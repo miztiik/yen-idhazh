@@ -6,6 +6,7 @@ type IngestFailureEvidence = Omit<Pick<DocumentWorkFact,
   "operation" | "failure_code"> & {
     operation: DocumentWorkFact["operation"] | "quality";
     failure_code: DocumentWorkFact["failure_code"] | NonNullable<ExtractionQuality["failure_code"]>;
+    request_role?: DocumentWorkFact["request_role"];
   };
 
 function isHttpRefusal(status: number | null): boolean {
@@ -18,6 +19,7 @@ export function attributeIngestOutcome(
 ): DocumentWorkFact["attribution"] {
   if (evidence.outcome !== "failed") return null;
   if (evidence.operation === "quality") return "unresolved";
+  if (evidence.operation === "attempt" && evidence.request_role === "resource") return "unresolved";
 
   if (evidence.failure_code === "unsafe-target"
     || evidence.failure_code === "body-too-large"

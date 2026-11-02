@@ -47,10 +47,15 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   // Port zero asks the operating system for an unused loopback port for this invocation.
   if (runtime.stage_origin === undefined) {
     const app = createPlanApp(inputs, runtime);
-    const server = Bun.serve({ hostname: inputs.settings.listener.hostname, port: 0, idleTimeout: 0, fetch: app.fetch });
-    try { return await runFeedPlan(raw, inputs, { ...runtime,
-      stage_origin: `http://${server.hostname}:${server.port}` }); }
-    finally { await server.stop(true); await app.close(); }
+    let server: ReturnType<typeof Bun.serve> | undefined;
+    try {
+      server = Bun.serve({ hostname: inputs.settings.listener.hostname, port: 0, idleTimeout: 0, fetch: app.fetch });
+      return await runFeedPlan(raw, inputs, { ...runtime,
+        stage_origin: `http://${server.hostname}:${server.port}` });
+    } finally {
+      try { await server?.stop(true); }
+      finally { await app.close(); }
+    }
   }
   const collectionId = randomUUID();
   const started = performance.now();

@@ -74,6 +74,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       operation: observation.operation, occurred_at: observation.occurred_at,
       ...result, duration_ms, http_status,
       request_phase: measurement?.attempt.phase ?? null,
+      request_role: measurement?.attempt.request_role ?? null,
       dispatched_request_count: measurement?.dispatched_request_count ?? null,
       request_coverage: measurement?.request_coverage ?? null,
     };

@@ -18,7 +18,8 @@ export const FeedProbeRequestSchema = z.strictObject({
 }).meta({
   version: FEED_PROBE_VERSION,
   changelog: [
-    { version: FEED_PROBE_VERSION, change: "Declare strict feed probe request and result contracts." },
+    { version: FEED_PROBE_VERSION, change: "Keep requests aligned with the browser-enabled probe result contract." },
+    { version: "2026-10-28", change: "Declare strict feed probe request and result contracts." },
   ],
 });
 export type FeedProbeRequest = z.infer<typeof FeedProbeRequestSchema>;
@@ -32,7 +33,8 @@ export const FeedProbeArticleSampleSchema = z.strictObject({
 }).meta({
   version: FEED_PROBE_VERSION,
   changelog: [
-    { version: FEED_PROBE_VERSION, change: "Keep article sample evidence body-free and bounded." },
+    { version: FEED_PROBE_VERSION, change: "Retain browser challenge diagnostics in article samples." },
+    { version: "2026-10-28", change: "Keep article sample evidence body-free and bounded." },
   ],
 });
 export type FeedProbeArticleSample = z.infer<typeof FeedProbeArticleSampleSchema>;
@@ -101,7 +103,8 @@ export const FeedProbeResultSchema = z.strictObject({
 }).meta({
   version: FEED_PROBE_VERSION,
   changelog: [
-    { version: FEED_PROBE_VERSION, change: "Declare strict feed probe request and result contracts." },
+    { version: FEED_PROBE_VERSION, change: "Retain browser challenge outcomes and response-size evidence in probe results." },
+    { version: "2026-10-28", change: "Declare strict feed probe request and result contracts." },
   ],
 });
 export type FeedProbeResult = z.infer<typeof FeedProbeResultSchema>;

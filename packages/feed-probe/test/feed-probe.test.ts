@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   FEED_PROBE_SAMPLE_DEFAULT,
   FEED_PROBE_SAMPLE_MAX,
+  FEED_PROBE_VERSION,
   FeedProbeRequestSchema,
   FeedProbeResultSchema,
   FeedIngestConfigSchema,
@@ -97,7 +98,7 @@ test("strict request and result contracts apply the sample default and maximum",
       diagnostics: null,
     }],
   });
-  expect(result.version).toBe("2026-10-28");
+  expect(result.version).toBe(FEED_PROBE_VERSION);
   expect(FeedProbeResultSchema.safeParse({ ...result, extra: true }).success).toBe(false);
 });
 

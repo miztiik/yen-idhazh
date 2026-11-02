@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
+import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { selectedArtifactPath, rawDocumentContentsFilename } from "../src/selected-artifact-path";
 import { createPlanTestServer } from "./plan-test-server";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
@@ -16,7 +17,7 @@ import { executePersistence } from "../src/api/persistence-operation";
 async function fetchFeed(f: Awaited<ReturnType<typeof recordedPlan>>) {
   const app = createPlanTestServer(f.inputs, f.runtime);
   try {
-    const response = await app.request("/api/2026-10-31/fetch", {
+    const response = await app.request(`${PLANNER_API_PREFIX}/fetch`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
         request_id: randomUUID(), correlation_id: randomUUID(), feed_id: f.inputs.harvest.sources[0]!.id,
         fetch_item_type: "feed",
@@ -30,7 +31,7 @@ test("standalone document work logs failure addresses only and persistence logs 
   const f = await recordedPlan();
   const app = createPlanTestServer(f.inputs, f.runtime);
   async function post(operation: string, body: unknown) {
-    const response = await app.request(`/api/2026-10-31/${operation}`, {
+    const response = await app.request(`${PLANNER_API_PREFIX}/${operation}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     });
     expect(response.status).toBe(200);
@@ -54,10 +55,10 @@ test("standalone document work logs failure addresses only and persistence logs 
         if (event.operation === failedOperation && event.phase === "failed") {
           expect(event.details.article_url).toBe(url);
           expect(event.details.network_failure).toMatchObject({ requested_url: url,
-            final_attempted_url: url, failed_url: url, http_status: 404, request_profile: "firefox" });
+            final_attempted_url: url, failed_url: url, http_status: 404, request_profile: "chromium" });
         } else if (event.operation === "request-attempt" && event.phase === "failed") {
           expect(event.details.network_failure).toMatchObject({ failed_url: url,
-            http_status: 404, attempt: { phase: "target", request_profile: "firefox" } });
+            http_status: 404, attempt: { phase: "target", request_profile: "chromium", request_role: "document" } });
         } else expect(JSON.stringify(event)).not.toContain("https://");
       }
     }
@@ -97,7 +98,7 @@ test("feed byte cutoffs include the limit and observed lower bound in failure ev
     await fetchFeed(f);
     const event = f.events.find(item => item.operation === "fetch" && item.phase === "failed"
       && item.details.document_kind === "feed");
-    expect(event?.details.body_limit).toMatchObject({ configured_limit_bytes: 700 });
+    expect(event?.details.body_limit).toMatchObject({ configured_limit_bytes: 700, limit_stage: "completed-response" });
     expect((event?.details.body_limit as { observed_at_least_bytes: number }).observed_at_least_bytes).toBeGreaterThan(700);
   } finally { await f.close(); }
 });
@@ -106,13 +107,12 @@ test("robots byte cutoffs retain their evidence after the feed target is dispatc
   const f = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
   try {
     f.inputs.harvest.extraction.max_body_bytes = 30;
-    f.inputs.harvest.config.harvest.request_headers.secondary = null;
     f.transport.recordings.responses["https://news.example/article-failures.xml"] = [{ status: 403, body: "" }];
     await fetchFeed(f);
     const event = f.events.find(item => item.operation === "fetch" && item.phase === "failed"
       && item.details.document_kind === "feed");
     expect(event?.details).toMatchObject({
-      body_limit: { configured_limit_bytes: 30 },
+      body_limit: { configured_limit_bytes: 30, limit_stage: "completed-response" },
       failure_code: "http",
       body_limit_source: "robots",
       requested_feed_url: "https://news.example/article-failures.xml",

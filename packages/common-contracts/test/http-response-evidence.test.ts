@@ -2,11 +2,14 @@
 import { expect, test } from "bun:test";
 import { HttpResponseEvidenceSchema, ResponseDiagnosticsConfigSchema } from "../src";
 
-test("response evidence distinguishes missing readings from measured zero", () => {
+test("response evidence distinguishes missing readings from measured zero and keeps historical labels", () => {
   const evidence = { content_type: null, decoded_bytes: null, declared_content_length: null,
     selected_headers: {}, headers_truncated: [], request_profile: "firefox" };
   expect(HttpResponseEvidenceSchema.parse(evidence).decoded_bytes).toBeNull();
   expect(HttpResponseEvidenceSchema.parse({ ...evidence, decoded_bytes: 0 }).decoded_bytes).toBe(0);
+  for (const request_profile of ["firefox", "chrome", "chromium"] as const) {
+    expect(HttpResponseEvidenceSchema.parse({ ...evidence, request_profile }).request_profile).toBe(request_profile);
+  }
   for (const patch of [
     { decoded_bytes: -1 }, { decoded_bytes: 1.5 }, { declared_content_length: -1 },
     { selected_headers: { "set-cookie": "private" } }, { headers_truncated: ["content-type"] },

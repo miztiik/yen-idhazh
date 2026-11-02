@@ -1,5 +1,6 @@
 /** Do unfinished collections refuse selection and prevent duplicate feed claims over real HTTP? */
 import { expect, test } from "bun:test";
+import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -17,7 +18,7 @@ test("unfinished or cancelled collection cannot be selected and a feed cannot be
   const fixture = await recordedPlan();
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const prefix = "/api/2026-10-31";
+  const prefix = PLANNER_API_PREFIX;
   const id = randomUUID();
   try {
     const begun = await app.request(`${prefix}/collections`, post({ collection_id: id, request: {} }));
@@ -52,7 +53,7 @@ test("standalone and collection fetches share their domain queue", async () => {
   }];
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const prefix = "/api/2026-10-31";
+  const prefix = PLANNER_API_PREFIX;
   const collectionId = randomUUID();
   const collection = await app.request(`${prefix}/collections`, post({ collection_id: collectionId, request: {} }));
   expect(collection.status).toBe(200);
@@ -97,7 +98,7 @@ test("active execution input remains pinned and an expired batch cannot reopen h
   const { run_number: _run, ...runtime } = fixture.runtime;
   const app = createPlanTestServer(fixture.inputs, runtime);
   const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const prefix = "/api/2026-10-31";
+  const prefix = PLANNER_API_PREFIX;
   const first = randomUUID();
   const second = randomUUID();
   try {
@@ -136,7 +137,7 @@ test("final status uses checked work, not carry rows, and raw finish errors keep
   const fixture = await recordedPlan();
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const prefix = "/api/2026-10-31";
+  const prefix = PLANNER_API_PREFIX;
   const id = randomUUID();
   try {
     expect((await app.request(`${prefix}/collections`, post({ collection_id: id, request: {} }))).status).toBe(200);

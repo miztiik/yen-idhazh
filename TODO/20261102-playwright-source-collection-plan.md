@@ -37,7 +37,7 @@ Table C - Work sequence
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Replace source downloads with owned browser sessions | - | A | PENDING | probable-fishstick | - | - |
+| C1 | 1 | Replace source downloads with owned browser sessions | - | A | DONE | playwright-download-replacement | - | b11377c9-58f8-417e-a0ef-133eeb6a6d62 |
 | C2 | 2 | Exercise the branch through the existing manual workflow | 1 | B | PENDING | probable-fishstick | - | - |
 | C3 | 3 | Observe recovery and establish main-merge readiness | 1, 2 | C | PENDING | probable-fishstick | - | - |
 

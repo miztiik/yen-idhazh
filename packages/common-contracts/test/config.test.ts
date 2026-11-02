@@ -87,6 +87,65 @@ if (Bun.argv.includes("--emit-schemas")) {
     expect(configs.FeedPartitionConfigSchema.safeParse({ ...bounds, default_shards: 21 }).success).toBe(false);
   });
 
+  test("browser settings and safe request headers use their defaults and allowlist", async () => {
+    expect(configs.FeedBrowserConfigSchema.parse({})).toEqual({
+      headless: true,
+      document_timeout_ms: 30000,
+      challenge_selectors: ["#challenge-form", "#challenge-running", "#cf-challenge-running"],
+    });
+    expect(configs.FeedRequestHeadersSchema.parse({})).toEqual({});
+    expect(configs.FeedRequestHeadersSchema.parse({
+      accept: "application/xml", "accept-language": "en",
+    })).toEqual({ accept: "application/xml", "accept-language": "en" });
+    for (const invalid of [
+      { primary: { browser: "firefox", headers: {} } },
+      { recoverable_http_statuses: [403], recovery_min_body_bytes: 200 },
+      { host: "internal.example" },
+      { "user-agent": "retired crawler" },
+      { authorization: "credentials" },
+      { accept: "text/html\r\nhost: internal.example" },
+      { Accept: "text/html" },
+      { accept: "" },
+    ]) {
+      expect(configs.FeedRequestHeadersSchema.safeParse(invalid).success).toBe(false);
+    }
+    for (const invalid of [
+      { headless: "true" }, { document_timeout_ms: 0 }, { document_timeout_ms: 1.5 },
+      { challenge_selectors: [""] }, { extra: true },
+    ]) {
+      expect(configs.FeedBrowserConfigSchema.safeParse(invalid).success).toBe(false);
+    }
+
+    const config = await readConfig();
+    expect(configs.FeedIngestConfigSchema.safeParse({
+      ...config, harvest: {
+        ...config.harvest,
+        request_headers: {
+          primary: { browser: "firefox", headers: {} },
+          secondary: { browser: "chrome", headers: {} },
+          recoverable_http_statuses: [403],
+          recovery_min_body_bytes: 200,
+        },
+      },
+    }).success).toBe(false);
+    const harvestWithoutBrowserSettings = { ...config.harvest };
+    delete harvestWithoutBrowserSettings.browser;
+    delete harvestWithoutBrowserSettings.request_headers;
+    expect(configs.FeedIngestConfigSchema.parse({
+      ...config, harvest: harvestWithoutBrowserSettings,
+    }).harvest).toMatchObject({
+      browser: {
+        headless: true,
+        document_timeout_ms: 30000,
+        challenge_selectors: ["#challenge-form", "#challenge-running", "#cf-challenge-running"],
+      },
+      request_headers: {},
+    });
+    expect(configs.FeedIngestConfigSchema.safeParse({
+      ...config, harvest: { ...config.harvest, browser: { ...config.harvest.browser, headless: "true" } },
+    }).success).toBe(false);
+  });
+
   test.each([
     [["triage", "min_words"], 0],
     [["triage", "max_age_hours"], null],
@@ -138,35 +197,8 @@ if (Bun.argv.includes("--emit-schemas")) {
 
   test("global config rejects bad bounds, unknown keys, and invalid references", async () => {
     const config = await readConfig();
-    const profiles = config.harvest.request_headers;
-    expect(configs.FeedRequestHeadersSchema.parse({ ...profiles, secondary: null }).secondary).toBeNull();
-    for (const browser of ["firefox", "chrome"]) {
-      for (const headers of [{}, { accept: "application/xml" }, { "accept-language": "en" }]) {
-        expect(configs.FeedRequestHeadersSchema.safeParse({ ...profiles, primary: { browser, headers } }).success).toBe(true);
-      }
-    }
-    for (const headers of [
-      { host: "internal.example" }, { "user-agent": "retired crawler" },
-      { authorization: "credentials" }, { accept: "text/html\r\nhost: internal.example" },
-      { accept: "" }, { Accept: "text/html" },
-    ]) {
-      for (const name of ["primary", "secondary"]) {
-        expect(configs.FeedRequestHeadersSchema.safeParse({
-          ...profiles, [name]: { browser: "firefox", headers },
-        }).success).toBe(false);
-      }
-    }
-    for (const primary of [{ accept: "text/html" }, { browser: "unsupported", headers: {} }]) {
-      expect(configs.FeedRequestHeadersSchema.safeParse({ ...profiles, primary }).success).toBe(false);
-    }
     expect(configs.FeedIngestConfigSchema.safeParse({
       ...config, harvest: { ...config.harvest, user_agent: "retired crawler" },
-    }).success).toBe(false);
-    expect(configs.FeedRequestHeadersSchema.safeParse({
-      ...profiles, recoverable_http_statuses: [403, 403],
-    }).success).toBe(false);
-    expect(configs.FeedRequestHeadersSchema.safeParse({
-      ...profiles, recovery_min_body_bytes: -1,
     }).success).toBe(false);
     for (const patch of [
       { partition: { ...config.partition, min_shards: config.partition.max_shards + 1 } },

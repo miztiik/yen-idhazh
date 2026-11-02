@@ -4,7 +4,7 @@ import { loadHarvestInputs } from "../src/harvest-feeds/load-harvest-inputs";
 import type { ConfiguredSource } from "../src/harvest-feeds/load-harvest-inputs";
 import type { HarvestContext } from "../src/harvest-feeds/harvest-types";
 import type { HarvestTransport, TransportRequest, TransportResponse } from "../src/harvest-feeds/transport";
-import { responseEvidence } from "../src/harvest-feeds/impit-transport";
+import { responseEvidence } from "../src/harvest-feeds/source-response-evidence";
 import { BodyLimitError } from "../src/harvest-feeds/transport";
 import { parseHTML } from "linkedom";
 
@@ -19,14 +19,6 @@ const RecordingsSchema = z.object({
   responses: z.record(z.string(), z.array(ResponseSchema).min(1)),
 });
 export type RecordedResponse = z.infer<typeof ResponseSchema>;
-
-export async function readHeaderRecovery() {
-  const cases = z.array(z.object({ name: z.string(), responses: z.array(ResponseSchema).min(1) }));
-  return z.object({
-    recoveries: cases, permanent_failures: cases, short_content: z.string(),
-    short_redirect: ResponseSchema, primary_timeouts: z.array(ResponseSchema).min(1),
-  }).parse(await Bun.file(new URL("harvest-header-recovery.json", fixtures)).json());
-}
 
 export async function readRecordings() {
   const [raw, rss, atom, article] = await Promise.all([
@@ -121,7 +113,9 @@ export class RecordedTransport implements HarvestTransport {
       if (body === undefined) throw new Error("recording is missing its observed body");
       const bytes = Buffer.byteLength(body);
       const evidence = responseEvidence(new Headers(response.headers), input, bytes);
-      if (bytes > input.max_body_bytes) throw new BodyLimitError(response.status, input.max_body_bytes, bytes, evidence);
+      if (bytes > input.max_body_bytes) {
+        throw new BodyLimitError(response.status, input.max_body_bytes, bytes, evidence, "completed-response");
+      }
       return { status: response.status, body, location: response.location ?? null, evidence };
     } finally { this.active--; }
   }

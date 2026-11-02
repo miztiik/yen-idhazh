@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
-  FeedIngestCandidateSchema, PlannerStageContextSchema,
+  DocumentWorkFactSchema, FeedIngestCandidateSchema, PlannerStageContextSchema,
   HarvestDiagnosticsSchema, SourceArticleOutcomeSchema, SourceSnapshotSchema, deriveCandidateId, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { HarvestArticleResultSchema } from "../src/harvest-feeds/harvest-types";
@@ -51,6 +51,33 @@ test("technical admission uses access and words, not publication age or selectio
   expect(resolveArticleSourceOutcome(paywall, 10, [401, 403], at)?.reason_code).toBe("PAYWALL_OR_BLOCKED");
   expect(SourceArticleOutcomeSchema.safeParse({ disposition: "admitted", reason_code: "EXTRACT_EMPTY", settled_at: at }).success).toBe(false);
   expect(SourceArticleOutcomeSchema.safeParse({ disposition: "source_refused", reason_code: null, settled_at: at }).success).toBe(false);
+});
+
+test("resource failures count requests without reducing source admission and partial coverage stays unknown", () => {
+  const { at, context, source } = recording();
+  const work = createRunHealth(context, [source], new Map(), {
+    min_words: 10, blocked_http_statuses: [403], tidy_urls: true,
+  });
+  const fact = DocumentWorkFactSchema.parse({
+    run_id: context.run_id, attempt: context.writer.attempt, feed_id: source.feed_id,
+    document_kind: "article", operation: "attempt", outcome: "failed",
+    occurred_at: at, duration_ms: 1, http_status: 403, attribution: "unresolved",
+    failure_code: "http", request_phase: "target", request_role: "resource",
+    dispatched_request_count: 1, request_coverage: "complete",
+  });
+  expect(attributeIngestOutcome(fact)).toBe("unresolved");
+  expect(attributeIngestOutcome({ ...fact, request_role: "document" })).toBe("source");
+  work.observe(fact);
+  work.captureArticle(randomUUID(), source.feed_id, at, {
+    disposition: "admitted", reason_code: null, settled_at: at,
+  });
+  expect(work.rows()[0]).toMatchObject({
+    article_requests: 1, article_candidates: 1, rejection_counts: [],
+  });
+  work.observe({ ...fact, request_coverage: "partial" });
+  expect(work.rows()[0]).toMatchObject({
+    article_requests: null, article_candidates: 1, rejection_counts: [], counts_complete: false,
+  });
 });
 
 test("measured quality rejection stays unresolved and is counted once without a source refusal", () => {

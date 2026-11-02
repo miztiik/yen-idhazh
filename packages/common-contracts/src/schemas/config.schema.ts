@@ -6,7 +6,8 @@ import {
 import {
   FeedCurationPolicySchema, FeedScreeningPolicySchema,
 } from "./policy.schema";
-import { RequestProfileSchema, ResponseDiagnosticsConfigSchema } from "./http-response-evidence.schema";
+import { ResponseDiagnosticsConfigSchema } from "./http-response-evidence.schema";
+import { FEED_INGEST_CONFIG_VERSION } from "../version";
 
 export const FeedUrlExclusionSchema = z.strictObject({
   host: z.hostname(),
@@ -44,20 +45,19 @@ export const FeedContentFiltersConfigSchema = z.strictObject({
   press_release: FeedPressReleaseFilterSchema,
   link_heavy: FeedLinkHeavyFilterSchema,
 });
-const BrowserProfileSchema = z.strictObject({
-  browser: RequestProfileSchema,
-  headers: z.partialRecord(z.enum(["accept", "accept-language"]), NonEmptySchema.regex(/^[\x20-\x7e]+$/)),
-});
+const FeedRequestHeaderValueSchema = NonEmptySchema.regex(/^[\x20-\x7e]+$/);
 export const FeedRequestHeadersSchema = z.strictObject({
-  primary: BrowserProfileSchema,
-  secondary: BrowserProfileSchema.nullable(),
-  recoverable_http_statuses: z.array(z.int().min(400).max(599)),
-  recovery_min_body_bytes: z.int().nonnegative(),
-}).superRefine((value, ctx) => {
-  if (new Set(value.recoverable_http_statuses).size !== value.recoverable_http_statuses.length) {
-    reject(ctx, "recoverable_http_statuses must not repeat a status", ["recoverable_http_statuses"]);
-  }
+  accept: FeedRequestHeaderValueSchema.optional(),
+  "accept-language": FeedRequestHeaderValueSchema.optional(),
+}).default({});
+export const FeedBrowserConfigSchema = z.strictObject({
+  headless: z.boolean().default(true),
+  document_timeout_ms: PositiveCountSchema.default(30000),
+  challenge_selectors: z.array(NonEmptySchema).default([
+    "#challenge-form", "#challenge-running", "#cf-challenge-running",
+  ]),
 });
+export type FeedBrowserConfig = z.infer<typeof FeedBrowserConfigSchema>;
 export const RequestPacingSettingsSchema = z.strictObject({
   enabled: z.boolean().describe(
     "Apply shared process-local domain and publisher pacing. Remove this switch and its bypass path when source request pacing is no longer needed.",
@@ -92,6 +92,7 @@ export const FeedHarvestConfigSchema = z.strictObject({
     "Apply additional article cleanup before removing all queries and fragments. Remove this switch and the disabled path when additional cleanup becomes mandatory.",
   ),
   request_headers: FeedRequestHeadersSchema,
+  browser: FeedBrowserConfigSchema.default(() => FeedBrowserConfigSchema.parse({})),
   response_diagnostics: ResponseDiagnosticsConfigSchema,
   request_pacing: RequestPacingSettingsSchema,
   semantic_fallback: FeedSemanticFallbackConfigSchema,
@@ -181,7 +182,7 @@ export const FeedLifecyclePolicySchema = z.strictObject({
 });
 export type FeedLifecyclePolicy = z.infer<typeof FeedLifecyclePolicySchema>;
 export const FeedIngestConfigSchema = z.strictObject({
-  version: z.literal("2026-11-01"),
+  version: z.literal(FEED_INGEST_CONFIG_VERSION),
   availability: FeedLifecyclePolicySchema,
   harvest: FeedHarvestConfigSchema,
   content_filters: FeedContentFiltersConfigSchema,
@@ -197,8 +198,9 @@ export const FeedIngestConfigSchema = z.strictObject({
     default: {}, type: "object", additionalProperties: false,
   }),
 }).meta({
-  version: "2026-11-01",
+  version: FEED_INGEST_CONFIG_VERSION,
   changelog: [
+    { version: FEED_INGEST_CONFIG_VERSION, change: "Configure browser execution and flat allowlisted request headers." },
     { version: "2026-11-01", change: "Configure shared domain and publisher request pacing." },
     { version: "2026-11-01", change: "Use native browser profiles and configured safe response headers." },
   ],

@@ -68,7 +68,7 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   if (keepOriginal) {
     if (original !== undefined) original.owns_choice = true;
   } else {
-    registerStageExecution(inputs, context, "selection", started);
+    await registerStageExecution(inputs, context, "selection", started);
     if (original?.kind === "document" && !hasArtifact) await recordFinalizedDocumentWork(inputs, original);
   }
   const healthStarted = performance.now();

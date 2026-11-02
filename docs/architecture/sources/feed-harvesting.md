@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-02
 
 How do configured feeds become sanitized article candidates?
 This build-time path leaves production Python discovery and extraction
@@ -14,10 +14,13 @@ extraction configuration before work. The taxonomy contributes active source
 kinds and numeric tier weights, not vertical policy or article labels.
 
 The actual harvester accepts validated context plus an optional recorded
-source-response boundary. Ordinary execution uses native Impit. One fetcher
-reuses one client per configured browser profile; each request owns its
-cancellation signal and releases its response reader on completion or refusal.
-Impit has no public client-close API. No dispatcher or resolver adapter remains.
+source-response boundary. Ordinary execution uses Playwright Chromium.
+The listener owns one lazy browser process. Each execution owns a temporary
+context that shares only its site-issued cookies, and each logical attempt
+owns a page. Independent executions do not share cookies. Direct harvesting
+owns its browser unless supplied one; the probe CLI shares its browser across
+its targets. Awaited cleanup releases pages, contexts and owned processes on
+completion, cancellation, eviction, collection release and listener shutdown.
 
 Independent feeds overlap within configured bounds. Article work can start
 after its supplying feed is parsed. Native workers perform the production
@@ -36,7 +39,7 @@ Reporting configuration does not change harvested content identity.
 Missing feed fields do not renumber later entries. Page canonical tags,
 scripts and prose never grant a new fetch destination.
 
-Every article loses its entire query string and fragment. This includes
+Every initial article request loses its entire query string and fragment. This includes
 required article identifiers: a query-dependent article can stop working.
 `harvest.tidy_urls` enables additional cleanup before that removal, including
 unwrapping supported redirect addresses. Setting it to false does not preserve
@@ -46,7 +49,7 @@ their request parameters. Feed identity and Python discovery remain unchanged.
 `article-url.ts` exports `cleanArticleUrl`, the shared article cleanup policy.
 `article-identity.ts` hashes its exact serialized result as `url_key` and retains
 that result as `canonical_url`. The permitted fetcher uses the same policy for
-robots permission and each dispatched article hop. Redirects do not change
+robots permission and the initial article request. Redirects do not change
 the initial identity. The lower-level `http-request-target.ts` applies the
 optional cleaner; it does not hash addresses.
 
@@ -57,7 +60,7 @@ fragment as historical evidence. The final serialized article address must
 pass the same URL format and length contract as downstream payloads before
 hashing or dispatch; percent-encoding cannot bypass that bound. Each transformed address
 passes URL, hostname and explicit-address checks before dispatch.
-Impit resolves hostnames; this TypeScript path does not resolve or pin their
+Chromium resolves hostnames; this TypeScript path does not resolve or pin their
 addresses and does not protect against DNS rebinding.
 Robots results are retained as evidence; article `enforce` policy may stop an
 article before target dispatch. An unsafe transformed address is never
@@ -110,52 +113,67 @@ and their redirect hops. Missing settings default to `enforce`; committed
 planner configuration uses `observe`. In `observe`, denied or unknown robots
 permission does not block a safe article request. Actual retry and redirect dispatches
 each count; cache reuse adds no request.
-The fetch stops at the first decoded stream chunk that takes the running byte
-count over `extract.max_body_bytes`. Its diagnostic records that configured
-limit and the bytes observed so far as a lower bound; it does not read the rest
-of the response or claim its full size.
+After a response completes, decoded HTTP bytes must fit
+`extract.max_body_bytes`. The final UTF-8 parser input, including a rendered
+article document, must separately fit that same limit. Evidence names
+`completed-response` or `parser-input`; `decoded_bytes` always measures the
+HTTP body, never the rendered document. This is not an early transfer cutoff
+or a browser-memory bound. A decoding or completion failure remains a failure;
+an available prefix is never returned as a successful response.
 
-`harvest.request_headers` supplies primary and nullable secondary native browser
-profiles. Firefox is primary; Chrome is secondary. Robots use the primary
-profile. Impit selects TLS, HTTP/2 and wire-header defaults together. Explicit
-`accept` and `accept-language` overrides can select content or language;
-the committed profiles use no overrides.
-Wire headers have no crawler user-agent suffix or copied browser version.
-Impit does not expose its native user-agent for permission matching, so the
-robots parser checks general `User-agent: *` rules, not browser-specific groups.
-The wire identity is a browser profile, not an identified crawler with contact
-details. This trade-off leaves native headers intact; it does not execute
-JavaScript, sign requests, import credentials or guarantee publisher access.
+`harvest.request_headers` is an allowlisted header map, default `{}`.
+Chromium supplies its own browser headers. The robots parser matches general
+`User-agent: *` rules, not browser-specific groups. There is no secondary
+profile or fallback transport. Older fingerprint-shaped configuration fails
+validation instead of being converted.
 A denied or unknown robots result is retained across redirects. It blocks an
 article only when that article uses `enforce`; it does not block a safe feed
 request or an article in `observe`.
 
-Within the bounded target allowance, exhausted network/status retries or
-a successful article body below `recovery_min_body_bytes` can try the secondary
-profile once per redirect hop. Only `recoverable_http_statuses` permit HTTP
-profile recovery; missing, gone and rate-limited responses do not use it by
-default. Each profile keeps the existing status retry rules. Attempt
-sequence remains unique; the retry index restarts for a new profile.
-Every actual dispatch is counted. A failed recovery preserves an earlier
-real short response for normal parsing rather than inventing article text.
-This also holds when a secondary redirect ends in a download failure.
-An unsafe article redirect always refuses the operation. Denied or unknown
-permission on a safe redirect follows the document's robots policy.
-Each enabled profile contributes one configured attempt-and-backoff allowance
-to the deadline shared by all target reads and article redirect hops. Robots
-work has a separate allowance: one configured retry sequence, including its
-attempt timeouts and backoff. Waiting for robots does not consume target time
-or abort its signal. Each new origin has that same bounded robots allowance;
-success and settled failures are cached by origin for this fetcher. A failed
-check becomes unknown and is not started again for each article. External
-cancellation cancels both target work and robots waiting.
-Disabling the secondary profile leaves one target allowance.
-The body-size recovery rule never applies to feeds. Short, empty and malformed
-feed downloads keep their real HTTP result and separate parse outcome.
+`harvest.browser.headless` defaults to true. The document deadline starts
+at first document dispatch; `harvest.browser.document_timeout_ms` defaults
+to 30000 ms, an initial estimate rather than measured performance.
+Per-request timeouts, retries and backoff remain separate. Robots work has
+its own requests and origin cache; startup and robots waiting have cancellation
+owners. A failed robots check becomes unknown and is cached for the execution.
+Robots resources use an explicit mode that does not request robots recursively.
+
+The browser request gate is installed before page execution. Redirects,
+scripts, fetch requests, cross-origin frames, dedicated workers and preflights
+pass URL, hostname, literal-address, robots and pacing checks before dispatch.
+Browser-generated parameters survive; only the initial article address uses
+identity cleanup. Unsafe destinations refuse the operation. Unsolicited
+popups, service workers and WebSockets are blocked. Chromium starts with
+`--disable-shared-workers`: pausing a SharedWorker target does not prevent
+its initial script download. This mandatory browser control disables creation
+before a page can download that script; it is not a page-script override.
+Any other root target that cannot be gated is closed before execution and
+reports `network` with `ERR_UNSUPPORTED_BROWSER_TARGET`.
+Browser subprocesses receive only startup, temporary-directory and locale
+environment values, not repository credentials. Sandboxing remains enabled.
+
+Feeds and robots return the completed original network body, not the
+browser's XML viewer. Narrow response-header continuation permits inline
+reading of download-like XML while evidence retains original headers.
+Articles return rendered HTML through the existing inert parser and sanitizer.
+Existing content roots are readiness hints, not new admission rules.
+There is no global network-idle wait or fixed sleep. Actual short content
+goes to ordinary extraction checks; descriptions and invented prose never
+replace it. If the original document has completed but its content root remains
+empty at the rendering deadline, its actual markup still goes to extraction.
+A page that depends on a disabled SharedWorker can therefore yield no article
+text; a completed HTTP request alone is not collection success.
+
+`harvest.browser.challenge_selectors` names interstitial signals. An explicit
+challenge header or unresolved configured selector produces
+`challenge-unresolved`, even with HTTP 200. Automatic navigation and site
+cookies can proceed until the document deadline. No credentials, persistent
+profile, proxy, solver or human challenge step is introduced. Browser execution
+alone does not demonstrate readable content or live publisher recovery.
 
 `harvest.request_pacing` applies a process-local scheduler to every dispatched
-robots, feed and article request, including retries, secondary-profile recovery
-and redirect hops. Each request uses its destination domain and, when present,
+robots, feed and article request, including resources, retries and redirect
+hops. Each request uses its destination domain and, when present,
 the curated publisher ID. The domain key groups hostnames by registrable domain
 (the domain beneath the public suffix), using the configured private-suffix
 policy; a missing publisher ID adds no publisher key. Both keys are acquired
@@ -189,7 +207,8 @@ and robots requests. Equality remains admitted. An unavailable or too-future
 date retains the later first-sight or unknown-time path.
 
 A missing title retains page-title recovery. Actual HTML extraction keeps
-prose and byline but never executes scripts or loads page resources.
+prose and byline. This inert parsing step never executes scripts or loads
+resources; browser loading has already finished.
 Defuddle's node entry produces Markdown with asynchronous source fetches
 disabled and a rejecting resource-fetch callback. The sanitizer runs after
 Markdown conversion as well as on decoded DOM text before conversion.
@@ -252,44 +271,24 @@ keeps that evidence separate from the publisher's actual response. Keep the
 robots verdict, status and retrieval failure, but let the target response
 decide whether the feed fetch succeeded. Article `enforce` remains an explicit
 option. URL and explicit-address checks remain; hostname address resolution
-and socket pinning do not. Manual redirects keep each destination subject to
-those remaining checks before dispatch.
+and socket pinning do not. Browser request interception checks each
+destination before dispatch, including requests that page JavaScript creates.
+Unsupported child targets are refused before execution because observing their
+requests afterward would not protect the request boundary.
 
-Native defaults keep TLS verification enabled, use HTTP/2 where supported,
-and decode gzip, Brotli and deflate streams. HTTP/3 is opt-in and is not
-requested; no measured source need justifies adding a control for it.
-No proxy, persistent cookie jar or weaker TLS fallback is enabled.
-Each request passes the existing attempt budget to Impit's native timeout.
-This is a total connection-through-body deadline, not a headers-only timeout.
-The public JavaScript API has no separate connect-only or read-only timeout.
-Before headers arrive, Impit has no supported immediate native cancellation
-API. The request keeps ownership until headers arrive or that native timeout
-expires; early cancellation can wait up to the attempt budget plus settlement
-overhead. It never returns early while that native request remains active.
-After headers arrive, caller cancellation aborts the owned native signal.
-The body reader keeps ownership until the native stream observes that abort;
-it does not leave the read loop early on the caller signal. A cancelled result
-is never returned as successful content. Failed reads also await stream cleanup.
-The existing application deadline still bounds response reading.
-Request cancellation and failed-reader cleanup must not replace the observed
-status and byte count.
-A proven decoded cutoff remains the primary failure if later cancellation or
-stream cleanup also fails. Combined errors retain the cleanup cause and any
-available safe code without exposing exception messages.
-API completion and native response termination are different events.
-The transport test keeps Impit under Bun and uses a genuine Node source to
-check decoded-byte limits, cancellation, native deadlines and response evidence.
-Native total-body timeout is checked separately from caller cancellation.
-An unfinished response can remain active after its native deadline; an API
-failure does not prove physical response termination. The public API has no
-bounded disposal acknowledgement for that error path. Pacing slots follow
-application request settlement and configured cooldown, not physical native
-response termination. Network activity may therefore overlap after a timeout,
-even though application requests sharing a pacing key do not overlap.
-Streamed native errors may be untyped; their messages are not used to invent
-a timeout class or safe error code.
-The separate `source-transport-test.yml` workflow runs this same native
-API test on Linux and records the actual candidate SHA.
+Playwright replaces the fingerprint-only client so actual page JavaScript and
+temporary cookies can recover public content without a second transport.
+Chromium owns response decompression. Reading its completed original body
+preserves completion failures but gives up the former decoded-stream cutoff.
+Separate admission of the rendered parser input prevents DOM expansion from
+bypassing the existing limit; neither check bounds browser memory.
+Resource failures remain visible without converting optional assets into
+document refusals or source penalties.
+
+The separate `source-transport-test.yml` workflow runs the actual browser
+modules under Linux Bun, checks active Chromium sandboxing, and records the
+candidate SHA, host and installation time. Bounded loopback cases are not
+evidence of live publisher recovery.
 Production CI keeps its existing full-candidate checks.
 
 ## Dependencies and cost
@@ -297,19 +296,18 @@ Production CI keeps its existing full-candidate checks.
 Feedsmith 3.0.1 replaces rss-parser and adds JSON Feed and RDF support. Its
 XML parser and entity decoder replace the old XML dependency tree.
 The existing Defuddle 0.19.5 node entry uses its installed Markdown converter;
-LinkeDOM still supplies inert documents. Impit replaces the former HTTP client
-and its compression/dispatcher machinery; the address and robots libraries
+LinkeDOM still supplies inert documents. Playwright replaces the former HTTP
+client; the address and robots libraries
 retain URL/literal checks and rule parsing. These dependencies run in the
 build-time Bun process and workers, not the published browser bundle.
 TidyURL 1.18.3 adds its bundled URL-cleaning rules and no runtime dependencies
 for request-target cleanup. Its installed bytes remain build-time only.
-Impit's beneficiary is native browser TLS and HTTP fingerprints with bounded
-decoded response reads. Its Linux x64 native binary occupies 10,581,792 bytes
-(about 10.1 MiB). Service and probe installation took 2 seconds on a GitHub
-Linux x64 runner, after shared publication packages were installed. The host
-reported four logical CPUs and about 16 GiB RAM.
-Native binaries are install-time
-dependencies, never committed or shipped to the published site.
+Playwright 1.62.1 provides real browser navigation, JavaScript and cookies.
+Its costs are the matching Chromium installation, native runtime dependencies,
+startup time and browser memory. The separate workflow measures installation
+time and host resources; no earlier native-client measurement describes this
+browser. Browser binaries are install-time dependencies, never committed or
+shipped to the published site.
 The remaining `undici-types` dependency is type declarations required by
 Bun/Node types, not a runtime HTTP client. No runtime Undici dependency remains
 in the service or probe lockfile. No parser framework or profiler is introduced.

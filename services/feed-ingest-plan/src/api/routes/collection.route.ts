@@ -34,7 +34,7 @@ export function collectionRoute(inputs: PlanInputs, runtime: () => PlanRuntime) 
   });
   app.post("/collections/release", async c => {
     const request = ReleaseCollectionRequestSchema.parse(await readRequestBody(c.req.raw));
-    return c.json(ReleasedCollectionSchema.parse(releaseCollection(request, inputs)));
+    return c.json(ReleasedCollectionSchema.parse(await releaseCollection(request, inputs)));
   });
   return app;
 }

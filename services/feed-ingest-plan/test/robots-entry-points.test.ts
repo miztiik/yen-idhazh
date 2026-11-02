@@ -22,7 +22,6 @@ test("bulk and standalone feed reads dispatch targets after denied or failed rob
       const recorded = await recordedPlan();
       const app = entry === "standalone" ? createPlanTestServer(recorded.inputs, recorded.runtime) : null;
       try {
-        recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
         recorded.transport.recordings.responses["https://news.example/robots.txt"] = [scenario.response];
         recorded.transport.recordings.responses["https://news.example/feed.xml"] = [{
           status: 200, body: "<rss version=\"2.0\"><channel><title>Recorded empty feed</title></channel></rss>",
@@ -63,7 +62,6 @@ test("bulk and standalone feed reads dispatch targets after denied or failed rob
 test("the plan records target work after robots denial without inventing a failed feed check", async () => {
   for (const targetStatus of [200, 403] as const) {
     const recorded = await recordedPlan();
-    recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
     recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
       status: 200, body: "User-agent: *\nDisallow: /\n",
     }];
@@ -116,7 +114,7 @@ test("standalone observed success parses its live input without another request"
       request_id: requestId, correlation_id: correlation, feed_id: "recorded-news",
       fetch_item_type: "article", url: "https://news.example/second",
     });
-    const fetch = () => app.request("/api/2026-10-31/fetch", {
+    const fetch = () => app.request(`${PLANNER_API_PREFIX}/fetch`, {
       method: "POST", headers: { "content-type": "application/json" }, body,
     });
     const response = await fetch();
@@ -124,7 +122,7 @@ test("standalone observed success parses its live input without another request"
     const result = await response.json();
     expect(result).toMatchObject({ failure: null, http_status: 200 });
     const requests = recorded.transport.requests.length;
-    const parsed = await app.request("/api/2026-10-31/parse", {
+    const parsed = await app.request(`${PLANNER_API_PREFIX}/parse`, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({
         request_id: randomUUID(), fetch_request_id: requestId,
@@ -150,7 +148,7 @@ test("an enforced standalone refusal never dispatches the article target", async
       request_id: requestId, correlation_id: randomUUID(), feed_id: "recorded-news",
       fetch_item_type: "article", url: "https://news.example/second",
     });
-    const fetch = () => app.request("/api/2026-10-31/fetch", {
+    const fetch = () => app.request(`${PLANNER_API_PREFIX}/fetch`, {
       method: "POST", headers: { "content-type": "application/json" }, body,
     });
     expect(await (await fetch()).json()).toMatchObject({ failure: "robots-denied", http_status: null });

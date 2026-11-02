@@ -1,8 +1,9 @@
 /** Which safe response facts can a failed source request retain? */
 import { z } from "zod";
 import { CountSchema, PositiveCountSchema, reject } from "./primitives";
+import { HTTP_RESPONSE_EVIDENCE_VERSION } from "../version";
 
-export const RequestProfileSchema = z.enum(["firefox", "chrome"]);
+export const RequestProfileSchema = z.enum(["firefox", "chrome", "chromium"]);
 export const DiagnosticHeaderNameSchema = z.string().max(128).regex(/^[a-z0-9-]+$/).refine(
   name => !/authorization|cookie|credential|token|secret|api-key|authenticate|location|refresh/.test(name),
   "response_diagnostics.header_names must not include credentials or redirect addresses",
@@ -29,7 +30,10 @@ export const HttpResponseEvidenceSchema = z.strictObject({
     reject(ctx, "headers_truncated must name distinct retained headers", ["headers_truncated"]);
   }
 }).meta({
-  version: "2026-11-01",
-  changelog: [{ version: "2026-11-01", change: "Declare bounded body-free native response evidence." }],
+  version: HTTP_RESPONSE_EVIDENCE_VERSION,
+  changelog: [
+    { version: HTTP_RESPONSE_EVIDENCE_VERSION, change: "Record Chromium as the source of new browser response evidence." },
+    { version: "2026-11-01", change: "Declare bounded body-free native response evidence." },
+  ],
 });
 export type HttpResponseEvidence = z.infer<typeof HttpResponseEvidenceSchema>;

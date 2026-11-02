@@ -27,6 +27,7 @@ import {
 import type { RequestPacing } from "@idhazh/feed-ingest-plan/robots-policy";
 import type { FetchResult } from "@idhazh/feed-ingest-plan/robots-policy";
 import type { HarvestTransport } from "@idhazh/feed-ingest-plan/transport";
+import { createBrowserRuntime, type BrowserRuntime } from "@idhazh/feed-ingest-plan/browser-runtime";
 
 export type FeedProbeOptions = {
   signal?: AbortSignal;
@@ -35,8 +36,10 @@ export type FeedProbeOptions = {
   publisher_id?: string | null;
   request_pacing?: RequestPacing;
   transport?: HarvestTransport;
+  browser_runtime?: BrowserRuntime;
   boundary?: {
     transport?: HarvestTransport;
+    browser_runtime?: BrowserRuntime;
   };
 };
 
@@ -77,6 +80,11 @@ async function loadSettings(options: FeedProbeOptions): Promise<FeedProbeSetting
 export async function createFeedProbePacing(options: FeedProbeOptions = {}): Promise<RequestPacing> {
   const settings = await loadSettings(options);
   return createRequestPacing(settings.harvest.request_pacing, settings.include_private_suffixes);
+}
+
+export async function createFeedProbeBrowser(options: FeedProbeOptions = {}): Promise<BrowserRuntime> {
+  const settings = await loadSettings(options);
+  return createBrowserRuntime(settings.harvest.browser);
 }
 
 function timeoutDiagnostics(): HarvestDiagnostics {
@@ -190,13 +198,17 @@ export async function probeFeed(
   const boundary = {
     ...(options.boundary ?? {}),
     ...(options.transport === undefined ? {} : { transport: options.transport }),
+    ...(options.browser_runtime === undefined ? {} : { browser_runtime: options.browser_runtime }),
     ...(options.request_pacing === undefined ? {} : { request_pacing: options.request_pacing }),
     include_private_suffixes: settings.include_private_suffixes,
   };
+  const ownedBrowser = boundary.browser_runtime === undefined && boundary.transport === undefined
+    ? createBrowserRuntime(settings.harvest.browser) : undefined;
+  const browserRuntime = boundary.browser_runtime ?? ownedBrowser;
   const fetcher = createPermittedFetcher(
     settings.harvest,
     settings.extraction,
-    boundary,
+    { ...boundary, ...(browserRuntime === undefined ? {} : { browser_runtime: browserRuntime }) },
   );
   try {
     const feedStarted = performance.now();
@@ -363,7 +375,10 @@ export async function probeFeed(
       paywall_confirmed: paywallConfirmed,
       paywall_evidence: evidence,
     });
-  } finally { await fetcher.close(); }
+  } finally {
+    try { await fetcher.close(); }
+    finally { await ownedBrowser?.close(); }
+  }
 }
 
 export const feedProbe = probeFeed;

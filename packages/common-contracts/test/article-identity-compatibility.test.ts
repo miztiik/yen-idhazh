@@ -54,7 +54,7 @@ test("current document construction succeeds and old documents and batches refus
   const document = await Bun.file(new URL("../../../tests/fixtures/contracts/fetched-document/refused.json", import.meta.url)).json();
   const currentDocument = FetchedDocumentSchema.parse({ ...document, version: OPERATION_VERSION });
   expect(currentDocument.version).toBe(OPERATION_VERSION);
-  for (const version of ["2026-10-28", "2026-10-29", "2026-10-30"]) {
+  for (const version of ["2026-10-28", "2026-10-29", "2026-10-30", "2026-11-01"]) {
     expect(FetchedDocumentSchema.safeParse({ ...currentDocument, version }).success).toBe(false);
   }
   const recordedBatch = await Bun.file(new URL("../../../tests/fixtures/contracts/parsed-feed-batch/empty.json", import.meta.url)).json();
@@ -64,7 +64,9 @@ test("current document construction succeeds and old documents and batches refus
     evidence: {}, history_rows: [], history_days: [], work_rows: [], exclusions: [],
   });
   expect(current.version).toBe(PARSED_FEED_BATCH_VERSION);
-  expect(ParsedFeedBatchSchema.safeParse({ ...current, version: "2026-10-30" }).success).toBe(false);
+  for (const version of ["2026-10-30", "2026-10-31"]) {
+    expect(ParsedFeedBatchSchema.safeParse({ ...current, version }).success).toBe(false);
+  }
 });
 
 test("event readers require the current recorded version instead of rewriting older progress", () => {
@@ -72,7 +74,7 @@ test("event readers require the current recorded version instead of rewriting ol
     correlation_id: "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc", occurred_at: at,
     operation: "fetch" as const, phase: "completed" as const, details: { output_count: 1 } };
   expect(readFeedIngestEvent(event)).toEqual(event);
-  for (const version of ["2026-10-29T08:00", "2026-10-30T22:25", "2026-10-30T22:48", undefined]) {
+  for (const version of ["2026-10-29T08:00", "2026-10-30T22:25", "2026-10-30T22:48", "2026-11-01", undefined]) {
     expect(() => readFeedIngestEvent({ ...event, version })).toThrow();
   }
 });

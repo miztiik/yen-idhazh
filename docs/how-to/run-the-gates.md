@@ -240,24 +240,38 @@ The native package command supplies its declared timeout. Keep shorter
 process deadlines and existing independent failure checks; do not raise
 timeouts to retain repeated planning work.
 
-For native source HTTP changes, add
-`test/impit-transport.test.ts` to the service selection. It uses real Impit
-under Bun against generated loopback responses, not live publishers:
-gzip, Brotli and deflate decoding, decoded-byte cutoff, stalled-read
-cancellation, pre-header ownership through native timeout or delayed headers,
-manual redirects and native Firefox/Chrome wire headers. The pre-header cases
-also verify ownership until headers or the native deadline settles.
-Native total-body timeout is a separate API failure case; immediate socket
-closure is not an additional API latency gate. Run it on Linux in
-merge-candidate CI. Ordinary source tests keep their recorded HTTP boundary;
-they do not access the open web.
+For source browser changes, install the locked browser and add
+`test/browser-request-policy.test.ts`, `test/playwright-transport.test.ts` and
+`test/execution-resource-lifecycle.test.ts` to the service selection:
+
+```powershell
+bun run --cwd .\services\feed-ingest-plan browser:install
+```
+
+The real Chromium cases use bounded generated loopback responses and named
+recorded content, not live publishers. They cover temporary cookies,
+navigation, raw download-like XML, rendered articles, unresolved challenges,
+request admission, cross-origin frames and preflights, dedicated workers,
+unsafe destinations, browser-enforced SharedWorker refusal before script
+download, late requests after cleanup, cancellation, truncated and malformed
+encoded bodies,
+compressed decoded-body limits and rendered parser-input limits.
+Completed-body admission does not claim an early stream cutoff.
+Ordinary source tests keep their recorded HTTP boundary.
+
+Linux runs use the actual Bun browser implementation and check active
+Chromium sandboxing. Windows runs use Node for the browser oracle because
+the local Bun browser pipe does not initialize; that result is not proof
+of Linux compatibility. Linux Bun verification must pass before live
+collection.
 The separate `source-transport-test.yml` workflow runs this oracle on Linux
 with committed, frozen dependencies. Production `ci.yml`
-has no added native-platform job. The separate workflow runs for named source
+has no added browser-platform job. The separate workflow runs for named source
 changes in a pull request and supports manual dispatch on a candidate branch:
 `gh workflow run source-transport-test.yml --ref <candidate-branch>`.
 Its summary records the checked-out code SHA, candidate ref, run and attempt;
-logs retain the effective profiles, attempt timeout and measured host.
+logs retain browser settings, attempt timeout, measured host and installation
+duration. Browser binaries are not committed.
 A new workflow can run from a pull request before it is available for manual
 dispatch on the default branch. If a local registry cannot
 install a native patch, CI can prepare and verify its normal manifest and

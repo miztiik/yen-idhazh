@@ -149,11 +149,15 @@ describe("rejection evidence", () => {
     expect(HarvestDiagnosticsSchema.parse({
       fetch_failure: "body-too-large",
       body_limit: { configured_limit_bytes: 1024, observed_at_least_bytes: 1056 },
-    }).body_limit).toEqual({ configured_limit_bytes: 1024, observed_at_least_bytes: 1056 });
+    }).body_limit).toEqual({
+      configured_limit_bytes: 1024, observed_at_least_bytes: 1056, limit_stage: "decoded-stream",
+    });
     expect(HarvestDiagnosticsSchema.parse({
       fetch_failure: "robots-unknown", robots_failure: "body-too-large",
       body_limit: { configured_limit_bytes: 30, observed_at_least_bytes: 59 },
-    }).body_limit).toEqual({ configured_limit_bytes: 30, observed_at_least_bytes: 59 });
+    }).body_limit).toEqual({
+      configured_limit_bytes: 30, observed_at_least_bytes: 59, limit_stage: "decoded-stream",
+    });
     for (const body_limit of [
       { configured_limit_bytes: 1024, observed_at_least_bytes: 1024 },
       { configured_limit_bytes: -1, observed_at_least_bytes: 1056 },
@@ -588,7 +592,7 @@ describe("current planner contracts", () => {
     });
     expect(currentBatch.version).toBe(PARSED_FEED_BATCH_VERSION);
     expect(currentBatch.observations[batchCandidate.candidate_id]!.diagnostics?.body_limit).toEqual({
-      configured_limit_bytes: 1024, observed_at_least_bytes: 1056,
+      configured_limit_bytes: 1024, observed_at_least_bytes: 1056, limit_stage: "decoded-stream",
     });
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, version: "2026-10-24" }).success).toBe(false);
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, observations: { [digest]: { candidate_id: digest } } }).success).toBe(false);

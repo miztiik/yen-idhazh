@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-01",
+  "version": "2026-11-02",
   "availability": {
     "consecutive_failed_checks_before_rest": 5,
     "rest_hours": 24,
@@ -13,17 +13,11 @@
     "parse_timeout_ms": 10000,
     "article_robots_policy": "observe",
     "tidy_urls": true,
-    "request_headers": {
-      "primary": {
-        "browser": "firefox",
-        "headers": {}
-      },
-      "secondary": {
-        "browser": "chrome",
-        "headers": {}
-      },
-      "recoverable_http_statuses": [403, 406, 408, 425, 500, 502, 503, 504],
-      "recovery_min_body_bytes": 200
+    "request_headers": {},
+    "browser": {
+      "headless": true,
+      "document_timeout_ms": 30000,
+      "challenge_selectors": ["#challenge-form", "#challenge-running", "#cf-challenge-running"]
     },
     "response_diagnostics": {
       "header_names": ["content-type", "content-length", "retry-after"],

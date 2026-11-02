@@ -1,5 +1,6 @@
 /** Does the workflow client use an existing listener without taking over its lifetime? */
 import { expect, test } from "bun:test";
+import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createPlanApp, servePlan } from "../src/api/server";
@@ -15,7 +16,7 @@ test("a disabled listener fails before planning and remains under its caller's c
   try {
     const directory = join(fixture.directory, "evidence");
     await mkdir(directory);
-    const base = `http://${fixture.inputs.settings.listener.hostname}:${server.port}/api/2026-10-31`;
+    const base = `http://${fixture.inputs.settings.listener.hostname}:${server.port}${PLANNER_API_PREFIX}`;
     await expect(requestPlannerHttp(base, fixture.inputs, {}, directory))
       .rejects.toThrow("Planner listener is not enabled and responsive");
     expect(fixture.transport.requests).toHaveLength(0);
@@ -42,7 +43,7 @@ test("the workflow reads health before releasing the finalized collection", asyn
   try {
     const directory = join(fixture.directory, "evidence");
     await mkdir(directory);
-    const base = `http://127.0.0.1:${server.port}/api/2026-10-31`;
+    const base = `http://127.0.0.1:${server.port}${PLANNER_API_PREFIX}`;
     const result = await requestPlannerHttp(base, fixture.inputs, {}, directory);
     expect(result.health).toBeDefined();
     const summary = calls.findIndex(call => call.path.endsWith("/feed-health-state")

@@ -1,7 +1,7 @@
 /** Finalize a public stage chain after selected persistence without inventing missing timing evidence. */
 import type { SelectedFeedBatch } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
-import { currentExecutionState, executionHasArtifact, registerStageExecution } from "./document-state";
+import { currentExecutionState, disposeDocumentState, executionHasArtifact, registerStageExecution } from "./document-state";
 import type { DocumentState, ExecutionState } from "./document-state";
 import { recordPlanRun } from "../record-plan-run";
 import { stageStore } from "./stage-store";
@@ -15,6 +15,7 @@ async function saveOutcome(inputs: PlanInputs, state: ExecutionState, values: Pa
     if (state.run_result === result) delete state.run_result;
     throw error;
   }
+  finally { if (state.kind === "document") await disposeDocumentState(state); }
 }
 export async function recordFinalizedDocumentWork(inputs: PlanInputs, state: DocumentState) {
   if (!state.health_written || state.owns_choice || executionHasArtifact(inputs, state.context)) return;
@@ -32,7 +33,7 @@ export async function recordStandaloneRun(inputs: PlanInputs,
   if (claim.scope === "plan") return undefined;
   const pending = currentExecutionState(inputs, batch.context.run_id);
   const state = pending === undefined
-    ? registerStageExecution(inputs, batch.context, "partition", null) : await pending;
+    ? await registerStageExecution(inputs, batch.context, "partition", null) : await pending;
   const healthRecorded = batch.health_rows.length === 0 || state.health_written || claim.health_fingerprint !== null;
   return saveOutcome(inputs, state, {
     duration_ms: state.started === null ? null : Math.round(performance.now() - state.started),

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { RawDocumentFailureSchema, NetworkFailureDetailsSchema } from "@idhazh/common-contracts";
+import { RawDocumentFailureSchema, NetworkFailureDetailsSchema, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { rawDocumentContentsFilename, rawDocumentContentsPath, ArtifactRootSchema } from "../src/selected-artifact-path";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
 import { finishRawDocumentFailures, failureMetadata } from "../src/dump-raw-document-failure";
@@ -31,7 +31,7 @@ test("actual parse failures write and package metadata under one validated gener
   const requestId = randomUUID();
   const correlationId = randomUUID();
   async function post(operation: string, body: unknown) {
-    const response = await app.request(`/api/2026-10-31/${operation}`, {
+    const response = await app.request(`${PLANNER_API_PREFIX}/${operation}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     });
     expect(response.status).toBe(200);
@@ -82,7 +82,7 @@ test("actual parse failures write and package metadata under one validated gener
     const event = fixture.events.find(event => event.operation === "parse" && event.phase === "failed")!;
     expect(event.details.network_failure).toMatchObject({
       http_status: 200, final_attempted_url: "https://news.example/malformed.xml", failed_url: null,
-      response_evidence: { decoded_bytes: Buffer.byteLength(artifact.body!), request_profile: "firefox" },
+      response_evidence: { decoded_bytes: Buffer.byteLength(artifact.body!), request_profile: "chromium" },
     });
     await mkdir(join(fixture.directory, "config"));
     await writeFile(join(fixture.directory, "config", "feed-ingest-plan-service.json"), JSON.stringify(fixture.inputs.settings));
@@ -119,7 +119,7 @@ test("actual parse failures write and package metadata under one validated gener
 test("required network evidence survives clean and rejected flexible details without admitting caller secrets", () => {
   const evidence = NetworkFailureDetailsSchema.parse({
     requested_url: "https://news.example/input?page=2", final_attempted_url: null,
-    failed_url: "https://news.example/robots.txt?token=private", http_status: 503, request_profile: "firefox",
+    failed_url: "https://news.example/robots.txt?token=private", http_status: 503, request_profile: "chromium",
     response_evidence: null, robots_response_evidence: null, robots_http_status: 503, robots_failure: "http", attempt: null,
   });
   const base = {
@@ -130,7 +130,7 @@ test("required network evidence survives clean and rejected flexible details wit
     const event = prepareProgressEvent({ ...base, details }, [], undefined, undefined, evidence);
     expect(event.details.network_failure).toMatchObject({
       requested_url: "https://news.example/input", final_attempted_url: null, failed_url: null,
-      http_status: 503, request_profile: "firefox",
+      http_status: 503, request_profile: "chromium",
     });
     expect(JSON.stringify(event)).not.toContain("private");
   }

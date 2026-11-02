@@ -15,7 +15,7 @@ function failureCode(result: FetchResult): HarvestDiagnostics["failure_code"] {
       if (result.http_status !== null && result.http_status >= 400) return "http_client_error";
       return "unknown";
     case "dns": case "network": case "timeout": return "network_error";
-    case "body-too-large": case "redirect-loop": return "unknown";
+    case "body-too-large": case "redirect-loop": case "challenge-unresolved": return "unknown";
   }
 }
 

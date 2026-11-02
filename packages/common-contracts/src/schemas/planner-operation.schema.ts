@@ -7,8 +7,9 @@ import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
 import { HttpResponseEvidenceSchema, RequestProfileSchema } from "./http-response-evidence.schema";
 import { RequestPacingSettingsSchema } from "./config.schema";
 
-export const OPERATION_VERSION = "2026-11-01" as const;
+export const OPERATION_VERSION = "2026-11-02" as const;
 const OperationVersionSchema = z.literal(OPERATION_VERSION).default(OPERATION_VERSION);
+export const RequestRoleSchema = z.enum(["document", "resource"]);
 export const SourceArticleOutcomeSchema = z.strictObject({
   disposition: z.enum(["admitted", "source_refused"]),
   reason_code: SourceArticleRefusalReasonSchema.nullable(), settled_at: RecordedInstantSchema,
@@ -21,6 +22,7 @@ export type SourceArticleOutcome = z.infer<typeof SourceArticleOutcomeSchema>;
 export const RequestIdSchema = z.uuid({ version: "v4" });
 export const FetchAttemptSchema = z.strictObject({
   phase: z.enum(["validation", "robots", "target"]), sequence: CountSchema, retry: CountSchema,
+  request_role: RequestRoleSchema.nullable().default(null),
   duration_ms: CountSchema, backoff_ms: CountSchema.nullable().default(null),
   retry_total_ms: CountSchema.nullable().default(null),
   http_status: z.int().min(100).max(599).nullable(),
@@ -46,8 +48,9 @@ export const NetworkFailureDetailsSchema = z.strictObject({
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
-    { version: OPERATION_VERSION, change: "Retain request pacing waits and effective settings in failure details." },
-    { version: OPERATION_VERSION, change: "Validate body-free failure details separately from flexible log fields." },
+    { version: OPERATION_VERSION, change: "Record document and resource request roles and unresolved challenge failures." },
+    { version: "2026-11-01", change: "Retain request pacing waits and effective settings in failure details." },
+    { version: "2026-11-01", change: "Validate body-free failure details separately from flexible log fields." },
   ],
 });
 export type NetworkFailureDetails = z.infer<typeof NetworkFailureDetailsSchema>;
@@ -108,10 +111,10 @@ export const FetchedDocumentSchema = z.strictObject({
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
-    { version: OPERATION_VERSION, change: "Preserve request pacing waits and effective settings." },
-    { version: OPERATION_VERSION, change: "Add native response, profile and safe request-address evidence." },
-    { version: OPERATION_VERSION, change: "Require current fetched documents without older-format readers." },
-    { version: "2026-10-30", change: "Retain configured response limits and observed cutoff bytes." },
+    { version: OPERATION_VERSION, change: "Record document and resource request roles and explicit body-limit stages." },
+    { version: "2026-11-01", change: "Preserve request pacing waits and effective settings." },
+    { version: "2026-11-01", change: "Add native response, profile and safe request-address evidence." },
+    { version: "2026-11-01", change: "Require current fetched documents without older-format readers." },
     { version: "2026-10-28", change: "Earlier changes are in this file's Git history." },
   ],
 });

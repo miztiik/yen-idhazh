@@ -136,9 +136,6 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
 
 test("public harvest returns strict full text and streamed work facts without persisting an audit population", async () => {
   const recordings = await readRecordings();
-  for (const url of ["https://news.example/feed.xml", "https://news.example/story/"]) {
-    recordings.responses[url]!.unshift({ status: 403, body: "" });
-  }
   const transport = new RecordedTransport(recordings);
   const loaded = await inputs([
     source({ publisher_id: "recorded-publication" }),

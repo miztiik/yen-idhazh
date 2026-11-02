@@ -19,6 +19,7 @@ import {
   PARSED_FEED_BATCH_VERSION, SELECTED_ARTICLE_VERSION,
 } from "../version";
 import { PlannerRequestReportSchema } from "./planner-request-report.schema";
+import { FetchFailureSchema } from "./harvest-diagnostics.schema";
 export { PlannerRequestReportSchema } from "./planner-request-report.schema";
 export type { PlannerRequestReport } from "./planner-request-report.schema";
 
@@ -45,10 +46,7 @@ export type PreflightFreshness = z.infer<typeof PreflightFreshnessSchema>;
 export const PlannerHarvestObservationSchema = z.strictObject({
   candidate_id: Sha256Schema, http_status: z.int().min(100).max(599).nullable(),
   robots: z.enum(["allowed", "denied", "unknown"]).nullable(),
-  fetch_failure: z.enum([
-    "http", "timeout", "unsafe-target", "dns", "network", "robots-denied",
-    "robots-unknown", "body-too-large", "redirect-loop",
-  ]).nullable(),
+  fetch_failure: FetchFailureSchema.nullable(),
   paywall: z.boolean().nullable(),
   paywall_evidence: z.enum(["json-ld", "configured-marker", "none", "not-observed"]),
   extraction: z.enum(["success", "empty", "failed", "not-attempted"]),
@@ -119,11 +117,11 @@ export const ParsedFeedBatchSchema = z.strictObject({
 }).meta({
   version: PARSED_FEED_BATCH_VERSION,
   changelog: [
-    { version: PARSED_FEED_BATCH_VERSION, change: "Require the current parsed batch without older-format readers." },
+    { version: PARSED_FEED_BATCH_VERSION, change: "Retain browser challenge failures and response-size measurement stages." },
+    { version: "2026-10-31", change: "Require the current parsed batch without older-format readers." },
     { version: "2026-10-30", change: "Retain parser deadlines, collection completion and response byte-limit evidence." },
     { version: "2026-10-29", change: "Identify parsed candidates produced with shared query-free article cleanup." },
-    { version: "2026-10-27T18:30", change: "Link standalone article batches to their original source-outcome receipt." },
-    { version: "2026-10-25", change: "Earlier changes are in git." },
+    { version: "2026-10-25", change: "Earlier changes are in this file's Git history." },
   ],
 });
 export type ParsedFeedBatch = z.infer<typeof ParsedFeedBatchSchema>;

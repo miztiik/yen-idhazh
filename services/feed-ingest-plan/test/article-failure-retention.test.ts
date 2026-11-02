@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { ParsedFeedBatchSchema, RejectedArticleRowContract, RejectedArticleRowSchema, SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
+import { ParsedFeedBatchSchema, PLANNER_API_PREFIX, RejectedArticleRowContract, RejectedArticleRowSchema, SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { recordedPlan } from "./plan-recordings";
 import { createPlanTestServer } from "./plan-test-server";
@@ -50,13 +50,13 @@ async function capture(recorded: Awaited<ReturnType<typeof recordedPlan>>, urls:
     for (const url of urls) {
       const request = { request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news",
         fetch_item_type: "article", url };
-      const response = await app.request("/api/2026-10-31/fetch", {
+      const response = await app.request(`${PLANNER_API_PREFIX}/fetch`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request),
       });
       expect(response.status).toBe(200);
       const fetched = FetchResponseSchema.parse(await response.json());
       if (fetched.body_sha256 !== null) {
-        const parsed = await app.request("/api/2026-10-31/parse", {
+        const parsed = await app.request(`${PLANNER_API_PREFIX}/parse`, {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
             request_id: randomUUID(), fetch_request_id: fetched.fetch_request_id,
             article_id: fetched.article_id, correlation_id: fetched.correlation_id,
@@ -78,7 +78,6 @@ test("terminal HTTP, DNS, TLS, timeout, robots and extraction failures retain th
     delete recorded.runtime.correlation_id;
     recorded.inputs.harvest.config.harvest.article_robots_policy = "enforce";
     recorded.inputs.harvest.extraction.max_retries = 0;
-    recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
     for (const entry of cases) if (entry.responses) recorded.transport.recordings.responses[entry.url] = entry.responses;
     await capture(recorded, cases.map(entry => entry.url));
     const rows = await rejectedRows(recorded);
@@ -136,7 +135,6 @@ test("observed robots denial retains the actual dispatched target failures", asy
     const cases = (await failureCases()).filter(entry => entry.expected.fetch_failure !== null && entry.expected.robots === "allowed");
     recorded.inputs.harvest.config.harvest.article_robots_policy = "observe";
     recorded.inputs.harvest.extraction.max_retries = 0;
-    recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
     for (const entry of cases) {
       recorded.transport.recordings.responses[`${new URL(entry.url).origin}/robots.txt`] = [
         { status: 200, body: "User-agent: *\nDisallow: /\n" },

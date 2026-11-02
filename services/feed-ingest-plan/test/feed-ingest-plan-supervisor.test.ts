@@ -1,5 +1,6 @@
 /** Does the real child boundary preserve output and identity, and release its exact listener after failure? */
 import { expect, test } from "bun:test";
+import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeFile } from "node:fs/promises";
@@ -88,7 +89,7 @@ test("cancellation during real recorded feed work reaps the child and releases i
       serverEntry: fixture.serverEntry, signal: cancellation.signal,
     });
     void pending.catch(() => {});
-    const health = `http://127.0.0.1:${fixture.inputs.settings.listener.port}/api/2026-10-31/health`;
+    const health = `http://127.0.0.1:${fixture.inputs.settings.listener.port}${PLANNER_API_PREFIX}/health`;
     const deadline = AbortSignal.timeout(fixture.inputs.settings.supervision.readiness_timeout_ms);
     let identity: ReturnType<typeof PlannerReadySchema.parse> | undefined;
     while (!identity) {

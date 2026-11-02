@@ -20,10 +20,13 @@ import { finishRawDocumentFailures } from "../dump-raw-document-failure";
 import { stageStore } from "./stage-store";
 import { createRequestPacing } from "../harvest-feeds/request-pacing";
 import type { RequestPacing } from "../harvest-feeds/request-pacing";
+import { createBrowserRuntime, type BrowserRuntime } from "../harvest-feeds/browser-runtime";
+import { disposeExecutionStates } from "./document-state";
 
 const apiPrefix = PLANNER_API_PREFIX;
 const activeApps = new WeakMap<PlanInputs, number>();
 const requestPacingByInputs = new WeakMap<PlanInputs, RequestPacing>();
+const browsersByInputs = new WeakMap<PlanInputs, { runtime: BrowserRuntime; owned: boolean }>();
 function requestPacingFor(inputs: PlanInputs) {
   let pacing = requestPacingByInputs.get(inputs);
   if (pacing === undefined) {
@@ -39,11 +42,21 @@ function requestPacingFor(inputs: PlanInputs) {
 export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity?: PlannerReady) {
   const app = new Hono<{ Bindings: PlanningBindings }>();
   const requestPacing = requestPacingFor(inputs);
+  let browser = browsersByInputs.get(inputs);
+  if (browser === undefined) {
+    browser = {
+      runtime: runtime.boundary?.browser_runtime ?? createBrowserRuntime(inputs.harvest.config.harvest.browser),
+      owned: runtime.boundary?.browser_runtime === undefined,
+    };
+    browsersByInputs.set(inputs, browser);
+  }
+  const listenerSignal = new AbortController();
   const parserPool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
   const requestRuntime = () => ({
     ...runtime,
+    signal: AbortSignal.any([listenerSignal.signal, ...(runtime.signal === undefined ? [] : [runtime.signal])]),
     boundary: {
-      ...runtime.boundary, request_pacing: requestPacing,
+      ...runtime.boundary, request_pacing: requestPacing, browser_runtime: browser.runtime,
       include_private_suffixes: inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes,
     },
     parser_pool: parserPool,
@@ -53,10 +66,13 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity
     onError: c => c.json({ code: "BODY_TOO_LARGE", issues: [{ field: "body", message: "Body exceeds configured max_body_bytes" }] }, 413),
   }));
   app.route(apiPrefix, healthRoute(inputs, identity));
-  app.route(apiPrefix, planRoute((request, captured) => runFeedPlan(request, inputs, {
-    ...requestRuntime(), ...captured,
-    signal: AbortSignal.any([runtime.signal, captured?.signal].filter((signal): signal is AbortSignal => signal !== undefined)),
-  })));
+  app.route(apiPrefix, planRoute((request, captured) => {
+    const current = requestRuntime();
+    return runFeedPlan(request, inputs, {
+      ...current, ...captured,
+      signal: AbortSignal.any([current.signal, ...(captured?.signal === undefined ? [] : [captured.signal])]),
+    });
+  }));
   app.route(apiPrefix, documentRoute(inputs, requestRuntime));
   app.route(apiPrefix, collectionRoute(inputs, requestRuntime));
   app.route(apiPrefix, stagesRoute(inputs, requestRuntime));
@@ -75,12 +91,18 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity
   let closing: Promise<void> | undefined;
   return Object.assign(app, { close() {
     if (closing !== undefined) return closing;
+    listenerSignal.abort();
     if (runtime.parser_pool === undefined) parserPool.close();
     const remaining = (activeApps.get(inputs) ?? 1) - 1;
     activeApps.set(inputs, remaining);
-    if (remaining === 0) requestPacingByInputs.delete(inputs);
+    if (remaining === 0) {
+      requestPacingByInputs.delete(inputs);
+      browsersByInputs.delete(inputs);
+    }
     closing = remaining > 0 ? Promise.resolve() : (async () => {
       const failures: unknown[] = [];
+      try { await disposeExecutionStates(inputs); }
+      catch (error) { failures.push(error); }
       try { await finishRawDocumentFailures(inputs); }
       catch (error) { failures.push(error); }
       finally {
@@ -88,6 +110,10 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity
       }
       try { await requestPacing.close(); }
       catch (error) { failures.push(error); }
+      if (browser.owned) {
+        try { await browser.runtime.close(); }
+        catch (error) { failures.push(error); }
+      }
       if (failures.length) throw new AggregateError(failures, "Planner listener cleanup failed");
     })();
     return closing;

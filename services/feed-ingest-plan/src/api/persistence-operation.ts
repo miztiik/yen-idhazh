@@ -42,7 +42,7 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
     const document = await state;
     finalizedHealth ??= document.health_fingerprint;
   } else if (claim.scope !== "plan") {
-    registerStageExecution(inputs, batch.context, "partition", null);
+    await registerStageExecution(inputs, batch.context, "partition", null);
   }
   if (finalizedHealth !== null && finalizedHealth !== healthFingerprint(batch.health_rows)) {
     throw new PlanError("REQUEST_CONFLICT", "Selection differs from this execution's finalized health capture", "batch_id");

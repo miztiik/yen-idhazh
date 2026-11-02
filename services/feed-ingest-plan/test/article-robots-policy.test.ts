@@ -23,7 +23,6 @@ async function setup(options: {
     harvest: {
       ...loaded.config.harvest, article_robots_policy: options.policy ?? "observe",
       fetch_timeout_ms: options.timeout ?? 1000,
-      request_headers: { ...loaded.config.harvest.request_headers, secondary: null },
       request_pacing: {
         ...loaded.config.harvest.request_pacing,
         enabled: options.pacing ?? false,
@@ -95,7 +94,9 @@ test("observed denial retains robots facts while 200, 403 and 429 describe the a
     });
     expect(fetched.body).toBe(response.status === 200 ? transport.recordings.bodies.article : null);
     expect(requested(transport)).toEqual([robots, target]);
-    expect(fetched.attempts!.filter(attempt => attempt.phase === "target")).toHaveLength(1);
+    expect(fetched.attempts!.map(attempt => [attempt.phase, attempt.request_role])).toEqual([
+      ["robots", "document"], ["target", "document"],
+    ]);
   }
 });
 
@@ -320,15 +321,17 @@ test("a cancelled shared-robots waiter stops without cancelling the first caller
   const controller = new AbortController();
   let cancellation: ReturnType<typeof setTimeout> | undefined;
   try {
-    const second = await fetcher.fetch(target, async measurement => {
-      if (measurement.attempt.phase === "validation") {
-        cancellation = setTimeout(() => {
-          controller.abort(new DOMException("recorded shared waiter cancellation", "AbortError"));
-        }, 0);
-      }
-    }, "article", controller.signal);
+    const waiting = fetcher.fetch(target, undefined, "article", controller.signal);
+    cancellation = setTimeout(() => {
+      controller.abort(new DOMException("recorded shared waiter cancellation", "AbortError"));
+    }, 0);
+    const second = await waiting;
     expect(second).toMatchObject({ body: null, failure: "timeout" });
-    expect(second.attempts!.map(attempt => attempt.phase)).toEqual(["validation"]);
+    for (const attempt of second.attempts ?? []) {
+      expect(attempt).toMatchObject({
+        failure: "timeout", request_role: null, request_url: null, request_profile: null,
+      });
+    }
     expect(firstSettled).toBe(false);
     expect(transport.active).toBe(1);
     expect(requested(transport)).toEqual([robots]);

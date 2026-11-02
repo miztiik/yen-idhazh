@@ -3,6 +3,7 @@ import { z } from "zod";
 import { CountSchema, NonEmptySchema, reject } from "./primitives";
 import { HttpResponseEvidenceSchema } from "./http-response-evidence.schema";
 import { RequestPacingSettingsSchema } from "./config.schema";
+import { HARVEST_DIAGNOSTICS_VERSION } from "../version";
 
 export const ExtractionSignalSchema = z.enum(["contaminated", "boilerplate", "not_prose", "too_short"]);
 export const ExtractionQualitySchema = z.strictObject({
@@ -28,10 +29,11 @@ export type ExtractionQuality = z.infer<typeof ExtractionQualitySchema>;
 
 export const FetchFailureSchema = z.enum([
   "http", "timeout", "unsafe-target", "dns", "network", "robots-denied",
-  "robots-unknown", "body-too-large", "redirect-loop",
+  "robots-unknown", "body-too-large", "redirect-loop", "challenge-unresolved",
 ]);
 export const BodyLimitEvidenceSchema = z.strictObject({
   configured_limit_bytes: CountSchema, observed_at_least_bytes: CountSchema,
+  limit_stage: z.enum(["decoded-stream", "completed-response", "parser-input"]).default("decoded-stream"),
 }).superRefine((value, ctx) => {
   if (value.observed_at_least_bytes <= value.configured_limit_bytes) {
     reject(ctx, "cutoff evidence must exceed the configured byte limit");
@@ -70,8 +72,9 @@ const HarvestDiagnosticsBaseSchema = z.strictObject({
   warnings: z.array(z.enum(["malformed-json-ld", "semantic-dom-fallback"])).max(2).default([]),
   quality: ExtractionQualitySchema.nullable().default(null),
 }).meta({
-  version: "2026-11-01",
+  version: HARVEST_DIAGNOSTICS_VERSION,
   changelog: [
+    { version: HARVEST_DIAGNOSTICS_VERSION, change: "Classify unresolved challenges and name body-limit measurement stages." },
     { version: "2026-11-01", change: "Retain measured request pacing and effective settings." },
     { version: "2026-11-01", change: "Retain bounded native response evidence; missing historical evidence stays null." },
     { version: "2026-10-30", change: "Distinguish parser deadline, cancellation and worker failures from source failures." },

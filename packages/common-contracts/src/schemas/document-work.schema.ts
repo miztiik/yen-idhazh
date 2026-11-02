@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { CountSchema, PositiveCountSchema, RunIdSchema, SlugSchema, TimestampSchema } from "./primitives";
 import { ExtractionFailureSchema, FetchFailureSchema } from "./harvest-diagnostics.schema";
+import { RequestRoleSchema } from "./planner-operation.schema";
 
 export const DocumentWorkFactSchema = z.strictObject({
   run_id: RunIdSchema, attempt: PositiveCountSchema, feed_id: SlugSchema,
@@ -12,6 +13,7 @@ export const DocumentWorkFactSchema = z.strictObject({
   attribution: z.enum(["source", "pipeline", "unresolved"]).nullable(),
   failure_code: z.union([FetchFailureSchema, ExtractionFailureSchema, z.literal("malformed-feed"), z.null()]),
   request_phase: z.enum(["validation", "robots", "target"]).nullable(),
+  request_role: RequestRoleSchema.nullable().default(null),
   dispatched_request_count: CountSchema.nullable(), request_coverage: z.enum(["complete", "partial", "unknown"]).nullable(),
 });
 export type DocumentWorkFact = z.infer<typeof DocumentWorkFactSchema>;

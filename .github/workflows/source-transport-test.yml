@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  native_source_transport:
+  browser_source_transport:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -49,20 +49,23 @@ jobs:
             "$(git rev-parse HEAD)" "$CANDIDATE_REF" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
             | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Install native source dependencies
+      - name: Install browser source dependencies
         run: |
           set -euo pipefail
           start=$SECONDS
           bun install --cwd services/feed-ingest-plan --frozen-lockfile
           bun install --cwd packages/feed-probe --frozen-lockfile
           bun install --cwd services/host-fingerprints --frozen-lockfile
-          printf 'Native source verification dependency installation took %d seconds.\n' "$((SECONDS - start))"
+          printf 'Source dependency installation took %d seconds.\n' "$((SECONDS - start))"
+          start=$SECONDS
+          bun run --cwd services/feed-ingest-plan browser:install
+          printf 'Chromium installation took %d seconds.\n' "$((SECONDS - start))"
           cd services/feed-ingest-plan
-          node -e 'const fs = require("node:fs"), os = require("node:os"); console.log(JSON.stringify({native_binary_bytes: fs.statSync(require.resolve("impit-linux-x64-gnu")).size, host_platform: process.platform, host_architecture: process.arch, host_logical_cpus: os.cpus().length, host_ram_bytes: os.totalmem()}))'
-          bun -e 'const config = JSON.parse(await Bun.file("../../config/feed-ingest-plan.json").text()); console.log(JSON.stringify({profiles: config.harvest.request_headers, attempt_timeout_ms: config.harvest.fetch_timeout_ms, response_diagnostics: config.harvest.response_diagnostics}))'
+          node -e 'const os = require("node:os"); console.log(JSON.stringify({host_platform: process.platform, host_architecture: process.arch, host_logical_cpus: os.cpus().length, host_ram_bytes: os.totalmem()}))'
+          bun -e 'const config = JSON.parse(await Bun.file("../../config/feed-ingest-plan.json").text()); console.log(JSON.stringify({browser: config.harvest.browser, request_headers: config.harvest.request_headers, attempt_timeout_ms: config.harvest.fetch_timeout_ms, response_diagnostics: config.harvest.response_diagnostics}))'
 
-      - name: Verify native source response ownership
+      - name: Verify checked browser source ownership
         run: |
           bun run --cwd services/feed-ingest-plan check
           bun run --cwd packages/feed-probe check
-          bun run --cwd services/feed-ingest-plan test ./test/impit-transport.test.ts
+          bun run --cwd services/feed-ingest-plan test ./test/browser-request-policy.test.ts ./test/playwright-transport.test.ts ./test/execution-resource-lifecycle.test.ts

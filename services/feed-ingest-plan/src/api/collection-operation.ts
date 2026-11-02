@@ -12,7 +12,7 @@ import {
   ReleaseCollectionRequestSchema,
 } from "./collection-contracts";
 import { captureDocumentContext } from "./operation-context";
-import { documentState } from "./document-state";
+import { currentExecutionState, disposeDocumentState, documentState, releaseExecutionState } from "./document-state";
 import type { DocumentState } from "./document-state";
 import { stageStore } from "./stage-store";
 import { rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
@@ -79,6 +79,7 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
     const finished = [...owned].find(([, value]) => value.status !== "collecting"
       && !stageStore(inputs).isRunActive(value.context.run_id));
     if (finished === undefined) throw new PlanError("REQUEST_BUSY", "Collection capacity is occupied by active work", "collection_id");
+    await releaseExecutionState(inputs, finished[1].context.run_id);
     owned.delete(finished[0]);
   }
   const context = pendingContexts.get(inputs)?.get(request.collection_id) ?? resolveRunContext(inputs.settings, runtime.git_sha, runtime.clock?.() ?? new Date(),
@@ -89,6 +90,7 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
   }
   const record = captureDocumentContext(request.collection_id, context.correlation_id, inputs, runtime, context);
   const stages = stageStore(inputs);
+  const previousState = currentExecutionState(inputs, context.run_id);
   stages.retainRun(context.run_id);
   try {
     const state = await documentState(record, inputs, runtime);
@@ -113,7 +115,11 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
       config_sha256: record.config_sha256, signal: new AbortController(), status: "collecting",
       closing: false, finalizing: false, operations: new Set() });
     return { collection_id: request.collection_id, context, feeds: [...feeds.keys()] };
-  } catch (error) { stages.releaseRun(context.run_id); throw error; }
+  } catch (error) {
+    try { if (previousState === undefined) await releaseExecutionState(inputs, context.run_id); }
+    finally { stages.releaseRun(context.run_id); }
+    throw error;
+  }
 }
 export function claimCollectionFeed(inputs: PlanInputs, id: string, feedId: string, correlationId: string) {
   const collection = getCollection(inputs, id);
@@ -172,6 +178,7 @@ export async function completeCollection(inputs: PlanInputs, id: string) {
     }
     collection.status = "complete";
     collection.completed_batch_id = batch.batch_id;
+    await disposeDocumentState(collection.state);
     return { collection_id: id, batch_id: batch.batch_id, discovered_articles: saved.result, rejected_articles: rejected };
   })();
   try { return await collection.complete; }
@@ -197,10 +204,12 @@ export async function cancelCollection(inputs: PlanInputs, id: string) {
   await drainCollectionOperations(collection);
   await collection.complete?.catch(() => undefined);
   await drainCollectionOperations(collection);
-  const parsed = snapshotCollectionBatch(inputs, collection, false);
-  return { collection_id: id, status: "cancelled" as const, batch_id: parsed.batch_id,
-    rejected_articles: await finalizeCollectionRejections(inputs, collection),
-    has_work: collection.state.work.rows().length > 0 };
+  try {
+    const parsed = snapshotCollectionBatch(inputs, collection, false);
+    return { collection_id: id, status: "cancelled" as const, batch_id: parsed.batch_id,
+      rejected_articles: await finalizeCollectionRejections(inputs, collection),
+      has_work: collection.state.work.rows().length > 0 };
+  } finally { await disposeDocumentState(collection.state); }
 }
 export async function trackCollectionOperation<T>(collection: Collection, operation: () => Promise<T>) {
   if (collection.status !== "collecting" || collection.closing || collection.signal.signal.aborted) {
@@ -233,6 +242,7 @@ export async function finalizeCollection(raw: unknown, inputs: PlanInputs) {
   collection.closing = true;
   collection.finalizing = true;
   await drainCollectionOperations(collection);
+  await disposeDocumentState(collection.state);
   const timing = PlanApiTimingSchema.parse({
     operation: "fetch", duration_ms: request.collection_timing.duration_ms, status: request.collection_timing.status,
   });
@@ -252,7 +262,7 @@ export async function finalizeCollection(raw: unknown, inputs: PlanInputs) {
   collection.finalizing = false;
   return result;
 }
-export function releaseCollection(raw: unknown, inputs: PlanInputs) {
+export async function releaseCollection(raw: unknown, inputs: PlanInputs) {
   const request = ReleaseCollectionRequestSchema.parse(raw);
   const collection = [...held(inputs).values()].find(value =>
     value.context.run_id === request.run_id && value.context.writer.attempt === request.attempt);
@@ -260,6 +270,7 @@ export function releaseCollection(raw: unknown, inputs: PlanInputs) {
   if (collection.finalization === undefined || collection.finalizing || collection.operations.size) {
     throw new PlanError("REQUEST_INCOMPLETE", "Collection cannot be released before final accounting", "run_id");
   }
+  await releaseExecutionState(inputs, collection.context.run_id);
   held(inputs).delete(collection.collection_id);
   stageStore(inputs).releaseRun(collection.context.run_id);
   return { ...request, released: true };

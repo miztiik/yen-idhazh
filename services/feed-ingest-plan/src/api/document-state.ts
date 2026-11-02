@@ -39,32 +39,71 @@ export type DocumentState = ExecutionStateBase & {
 };
 export type ExecutionState = DocumentState | (ExecutionStateBase & { kind: "plan" | "selection" | "partition" });
 const documents = new WeakMap<PlanInputs, Map<string, Promise<ExecutionState>>>();
+const admissions = new WeakMap<PlanInputs, Promise<void>>();
+const disposals = new WeakMap<DocumentState, Promise<void>>();
+async function updateExecutions<T>(inputs: PlanInputs, update: () => Promise<T>): Promise<T> {
+  const previous = admissions.get(inputs) ?? Promise.resolve();
+  const result = previous.then(update);
+  const settled = result.then(() => undefined, () => undefined);
+  admissions.set(inputs, settled);
+  try { return await result; }
+  finally { if (admissions.get(inputs) === settled) admissions.delete(inputs); }
+}
+export function disposeDocumentState(state: DocumentState) {
+  let pending = disposals.get(state);
+  if (pending === undefined) {
+    pending = state.fetcher.close();
+    disposals.set(state, pending);
+  }
+  return pending;
+}
+async function disposeState(pending: Promise<ExecutionState>) {
+  const state = await pending;
+  if (state.kind === "document") await disposeDocumentState(state);
+}
+export async function disposeExecutionStates(inputs: PlanInputs) {
+  await updateExecutions(inputs, async () => {
+    const results = await Promise.allSettled([...statesFor(inputs).values()].map(disposeState));
+    const failures = results.flatMap(result => result.status === "rejected" ? [result.reason] : []);
+    if (failures.length) throw new AggregateError(failures, "Execution resource cleanup failed");
+  });
+}
+export async function releaseExecutionState(inputs: PlanInputs, runId: string) {
+  await updateExecutions(inputs, async () => {
+    const states = statesFor(inputs);
+    const pending = states.get(runId);
+    if (pending !== undefined) await disposeState(pending);
+    states.delete(runId);
+  });
+}
 function statesFor(inputs: PlanInputs) {
   let states = documents.get(inputs);
   if (states === undefined) { states = new Map(); documents.set(inputs, states); }
   return states;
 }
-function statesForExecution(inputs: PlanInputs, runId: string) {
+async function statesForExecution(inputs: PlanInputs, runId: string) {
   const states = statesFor(inputs);
   while (states.size >= inputs.settings.listener.max_stage_batches && !states.has(runId)) {
     const expired = [...states.keys()].find(id => !stageStore(inputs).isRunActive(id));
     if (expired === undefined) throw new PlanError("REQUEST_BUSY", "Run capacity is occupied by active work");
+    await disposeState(states.get(expired)!);
     stageStore(inputs).forgetRun(expired);
     states.delete(expired);
   }
   return states;
 }
-function rememberExecution(inputs: PlanInputs, runId: string, state: Promise<ExecutionState>) {
-  statesForExecution(inputs, runId).set(runId, state);
-}
-export function registerStageExecution(
+export async function registerStageExecution(
   inputs: PlanInputs, context: RunContext, kind: "plan" | "selection" | "partition", started: number | null,
 ) {
   const state: ExecutionState = {
     kind, context, started, api_timings: [], health_written: false, health_fingerprint: null,
     owns_choice: kind !== "plan",
   };
-  rememberExecution(inputs, context.run_id, Promise.resolve(state));
+  await updateExecutions(inputs, async () => {
+    const states = await statesForExecution(inputs, context.run_id);
+    if (states.has(context.run_id)) throw new PlanError("REQUEST_CONFLICT", "Execution identity is already registered", "run_id");
+    states.set(context.run_id, Promise.resolve(state));
+  });
   return state;
 }
 export function executionHasArtifact(inputs: PlanInputs, context: RunContext) {
@@ -84,28 +123,31 @@ export function checkFetchedDocument(record: FetchedDocumentReference, inputs: P
   return artifact;
 }
 export async function documentState(record: DocumentOperationContext, inputs: PlanInputs, runtime: PlanRuntime) {
-  const states = statesForExecution(inputs, record.context.run_id);
-  let pending = states.get(record.context.run_id);
-  if (pending === undefined) {
-    pending = (async (): Promise<DocumentState> => {
-      const started = performance.now();
-      const context = record.context;
-      const historyStarted = performance.now();
-      const baseline = await readRunHistory(inputs, context);
-      const history = await preparePlanningHealth(inputs, context.now, { context, rows: [] }, baseline.health);
-      return {
-        kind: "document", context, history, work: createRunHealth(context,
-          inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source)), history.sources,
-          { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls,
-            clock: runtime.observation_clock ?? (() => new Date()) }),
-        fetcher: createPermittedFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),
-        config_sha256: record.config_sha256, fetch_request_ids: new Set<string>(), baseline, discovered_rows: [], started,
-        api_timings: [{ operation: "feed-health-before-fetch", duration_ms: Math.round(performance.now() - historyStarted), status: "completed" }],
-        health_written: false, health_fingerprint: null, owns_choice: false,
-      };
-    })();
-    rememberExecution(inputs, record.context.run_id, pending);
-  }
+  const { pending } = await updateExecutions(inputs, async () => {
+    const states = await statesForExecution(inputs, record.context.run_id);
+    let pending = states.get(record.context.run_id);
+    if (pending === undefined) {
+      pending = (async (): Promise<DocumentState> => {
+        const started = performance.now();
+        const context = record.context;
+        const historyStarted = performance.now();
+        const baseline = await readRunHistory(inputs, context);
+        const history = await preparePlanningHealth(inputs, context.now, { context, rows: [] }, baseline.health);
+        return {
+          kind: "document", context, history, work: createRunHealth(context,
+            inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source)), history.sources,
+            { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls,
+              clock: runtime.observation_clock ?? (() => new Date()) }),
+          fetcher: createPermittedFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),
+          config_sha256: record.config_sha256, fetch_request_ids: new Set<string>(), baseline, discovered_rows: [], started,
+          api_timings: [{ operation: "feed-health-before-fetch", duration_ms: Math.round(performance.now() - historyStarted), status: "completed" }],
+          health_written: false, health_fingerprint: null, owns_choice: false,
+        };
+      })();
+      states.set(record.context.run_id, pending);
+    }
+    return { pending };
+  });
   const state = await pending;
   if (state.kind !== "document") throw new PlanError("ARTIFACT_INVALID", "Document work belongs to a different execution", "fetch_request_id");
   if (state.context.correlation_id !== record.context.correlation_id) {

@@ -1,6 +1,6 @@
 # The Trust Boundary
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-11-02
 
 Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the planted attacks that assert it on every change. This is the operational home of Guardrail #11.
 
@@ -122,13 +122,22 @@ Two arguments swap silently and neither answer is wrong-looking: `Protego.can_fe
 **A group naming another crawler does not bind us.** The identity stays `yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)`, which carries a contact address a publisher can act on. Sending a user agent a site allows would defeat the publisher's stated policy and throw that address away.
 
 The isolated TypeScript planner instead uses
-[native browser transport](feed-harvesting.md#request-and-extraction-controls).
+[checked browser transport](feed-harvesting.md#request-and-extraction-controls).
 It rejects unsafe schemes, credentials, local names and explicit private or
-reserved addresses before each manual redirect dispatch. Impit resolves
+reserved addresses before dispatch, including browser redirects and resources.
+Chromium resolves
 hostnames; this path has no project DNS lookup, socket address pinning or
 DNS-rebinding protection. It keeps native browser headers and matches general
 `User-agent: *` robots rules, not browser-specific groups. Feed requests observe
 permission; articles preserve their configured enforce-or-observe policy.
+Sandboxed browser contexts are temporary and receive no repository credentials.
+The request gate is installed before page or child-target execution; an
+unsupported target is refused rather than given an unchecked route.
+Service workers, WebSockets and unsolicited popups are blocked.
+SharedWorker creation is disabled by Chromium's `--disable-shared-workers`
+startup control, before a page can request its worker script. Closing a paused
+SharedWorker target alone is insufficient: its script can already be in flight.
+Rendered HTML still crosses the extraction sanitizer before downstream use.
 Python's transport, permission rules and declared identity remain unchanged.
 
 ### Permission is a value, and a target without it is never requested

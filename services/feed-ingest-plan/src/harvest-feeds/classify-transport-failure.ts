@@ -1,22 +1,29 @@
-/** Classify one source failure while preserving a proven cutoff and available safe codes. */
+/** Classify source failures without discarding body-limit evidence or safe error codes. */
 import { constants as osConstants } from "node:os";
 import { HarvestDiagnosticsSchema } from "@idhazh/common-contracts";
-import { NetworkError, TimeoutError, DecodingError, ProtocolError, StreamError } from "impit";
+import { errors } from "playwright";
 import type { FetchFailure } from "./harvest-types";
-import { BodyLimitError, ResponseReadError, readBodyLimitEvidence } from "./transport";
+import { BodyLimitError, BrowserNetworkError, ChallengeUnresolvedError, ResponseReadError, readBodyLimitEvidence } from "./transport";
 import { UnsafeTargetError } from "./safe-target";
 import { InvalidArticleUrlError } from "./article-url";
 
 export function classifyTransportFailure(error: unknown, signal: AbortSignal): FetchFailure {
   if (readBodyLimitEvidence(error) !== undefined) return "body-too-large";
+  if (error instanceof AggregateError && error.cause !== undefined) return classifyTransportFailure(error.cause, signal);
+  if (error instanceof ChallengeUnresolvedError) return "challenge-unresolved";
   if (error instanceof ResponseReadError) {
     const primary = error.cause instanceof AggregateError ? error.cause.cause : error.cause;
-    return signal.aborted || primary instanceof TimeoutError ? "timeout" : "network";
+    if (signal.aborted || primary instanceof errors.TimeoutError
+      || (primary instanceof DOMException && ["TimeoutError", "AbortError"].includes(primary.name))) return "timeout";
+    return primary instanceof BrowserNetworkError ? classifyTransportFailure(primary, signal) : "network";
   }
   if (error instanceof UnsafeTargetError || error instanceof InvalidArticleUrlError) return "unsafe-target";
-  if (signal.aborted || error instanceof TimeoutError) return "timeout";
-  if (error instanceof NetworkError || error instanceof ProtocolError || error instanceof DecodingError
-    || error instanceof StreamError) return "network";
+  if (signal.aborted || error instanceof errors.TimeoutError
+    || (error instanceof DOMException && ["TimeoutError", "AbortError"].includes(error.name))) return "timeout";
+  if (error instanceof BrowserNetworkError) {
+    if (error.code === "ERR_TOO_MANY_REDIRECTS") return "redirect-loop";
+    return error.code === "ERR_NAME_NOT_RESOLVED" ? "dns" : "network";
+  }
   const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
   if (cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string") {
     if (["ENOTFOUND", "EAI_AGAIN", "ENODATA"].includes(cause.code)) return "dns";
@@ -33,6 +40,7 @@ export function readTransportErrorCode(error: unknown): string | null {
   if (cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string") {
     if (!(cause.code in osConstants.errno)
       && !["ENOTFOUND", "EAI_AGAIN", "ENODATA"].includes(cause.code)
+      && !/^ERR_[A-Z0-9_]+$/.test(cause.code)
       && !/^(ERR_TLS_|ERR_SSL_|CERT_|DEPTH_|SELF_SIGNED_|UNABLE_TO_)/.test(cause.code)) return null;
     const parsed = HarvestDiagnosticsSchema.shape.error_code.safeParse(cause.code);
     if (parsed.success) return parsed.data;

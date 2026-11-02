@@ -10,6 +10,7 @@ import { createPermittedFetcher } from "./robots-policy";
 import type { HarvestTransport } from "./transport";
 import type { RequestPacing } from "./request-pacing";
 import { ArticleParserPool } from "./article-parser-pool";
+import { createBrowserRuntime, type BrowserRuntime } from "./browser-runtime";
 
 export { loadHarvestInputs, readHarvestInputs } from "./load-harvest-inputs";
 export type { HarvestInputs } from "./load-harvest-inputs";
@@ -56,11 +57,16 @@ export async function harvestFeeds(
     transport?: HarvestTransport;
     request_pacing?: RequestPacing;
     include_private_suffixes?: boolean;
+    browser_runtime?: BrowserRuntime;
   } = {},
 ): Promise<HarvestResult> {
   WriterIdentitySchema.parse(context.writer);
+  const ownedBrowser = boundary.browser_runtime === undefined && boundary.transport === undefined
+    ? createBrowserRuntime(inputs.config.harvest.browser) : undefined;
+  const browserRuntime = boundary.browser_runtime ?? ownedBrowser;
   const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, {
     ...boundary,
+    ...(browserRuntime === undefined ? {} : { browser_runtime: browserRuntime }),
     include_private_suffixes: boundary.include_private_suffixes
       ?? inputs.config.curate_articles.website_grouping.include_private_suffixes,
   }, context.observation_clock);
@@ -122,6 +128,7 @@ export async function harvestFeeds(
     };
   } finally {
     if (context.parser_pool === undefined) ownedPool.close();
-    await fetcher.close();
+    try { await fetcher.close(); }
+    finally { await ownedBrowser?.close(); }
   }
 }

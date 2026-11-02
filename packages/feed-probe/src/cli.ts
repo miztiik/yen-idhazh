@@ -4,7 +4,7 @@ import {
   FeedProbeResultSchema,
   type FeedProbeResult,
 } from "@idhazh/common-contracts";
-import { createFeedProbePacing, probeFeed } from "./feed-probe";
+import { createFeedProbeBrowser, createFeedProbePacing, probeFeed } from "./feed-probe";
 import type { FeedProbeOptions } from "./feed-probe";
 import {
   feedProbeCliUsage,
@@ -30,6 +30,7 @@ import {
 } from "./cli-output";
 
 export type FeedProbeCliDependencies = {
+  browser_runtime?: FeedProbeOptions["browser_runtime"];
   repoRoot?: string;
   now?: () => Date;
   probe?: (
@@ -99,10 +100,13 @@ export async function runFeedProbeCli(
   }
 
   let requestPacing: Awaited<ReturnType<typeof createFeedProbePacing>> | undefined;
+  let ownedBrowser: Awaited<ReturnType<typeof createFeedProbeBrowser>> | undefined;
   if (dependencies.probe === undefined) {
     try {
+      if (dependencies.browser_runtime === undefined) ownedBrowser = await createFeedProbeBrowser();
       requestPacing = await createFeedProbePacing();
     } catch (error) {
+      await ownedBrowser?.close();
       stderr(`error: ${error instanceof Error ? error.message : String(error)}`);
       return 1;
     }
@@ -118,8 +122,9 @@ export async function runFeedProbeCli(
   const reports: FeedProbeReport[] = [];
   let exceptionFailures = 0;
   const probe = dependencies.probe ?? probeFeed;
+  const browserRuntime = dependencies.browser_runtime ?? ownedBrowser;
 
-  let pacingCloseError: unknown = null;
+  const cleanupErrors: unknown[] = [];
   try {
     for (const target of targets) {
       const started = performance.now();
@@ -129,6 +134,7 @@ export async function runFeedProbeCli(
           sample_count: options.articles,
         }, {
           publisher_id: target.publisher_id,
+          ...(browserRuntime === undefined ? {} : { browser_runtime: browserRuntime }),
           ...(requestPacing === undefined ? {} : { request_pacing: requestPacing }),
         });
         FeedProbeResultSchema.parse(result);
@@ -145,10 +151,14 @@ export async function runFeedProbeCli(
     }
   } finally {
     try { await requestPacing?.close(); }
-    catch (error) { pacingCloseError = error; }
+    catch (error) { cleanupErrors.push(error); }
+    try { await ownedBrowser?.close(); }
+    catch (error) { cleanupErrors.push(error); }
   }
-  if (pacingCloseError !== null) {
-    stderr(`error: request pacing cleanup failed: ${pacingCloseError instanceof Error ? pacingCloseError.message : String(pacingCloseError)}`);
+  if (cleanupErrors.length) {
+    for (const error of cleanupErrors) {
+      stderr(`error: probe cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return 1;
   }
 

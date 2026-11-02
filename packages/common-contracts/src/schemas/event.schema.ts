@@ -19,9 +19,9 @@ export const FeedIngestEventSchema = z.strictObject({
 }).meta({
   version: FEED_INGEST_EVENT_VERSION,
   changelog: [
-    { version: FEED_INGEST_EVENT_VERSION, change: "Add independently validated native request-failure evidence." },
-    { version: FEED_INGEST_EVENT_VERSION, change: "Require current progress events without earlier-version conversion." },
-    { version: "2026-10-30T22:48", change: "Add separate typed quality-rejection events." },
+    { version: FEED_INGEST_EVENT_VERSION, change: "Retain browser challenge failures and request-role evidence in progress details." },
+    { version: "2026-11-01", change: "Add independently validated native request-failure evidence." },
+    { version: "2026-11-01", change: "Require current progress events without earlier-version conversion." },
     { version: "2026-10-30T22:25", change: "Record safe feed failure targets and response byte-limit evidence." },
     { version: "2026-10-29T08:00", change: "Earlier changes are in this file's Git history." },
   ],
@@ -50,7 +50,8 @@ export const FeedOutcomePayloadSchema = z.strictObject({
 }).meta({
   version: FEED_OUTCOME_PAYLOAD_VERSION,
   changelog: [
-    { version: FEED_OUTCOME_PAYLOAD_VERSION, change: "Retain decoded response byte-limit evidence." },
+    { version: FEED_OUTCOME_PAYLOAD_VERSION, change: "Retain explicit browser challenge and response-size evidence." },
+    { version: "2026-10-30", change: "Retain decoded response byte-limit evidence." },
     { version: "2026-10-27", change: "Remove source classification fields from planner feed outcomes." },
   ],
 });
