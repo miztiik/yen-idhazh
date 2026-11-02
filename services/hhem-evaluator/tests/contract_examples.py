@@ -1,0 +1,136 @@
+"""Build bounded native contract examples, not model prediction recordings."""
+
+import hashlib
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+
+from hhem_evaluator.contracts.base import SCHEMA_VERSION, NativeContract
+from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
+from hhem_evaluator.contracts.evaluation_event import EvaluationEvent, EventDetails
+from hhem_evaluator.contracts.evaluation_progress import (
+    EvaluationTimings,
+    EvaluationWindows,
+    WindowCounts,
+)
+from hhem_evaluator.contracts.evaluation_result import EvaluationResult
+from hhem_evaluator.contracts.model_identity import ModelIdentity, RuntimeVersions
+from hhem_evaluator.contracts.worker_identity import WorkerIdentity
+from hhem_evaluator.contracts.worker_message import ScoreWindow, WindowOutcome
+from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.resolve_ids import create_event_id
+from hhem_evaluator.resolve_request import resolve_request
+
+REPOSITORY = Path(__file__).resolve().parents[3]
+SETTINGS_FILE = REPOSITORY / "config" / "hhem-evaluator" / "settings.json"
+EXECUTION_ID = "11111111-2222-4333-8444-555555555555"
+REQUEST_ID = "12345678-1234-4234-8234-123456789abc"
+CORRELATION_ID = "87654321-4321-4321-8321-cba987654321"
+OPERATION_ID = "99999999-8888-4777-8666-555555555555"
+
+
+def read_contract[Contract: NativeContract](contract: type[Contract], payload: object) -> Contract:
+    """Validate a JSON-shaped value through the real native JSON reader."""
+    return contract.model_validate_json(json.dumps(payload))
+
+
+def example_model() -> ModelIdentity:
+    """Supply format examples, never evidence of loaded model bytes."""
+    settings = load_settings(SETTINGS_FILE)
+    return ModelIdentity(
+        reference=settings.hhem.model.reference,
+        configured_revision=settings.hhem.model.revision,
+        loaded_revision=settings.hhem.model.revision,
+        foundation_reference=settings.hhem.foundation.reference,
+        foundation_revision=settings.hhem.foundation.revision,
+        loaded_weights_sha256=hashlib.sha256(b"contract-only weight format example").hexdigest(),
+        loaded_config_sha256=hashlib.sha256(b"contract-only config format example").hexdigest(),
+        service_config_sha256=hashlib.sha256(SETTINGS_FILE.read_bytes()).hexdigest(),
+        runtime_versions=RuntimeVersions(
+            python="3.12.12", pytorch="2.8.0+cpu", transformers="4.57.6"
+        ),
+    )
+
+
+def example_worker() -> WorkerIdentity:
+    return WorkerIdentity(generation=1, pid=1234, start_ticks="5678", pin_unavailable_reason=None)
+
+
+def example_result() -> EvaluationResult:
+    settings = load_settings(SETTINGS_FILE)
+    effective = resolve_request(
+        EvaluateRequest(source_text="Project-authored source.", summary_text="Source summary."),
+        settings,
+    )
+    return EvaluationResult(
+        version=SCHEMA_VERSION,
+        status="complete",
+        execution_id=EXECUTION_ID,
+        request_id=REQUEST_ID,
+        correlation_id=CORRELATION_ID,
+        terminal_event_id=create_event_id(EXECUTION_ID, 4),
+        hhem=0.75,
+        hhem_full=None,
+        hhem_delta=None,
+        effective_settings=effective,
+        windows=EvaluationWindows(
+            primary=WindowCounts(planned=1, scored=1), full=None, full_reused_primary=False
+        ),
+        model=example_model(),
+        worker=example_worker(),
+        timings_ms=EvaluationTimings(queue_wait=0, primary_scoring=0, full_scoring=None, total=0),
+        errors=(),
+    )
+
+
+def example_event() -> EvaluationEvent:
+    return EvaluationEvent(
+        version=SCHEMA_VERSION,
+        event_id=create_event_id(EXECUTION_ID, 1),
+        execution_id=EXECUTION_ID,
+        sequence=1,
+        request_id=REQUEST_ID,
+        correlation_id=CORRELATION_ID,
+        caused_by_event_id=None,
+        run_id=None,
+        pipeline_name=None,
+        task_name=None,
+        operation_id=OPERATION_ID,
+        operation="request",
+        phase="started",
+        occurred_at=datetime(2026, 11, 2, tzinfo=UTC),
+        level="INFO",
+        details=EventDetails(),
+    )
+
+
+def example_command() -> ScoreWindow:
+    return ScoreWindow(
+        version=SCHEMA_VERSION,
+        kind="score_window",
+        execution_id=EXECUTION_ID,
+        generation=1,
+        comparison="primary",
+        window_index=0,
+        start_word=0,
+        end_word=4,
+        source_text="A project-authored source canary.",
+        summary_text="A project-authored summary canary.",
+    )
+
+
+def example_window_outcome() -> WindowOutcome:
+    command = example_command()
+    return WindowOutcome(
+        version=command.version,
+        kind="window_scored",
+        execution_id=command.execution_id,
+        generation=command.generation,
+        comparison=command.comparison,
+        window_index=command.window_index,
+        start_word=command.start_word,
+        end_word=command.end_word,
+        score=0.75,
+        scoring_ms=0,
+        error=None,
+    )
