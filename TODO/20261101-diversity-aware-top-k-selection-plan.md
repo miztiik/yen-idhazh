@@ -10,7 +10,7 @@ Table A
 | Id | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | Select the strongest available digest inputs without leaving article slots unused because of source allocations. K means the maximum number of articles to select. |
-| A2 | In scope | Parse-time word-count reuse; cached substance scoring during screening; source-weight ranking; one global age policy; two-stage cached scoring and candidate-level lazy selection; complete losses; native contracts, input fingerprints, workflow controls and reports. |
+| A2 | In scope | Parse-time full-body count reuse; retained-paragraph scoring with a separate cached count; source-weight ranking; one global age policy; two-stage cached scoring and candidate-level lazy selection; complete losses; native contracts, input fingerprints, workflow controls and reports. |
 | A3 | Chosen strategy | Prepare each eligible candidate's fixed numeric score, then use a lazy max-heap with one entry per candidate. Apply the corrected reliability, continuous length and language-analysis rules below. Do not substitute feed/website pair groups, equal-score lists or another optimizer. |
 | A4 | Capacity contract | Select the smaller of K and the number of distinct eligible canonical URLs. Scores may be negative. No unstated minimum-score gate. |
 | A5 | Current status | Execution-ready plan; application implementation has not started. Rows 1-4 are separate PRs, and each must leave its current producers, consumers and tests working. |
@@ -20,10 +20,10 @@ Table A
 | A9 | Execution | Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes. |
 | A10 | Dispatch constraint | Rows depend on the preceding merged PR and overlap named files. Their effective parallelism is one, regardless of the execution stamp's pool ceiling. Do not remove active bucket fields in row 1 or leave row 3's readers broken until row 4. Check conflicts against other work; do not edit either engineering-instruction file. |
 | A11 | Source-tier rule | From row 3, no source_tier/tier or applied_tier_weight is used to enroll, screen, score, rank, set quotas or fingerprint top-K inputs. Authority uses source.weight through H16. Rows 1-2 retain the existing selector until its single replacement; other subsystems retain their catalog classifications. |
-| A12 | Ledger word-count rule | Row 1 makes the parser's retained count reusable. Row 3 adds that exact required integer to selected metadata, the text artifact, raw Parquet and compact Parquet together. A missing count fails validation; no downstream recount, null fill or zero default. |
-| A13 | Stage 1 in English | Read the configured feeds; fetch and sanitize article bodies; retain the final body's parsed count. Apply access, URL, content and word-floor checks; require a usable age instant within the age limit. Analyze each survivor with compromise once during screening and cache substance. Resolve a website key from its canonical URL. Cache the full base from source weight, recency, measured pass history and substance; missing history adds no penalty. |
+| A12 | Ledger word-count rule | word_count remains the parser's count of the complete sanitized article body. substance_word_count counts only H28's retained paragraphs and drives substance scoring. Row 3 requires both integers in selected metadata, the unchanged text artifact, raw Parquet and compact Parquet under I9. Neither count is guessed, substituted for the other or recalculated downstream. |
+| A13 | Stage 1 in English | Read the configured feeds; fetch and sanitize article bodies; retain the full body's parsed count. Apply cheap access, URL, content, raw technical-word and known-age checks. Measure paragraphs once with compromise; require the retained-word floor before final substance scoring. Cache the retained count and substance without changing the body. Resolve a website key from its canonical URL. Cache the full base from source weight, recency, measured pass history and substance; missing history adds no penalty. |
 | A14 | Stage 2 in English | Put every eligible candidate's cached score in the max-heap. Pop the leading candidate, skip an already-chosen URL, refresh only its current numeric diversity terms, and compare its complete key with the next cached upper bound. Reinsert if another candidate may outrank it; otherwise choose it and update only its feed/site counts. Repeat to the article limit or exhausted unique supply. |
-| A15 | Delivery in English | Give every original unchosen candidate a duplicate or capacity loss. Derive metadata and original text from the same winners; assign workers without reranking. The existing TypeScript writer validates and writes the selected-article ledgers with the parsed count, then produces the text artifact and reconciled reports. |
+| A15 | Delivery in English | Give every original unchosen candidate a duplicate or capacity loss. Derive metadata, both counts and original text from the same winners; assign workers without reranking or changing their full-body work estimate. The existing TypeScript writer validates and writes the selected-article ledgers, then produces the text artifact and reconciled reports. |
 
 Table B
 
@@ -41,17 +41,21 @@ Table B
 %%{init: {"htmlLabels": false, "flowchart": {"htmlLabels": false}}}%%
 flowchart TD
     inputs["Feeds and fixed UTC clock"]
-    parse["Fetch, sanitize, parse<br/>Count words once"]
+    parse["Fetch, sanitize, parse<br/>Cache full-body word_count"]
     inputs --> parse
 
     subgraph stage_one["Stage 1: Eligibility and fixed-score preparation"]
-        gates{"Pass access, URL, content,<br/>word minimum and known age<br/>within the limit?"}
-        substance["Analyze body with compromise<br/>Cache substance once"]
+        gates{"Pass access, URL, content,<br/>raw word minimum and known age<br/>within the limit?"}
+        paragraphs["Measure paragraphs once<br/>Retain by word OR sentence rule"]
+        floor{"Retained count meets<br/>the scoring minimum?"}
+        substance["Cache retained count,<br/>length, density and headline score"]
         base["Resolve website key<br/>Cache weight, recency,<br/>measured reliability and substance"]
-        gates -->|Yes| substance --> base
+        gates -->|Yes| paragraphs --> floor
+        floor -->|Yes| substance --> base
     end
     parse --> gates
     gates -->|No| refusal["Screening refusal"]
+    floor -->|No| refusal
 
     subgraph stage_two["Stage 2: Diversity-aware top-K greedy reranking"]
         heap["Build candidate max-heap"]
@@ -72,11 +76,11 @@ flowchart TD
     base --> heap
     remaining -->|No| accounting["Record every outcome<br/>Chosen, screening refusal,<br/>duplicate or capacity loss"]
     refusal --> accounting
-    accounting --> partition["Assign workers<br/>Keep chosen text and word_count"]
+    accounting --> partition["Assign workers<br/>Keep original text and both counts"]
     partition --> persist["Native validation<br/>Existing ledger writer"]
-    persist --> raw["Raw selected_articles<br/>with parsed word_count"]
-    persist --> compact["Compact selected_articles<br/>with parsed word_count"]
-    persist --> artifact["Selected text artifact<br/>with parsed word_count"]
+    persist --> raw["Raw selected_articles<br/>with both word counts"]
+    persist --> compact["Compact selected_articles<br/>with both word counts"]
+    persist --> artifact["Original text artifact<br/>with both word counts"]
     raw --> report["Reconciled selection<br/>and loss reports"]
     compact --> report
     artifact --> report
@@ -95,7 +99,7 @@ Table C
 
 ## 2 - Row 1 - Prepare contracts and configuration
 
-- **Scope:** Declare the new scoring inputs, reuse the parser's count and remove the catalog probe's dependence on planner snapshots without changing current selection.
+- **Scope:** Declare the new scoring inputs, share the existing word counter, reuse the parser's count and remove the catalog probe's dependence on planner snapshots without changing current selection.
 - **Files touched:**
   - `TODO/20261101-diversity-aware-top-k-selection-plan.md`
   - `config/feed-ingest-plan.json`
@@ -111,6 +115,8 @@ Table C
   - `packages/feed-probe/test/feed-probe.test.ts`
   - `packages/feed-probe/test/feed-probe-cli.test.ts`
   - `services/feed-ingest-plan/src/config/resolve-policy.ts`
+  - `services/feed-ingest-plan/src/count-article-words.ts` (new)
+  - `services/feed-ingest-plan/src/harvest-feeds/corroborated-words.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/dom-extractor.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/extraction-quality.ts`
   - `services/feed-ingest-plan/src/screen-article-candidates/freshness-decay.ts`
@@ -125,15 +131,15 @@ Table D
 
 | Id | # | Decision | Authority |
 | --- | --- | --- | --- |
-| D1 | 1 | `word_count` is the authoritative count of the final sanitized body, produced during parse. Require it downstream; never calculate it again in screening or selection. | Stage ownership |
+| D1 | 1 | `word_count` is the authoritative count of the complete final sanitized body, produced during parse. Require it downstream; never derive that full-body count again. H28's distinct paragraph measurement does not replace it or the extraction-quality count. | Stage ownership |
 | D2 | 2 | Count the primary body once. If fallback produces a different body, count that body once, compare the cached values and retain the winner's count. | Existing fallback behavior |
-| D3 | 3 | Pass the retained count into extraction-quality calculation instead of having that calculation call the word counter again. Do not add an optional recount fallback. | Single calculation |
+| D3 | 3 | Move the existing countWords implementation unchanged into count-article-words.ts; update its parser, corroboration and test imports without a re-export bridge. Screening can then share the definition without importing another stage's internals. Pass the retained full-body count into extraction-quality calculation instead of recounting there; no optional fallback. | Shared definition and single raw calculation |
 | D4 | 4 | Independent corroboration remains an independent measurement. Do not replace its count with the extracted body's count or remove its contamination check. | Extraction trust boundary |
 | D5 | 5 | Keep existing parsed payload meanings and shared extraction-quality fields unchanged in this structural PR. | Output parity |
-| D6 | 6 | Add G2/G7-G9 and G12-G20/G22-G24's scoring configuration, F2's raw/admitted screening declarations and I18's numerical declaration. Infer the existing freshness helper's raw type from the native declaration without changing its results. The current policy resolver must exclude new global-only blocks from source overrides. Keep active bucket/cap/source/selected shapes and the current triage minimum until their named replacement rows. | Working intermediate release |
+| D6 | 6 | Add G2/G7-G9 and G11-G20/G22-G25's scoring configuration, F2's raw/admitted screening declarations and I18's numerical declaration. Infer the existing freshness helper's raw type from the native declaration without changing its results. The current policy resolver must exclude new global-only blocks from source overrides. Keep active bucket/cap/source/selected shapes until their named replacement rows. | Working intermediate release |
 | D7 | 7 | `packages/feed-probe/src/source-selection.ts` calls SourceSnapshotSchema for catalog validation today. Remove that planner coupling and validate through its existing CatalogSourceSchema; preserve field bounds, defaults, lifecycle placement, URL rules and duplicate checks. Keep catalog tier classification unchanged. | Verified external consumer |
 | D8 | 8 | Do not remove tier, applied_tier_weight or selected fields in this PR. Do not declare an unused second selected-row format. Row 3 changes the one native format together with all active producers/readers. | Reader/writer coherence |
-| D9 | 9 | Keep the existing recency and reliability settings at G5/G6/G21. Add no second spelling of their values. Row 2 changes the one existing triage.min_words setting to G11's final value. | Single policy authority |
+| D9 | 9 | Keep the existing recency, reliability and raw technical-word settings at G5/G6/G21/G26 unchanged. G11 is a separate retained-word scoring floor, not another spelling of the technical minimum. Do not change technical capture classification to implement editorial screening. | Separate measurement meanings |
 
 Table E
 
@@ -190,31 +196,32 @@ R(d) = w_r \cdot \left(\frac{1}{2}\right)^{\frac{\max(0, \text{age\_hours})}{h}}
 Configured evidence of depth, not factual verification or an unbiased quality measurement:
 
 ```math
-Q(d) = Q_{\text{bandpass}}(\text{words}) + Q_{\text{entity}}(\text{density}) - Q_{\text{hype}}(\text{headline})
+Q(d) = Q_{\text{bandpass}}(\text{retained words}) + Q_{\text{entity}}(\text{retained density}) - Q_{\text{hype}}(\text{headline})
 ```
 
 **Length Guardrail (`Q_bandpass`):**
 
-* Fewer than 250 words: Disqualified at screening.
-* 250-399 words: Linear ramp from `0.0` to `1.0`.
-* 400-1500 words: Flat full credit (`1.0`). Zero incentive to inflate word count.
-* 1501-3500 words: Continuous linear decay from `1.0` at 1500 words to `0.50` at 3500 words.
-* More than 3500 words: Clamped at `0.50`; no jump at word 3001 or 3501.
+* Use only H28's retained-paragraph word count, never the full-body count.
+* Fewer than 450 retained words: Disqualified at screening.
+* 450-749 retained words: Linear ramp from `0.0` at 450 words toward `1.0` at 750 words.
+* 750-3500 retained words: Flat full credit (`1.0` length points).
+* 3501-6000 retained words: Continuous linear taper from `1.0` at 3500 words to `0.80` at 6000 words.
+* More than 6000 retained words: Clamped at `0.80` length points. This changes the length component, not the complete score by a fixed percentage.
 
 ```math
 Q_{\text{bandpass}}(w)=
 \begin{cases}
-\text{screening refusal} & w<250 \\
-\frac{w-250}{149} & 250\leq w<400 \\
-1 & 400\leq w\leq1500 \\
-1-\frac{0.5(w-1500)}{2000} & 1500<w\leq3500 \\
-0.5 & w>3500
+\text{screening refusal} & w<450 \\
+\frac{w-450}{300} & 450\leq w<750 \\
+1 & 750\leq w\leq3500 \\
+1-\frac{0.2(w-3500)}{2500} & 3500<w\leq6000 \\
+0.8 & w>6000
 \end{cases}
 ```
 
 **Factual Density (`Q_entity`):**
 
-* Ratio of recognized proper-name spans plus numerical quantities to sentence count, using compromise's analysis. One-word names count; overlapping spans do not earn duplicate credit.
+* Ratio of recognized proper-name spans plus numerical quantities to sentence count, using only retained paragraphs. Reuse compromise's per-paragraph analysis; discarded navigation/footer fragments contribute nothing. One-word names count; overlapping spans do not earn duplicate credit.
 * Normalize between `0.0` and `0.30` score points under H6. This is a lexical-density signal, not proof that a statement is factual.
 
 **Headline Hype Deduction (`Q_hype`):**
@@ -222,7 +229,7 @@ Q_{\text{bandpass}}(w)=
 * Deducts up to `-0.25` points for:
   - Capitalization shouting: at least two unexempt ALL-CAPS words that make up at least half of all headline terms containing two or more letters. Only library-recognized acronyms are exempt from the uppercase count; they remain in the denominator. No short-word exemption.
   - Exclamatory or sensational punctuation (`!!`, `?!`).
-  - Headline/opening mismatch after noun and verb inflection normalization. This is a weak lexical signal, not a semantic clickbait classifier.
+  - Headline/retained-opening mismatch after noun and verb inflection normalization. This is a weak lexical signal, not a semantic clickbait classifier.
 
 ### B. Dynamic Marginal Score & Diversity Penalty
 
@@ -272,10 +279,9 @@ At step `t`, with already selected set `S_(t-1)`, the marginal score for an unse
 
 ## 4 - Row 2 - Add substance scoring during screening
 
-- **Scope:** Implement the real compromise-based substance scorer, require usable time evidence, apply the 250-word screening floor and cache each survivor's score without changing the selection algorithm.
+- **Scope:** Implement retained-paragraph measurement and the real compromise-based scorer, require usable time evidence and the filtered-word floor, and cache each survivor's count/score without changing the selection algorithm or original article body.
 - **Files touched:**
   - `TODO/20261101-diversity-aware-top-k-selection-plan.md`
-  - `config/feed-ingest-plan.json`
   - `packages/common-contracts/src/schemas/rejection.schema.ts`
   - `packages/common-contracts/src/schemas/rejected-article.schema.ts`
   - `packages/common-contracts/test/rejection.test.ts`
@@ -286,22 +292,27 @@ At step `t`, with already selected set `S_(t-1)`, the marginal score for an unse
   - `services/feed-ingest-plan/package.json`
   - `services/feed-ingest-plan/bun.lock`
   - `services/feed-ingest-plan/src/screen-article-candidates/triage-gates.ts`
+  - `services/feed-ingest-plan/src/screen-article-candidates/measure-substantive-paragraphs.ts` (new)
   - `services/feed-ingest-plan/src/screen-article-candidates/score-article-substance.ts` (new)
   - `services/feed-ingest-plan/src/screen-article-candidates/normalize-article-terms.ts` (new)
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-policy-report.ts`
   - `services/feed-ingest-plan/test/triage.test.ts`
   - `services/feed-ingest-plan/test/curate.test.ts`
   - `services/feed-ingest-plan/test/substance-score.test.ts` (new)
   - `services/feed-ingest-plan/test/plan-recordings.ts`
   - `services/feed-ingest-plan/test/plan-entry-points.test.ts`
   - `services/feed-ingest-plan/test/planner-output-recordings.ts`
+  - `services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts`
   - `tests/fixtures/feed-ingest-plan/screening-cases.json`
   - `tests/fixtures/feed-ingest-plan/substance-score-cases.json` (new)
   - `tests/fixtures/feed-ingest-plan/entry-points/response.json`
+  - `tests/fixtures/feed-ingest-plan/entry-points/selected-articles.json`
+  - `tests/fixtures/feed-ingest-plan/entry-points/selected-articles.rows.json`
   - `tests/fixtures/feed-ingest-plan/entry-points/rejected-articles.rows.json`
   - `docs/architecture/sources/article-substance-scoring.md` (new with the real scorer)
   - `docs/architecture/sources/feed-curation.md`
-- **Acceptance gates:** Local: M1, common-contracts/writer/service checks, and the named screening/scoring/schema/entry-point cases. Run the real library against the recorded language cases, all H1/H2 endpoints and invalid settings. Check K19's missing-age gate, stage attribution and exclusion from technical pass counts; read the actual rejection through raw/compact Parquet. CI: required checks on this PR candidate. Renew affected current fixtures here.
-- **Oracle:** Real recorded articles produce H1-H13's expected components and F2's required admitted evidence; every cheap refusal exits before substance analysis. The existing selector retains its behavior on a comparison pool that passes both new gates: usable time evidence and the word floor. This proves the measurement/cache and intended screening changes, not that the final ranking is active or that the library understands every paraphrase.
+- **Acceptance gates:** Local: M1/M6, common-contracts/writer/service checks, and the named screening/scoring/schema/entry-point/report cases. Run the real library against recorded language/paragraph cases, all H1/H2 endpoints and invalid settings. Check K19-K21's gates, measured refusal details and unchanged technical counts; read each new reason's stage/count through actual raw/compact rejection Parquet. CI: required checks on this PR candidate. Renew affected current fixtures here.
+- **Oracle:** Recorded articles and bounded boundary inputs produce H1-H13/H28/H29's expected retained counts/components and F2's required admitted evidence without changing full-body text/counts. Cheap refusals exit before paragraph analysis; filtered-word refusals follow that measurement and exit before final scoring. The existing selector retains its behavior on a comparison pool passing the new time and retained-word gates. This proves measurement/cache and intended screening changes, not complete boilerplate removal, factual quality or final-ranking activation.
 
 ### Shared decisions and declared contracts
 
@@ -309,13 +320,13 @@ Table F
 
 | Id | # | Decision | Authority |
 | --- | --- | --- | --- |
-| F1 | 1 | Use cheap eligibility checks on all parsed candidates, then score only their survivors in the same screening loop. N is the parsed count; M is the survivor count, not a configured multiple of K. | Exact capacity contract |
-| F2 | 2 | Declare raw timing evidence and admitted freshness in screened-article.schema.ts. Raw evidence may have null timing/age and an unknown timing source. Admitted freshness requires a UTC timing_at, finite signed age_hours, timing_source of published_at or first_seen, and finite substance_score. Infer service types from these declarations. Row 1 declares them; row 2 narrows raw evidence before constructing ScreenedCandidate.freshness. No cast, fabricated time or missing-score default. | Native contract |
+| F1 | 1 | Apply cheap eligibility checks to all N parsed candidates. Measure paragraphs only for their survivors, then apply the retained-word floor before final scoring in the same screening loop. M is the final admitted count after both kinds of check, not a configured multiple of K. | Exact capacity contract |
+| F2 | 2 | Declare raw timing evidence, admitted freshness and the screened-candidate refinement in screened-article.schema.ts. Raw timing may be null/unknown. Admitted freshness requires UTC timing_at, finite signed age_hours, timing_source of published_at or first_seen, finite substance_score and required substance_word_count using PositiveCountSchema. Validate that the retained count cannot exceed candidate.word_count. Infer service types from these declarations. Row 1 declares them; row 2 constructs admitted evidence only after the time and retained-word gates. No cast, fabricated time, missing-count default or missing-score default. | Native contract |
 | F3 | 3 | The numerical selector receives only identities, fixed numeric components and the derived website identity. It has no article-text input. The adapter creates one numerical record per survivor and joins chosen identities back to original content afterward. | Stage separation |
 | F4 | 4 | Authority is the configured authority coefficient times `source.weight`. Equal configured feed weights provide uniform weighting through the same path. No taxonomy multiplier. | Source-weight design |
 | F5 | 5 | Remove the planner's taxonomy read, source-tier activation/coverage gates and taxonomy contribution to its fingerprint. Feed lifecycle status still controls enrollment. Leave the shared taxonomy file and its non-planner readers unchanged. | Tier-independent planner |
 | F6 | 6 | Row 2 rejects unavailable age before substance analysis; row 3 applies the global ceiling before download where time is known, and during screening. Use the captured UTC evaluation clock, trusted publication or recorded first sight, and signed future ages. Keep unavailable raw evidence null for its refusal; it never becomes admitted evidence, a base score or a selected article. | Required time evidence |
-| F7 | 7 | Use J7's compromise version for sentence boundaries, proper-name/quantity spans and noun/verb normalization. Compile only the remaining trusted punctuation patterns once per screening invocation. Analyze each survivor's body once for density; use bounded headline/opening copies for overlap. Never recount words or analyze text in heap refreshes. | Cached screening |
+| F7 | 7 | Use J7's compromise version for paragraph sentence boundaries, proper-name/quantity spans and noun/verb normalization. Compile trusted punctuation patterns once per screening invocation. H28 parses each nonempty block once and reuses retained documents for density; H29 supplies the bounded opening for overlap. Do not parse the joined full body again, recalculate either count downstream or analyze text in heap refreshes. | Cached screening |
 | F8 | 8 | H19 declares the draft's complete cached and persisted base score. H24 adds only current diversity terms to it. Static adjustment entries are a breakdown of terms already in base, not another addition to marginal. Change this field meaning in the current native format; do not keep a legacy base convention. | Draft score decomposition |
 | F9 | 9 | Missing/incomplete article-pass history contributes a numeric zero adjustment, not a measured zero pass fraction. Apply the floor only to a measured fraction. Preserve the existing article_pass_rate adjustment term and observed null evidence. | Evidence-neutral cold start |
 | F10 | 10 | Use current-run website and feed counts, with the draft's absolute count-squared penalties. Remove normalized shares and current-day publisher-exposure ranking. Already-published URL checks remain. | Replacement diversity rule |
@@ -328,7 +339,11 @@ Table F
 | F17 | 17 | Sections 3.A/3.B define the mathematical model. Tables G/H resolve its configuration, exact integer endpoints and lexical measurements; they must implement this model, not replace it. Table O checks draft coverage, Table P gives derived examples and Table N assigns work. No worker chooses a different curve, sign or stopping rule. | Complete implementation specification |
 | F18 | 18 | No finite acronym allowlist, hand-written sentence/name/number tokenizer, naive suffix stripping or substring matching. Use the supported library calls in H3-H11, not the nonexistent entities() call. The library handles English inflections, not arbitrary derivational pairs, synonyms or factual correctness. | Verified API and limits |
 | F19 | 19 | Row 2 retains the existing selector and its active required fields. The new screening measurement is a complete capability; it becomes a ranking input only in row 3. No second selector, shadow pipeline or legacy switch is introduced. | Incremental real delivery |
-| F20 | 20 | Row 2 adds I12's unavailable-age reason and its screening-only REASON_STAGES entry before its producer. Update both rejection contracts' local version/changelog declarations, native schema bindings and current rejection recordings in that release. Missing age requires no numeric age details. Do not add this reason to SourceArticleRefusalReasonSchema or create another technical outcome; preserve the original capture's technical classification and counts. Keep existing known-age limits until row 3. | Complete screening release |
+| F20 | 20 | Row 2 adds I12's unavailable-age and retained-word reasons with screening-only REASON_STAGES entries before their producers. The retained-word reason requires words_found equal to the measured filtered count and words_required equal to G11; its native refinement requires found < required. Zero retained words is a measured refusal, not zero substance. Missing age needs no numeric age details. Update both rejection contracts' local versions/changelogs, REQUIRED_DETAILS, schema bindings and current recordings together. Neither new cause enters SourceArticleRefusalReasonSchema or creates another technical outcome. Preserve original technical counts and existing known-age limits until row 3. | Complete screening release |
+| F21 | 21 | The paragraph helper returns only serializable substance_word_count, sentence_count, name_count, number_count and opening_text under H28/H29. Counts are measured nonnegative integers; no library document crosses the helper boundary. Reuse D3's shared Unicode-whitespace definition per block. This is one additional structural measurement, not a replacement for raw word_count, independent corroboration or full-body worker estimates. | Distinct cached evidence |
+| F22 | 22 | A paragraph is a nonempty newline-delimited block, not a semantic guarantee. Short two-sentence footers and long disclaimers can remain; short single-sentence prose and soft-wrapped lines can be lost. Keep these cases explicit without site rules, raw-text fallback or scraper changes. Removal percentages remain unmeasured, not acceptance claims. | Heuristic limits |
+| F23 | 23 | The shared recordedPlan fixture already uses a smaller raw-word minimum for short recorded articles. Give unrelated API/CLI journeys an explicit fixture scoring policy too, without padding article bodies or lowering production defaults. Keep separate default-policy cases for the retained floor, curve and paragraph predicate. Renew only changed current recordings from the real recorder. | Independent failure mechanisms |
+| F24 | 24 | Row 2's effective-policy report distinguishes the raw technical floor from the retained scoring floor and shows the active paragraph/curve settings. It must not claim cached substance already drives the old selector. Keep its still-active allocation controls until row 3 removes that selector; report changes and their tests ship with each release. | Truthful intermediate reporting |
 
 ### Policy declarations
 
@@ -346,10 +361,10 @@ Table G
 | G8 | `diversity.lambda_feed` | `lambda_feed` | 0.02 points per squared prior feed count | Finite, nonnegative |
 | G9 | `diversity.novelty_bonus` | `beta` | 0.15 points before a feed's first selected article | Finite, nonnegative |
 | G10 | `website_grouping.include_private_suffixes` | - | True: retain the configured private-suffix grouping policy | Boolean; grouping recomputed from canonical URLs |
-| G11 | Existing `triage.min_words`, outside curation | `minWords` | 250 words from row 2: inclusive screening floor and start of the short-article ramp | Positive integer; the single authority for both checks |
-| G12 | `substance.word_count_target_min`, `substance.word_count_target_max` | `targetMin`, `targetMax` | 400 through 1,500 words: full length credit | Integers; targetMin >= minWords + 2 and targetMax >= targetMin |
-| G13 | `substance.word_count_plateau` | `plateauWords` | 3,500 words: last word count in the continuous long-article decline | Integer; plateauWords > targetMax |
-| G14 | `substance.length_scores.minimum`, `.full`, `.above_plateau` | `lengthMinimum`, `lengthFull`, `lengthAbove` | 0.0, 1.0 and 0.50 length points respectively | Finite nonnegative levels; minimum <= above_plateau <= full; no decline_end setting |
+| G11 | `substance.min_word_count_floor` | `minWords` | 450 retained words: inclusive scoring-admission floor and start of the short-article ramp | Positive integer; raw triage remains G26 |
+| G12 | `substance.word_count_ramp_end`, `substance.word_count_sweet_spot_max` | `rampEnd`, `sweetSpotMax` | 750 through 3,500 retained words: full length credit | Integers; rampEnd > minWords and sweetSpotMax >= rampEnd |
+| G13 | `substance.word_count_plateau_start` | `plateauStart` | 6,000 retained words: end of the gentle long-form taper | Integer; plateauStart > sweetSpotMax |
+| G14 | `substance.length_scores.minimum`, `.full`, `substance.long_form_floor_score` | `lengthMinimum`, `lengthFull`, `longFormFloor` | 0.0, 1.0 and 0.80 length points respectively | Finite nonnegative levels; minimum <= longFormFloor <= full |
 | G15 | `substance.entity_density_weight` | `densityWeight` | 0.30 maximum name/number-density points | Finite, nonnegative |
 | G16 | `substance.entity_density_full_credit` | `densityFull` | 1.0 counted name/number signal per sentence reaches full density credit; provisional default, not factual calibration | Positive finite signal density |
 | G17 | `substance.headline_hype_penalty` | `hypeCap` | 0.25 maximum headline deduction | Finite, nonnegative magnitude |
@@ -360,18 +375,20 @@ Table G
 | G22 | `substance.headline.shouting_min_uppercase_fraction` | - | 0.50: unexempt uppercase terms must make up at least half of H9's qualifying headline terms | Finite fraction from zero through one; inclusive comparison; no acronym-length exemption |
 | G23 | `substance.headline.stop_words` | - | Grammar-only keyword exclusions: a, an, the, and, or, but, for, nor, so, yet, as, at, by, in, of, on, to, with, from, into, is, are, was, were, be, been, this, that, these, those | Distinct nonempty lowercase terms; not an authority or quality list |
 | G24 | `substance.headline.punctuation_patterns` | - | `!{2,}`, `\?!`, `!\?`: repeated exclamation or mixed question/exclamation punctuation | Trusted nonempty Unicode regular expressions; reject invalid patterns by field name |
+| G25 | `substance.substantive_paragraph_min_words`, `substance.substantive_paragraph_min_sentences` | - | Retain a block with at least 25 words OR at least two library sentences | Positive integers; inclusive OR, not AND |
+| G26 | Existing `triage.min_words`, outside curation | `technicalMinWords` | Keep the current 180 full-body words for raw technical triage and capture classification | Positive integer; no alias to G11 and no filtered-count substitution |
 
 Table H
 
 | Id | Rule | Exact behavior |
 | --- | --- | --- |
-| H1 | Short-article length equation | With `w = candidate.word_count`, reject at screening if `w < minWords`. For `minWords <= w < targetMin`, `Q_length = lengthMinimum + (lengthFull - lengthMinimum) * (w - minWords) / (targetMin - 1 - minWords)`. For `targetMin <= w <= targetMax`, `Q_length = lengthFull`. Do not change the inclusive endpoints or use targetMin as the ramp denominator. |
-| H2 | Long-article length equation | For `targetMax < w <= plateauWords`, `Q_length = lengthFull + (lengthAbove - lengthFull) * (w - targetMax) / (plateauWords - targetMax)`. For `w > plateauWords`, `Q_length = lengthAbove`. Both joins are continuous. No extra full-credit word, final jump or unused decline_end coefficient. |
-| H3 | Sentence units | Analyze the sanitized body with `nlp(text)` and use `doc.sentences().length`. The library handles abbreviations such as U.S. and Dr.; this scorer does not reuse or change the independent extraction-quality sentence rule. A final unterminated sentence counts under the library's behavior. |
-| H4 | Name signals | Use `doc.match('#ProperNoun+')` and count its non-overlapping spans. The plus means one or more proper-noun terms, not two capitalized words. A one-word recognized name counts once, and a multiword name counts once. Recognition is the library's English heuristic, not a complete entity database. |
-| H5 | Numeric signals | Use `doc.numbers().not('#ProperNoun')` and count its remaining non-overlapping quantity spans. Each returned span counts once; a multiword quantity counts once when retained as one span. Exclude proper-noun terms before counting, so those terms earn no numeric credit as well as name credit. Use the public string selector, not a View argument or an assumed whole-quantity discard rule. |
+| H1 | Short-article length equation | Let w be F21's measured substance_word_count, cached in F2 after admission. Refuse when w < minWords. For minWords <= w < rampEnd, Q_length = lengthMinimum + (lengthFull - lengthMinimum) * (w - minWords) / (rampEnd - minWords). For rampEnd <= w <= sweetSpotMax, Q_length = lengthFull. No minus-one denominator and no raw-count substitution. |
+| H2 | Long-article length equation | For sweetSpotMax < w <= plateauStart, Q_length = lengthFull + (longFormFloor - lengthFull) * (w - sweetSpotMax) / (plateauStart - sweetSpotMax). For w > plateauStart, Q_length = longFormFloor. Both joins are continuous; no extra full-credit word or final jump. |
+| H3 | Sentence units | H28 uses each block's nlp(text).sentences().length for retention, then sums only retained blocks for density. Reuse that measurement. The library handles U.S./Dr. abbreviations and final unterminated sentences under its own behavior; do not change the independent extraction-quality sentence rule. |
+| H4 | Name signals | On each retained block's existing document, use doc.match('#ProperNoun+') and sum its non-overlapping spans. The plus means one or more proper-noun terms. A recognized one-word name counts once; a multiword name counts once. Discarded blocks earn no credit. Recognition remains the library's English heuristic, not a complete entity database. |
+| H5 | Numeric signals | On each retained block's existing document, use doc.numbers().not('#ProperNoun') and sum its remaining non-overlapping quantity spans. Each returned span counts once; a multiword quantity counts once when retained as one span. Exclude proper-noun terms before counting. Use the public string selector, not a View argument or an assumed whole-quantity discard rule. Discarded blocks earn no credit. |
 | H6 | Density equation | Let `names` and `numbers` be H4/H5 hit counts and `sentences` be H3's count. `density = sentences == 0 ? 0 : (names + numbers) / sentences`. `Q_entity = densityWeight * min(1, max(0, density / densityFull))`. No units means no density contribution, not a claim of zero factual content. G16 explicitly supplies the normalization missing from the draft. |
-| H7 | Headline and opening terms | Preserve an original-case headline document for shouting. For comparison, create lowercase headline and bounded-opening documents, run `nouns().toSingular()` then `verbs().toInfinitive()`, and use public `doc.json()` output. Treat the output as unknown, validate the consumed text/normal/tags fields in each entry's terms with a local Zod schema, then read normal for whole-term comparison. Ignore unused metadata; do not access internal term storage or use punctuation-bearing display output as a normalized key. Lowercase before tagging; never mutate stored title/body text. |
+| H7 | Headline and opening terms | Preserve an original-case headline document for shouting. For comparison, create lowercase headline and H29 bounded retained-opening documents, run `nouns().toSingular()` then `verbs().toInfinitive()`, and use public `doc.json()` output. Treat the output as unknown, validate the consumed text/normal/tags fields in each entry's terms with a local Zod schema, then read normal for whole-term comparison. Ignore unused metadata; do not access internal term storage or use punctuation-bearing display output as a normalized key. Lowercase before tagging; never mutate stored title/body text. |
 | H8 | Acronyms and stop words | Only terms recognized by the original headline's `acronyms()` are exempt from the uppercase numerator; the public JSON Acronym tag identifies that membership. Keep them in the denominator. No length-based exemption or finite allowlist. G23 excludes grammar words from opening-keyword comparison only: stop words remain in both shouting counts when otherwise eligible. Library recognition is heuristic; do not claim every abbreviation is recognized. |
 | H9 | Shouting flag | Let letter_words be original-case headline terms containing at least G20's minimum Unicode letters. Let uppercase_words be those terms equal to their uppercase form, different from their lowercase form, and not exempt under H8. Flag exactly when letter_words.length > 0, uppercase_words.length >= G20's minimum word count, and uppercase_words.length / letter_words.length >= G22. Empty input never flags. Use the original case and inclusive fraction threshold; neither stop words nor acronyms leave the denominator. |
 | H10 | Punctuation flag | Any G24 pattern matches. Each headline flag is one or zero and contributes once, not once per match. |
@@ -382,7 +399,7 @@ Table H
 | H15 | Timing and eligibility equations | `T` is the parsed batch's captured UTC evaluation instant in milliseconds. Use trusted publication within collect.max_future_hours; otherwise use captured discovery evidence's first_seen_at. If neither is usable, emit I12's unavailable-age refusal at screening before substance analysis; do not substitute fetched_at, selection time or T. With usable instant t, ageHours = (T - t) / MILLISECONDS_PER_HOUR; the named unit constant is 3,600,000 milliseconds per hour. Final admission requires ageHours <= ageCeiling. Preserve signed ages and publication trust. Trusted publication does not also require first sight; malformed timestamps fail native validation rather than being silently reclassified. |
 | H16 | Authority equation | `A(d) = alpha * d.source.weight`. The removed taxonomy weight is not another factor. Each configured feed weight remains in the unit interval; equal weights use this same equation. |
 | H17 | Recency equation | For admitted candidates, `R(d) = w_r * (0.5 ** (max(0, ageHours) / h))`. Require H15's known finite signed age and G6's coefficients. Missing age cannot reach this calculation or default to zero. Near-future timing cannot increase R above w_r. |
-| H18 | Technical pass fraction | For the feed's complete G21 window, `p = passed / (passed + refused)`. Count only original captures passing technical checks and known source-attributed technical refusals. Do not count publication, age, category, content-policy or selection losses. Missing coverage or a zero denominator gives an unavailable p, not measured zero. H14 uses `f = G5`; if G4 is false its adjustment is zero. |
+| H18 | Technical pass fraction | For the feed's complete G21 window, `p = passed / (passed + refused)`. Count only original captures passing technical checks and known source-attributed technical refusals. Do not count publication, age, category, content-policy, retained-word or selection losses. Missing coverage or a zero denominator gives an unavailable p, not measured zero. H14 uses `f = G5`; if G4 is false its adjustment is zero. |
 | H19 | Draft base score and cache | `BaseScore = ((A + R) + passAdjustment) + Q`. Cache it once from screening evidence and captured history; persist `ratings.base_article_score = BaseScore`. `feed_authority_score = A`; `recency_score = R`. No component changes after heap setup. This replaces the older field meaning rather than preserving it through a bridge. |
 | H20 | Website identity and counts | Resolve every numerical record's nonempty website_group from its validated canonical URL using the existing website-group.ts and tldts policy: registrable domain, otherwise lowercase hostname with a trailing DNS dot removed. Recompute consistently rather than mixing supplied grouping and fallback keys. Invalid URLs fail validation. A valid HTTP URL has a hostname, so no feed-ID escape or shared null key is needed. Count prior winners by this key and by feed_id across the full pool. |
 | H21 | Website penalty equation | `P_website = lambda_website * (n_website ** 2)` and its signed adjustment is numeric `-P_website` for every candidate. A not-yet-selected key has count zero, not missing identity. Do not divide by K or the current selected count. |
@@ -392,6 +409,8 @@ Table H
 | H25 | Complete ordering key | `key(d,S) = (M(d,S), d.candidate_id)`. Greater numeric M wins; exactly equal M uses the smaller candidate_id under direct ASCII comparison. No tolerance or display rounding defines a tie. Retain one key per candidate; do not replace this with static-score pair ordering. |
 | H26 | Capacity equation | Let `U = size(set(admitted.map(d => d.url_key)))`. The chosen count is `K_chosen = min(K, U)`. This is a maximum unique-URL count, not a source reservation or a positive-score threshold. Exhaustion means no remaining unchosen, unseen-URL candidate. |
 | H27 | Accounting equation | Parsed identities are the disjoint union of screening rejections and admitted identities. Admitted identities are the disjoint union of chosen identities, duplicate-carrier losses and capacity losses. Thus `parsed_count = screening_rejections + chosen_count + duplicate_losses + capacity_losses`. Use original arrays, not only the survivors left inside queue working lists. |
+| H28 | Retained paragraphs | Split sanitized article_text with /\n+/u, trim blocks and ignore empty ones. Count each block once with D3's shared word counter and parse it once with nlp. Retain it when either G25 threshold is met. Reuse its document for H3-H5; sum only retained words/sentences/names/numbers. The two-sentence branch requires analysis before retention. Measure every block even after the retained-word floor is reached. Sum cached counts; never recount joined text or fall back to raw text. |
+| H29 | Retained opening and unchanged body | Build H7's opening from retained blocks in source order, separated by two newlines and bounded by G19's Unicode-character limit. Keep documents local and return only F21's evidence. Empty retained text produces F20's measured word-floor refusal before final Q/base scoring. Keep the original sanitized article_text, raw word_count, extraction-quality evidence and full-body worker estimates unchanged. |
 
 ### Heap and output contracts
 
@@ -407,11 +426,11 @@ Table I
 | I6 | Commit | Commit the popped, freshly evaluated winner, not the last candidate inspected. Record its exact terms, add its URL/identity, then increment both its feed count and resolved website count. Do not reinsert the winner. Other entries become stale because the chosen count increased. Skipped duplicate carriers change no counts and consume no slot. |
 | I7 | Completion | Continue to A4's count even when all scores are negative. Preserve all original identities for one final loss pass; duplicate-of-selected-URL takes precedence over capacity loss. |
 | I8 | Adjustment terms | Use exactly `article_pass_rate`, `substance_quality_score`, `domain_diversity_penalty`, `feed_diversity_penalty` and `novelty_bonus` in ratings.adjustments. The screening cache is freshness.substance_score; its ledger term is substance_quality_score. All five values are finite signed numbers under H12/H14/H21-H23, including numeric zero for unmeasured/disabled history. Observed unavailable pass history remains null in its own evidence. |
-| I9 | Required selected word count | Add required `word_count: CountSchema` to the shared MetadataFields in `packages/common-contracts/src/schemas/selected-article.schema.ts`. This non-null integer belongs to SelectedArticleMetadataSchema, SelectedArtifactArticleSchema and SelectedArticleRowSchema. Copy candidate.word_count through selectedArticleMetadata, API/stage payloads, partition and both raw and compact selected_articles ledgers. No optional value, recount, null fill or default. Preserve retained identities, text, raw weight and work fields; I19 declares the final timing invariant. |
+| I9 | Required selected word counts | Add required word_count: CountSchema and substance_word_count: PositiveCountSchema to the shared MetadataFields in packages/common-contracts/src/schemas/selected-article.schema.ts. Both belong to SelectedArticleMetadataSchema, SelectedArtifactArticleSchema and SelectedArticleRowSchema; refine retained <= raw in every shape. Copy the parser's raw count and F2's admitted retained count through selectedArticleMetadata, API/stage payloads, partition and raw/compact selected_articles. No optional value, recount, null fill or default. Keep original text, identity, raw weight and full-body work fields; I19 owns timing. |
 | I10 | Retired source/selected fields | In row 3, remove tier and applied_tier_weight from planner source snapshots and selected metadata; remove feed_limit, exploration_slot and cap_relaxations from selected projections. Convert native stage/API/partition/writer callers in the same PR. The catalog probe was decoupled in row 1; retain no legacy optional metadata or compatibility reader. |
-| I11 | Retired configuration | In row 3, remove source_based_quality_buckets, soft_caps, mmr_weights, exploration_slot_share, per-tier age overrides and their helpers. Retain the existing G5/G6/G11/G21 settings as their single authorities. No old-key aliases, duplicate recency/floor settings or unused decline_end setting. |
-| I12 | Active loss causes | Duplicate carrier: `REJECTED_DUPLICATE_CANONICAL_CARRIER`; eligible but unchosen: `REJECTED_GLOBAL_CAPACITY_REACHED`. Row 2 adds `REJECTED_SCREENING_AGE_UNAVAILABLE`, only at screen-article-candidates with null age details. Row 3 adds global over-age cause `REJECTED_SCREENING_AGE_CEILING`. Retain other safety/content causes and actual stage attribution; remove retired quota/ladder/cap reasons only with their row 3 callers. Neither age cause enters technical pass counts. |
-| I13 | Output projection | Derive metadata and the text artifact from the same chosen population. Join by chosen candidate identity, not the first matching URL. Partition assigns it without reranking or changing text/count. The existing native writer's raw and compact row projections both retain I9; prove this from actual Parquet readback, not schema presence alone. |
+| I11 | Retired configuration | In row 3, remove source_based_quality_buckets, soft_caps, mmr_weights, exploration_slot_share, per-tier age overrides and their helpers. Retain G5/G6/G21/G26 as the existing authorities and G11-G14/G25 as the distinct scoring policy. No old-key aliases, duplicate recency/floor settings or unused decline_end setting. |
+| I12 | Active loss causes | Duplicate carrier: REJECTED_DUPLICATE_CANONICAL_CARRIER; eligible but unchosen: REJECTED_GLOBAL_CAPACITY_REACHED. Row 2 adds screening-only REJECTED_SCREENING_AGE_UNAVAILABLE with null age details and REJECTED_SCREENING_SUBSTANCE_MIN_WORDS with F20's measured word details. Keep REJECTED_SCREENING_MIN_WORDS for raw technical failure only. Row 3 adds global over-age REJECTED_SCREENING_AGE_CEILING. Retain safety/content causes and actual attribution; retire quota/ladder/cap causes with their callers. New age/substance losses never enter technical pass counts. |
+| I13 | Output projection | Derive metadata and the unchanged text artifact from the same chosen population. Join by chosen candidate identity, not the first matching URL. Partition assigns it without reranking or changing text, either count or full-body work estimates. The existing writer's raw and compact row projections both retain I9; prove this from actual Parquet readback, not schema presence alone. |
 | I14 | Diagnostic counts | Declare the current selection response's heap_entry_count, score_refreshes and heap_pops in planner-stage.schema.ts before exposing them. Entry count is initial eligible M; refreshes count I4's stale numeric reevaluations, excluding initialization/duplicate discards; pops count every removal attempt. Row 3 removes quota controls/reports and explains global supply/losses. Row 4 adds U1-U5's saved run metrics, not a new ledger. |
 | I15 | Input digest | Hash only the validated inputs this planner uses. Include the effective scoring policy and source weights; exclude the removed registry input. Preserve existing exclusion of reporting-only settings. |
 | I16 | Exact numeric ties | Keep H25's complete score/ASCII-ID key on each candidate. If unequal base scores round to an equal marginal score after penalties, the smaller ID still wins. Apply that same comparator to heap bounds and refreshed entries; no grouped tie resolver, tolerance or score quantization. |
@@ -501,7 +520,7 @@ Table J
 
 | Id | Cost | Meaning and limit |
 | --- | --- | --- |
-| J1 | Screening | One cheap pass over N parsed candidates, plus text-rule work over M survivors. Parsing all fetched bodies has already happened; this change does not claim to avoid their download or parse cost. |
+| J1 | Screening | One cheap pass over N parsed candidates, then a paragraph count/analysis pass over its survivors, including those later refused by the retained-word floor. Only the final M admitted candidates get cached Q. Reuse retained block documents for density and bounded copies for headline/opening comparison; no extra full-body NLP pass. Fetch/extraction costs have already been paid. |
 | J2 | Setup | Stage 1 caches fixed numeric scores in `O(M)` after screening's text work; bottom-up bulk heap construction is also `O(M)`. No pair sort, equal-score-list build or repeated body analysis. |
 | J3 | Selection | Stage 2 performs constant-size numeric refreshes and logarithmic heap operations. Let K' be the chosen count, D discarded duplicate carriers and R stale score refreshes. Cost is `O((K' + D + R) * log(M + 1))`. The requested `O(K log N)` target applies when D + R scales with K, not as an unconditional worst-case bound: up to M entries can need refresh at each choice. Account for refreshes explicitly; do not change the draft's winner sequence to claim a lower bound. |
 | J4 | Space | `O(M)` candidate entries/references and bounded per-pool count maps; original article text remains in the owning stage. |
@@ -521,12 +540,12 @@ Table K
 | K4 | Repeated ties, negative scores and changed input order | Any insertion-order or locale dependence; any accidental minimum-quality rejection. |
 | K5 | A feed spans several websites; a website spans several feeds; grouping unavailable and mixed supplied evidence | Counters isolated to pairs, penalty-free missing groups, a shared null key or inconsistent grouping for the same canonical host produce incorrect winners. Use valid hosts for which registrable-domain lookup returns null and prove hostname fallback receives growing penalties. |
 | K6 | Duplicate entry encountered before the final pick, and winner not last scanned | Lost rejection records, wrong winner counters or wrong content joins. |
-| K7 | Cheap-gate failures and length boundaries | Failed candidates receive no substance analysis; the inclusive floor, ramp and both continuous long-curve joins match H1/H2. Check 1500/1501, 3000/3001 and 3500/3501 explicitly. |
+| K7 | Cheap-gate failures and retained-length boundaries | Cheap access/raw-word/time failures receive no paragraph analysis. Filtered-word failures occur after measurement but before final scoring. Check retained counts 449/450, 749/750, 3500/3501 and 6000/6001 against H1/H2, never the raw count. |
 | K8 | Recorded names, quantities and headlines | Include one-word/multiword names, overlapping proper-noun/quantity terms, U.S./Dr./decimal punctuation and ordinary abbreviations. P16-P18 cover all-short uppercase headlines, acronym-heavy normal headlines, the exact half/less-than-half boundary, one uppercase word and empty input. Verify the public JSON term reader, punctuation-free normalized keys, inflections, shared-state isolation, substring false matches and the deduction cap against the actual library, not hardcoded parser outputs. |
 | K9 | Complete measured zero, null/missing/incomplete history, zero denominator, disabled adjustment and opposing RSS ratios | Every unmeasured case must give zero adjustment and retain null evidence; measured zero gives the configured floor penalty. A cold-start and an established feed both receive the first-use bonus when unrepresented. RSS success must not substitute for article-pass evidence. |
 | K10 | Change only catalog tier data; change each retained coefficient separately | Taxonomy still affects planner eligibility/hash/ranking, or a tunable has no actual consumer. |
 | K11 | One feed/site, distinct equal-base candidates and 100 choices | Instrument the real heap: all candidates start as entries; stale numeric refreshes/pops reconcile with I14. No text rescoring, pair grouping or claimed fixed refresh count. Compare every winner with the reference; no mocked scorer. |
-| K12 | Real screening -> selection -> partition -> native output | Read raw and compact Parquet and the text artifact; every selected word_count must be a required integer equal to the chosen parsed count, including duplicate carriers with different bodies/counts. Expose lost cache, count omission, changed text, missing losses or wrong health totals. |
+| K12 | Real screening -> selection -> partition -> native output | Read raw/compact Parquet and the original-text artifact. Each required raw count equals the chosen parsed count; each required retained count equals screening's measurement and is no greater than raw. Include duplicate carriers with different bodies/counts and reject missing, fractional, negative or retained-greater-than-raw counts. Expose lost caches, changed text/work estimates, missing losses or wrong health totals. |
 | K13 | Current replay and one named older-format refusal per changed family | A reader/writer date mapping disagrees, a digest is invalid, or an old-format bridge remains. |
 | K14 | Two distinct base values rounding to the same marginal value under a shared penalty | Comparing only base numbers or ignoring the ID in a stale-bound comparison selects the wrong winner. Table P gives the bounded example. |
 | K15 | Every derived example in Table P and each changed scoring knob | Missing exponent, denominator, clamp, floor, sign, adjustment order or actual configured reader. Numeric checks use the fixture's declared tolerance; winner comparisons never use that tolerance. |
@@ -534,6 +553,8 @@ Table K
 | K17 | Every separately released row | A removal precedes its live caller, correctness fixtures are deferred, or a stale report/API response survives a contract change. Run the row's actual producer-to-consumer path before merge, not only isolated schema parsing. |
 | K18 | Run metrics on nonempty, empty, not-reached and failed-after-selection cases | U1-U5 confuses no selections with unavailable selection, labels all first-use feeds as historically new, drops failed-run evidence or averages missing scores as zero. |
 | K19 | Trusted publication, recorded first sight and unavailable time | In row 2, both absent or untrusted-future publication without first sight produce the screening-only unavailable-age cause before substance analysis. Trusted publication alone remains usable; a missing/untrusted publication uses real recorded first sight. Malformed timestamps fail native validation, not a fabricated-age fallback. Check null refusal details, complete accounting and unchanged technical pass counts. Row 3 also proves the global age boundary and rejects unavailable timing in selected metadata, artifact and actual raw/compact output. |
+| K20 | Paragraph boundaries, padding and retained-only density | Cover 24/25 words, one/two library sentences, inclusive OR, empty/whitespace blocks, CRLF and abbreviations. P21-P24 expose chrome-only inflation, lost long-form credit, raw-text fallback and discarded-name/quantity credit. Exercise long disclaimers, short two-sentence footers and soft-wrapped prose as the specified heuristic's limits, not semantic-removal guarantees. Change each G25 threshold and prove its consumer while raw text/counts stay unchanged. |
+| K21 | Distinct technical and retained-word refusals | A raw-pass/filtered-fail input emits I12's new substance cause with the actual retained words and G11 threshold. Missing details, the wrong stage and invalid counts fail native validation. Preserve original technical capture/pass counts; grouped raw/compact rejection rows retain the new screening reason and count. An empty filtered view is refused, never admitted with a default score. |
 
 ### Rejected alternatives
 
@@ -563,7 +584,7 @@ Table M
 | M3 | Numeric/schema cases | Common package: config.test.ts, screened-article.test.ts, rejection.test.ts, article-identity-compatibility.test.ts and `bun run --cwd .\packages\common-contracts schema-binding`. Service: the row's named harvest/triage/policy/curate/substance/diverse cases. Run each package's selected files together through its declared Bun test command; add no fixture-wide tree scan. |
 | M4 | Integration | Service: `plan-entry-points.test.ts`, `plan-api.test.ts`, `plan-engine.test.ts`, `file-baseline.test.ts`, `feed-ingest-plan-report.test.ts`, `feed-ingest-plan-workflow.test.ts`, plus changed named history/accounting callers from the selector. Writer: `parquet-parity.test.ts`. Use actual recorded inputs, loopback APIs and Parquet bytes. |
 | M5 | Fixture renewal | Each PR renews the recordings it changes, using the existing recorder, then unsets its capture switch. Row 3 carries the required selection/Parquet fixtures; row 4 carries new metric/report fixtures. Revalidate model fields and real writer output; no historical-data conversion utility. |
-| M6 | Operator report | In row 3, inspect the actual replacement policy/selection report: age/article count, raw weights versus shape scores, complete losses and no retired controls. In row 4, inspect the added diversity metrics and empty/unavailable wording. Use one representative generated report and Susan's distinct ship-quality review for each changed surface; no published-site/browser expansion for this backend-only work. |
+| M6 | Operator report | Row 2 shows the distinct word floors and paragraph/curve settings without claiming the ranking changed. Row 3 shows global age/capacity, both counts, weights versus shape scores and complete losses without retired controls. Row 4 adds diversity metrics and empty/unavailable wording. Use one representative generated report and Susan's distinct ship-quality review per changed surface; no published-site/browser expansion for this backend-only work. |
 | M7 | Canonical documentation | Curation owns selection and diversity; the new substance page owns lexical rules; extraction owns parse measurements; the ledger reference owns field disposition and format refusal. Remove stale rejection-migration wording and obsolete allocation claims in place. |
 | M8 | Final candidate | Required CI passes on the complete candidate. Record exact revision, named selections and results; do not repeat unchanged worker checks. No historical state edits, instruction-file edits, debugging markers or unsynchronized lockfiles. |
 
@@ -573,12 +594,12 @@ Table N
 
 | Id | Release row | Step | Depends-on | Deliverable | Completion check |
 | --- | --- | --- | --- | --- | --- |
-| N1 | 1 | Prepare declarations and parsed inputs | - | D1-D9: declare scoring policy and native screening/numerical types; reuse parsed counts; decouple the catalog probe. Keep active formats and current selection intact. | Row 1's parity oracle and K16 pass; no removal-only contract/config break. |
-| N2 | 2 | Implement substance and its admission gates | N1 | H1-H13 in the scorer/normalizer, H15's unavailable-age gate, F2/F20's native evidence/rejections, J7's dependency and G11's one word floor. Keep the current known-age limits and selector. | Row 2's real-library oracle, K19's gate/accounting, native rejection readback and current affected fixtures pass. |
+| N1 | 1 | Prepare declarations and parsed inputs | - | D1-D9: declare distinct raw/scoring policy and native screening/numerical types; reuse parsed counts; decouple the catalog probe. Keep active formats and current selection intact. | Row 1's parity oracle and K16 pass; no removal-only contract/config break. |
+| N2 | 2 | Implement substance and its admission gates | N1 | H28/H29's helper, H1-H13's scorer, H15's time gate, F2/F20's evidence/rejections and J7's dependency. Use G11/G25 without changing G26, known-age limits or the selector; F23/F24 keep fixture and report claims accurate. | Row 2's real-library oracle, K19-K21's gates/accounting, native rejection readback, effective-policy report and affected current fixtures pass. |
 | N3 | 3 | Replace age limits and tier inputs | N2 | One global ceiling over row 2's required time evidence; no planner taxonomy load, activation gate, coverage rule or hash input; H20's nonempty website fallback. | Age/trust/fallback, taxonomy-substitution and hostname-penalty cases pass. |
 | N4 | 3 | Implement the candidate heap | N1 | I1-I7/I16/I18 and J5's narrow in-repository heap; no new queue dependency. | Every winner equals the independent full-scan reference, including negatives, duplicates, crossed feed/site counts and numeric ties. |
 | N5 | 3 | Wire the sole selector and losses | N2, N3, N4 | Cache H19 once, apply neutral unmeasured history, join original content by identity, and remove old allocation/exposure machinery. | At least K eligible unique URLs yield K winners; H27 accounts for every identity. |
-| N6 | 3 | Change active formats and all required callers | N5 | I8-I19: source/candidate/stage/rejection/selected contracts, native stamps, API/partition/writer projections and current raw/compact/artifact recordings together. | Required word_count and known timing survive actual Parquet readback; obsolete fields, unavailable selected timing and older affected formats refuse without a bridge. |
+| N6 | 3 | Change active formats and all required callers | N5 | I8-I19: source/candidate/stage/rejection/selected contracts, native stamps, API/partition/writer projections and current raw/compact/artifact recordings together. | Both required word counts, their inequality and known timing survive actual Parquet readback; original body/work estimates stay unchanged. Obsolete fields, unavailable timing and older affected formats refuse without a bridge. |
 | N7 | 3 | Remove obsolete operator controls | N6 | Update the named policy/workflow/verification surfaces and their docs/tests; explain global eligible supply and terminal losses. | No shipped reader or report still expects retired fields or quota controls; M6 passes. |
 | N8 | 3 | Release the complete engine change | N7 | Row 3's local oracle, required dependant checks and complete CI candidate. | Selection works end to end before row 4 begins; audit work is not needed to repair it. |
 | N9 | 4 | Add saved diversity metrics and audit output | N8 | U1-U5 in the existing plan-run contract, real run writers, native row mappings, responses and report renderer. | Nonempty, empty, not-reached and failed-after-selection cases preserve truthful metrics. |
@@ -593,8 +614,8 @@ Table O
 | O1 | Authority prior | Section 3.A.1; H16 with G3 | Preserve the coefficient and raw feed weight; remove the taxonomy factor and planner dependency. |
 | O2 | Exponential recency | Section 3.A.2; H15/H17 with G6 | Preserve the exponent, zero-age clamp, half-life and captured time basis; require usable time evidence before scoring. Unknown age is a screening refusal, not zero recency on an admitted candidate. |
 | O3 | Technical pass fraction and floor adjustment | Section 3.A.3; H14/H18 with G4/G5/G21 | Keep the measured fraction/floor; correct unmeasured history to zero adjustment. |
-| O4 | Short ramp, flat band and long decline | H1/H2 with G11-G14 | Keep the short ramp and flat band; replace the long curve with continuous decay to 3500 words, then clamp. |
-| O5 | Name/number density | H3-H6 with G15/G16 | Preserve the bounded density contribution; use library sentence/name/quantity spans with one-word support and no overlap credit. G16 supplies the normalization. |
+| O4 | Retained-word ramp, flat band and long taper | H1/H2 with G11-G14 | Use retained words: ramp to 750, full credit through 3500, gentle taper to 0.80 length points at 6000, then clamp. Preserve continuous joins. |
+| O5 | Name/number density | H3-H6/H28 with G15/G16 | Count only retained paragraphs' library sentence/name/quantity spans with one-word support and no overlap credit. G16 supplies the normalization. |
 | O6 | Headline deduction and substance total | H7-H13 with G17-G20/G22-G24 | Keep bounded deduction and signs; use the headline-wide uppercase fraction with only recognized-acronym numerator exemptions, public JSON term output and normalized whole-term comparison. |
 | O7 | Static BaseScore | Section 3.A; H19; I17 | Preserve the complete draft arithmetic in the cache and persisted base field. Do not retain the older authority-plus-recency meaning or add static adjustments twice. |
 | O8 | Marginal score | Section 3.B; H20-H24 | Preserve both signed penalties and the first-use term. Do not normalize or stop on negative values. |
@@ -603,10 +624,12 @@ Table O
 | O11 | Novelty bonus | H23; I8 | Preserve the first-use arithmetic and draft term novelty_bonus; it is not a reserved slot or a story-novelty claim. |
 | O12 | Greedy winner, tie, count updates and termination | H25/H26; reference and candidate-level pseudocode | Preserve the draft's winner sequence through the later lazy-heap refinement. Commit the actual winner's counts and retain duplicate records for terminal accounting. |
 | O13 | Terminal losses and recorded score terms | H27; I8/I9/I13/I17 | Preserve original identities for one final loss pass and derive text/metadata from the same winners. Delete obsolete fields/reasons instead of retaining compatibility machinery. |
-| O14 | Later parsed-count requirement | D1-D4; A12; I9/I13; K12; N1/N6 | Count the body during parse and copy that required integer through raw and compact selected_articles ledgers and the text artifact. No downstream recount. |
-| O15 | Later cached-substance requirement | F2/F3/F7; H12/H19; I18; N2/N5 | Compute substance once during screening; selection uses cached numbers and never analyzes text. |
+| O14 | Later parsed-count requirement | D1-D4; A12; I9/I13; K12; N1/N6 | Keep the complete body's parsed count and carry it beside the distinct retained count through raw/compact selected_articles and the original-text artifact. Neither count is recalculated downstream. |
+| O15 | Later cached-substance requirement | F2/F3/F7/F21; H12/H19/H28/H29; I18; N2/N5 | Measure paragraphs and cache the admitted retained count/substance once during screening. Selection uses numbers, never text. |
 | O16 | Later two-stage/lazy-heap requirement | A13/A14; I1-I7; candidate-level pseudocode; J1-J4 | Fixed-score preparation followed by candidate-level lazy reranking; retain full eligible supply, exact winners and explicit refresh-cost accounting. |
 | O17 | Later source-weight-only and replacement requirements | A7/A11; F4/F5/F13; I10-I12; N1/N3/N6 | Remove tier weighting/dependencies and compatibility machinery. Use raw source.weight as the source prior and current-only affected formats; do not rewrite historical ledgers. |
+| O18 | Paragraph filter and unchanged body | F21/F22; G25; H28/H29; K20 | Retain newline blocks meeting the word OR sentence threshold. Reuse their analysis for density/opening; keep full source text and expose the rule's limits without an unmeasured removal percentage. |
+| O19 | Separate technical and scoring floors | D9; F20; G11/G26; K21 | Keep raw technical measurement unchanged. Reject insufficient retained prose with its own screening cause, not a new technical failure. |
 
 ### Derived arithmetic examples
 
@@ -615,9 +638,9 @@ Table P
 | Id | Input using Table G defaults | Required result |
 | --- | --- | --- |
 | P1 | Known signed ages: near-future, zero, 18 hours, 36 hours | Recency is respectively 0.6, 0.6, 0.3 and 0.15 points. An unavailable age is refused before scoring; a past age above the global ceiling also fails screening. |
-| P2 | Word counts 249, 250, 325 and 399 | Respectively screening refusal, 0.0 length points, `75 / 149 = 0.5033557046979866` length points, and 1.0 length points. |
-| P3 | Word counts 400, 1,500 and 1,501 | Respectively 1.0, 1.0 and 0.99975 length points; the decline starts immediately and continuously after the flat band. |
-| P4 | Word counts 2,250, 3,000, 3,001, 3,500 and 3,501 | Respectively 0.8125, 0.625, 0.62475, 0.50 and 0.50 length points. Adjacent words at 3000/3001 differ by only 0.00025 point, not 0.20 point. |
+| P2 | Retained word counts 449, 450, 600 and 749 | Respectively screening refusal, 0.0 length points, 0.50 length points and `299 / 300 = 0.9966666666666667` length points. The ramp does not reach full credit one word early. |
+| P3 | Retained word counts 750, 2,500 and 3,500 | Each gets 1.0 length points. Full credit includes the taper's starting endpoint. |
+| P4 | Retained word counts 3,501, 4,750, 5,000, 5,999, 6,000, 6,001 and 7,000 | Length points are respectively 0.99992, 0.90, 0.88, 0.80008, 0.80, 0.80 and 0.80. These are length-component points, not percentage deductions from the complete score. |
 | P5 | Two name/number signals in four sentence units; then at least one signal per unit | Density contributions are 0.15 and 0.30 points respectively; additional density stays capped. |
 | P6 | Each headline flag alone, then all three; length 1.0 and density 0.30 with all three | Deductions are 0.10, 0.10, 0.05, then 0.25 points. Combined substance is 1.05 points, not 1.55 points. |
 | P7 | Website's first six articles, meaning pre-choice counts zero through five | Signed website deductions are `[0.0, -0.04, -0.16, -0.36, -0.64, -1.00]` points. |
@@ -634,6 +657,10 @@ Table P
 | P18 | Headlines ALARMING report; NATO EU AI; numeric-only, punctuation-only or empty input | Respectively one unexempt uppercase term, only recognized acronyms, or no qualifying letter terms. None triggers shouting, including a one-word numerator that reaches half the headline. Empty input cannot divide by zero. |
 | P19 | Missing publication and discovery; then publication beyond the trusted future tolerance with no discovery | Both produce I12's unavailable-age screening refusal, null age details and no substance/base score. A high source weight cannot admit either candidate. |
 | P20 | Trusted publication 18 hours before T with no first sight; then missing/untrusted publication with recorded first sight 18 hours before T | Both have known age 18 hours and recency 0.30 points. Subject to the other gates, both pass the final 36-hour ceiling. Screening never manufactures a first-sight timestamp. |
+| P21 | One retained 150-word paragraph plus 250 words in one-sentence navigation blocks, each below G25's word minimum; repeat with 1,000 padding words | Raw counts are 400 and 1,150, both above G26. Each retains only 150 words, so both fail G11 with the substance-specific cause. Padding cannot provide full length credit or contribute names/numbers to density. Original technical outcomes remain unchanged. |
+| P22 | Fifty retained 50-word report paragraphs plus 1,000 discarded sidebar words; repeat with 5,000 discarded sidebar words | Raw counts stay 3,500 and 7,500. Both retain 2,500 words and earn 1.0 length points; using raw count would wrongly taper the second case. The worker receives each full original body/work estimate; both counts survive selected outputs in row 3. |
+| P23 | A 24-word one-sentence block; a 25-word one-sentence block; Subscribe now. Terms apply. | Retained counts are respectively zero, 25 and four words. The short footer's two sentences deliberately satisfy the OR predicate; do not relabel it as semantic cleaning. Abbreviations alone must not manufacture a second sentence. |
+| P24 | Empty body or a technically admitted body made only of discarded fragments | The measured retained count is zero. Empty/raw technical failure exits cheaply; a raw-pass empty filtered view emits the substance-specific refusal after paragraph measurement. Neither gets a default score or a fallback to raw text. |
 
 ## 5 - Row 3 - Replace the selection engine and its consumers
 
@@ -722,8 +749,8 @@ Table P
   - `docs/architecture/sources/feed-plan-runner.md`
   - `docs/architecture/sources/feed-partitioning.md`
   - `docs/reference/feed-planner-ledgers.md`
-- **Acceptance gates:** Local: M1-M7 for the named selector, policy, workflow, native-writer and real loopback/API dependants; include K1-K15/K17/K19 and row 1's unchanged probe record. Validate actual raw/compact Parquet, text artifacts, required selected timing and current-only format refusal. CI: required checks on this complete PR candidate; no live data-writing workflow dispatch.
-- **Oracle:** For bounded recorded/generated inputs, every chosen identity and exact score/ID order equals an independent full-scan greedy reference, every parsed identity has one terminal outcome, and raw/compact/artifact word_count equals the chosen parsed count. This proves the specified greedy sequence, capacity, accounting and count delivery, not global optimality, factual accuracy or topic coverage.
+- **Acceptance gates:** Local: M1-M7 for the named selector, policy, workflow, native-writer and real loopback/API dependants; include K1-K15/K17/K19-K21 and row 1's unchanged probe record. Validate actual raw/compact Parquet, original text, both counts, required selected timing and current-only format refusal. CI: required checks on this complete PR candidate; no live data-writing workflow dispatch.
+- **Oracle:** For bounded recorded/generated inputs, every chosen identity and exact score/ID order equals an independent full-scan greedy reference, every parsed identity has one terminal outcome, and raw/compact/artifact counts equal the chosen parsed and screening measurements. This proves the specified greedy sequence, capacity, accounting and count delivery, not global optimality, factual accuracy or topic coverage.
 
 Table Q
 
@@ -732,7 +759,7 @@ Table Q
 | Q1 | 1 | N3-N8 are one coherent engine release because removing an active required shape must include its producer/readers. Count reuse, policy preparation and language analysis already shipped separately; new run metrics do not block this release. | Dependency boundary |
 | Q2 | 2 | Remove allocateSourceBasedQualityBucketBudgets, resolveSourceBasedQualityBucketWindows, older/buffer allocation phases, quota/cap helpers, exploration slots and current-day exposure ranking after converting their named callers. Keep publication-URL and safety history. | Verified retired behavior |
 | Q3 | 3 | Source snapshots, candidate/stage/API outputs, selected metadata/artifact/rows, shard-packer and the native writer are the direct contract chain. SourceSnapshotSchema's outside-planner probe caller was removed in row 1. No direct selected-tier frontend reader was found; do not invent a frontend migration. Recheck named consumers before dispatch. | Verified consumer map |
-| Q4 | 4 | Add I9's required word_count, require I19's known selected timing and remove I10's selected/source fields in this PR only. Declare the new native shape before implementing its projection. Keep every changed family's current recordings, refusal cases, row mapping and canonical documentation in this PR. | One active format |
+| Q4 | 4 | Add I9's two required word counts and their inequality, require I19's known selected timing and remove I10's selected/source fields in this PR only. Declare the native shape before projection. Keep each changed family's current recordings, refusal cases, row mapping and canonical documentation in this PR. | One active format |
 | Q5 | 5 | Replace only retired selection reasons; retain access, content, extraction, URL, publication and age refusals. The two terminal curation losses are not the complete rejection vocabulary. | Safety and accounting |
 | Q6 | 6 | Use H20's shared website resolver for both evidence and numerical preparation. A caller-supplied missing/different group cannot bypass or split the canonical host's penalty. | Consistent identity |
 
@@ -820,13 +847,15 @@ Table V
 | V3 | Acronyms and short-word shouting bypass | H8/H9 and G20/G22 require both the unexempt uppercase-word minimum and the inclusive headline-wide fraction. Only recognized acronyms leave the numerator, never the denominator. Row 2 checks P16-P18 with the real library; no short-word exemption remains. |
 | V4 | Abbreviation sentence splits | H3 uses compromise sentence boundaries without changing extraction-quality rules. Row 2 checks abbreviations and decimal punctuation. |
 | V5 | Raw-token opening mismatch | H7/H11 normalize noun and verb inflections before whole-term overlap. Row 2 checks inflections and substring false matches; arbitrary derivations/synonyms remain an explicit heuristic limit, not a claimed library capability. |
-| V6 | Long-article score jump | H2 and P3/P4 implement continuous decay to 3500 words, then clamp. No 3001-word cliff or unused decline_end knob. Row 2 carries the boundary checks. |
+| V6 | Long-article score jump | H1/H2 and P2-P4 use retained words, a wider full-credit band and continuous taper to 0.80 length points at 6000 words, then clamp. Row 2 carries every endpoint check; no complete-score percentage penalty is implied. |
 | V7 | Heap dependency | J5 and N4 specify a narrow in-repository binary max-heap with differential tests, not heap-js or an unmeasured flat-scan performance claim. Row 3 owns it. |
 | V8 | Shared-contract blast radius | D7 decouples the actual catalog-probe consumer in row 1. Q3/Q4 convert the native selected/stage/API/partition/writer chain in row 3; no legacy optional tier metadata or historic conversion. |
 | V9 | Missing website bypass | H20/H21 require canonical-URL grouping with normalized-host fallback. Row 3 tests absent supplied grouping and actual registrable-domain lookup failure. |
 | V10 | Large single release and late tests | C1-C4/N1-N10 define four sequential working PRs. Every row carries its required tests/fixtures/docs; removals stay with their callers, and row 4 adds audit capability rather than repairing earlier releases. |
 | V11 | Internal lexical API and View-based exclusion | H7 reads validated public JSON term output; H5 uses the public ProperNoun string selector. Row 2's recorded cases prove normalization, numeric/name separation and explicit failure on invalid library output without internal method access or unsafe casts. |
 | V12 | Unavailable-age admission | H15/F20/K19 reject missing usable time evidence before language analysis in row 2. Row 3 enforces I19's known-time invariant in every selected projection and native output reader. Raw missing evidence stays null; no current-time substitute or technical-history penalty. |
+| V13 | Boilerplate-inflated scoring | H28/H29 and K20/P21/P22 exclude discarded blocks from length, density and opening evidence without changing extraction or the worker's body. F22/P23 make retained-noise and short-prose limits explicit; no removal percentage is asserted. Row 2 owns measurement, row 3 owns both counts in selected output. |
+| V14 | Raw versus retained count drift | A12/F2/I9/K12 preserve both meanings and validate retained <= raw. G11's retained floor uses F20's distinct refusal; G26 and original technical history stay unchanged. Neither missing nor empty evidence becomes a success-shaped zero score. |
 
 ## See also
 
