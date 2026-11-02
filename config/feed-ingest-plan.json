@@ -161,6 +161,7 @@
     "compression": "snappy"
   },
   "workflow_reporting": {
+    "score_decimal_places": 3,
     "enabled": true,
     "removal_condition": "Delete enabled, this adapter, its tests, and its workflow invocation together when development reporting is no longer needed."
   },

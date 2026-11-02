@@ -112,11 +112,37 @@ They retain report and metadata recovery checks after delivery failure.
 Independent writer and contract tests own native digest, identifier and
 historical ledger coverage. The workflow does not add a synthetic receipt.
 
+## Offline recording in CI
+
+The existing CI workflow has a default-off `capture_planner_recordings`
+dispatch input. It checks out the selected revision and runs the existing
+real API recorder against recorded RSS and HTML. It does not read live feeds,
+commit data or change parser or test deadlines.
+
+```text
+gh workflow run ci.yml --ref <branch> -f capture_planner_recordings=true
+gh run download <run-id> --name planner-current-recordings --dir <temporary-directory>
+```
+
+The `planner-current-recordings` artifact is uploaded only after the recorder
+succeeds. It contains exactly eight files for
+`tests/fixtures/feed-ingest-plan/entry-points/`: `response.json`, `health.json`,
+`selected-articles.json` and the `discovered-articles`, `selected-articles`,
+`rejected-articles`, `feed-health-state` and `plan-runs` `.rows.json` files.
+The capture switch is unset when the recorder step exits, including on failure.
+Review and commit only these generated current recordings, then run ordinary
+candidate CI without capture. Existing replay, CLI and full-suite gates remain
+unchanged; a recording run is not their replacement.
+
 ## Saved output and failures
 
 `services/feed-ingest-plan/scripts/` owns workflow execution, local input loading,
 native verification, metadata commits, artifact preparation and
 reporting. `services/host-probes/scripts/` owns optional controlled host tools.
+`workflow_reporting.score_decimal_places` controls displayed selected scores,
+with a default of three decimal places. Saved metadata and selected-text
+artifacts keep exact scores; rounding never affects winner comparisons.
+
 Workflow YAML calls those modules directly. `.github/scripts/` retains only
 the independent `ai-pipeline.ts` experiment and `serve-evaluator.py`; neither
 is required for the native feed APIs. Recorded compatibility drivers live in

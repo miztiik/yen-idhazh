@@ -5,8 +5,8 @@ import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  FeedHealthStateRowSchema, FeedIngestCandidateSchema, ParsedFeedBatchSchema, SelectedArticleRowContract,
-  SelectedArticlesArtifactSchema, SelectedFeedBatchSchema, deriveCandidateId, deriveUrlKey, selectedArticleMetadata,
+  FeedHealthStateRowSchema, FeedIngestCandidateSchema, ParsedFeedBatchSchema, PartitionedFeedBatchSchema, PlanRunRowContract, SelectedArticleRowContract,
+  SelectedArticlesArtifactSchema, deriveCandidateId, deriveUrlKey, selectedArticleMetadata,
 } from "@idhazh/common-contracts";
 import type { FeedIngestConfig, PlannerArticleEvidence } from "@idhazh/common-contracts";
 import { loadPlanningConfig, resolvePolicy } from "../src/config/resolve-policy";
@@ -26,13 +26,14 @@ import { endpointKey } from "../src/read-ledger-history/read-feed-history";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { source } from "./harvest-recordings";
 import { recordedPlan } from "./plan-recordings";
-import { recordedPersistenceBatch } from "./persistence-recordings";
+import { stageConfigFingerprint } from "../src/api/operation-context";
+import { summarizeRequestReport } from "../src/read-ledger-history/request-summary";
 import { stageStore } from "../src/api/stage-store";
 import { executePersistence } from "../src/api/persistence-operation";
+import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
 import { compactRows, readWritten } from "./partition-fixtures";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
-import { renderSelectedEvidence } from "../src/reporting/selected-evidence-markdown";
-import { formatPolicyTable } from "../scripts/feed-ingest-plan-policy-report";
+import { renderWorkflowPlanMarkdown } from "../scripts/feed-ingest-plan-report";
 
 type CandidateCase = {
   name: string; source: string; ordinal: number;
@@ -294,7 +295,7 @@ test("real screening joins the strongest duplicate body and preserves both count
   expect(screened.rejections.map(row => row.drop_reason)).toEqual(["REJECTED_SCREENING_MIN_WORDS"]);
   const before = structuredClone(screened.admitted);
   const result = curateArticles(selectionInput(setup, screened.admitted));
-  const packed = partitionArticles(result.articles, { strategy: "none", dispatch_count: 1 });
+  const packed = partitionArticles(result.articles, { strategy: "bin-pack", dispatch_count: 1 });
   const chosen = packed.articles.find(row => row.url_key === original.url_key)!;
   expect(chosen.feed_id).toBe(stronger.feed_id);
   expect(chosen.weight).toBe(stronger.source.weight);
@@ -308,11 +309,47 @@ test("real screening joins the strongest duplicate body and preserves both count
   expect(screened.admitted).toEqual(before);
   const fixture = await recordedPlan();
   try {
-    const seed = await recordedPersistenceBatch(fixture.inputs, fixture.runtime);
-    const batch = stageStore(fixture.inputs).write("selected", SelectedFeedBatchSchema, {
-      ...seed, batch_id: randomUUID(), context: setup.context,
-      evaluated_at: setup.context.now, selection_started_at_utc: setup.context.now, articles: packed.articles,
+    const candidates = [original, other, stronger, short, zero];
+    fixture.inputs.harvest = {
+      ...fixture.inputs.harvest, ...setup.planning,
+      sources: [...new Map(candidates.map(candidate => [candidate.feed_id, source({
+        id: candidate.feed_id, url: candidate.source.feed_url, title: candidate.source.title,
+        weight: candidate.source.weight, publisher_id: candidate.source.publisher_id,
+      })])).values()],
+      publishers: [...new Set(candidates.flatMap(candidate =>
+        candidate.source.publisher_id === null ? [] : [candidate.source.publisher_id]))]
+        .map(id => ({ id, display_name: "Recorded publisher" })),
+    };
+    const parsed = ParsedFeedBatchSchema.parse({
+      ...selectionInput(setup, screened.admitted).batch, candidates,
+      observations: Object.fromEntries(candidates.map(candidate => [candidate.candidate_id, {
+        candidate_id: candidate.candidate_id, http_status: 200, paywall: false, robots: "allowed",
+        fetch_failure: null, extraction: "success", paywall_evidence: "none", observed_at: setup.context.now,
+      }])),
     });
+    const currentHealth = {
+      sources: new Map<string, SourceHistoryEvidence>(),
+      request_report: summarizeRequestReport({
+        rows: [], days: [], sources: [...new Map(candidates.map(candidate =>
+          [candidate.feed_id, candidate.source])).values()], now: setup.context.now,
+        request_report_closed_days: fixture.inputs.harvest.config.feedback.request_report_closed_days,
+      }),
+    };
+    const selection = await selectArticles(parsed, fixture.inputs, setup.context.now, currentHealth,
+      setup.context, await readRunHistory(fixture.inputs, setup.context));
+    expect(selection.articles).toEqual(result.articles);
+    expect(selection.rejected_articles.map(row => row.reason_code).sort()).toEqual([
+      "REJECTED_DUPLICATE_CANONICAL_CARRIER", "REJECTED_SCREENING_MIN_WORDS",
+    ]);
+    const batch = stageStore(fixture.inputs).write("partitioned", PartitionedFeedBatchSchema, {
+      batch_id: randomUUID(), parsed_batch_id: randomUUID(), context: setup.context,
+      selection_batch_id: randomUUID(),
+      config_sha256: stageConfigFingerprint(fixture.inputs, fixture.runtime),
+      evaluated_at: setup.context.now, selection_started_at_utc: setup.context.now,
+      ...selection, ...packed,
+    });
+    const health = await executeFeedHealthState({ batch_id: batch.batch_id, action: "record" },
+      fixture.inputs, fixture.runtime);
     const persisted = await executePersistence({ batch_id: batch.batch_id }, fixture.inputs, fixture.runtime);
     const raw = await readWritten(fixture.inputs.outputRoot, "selected-articles", setup.context.date,
       SelectedArticleRowContract, persisted.files);
@@ -337,16 +374,30 @@ test("real screening joins the strongest duplicate body and preserves both count
     const capture = process.env.IDHAZH_CURATION_EVIDENCE_DIRECTORY;
     if (capture !== undefined) {
       await mkdir(capture, { recursive: true });
-      const policy = formatPolicyTable({
-        config: setup.planning.config, request: {}, history: setup.inputs.clock_config.collect,
-        parser_concurrency: setup.inputs.settings.listener.parser_concurrency,
-      }, true);
+      if (persisted.run_files === undefined) throw new Error("The real standalone run must have a saved outcome");
+      const savedRun = await readWritten(fixture.inputs.outputRoot, "plan-runs", setup.context.date,
+        PlanRunRowContract, persisted.run_files);
+      const policy = {
+        config: fixture.inputs.harvest.config, request: { shards: packed.dispatch_count, partition_strategy: packed.strategy },
+        history: fixture.inputs.clock_config.collect,
+        parser_concurrency: fixture.inputs.settings.listener.parser_concurrency,
+      };
+      const report = renderWorkflowPlanMarkdown({
+        response: {
+          ...savedRun.rows[0], planning_complete: persisted.run_status === "completed",
+          correlation_id: setup.context.correlation_id, batches: { selection_batch_id: batch.batch_id },
+          files: {
+            selected_articles: persisted.files, rejected_articles: persisted.rejected_files,
+            feed_health_state: health.files, plan_runs: persisted.run_files,
+          },
+          selected_url_keys: packed.articles.map(row => row.url_key),
+          assignments: packed.articles.map(({ url_key, editorial_rank, worker_assignment }) =>
+            ({ url_key, editorial_rank, worker_assignment })),
+        },
+        selected: raw.rows, health, policy, failures: { articles: selection.rejected_articles },
+      });
       await Promise.all([
-        writeFile(join(capture, "selected-evidence.md"), [
-          policy.summary,
-          renderSelectedEvidence(raw.rows, { run_id: setup.context.run_id, attempt: setup.context.writer.attempt,
-            selected_count: raw.rows.length }),
-        ].join("\n\n")),
+        writeFile(join(capture, "selected-evidence.md"), report.markdown),
         writeFile(join(capture, "selection.json"), JSON.stringify({
           artifact, rows: raw.rows, screening_rejections: screened.rejections,
           losses: result.losses.map(loss => ({ candidate_id: loss.article.candidate.candidate_id, reason: loss.reason })),

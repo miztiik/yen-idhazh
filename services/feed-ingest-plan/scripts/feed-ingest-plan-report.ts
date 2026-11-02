@@ -30,6 +30,7 @@ export function renderWorkflowPlanMarkdown(
   const host = formatHostFingerprintSummary(input.host);
   return renderPlanMarkdown({
     response, health: input.health, selected: input.selected, policy: { markdown: policy.summary, notice: policy.notice },
+    score_decimal_places: policy.score_decimal_places,
     host: { markdown: host.cells, notice: host.notice },
     maximum: policy.maximum,
     ...(input.failures === undefined ? {} : { failures: input.failures }),

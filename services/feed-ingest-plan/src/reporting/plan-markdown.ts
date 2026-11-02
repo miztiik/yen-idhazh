@@ -23,6 +23,7 @@ export type PlannerMarkdown = Readonly<{
 export type PlanMarkdownEvidence = Readonly<{
   response: unknown; health?: unknown; selected?: unknown; policy?: MarkdownSection; host?: MarkdownSection;
   maximum?: string;
+  score_decimal_places?: number;
   failures?: ReportFailureEvidence;
 }>;
 
@@ -114,7 +115,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
     "", "Technically eligible means original captures passing technical admission, not later screening. Each feed combines this run's UTC work days; one unknown constituent makes its exact total unavailable.",
     "", "</details>", "", requestReport.markdown,
     "", renderSelectionExclusions(health?.rows),
-    "", renderSelectedEvidence(input.selected, row),
+    "", renderSelectedEvidence(input.selected, row, input.score_decimal_places),
     ...(input.policy === undefined ? [
       "", "<details>", "<summary>Effective settings</summary>", "",
       "## Table G - Effective settings", "", "| Id | Setting | Effective value | Source |",

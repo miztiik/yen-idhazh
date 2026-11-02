@@ -133,6 +133,8 @@ export const FeedSealConfigSchema = z.strictObject({
   compression: z.enum(["snappy", "zstd", "none"]),
 });
 export const FeedWorkflowReportingConfigSchema = z.strictObject({
+  score_decimal_places: z.int().min(0).max(100).default(3)
+    .describe("Displayed score precision within the ECMAScript Number.toFixed range; saved scores remain exact."),
   enabled: z.boolean().default(true).describe(
     "External reporting only. Remove this key, adapter, tests, and workflow invocation together when development reporting is no longer needed.",
   ),

@@ -622,6 +622,8 @@ Table P
 - **Scope:** Activate the sole diversity-aware selector, delete the retired runtime and old-only tests, replace obsolete documentation with the new algorithm, and change required contracts and callers in the same cutover.
 - **Files touched:**
   - `TODO/20261101-diversity-aware-top-k-selection-plan.md`
+  - `.github/workflows/ci.yml`
+  - `backend/tests/workflows/test_ci_selection.py`
   - `config/feed-ingest-plan.json`
   - `config/feed-ingest-plan-service.json`
   - `packages/common-contracts/src/index.ts`
@@ -660,6 +662,9 @@ Table P
   - `services/feed-ingest-plan/src/curate-article-portfolio/editorial-selection.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/publisher-exposure.ts` (delete)
   - `services/feed-ingest-plan/src/curate-article-portfolio/select-diverse-articles.ts` (new)
+  - `services/feed-ingest-plan/src/reporting/selected-evidence-markdown.ts` (new)
+  - `services/feed-ingest-plan/src/reporting/plan-markdown.ts`
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts`
   - `services/feed-ingest-plan/src/select-articles.ts`
   - `services/feed-ingest-plan/src/api/selection-operation.ts`
   - `services/feed-ingest-plan/src/api/plan-response.schema.ts`

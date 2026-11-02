@@ -20,6 +20,7 @@ export const WorkflowPolicySchema = z.strictObject({
 
 export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
   if (input === undefined) return {
+    score_decimal_places: undefined,
     notice: "Effective settings were not recorded; committed defaults do not prove what this run used.",
     rows: [["Effective settings", "Not recorded", "Policy evidence unavailable"]],
   };
@@ -96,6 +97,7 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
     configured("URL exclusion rules", config.harvest.url_exclusions.length),
   ];
   return {
+    score_decimal_places: config.workflow_reporting.score_decimal_places,
     notice: `Policy config version: ${config.version}; selection started: ${selectionRan}; `
       + `article limit: ${request.article_limit} (${source("article_limit")}); article assignments: ${config.partition.enabled ? request.shards : 0}; `
       + `strategy: ${config.partition.enabled ? request.partition_strategy : "bypassed"}; article-pass adjustment enabled: `
@@ -109,6 +111,7 @@ export function formatPolicyTable(input: unknown, selectionRan: boolean, documen
   const policy = formatWorkflowPolicy(input, selectionRan);
   const ignored = policy.rows.filter(([, , source]) => source === "ignored workflow override").map(([setting]) => setting);
   return {
+    score_decimal_places: policy.score_decimal_places,
     notice: policy.notice,
     maximum: policy.rows.find(([setting]) => setting === "Article limit")?.[1] ?? "Not recorded",
     summary: [

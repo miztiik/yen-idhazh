@@ -28,8 +28,21 @@ test("selected evidence preserves measured zero and refuses incomplete or foreig
   const run = { run_id: row.run_id, attempt: row.attempt, selected_count: 1 };
   const document = parseHTML(Bun.markdown.html(renderSelectedEvidence([row], run))).document;
   const cells = [...document.querySelectorAll("tbody td")].map(cell => cell.textContent);
-  expect(cells).toEqual(["J1", "1", row.feed_id, "180", "0", "1", "0", "1.5", "1.25", "first_seen"]);
-  expect(document.textContent).not.toContain(row.canonical_url);
+  expect(cells).toEqual(["J1", "1", row.feed_id, "180", "0", "1", "0", "1.5", "1.25", "First recorded sighting"]);
+  const before = structuredClone(row);
+  const config = FeedIngestConfigSchema.parse(await Bun.file(
+    new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json());
+  const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
+  const display = formatWorkflowPolicy({
+    config: { ...config, workflow_reporting: { ...config.workflow_reporting, score_decimal_places: 0 } },
+    request: {}, history: settings.collect, parser_concurrency: 1,
+  }, true);
+  const rounded = parseHTML(Bun.markdown.html(
+    renderSelectedEvidence([row], run, display.score_decimal_places))).document;
+  expect([...rounded.querySelectorAll("tbody td")].map(cell => cell.textContent).slice(6, 9)).toEqual(["0", "2", "1"]);
+  expect(rounded.querySelector("details")!.textContent).toContain("rounded to 0 decimal places");
+  expect(row).toEqual(before);
+  expect(document.querySelector("details")!.textContent).not.toContain(row.canonical_url);
   expect(renderSelectedEvidence(undefined, run)).toContain("unavailable");
   expect(renderSelectedEvidence([], { ...run, selected_count: 0 })).toContain("zero articles");
   expect(() => renderSelectedEvidence([], run)).toThrow("complete execution");
