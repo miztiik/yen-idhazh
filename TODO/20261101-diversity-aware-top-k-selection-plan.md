@@ -94,6 +94,8 @@ Table C
 - **Files touched:**
   - `TODO/20261101-diversity-aware-top-k-selection-plan.md`
   - `config/feed-ingest-plan.json`
+  - `.github/workflows/source-transport-test.yml`
+  - `docs/how-to/run-the-gates.md`
   - `packages/common-contracts/src/index.ts`
   - `packages/common-contracts/src/version.ts`
   - `packages/common-contracts/src/schemas/config.schema.ts`
