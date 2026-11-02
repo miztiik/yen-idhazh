@@ -83,7 +83,7 @@ Table C
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Prepare contracts and configuration | - | A | PENDING | - | - | - |
+| C1 | 1 | Prepare contracts and configuration | - | A | IN-FLIGHT | selection-contract-readiness | - | 77e2fd0b-3c3f-4e30-ab1e-c571119a90d7 |
 | C2 | 2 | Add substance scoring during screening | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Replace the selection engine and its consumers | 2 | C | PENDING | - | - | - |
 | C4 | 4 | Add diversity run metrics and audit reporting | 3 | D | PENDING | - | - | - |
@@ -110,9 +110,11 @@ Table C
   - `services/feed-ingest-plan/src/harvest-feeds/corroborated-words.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/dom-extractor.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/extraction-quality.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/extraction-provenance.ts`
   - `services/feed-ingest-plan/src/screen-article-candidates/freshness-decay.ts`
   - `services/feed-ingest-plan/test/harvest.test.ts`
   - `services/feed-ingest-plan/test/policy.test.ts`
+  - `services/feed-ingest-plan/test/plan-entry-points.test.ts`
   - `docs/architecture/sources/feed-curation.md`
   - `docs/architecture/sources/feed-ingest-policies.md`
   - `docs/architecture/sources/extraction-quality.md`

@@ -1,5 +1,5 @@
 /** Count independent publisher article-length witnesses on one inert page. */
-import { countWords } from "./extraction-quality";
+import { countWords } from "../count-article-words";
 
 // Native schema.org article types, not editorial classifications or fetch targets.
 const ARTICLE_TYPES = new Set([

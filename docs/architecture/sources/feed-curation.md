@@ -1,10 +1,17 @@
 # Selecting an editorial portfolio
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-11-02
 
 How does the isolated planner choose articles from the admitted batch?
 It uses configured numeric rules and explicit factual evidence, not a model
 or an inferred subject classification.
+
+The configuration now declares future global-age, substance and diversity
+settings. They are preparation only: this selector still uses the bucket,
+tier and exposure rules below. The parser shares its word counter and passes
+its cached full-body count into quality measurement; this does not change
+selection. See [policy settings](feed-ingest-policies.md) and
+[extraction measurement](extraction-quality.md).
 
 These rules supersede the earlier proposal to reuse Python ranking choices;
 that proposal is not a separate unfinished selection requirement. The

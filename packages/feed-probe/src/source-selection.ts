@@ -6,7 +6,6 @@ import {
   NonEmptySchema,
   PositiveCountSchema,
   SlugSchema,
-  SourceSnapshotSchema,
   UrlSchema,
 } from "@idhazh/common-contracts";
 import type { FeedProbeCliOptions } from "./cli-options";
@@ -136,31 +135,11 @@ function validateCatalog(raw: unknown): { sources: CatalogSource[] } {
     if (source.status === "retired") {
       throw new FeedProbeInputError(`Catalog feed ${source.id} must not use retired status`);
     }
-    SourceSnapshotSchema.parse({
-      feed_id: source.id,
-      feed_url: source.url,
-      title: source.title ?? source.id,
-      publisher_id: source.publisher_id ?? null,
-      tier: source.tier ?? 1,
-      status: source.status,
-      weight: source.weight ?? 1,
-      applied_tier_weight: source.weight ?? 1,
-    });
   }
   for (const source of parsed.retired) {
     if (source.status !== "retired") {
       throw new FeedProbeInputError(`Catalog retired source ${source.id} must use retired status`);
     }
-    SourceSnapshotSchema.parse({
-      feed_id: source.id,
-      feed_url: source.url,
-      title: source.title ?? source.id,
-      publisher_id: source.publisher_id ?? null,
-      tier: source.tier ?? 1,
-      status: source.status,
-      weight: source.weight ?? 1,
-      applied_tier_weight: source.weight ?? 1,
-    });
   }
   for (const source of sources) {
     if (ids.has(source.id)) throw new FeedProbeInputError(`Duplicate catalog source ID: ${source.id}`);

@@ -15,3 +15,5 @@ export const PARSED_FEED_BATCH_VERSION = "2026-10-31" as const;
 export const FEED_OUTCOME_PAYLOAD_VERSION = "2026-10-30" as const;
 export const FEED_PROBE_VERSION = "2026-10-28" as const;
 export const FEED_INGEST_EVENT_VERSION = "2026-11-01" as const;
+export const FEED_INGEST_CONFIG_VERSION = "2026-11-02" as const;
+export const SCREENED_ARTICLE_VERSION = "2026-11-02" as const;

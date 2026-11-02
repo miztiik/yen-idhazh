@@ -23,7 +23,7 @@ function libraryVersion(name: "defuddle" | "linkedom" | "turndown"): string {
 }
 
 export const EXTRACTOR_VERSION = `defuddle-${libraryVersion("defuddle")}-linkedom-${libraryVersion("linkedom")}-turndown-${libraryVersion("turndown")}-bun-${Bun.version}-idhazh-${fingerprint([
-  "dom-extractor.ts", "corroborated-words.ts", "extraction-quality.ts", "extraction-controls.ts",
+  "dom-extractor.ts", "../count-article-words.ts", "corroborated-words.ts", "extraction-quality.ts", "extraction-controls.ts",
   "parse-document.ts", "extraction-provenance.ts", "semantic-extractor.ts", "sanitize-dom.ts", "content-evidence.ts",
 ])}`;
 export const SANITIZER_FINGERPRINT = `idhazh-typescript-sanitizer-3-${fingerprint(["sanitize-text.ts"])}`;
