@@ -5,7 +5,7 @@ export const EXTRACTION_QUALITY_VERSION = "2026-10-23" as const;
 export const PUBLISHER_IDENTITY_VERSION = "2026-10-24T20:04" as const;
 export const DISCOVERED_ARTICLE_VERSION = "2026-10-31" as const;
 export const SELECTED_ARTICLE_VERSION = "2026-11-02" as const;
-export const PLAN_RUN_VERSION = "2026-10-26" as const;
+export const PLAN_RUN_VERSION = "2026-11-02" as const;
 export const PLANNER_ENVELOPE_VERSION = "2026-10-31" as const;
 export const FEED_HEALTH_STATE_VERSION = "2026-10-31" as const;
 // The dated route identifies the current planner request and response protocol.

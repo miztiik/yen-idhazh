@@ -14,7 +14,7 @@ import {
   StageReferenceRequestSchema, PartitionArticlesRequestSchema,
   PlannerRejectionCountSchema, PlannerHealthDaySchema, PlannerRequestReportSchema,
   PlannerFeedEntrySchema, PlannerFeedOfferSchema,
-  SelectedArticleContentSchema, PlanRunRowSchema, PlanApiTimingSchema,
+  SelectedArticleContentSchema, PlanRunRowSchema, PlanApiTimingSchema, SelectionMetricsSchema,
   PlannerFileEnvelopeSchema, RecordedIdentitySchema,
   RowIdentitySchema,
   ROW_IDENTITY_COLUMN_VERSIONS, SourceSnapshotSchema, WriterIdentitySchema,
@@ -56,6 +56,7 @@ export const runtimeSchemas = {
   FeedHealthStateRow: FeedHealthStateRowSchema, FeedHealthReliability: FeedHealthReliabilitySchema,
   FeedHealthRejectionCount: FeedHealthRejectionCountSchema, PlanRunRow: PlanRunRowSchema,
   PlanApiTiming: PlanApiTimingSchema,
+  SelectionMetrics: SelectionMetricsSchema,
 } satisfies Record<string, z.ZodType>;
 
 export const schemas = Object.fromEntries(

@@ -12,6 +12,7 @@ async function fixture() {
   const run = PlanRunRowSchema.parse({
     run_id: feed.run_id, date: feed.date, attempt: feed.attempt, started_at: feed.checked_at,
     duration_ms: 1234, status: "completed", failure_code: null, selected_count: 2,
+    selection_metrics: { selected_website_groups: 1, selected_feeds: 2, mean_substance_score: 0.4 },
     strategy: "round-robin", dispatch_count: 3, selected_articles_artifact: null,
     api_timings: [], lifecycle_window_days: 31, reliability_floor: 0.5,
     reliability_penalty_enabled: true, evaluated_at: feed.checked_at,
@@ -37,6 +38,7 @@ test("keeps compact outcome and useful elapsed units without duplicate settings"
     Result: "completed", "Feeds checked": "1", "Feeds paused": "2",
     "Technically eligible articles": "6", "Selected / configured maximum": "2 / 10",
     "Elapsed planning time": "1.23 s",
+    "Selected website groups": "1", "Selected feeds": "2", "Mean substance score (points)": "0.4",
   });
   expect(facts(report.markdown)).not.toHaveProperty("Run");
   expect(report.markdown).not.toContain("Article assignments group selected articles");
@@ -79,7 +81,33 @@ test("keeps failed and unstarted selection facts distinct from configuration swi
   expect(facts(report.markdown)).toMatchObject({
     Result: "failed: PLANNER_EXECUTION_FAILED", "Elapsed planning time": "Not recorded",
   });
+
   expect(facts(report.markdown)).not.toHaveProperty("Selection began at (UTC)");
+});
+
+test("renders completed-empty, unavailable and failed-after-selection metrics without zero filling", async () => {
+  const { run } = await fixture();
+  const empty = renderRunFacts({ ...run, selected_count: 0, selection_metrics: {
+    selected_website_groups: 0, selected_feeds: 0, mean_substance_score: null,
+  } }, []);
+  expect(facts(empty.markdown)).toMatchObject({
+    "Selected website groups": "0", "Selected feeds": "0",
+    "Mean substance score (points)": "No selected articles",
+  });
+  const unavailable = renderRunFacts({ ...run, selected_count: 0, selection_metrics: null,
+    status: "failed", failure_code: "SELECTION_FAILED" }, undefined);
+  expect(facts(unavailable.markdown)).toMatchObject({
+    "Selected website groups": "Selection not completed", "Selected feeds": "Selection not completed",
+    "Mean substance score (points)": "Selection not completed",
+  });
+  const failed = renderRunFacts({ ...run, status: "failed", failure_code: "PERSIST_FAILED" }, undefined);
+  expect(facts(failed.markdown)).toMatchObject({
+    "Selected website groups": "1", "Selected feeds": "2", "Mean substance score (points)": "0.4",
+  });
+  const precise = { ...run, selection_metrics: { ...run.selection_metrics!, mean_substance_score: 0.15933333333333333 } };
+  expect(facts(renderRunFacts(precise, undefined, undefined, undefined, 2).markdown))
+    .toMatchObject({ "Mean substance score (points)": "0.16" });
+  expect(precise.selection_metrics.mean_substance_score).toBe(0.15933333333333333);
 });
 
 test("shows durable UTC recovery deadlines without inventing schedules from historical counters", async () => {

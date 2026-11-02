@@ -14,6 +14,7 @@ import { PlanResponseSchema } from "../src/api/plan-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-state.schema";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { recordedPlannerProcess } from "./planner-process-recordings";
+import { summarizeSelectionMetrics } from "../src/summarize-selection-metrics";
 
 const recordings = new URL("../../../tests/fixtures/feed-ingest-plan/entry-points/", import.meta.url);
 
@@ -39,6 +40,10 @@ test("one recorded API request writes a valid selected artifact", async () => {
     expect(artifact.attempt).toBe(summary.attempt);
     expect(artifact.articles).toHaveLength(1);
     expect(artifact.articles[0]!.article_text.length).toBeGreaterThan(0);
+    expect(summary.selection_metrics).toEqual(summarizeSelectionMetrics(artifact.articles, true));
+    const runs = await Promise.all(summary.files.plan_runs!.files.map(file =>
+      readPlannerParquet(join(fixture.inputs.outputRoot, file.path), "plan-runs", PlanRunRowContract)));
+    expect(runs.flatMap(file => file.rows).map(row => row.selection_metrics)).toEqual([summary.selection_metrics]);
     const selected = (await Promise.all(summary.files.selected_articles!.files.map(file =>
       readPlannerParquet(join(fixture.inputs.outputRoot, file.path), "selected-articles", SelectedArticleRowContract))))
       .flatMap(file => file.rows);
@@ -88,8 +93,12 @@ test("one recorded API request writes a valid selected artifact", async () => {
     const recorded = SelectedArticlesArtifactSchema.parse(await Bun.file(new URL("selected-articles.json", recordings)).json());
     expect(artifact.articles.map(article => ({
       url_key: article.url_key, feed_id: article.feed_id, canonical_url: article.canonical_url, article_text: article.article_text,
+      editorial_rank: article.editorial_rank, ratings: article.ratings,
+      word_count: article.word_count, substance_word_count: article.substance_word_count,
     }))).toEqual(recorded.articles.map(article => ({
       url_key: article.url_key, feed_id: article.feed_id, canonical_url: article.canonical_url, article_text: article.article_text,
+      editorial_rank: article.editorial_rank, ratings: article.ratings,
+      word_count: article.word_count, substance_word_count: article.substance_word_count,
     })));
   } finally { await fixture.close(); }
 });
@@ -125,6 +134,7 @@ test("one awaited CLI invocation writes one valid result", async () => {
     expect(artifact.run_id).toBe(summary.run_id);
     expect(artifact.articles).toHaveLength(1);
     expect(artifact.articles[0]!.article_text.length).toBeGreaterThan(0);
+    expect(summary.selection_metrics).toEqual(summarizeSelectionMetrics(artifact.articles, true));
     const events = FeedIngestEventSchema.array().parse((await readFile(
       join(fixture.directory, "recorded-events.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line)));
     expect(events.filter(event => event.operation === "plan" && event.phase === "started")).toHaveLength(1);

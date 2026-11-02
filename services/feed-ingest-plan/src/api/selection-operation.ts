@@ -12,7 +12,7 @@ import { utcTimestamp } from "../harvest-feeds/harvest-types";
 import { prepareExecutionHealth } from "./feed-health-state-operation";
 import { appendDocumentTiming, currentExecutionState, executionHasArtifact, registerStageExecution } from "./document-state";
 import { resolveRunContext } from "../resolve-run-context";
-import { recordFinalizedDocumentWork } from "./record-standalone-run";
+import { recordFinalizedDocumentWork, recordSelectionFailure, rememberCompletedSelection } from "./record-standalone-run";
 import { collectionForRun } from "./collection-operation";
 import { snapshotCollectionBatch } from "./collection-batch";
 
@@ -72,25 +72,39 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
     if (original?.kind === "document" && !hasArtifact) await recordFinalizedDocumentWork(inputs, original);
   }
   const healthStarted = performance.now();
-  let health;
-  let healthDuration: number;
-  let healthStatus: PlanApiTiming["status"] = "failed";
   try {
-    health = await prepareExecutionHealth(inputs, selectionStartedAt,
-      { context: parsed.context, rows: parsed.work_rows }, original.baseline);
-    healthStatus = "completed";
-  } finally {
-    healthDuration = Math.round(performance.now() - healthStarted);
-    const timing: PlanApiTiming = { operation: "feed-health-for-selection", duration_ms: healthDuration, status: healthStatus };
-    recordHealthTiming?.(timing);
-    await appendDocumentTiming(inputs, context.run_id, timing);
+    let health;
+    let healthDuration: number;
+    let healthStatus: PlanApiTiming["status"] = "failed";
+    try {
+      health = await prepareExecutionHealth(inputs, selectionStartedAt,
+        { context: parsed.context, rows: parsed.work_rows }, original.baseline);
+      healthStatus = "completed";
+    } finally {
+      healthDuration = Math.round(performance.now() - healthStarted);
+      const timing: PlanApiTiming = { operation: "feed-health-for-selection", duration_ms: healthDuration, status: healthStatus };
+      recordHealthTiming?.(timing);
+      await appendDocumentTiming(inputs, context.run_id, timing);
+    }
+    const result = await selectArticles(parsed, inputs, selectionStartedAt, health, context, original.baseline);
+    const batch = store.write("selected", SelectedFeedBatchSchema, {
+      batch_id: randomUUID(), parsed_batch_id: parsed.batch_id, config_sha256: parsed.config_sha256,
+      context, selection_started_at_utc: selectionStartedAt, evaluated_at: parsed.context.now, ...result,
+    });
+    store.ownership(batch.batch_id).scope = keepOriginal ? claim.scope : "standalone";
+    await rememberCompletedSelection(inputs, batch);
+    await appendDocumentTiming(inputs, batch.context.run_id, { operation: "select", duration_ms: Math.round(performance.now() - started), status: "completed" });
+    return { batch, health_summary_duration_ms: healthDuration };
+  } catch (error) {
+    await appendDocumentTiming(inputs, context.run_id, {
+      operation: "select", duration_ms: Math.round(performance.now() - started), status: "failed",
+    });
+    try {
+      await recordSelectionFailure(inputs, context, parsed.context.now, selectionStartedAt,
+        error instanceof PlanError ? error.code : "SELECTION_FAILED");
+    } catch (recordingError) {
+      throw new AggregateError([error, recordingError], "Selection failed and its run outcome could not be saved");
+    }
+    throw error;
   }
-  const result = await selectArticles(parsed, inputs, selectionStartedAt, health, context, original.baseline);
-  const batch = store.write("selected", SelectedFeedBatchSchema, {
-    batch_id: randomUUID(), parsed_batch_id: parsed.batch_id, config_sha256: parsed.config_sha256,
-    context, selection_started_at_utc: selectionStartedAt, evaluated_at: parsed.context.now, ...result,
-  });
-  store.ownership(batch.batch_id).scope = keepOriginal ? claim.scope : "standalone";
-  await appendDocumentTiming(inputs, batch.context.run_id, { operation: "select", duration_ms: Math.round(performance.now() - started), status: "completed" });
-  return { batch, health_summary_duration_ms: healthDuration };
 }

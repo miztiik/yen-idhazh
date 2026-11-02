@@ -9,6 +9,7 @@ import { stageStore } from "./stage-store";
 import { partitionArticles } from "../partition-article-shards/shard-packer";
 import { appendDocumentTiming, executionHasArtifact, registerStageExecution } from "./document-state";
 import { resolveRunContext } from "../resolve-run-context";
+import { recordStandaloneRun, rememberCompletedSelection } from "./record-standalone-run";
 
 export async function executePartition(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
   if (!inputs.harvest.config.partition.enabled) throw new PlanError("PARTITION_DISABLED", "Partitioning is disabled by the effective policy", "partition.enabled");
@@ -38,10 +39,24 @@ export async function executePartition(raw: unknown, inputs: PlanInputs, runtime
       })),
     });
   }
-  const partition = partitionArticles(selected.articles, controls);
-  const batch = store.write("partitioned", PartitionedFeedBatchSchema, {
-    ...selected, batch_id: randomUUID(), selection_batch_id: selected.batch_id, ...partition,
-  });
-  await appendDocumentTiming(inputs, batch.context.run_id, { operation: "partition", duration_ms: Math.round(performance.now() - started), status: "completed" });
-  return { batch };
+  await rememberCompletedSelection(inputs, selected);
+  try {
+    const partition = partitionArticles(selected.articles, controls);
+    const batch = store.write("partitioned", PartitionedFeedBatchSchema, {
+      ...selected, batch_id: randomUUID(), selection_batch_id: selected.batch_id, ...partition,
+    });
+    await appendDocumentTiming(inputs, batch.context.run_id, { operation: "partition", duration_ms: Math.round(performance.now() - started), status: "completed" });
+    return { batch };
+  } catch (error) {
+    await appendDocumentTiming(inputs, selected.context.run_id, {
+      operation: "partition", duration_ms: Math.round(performance.now() - started), status: "failed",
+    });
+    try {
+      await recordStandaloneRun(inputs, { ...selected, strategy: controls.strategy, dispatch_count: 0 },
+        null, error instanceof PlanError ? error.code : "PARTITION_FAILED");
+    } catch (recordingError) {
+      throw new AggregateError([error, recordingError], "Partition failed and its run outcome could not be saved");
+    }
+    throw error;
+  }
 }

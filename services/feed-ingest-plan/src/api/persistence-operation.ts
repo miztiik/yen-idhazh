@@ -15,7 +15,7 @@ import { stageStore } from "./stage-store";
 import { selectedArtifactPath } from "../selected-artifact-path";
 import { PlanError } from "./plan-request";
 import { appendDocumentTiming, currentExecutionState, registerStageExecution } from "./document-state";
-import { recordStandaloneRun } from "./record-standalone-run";
+import { recordStandaloneRun, rememberCompletedSelection } from "./record-standalone-run";
 import { healthFingerprint } from "./feed-health-state-operation";
 import { createStageLogger } from "../logging/structured-logger";
 
@@ -47,6 +47,7 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
   if (finalizedHealth !== null && finalizedHealth !== healthFingerprint(batch.health_rows)) {
     throw new PlanError("REQUEST_CONFLICT", "Selection differs from this execution's finalized health capture", "batch_id");
   }
+  await rememberCompletedSelection(inputs, batch);
   const artifact = SelectedArticlesArtifactSchema.parse({
     schema_version: SelectedArticleRowContract.schemaVersion, run_id: batch.context.run_id,
     attempt: batch.context.writer.attempt, date: batch.context.date, evaluated_at: batch.evaluated_at,
@@ -61,6 +62,7 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
     if (previous.fingerprint !== fingerprint) throw new PlanError("REQUEST_CONFLICT", "This execution already finalized a different selection or partition", "batch_id");
     return previous.result;
   }
+  let failureOutcomeSaved = false;
   const result = (async (): Promise<Result> => {
     const began = performance.now();
     const emit = createStageLogger(batch.context, runtime.log);
@@ -97,10 +99,23 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
     } catch (error) {
       emit("persist", "failed", { batch_id: batch.batch_id, failure_code: "PERSIST_FAILED",
         duration_ms: Math.round(performance.now() - began) });
+      await appendDocumentTiming(inputs, batch.context.run_id, {
+        operation: "persist", duration_ms: Math.round(performance.now() - began), status: "failed",
+      });
+      try {
+        const failed = await recordStandaloneRun(inputs, batch, null, "PERSIST_FAILED");
+        failureOutcomeSaved = failed !== undefined;
+      }
+      catch (recordingError) {
+        throw new AggregateError([error, recordingError], "Persistence failed and its run outcome could not be saved");
+      }
       throw error;
     }
   })();
   finalized.set(claim, { fingerprint, result });
   try { return await result; }
-  catch (error) { finalized.delete(claim); throw error; }
+  catch (error) {
+    if (!failureOutcomeSaved) finalized.delete(claim);
+    throw error;
+  }
 }

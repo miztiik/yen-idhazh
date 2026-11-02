@@ -5,12 +5,10 @@ import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { PlanInputs } from "./load-plan-inputs";
 import type { RunContext } from "./resolve-run-context";
 
-export async function recordPlanRun(inputs: PlanInputs, context: RunContext, values: {
-  duration_ms: number | null; status: PlanRunRow["status"]; failure_code: string | null;
-  selected_count: number; strategy: PlanRunRow["strategy"]; dispatch_count: number;
-  selected_articles_artifact: string | null; api_timings: PlanRunRow["api_timings"];
-  evaluated_at: string; selection_started_at_utc: string | null;
-}) {
+export async function recordPlanRun(inputs: PlanInputs, context: RunContext, values: Pick<PlanRunRow,
+  "duration_ms" | "status" | "failure_code" | "selected_count" | "selection_metrics" | "strategy"
+  | "dispatch_count" | "selected_articles_artifact" | "api_timings" | "evaluated_at" | "selection_started_at_utc"
+>) {
   const row = PlanRunRowSchema.parse({
     ...values, run_id: context.run_id, attempt: context.writer.attempt, date: context.date, started_at: context.captured_at,
     lifecycle_window_days: inputs.harvest.config.feedback.lifecycle_window_days,

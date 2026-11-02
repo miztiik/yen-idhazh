@@ -17,6 +17,8 @@ import { createPlanApp } from "../src/api/server";
 import { SelectionResponseSchema, PartitionResponseSchema } from "../src/api/stage-response.schema";
 import { stageStore } from "../src/api/stage-store";
 import { recordedPlan } from "./plan-recordings";
+import { summarizeSelectionMetrics } from "../src/summarize-selection-metrics";
+import { readPlannerParquet } from "@idhazh/ledger-file-writer";
 
 const recordings = new URL("../../../tests/fixtures/feed-ingest-plan/entry-points/", import.meta.url);
 
@@ -66,6 +68,7 @@ test("one recorded saved run agrees with its public summary and selected identit
   expect(result.row.run_id).toBe(artifact.run_id);
   expect(result.row.attempt).toBe(artifact.attempt);
   expect(result.row.selected_count).toBe(artifact.articles.length);
+  expect(result.row.selection_metrics).toEqual(summarizeSelectionMetrics(artifact.articles, true));
   const summary = PlanResponseSchema.parse(summarizePlan(result));
   expect(summary).toEqual(response);
   expect(result.selected.every(article => !("article_text" in article))).toBe(true);
@@ -133,6 +136,7 @@ test("real stage responses supply saved timestamps and metadata to orchestration
       expect(result.row.evaluated_at).toBe(selection!.evaluated_at);
       expect(result.row.evaluated_at).toBe(result.context.now);
       expect(result.selected.length).toBeGreaterThan(0);
+      expect(result.row.selection_metrics).toEqual(summarizeSelectionMetrics(selection!.articles, true));
       expect(result.selected).toEqual((enabled ? partition : selection)!.articles);
       expect(result.batches.selection_batch_id).toBe(selection!.batch_id);
       if (enabled) {
@@ -163,6 +167,9 @@ test("an empty real selection retains timestamps and its text-artifact receipt",
     const result = await runFeedPlan({}, fixture.inputs, fixture.runtime);
     expect(result.row.status).toBe("completed");
     expect(result.row.selected_count).toBe(0);
+    expect(result.row.selection_metrics).toEqual({
+      selected_website_groups: 0, selected_feeds: 0, mean_substance_score: null,
+    });
     expect(result.selected).toEqual([]);
     expect(result.row.selection_started_at_utc).toBe("2026-10-22T00:01:00Z");
     expect(result.row.evaluated_at).toBe(result.context.now);
@@ -171,6 +178,23 @@ test("an empty real selection retains timestamps and its text-artifact receipt",
     expect(result.row.api_timings.filter(timing => timing.operation === "fetch")).toHaveLength(1);
     expect(result.row.api_timings.find(timing => timing.operation === "fetch")).toMatchObject({ status: "completed" });
     expect(PlanResponseSchema.parse(summarizePlan(result)).assignments).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
+test("a real cancelled startup saves selection not completed rather than zero diversity", async () => {
+  const fixture = await recordedPlan();
+  try {
+    const result = await runFeedPlan({}, fixture.inputs, {
+      ...fixture.runtime, signal: AbortSignal.abort(new Error("Recorded cancellation before source work")),
+    });
+    expect(result.row.status).toBe("failed");
+    expect(result.row.selection_metrics).toBeNull();
+    expect(result.row.selected_count).toBe(0);
+    expect(result.row.selection_started_at_utc).toBeNull();
+    expect(result.selected).toEqual([]);
+    const native = await readPlannerParquet(join(fixture.inputs.outputRoot, result.files.plan_runs!.files[0]!.path),
+      "plan-runs", PlanRunRowContract);
+    expect(native.rows).toEqual([result.row]);
   } finally { await fixture.close(); }
 });
 
@@ -198,6 +222,11 @@ test("health and selected persistence failures preserve the independent successf
       });
       expect(result.row.status).toBe("partial");
       expect(result.row.failure_code).not.toBeNull();
+      expect(result.row.selected_count).toBeGreaterThan(0);
+      expect(result.row.selection_metrics).toEqual(summarizeSelectionMetrics(result.selected, true));
+      const readback = await readPlannerParquet(join(fixture.inputs.outputRoot, result.files.plan_runs!.files[0]!.path),
+        "plan-runs", PlanRunRowContract);
+      expect(readback.rows).toEqual([result.row]);
       if (blocked === "feed-health-state") {
         expect(result.files.feed_health_state).toBeUndefined();
         expect(result.files.selected_articles?.status).toBe("written");
@@ -216,7 +245,7 @@ test("partial and failed result models cannot claim completion or lose their fai
     const row = PlanRunRowContract.schema.parse({
       ...result.row, status, failure_code: "PERSIST_FAILED",
       ...(status === "failed" ? {
-        selected_count: 0, dispatch_count: 0, selected_articles_artifact: null, selection_started_at_utc: null,
+        selected_count: 0, selection_metrics: null, dispatch_count: 0, selected_articles_artifact: null, selection_started_at_utc: null,
       } : {}),
     });
     const summary = PlanResponseSchema.parse(summarizePlan({

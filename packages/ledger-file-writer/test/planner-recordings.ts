@@ -67,7 +67,7 @@ export function plannerRecordings(day = "2026-10-20", attempt = 1, execution = 1
       name: "plan-runs", contract: PlanRunRowContract,
       row: PlanRunRowSchema.parse({
         run_id, started_at: at, duration_ms: 25, status: "completed", failure_code: null,
-        selected_count: 0, strategy: "none", dispatch_count: 0, selected_articles_artifact: null,
+        selected_count: 0, selection_metrics: null, strategy: "none", dispatch_count: 0, selected_articles_artifact: null,
         api_timings: [{ operation: "feed-health-before-fetch", duration_ms: 0, status: "completed" }],
         date: day, attempt, lifecycle_window_days: 31, reliability_floor: 0.5,
         reliability_penalty_enabled: true, evaluated_at: at, request_report_closed_days: 7,
