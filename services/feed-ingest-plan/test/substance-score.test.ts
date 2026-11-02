@@ -12,6 +12,7 @@ const FixtureSchema = z.object({
   absolute_tolerance: z.number().positive(),
   length_cases: z.array(z.object({ words: z.int().nonnegative(), points: z.number() })),
   headlines: z.array(z.object({ title: z.string(), shouting: z.boolean() })),
+  questions: z.array(z.object({ text: z.string(), terms: z.array(z.string()) })),
   paragraphs: z.array(z.object({
     name: z.string(), text: z.string(), words: z.int(), sentences: z.int(),
     names: z.int(), numbers: z.int(), retained: z.boolean(),
@@ -195,6 +196,24 @@ test("punctuation, bounded inflection overlap, signed deductions and cap use the
   expect(separator.opening_text).toBe("Subscribe now. Terms apply.\n");
 });
 
+test("question headlines and retained openings normalize and receive their measured score", async () => {
+  const { policy, fixture } = await inputs();
+  const score = createSubstanceScorer(policy);
+  for (const entry of fixture.questions) {
+    expect([...normalizeArticleTerms(entry.text)], entry.text).toEqual(entry.terms);
+    const body = `${entry.text} ${fixture.paragraphs[2]!.text}`;
+    expect(measureSubstantiveParagraphs(body, policy).opening_text, entry.text).toBe(body);
+    for (const title of [entry.text, "Team reviews samples"]) {
+      const result = score(title, body);
+      expect(result, title).toMatchObject({
+        substance_word_count: countWords(body), headline_deduction: 0, opening_mismatch: false,
+      });
+      expect(result.length_score, title).toBe(policy.length_scores.full * (countWords(body) / policy.word_count_ramp_end));
+      expect(result.substance_score, title).toBe(result.length_score + result.density_score);
+    }
+  }
+});
+
 test("public JSON is validated and normalization is local, inflection-only and state-isolated", async () => {
   const { policy } = await inputs();
   const original = "Researchers STUDIED rivers!";
@@ -205,11 +224,22 @@ test("public JSON is validated and normalization is local, inflection-only and s
   expect(terms.has("rivers!")).toBe(false);
   expect(original).toBe("Researchers STUDIED rivers!");
   expect(normalizeArticleTerms("scrutiny").has("scrutinize")).toBe(false);
+  expect([...normalizeArticleTerms("The happier children walked quickly.")])
+    .toEqual(["the", "happier", "child", "walk", "quickly"]);
+  expect(normalizeArticleTerms("The fastest runners went home.").has("fastest")).toBe(true);
   expect(readArticleTerms([{ terms: [{ text: "River", normal: "river", tags: ["Noun"], unused: 1 }], unused: true }]))
     .toEqual([{ text: "River", normal: "river", tags: ["Noun"] }]);
+  expect(readArticleTerms([{ terms: [{ text: "Rivers", normal: "rivers", root: "river", tags: ["Noun", "Plural"], unused: 1 }], unused: true }]))
+    .toEqual([{ text: "Rivers", normal: "rivers", root: "river", tags: ["Noun", "Plural"] }]);
+  expect(readArticleTerms([{ terms: [{ text: "better", normal: "better", root: null, tags: ["Adverb"], unused: 1 }] }]))
+    .toEqual([{ text: "better", normal: "better", root: null, tags: ["Adverb"] }]);
   for (const value of [null, {}, [{ terms: [{}] }], [{ terms: [{ text: 1, normal: "x", tags: [] }] }],
     [{ terms: [{ text: "x", normal: null, tags: [] }] }], [{ terms: [{ text: "x", normal: "x", tags: "Noun" }] }]]) {
     expect(() => readArticleTerms(value)).toThrow();
+  }
+  for (const root of [1, {}, []]) {
+    expect(() => readArticleTerms([{ terms: [{ text: "rivers", normal: "rivers", tags: ["Noun", "Plural"], root }] }]))
+      .toThrow("root");
   }
   const score = createSubstanceScorer(policy);
   const body = "Alice counted 12 samples. Bob studied rivers.";
