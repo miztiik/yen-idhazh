@@ -11,6 +11,8 @@ import { parseRawDocumentDumpControl } from "../src/config/service-settings";
 import { writeJsonLine } from "../src/logging/structured-logger";
 import { publishWorkflowUploadInventories } from "./feed-ingest-plan-upload-inventory";
 import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
+import { runtimeFailureExecution, withPlannerFailure } from "../src/api/plan-failure";
+import { retainWorkflowFailure } from "./retain-workflow-failure";
 
 const FinalizationOperationSchema = z.enum(["all", "commit-ledgers", "write-report", "prepare-artifacts"]);
 
@@ -58,12 +60,22 @@ export async function finalizeRunOutput(input: {
       && !(operation === "prepare-artifacts" && name === "list-upload-files")) continue;
     try { await execute(); }
     catch (error) {
-      failures.push(error);
+      const capture = {
+        operation: name === "list-upload-files" ? "artifact-upload" as const : FinalizationOperationSchema.exclude(["all"]).parse(name),
+        execution: runtimeFailureExecution({
+          git_sha: gitSha, attempt, run_number: runNumber,
+          ...(input.runId === undefined ? {} : { captured_at: input.runId.slice(0, 10) }),
+        }),
+      };
+      const failure = withPlannerFailure(error, capture);
+      failures.push(failure);
+      try { await retainWorkflowFailure({ directory: input.directory, error: failure, capture }); }
+      catch (recordingError) {
+        failures.push(withPlannerFailure(recordingError, { ...capture, operation: "record-run" }));
+      }
       writeJsonLine({
         event: "workflow_finalization_failed", operation: name,
-        code: error instanceof Error && "code" in error && typeof error.code === "string"
-          ? error.code : describePlanError(error, input.root).code,
-        reason: error instanceof PlanError ? error.message : error instanceof Error ? error.name : "UnknownError",
+        code: failure.code, failure: failure.failure,
       });
     }
   }
@@ -98,7 +110,7 @@ if (import.meta.main) {
     });
   } catch (error) {
     writeJsonLine({ event: "workflow_finalization_incomplete",
-      code: describePlanError(error, process.cwd()).code });
+      ...describePlanError(error, process.cwd(), { operation: "workflow" }) });
     process.exitCode = 2;
   } finally {
     process.off("SIGINT", cancel);

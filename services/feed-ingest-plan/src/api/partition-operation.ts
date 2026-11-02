@@ -10,6 +10,7 @@ import { partitionArticles } from "../partition-article-shards/shard-packer";
 import { appendDocumentTiming, executionHasArtifact, registerStageExecution } from "./document-state";
 import { resolveRunContext } from "../resolve-run-context";
 import { recordStandaloneRun, rememberCompletedSelection } from "./record-standalone-run";
+import { retainFailureThroughCleanup } from "./retain-failure-through-cleanup";
 
 export async function executePartition(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
   if (!inputs.harvest.config.partition.enabled) throw new PlanError("PARTITION_DISABLED", "Partitioning is disabled by the effective policy", "partition.enabled");
@@ -48,15 +49,15 @@ export async function executePartition(raw: unknown, inputs: PlanInputs, runtime
     await appendDocumentTiming(inputs, batch.context.run_id, { operation: "partition", duration_ms: Math.round(performance.now() - started), status: "completed" });
     return { batch };
   } catch (error) {
-    await appendDocumentTiming(inputs, selected.context.run_id, {
-      operation: "partition", duration_ms: Math.round(performance.now() - started), status: "failed",
-    });
-    try {
-      await recordStandaloneRun(inputs, { ...selected, strategy: controls.strategy, dispatch_count: 0 },
-        null, error instanceof PlanError ? error.code : "PARTITION_FAILED");
-    } catch (recordingError) {
-      throw new AggregateError([error, recordingError], "Partition failed and its run outcome could not be saved");
-    }
-    throw error;
+    throw await retainFailureThroughCleanup(error, {
+      operation: "partition", execution: selected.context, limits: inputs.settings.diagnostics.failure,
+    }, [
+      { operation: "record-run", execute: () => appendDocumentTiming(inputs, selected.context.run_id, {
+        operation: "partition", duration_ms: Math.round(performance.now() - started), status: "failed",
+      }) },
+      { operation: "record-run", execute: () => recordStandaloneRun(inputs,
+        { ...selected, strategy: controls.strategy, dispatch_count: 0 },
+        null, error instanceof PlanError ? error.code : "PARTITION_FAILED") },
+    ]);
   }
 }

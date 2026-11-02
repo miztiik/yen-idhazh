@@ -5,7 +5,7 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CommitShaSchema, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { z } from "zod";
-import { PlanError, describePlanError } from "../src/api/plan-request";
+import { PlanError } from "../src/api/plan-request";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { writeJsonLine } from "../src/logging/structured-logger";
 import {
@@ -13,6 +13,8 @@ import {
   SafePersistHttpRequestSchema, SafePersistHttpStartupFailureSchema, SafePersistHttpStartupSchema,
 } from "./feed-ingest-plan-delivery-result";
 import { superviseHttpChild } from "./http-child-lifetime";
+import { readPlannerResponseError, withPlannerFailure } from "../src/api/plan-failure";
+import { retainFailureThroughCleanup } from "../src/api/retain-failure-through-cleanup";
 
 export async function deliverWorkflowMetadataHttp(input: {
   root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number; gitSha: string;
@@ -21,6 +23,8 @@ export async function deliverWorkflowMetadataHttp(input: {
   const request = SafePersistHttpRequestSchema.parse({
     runNumber: input.runNumber, attempt: input.attempt, paths: JSON.parse(input.currentRunFiles),
   });
+  const capture = { operation: "commit-ledgers" as const,
+    execution: { run_id: null, attempt: request.attempt, correlation_id: null, git_sha: gitSha } };
   try {
     const settings = ServiceSettingsSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan-service.json")).json());
     const startup = SafePersistHttpStartupSchema.parse({
@@ -29,11 +33,12 @@ export async function deliverWorkflowMetadataHttp(input: {
     });
     return await superviseHttpChild({
       root: input.root, kind: "SAFE_PERSIST", settings, startup,
+      capture: { ...capture, limits: settings.diagnostics.failure },
       serverEntry: options.serverEntry ?? fileURLToPath(new URL("./safe-persist-http-server.ts", import.meta.url)),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
       ready: async (message, pid, signal) => {
         const ready = z.union([SafePersistHttpReadySchema, SafePersistHttpStartupFailureSchema]).parse(message);
-        if (ready.event === "safe_persist_startup_failed") throw new PlanError(ready.code, ready.message);
+        if (ready.event === "safe_persist_startup_failed") throw new PlanError(ready.code, ready.message, null, { failure: ready.failure });
         if (ready.pid !== pid || ready.nonce !== startup.nonce || ready.port !== settings.listener.port) {
           throw new PlanError("SAFE_PERSIST_READY_IDENTITY", "Readiness does not match the owned safe-persist child");
         }
@@ -53,9 +58,7 @@ export async function deliverWorkflowMetadataHttp(input: {
         });
         const body: unknown = await response.json();
         if (response.status !== 200) {
-          const code = typeof body === "object" && body !== null && "code" in body && typeof body.code === "string"
-            ? body.code : "SAFE_PERSIST_HTTP_FAILED";
-          throw new PlanError(code, `Safe-persist returned HTTP ${response.status}: ${code}`);
+          throw readPlannerResponseError(body, { ...capture, limits: settings.diagnostics.failure });
         }
         const result = MetadataDeliveryResultSchema.parse(body);
         if (!isMetadataDeliveryConfirmed(result, request.paths)) {
@@ -65,15 +68,17 @@ export async function deliverWorkflowMetadataHttp(input: {
       },
     });
   } catch (error) {
+    const failure = withPlannerFailure(error, capture);
     const result = MetadataDeliveryResultSchema.parse({
       status: "failed", commit: null, files: request.paths.length, paths: request.paths,
     });
-    await writeFile(join(input.directory, "delivery-result.json"), JSON.stringify(result));
     writeJsonLine({
       event: "safe_persist_http_client_failed", run_number: request.runNumber, attempt: request.attempt,
       status: result.status, commit: result.commit, files: result.files,
-      code: error instanceof PlanError ? error.code : describePlanError(error, input.root).code,
+      code: failure.code, failure: failure.failure,
     });
-    throw error;
+    throw await retainFailureThroughCleanup(failure, capture, [{
+      operation: "record-run", execute: () => writeFile(join(input.directory, "delivery-result.json"), JSON.stringify(result)),
+    }]);
   }
 }

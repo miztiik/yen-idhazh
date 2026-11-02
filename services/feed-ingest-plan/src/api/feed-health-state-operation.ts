@@ -28,6 +28,7 @@ import { summarizeRequestReport } from "../read-ledger-history/request-summary";
 import { collectionForBatch } from "./collection-operation";
 import { snapshotCollectionBatch } from "./collection-batch";
 import { projectFeedHealthFields } from "../read-ledger-history/read-feed-health-fields";
+import { withPlannerFailure } from "./plan-failure";
 
 export async function prepareExecutionHealth(inputs: PlanInputs, now: string, current?: CurrentHealthWork, baseline?: RunHistory) {
   const captured = baseline ?? (current === undefined ? undefined : (await requireDocumentState(inputs, current.context)).baseline);
@@ -101,7 +102,10 @@ export async function recordFeedHealthState(
   while (finished.size >= inputs.settings.listener.max_stage_batches) finished.delete(finished.keys().next().value!);
   finished.set(key, { fingerprint, result });
   try { return await result; }
-  catch (error) { finished.delete(key); throw error; }
+  catch (error) {
+    finished.delete(key);
+    throw withPlannerFailure(error, { operation: "feed-health-state", execution: context, limits: inputs.settings.diagnostics.failure });
+  }
 }
 export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");

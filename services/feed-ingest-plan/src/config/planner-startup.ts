@@ -1,6 +1,6 @@
 /** Which private, transient controls can cross into a workflow's planner child? */
 import { z } from "zod";
-import { CommitShaSchema, PositiveCountSchema, FeedIngestConfigSchema } from "@idhazh/common-contracts";
+import { CommitShaSchema, PositiveCountSchema, FeedIngestConfigSchema, PlannerFailureSchema } from "@idhazh/common-contracts";
 import { ServiceSettingsSchema } from "./service-settings";
 
 // This pipe protocol is not a saved artifact or an HTTP input.
@@ -26,4 +26,5 @@ export const PlannerReadySchema = z.strictObject({
 export type PlannerReady = z.infer<typeof PlannerReadySchema>;
 export const PlannerStartupFailureSchema = z.strictObject({
   event: z.literal("planner_startup_failed"), code: z.string().min(1), message: z.string().min(1),
+  failure: PlannerFailureSchema.nullable().default(null),
 });

@@ -1,0 +1,8 @@
+{
+  "title": "Ada Lovelace visits London",
+  "article_text": "Grace Hopper described the measurement checks in Paris. The report records each observation and explains the measurement method.\n\nThe next section contains ordinary words about a small device and its measured output.\n\nMarie Curie spoke with the United Nations in Tokyo.",
+  "article_tail": "Marie Curie spoke with the United Nations in Tokyo.",
+  "excluded_script": "const hidden = 'Hidden Person visited Rome';",
+  "empty_title": "a quiet morning",
+  "empty_body": "the small device records the measurement."
+}

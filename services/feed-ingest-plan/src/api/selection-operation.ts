@@ -15,6 +15,7 @@ import { resolveRunContext } from "../resolve-run-context";
 import { recordFinalizedDocumentWork, recordSelectionFailure, rememberCompletedSelection } from "./record-standalone-run";
 import { collectionForRun } from "./collection-operation";
 import { snapshotCollectionBatch } from "./collection-batch";
+import { retainFailureThroughCleanup } from "./retain-failure-through-cleanup";
 
 export function requireStageConfiguration(
   batch: { config_sha256: string; context?: { run_id: string } }, inputs: PlanInputs, runtime: PlanRuntime,
@@ -96,15 +97,14 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
     await appendDocumentTiming(inputs, batch.context.run_id, { operation: "select", duration_ms: Math.round(performance.now() - started), status: "completed" });
     return { batch, health_summary_duration_ms: healthDuration };
   } catch (error) {
-    await appendDocumentTiming(inputs, context.run_id, {
-      operation: "select", duration_ms: Math.round(performance.now() - started), status: "failed",
-    });
-    try {
-      await recordSelectionFailure(inputs, context, parsed.context.now, selectionStartedAt,
-        error instanceof PlanError ? error.code : "SELECTION_FAILED");
-    } catch (recordingError) {
-      throw new AggregateError([error, recordingError], "Selection failed and its run outcome could not be saved");
-    }
-    throw error;
+    throw await retainFailureThroughCleanup(error, {
+      operation: "select", execution: context, limits: inputs.settings.diagnostics.failure,
+    }, [
+      { operation: "record-run", execute: () => appendDocumentTiming(inputs, context.run_id, {
+        operation: "select", duration_ms: Math.round(performance.now() - started), status: "failed",
+      }) },
+      { operation: "record-run", execute: () => recordSelectionFailure(inputs, context, parsed.context.now,
+        selectionStartedAt, error instanceof PlanError ? error.code : "SELECTION_FAILED") },
+    ]);
   }
 }

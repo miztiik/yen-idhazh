@@ -1,6 +1,9 @@
 /** Which authored settings bound the operator listener and its named input files? */
 import { z } from "zod";
-import { DateStampSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import {
+  ArticleEntityLimitsSchema, DateStampSchema, MAX_PLANNER_FAILURE_CAUSES,
+  NonEmptySchema, NonNegativeSchema, PositiveCountSchema,
+} from "@idhazh/common-contracts";
 import { ArtifactRootSchema } from "../selected-artifact-path";
 
 export const RelativePathSchema = NonEmptySchema.refine(
@@ -25,6 +28,11 @@ export const PlannerDayInputSchema = LedgerDayInputSchema.refine(value => value.
   message: "Planner compact membership uses exact files, not indexes",
 });
 export type LedgerDayInput = z.infer<typeof LedgerDayInputSchema>;
+export const FailureCaptureLimitsSchema = z.strictObject({
+  max_stack_chars: PositiveCountSchema.max(65536).default(16384),
+  max_causes: z.int().min(0).max(MAX_PLANNER_FAILURE_CAUSES).default(MAX_PLANNER_FAILURE_CAUSES),
+});
+export type FailureCaptureLimits = z.infer<typeof FailureCaptureLimitsSchema>;
 export const ServiceSettingsSchema = z.strictObject({
   enabled: z.boolean().default(false).describe(
     "Remove when the planner is approved for production use.",
@@ -33,6 +41,10 @@ export const ServiceSettingsSchema = z.strictObject({
   dump_raw_document_contents: z.boolean().default(false).describe(
     "Append body-free failed-document metadata only to the optional private diagnostic artifact.",
   ),
+  diagnostics: z.strictObject({
+    failure: FailureCaptureLimitsSchema.prefault({}),
+    named_entities: ArticleEntityLimitsSchema.default({ max_entities: 256, max_entity_chars: 160 }),
+  }).prefault({}).describe("Per-run diagnostics run only inside the existing development service gate."),
   listener: z.strictObject({
     hostname: NonEmptySchema, port: PositiveCountSchema.max(65535),
     idle_timeout_seconds: PositiveCountSchema.max(255),

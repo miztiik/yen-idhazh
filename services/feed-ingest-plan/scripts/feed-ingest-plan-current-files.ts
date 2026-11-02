@@ -1,7 +1,7 @@
 /** Which completed files remain recoverable even when another producer fails? */
 import { join } from "node:path";
 import { z } from "zod";
-import { CommitShaSchema } from "@idhazh/common-contracts";
+import { CommitShaSchema, PlannerSavedResponseSchema } from "@idhazh/common-contracts";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { PlanResponseSchema } from "../src/api/plan-response.schema";
 import { WorkflowHostFingerprintSchema } from "./feed-ingest-plan-host-fingerprint";
@@ -47,7 +47,17 @@ export async function collectWorkflowFiles(input: {
   const result = Bun.file(join(input.directory, "response.json"));
   if (await result.exists()) {
     try {
-      const parsed = PlanResponseSchema.parse(await result.json());
+      const saved = PlannerSavedResponseSchema.parse(await result.json());
+      if (!("planning_complete" in saved)) {
+        const execution = saved.failure?.execution;
+        if (execution?.run_id != null && execution.run_id !== input.identity.run_id
+          || execution?.attempt != null && execution.attempt !== input.identity.attempt
+          || execution?.git_sha != null && execution.git_sha !== input.identity.git_sha) {
+          throw new Error("Planner failure belongs to another execution");
+        }
+        return { paths, response, failures };
+      }
+      const parsed = saved;
       if (parsed.run_id !== input.identity.run_id || parsed.attempt !== input.identity.attempt) {
         throw new Error("Planner result belongs to another execution");
       }

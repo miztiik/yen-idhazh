@@ -1,5 +1,6 @@
 /** Expose registered ledger readers, writers and file identities. */
 export { persistLedger } from "./persist-ledger";
+export { writeAtomically } from "./atomic-file";
 export { persistRawLedger } from "./persist-raw";
 export { persistCompactLedger } from "./persist-compact";
 export { PersistedLedgerFileSchema } from "./ledger-file-receipt";

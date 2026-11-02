@@ -18,6 +18,8 @@ import { appendDocumentTiming, currentExecutionState, registerStageExecution } f
 import { recordStandaloneRun, rememberCompletedSelection } from "./record-standalone-run";
 import { healthFingerprint } from "./feed-health-state-operation";
 import { createStageLogger } from "../logging/structured-logger";
+import { withPlannerFailure } from "./plan-failure";
+import { retainFailureThroughCleanup } from "./retain-failure-through-cleanup";
 
 type Result = {
   files: PersistLedgerResult; artifact: string; selected_count: number;
@@ -97,19 +99,22 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
       return { files, rejected_files: rejectedFiles, artifact: path, selected_count: metadata.length,
         ...(run === undefined ? {} : { run_files: run.files, run_status: run.row.status }) };
     } catch (error) {
-      emit("persist", "failed", { batch_id: batch.batch_id, failure_code: "PERSIST_FAILED",
-        duration_ms: Math.round(performance.now() - began) });
-      await appendDocumentTiming(inputs, batch.context.run_id, {
-        operation: "persist", duration_ms: Math.round(performance.now() - began), status: "failed",
+      const failure = withPlannerFailure(error, {
+        operation: "persist", execution: batch.context, limits: inputs.settings.diagnostics.failure,
       });
-      try {
-        const failed = await recordStandaloneRun(inputs, batch, null, "PERSIST_FAILED");
-        failureOutcomeSaved = failed !== undefined;
-      }
-      catch (recordingError) {
-        throw new AggregateError([error, recordingError], "Persistence failed and its run outcome could not be saved");
-      }
-      throw error;
+      emit("persist", "failed", { batch_id: batch.batch_id, failure_code: "PERSIST_FAILED",
+        duration_ms: Math.round(performance.now() - began), failure: failure.failure });
+      throw await retainFailureThroughCleanup(failure, {
+        operation: "persist", execution: batch.context, limits: inputs.settings.diagnostics.failure,
+      }, [
+        { operation: "record-run", execute: () => appendDocumentTiming(inputs, batch.context.run_id, {
+          operation: "persist", duration_ms: Math.round(performance.now() - began), status: "failed",
+        }) },
+        { operation: "record-run", execute: async () => {
+          const failed = await recordStandaloneRun(inputs, batch, null, "PERSIST_FAILED");
+          failureOutcomeSaved = failed !== undefined;
+        } },
+      ]);
     }
   })();
   finalized.set(claim, { fingerprint, result });

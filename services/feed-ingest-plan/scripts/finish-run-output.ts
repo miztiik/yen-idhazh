@@ -7,8 +7,8 @@ import { describePlanError, PlanError } from "../src/api/plan-request";
 import { collectWorkflowFiles, readWorkflowDeliveryContext } from "./feed-ingest-plan-current-files";
 import { isMetadataDeliveryConfirmed, MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result";
 import { parseRawDocumentDumpControl } from "../src/config/service-settings";
-import { rawDocumentContentsFilename } from "../src/selected-artifact-path";
-import { RAW_DOCUMENT_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-artifacts";
+import { articleEntitiesFilename, rawDocumentContentsFilename } from "../src/selected-artifact-path";
+import { ARTICLE_ENTITY_ARTIFACT_DIRECTORY, RAW_DOCUMENT_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-artifacts";
 
 const OutcomeSchema = z.enum(["success", "failure", "cancelled", "skipped"]);
 
@@ -35,6 +35,7 @@ export async function finishRunOutput(input: {
   uploadOutcome: unknown; artifactId?: string;
   dumpRawDocumentContents?: boolean; rawDocumentContents?: string; runId?: string;
   rawUploadOutcome?: unknown; rawArtifactId?: string;
+  articleEntities?: string; entityUploadOutcome?: unknown; entityArtifactId?: string;
   commitOutcome?: unknown; reportOutcome?: unknown; writeReport?: boolean;
 }) {
   const gitSha = CommitShaSchema.parse(input.gitSha);
@@ -65,9 +66,20 @@ export async function finishRunOutput(input: {
   const rawUploaded = !rawRequired || (OutcomeSchema.parse(input.rawUploadOutcome) === "success"
     && z.string().regex(/^\d+$/).safeParse(input.rawArtifactId).success);
   if (!rawUploaded) failures.push(new Error("The raw document artifact upload was not confirmed"));
+  let entityPath: string | undefined;
+  if (input.articleEntities !== undefined && input.articleEntities !== "") {
+    if (input.runId === undefined) throw new Error("Entity artifact requires runId");
+    if (input.runId.slice(11) !== input.runNumber) throw new Error("Entity artifact run differs from the workflow");
+    entityPath = z.literal(`${ARTICLE_ENTITY_ARTIFACT_DIRECTORY}/${articleEntitiesFilename({
+      run_id: input.runId, writer: { attempt: input.attempt },
+    })}`).parse(input.articleEntities);
+  }
+  const entitiesUploaded = entityPath === undefined || (OutcomeSchema.parse(input.entityUploadOutcome) === "success"
+    && z.string().regex(/^\d+$/).safeParse(input.entityArtifactId).success);
+  if (!entitiesUploaded) failures.push(new Error("The article entity artifact upload was not confirmed"));
   let cleaned = false;
   if (commit === "success" && reportComplete && finalization === "success"
-    && uploaded && rawUploaded && collection !== "cancelled") {
+    && uploaded && rawUploaded && entitiesUploaded && collection !== "cancelled") {
     let operation = "check-directory";
     try {
       const directory = await ownedRunDirectory(input.root, input.temporaryRoot);
@@ -107,6 +119,7 @@ if (import.meta.main) {
     const { RUNNER_TEMP, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, COLLECTION_OUTCOME, PLANNING_COMPLETE,
       FINALIZATION_OUTCOME, UPLOAD_OUTCOME, UPLOAD_ARTIFACT_ID,
       DUMP_RAW_DOCUMENT_CONTENTS, RAW_DOCUMENT_CONTENTS, RAW_UPLOAD_OUTCOME, RAW_UPLOAD_ARTIFACT_ID, GITHUB_SHA,
+      ARTICLE_ENTITIES, ENTITY_UPLOAD_OUTCOME, ENTITY_UPLOAD_ARTIFACT_ID,
       COMMIT_OUTCOME, REPORT_OUTCOME, WRITE_REPORT, RUN_ID } = process.env;
     if (!RUNNER_TEMP || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_SHA) throw new Error("Workflow completion controls are missing");
     await finishRunOutput({
@@ -123,9 +136,12 @@ if (import.meta.main) {
       ...(RAW_DOCUMENT_CONTENTS === undefined ? {} : { rawDocumentContents: RAW_DOCUMENT_CONTENTS }),
       ...(RAW_UPLOAD_OUTCOME === undefined ? {} : { rawUploadOutcome: RAW_UPLOAD_OUTCOME }),
       ...(RAW_UPLOAD_ARTIFACT_ID === undefined ? {} : { rawArtifactId: RAW_UPLOAD_ARTIFACT_ID }),
+      ...(ARTICLE_ENTITIES === undefined ? {} : { articleEntities: ARTICLE_ENTITIES }),
+      ...(ENTITY_UPLOAD_OUTCOME === undefined ? {} : { entityUploadOutcome: ENTITY_UPLOAD_OUTCOME }),
+      ...(ENTITY_UPLOAD_ARTIFACT_ID === undefined ? {} : { entityArtifactId: ENTITY_UPLOAD_ARTIFACT_ID }),
     });
   } catch (error) {
-    console.error(JSON.stringify({ event: "workflow_output_incomplete", code: describePlanError(error, process.cwd()).code }));
+    console.error(JSON.stringify({ event: "workflow_output_incomplete", ...describePlanError(error, process.cwd(), { operation: "workflow" }) }));
     process.exitCode = 2;
   }
 }

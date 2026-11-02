@@ -33,6 +33,7 @@ import { createStageLogger } from "../logging/structured-logger";
 import { resolveArticleSourceOutcome } from "../article-source-outcome";
 import { recordDocumentRejections } from "./record-document-rejections";
 import { collectionFeedRequest } from "./collection-operation";
+import { recordArticleEntities } from "../record-article-entities";
 
 export async function parseFetchedDocument(
   request: z.infer<typeof ParseRequestSchema>, fetched: FetchedDocumentReference,
@@ -107,6 +108,12 @@ export async function parseFetchedDocument(
     }) };
   }
   const pool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
+  const candidateId = offer?.offer_id ?? deriveCandidateId(state.context.run_id, source.id, 0);
+  const recordEntities = (title: string | null, article_text: string | null) =>
+    recordArticleEntities(inputs, state.context, {
+      article_id: artifact.article_id, candidate_id: candidateId, feed_id: source.id,
+      title, article_text, observed_at: utcTimestamp(runtime.observation_clock),
+    });
   let parsed;
   const parseStarted = performance.now();
   try {
@@ -114,14 +121,18 @@ export async function parseFetchedDocument(
       timeout_ms: inputs.harvest.config.harvest.parse_timeout_ms,
       ...(signal === undefined ? {} : { signal }),
     }), artifact.observation.event_id, describeArticleParse, artifact.canonical_url);
+  } catch (error) {
+    await recordEntities(offer?.entry.title ?? null, null);
+    throw error;
   } finally { if (runtime.parser_pool === undefined) pool.close(); }
-  const candidateId = offer?.offer_id ?? deriveCandidateId(state.context.run_id, source.id, 0);
+  const extractionMs = Math.round(performance.now() - parseStarted);
   const title = resolveArticleTitle(offer?.entry.title ?? null, parsed.parsed?.page_title ?? null);
+  await recordEntities(title, parsed.parsed?.article_text ?? null);
   const extractionFailure = parsed.failure === "malformed-feed" ? null : parsed.failure
     ?? (parsed.parsed?.article_text ? title ? null : "missing-title" : "empty-content");
   const qualityFailure = parsed.parsed?.quality?.failure_code ?? null;
   const diagnostics = HarvestDiagnosticsSchema.parse({
-    ...fetchEvidence(artifact), extract_ms: Math.round(performance.now() - parseStarted),
+    ...fetchEvidence(artifact), extract_ms: extractionMs,
     extraction_failure: extractionFailure,
     stopped_stage: extractionFailure !== null || parsed.parsed?.quality?.rejected ? "extract" : null,
     detail: parsed.failure ?? extractionFailure ?? (parsed.parsed?.quality?.rejected ? qualityFailure : null),

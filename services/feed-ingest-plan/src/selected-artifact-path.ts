@@ -7,7 +7,7 @@ const maximumGeneratedRun = `9999-12-31-${((1n << 128n) - 1n).toString()}`;
 export const ArtifactRootSchema = RelPathSchema.refine(root =>
   RelPathSchema.safeParse(`${root}/${maximumGeneratedRun}/${Number.MAX_SAFE_INTEGER}/${rawDocumentContentsFilename({
     run_id: maximumGeneratedRun, writer: { attempt: Number.MAX_SAFE_INTEGER },
-  })}`).success,
+  })}.part`).success,
   "Artifact root must leave room for the generated execution, attempt and filename");
 
 export function selectedArtifactPath(root: string, context: { run_id: string; writer: { attempt: number } }) {
@@ -20,4 +20,12 @@ export function rawDocumentContentsFilename(context: { run_id: string; writer: {
   const run = RunIdSchema.parse(context.run_id);
   const attempt = WriterIdentitySchema.shape.attempt.parse(context.writer.attempt);
   return RelPathSchema.parse(`raw-document-contents-${run.slice(0, 10)}-${run.slice(11)}-${attempt}.jsonl`);
+}
+export function articleEntitiesPath(root: string, context: { run_id: string; writer: { attempt: number } }) {
+  return RelPathSchema.parse(`${root}/${context.run_id}/${context.writer.attempt}/${articleEntitiesFilename(context)}`);
+}
+export function articleEntitiesFilename(context: { run_id: string; writer: { attempt: number } }) {
+  const run = RunIdSchema.parse(context.run_id);
+  const attempt = WriterIdentitySchema.shape.attempt.parse(context.writer.attempt);
+  return RelPathSchema.parse(`article-entities-${run.slice(0, 10)}-${run.slice(11)}-${attempt}.jsonl`);
 }

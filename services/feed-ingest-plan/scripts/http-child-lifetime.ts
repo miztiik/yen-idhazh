@@ -3,6 +3,10 @@ import { createInterface } from "node:readline";
 import { PlanError } from "../src/api/plan-request";
 import type { ServiceSettings } from "../src/config/service-settings";
 import { writeJsonLine } from "../src/logging/structured-logger";
+import { describePlanError } from "../src/api/plan-request";
+import { withPlannerFailure } from "../src/api/plan-failure";
+import type { FailureCaptureOptions } from "../src/api/plan-failure";
+import { retainFailureThroughCleanup } from "../src/api/retain-failure-through-cleanup";
 
 type ChildKind = "PLANNER" | "SAFE_PERSIST";
 type HttpServer = { stop(force?: boolean): Promise<void> };
@@ -41,6 +45,7 @@ async function readReady(stream: ReadableStream<Uint8Array>, limit: number, sign
 export async function superviseHttpChild<T>(input: {
   root: string; serverEntry: string; startup: object; kind: ChildKind;
   settings: Pick<ServiceSettings, "listener" | "supervision">; signal?: AbortSignal;
+  capture?: FailureCaptureOptions;
   ready: (message: unknown, pid: number, signal: AbortSignal) => Promise<string>;
   request: (base: string, signal: AbortSignal) => Promise<T>;
 }) {
@@ -60,6 +65,7 @@ export async function superviseHttpChild<T>(input: {
     signal.addEventListener("abort", () => reject(signal.reason), { once: true });
   });
   let completed = false;
+  let original: PlanError | undefined;
   try {
     const startupReady = (async () => {
       child.stdin.write(`${JSON.stringify(input.startup)}\n`);
@@ -71,25 +77,48 @@ export async function superviseHttpChild<T>(input: {
     const result = await Promise.race([input.request(base, signal), unexpectedExit, aborted]);
     completed = true;
     return result;
+  } catch (error) {
+    original = withPlannerFailure(error, input.capture ?? { operation: "workflow" });
+    throw original;
   } finally {
-    cancellation.abort(new Error("HTTP child supervisor stopped"));
-    let pipeFailure: unknown;
-    // EOF also closes the child if its supervisor disappears.
-    const closingPipe = Promise.resolve().then(() => child.stdin.end()).catch(error => {
-      if (!(error instanceof Error) || !("code" in error) || !["EPIPE", "ERR_STREAM_DESTROYED"].includes(String(error.code))) pipeFailure = error;
-    });
-    try {
-      const [code] = await beforeDeadline(Promise.all([child.exited, closingPipe]),
-        controls.shutdown_timeout_ms, `${input.kind}_SHUTDOWN_TIMEOUT`);
-      if (completed && code !== 0) throw new PlanError(`${input.kind}_CHILD_EXIT`, `HTTP child shutdown failed with status ${code}`);
-    } catch (error) {
-      if (!(error instanceof PlanError) || error.code !== `${input.kind}_SHUTDOWN_TIMEOUT`) throw error;
-      writeJsonLine({ event: `${input.kind.toLowerCase()}_child_forced`, pid: child.pid });
-      child.kill("SIGKILL");
-      await beforeDeadline(child.exited, controls.forced_exit_timeout_ms, `${input.kind}_REAP_TIMEOUT`);
-      if (completed) throw error;
-    } finally { await child.stdout.cancel(); }
-    if (pipeFailure !== undefined) throw pipeFailure;
+    const close = async () => {
+      cancellation.abort(new Error("HTTP child supervisor stopped"));
+      let pipeFailure: unknown;
+      // EOF also closes the child if its supervisor disappears.
+      const closingPipe = Promise.resolve().then(() => child.stdin.end()).catch(error => {
+        if (!(error instanceof Error) || !("code" in error) || !["EPIPE", "ERR_STREAM_DESTROYED"].includes(String(error.code))) pipeFailure = error;
+      });
+      let cleanupFailure: unknown;
+      try {
+        const [code] = await beforeDeadline(Promise.all([child.exited, closingPipe]),
+          controls.shutdown_timeout_ms, `${input.kind}_SHUTDOWN_TIMEOUT`);
+        if (completed && code !== 0) throw new PlanError(`${input.kind}_CHILD_EXIT`, `HTTP child shutdown failed with status ${code}`);
+      } catch (error) {
+        cleanupFailure = error;
+        if (error instanceof PlanError && error.code === `${input.kind}_SHUTDOWN_TIMEOUT`) {
+          writeJsonLine({ event: `${input.kind.toLowerCase()}_child_forced`, pid: child.pid });
+          child.kill("SIGKILL");
+          try { await beforeDeadline(child.exited, controls.forced_exit_timeout_ms, `${input.kind}_REAP_TIMEOUT`); }
+          catch (reapError) { cleanupFailure = new AggregateError([error, reapError], "HTTP child could not be reaped"); }
+        }
+      }
+      try { await child.stdout.cancel(); }
+      catch (error) {
+        cleanupFailure = cleanupFailure === undefined ? error
+          : new AggregateError([cleanupFailure, error], "HTTP child drain and stream cleanup failed");
+      }
+      if (cleanupFailure !== undefined && pipeFailure !== undefined) {
+        throw new AggregateError([cleanupFailure, pipeFailure], "HTTP child cleanup failed");
+      }
+      if (cleanupFailure !== undefined) throw cleanupFailure;
+      if (pipeFailure !== undefined) throw pipeFailure;
+    };
+    if (original !== undefined) {
+      throw await retainFailureThroughCleanup(original, input.capture ?? { operation: "workflow" }, [
+        { operation: "listener-close", execute: close },
+      ]);
+    }
+    await close();
   }
 }
 
@@ -97,6 +126,7 @@ export async function runHttpChild(
   kind: ChildKind,
   prepare: (message: unknown) => {
     shutdownTimeoutMs: number;
+    capture?: FailureCaptureOptions;
     start: (signal: AbortSignal) => Promise<{ server: HttpServer; ready: object }>;
   },
 ) {
@@ -107,12 +137,16 @@ export async function runHttpChild(
   let shutdownMs: number | undefined;
   let forceTimer: ReturnType<typeof setTimeout> | undefined;
   let closed = false;
+  let capture: FailureCaptureOptions = { operation: "listener-start" };
+  let original: PlanError | undefined;
   const stop = () => {
     closed = true;
     cancellation.abort(new Error("HTTP child supervisor closed"));
     if (shutdownMs !== undefined) forceTimer ??= setTimeout(() => {
       writeJsonLine({ event: `${kind.toLowerCase()}_shutdown_forced` });
-      void server?.stop(true);
+      void server?.stop(true).catch(error => writeJsonLine({
+        event: `${kind.toLowerCase()}_forced_close_failed`, ...describePlanError(error, undefined, capture),
+      }));
       process.exit(2);
     }, shutdownMs);
     const current = server;
@@ -121,6 +155,7 @@ export async function runHttpChild(
       try { await current.stop(); }
       finally { lines.close(); }
     })();
+    void closing.catch(() => {});
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
@@ -132,6 +167,7 @@ export async function runHttpChild(
     });
     const message: unknown = JSON.parse(line);
     const prepared = prepare(message);
+    capture = prepared.capture ?? capture;
     shutdownMs = prepared.shutdownTimeoutMs;
     if (closed) throw new PlanError(`${kind}_STARTUP_CLOSED`, "Supervisor left before listener startup");
     const started = await prepared.start(cancellation.signal);
@@ -147,18 +183,26 @@ export async function runHttpChild(
     });
     await closing;
   } catch (error) {
+    original = withPlannerFailure(error, capture);
     console.log(JSON.stringify({
       event: `${kind.toLowerCase()}_startup_failed`,
-      code: error instanceof PlanError ? error.code : `${kind}_STARTUP_FAILED`,
-      message: error instanceof PlanError ? error.message : "HTTP child could not load validated controls and named inputs",
+      code: original.code,
+      message: "HTTP child operation did not complete",
+      failure: original.failure,
     }));
-    throw error;
+    throw original;
   } finally {
-    stop();
-    await closing;
-    clearTimeout(forceTimer);
-    lines.close();
-    process.off("SIGINT", stop);
-    process.off("SIGTERM", stop);
+    try {
+      const close = () => { stop(); return closing; };
+      if (original !== undefined) throw await retainFailureThroughCleanup(original, capture, [
+        { operation: "listener-close", execute: close },
+      ]);
+      await close();
+    } finally {
+      clearTimeout(forceTimer);
+      lines.close();
+      process.off("SIGINT", stop);
+      process.off("SIGTERM", stop);
+    }
   }
 }

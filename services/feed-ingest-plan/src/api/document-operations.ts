@@ -6,7 +6,7 @@ import { captureDocumentContext, stageConfigFingerprint } from "./operation-cont
 import { fetchDocument, resolveFetchParent } from "./fetch-operation";
 import { parseFetchedDocument } from "./parse-operation";
 import { appendDocumentTiming } from "./document-state";
-import { PlanError, describePlanError } from "./plan-request";
+import { PlanError } from "./plan-request";
 import { FetchResponseSchema, ParseResponseSchema } from "./document-response.schema";
 import { stageStore } from "./stage-store";
 import {
@@ -17,6 +17,8 @@ import { dumpRawDocumentFailure } from "../dump-raw-document-failure";
 import { utcTimestamp } from "../harvest-feeds/harvest-types";
 import type { FetchedDocumentReference } from "./stage-store";
 import type { z } from "zod";
+import { withPlannerFailure } from "./plan-failure";
+import { retainFailureThroughCleanup } from "./retain-failure-through-cleanup";
 
 type DocumentRequest = z.infer<typeof FetchRequestSchema> | z.infer<typeof ParseRequestSchema>;
 
@@ -81,15 +83,23 @@ async function executeOwnedDocumentOperation(
       retain = response.failure === null;
       return result.response_json;
     } catch (error) {
-      await recordFailure("fetch", request.request_id, describePlanError(error, inputs.root).code,
-        store.fetchedDocument(request.request_id), inputs, runtime);
-      if (request.fetch_item_type === "feed" && error instanceof PlanError && ["FEED_RESTING", "FEED_RETIRED"].includes(error.code)) {
-        settleCollectionFeed(inputs, record.context.run_id, request.feed_id, null);
-      }
-      await appendDocumentTiming(inputs, record.context.run_id, {
-        operation: "fetch", duration_ms: Math.round(performance.now() - begin), status: "failed",
+      const failure = withPlannerFailure(error, {
+        operation: "fetch", execution: record.context, limits: inputs.settings.diagnostics.failure,
       });
-      throw error;
+      throw await retainFailureThroughCleanup(failure, {
+        operation: "fetch", execution: record.context, limits: inputs.settings.diagnostics.failure,
+      }, [
+        { operation: "write-document-failures", execute: () => recordFailure("fetch", request.request_id,
+          failure.code, store.fetchedDocument(request.request_id), inputs, runtime) },
+        { operation: "collection-cancel", execute: () => {
+          if (request.fetch_item_type === "feed" && ["FEED_RESTING", "FEED_RETIRED"].includes(failure.code)) {
+            settleCollectionFeed(inputs, record.context.run_id, request.feed_id, null);
+          }
+        } },
+        { operation: "record-run", execute: () => appendDocumentTiming(inputs, record.context.run_id, {
+          operation: "fetch", duration_ms: Math.round(performance.now() - begin), status: "failed",
+        }) },
+      ]);
     } finally { store.finishFetch(request.request_id, retain); }
   }
   const fetched = store.claimDocument(request.fetch_request_id, request.request_id, request.article_id,
@@ -110,10 +120,17 @@ async function executeOwnedDocumentOperation(
     });
     return result.response_json;
   } catch (error) {
-    await recordFailure("parse", request.request_id, describePlanError(error, inputs.root).code, fetched, inputs, runtime);
-    await appendDocumentTiming(inputs, fetched.context.run_id, {
-      operation: "parse", duration_ms: Math.round(performance.now() - begin), status: "failed",
+    const failure = withPlannerFailure(error, {
+      operation: "parse", execution: fetched.context, limits: inputs.settings.diagnostics.failure,
     });
-    throw error;
+    throw await retainFailureThroughCleanup(failure, {
+      operation: "parse", execution: fetched.context, limits: inputs.settings.diagnostics.failure,
+    }, [
+      { operation: "write-document-failures", execute: () =>
+        recordFailure("parse", request.request_id, failure.code, fetched, inputs, runtime) },
+      { operation: "record-run", execute: () => appendDocumentTiming(inputs, fetched.context.run_id, {
+        operation: "parse", duration_ms: Math.round(performance.now() - begin), status: "failed",
+      }) },
+    ]);
   } finally { store.consumeDocument(request.fetch_request_id, request.request_id); }
 }

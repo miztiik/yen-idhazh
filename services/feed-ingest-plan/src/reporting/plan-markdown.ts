@@ -12,6 +12,8 @@ import type { ReportFailureEvidence } from "./failure-evidence-markdown";
 import { aggregateFeedResults, compareKnownDescending, formatDuration } from "./aggregate-feed-results";
 import { renderSelectionExclusions } from "./selection-exclusions-markdown";
 import { renderSelectedEvidence } from "./selected-evidence-markdown";
+import { renderExecutionFailure } from "./execution-failure-markdown";
+import type { PlannerFailure } from "@idhazh/common-contracts";
 
 export type MarkdownSection = Readonly<{ markdown: string; notice: string }>;
 export type PlannerMarkdownNotice = Readonly<{
@@ -106,6 +108,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
   })[operation];
   const summary = [
     "# Feed planner run", "", facts.markdown, "", failureEvidence.markdown,
+    ...(row.failure_code !== null || response.failure !== null ? ["", renderExecutionFailure(response.failure)] : []),
     "", "<details>", "<summary>Per-feed article results</summary>", "",
     "## Table C - Per-feed article results", "",
     "| Id | Feed | Selected articles | Technically eligible articles | Feed checks |",
@@ -140,10 +143,10 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
   return { markdown: summary, notices };
 }
 
-export function renderUnavailablePlanMarkdown(input: { host?: MarkdownSection } = {}): PlannerMarkdown {
+export function renderUnavailablePlanMarkdown(input: { host?: MarkdownSection; failure?: PlannerFailure | null } = {}): PlannerMarkdown {
   const message = "No planner HTTP result was saved, so planning completion, feed work, request counts and exclusions were not recorded.";
   return {
-    markdown: `# Feed planner run\n\n## Table A - Run outcome\n\n**Planning result unavailable.**\n\n## Table B - Needs attention\n\n${message}${input.host === undefined ? "" : `\n\n<details>\n<summary>Execution measurements</summary>\n\n## Table H - Execution measurements\n\n| Id | Measure | Recorded value |\n| --- | --- | --- |\n${input.host.markdown}\n\n</details>`}`,
+    markdown: `# Feed planner run\n\n## Table A - Run outcome\n\n**Planning result unavailable.**\n\n## Table B - Needs attention\n\n${message}\n\n${renderExecutionFailure(input.failure ?? null)}${input.host === undefined ? "" : `\n\n<details>\n<summary>Execution measurements</summary>\n\n## Table H - Execution measurements\n\n| Id | Measure | Recorded value |\n| --- | --- | --- |\n${input.host.markdown}\n\n</details>`}`,
     notices: [
       { level: "warning", title: "Feed planner outcome", message },
     ],

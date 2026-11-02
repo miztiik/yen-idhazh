@@ -23,6 +23,9 @@ import { CompletedCollectionSchema } from "./collection-contracts";
 import type { z } from "zod";
 import { snapshotCollectionBatch } from "./collection-batch";
 import { finishRawDocumentFailures } from "../dump-raw-document-failure";
+import { finishArticleEntities } from "../record-article-entities";
+import { capturePlannerFailure, combinePlannerFailures } from "./plan-failure";
+import { retainFailureThroughCleanup } from "./retain-failure-through-cleanup";
 
 export type Collection = {
   collection_id: string;
@@ -113,7 +116,11 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
       config_sha256: record.config_sha256, signal: new AbortController(), status: "collecting",
       closing: false, finalizing: false, operations: new Set() });
     return { collection_id: request.collection_id, context, feeds: [...feeds.keys()] };
-  } catch (error) { stages.releaseRun(context.run_id); throw error; }
+  } catch (error) {
+    throw await retainFailureThroughCleanup(error, {
+      operation: "feed-health-before-fetch", execution: context, limits: inputs.settings.diagnostics.failure,
+    }, [{ operation: "collection-cancel", execute: () => stages.releaseRun(context.run_id) }]);
+  }
 }
 export function claimCollectionFeed(inputs: PlanInputs, id: string, feedId: string, correlationId: string) {
   const collection = getCollection(inputs, id);
@@ -230,6 +237,11 @@ export async function finalizeCollection(raw: unknown, inputs: PlanInputs) {
   if (collection.status === "failed" && request.failure_code === null) {
     throw new PlanError("INVALID_REQUEST", "Cancelled collection requires a failure cause", "failure_code");
   }
+  if (request.failure !== null && (request.failure.execution.run_id !== collection.context.run_id
+    || request.failure.execution.attempt !== collection.context.writer.attempt
+    || request.failure.execution.correlation_id !== collection.context.correlation_id)) {
+    throw new PlanError("INVALID_REQUEST", "Failure evidence belongs to another execution", "failure");
+  }
   collection.closing = true;
   collection.finalizing = true;
   await drainCollectionOperations(collection);
@@ -240,12 +252,23 @@ export async function finalizeCollection(raw: unknown, inputs: PlanInputs) {
     item.operation !== "feed-health-before-fetch");
   collection.state.api_timings.splice(insertion < 0 ? collection.state.api_timings.length : insertion, 0, timing);
   let failureCode = request.failure_code;
-  try { await finishRawDocumentFailures(inputs, collection.state.context); }
-  catch { failureCode ??= "RAW_DOCUMENT_OUTPUT_FAILED"; }
+  let failure = request.failure;
+  const diagnostics = await Promise.allSettled([
+    finishRawDocumentFailures(inputs, collection.state.context), finishArticleEntities(inputs, collection.state.context),
+  ]);
+  for (const [index, result] of diagnostics.entries()) {
+    if (result.status !== "rejected") continue;
+    const current = capturePlannerFailure(result.reason, {
+      operation: index === 0 ? "write-document-failures" : "write-entities",
+      execution: collection.context, limits: inputs.settings.diagnostics.failure,
+    });
+    failure = failure === null ? current : combinePlannerFailures(failure, current, inputs.settings.diagnostics.failure);
+    failureCode ??= index === 0 ? "RAW_DOCUMENT_OUTPUT_FAILED" : "ARTICLE_ENTITY_OUTPUT_FAILED";
+  }
   const status = failureCode === null ? "completed"
     : collection.state.work.rows().some(row => row.checked_at !== null) ? "partial" : "failed";
   const result = FinalizedCollectionSchema.parse({
-    collection_id: request.collection_id, status, failure_code: failureCode,
+    collection_id: request.collection_id, status, failure_code: failureCode, failure,
     api_timings: [...collection.state.api_timings],
   });
   collection.finalization = { request: requestKey, result };
