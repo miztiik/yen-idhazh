@@ -787,6 +787,8 @@ Table R
   - `services/feed-ingest-plan/test/file-baseline.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts`
   - `services/feed-ingest-plan/test/run-facts-report.test.ts` (rendered metric states)
+  - `services/feed-ingest-plan/test/logical-completion.test.ts` (native completed-selection fixture facts)
+  - `services/feed-ingest-plan/test/operation-logging.test.ts` (terminal failed batch and fresh execution recovery)
   - `tests/fixtures/feed-ingest-plan/entry-points/response.json`
   - `tests/fixtures/feed-ingest-plan/entry-points/plan-runs.rows.json` (actual recorder output)
   - `tests/fixtures/feed-ingest-plan/entry-points/health.json` (actual recorder output)
