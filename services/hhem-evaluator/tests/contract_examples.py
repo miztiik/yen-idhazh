@@ -1,6 +1,5 @@
 """Build bounded native contract examples, not model prediction recordings."""
 
-import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -43,9 +42,6 @@ def example_model() -> ModelIdentity:
         loaded_revision=settings.hhem.model.revision,
         foundation_reference=settings.hhem.foundation.reference,
         foundation_revision=settings.hhem.foundation.revision,
-        loaded_weights_sha256=hashlib.sha256(b"contract-only weight format example").hexdigest(),
-        loaded_config_sha256=hashlib.sha256(b"contract-only config format example").hexdigest(),
-        service_config_sha256=hashlib.sha256(SETTINGS_FILE.read_bytes()).hexdigest(),
         runtime_versions=RuntimeVersions(
             python="3.12.12", pytorch="2.8.0+cpu", transformers="4.57.6"
         ),

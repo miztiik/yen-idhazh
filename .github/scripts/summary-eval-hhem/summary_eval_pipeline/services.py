@@ -1,6 +1,7 @@
 """How are only this caller's service children started, identified and joined?"""
 
 import contextlib
+import json
 import queue
 import subprocess
 import sys
@@ -11,17 +12,18 @@ from typing import Literal
 
 from pydantic import ValidationError
 
-from .contracts.evaluation_event import EvaluationEvent
-from .contracts.service_settings import ServiceSettings
-from .contracts.workflow_control import (
+from hhem_evaluator.contracts.evaluation_event import EvaluationEvent
+from hhem_evaluator.contracts.service_settings import ServiceSettings
+
+from .control import (
     ApiReady,
     HostReady,
     ServiceControl,
     ServiceStopped,
     StartupPacket,
 )
-from .fail_manual_evaluation import WorkflowFailure
-from .load_manual_settings import ManualSettings
+from .failures import WorkflowFailure
+from .settings import PipelineSettings
 
 # The private protocol emits one ready packet and one stopped packet, then EOF.
 CONTROL_PACKET_CAPACITY = 3
@@ -35,7 +37,7 @@ class OwnedService:
         root: Path,
         packet: StartupPacket,
         settings: ServiceSettings,
-        manual: ManualSettings,
+        manual: PipelineSettings,
     ) -> None:
         self.service, self.packet, self.settings, self.manual = service, packet, settings, manual
         self.messages: queue.Queue[ServiceControl | None] = queue.Queue(CONTROL_PACKET_CAPACITY)
@@ -46,6 +48,7 @@ class OwnedService:
         self.ready: ApiReady | HostReady | None = None
         self.stopped: ServiceStopped | None = None
         self.closed = False
+        self.finish_sent = False
         try:
             self.process = subprocess.Popen(
                 command,
@@ -170,6 +173,21 @@ class OwnedService:
             or event.execution_id != execution_id
         ):
             raise WorkflowFailure("EVENT_STREAM_FAILED", "evaluation", self.service)
+
+    def finish_measurement(self, outcome: str) -> None:
+        """Send an explicit closing outcome; EOF alone is cancellation."""
+        if self.service != "host" or self.finish_sent or outcome not in ("success", "error"):
+            raise WorkflowFailure("CHILD_PROTOCOL_FAILED", "cleanup", self.service)
+        if self.process.stdin is None:
+            raise WorkflowFailure("SERVICE_STOP_FAILED", "cleanup", self.service)
+        try:
+            self.process.stdin.write(
+                json.dumps({"kind": "stop", "outcome": outcome}).encode() + b"\n"
+            )
+            self.process.stdin.flush()
+            self.finish_sent = True
+        except OSError:
+            raise WorkflowFailure("SERVICE_STOP_FAILED", "cleanup", self.service) from None
 
     def close(self, timeout_ms: int) -> ServiceStopped:
         if self.closed:

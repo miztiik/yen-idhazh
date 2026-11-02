@@ -26,8 +26,8 @@
     "cache_directory": "services/hhem-evaluator/var/model-cache"
   },
   "scoring": {
-    "chunk_words": 900,
-    "chunk_overlap_words": 100,
+    "chunk_words": 5000,
+    "chunk_overlap_words": 500,
     "max_windows_per_comparison": 256
   },
   "response": {

@@ -3,16 +3,16 @@
 import contextlib
 import math
 import os
+import platform
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
 
 from .contracts.error_detail import ErrorDetail
-from .contracts.model_identity import ModelIdentity
+from .contracts.model_identity import ModelIdentity, RuntimeVersions
 from .contracts.service_settings import ModelAssetSettings, ServiceSettings
 from .fail_evaluation import EvaluationFailure
-from .fingerprint_model import FingerprintableModel, fingerprint_model
 
 
 class Prediction(Protocol):
@@ -20,7 +20,7 @@ class Prediction(Protocol):
     def item(self) -> float: ...
 
 
-class OfficialModel(FingerprintableModel, Protocol):
+class OfficialModel(Protocol):
     def to(self, device: str) -> "OfficialModel": ...
     def eval(self) -> "OfficialModel": ...
     def predict(self, pairs: list[tuple[str, str]]) -> Prediction: ...
@@ -122,13 +122,17 @@ def load_model(settings: ServiceSettings, root: Path, *, local_only: bool) -> Pr
             )
             model.to("cpu")
             model.eval()
-            identity = fingerprint_model(
-                model,
-                settings,
-                model_directory,
-                foundation_directory,
-                pytorch_version=torch.__version__,
-                transformers_version=transformers.__version__,
+            identity = ModelIdentity(
+                reference=settings.hhem.model.reference,
+                configured_revision=settings.hhem.model.revision,
+                loaded_revision=model_directory.name,
+                foundation_reference=settings.hhem.foundation.reference,
+                foundation_revision=foundation_directory.name,
+                runtime_versions=RuntimeVersions(
+                    python=platform.python_version(),
+                    pytorch=torch.__version__,
+                    transformers=transformers.__version__,
+                ),
             )
             return CpuPredictor(model, identity)
     except Exception:

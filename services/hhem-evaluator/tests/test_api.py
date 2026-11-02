@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from hhem_evaluator.contracts.base import API_PREFIX
+from hhem_evaluator.contracts.base import API_PREFIX, EVALUATE_PATH
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.evaluation_event import EventDetails
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
@@ -43,7 +43,7 @@ def test_disabled_service_and_native_openapi_do_not_start_or_read_input() -> Non
             assert request.messages[0]["status"] == 503
             assert not service.worker.controls
             schema = (await service.client.get(f"{API_PREFIX}/openapi.json")).json()
-            body = schema["paths"][f"{API_PREFIX}/evaluate"]["post"]["requestBody"]
+            body = schema["paths"][EVALUATE_PATH]["post"]["requestBody"]
             declared = body["content"]["application/json"]["schema"]
             native = EvaluateRequest.model_json_schema()
             assert declared == native
@@ -88,7 +88,7 @@ def test_resolved_controls_are_native_and_invalid_requests_never_get_a_422() -> 
         async with running_service() as service:
             for changes in (
                 {"chunk_words": 100},
-                {"chunk_overlap_words": 900},
+                {"chunk_overlap_words": 5000},
                 {"hhem_full": True},
                 {"chunk_words": "1500"},
                 {"include_window_details": None},

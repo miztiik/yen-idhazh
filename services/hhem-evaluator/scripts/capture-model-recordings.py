@@ -7,8 +7,9 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from recording_json import canonical_bytes
+
 from hhem_evaluator.fail_evaluation import EvaluationFailure
-from hhem_evaluator.fingerprint_model import canonical_bytes
 from hhem_evaluator.load_model import load_model, quiet_model_output
 from hhem_evaluator.load_settings import load_settings
 

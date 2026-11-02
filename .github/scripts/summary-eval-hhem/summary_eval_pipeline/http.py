@@ -6,9 +6,9 @@ from typing import Literal
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from .contracts.workflow_report import FailurePhase
-from .fail_manual_evaluation import WorkflowFailure
-from .load_manual_settings import ManualSettings
+from .contracts import FailurePhase
+from .failures import WorkflowFailure
+from .settings import PipelineSettings
 
 
 def loopback_url(host: Literal["127.0.0.1", "::1"], port: int) -> str:
@@ -21,8 +21,8 @@ async def call_local_api[Result: BaseModel](
     method: Literal["GET", "POST"],
     url: str,
     contract: type[Result],
-    manual: ManualSettings,
-    timeout_ms: int,
+    manual: PipelineSettings,
+    timeout_ms: float,
     *,
     service: Literal["hhem", "host"],
     phase: FailurePhase,

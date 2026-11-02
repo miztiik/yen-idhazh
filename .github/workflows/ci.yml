@@ -180,7 +180,9 @@ jobs:
 
       - name: Prepare the existing host profile implementation
         working-directory: .
-        run: bun install --frozen-lockfile --cwd services/host-probes
+        run: |
+          bun install --frozen-lockfile --cwd services/host-fingerprints
+          bun install --frozen-lockfile --cwd services/host-probes
 
       - name: Check the caller launchers with the existing host compiler
         working-directory: services/host-probes
@@ -188,17 +190,19 @@ jobs:
           bun run --no-install node_modules/typescript/bin/tsc
           --noEmit --target ESNext --module ESNext --moduleResolution Bundler
           --strict --skipLibCheck --types bun
-          ../hhem-evaluator/scripts/serve-host-probes.ts
+          ../../.github/scripts/summary-eval-hhem/measure-host.ts
           ../hhem-evaluator/tests/host-profile-bridge.ts
 
       - name: Install only the locked service development environment
         run: uv sync --frozen --group dev
 
       - name: Lint native service contracts
-        run: uv run --frozen ruff check src tests
+        run: >-
+          uv run --frozen ruff check --config pyproject.toml
+          src tests scripts ../../.github/scripts/summary-eval-hhem
 
       - name: Check strict service types
-        run: uv run --frozen mypy src tests
+        run: uv run --frozen mypy src tests ../../.github/scripts/summary-eval-hhem/summary_eval_pipeline
 
       - name: Check offline service and native compatibility
         run: uv run --frozen pytest

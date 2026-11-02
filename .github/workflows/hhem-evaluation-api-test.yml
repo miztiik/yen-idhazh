@@ -1,14 +1,14 @@
-name: HHEM evaluation API test
+name: summary-eval-hhem
 
 on:
   workflow_dispatch:
     inputs:
       source_text:
-        description: Full source text to check the summary against
+        description: Full source text; published in the expandable run report
         required: true
         type: string
       summary_text:
-        description: Supplied summary text to evaluate
+        description: Supplied summary; published in the expandable run report
         required: true
         type: string
 
@@ -37,22 +37,34 @@ jobs:
         with:
           bun-version: '1.3.13'
 
-      - name: Prepare the existing locked host instrument
+      - name: Prepare existing shared host APIs
         working-directory: .
-        run: bun install --frozen-lockfile --cwd services/host-probes
+        run: |
+          bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd packages/ledger-file-writer
+          bun install --frozen-lockfile --cwd services/host-fingerprints
+          bun install --frozen-lockfile --cwd services/host-probes
 
       - name: Install the selected CPU model environment
         run: uv sync --frozen --extra model --no-dev
 
-      - name: Evaluate once and close owned services
-        run: uv run --frozen --extra model --no-dev python -m hhem_evaluator.run_manual_evaluation --root ../..
+      - name: Start API, check health, evaluate and close owned services
+        run: >-
+          uv run --frozen --extra model --no-dev python
+          ../../.github/scripts/summary-eval-hhem/run.py --root ../..
 
-      - name: Upload only validated body-free evidence
+      - name: Generating report from evaluator results
+        if: always()
+        run: >-
+          uv run --frozen --extra model --no-dev python
+          ../../.github/scripts/summary-eval-hhem/report.py --root ../..
+
+      - name: Publish report and body-free evaluation data
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: hhem-evaluation-report
+          name: summary-eval-hhem-report
           path: |
-            services/hhem-evaluator/var/workflow/report.json
-            services/hhem-evaluator/var/workflow/report.md
+            backend/var/summary-eval-hhem/evaluation.json
+            backend/var/summary-eval-hhem/report.md
           if-no-files-found: warn

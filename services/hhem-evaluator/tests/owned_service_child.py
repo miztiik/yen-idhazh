@@ -6,19 +6,21 @@ import sys
 import threading
 from pathlib import Path
 
-from hhem_evaluator.contracts.base import SCHEMA_VERSION
-from hhem_evaluator.contracts.evaluation_event import EventDetails
-from hhem_evaluator.contracts.workflow_control import (
+from summary_eval_pipeline.channels import open_owned_channels
+from summary_eval_pipeline.contracts import Hardware
+from summary_eval_pipeline.control import (
     ApiReady,
     HostReady,
     ServiceStopped,
     StartupPacket,
 )
+from summary_eval_pipeline.serve_hhem import emit_control, watch_parent_lifetime
+
+from hhem_evaluator.contracts.base import SCHEMA_VERSION
+from hhem_evaluator.contracts.evaluation_event import EventDetails
 from hhem_evaluator.emit_events import EventEmitter, EventWriter
 from hhem_evaluator.load_settings import load_settings
-from hhem_evaluator.open_owned_channels import open_owned_channels
 from hhem_evaluator.resolve_ids import create_execution_id
-from hhem_evaluator.serve_owned_api import emit_control, watch_parent_lifetime
 
 
 def private_output_case(packet: StartupPacket, mode: str) -> None:
@@ -104,8 +106,16 @@ def main() -> None:
             service="host",
             startup_id=create_execution_id() if mode == "mismatch" else packet.startup_id,
             pid=os.getpid(),
-            host="127.0.0.1",
-            port=3011,
+            hardware=Hardware(
+                status="disabled",
+                cpu_model=None,
+                cpu_logical_processors=None,
+                cpu_physical_cores=None,
+                machine_memory_total_mib=None,
+                unavailable={},
+                reason="configured_off",
+            ),
+            profile_started=False,
             lifecycle_timeout_ms=1000,
         )
     sys.stdout.write(ready.model_dump_json() + "\n")

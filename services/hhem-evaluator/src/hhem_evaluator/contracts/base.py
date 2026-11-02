@@ -9,6 +9,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, St
 # These are wire-protocol identities, not operational settings.
 SCHEMA_VERSION: Final = "2026-11-02"
 API_PREFIX: Final = f"/api/{SCHEMA_VERSION}"
+EVALUATE_PATH: Final = f"{API_PREFIX}/summary-eval-hhem"
 SchemaVersion = Literal["2026-11-02"]
 Operation = Literal["service", "worker", "request", "queue", "primary", "full"]
 Comparison = Literal["primary", "full"]

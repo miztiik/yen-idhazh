@@ -4,14 +4,27 @@ from typing import Annotated, Literal
 
 from pydantic import Field, RootModel
 
-from .base import NativeContract, PositiveCount, SchemaVersion, Uuid4
-from .service_settings import StartupContext
+from hhem_evaluator.contracts.base import (
+    CommitId,
+    NativeContract,
+    PositiveCount,
+    SchemaVersion,
+    Uuid4,
+)
+from hhem_evaluator.contracts.service_settings import StartupContext
+
+from .contracts import Hardware
+from .host_reader import MachineUsage
 
 
 class StartupPacket(NativeContract):
     version: SchemaVersion
     startup_id: Uuid4
     context: StartupContext
+    git_sha: CommitId | None = None
+    attempt: PositiveCount = 1
+    request_id: Uuid4 | None = None
+    correlation_id: Uuid4 | None = None
 
 
 class ControlPacket(NativeContract):
@@ -31,8 +44,8 @@ class HostReady(ControlPacket):
     service: Literal["host"]
     startup_id: Uuid4
     pid: PositiveCount
-    host: Literal["127.0.0.1", "::1"]
-    port: int = Field(strict=True, ge=1, le=65535)
+    hardware: Hardware
+    profile_started: bool
     lifecycle_timeout_ms: PositiveCount
 
 
@@ -43,6 +56,7 @@ class ServiceStopped(ControlPacket):
     pid: PositiveCount
     clean: bool
     worker_exit_confirmed: bool | None
+    machine: MachineUsage | None = None
 
 
 class ServiceStartFailed(ControlPacket):

@@ -1,10 +1,10 @@
-"""Which observed assets and runtime versions identify the loaded model?"""
+"""Which pinned revisions and runtime versions identify the loaded model?"""
 
 from typing import Annotated
 
-from pydantic import StringConstraints
+from pydantic import ConfigDict, StringConstraints
 
-from .base import CommitId, ModelReference, NativeContract, Sha256
+from .base import SCHEMA_VERSION, CommitId, ModelReference, NativeContract
 
 RuntimeVersion = Annotated[
     str, StringConstraints(strict=True, pattern=r"^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$")
@@ -20,14 +20,24 @@ class RuntimeVersions(NativeContract):
 
 
 class ModelIdentity(NativeContract):
-    """Require actual loaded fingerprints before describing model readiness."""
+    """Identify the selected upstream assets without re-hashing loaded tensors."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": SCHEMA_VERSION,
+            "changelog": [
+                {
+                    "version": SCHEMA_VERSION,
+                    "change": "Identify pinned revisions without runtime fingerprints.",
+                },
+                {"version": SCHEMA_VERSION, "change": "Declare standalone model identity."},
+            ],
+        }
+    )
 
     reference: ModelReference
     configured_revision: CommitId
     loaded_revision: CommitId
     foundation_reference: ModelReference
     foundation_revision: CommitId
-    loaded_weights_sha256: Sha256
-    loaded_config_sha256: Sha256
-    service_config_sha256: Sha256
     runtime_versions: RuntimeVersions

@@ -6,14 +6,15 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .contracts.evaluate_request import EvaluateRequest
-from .contracts.service_settings import ServiceSettings
-from .fail_manual_evaluation import WorkflowFailure
-from .load_manual_settings import ManualSettings
-from .resolve_ids import create_execution_id
+from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
+from hhem_evaluator.contracts.service_settings import ServiceSettings
+from hhem_evaluator.resolve_ids import create_execution_id
+
+from .failures import WorkflowFailure
+from .settings import PipelineSettings
 
 
-def read_manual_inputs(settings: ServiceSettings, manual: ManualSettings) -> EvaluateRequest:
+def read_manual_inputs(settings: ServiceSettings, manual: PipelineSettings) -> EvaluateRequest:
     event_path = os.environ.get("GITHUB_EVENT_PATH")
     if not event_path:
         raise WorkflowFailure("INPUT_INVALID", "input")

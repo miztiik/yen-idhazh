@@ -7,8 +7,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-
-from hhem_evaluator.contracts.host_profile_reader import StartProfileResponse, StopProfileResponse
+from summary_eval_pipeline.host_reader import HardwareRow, MachineUsage
 
 from .contract_examples import REPOSITORY
 
@@ -48,12 +47,17 @@ def resolve(node: object, root: dict[str, object]) -> dict[str, object]:
 
 
 def variants(node: dict[str, object]) -> list[object] | None:
+    kinds = node.get("type")
+    if isinstance(kinds, list):
+        return [{**node, "type": kind} for kind in kinds]
     value = node.get("oneOf", node.get("anyOf"))
     assert value is None or isinstance(value, list)
     return value
 
 
 def literals(node: dict[str, object]) -> list[object] | None:
+    if node.get("type") == "null":
+        return [None]
     if "const" in node:
         return [node["const"]]
     value = node.get("enum")
@@ -127,7 +131,7 @@ def test_consumed_host_fields_match_actual_native_schemas() -> None:
         "The native host schema export failed; prepare its locked dependencies. " + result.stderr
     )
     native = mapping(json.loads(result.stdout))
-    for name, contract in (("start", StartProfileResponse), ("stop", StopProfileResponse)):
+    for name, contract in (("hardware", HardwareRow), ("machine", MachineUsage)):
         native_schema = mapping(native[name])
         reader_schema: dict[str, object] = contract.model_json_schema()
         compare_projection(native_schema, reader_schema, native_schema, reader_schema, name)

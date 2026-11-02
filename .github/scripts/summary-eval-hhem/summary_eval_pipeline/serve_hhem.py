@@ -15,13 +15,14 @@ from typing import BinaryIO, TextIO
 import uvicorn
 from uvicorn.lifespan.on import LifespanOn
 
-from .contracts.base import SCHEMA_VERSION
-from .contracts.workflow_control import ApiReady, ServiceStartFailed, ServiceStopped, StartupPacket
-from .emit_events import EventWriter
-from .load_manual_settings import load_manual_settings
-from .load_settings import load_settings
-from .open_owned_channels import OwnedChannels, open_owned_channels
-from .serve_api import create_app
+from hhem_evaluator.contracts.base import SCHEMA_VERSION
+from hhem_evaluator.emit_events import EventWriter
+from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.serve_api import create_app
+
+from .channels import OwnedChannels, open_owned_channels
+from .control import ApiReady, ServiceStartFailed, ServiceStopped, StartupPacket
+from .settings import load_pipeline_settings
 
 
 def emit_control(
@@ -154,7 +155,7 @@ def main() -> None:
         packet: StartupPacket | None = None
         try:
             root = args.root.resolve()
-            manual = load_manual_settings(root)
+            manual = load_pipeline_settings(root)
             line = sys.stdin.buffer.readline(manual.control_max_bytes + 1)
             if len(line) > manual.control_max_bytes or not line.endswith(b"\n"):
                 raise ValueError("Invalid private startup packet")

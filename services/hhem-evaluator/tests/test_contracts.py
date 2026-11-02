@@ -163,9 +163,10 @@ def test_native_schemas_are_strict_versioned_and_change_logged(
 ) -> None:
     schema = contract.model_json_schema()
     assert schema["version"] == SCHEMA_VERSION
-    assert schema["changelog"] == [
-        {"version": SCHEMA_VERSION, "change": "Declare standalone HHEM service contracts."}
-    ]
+    changes = schema["changelog"]
+    assert 1 <= len(changes) <= 5
+    assert changes[0]["version"] == SCHEMA_VERSION
+    assert all(entry["change"] and "\n" not in entry["change"] for entry in changes)
     assert schema["additionalProperties"] is False
     if "version" in contract.model_fields:
         assert "version" in schema["required"]
@@ -440,12 +441,11 @@ def test_details_and_counts_describe_only_completed_valid_windows(
 @pytest.mark.parametrize(
     "field", ["loaded_weights_sha256", "loaded_config_sha256", "service_config_sha256"]
 )
-def test_ready_model_identity_requires_each_actual_fingerprint(field: str) -> None:
+def test_runtime_model_identity_does_not_accept_removed_fingerprints(field: str) -> None:
     payload = example_model().model_dump(mode="json")
-    del payload[field]
-    with pytest.raises(ValidationError):
-        read_contract(ModelIdentity, payload)
-    payload[field] = "unknown"
+    assert field not in payload
+    assert field not in ModelIdentity.model_json_schema()["properties"]
+    payload[field] = "f" * 64
     with pytest.raises(ValidationError):
         read_contract(ModelIdentity, payload)
 
