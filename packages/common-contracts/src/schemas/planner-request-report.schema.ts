@@ -14,9 +14,9 @@ export const PlannerRequestReportSchema = z.strictObject({
   input_complete: z.boolean(),
   feeds: z.array(z.strictObject({
     feed_id: SlugSchema, feed_requests: CountSchema.nullable(),
-    article_requests: CountSchema.nullable(), robots_requests: CountSchema.nullable(),
+    article_requests: CountSchema.nullable(),
     counts_complete: z.boolean(),
-    coverage: z.strictObject({ feed_requests: coverage, article_requests: coverage, robots_requests: coverage }),
+    coverage: z.strictObject({ feed_requests: coverage, article_requests: coverage }),
   })),
 }).superRefine((value, ctx) => {
   const validDays = (days: string[]) => new Set(days).size === days.length
@@ -26,7 +26,7 @@ export const PlannerRequestReportSchema = z.strictObject({
   }
   const dayCount = (Date.parse(value.through_day) - Date.parse(value.from_day)) / 86_400_000 + 1;
   for (const feed of value.feeds) {
-    for (const field of ["feed_requests", "article_requests", "robots_requests"] as const) {
+    for (const field of ["feed_requests", "article_requests"] as const) {
       const cell = feed.coverage[field];
       const complete = value.input_complete && value.missing_days.length === 0
         && value.unattributed_days.length === 0 && cell.unknown_records === 0 && cell.complete_days.length === dayCount;
@@ -52,7 +52,10 @@ export const PlannerRequestReportSchema = z.strictObject({
     reject(ctx, "report completeness must include missing files, staged inputs and counter coverage");
   }
 }).meta({
-  version: "2026-10-29",
-  changelog: [{ version: "2026-10-29", change: "Declare independent request totals and their record and closed-day coverage." }],
+  version: "2026-11-02",
+  changelog: [
+    { version: "2026-11-02", change: "Remove the robots request total and its independent coverage category." },
+    { version: "2026-10-29", change: "Declare independent request totals and their record and closed-day coverage." },
+  ],
 });
 export type PlannerRequestReport = z.infer<typeof PlannerRequestReportSchema>;

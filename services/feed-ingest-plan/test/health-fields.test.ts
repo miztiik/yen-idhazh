@@ -70,14 +70,15 @@ test("missing, added and retyped columns affect only the uses that require them"
   try {
     const { row, written } = await healthFieldFixture(join(root, "state"));
     const path = join(root, "state", written.files[0]!.path);
-    const variant = schema.omit({ permission: true, reliability: true, articles_selected: true }).extend({
+    const variant = schema.omit({ reliability: true, articles_selected: true }).extend({
       status: z.string(), detail: z.object({ label: z.string(), readings: z.array(z.number()) }),
+      robots_requests: shape.feed_requests,
       rejection_counts: z.array(z.object(shape.rejection_counts.element.shape).omit({ stage: true }).extend({
         detail: z.string(),
       })),
     });
     const stored = variant.parse({
-      ...row, status: "retained", detail: { label: "extra", readings: [0.25, 0.5] },
+      ...row, status: "retained", detail: { label: "extra", readings: [0.25, 0.5] }, robots_requests: null,
       rejection_counts: row.rejection_counts.map(reason => ({ ...reason, detail: "unrelated" })),
     });
     await rewriteHealthFields(path, [stored], variant, { stamp: "2026-10-25" });
@@ -89,7 +90,8 @@ test("missing, added and retyped columns affect only the uses that require them"
     for (const use of [read.uses.request_totals, read.uses.article_admission]) expect(use.gaps).toEqual([]);
     expect(read.uses.feed_rest.gaps).toEqual([expect.objectContaining({ field: "status", code: "invalid" })]);
     expect(read.uses.feed_reliability.gaps).toEqual([expect.objectContaining({ field: "reliability", code: "missing" })]);
-    expect(read.uses.request_totals.rows[0]).toMatchObject({ feed_requests: 2, article_requests: 4, robots_requests: 0 });
+    expect(read.uses.request_totals.rows[0]).toMatchObject({ feed_requests: 2, article_requests: 4 });
+    expect(read.uses.request_totals.rows[0]).not.toHaveProperty("robots_requests");
     expect(read.uses.feed_reliability.partial_rows[0]).toMatchObject({ outcome: "ok", items: 4 });
     await expect(readPlannerParquet(path, "feed-health-state", FeedHealthStateRowContract)).rejects.toThrow();
     expect(await readFile(path)).toEqual(before);
@@ -105,7 +107,7 @@ test("request field gaps retain independent checks and individual valid counters
     const { row, written } = await healthFieldFixture(join(root, "state"));
     const path = join(root, "state", written.files[0]!.path);
     const variant = schema.omit({ article_requests: true });
-    const stored = { ...variant.parse(row), feed_requests: -1, robots_requests: null };
+    const stored = { ...variant.parse(row), feed_requests: -1 };
     await rewriteHealthFields(path, [stored], variant, { stamp: "2026-10-25" });
     const logged: unknown[] = [];
     const correlation_id = randomUUID();
@@ -117,7 +119,7 @@ test("request field gaps retain independent checks and individual valid counters
     expect(read.uses.request_totals.rows).toEqual([]);
     expect(read.uses.request_totals.partial_rows).toEqual([{
       date: row.date, run_id: row.run_id, attempt: row.attempt, feed_id: row.feed_id,
-      endpoint_key: row.endpoint_key, robots_requests: null,
+      endpoint_key: row.endpoint_key,
     }]);
     expect(read.uses.request_totals.gaps).toEqual([
       expect.objectContaining({ use: "request_totals", field: "feed_requests", day: row.date, code: "invalid" }),
@@ -147,13 +149,45 @@ test("request field gaps retain independent checks and individual valid counters
     const partial = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
       day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     });
-    expect(partial.uses.request_totals.partial_rows[0]).toMatchObject({ feed_requests: 2, robots_requests: 0 });
+    expect(partial.uses.request_totals.partial_rows[0]).toMatchObject({ feed_requests: 2 });
     expect(partial.uses.request_totals.partial_rows[0]).not.toHaveProperty("article_requests");
     await rewriteHealthFields(path, [{ ...row, article_requests: null }], schema);
     const unknown = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
       day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     });
     expect(unknown.uses.request_totals.rows[0]?.article_requests).toBeNull();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("retired historical enum values are field gaps without erasing usable counters or saved calculations", async () => {
+  const root = await mkdtemp(join(tmpdir(), "health-field-retired-values-"));
+  try {
+    const { row, written } = await healthFieldFixture(join(root, "state"));
+    const path = join(root, "state", written.files[0]!.path);
+    const historical = schema.extend({ outcome: z.string(), check_result: z.string() });
+    const stored = {
+      ...row, outcome: "robots_denied", check_result: "robots", availability: "resting",
+      rest_until: "2026-10-26T10:00:00Z",
+      reliability: { productive: 1, attempted: 2, success_fraction: 0.5, production_factor: 0.5,
+        from_day: row.date, through_day: row.date, complete: true },
+    };
+    await rewriteHealthFields(path, [stored], historical, { stamp: "2026-10-31" });
+    const before = await readFile(path);
+    const read = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
+      day: row.date, raw_files: [`state/${written.files[0]!.path}`],
+    });
+    expect(read.complete).toBe(true);
+    expect(read.uses.request_totals.rows).toHaveLength(1);
+    expect(read.uses.article_admission.rows).toHaveLength(1);
+    expect(read.uses.feed_rest.gaps.map(gap => [gap.field, gap.code])).toEqual([
+      ["outcome", "invalid"], ["check_result", "invalid"],
+    ]);
+    expect(read.uses.feed_rest.partial_rows[0]).toMatchObject({
+      availability: "resting", rest_until: stored.rest_until,
+    });
+    expect(read.uses.feed_reliability.gaps.map(gap => [gap.field, gap.code])).toEqual([["outcome", "invalid"]]);
+    expect(read.uses.feed_reliability.partial_rows[0]?.reliability).toEqual(stored.reliability);
+    expect(await readFile(path)).toEqual(before);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -234,7 +268,7 @@ test("duplicates compare actual stored fields before projection and retain endpo
     await rewriteHealthFields(path, [row, row, { ...row, attempt: 2, check_request_id: randomUUID() },
       { ...row, endpoint_key: "2".repeat(64), check_request_id: randomUUID() }], schema);
     expect((await read()).uses.request_totals.rows).toHaveLength(3);
-    await rewriteHealthFields(path, [row, { ...row, permission: "denied" }], schema);
+    await rewriteHealthFields(path, [row, { ...row, status: 403 }], schema);
     expect((await read()).uses.feed_rest.gaps).toContainEqual(expect.objectContaining({ code: "conflict" }));
     const invalid = schema.omit({ attempt: true }).parse(row);
     await rewriteHealthFields(path, [invalid], schema.omit({ attempt: true }));

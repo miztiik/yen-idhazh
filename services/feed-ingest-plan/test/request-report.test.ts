@@ -48,18 +48,18 @@ test("sums each usable counter across full and partial records without double co
   expect(result.complete).toBe(false);
   expect(result.missing_days).toEqual([]);
   expect(result.feeds[0]).toMatchObject({
-    feed_requests: 8, article_requests: 4, robots_requests: 0, counts_complete: false,
+    feed_requests: 8, article_requests: 4, counts_complete: false,
     coverage: {
       feed_requests: { status: "complete", known_records: 4, unknown_records: 0, complete_days: ["2026-10-24", row.date] },
       article_requests: { status: "partial", known_records: 1, unknown_records: 3, recorded_days: [row.date], complete_days: ["2026-10-24"] },
-      robots_requests: { status: "complete", known_records: 4 },
     },
   });
-  expect(report([row, { ...row, permission: "denied" }])).toMatchObject({
+  expect(report([row, { ...row, status: 403 }])).toMatchObject({
     complete: false, feeds: [{ counts_complete: false, feed_requests: null, article_requests: null }],
   });
   const rendered = renderRequestReport(result);
-  expect(rendered.markdown).toContain("| 4 | 8 | 0 | Article&#58; partial; Feed&#58; complete; Robots&#58; complete |");
+  expect(rendered.markdown).toContain("| 4 | 8 | Article&#58; partial; Feed&#58; complete |");
+  expect(rendered.markdown.toLowerCase()).not.toContain("robots");
   expect(Bun.markdown.html(rendered.markdown)).toContain("<td>4</td>");
   expect(rendered.markdown).not.toContain("*");
   expect(rendered.markdown).toContain("| 1 / 2 | 1 / 2 | 3 |");
@@ -69,8 +69,8 @@ test("reports missing files, unidentifiable records and staged input gaps withou
   const { row, report, days } = await fixture();
   const missing = report([row], { days: [days[1]!] });
   expect(missing).toMatchObject({ complete: false, missing_days: ["2026-10-24"] });
-  expect(missing.feeds[0]).toMatchObject({ feed_requests: 2, article_requests: 4, robots_requests: 0 });
-  expect(missing.feeds[0]!.coverage.robots_requests).toMatchObject({
+  expect(missing.feeds[0]).toMatchObject({ feed_requests: 2, article_requests: 4 });
+  expect(missing.feeds[0]!.coverage.feed_requests).toMatchObject({
     status: "partial", known_records: 1, recorded_days: [row.date], complete_days: [row.date],
   });
   const unattributed = report([row, { ...row, attempt: "invalid" }]);
@@ -85,28 +85,30 @@ test("reports missing files, unidentifiable records and staged input gaps withou
   expect(rendered.markdown).toContain("Staged history inputs: incomplete");
   expect(renderRequestReport(missing).markdown).toContain("complete transfer; historical day coverage may still be incomplete");
   expect(renderRequestReport(missing).markdown).toContain("Historical window - missing or incomplete day files: 2026-10-24");
-  expect(rendered.markdown).toContain("| 4 | 2 | 0 |");
+  expect(rendered.markdown).toContain("| 4 | 2 |");
 });
 
 test("distinguishes known zero from absent counts and leaves unrelated counters complete", async () => {
   const { row, report } = await fixture();
   const unknown = report([{ ...row, article_requests: null, feed_requests: 0 }]);
-  expect(unknown.feeds[0]).toMatchObject({ feed_requests: 0, article_requests: null, robots_requests: 0 });
+  expect(unknown.feeds[0]).toMatchObject({ feed_requests: 0, article_requests: null });
   expect(unknown.feeds[0]!.coverage.article_requests).toMatchObject({
     status: "none", known_records: 0, unknown_records: 1,
   });
   const empty = report([]);
-  expect(empty).toMatchObject({ complete: true, feeds: [{ feed_requests: 0, article_requests: 0, robots_requests: 0 }] });
+  expect(empty).toMatchObject({ complete: true, feeds: [{ feed_requests: 0, article_requests: 0 }] });
+  expect(Object.keys(empty.feeds[0]!.coverage).sort()).toEqual(["article_requests", "feed_requests"]);
   const absent = report([], { days: [] });
-  expect(absent.feeds[0]).toMatchObject({ feed_requests: null, article_requests: null, robots_requests: null });
-  expect(renderRequestReport(absent).markdown).toContain("| Not recorded | Not recorded | Not recorded |");
-  expect(renderRequestReport(unknown).markdown).toContain("| Not recorded | 0 | 0 |");
+  expect(absent.feeds[0]).toMatchObject({ feed_requests: null, article_requests: null });
+  expect(renderRequestReport(absent).markdown).toContain("| Not recorded | Not recorded |");
+  expect(renderRequestReport(unknown).markdown).toContain("| Not recorded | 0 |");
   const articleOnly = report([{ ...row, feed_requests: null, robots_requests: -1 }]);
   expect(articleOnly.feeds[0]).toMatchObject({
-    feed_requests: null, article_requests: 4, robots_requests: null,
-    coverage: { article_requests: { status: "complete" }, robots_requests: { status: "none", unknown_records: 1 } },
+    feed_requests: null, article_requests: 4,
+    coverage: { article_requests: { status: "complete" }, feed_requests: { status: "none", unknown_records: 1 } },
   });
-  expect(renderRequestReport(articleOnly).markdown).toContain("| 4 | Not recorded | Not recorded |");
+  expect(articleOnly.feeds[0]).not.toHaveProperty("robots_requests");
+  expect(renderRequestReport(articleOnly).markdown).toContain("| 4 | Not recorded |");
   expect(Bun.markdown.html(renderRequestReport(report([{ ...row, feed_requests: 0 }], { days: [] })).markdown))
     .toContain("<td>0</td>");
   expect(renderRequestReport(undefined).notice).toContain("was not recorded");
@@ -182,7 +184,7 @@ test("shares identical coverage rows and keeps request counts in one fold withou
   const before = structuredClone({ requests, health });
   const rendered = renderRequestReport(requests, health).markdown;
   expect(rendered).not.toContain("reliability");
-  expect(rendered).toContain("all 3 feeds; article, feed, robots requests");
+  expect(rendered).toContain("all 3 feeds; article, feed requests");
   expect(rendered).toContain("<summary>Request counts and coverage</summary>");
   expect(rendered).toContain("| 1 / 2 | 2 / 2 | 0 |");
   expect(rendered).toContain("2026-10-24 through 2026-10-25");

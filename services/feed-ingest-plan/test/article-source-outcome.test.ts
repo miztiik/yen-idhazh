@@ -12,6 +12,10 @@ import { attributeIngestOutcome } from "../src/attribute-ingest-outcomes";
 import { createRunHealth } from "../src/run-health";
 import { summarizePlanningHealth } from "../src/read-ledger-history/health-summary";
 import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-health-fields";
+import { createSourceFetcher } from "@idhazh/feed-ingest-plan/fetch-source";
+import { documentWork } from "../src/harvest-feeds/document-work";
+import { createIngestObservations } from "../src/ingest-observations";
+import { RecordedTransport, inputs, readRecordings } from "./harvest-recordings";
 
 function recording() {
   const at = "2026-10-27T12:00:00Z";
@@ -34,11 +38,51 @@ function recording() {
       author: null, categories: [], published_at: "2020-01-01T00:00:00Z", fetched_at: at,
     }),
     rejection: null,
-    observation: { candidate_id: deriveCandidateId(run, source.feed_id, 0), http_status: 200, robots: "allowed",
+    observation: { candidate_id: deriveCandidateId(run, source.feed_id, 0), http_status: 200,
       fetch_failure: null, paywall: false, paywall_evidence: "none", extraction: "success", observed_at: at, diagnostics: null },
   });
   return { at, source, context, article };
 }
+
+test("retries and redirects count once on their dispatch UTC day, not the later settlement day", async () => {
+  const { context, source } = recording();
+  const loaded = await inputs([], { extraction: { max_retries: 1 } });
+  const recordings = await readRecordings();
+  const target = "https://news.example/retry";
+  recordings.responses[target] = [
+    { status: 503, body: "" }, { status: 302, body: "", location: "https://atom.example/entry" },
+  ];
+  const transport = new RecordedTransport(recordings);
+  let at = "2026-10-27T23:59:59Z";
+  const clock = () => new Date(at);
+  transport.on_request = () => { at = "2026-10-28T00:00:00Z"; };
+  const fetcher = createSourceFetcher({
+    ...loaded.config.harvest, request_headers: { ...loaded.config.harvest.request_headers, secondary: null },
+  }, loaded.extraction, { transport }, clock);
+  const health = createRunHealth(context, [source], new Map(), {
+    min_words: 10, blocked_http_statuses: [], tidy_urls: true,
+  });
+  const work = documentWork({
+    observation_clock: clock, observations: createIngestObservations(health.observe),
+  }, {
+    run_id: context.run_id, correlation_id: context.correlation_id,
+    article_id: deriveUrlKey(target), feed_id: source.feed_id,
+  }, randomUUID(), {
+    document_kind: "article", publisher_id: null, candidate_id: null,
+    observed_run_id: context.run_id, observed_attempt: context.writer.attempt, feed_id: source.feed_id,
+  });
+  try {
+    expect((await work.fetch(fetcher, target)).fetched.failure).toBeNull();
+    expect(transport.requests.map(request => request.url.href)).toEqual([target, target, "https://atom.example/entry"]);
+    expect(health.rows().map(row => ({
+      date: row.date, feed_requests: row.feed_requests, article_requests: row.article_requests,
+      counts_complete: row.counts_complete,
+    }))).toEqual([
+      { date: "2026-10-27", feed_requests: 0, article_requests: 1, counts_complete: true },
+      { date: "2026-10-28", feed_requests: 0, article_requests: 2, counts_complete: true },
+    ]);
+  } finally { await fetcher.close(); }
+});
 
 test("technical admission uses access and words, not publication age or selection", () => {
   const { at, article } = recording();
@@ -57,7 +101,7 @@ test("measured quality rejection stays unresolved and is counted once without a 
   const { at, context: plannerContext, source, article } = recording();
   const candidate = article(10).candidate!;
   const diagnostics = HarvestDiagnosticsSchema.parse({
-    http_status: 200, robots: "allowed", failure_code: "too_short", stopped_stage: "extract",
+    http_status: 200, failure_code: "too_short", stopped_stage: "extract",
     detail: "too_short",
     quality: {
       source_word_count: 10, word_count: 10, corroborated_word_count: null,
@@ -79,7 +123,7 @@ test("measured quality rejection stays unresolved and is counted once without a 
   const rejected = HarvestArticleResultSchema.parse({
     candidate: null, rejection,
     observation: {
-      candidate_id: candidate.candidate_id, http_status: 200, robots: "allowed", fetch_failure: null,
+      candidate_id: candidate.candidate_id, http_status: 200, fetch_failure: null,
       paywall: false, paywall_evidence: "none", extraction: "success", observed_at: at, diagnostics,
     },
   });

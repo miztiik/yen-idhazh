@@ -48,6 +48,8 @@ test("preflight uses the global age ceiling, inclusive boundary and future toler
       { title: "Published", path: "published", date: "2026-10-22T11:00:00Z" },
       { title: "Settled failure", path: "settled", date: "2026-10-22T11:00:00Z" },
       { title: "Blocked marker", path: "https://fool.com/the-ascent/blocked", date: "2026-10-22T11:00:00Z" },
+      { title: "Earlier permission refusal", path: "admitted-one", date: "2026-10-22T11:00:00Z" },
+      { title: "Earlier policy lookup failure", path: "admitted-two", date: "2026-10-22T11:00:00Z" },
     ];
     recordings.bodies.rss = feed(items);
     for (const item of items.slice(1)) recordings.responses[
@@ -72,17 +74,23 @@ test("preflight uses the global age ceiling, inclusive boundary and future toler
       ledger: "item-health", registryEntry: planner.registrations.item_health, outputRoot: root,
       ledgerSettings: planner.ledgerSettings, rowContract: ItemHealthFailureProjectionContract,
       period: { tier: "raw", covers: "2026-10-22" }, writerContext: run.writer,
-      rows: [ItemHealthFailureProjectionSchema.parse({
+      rows: [{
         date: "2026-10-22", url_key: deriveUrlKey(settledUrl), outcome: "failed", code: "network_error",
-      })],
+      }, {
+        date: "2026-10-22", url_key: deriveUrlKey("https://news.example/admitted-one"), outcome: "failed", code: "robots_denied",
+      }, {
+        date: "2026-10-22", url_key: deriveUrlKey("https://news.example/admitted-two"), outcome: "failed", code: "robots_unreachable",
+      }].map(row => ItemHealthFailureProjectionSchema.parse(row)),
     });
     const history = await readExclusionEvidence({
-      root, now: "2026-10-22T12:00:00Z", publishedWindowDays: 1, settledFailureCodes: ["network_error"],
+      root, now: "2026-10-22T12:00:00Z", publishedWindowDays: 1,
+      settledFailureCodes: ["network_error", "robots_denied", "robots_unreachable"],
       publishedRegistration: planner.registrations.published, itemHealthRegistration: planner.registrations.item_health,
       publishedDays: [{ day: "2026-10-21", raw_files: published.files.map(file => file.path) }],
       settledFailureDays: [{ day: "2026-10-22", raw_files: settled.files.map(file => file.path) }],
     });
     run.exclusions = { ...history, published_window_days: 1 };
+    expect([...history.settled_failure_codes]).toEqual([[deriveUrlKey(settledUrl), "network_error"]]);
     const result = await harvestFeeds(loaded, run, { transport });
     expect(result.rejections.map(row => row.drop_reason).sort()).toEqual([
       "ALREADY_PUBLISHED", "BLOCKED_URL_MARKER", "REJECTED_SCREENING_AGE_CEILING", "SETTLED_FAILURE",
@@ -105,15 +113,15 @@ test("preflight uses the global age ceiling, inclusive boundary and future toler
     expect(early.rejection?.details.age_hours).toBeCloseTo(36 + 1 / 3600, 8);
     expect(early.rejection?.details.max_age_hours).toBe(36);
     expect(early.observation).toMatchObject({
-      extraction: "not-attempted", http_status: null, paywall: null, robots: null,
+      extraction: "not-attempted", http_status: null, paywall: null,
       preflight_freshness: { timing_source: "published_at", timing_at: items[0]!.date },
     });
-    expect(result.candidates.map(row => row.entry_ordinal)).toEqual([1, 2, 3, 4, 5]);
+    expect(result.candidates.map(row => row.entry_ordinal)).toEqual([1, 2, 3, 4, 5, 9, 10]);
     expect(result.candidates.every(row => row.candidate_id === deriveCandidateId(run.writer.run_id, row.feed_id, row.entry_ordinal))).toBe(true);
     expect(result.discovered_candidates.map(row => row.url_key)).toContain(deriveUrlKey(publishedUrl));
     expect(result.discovered_candidates.map(row => row.url_key)).toContain(deriveUrlKey(settledUrl));
     expect(result.discovered_candidates.map(row => row.url_key)).not.toContain(deriveUrlKey(blockedUrl));
-    expect(result.feed_outcomes[0]).toMatchObject({ parsed_count: 9, harvested_count: 5 });
+    expect(result.feed_outcomes[0]).toMatchObject({ parsed_count: 11, harvested_count: 7 });
     expect(result).not.toHaveProperty("rejection_files");
   } finally { await rm(root, { recursive: true, force: true }); }
 });

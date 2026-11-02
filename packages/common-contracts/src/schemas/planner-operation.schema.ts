@@ -7,7 +7,7 @@ import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
 import { HttpResponseEvidenceSchema, RequestProfileSchema } from "./http-response-evidence.schema";
 import { RequestPacingSettingsSchema } from "./config.schema";
 
-export const OPERATION_VERSION = "2026-11-01" as const;
+export const OPERATION_VERSION = "2026-11-02" as const;
 const OperationVersionSchema = z.literal(OPERATION_VERSION).default(OPERATION_VERSION);
 export const SourceArticleOutcomeSchema = z.strictObject({
   disposition: z.enum(["admitted", "source_refused"]),
@@ -20,7 +20,7 @@ export const SourceArticleOutcomeSchema = z.strictObject({
 export type SourceArticleOutcome = z.infer<typeof SourceArticleOutcomeSchema>;
 export const RequestIdSchema = z.uuid({ version: "v4" });
 export const FetchAttemptSchema = z.strictObject({
-  phase: z.enum(["validation", "robots", "target"]), sequence: CountSchema, retry: CountSchema,
+  phase: z.enum(["validation", "target"]), sequence: CountSchema, retry: CountSchema,
   duration_ms: CountSchema, backoff_ms: CountSchema.nullable().default(null),
   retry_total_ms: CountSchema.nullable().default(null),
   http_status: z.int().min(100).max(599).nullable(),
@@ -39,15 +39,13 @@ export const NetworkFailureDetailsSchema = z.strictObject({
   response_evidence: HttpResponseEvidenceSchema.nullable(),
   pacing_time_ms: CountSchema.nullable().default(null),
   pacing_settings: RequestPacingSettingsSchema.nullable().default(null),
-  robots_response_evidence: HttpResponseEvidenceSchema.nullable(),
-  robots_http_status: FetchAttemptSchema.shape.http_status,
-  robots_failure: FetchFailureSchema.nullable(),
   attempt: FetchAttemptSchema.nullable(),
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
-    { version: OPERATION_VERSION, change: "Retain request pacing waits and effective settings in failure details." },
-    { version: OPERATION_VERSION, change: "Validate body-free failure details separately from flexible log fields." },
+    { version: OPERATION_VERSION, change: "Retain only target request failures and response evidence." },
+    { version: "2026-11-01", change: "Retain request pacing waits and effective settings in failure details." },
+    { version: "2026-11-01", change: "Validate body-free failure details separately from flexible log fields." },
   ],
 });
 export type NetworkFailureDetails = z.infer<typeof NetworkFailureDetailsSchema>;
@@ -61,12 +59,10 @@ export const FetchedDocumentSchema = z.strictObject({
   version: OperationVersionSchema,
   fetch_item_type: z.enum(["feed", "article"]), canonical_url: UrlSchema, article_id: Sha256Schema, feed_id: SlugSchema,
   body: z.string().nullable(), http_status: z.int().min(100).max(599).nullable(),
-  failure: FetchFailureSchema.nullable(), robots: z.enum(["allowed", "denied", "unknown"]).nullable(),
-  error_code: FetchAttemptSchema.shape.error_code, robots_failure: FetchFailureSchema.nullable(),
-  robots_http_status: z.int().min(100).max(599).nullable(),
+  failure: FetchFailureSchema.nullable(),
+  error_code: FetchAttemptSchema.shape.error_code,
   body_limit: BodyLimitEvidenceSchema.nullable().default(null),
   response_evidence: HttpResponseEvidenceSchema.nullable().default(null),
-  robots_response_evidence: HttpResponseEvidenceSchema.nullable().default(null),
   requested_url: UrlSchema.nullable().default(null),
   final_attempted_url: UrlSchema.nullable().default(null),
   failed_url: UrlSchema.nullable().default(null),
@@ -88,7 +84,7 @@ export const FetchedDocumentSchema = z.strictObject({
   if (value.body === null ? value.body_sha256 !== null : value.body_sha256 === null) {
     ctx.addIssue({ code: "custom", message: "body and body digest must be available together" });
   }
-  const bodyLimitFailure = value.failure === "body-too-large" || value.robots_failure === "body-too-large";
+  const bodyLimitFailure = value.failure === "body-too-large";
   if ((value.body_limit !== null && !bodyLimitFailure)
     || (bodyLimitFailure && value.body_limit === null)) {
     ctx.addIssue({ code: "custom", message: "current body-limit failures require their measured cutoff evidence" });
@@ -108,10 +104,10 @@ export const FetchedDocumentSchema = z.strictObject({
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
-    { version: OPERATION_VERSION, change: "Preserve request pacing waits and effective settings." },
-    { version: OPERATION_VERSION, change: "Add native response, profile and safe request-address evidence." },
-    { version: OPERATION_VERSION, change: "Require current fetched documents without older-format readers." },
-    { version: "2026-10-30", change: "Retain configured response limits and observed cutoff bytes." },
+    { version: OPERATION_VERSION, change: "Remove robots fields and attempts from current fetched documents." },
+    { version: "2026-11-01", change: "Preserve request pacing waits and effective settings." },
+    { version: "2026-11-01", change: "Add native response, profile and safe request-address evidence." },
+    { version: "2026-11-01", change: "Require current fetched documents without older-format readers." },
     { version: "2026-10-28", change: "Earlier changes are in this file's Git history." },
   ],
 });

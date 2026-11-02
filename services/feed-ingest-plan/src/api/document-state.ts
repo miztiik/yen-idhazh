@@ -5,7 +5,7 @@ import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { createRunHealth } from "../run-health";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
-import { createPermittedFetcher } from "../harvest-feeds/robots-policy";
+import { createSourceFetcher } from "../harvest-feeds/fetch-source";
 import { preparePlanningHealth } from "./prepare-planning-health";
 import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
 import { deriveFeedIdentity } from "../harvest-feeds/feed-identity";
@@ -32,7 +32,7 @@ export type DocumentState = ExecutionStateBase & {
   plan_owned?: boolean;
   harvest_rejections?: CandidateRejectionRecord[];
   kind: "document"; history: Awaited<ReturnType<typeof preparePlanningHealth>>;
-  work: ReturnType<typeof createRunHealth>; fetcher: ReturnType<typeof createPermittedFetcher>;
+  work: ReturnType<typeof createRunHealth>; fetcher: ReturnType<typeof createSourceFetcher>;
   config_sha256: string;
   fetch_request_ids: Set<string>;
   baseline: RunHistory;
@@ -99,7 +99,7 @@ export async function documentState(record: DocumentOperationContext, inputs: Pl
           inputs.harvest.sources.map(source => sourceSnapshot(source)), history.sources,
           { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls,
             clock: runtime.observation_clock ?? (() => new Date()) }),
-        fetcher: createPermittedFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),
+        fetcher: createSourceFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),
         config_sha256: record.config_sha256, fetch_request_ids: new Set<string>(), baseline, discovered_rows: [], started,
         api_timings: [{ operation: "feed-health-before-fetch", duration_ms: Math.round(performance.now() - historyStarted), status: "completed" }],
         health_written: false, health_fingerprint: null, owns_choice: false,

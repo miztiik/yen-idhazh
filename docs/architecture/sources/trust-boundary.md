@@ -126,9 +126,9 @@ The isolated TypeScript planner instead uses
 It rejects unsafe schemes, credentials, local names and explicit private or
 reserved addresses before each manual redirect dispatch. Impit resolves
 hostnames; this path has no project DNS lookup, socket address pinning or
-DNS-rebinding protection. It keeps native browser headers and matches general
-`User-agent: *` robots rules, not browser-specific groups. Feed requests observe
-permission; articles preserve their configured enforce-or-observe policy.
+DNS-rebinding protection. It keeps native browser headers and fetches only
+the required feed and article targets. It does not retrieve, parse or enforce
+robots files, and has no robots policy setting or permission result.
 Python's transport, permission rules and declared identity remain unchanged.
 
 ### Permission is a value, and a target without it is never requested

@@ -301,6 +301,14 @@ jobs:
           bun run check
           bun run test
 
+      - name: TypeScript feed probe
+        if: needs.scope.outputs.code == 'true'
+        working-directory: packages/feed-probe
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+          bun run test
+
       - name: Live TypeScript RAM and optional copy proof
         if: needs.scope.outputs.code == 'true'
         run: bun run services/host-probes/scripts/feed-ingest-plan-profile-proof.ts

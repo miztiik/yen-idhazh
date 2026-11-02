@@ -1,6 +1,6 @@
 # Feed rest and retirement
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-02
 
 How does a planner run reuse a supported feed decision without a separate state store?
 
@@ -31,7 +31,7 @@ Table A
 | A5 | Minimum confirmed failure episode age | 36 hours must also have elapsed. |
 
 Both retirement gates must hold on a new confirmed failing recovery check.
-Only target HTTP 404, 410 or 5xx advances that count. Timeouts, robots results,
+Only target HTTP 404, 410 or 5xx advances that count. Timeouts,
 local parse failures, uncertain transport and interruption cannot prove
 retirement. A valid parsed feed, including an empty feed, resets the episode.
 

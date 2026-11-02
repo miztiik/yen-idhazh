@@ -1,6 +1,6 @@
 /** Keep rejected offers out of HTTP work and assemble collection snapshots only at stage boundaries. */
 import { expect, test } from "bun:test";
-import { ParsedFeedBatchSchema } from "@idhazh/common-contracts";
+import { ParsedFeedBatchSchema, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { stageStore } from "../src/api/stage-store";
 import { collectionForRun } from "../src/api/collection-operation";
 import { recordedPlan } from "./plan-recordings";
@@ -58,7 +58,7 @@ test("explicit health reads capture current collection work without allowing pre
   const fixture = await recordedPlan();
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   const id = randomUUID();
-  const post = (path: string, body: unknown) => app.request(`/api/2026-10-31/${path}`, {
+  const post = (path: string, body: unknown) => app.request(`${PLANNER_API_PREFIX}/${path}`, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   });
   try {
@@ -84,7 +84,7 @@ test("explicit health reads capture current collection work without allowing pre
     expect((await post("select-articles", { batch_id: captured.batch_id })).status).toBe(409);
     expect((await post("collections/cancel", { collection_id: id })).status).toBe(200);
     expect(collection.signal.signal.aborted).toBe(true);
-    expect(fixture.transport.requests.filter(request => request.url.pathname !== "/robots.txt")).toHaveLength(1);
+    expect(fixture.transport.requests).toHaveLength(1);
     expect(collection.state.work.rows().some(row => row.checked_at !== null)).toBe(true);
     const outcome = FinalizedCollectionSchema.parse(await (await post("collections/finalize", {
       collection_id: id, failure_code: "PLANNER_EXECUTION_FAILED",
@@ -105,7 +105,7 @@ test("cancellation drains owned requests and retains partial accounting without 
     <item><title>Pending article</title><link>https://news.example/timeout</link></item></channel></rss>`;
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   const id = randomUUID();
-  const post = (path: string, body: unknown) => app.request(`/api/2026-10-31/${path}`, {
+  const post = (path: string, body: unknown) => app.request(`${PLANNER_API_PREFIX}/${path}`, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   });
   let pending: Promise<Response> | undefined;

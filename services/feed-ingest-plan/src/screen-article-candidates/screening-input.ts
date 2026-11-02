@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   FeedIngestCandidateSchema, NonEmptySchema,
   NonNegativeSchema, RunIdSchema, Sha256Schema,
-  DateStampSchema, ItemHealthFailureCodeSchema, CountSchema,
+  DateStampSchema, ItemHealthFailureCodeSchema, PlannerItemFailureCodeSchema, CountSchema,
 } from "@idhazh/common-contracts";
 import { HarvestObservationSchema } from "@idhazh/feed-ingest-plan/harvest-feeds";
 import type { HarvestObservation } from "@idhazh/feed-ingest-plan/harvest-feeds";
@@ -28,7 +28,13 @@ const ExclusionsSchema = z.strictObject({
   settled_failure_codes: z.record(Sha256Schema, ItemHealthFailureCodeSchema),
   matched_published_keys: z.record(Sha256Schema, Sha256Schema).optional(),
   matched_failure_keys: z.record(Sha256Schema, Sha256Schema).optional(),
-});
+}).transform(value => ({
+  ...value,
+  settled_failure_codes: Object.fromEntries(Object.entries(value.settled_failure_codes).flatMap(([key, code]) => {
+    const eligible = PlannerItemFailureCodeSchema.safeParse(code);
+    return eligible.success ? [[key, eligible.data]] : [];
+  })),
+}));
 
 export type ScreeningInput = {
   candidates: readonly FeedIngestCandidate[];
@@ -37,7 +43,7 @@ export type ScreeningInput = {
   planning: PlanningConfig;
   clock_config: { collect: { max_future_hours: number } };
   run: { now: string; run_id: string; correlation_id: string };
-  exclusions?: z.infer<typeof ExclusionsSchema>;
+  exclusions?: z.input<typeof ExclusionsSchema>;
 };
 
 export function validateScreeningInput(input: ScreeningInput) {

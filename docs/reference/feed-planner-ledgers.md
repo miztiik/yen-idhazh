@@ -189,8 +189,10 @@ screened evidence, candidate rejections and rejected-article rows use
 `feed_url`, `title`, lifecycle `status` and unit-interval `weight`.
 Enclosing private payloads must validate that same current source shape;
 a fetched-document body does not embed it.
-Discovery, health and file envelopes retain `2026-10-31`; progress events
-and fetched-document operation declarations retain `2026-11-01`.
+Discovery and file envelopes retain `2026-10-31`. Health rows, progress events,
+fetched documents, failed-input metadata and probe output use `2026-11-02`.
+Private selected and partitioned batches use `SELECTED_FEED_BATCH_VERSION`,
+independently of the unchanged selected-article record stamp.
 Plan runs use `2026-11-02` with required nullable selection metrics.
 Readers verify physical fields, file identity and canonical
 digest against the current format. Older formats refuse with diagnostics.
@@ -229,14 +231,13 @@ totals or add together saved rolling reliability results.
 | C5 | `feed_id` | Feed/run/day | Identify the feed |
 | C6 | `endpoint_key` | Feed/run/day | Prevent a changed feed URL inheriting the old endpoint's state |
 | C7 | `checked_at` | Feed/run/day | Actual feed-check time; nullable when this work day had no feed check |
-| C8 | `permission` | Feed/run/day | Allowed, denied or unknown as observed for this work |
 | C9 | `availability` | Feed/run/day | Supported computed eligibility, rest, retirement or unknown state |
 | C10 | `strikes` | Feed/run/day | Observed logical failure streak; a supported lower bound when earlier history is partial, null before known checks |
 | C11 | Removed | - | UTC rest deadlines replace skipped-run counting |
 | C12 | `last_failure_code` | Feed/run/day | Explain the run's latest feed failure without free-text payloads |
 | C13 | `status` | Feed/run/day | Actual feed HTTP status; nullable; not catalog membership |
 | C14 | `reliability.productive` | Captured lookback | Productive reads in the measured lookback used for this run |
-| C15 | `reliability.attempted` | Captured lookback | Evidence-bearing reads; excludes rest/robots skips |
+| C15 | `reliability.attempted` | Captured lookback | Evidence-bearing reads; excludes rest skips |
 | C16 | `reliability.success_fraction` | Captured lookback | Measured productive fraction, saved downward to three decimal places |
 | C18 | `reliability.from_day` | Captured lookback | Beginning of the represented evidence window |
 | C19 | `reliability.through_day` | Captured lookback | End of that window |
@@ -250,7 +251,6 @@ totals or add together saved rolling reliability results.
 | C27 | `articles_selected` | Run counters | Selected opportunities from this feed in this run/day |
 | C28 | `feed_requests` | Run counters | Actual feed requests, including retries/redirects |
 | C29 | `article_requests` | Run counters | Actual article requests |
-| C30 | `robots_requests` | Run counters | Actual robots requests; cache reuse adds zero |
 | C31 | `counts_complete` | Run counters | Flag incomplete accounting; unknown counts remain null |
 | C32 | `rejection_counts[].reason_code` | Run counters | Aggregate rejection reason |
 | C33 | `rejection_counts[].count` | Run counters | Number rejected for that grouped reason |
@@ -260,9 +260,9 @@ totals or add together saved rolling reliability results.
 | C37 | `rejection_counts[].attribution` | Run counters | Feed, pipeline or unknown for failures; null for ordinary exclusions |
 | C38 | `attempt` | Feed/run/day | Retain the run attempt when compacted rows from different executions coexist |
 | C39 | `items` | Feed/run/day | Existing distinct-offered-URL count used to decide whether the feed read was productive |
-| C40 | `outcome` | Feed/run/day | Native download/permission result, not parsed validity; combined with C39 for read productivity |
+| C40 | `outcome` | Feed/run/day | Native target-download result, not parsed validity; combined with C39 for read productivity |
 | C41 | `check_request_id` | Feed/run/day | Actual logical check identity; null for carried-only rows |
-| C42 | `check_result` | Feed/run/day | Parsed validity or typed HTTP, timeout, robots, transport, local or interrupted result |
+| C42 | `check_result` | Feed/run/day | Parsed validity or typed HTTP, timeout, transport, local or interrupted result |
 | C43 | `rest_until` | Saved calculation | Supported UTC recovery deadline |
 | C44 | `first_confirmed_failure_at` | Saved calculation | UTC first observed confirmed failure in the known episode; partial history does not claim an earlier unseen start |
 | C45 | `failed_recovery_checks` | Saved calculation | Observed qualifying confirmed recovery failures; partial history does not claim an exact earlier total |
@@ -275,13 +275,14 @@ Retired field IDs: C3 moved to D16; C4 moved to D17; C17 moved to D21. These
 settings belong once to the run, rather than repeated on every feed row or
 assumed constant across compacted files. The API supplies
 `reliability.window_days` from the linked D21 value.
+Fields C8 and C30 are removed, with no replacement columns.
 
 Run counters are accumulated during that run only. Daily opportunity counts
 sum those per-run decisions; they do not claim unique articles across the day.
 Planning yield is calculated from selected/candidate counts. Request totals
 measure spend, not blame.
 
-`outcome` preserves the native download/permission result. An HTTP success
+`outcome` preserves the native target-download result. An HTTP success
 can therefore record `ok` even when the feed is empty or parsing fails.
 `last_failure_code = FEED_PARSE_FAILED` identifies the latter; it does not
 rewrite the download outcome. A human-facing feed read result combines that
@@ -525,27 +526,28 @@ no permanent compatibility API.
 
 | ID | Service | Method and full path | Current role |
 | --- | --- | --- | --- |
-| K1 | Feed planner | `GET /api/2026-10-31/health` | Implemented: listener/enablement check only, not a feed-reliability query |
-| K2 | Feed planner | `POST /api/2026-10-31/plan` | Runs the shared stages and finalizes the five ledgers and selected text artifact |
-| K3 | Feed planner | `POST /api/2026-10-31/fetch` | Implemented fetch for either a configured feed or an explicitly permitted article |
-| K4 | Feed planner | `POST /api/2026-10-31/parse` | Consumes one live fetched feed or article without network calls; feed parsing returns body-free offers and a server-owned batch |
-| K5 | Feed planner | `POST /api/2026-10-31/select-articles` | Implemented combined admission/ranking; no selection-idempotency requirement or input-count cap |
-| K6 | Feed planner | `POST /api/2026-10-31/partition-articles` | Implemented worker assignment/bin packing; does not reselect |
-| K7 | Feed planner | `POST /api/2026-10-31/persist-selected-articles` | Writes B without text and produces its text-bearing artifact; the removed persistence route returns ordinary HTTP 404 |
-| K8 | Feed planner | `POST /api/2026-10-31/feed-health-state` | Explicit `summarize` or `record` for a server-owned batch; returns C, request spend, the reliability window and actual write receipts when recorded |
+| K1 | Feed planner | `GET /api/2026-11-02/health` | Implemented: listener/enablement check only, not a feed-reliability query |
+| K2 | Feed planner | `POST /api/2026-11-02/plan` | Runs the shared stages and finalizes the five ledgers and selected text artifact |
+| K3 | Feed planner | `POST /api/2026-11-02/fetch` | Fetches only a configured feed or operator-authorized article target and its validated redirect hops |
+| K4 | Feed planner | `POST /api/2026-11-02/parse` | Consumes one live fetched feed or article without network calls; feed parsing returns body-free offers and a server-owned batch |
+| K5 | Feed planner | `POST /api/2026-11-02/select-articles` | Implemented combined admission/ranking; no selection-idempotency requirement or input-count cap |
+| K6 | Feed planner | `POST /api/2026-11-02/partition-articles` | Implemented worker assignment/bin packing; does not reselect |
+| K7 | Feed planner | `POST /api/2026-11-02/persist-selected-articles` | Writes B without text and produces its text-bearing artifact; the removed persistence route returns ordinary HTTP 404 |
+| K8 | Feed planner | `POST /api/2026-11-02/feed-health-state` | Explicit `summarize` or `record` for a server-owned batch; returns C, target-only request spend, the reliability window and actual write receipts when recorded |
 | K9 | Host fingerprints | `GET /api/2026-10-20/health` | Implemented separate service health check |
 | K10 | Host fingerprints | `POST /api/2026-10-20/fingerprint` | Implemented optional machine collection/persistence; not mandatory planner evidence |
 | K11 | Host probes | `GET /api/2026-10-20/sample` | Implemented standalone machine CPU/RAM sample |
 | K12 | Host probes | `POST /api/2026-10-24/start-task-profile` | Implemented optional explicitly pinned process profiling |
 | K13 | Host probes | `POST /api/2026-10-24/stop-task-profile` | Implemented stop/readback for that profile |
 | K14 | Host probes | `POST /api/2026-10-24/cache/latency` | Implemented optional owned cache benchmark; not planner article timing |
-| K15 | Feed planner | `POST /api/2026-10-31/collections` | Starts one run-owned collection and captures eligible feeds, run identity and policy |
-| K16 | Feed planner | `POST /api/2026-10-31/collections/complete` | Requires terminal feed/article work, saves discovery and harvested rejections, and returns the complete global batch |
-| K17 | Feed planner | `POST /api/2026-10-31/collections/cancel` | Cancels owned work, blocks partial-input selection, and returns rejection receipts and a partial-health batch reference |
-| K18 | Safe persist | `GET /api/2026-10-31/health` | Confirms the separately supervised delivery child, not planner enablement or feed health |
-| K19 | Safe persist | `POST /api/2026-10-31/safe-persist-data` | Reuses verified current metadata delivery through `safe_persist_data`; accepts only run number, attempt and exact completed paths |
-| K20 | Feed planner | `POST /api/2026-10-31/collections/finalize` | Drains owned work and raw diagnostics, then returns final status, failure cause and actual timing snapshot |
-| K21 | Feed planner | `POST /api/2026-10-31/collections/release` | Releases a finalized run/attempt after health summary; makes its in-memory batch eligible for bounded eviction |
+| K15 | Feed planner | `POST /api/2026-11-02/collections` | Starts one run-owned collection and captures eligible feeds, run identity and policy |
+| K16 | Feed planner | `POST /api/2026-11-02/collections/complete` | Requires terminal feed/article work, saves discovery and harvested rejections, and returns the complete global batch |
+| K17 | Feed planner | `POST /api/2026-11-02/collections/cancel` | Cancels owned work, blocks partial-input selection, and returns rejection receipts and a partial-health batch reference |
+| K18 | Safe persist | `GET /api/2026-11-02/health` | Confirms the separately supervised delivery child, not planner enablement or feed health |
+| K19 | Safe persist | `POST /api/2026-11-02/safe-persist-data` | Reuses verified current metadata delivery through `safe_persist_data`; accepts only run number, attempt and exact completed paths |
+| K20 | Feed planner | `POST /api/2026-11-02/collections/finalize` | Drains owned work and raw diagnostics, then returns final status, failure cause and actual timing snapshot |
+| K21 | Feed planner | `POST /api/2026-11-02/collections/release` | Releases a finalized run/attempt after health summary; makes its in-memory batch eligible for bounded eviction |
+| K22 | Feed planner | `POST /api/2026-11-02/collections/exists` | Reports collection ownership after an ambiguous startup response without starting work |
 
 The health responses belong to separate listeners; planner and safe persist use
 the same versioned path at different workflow steps. The standalone RAM
@@ -553,6 +555,8 @@ HTTP proof uses K11; it is not another RAM API. The ledger writer is a library
 and CLI, not an additional HTTP service. The safe-persist endpoint reuses the
 existing delivery package and adapter. No `GET /feeds` or read-only
 `GET /feed-health-state` route currently exists.
+Planner and delivery routes use the shared `PLANNER_API_PREFIX` for
+`2026-11-02`; earlier dated routes have no alias.
 
 K3 uses `feed_id`, not an old `source_id` alias. Article work can reference a
 server-owned `batch_id` and `offer_id`; an explicit operator URL remains a
@@ -574,7 +578,7 @@ K8 and selection. It is not K1's listener health response.
 | --- | --- | --- | --- |
 | L1 | Lifecycle/rest | `feedback.lifecycle_window_days = 31` represented UTC days | Use the newest named represented days, not 31 fabricated consecutive dates; preserve endpoint and native rest ordering |
 | L2 | Feed-read reliability | `collect.reliability_window_days = 30` represented days; `collect.reliability_floor = 0.5` | Productive / evidence-bearing feed reads, with the configured floor; keep the existing feed metric and expose incomplete evidence |
-| L3 | Request-spend report | `feedback.request_report_closed_days = 7` closed UTC calendar days | Sum observed feed/article/robots request spend, not a waste score or ranking penalty |
+| L3 | Request-spend report | `feedback.request_report_closed_days = 7` closed UTC calendar days | Sum observed feed/article target request spend, not a waste score or ranking penalty |
 
 **Confirmed decision:** Retain the seven-day component as a feed request-spend
 report only. Remove the qualified causal request-waste score. Its
@@ -612,10 +616,10 @@ The shared operation:
    than the request and the nearest start when end dates match. Existing
    partial-evidence handling remains when no such window is known.
    Adjust only known entering/leaving reads; recover from actual outcome/items
-   evidence only when a calculation is missing or unusable. Exclude rest/robots
+   evidence only when a calculation is missing or unusable. Exclude rest
    skips, retain counts, bounds and completeness, and never add saved fractions.
 5. Calculate the L3 report over the seven closed UTC days ending yesterday,
-   relative to D22. Sum C28-C30 and return report bounds and completeness.
+   relative to D22. Sum C28-C29 and return report bounds and completeness.
    Unknown request coverage is exposed; do not infer waste, blame or zero cost.
 6. Record the run's own health counters in C. Do not copy cumulative seven- or
    31-day request totals into each new run's counter fields. K8 returns the
@@ -657,14 +661,14 @@ published-payload ceiling in `config/idhazh.json`.
 | M4 | `url_key`, `feed_id` | Canonical URL hash and supplying feed |
 | M5 | `stage`, `reason_code` | Terminal harvest failure or final screening/curation refusal; retained rows accept bounded historical reason strings |
 | M6 | `freshness_cutoff_at` | Applied UTC age cutoff, or null when no cutoff was applied |
-| M7 | `http_status` | Actual article response status, or null if not observed; never the robots response |
+| M7 | `http_status` | Actual article target response status, or null if not observed |
 | M8 | `fetch_failure` | Typed terminal download failure, or null when no fetch failure was observed |
 | M9 | `error_code` | Validated low-level transport code, or null if not observed |
-| M10 | `robots` | Observed `allowed`, `denied` or `unknown` permission, or null before observation |
-| M11 | `robots_http_status` | Actual robots response status, or null if not observed |
-| M12 | `robots_failure` | Typed robots download failure, or null if not observed |
 | M13 | `pacing_time_ms` | Measured total queue wait for the fetch, or null when unmeasured |
 | M14 | `pacing_settings` | Effective domain delay, publisher delay, jitter and enable setting |
+
+Field IDs M10-M12 are retired. Current rows have no permission fields or
+placeholders.
 
 Current curation emits only `REJECTED_DUPLICATE_CANONICAL_CARRIER` for an
 unchosen carrier of a selected URL and `REJECTED_GLOBAL_CAPACITY_REACHED` for
@@ -697,7 +701,7 @@ remain grouped and never count these detail rows again.
 The workflow report verifies the current run's named rejection files and uses
 these fields in Needs attention. Terminal execution/candidate identities are
 counted once, and their detail replaces covered health aggregates rather than
-adding a second article count. Article and robots response codes stay separate.
+adding a second article count. Target status and transport failure stay distinct.
 Earlier pause explanations use validated staged health checks, not rejection
 rows or parsed job logs; see the
 [report evidence rules](../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures).
@@ -819,8 +823,10 @@ pushes without rerunning producers or changing the caller's checkout.
   and planner classifications.
 - Keep technical admission, safety, freshness, selection and partitioning.
   Article quality is not judged here.
-- DNS, pinned-address, redirect, robots and sanitization checks remain. Reduced
-  permission history does not authorize a fetch or weaken those checks.
+- TypeScript URL/name/literal-address, redirect and sanitization checks remain.
+  Its transport does not perform project DNS lookup or socket pinning.
+  Robots retrieval, parsing, enforcement, cache and permission fields are absent;
+  Python's separate fetching policy is unchanged.
 - Actual existing published/item outcomes remain external exclusion inputs.
   They are not written or inferred by planning.
 - Ordinary planning does not require machine fingerprints or CPU/RAM/cache/copy
@@ -896,7 +902,7 @@ It returns independent `uses`: `request_totals`, `feed_rest`,
 `packages/common-contracts/src/schemas/feed-health-fields.schema.ts`:
 
 - Every use requires `date`, `run_id`, `attempt`, `feed_id` and `endpoint_key`.
-- Request totals require `feed_requests`, `article_requests` and `robots_requests`.
+- Request totals require only `feed_requests` and `article_requests`.
 - Lifecycle reads expose the saved C9-C10 and C43-C49 calculation plus actual
   C7, C13, C39-C42 check facts for independent recovery.
 - Reliability reads expose its saved C14-C21 calculation and the actual read
@@ -913,6 +919,10 @@ missing or invalid counters are omitted from partial rows, never replaced with
 zero. This lets a later request report account for each counter independently.
 File coverage (`complete`, `represented`, file `gaps`) is separate from field
 coverage: `complete` alone never proves every required counter is known.
+Earlier extra columns still participate in the whole-file digest, but removed
+robots columns do not affect request completeness. A retired enum value in a
+required outcome or check field is an invalid-field gap, not a translated
+result; independently valid saved calculations remain available in partial rows.
 
 Identical copies of a fact count once. Conflicting copies refuse the affected
 fact before projection and produce identity-bearing gaps. Unrelated valid
@@ -942,7 +952,7 @@ entering boundary day. Selection and explicit health summaries calculate their
 report from those records without reopening history. Missing report-only files
 remain explicit gaps and do not prevent collection.
 
-The request report adds each usable feed, article and robots counter
+The request report adds each usable feed and article counter
 independently, including individually valid fields from partial rows.
 Absent, invalid and null counters remain unknown; a known zero is retained.
 For each feed and counter, `coverage` declares `status` (`complete`, `partial`

@@ -6,6 +6,8 @@ import { createPlanApp, servePlan } from "../src/api/server";
 import { requestPlannerHttp } from "../scripts/feed-ingest-plan-http-client";
 import { recordedPlan } from "./plan-recordings";
 import { collectionForRun } from "../src/api/collection-operation";
+import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-state.schema";
 
 test("a disabled listener fails before planning and remains under its caller's control", async () => {
   const fixture = await recordedPlan();
@@ -15,7 +17,7 @@ test("a disabled listener fails before planning and remains under its caller's c
   try {
     const directory = join(fixture.directory, "evidence");
     await mkdir(directory);
-    const base = `http://${fixture.inputs.settings.listener.hostname}:${server.port}/api/2026-10-31`;
+    const base = `http://${fixture.inputs.settings.listener.hostname}:${server.port}${PLANNER_API_PREFIX}`;
     await expect(requestPlannerHttp(base, fixture.inputs, {}, directory))
       .rejects.toThrow("Planner listener is not enabled and responsive");
     expect(fixture.transport.requests).toHaveLength(0);
@@ -42,9 +44,20 @@ test("the workflow reads health before releasing the finalized collection", asyn
   try {
     const directory = join(fixture.directory, "evidence");
     await mkdir(directory);
-    const base = `http://127.0.0.1:${server.port}/api/2026-10-31`;
+    const base = `http://127.0.0.1:${server.port}${PLANNER_API_PREFIX}`;
     const result = await requestPlannerHttp(base, fixture.inputs, {}, directory);
     expect(result.health).toBeDefined();
+    expect(fixture.transport.requests.map(request => request.url.href).sort()).toEqual([
+      "https://news.example/feed.xml", "https://news.example/story/", "https://news.example/second",
+    ].sort());
+    const health = FeedHealthStateUpdateResponseSchema.parse(result.health);
+    expect(health.rows.reduce((sum, row) => sum + row.feed_requests!, 0)).toBe(1);
+    expect(health.rows.reduce((sum, row) => sum + row.article_requests!, 0)).toBe(2);
+    expect(health.rows.every(row => row.counts_complete)).toBe(true);
+    for (const row of health.rows) {
+      expect(row).not.toHaveProperty("permission");
+      expect(row).not.toHaveProperty("robots_requests");
+    }
     const summary = calls.findIndex(call => call.path.endsWith("/feed-health-state")
       && typeof call.body === "object" && call.body !== null && "action" in call.body && call.body.action === "summarize");
     const release = calls.findIndex(call => call.path.endsWith("/collections/release"));

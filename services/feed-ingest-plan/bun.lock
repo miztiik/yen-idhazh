@@ -18,7 +18,6 @@
         "ipaddr.js": "2.5.0",
         "linkedom": "0.18.13",
         "parquet-wasm": "^0.9.0",
-        "robots-parser": "3.0.1",
         "tidy-url": "1.18.3",
         "tldts": "^7.4.19",
         "turndown": "7.2.4",
@@ -131,8 +130,6 @@
     "parquet-wasm": ["parquet-wasm@0.9.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/parquet-wasm/-/parquet-wasm-0.9.0.tgz", {}, "sha512-3txonYEwEymakuL1WBsljZDvlke103pHzsp/xZzyRuyYeE9pGVLqYMe4L8/a2H+n+d7XEnmcIFBUJ5BYbyEhtg=="],
 
     "path-expression-matcher": ["path-expression-matcher@1.6.2", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/path-expression-matcher/-/path-expression-matcher-1.6.2.tgz", {}, "sha1-VnxzwHGX6dzvJOkO3NxXEFZZkWg="],
-
-    "robots-parser": ["robots-parser@3.0.1", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/robots-parser/-/robots-parser-3.0.1.tgz", {}, "sha1-PYo836isJAy7BipL0W/MDg+57SM="],
 
     "strnum": ["strnum@2.5.1", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/strnum/-/strnum-2.5.1.tgz", { "dependencies": { "anynum": "^1.0.1" } }, "sha512-UM4nTLWzQiDBseVxUGxN0wJzIk0UU89Qi7pKXz9qISo+lhviJikTuikBsK/oFRlpvYHvSdz0TVoLyQ+sEpYwxA=="],
 

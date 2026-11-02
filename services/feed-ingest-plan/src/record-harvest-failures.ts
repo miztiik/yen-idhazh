@@ -24,8 +24,7 @@ export async function recordHarvestFailures(
       candidate_id: rejection.candidate_id, url_key: rejection.url_key, feed_id: rejection.feed_id,
       stage: rejection.stage, reason_code: rejection.drop_reason, freshness_cutoff_at: null,
       http_status: details.http_status, fetch_failure: details.fetch_failure,
-      error_code: details.error_code, robots: details.robots,
-      robots_http_status: details.robots_http_status, robots_failure: details.robots_failure,
+      error_code: details.error_code,
       pacing_time_ms: details.pacing_time_ms, pacing_settings: details.pacing_settings,
     }));
   }

@@ -53,10 +53,13 @@ type RecordedRoute = {
 };
 
 class RecordedFeedTransport implements HarvestTransport {
+  readonly requests: TransportRequest[] = [];
   constructor(private readonly routes: ReadonlyMap<string, RecordedRoute>) {}
 
   async request(input: TransportRequest): Promise<TransportResponse> {
-    const route = this.routes.get(input.url.href) ?? { status: 404, body: "" };
+    this.requests.push(input);
+    const route = this.routes.get(input.url.href);
+    if (route === undefined) throw new Error(`Missing recorded response for ${input.url.href}; network is not permitted`);
     return {
       status: route.status,
       body: route.body,
@@ -270,7 +273,6 @@ test("real core pass and report exit zero with recorded transport", async () => 
   const feed = await existingFeedFixture("feed.xml");
   const article = await existingFeedFixture("readable-article.html");
   const boundary = await recordedBoundary({
-    "https://fixture.test/robots.txt": { status: 404, body: "" },
     "https://fixture.test/feed.xml": { status: 200, body: feed },
     "https://fixture.test/article-one": { status: 200, body: article },
     "https://fixture.test/article-two": { status: 200, body: article },
@@ -315,6 +317,11 @@ test("real core pass and report exit zero with recorded transport", async () => 
     expect(report.passed).toBe(true);
     expect(reportText).not.toContain("<html");
     expect(reportText).not.toContain("A readable fixture article");
+    expect(reportText).not.toContain('"robots');
+    expect(boundary.transport.requests.map(request => request.url.href)).toEqual([
+      "https://fixture.test/feed.xml", "https://fixture.test/article-one",
+      "https://fixture.test/article-two", "https://fixture.test/article-three",
+    ]);
   } finally {
     await removeNamedFile(traceRelative);
     await removeNamedFile(reportRelative);
@@ -323,7 +330,6 @@ test("real core pass and report exit zero with recorded transport", async () => 
 
 test("real core feed failure returns exit one with a body-free trace", async () => {
   const boundary = await recordedBoundary({
-    "https://fail-fixture.test/robots.txt": { status: 404, body: "" },
     "https://fail-fixture.test/feed.xml": { status: 404, body: "" },
   });
   const traceRelative = "backend/var/probes/cli-fail-test.jsonl";
@@ -341,6 +347,7 @@ test("real core feed failure returns exit one with a body-free trace", async () 
       },
     );
     expect(exit).toBe(1);
+    expect(boundary.transport.requests.map(request => request.url.href)).toEqual(["https://fail-fixture.test/feed.xml"]);
     expect(stderr.join("\n")).toContain("failed/total: 1/1");
     const traceText = await Bun.file(join(repositoryRoot, traceRelative)).text();
     const report = JSON.parse(traceText.trim());

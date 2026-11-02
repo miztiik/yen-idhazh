@@ -96,12 +96,12 @@ export class RecordedTransport implements HarvestTransport {
   constructor(readonly recordings: Recordings) {}
 
   async request(input: TransportRequest): Promise<TransportResponse> {
+    this.requests.push(input);
+    this.on_request?.(input);
     input.signal.throwIfAborted();
     const url = input.url.href;
     const responses = this.recordings.responses[url];
     if (!responses) throw new Error(`No recorded response for ${url}; network is not permitted`);
-    this.requests.push(input);
-    this.on_request?.(input);
     const index = this.positions.get(url) ?? 0;
     this.positions.set(url, index + 1);
     const response = responses[Math.min(index, responses.length - 1)];
@@ -186,11 +186,9 @@ export async function readSafety() {
       expected: z.boolean(),
     })),
     invalid_url_exclusions: z.array(z.unknown()),
-    robots: z.array(z.object({
-      name: z.string(), body: z.string(), allowed: z.array(z.string()), denied: z.array(z.string()),
-    })),
-    robots_responses: z.array(ResponseSchema.extend({
-      expected: z.enum(["robots-denied", "robots-unknown"]).nullable(),
+    rate_limit_response: ResponseSchema,
+    target_errors: z.array(z.object({
+      error: z.string(), failure: z.enum(["dns", "network"]), error_code: z.string().nullable(),
     })),
   }).parse(raw);
 }

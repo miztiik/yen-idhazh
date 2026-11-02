@@ -38,7 +38,7 @@ Table C - PR-shaped outcomes
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Read health history by required fields across row-version dates | - | A | DONE | shiny-fiesta | - | - |
-| C2 | 2 | Remove robots behavior from TypeScript ingestion end-to-end | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Remove robots behavior from TypeScript ingestion end-to-end | 1 | B | IN-FLIGHT | didactic-succotash | - | Remove typescript robots checks |
 
 ## 2 - API and data contracts
 

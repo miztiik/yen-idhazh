@@ -1,7 +1,7 @@
 /** What supported lifecycle decision follows one completed logical feed check? */
 import { definitelyAfter, FeedLifecycleFieldsSchema } from "@idhazh/common-contracts";
 import type { FeedCheckResult, FeedHealthStateRow, FeedLifecycleFields, FeedLifecyclePolicy } from "@idhazh/common-contracts";
-import type { FetchResult } from "../harvest-feeds/robots-policy";
+import type { FetchResult } from "../harvest-feeds/fetch-source";
 
 const millisecondsPerHour = 3_600_000;
 export type FeedCheck = Pick<FeedHealthStateRow, "check_request_id" | "check_result" | "checked_at" | "status">;
@@ -75,7 +75,6 @@ export function classifyFeedFetchFailure(fetched: Pick<FetchResult, "failure" | 
       ? "confirmed-http-failure" : "other-http-failure";
   }
   if (fetched.failure === "timeout") return "timeout";
-  if (fetched.failure === "robots-denied" || fetched.failure === "robots-unknown") return "robots";
   return fetched.failure === "unsafe-target" ? "local-failure" : "transport-unknown";
 }
 

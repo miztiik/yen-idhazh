@@ -12,12 +12,13 @@ import {
 } from "../src/api/collection-contracts";
 import { rawDocumentContentsPath } from "../src/selected-artifact-path";
 import { FetchResponseSchema } from "../src/api/document-response.schema";
+import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 
 test("unfinished or cancelled collection cannot be selected and a feed cannot be claimed twice", async () => {
   const fixture = await recordedPlan();
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const prefix = "/api/2026-10-31";
+  const prefix = PLANNER_API_PREFIX;
   const id = randomUUID();
   try {
     const begun = await app.request(`${prefix}/collections`, post({ collection_id: id, request: {} }));
@@ -44,15 +45,12 @@ test("standalone and collection fetches share their domain queue", async () => {
   fixture.inputs.harvest.config.harvest.request_pacing = {
     enabled: true, domain_delay_ms: 50, publisher_delay_ms: 0, jitter_ms: 0,
   };
-  fixture.transport.recordings.responses["https://news.example/robots.txt"] = [{
-    status: 200, body: "User-agent: *\nAllow: /\n",
-  }];
   fixture.transport.recordings.responses["https://news.example/second-feed.xml"] = [{
     status: 200, fixture: "rss",
   }];
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const prefix = "/api/2026-10-31";
+  const prefix = PLANNER_API_PREFIX;
   const collectionId = randomUUID();
   const collection = await app.request(`${prefix}/collections`, post({ collection_id: collectionId, request: {} }));
   expect(collection.status).toBe(200);
@@ -77,9 +75,11 @@ test("standalone and collection fetches share their domain queue", async () => {
     })));
     const responses = await Promise.all(pending);
     expect(responses.map(response => response.status)).toEqual([200, 200]);
-    expect(fixture.transport.requests).toHaveLength(4);
+    expect(fixture.transport.requests.map(request => request.url.href)).toEqual([
+      "https://news.example/feed.xml", "https://news.example/second-feed.xml",
+    ]);
     expect(fixture.transport.peak).toBe(1);
-    expect(starts).toHaveLength(4);
+    expect(starts).toHaveLength(2);
     for (let index = 1; index < starts.length; index++) {
       expect(starts[index]! - starts[index - 1]!).toBeGreaterThanOrEqual(40);
     }
@@ -97,7 +97,7 @@ test("active execution input remains pinned and an expired batch cannot reopen h
   const { run_number: _run, ...runtime } = fixture.runtime;
   const app = createPlanTestServer(fixture.inputs, runtime);
   const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const prefix = "/api/2026-10-31";
+  const prefix = PLANNER_API_PREFIX;
   const first = randomUUID();
   const second = randomUUID();
   try {
@@ -136,7 +136,7 @@ test("final status uses checked work, not carry rows, and raw finish errors keep
   const fixture = await recordedPlan();
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const prefix = "/api/2026-10-31";
+  const prefix = PLANNER_API_PREFIX;
   const id = randomUUID();
   try {
     expect((await app.request(`${prefix}/collections`, post({ collection_id: id, request: {} }))).status).toBe(200);

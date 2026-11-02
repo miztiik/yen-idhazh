@@ -1,6 +1,6 @@
 /** Complete a bounded recorded collection through its public stages, without choosing or planning. */
 import { randomUUID } from "node:crypto";
-import { ParsedFeedBatchSchema } from "@idhazh/common-contracts";
+import { ParsedFeedBatchSchema, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../src/load-plan-inputs";
 import type { PlanRuntime } from "../src/run-feed-plan";
 import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-response.schema";
@@ -12,7 +12,7 @@ export async function collectRecordedFeeds(inputs: PlanInputs, runtime: PlanRunt
   const app = createPlanTestServer(inputs, runtime);
   const collectionId = randomUUID();
   async function post(operation: string, value: unknown) {
-    const response = await app.request(`/api/2026-10-31/${operation}`, {
+    const response = await app.request(`${PLANNER_API_PREFIX}/${operation}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(value),
     });
     const body: unknown = await response.json();

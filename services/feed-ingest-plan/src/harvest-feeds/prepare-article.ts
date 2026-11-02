@@ -38,7 +38,7 @@ export function prepareArticle(offered: OfferedArticle, inputs: HarvestInputs, c
     title: resolveArticleTitle(entry.title, null), categories: entry.categories,
   };
   const observation: HarvestArticleResult["observation"] = {
-    candidate_id: candidateId, http_status: null, robots: null, fetch_failure: null, paywall: null,
+    candidate_id: candidateId, http_status: null, fetch_failure: null, paywall: null,
     paywall_evidence: "not-observed", extraction: "not-attempted", observed_at: utcTimestamp(context.clock), diagnostics: null,
   };
   const reject = (reason: DropReason, details: Partial<RejectionDetails> = {}, measured = observation) => ({
@@ -49,7 +49,7 @@ export function prepareArticle(offered: OfferedArticle, inputs: HarvestInputs, c
     candidate_id: candidateId, identity, article, observation,
   });
   if (unsafe) {
-    const diagnostics = fetchDiagnostics({ body: null, http_status: null, failure: "unsafe-target", robots: null }, 0);
+    const diagnostics = fetchDiagnostics({ body: null, http_status: null, failure: "unsafe-target" }, 0);
     return reject("FETCH_FAILED", { diagnostics }, { ...observation, fetch_failure: "unsafe-target", diagnostics });
   }
   if (identity === null || !entry.link) return reject("MISSING_REQUIRED_FIELDS");

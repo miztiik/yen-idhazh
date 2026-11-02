@@ -37,6 +37,5 @@ export function resolveArticleSourceOutcome(
 
 export function hasArticleCapture(article: HarvestArticleResult) {
   return article.candidate !== null || article.observation.extraction !== "not-attempted"
-    || article.observation.fetch_failure !== null || article.observation.http_status !== null
-    || article.observation.robots !== null;
+    || article.observation.fetch_failure !== null || article.observation.http_status !== null;
 }

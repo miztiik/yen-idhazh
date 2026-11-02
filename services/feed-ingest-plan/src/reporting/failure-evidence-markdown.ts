@@ -19,9 +19,6 @@ function describeArticleFailure(article: RejectedArticleRow) {
     article.http_status === null ? "article response status unavailable" : `article HTTP ${article.http_status}`,
     ...(article.fetch_failure === null ? [] : [`fetch result: ${article.fetch_failure}`]),
     ...(article.error_code === null ? [] : [`transport code: ${article.error_code}`]),
-    ...(article.robots === null ? [] : [`robots permission: ${article.robots}`]),
-    ...(article.robots_http_status === null ? [] : [`robots HTTP ${article.robots_http_status}`]),
-    ...(article.robots_failure === null ? [] : [`robots result: ${article.robots_failure}`]),
   ];
   return `${describeReason(article.reason_code)} (${facts.join("; ")})`;
 }
@@ -45,7 +42,7 @@ function describeCheck(check: FeedHealthRestFields) {
   const names = {
     "valid-feed": "Valid feed response", "confirmed-http-failure": "Confirmed feed HTTP failure",
     "other-http-failure": "Feed HTTP failure", timeout: "Feed request timed out",
-    robots: "Feed robots restriction", "transport-unknown": "Feed transport failure",
+    "transport-unknown": "Feed transport failure",
     "local-failure": "Local feed-check failure", interrupted: "Feed check interrupted",
   };
   const http = check.check_result === "confirmed-http-failure" || check.check_result === "other-http-failure";
@@ -163,7 +160,7 @@ export function renderFailureEvidence(
         "| Id | Feed or scope | Problem | Observed impact | Evidence period | Next eligible check (UTC) |",
         "| --- | --- | --- | --- | --- | --- |",
         ...rows.map((item, index) => `| B${index + 1} | ${[item.scope, item.problem, item.impact, item.period, item.next].map(escapeMarkdown).join(" | ")} |`),
-        "", "An eligible check is not a scheduled request. A saved HTTP status is a response, not an underlying cause. Robots responses describe automated-access rules, not the article. Terminal article failures are counted once, not once per retry.",
+        "", "An eligible check is not a scheduled request. A saved HTTP status is a response, not an underlying cause. Terminal article failures are counted once, not once per retry.",
       ] : ["No recorded problems in the supplied run and availability evidence."]),
     ].join("\n"),
     notice: `${rows.length} attention items in saved evidence.`,

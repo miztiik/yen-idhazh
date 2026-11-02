@@ -65,7 +65,7 @@ export async function fixtureInput(options: { count?: number; words?: number[] }
     batch_id: randomUUID(), config_sha256: "b".repeat(64), context, request: {},
     candidates,
     observations: Object.fromEntries(candidates.map(candidate => [candidate.candidate_id, {
-      candidate_id: candidate.candidate_id, http_status: 200, paywall: false, robots: "allowed",
+      candidate_id: candidate.candidate_id, http_status: 200, paywall: false,
       fetch_failure: null, extraction: "success", paywall_evidence: "none", observed_at: context.now,
     }])),
     discovered: { availability: "unavailable" },

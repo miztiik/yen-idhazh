@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { RawDocumentFailureSchema, NetworkFailureDetailsSchema } from "@idhazh/common-contracts";
+import { RawDocumentFailureSchema, NetworkFailureDetailsSchema, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { rawDocumentContentsFilename, rawDocumentContentsPath, ArtifactRootSchema } from "../src/selected-artifact-path";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
 import { finishRawDocumentFailures, failureMetadata } from "../src/dump-raw-document-failure";
@@ -18,7 +18,10 @@ import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-re
 function assertBodyFree(value: unknown) {
   if (value === null || typeof value !== "object") return;
   for (const [key, nested] of Object.entries(value)) {
-    expect(["body", "article_text", "body_sample", "text_sample", "run_id", "transport"]).not.toContain(key);
+    expect([
+      "body", "article_text", "body_sample", "text_sample", "run_id", "transport",
+      "robots", "robots_failure", "robots_http_status", "robots_response_evidence", "body_limit_source",
+    ]).not.toContain(key);
     assertBodyFree(nested);
   }
 }
@@ -31,7 +34,7 @@ test("actual parse failures write and package metadata under one validated gener
   const requestId = randomUUID();
   const correlationId = randomUUID();
   async function post(operation: string, body: unknown) {
-    const response = await app.request(`/api/2026-10-31/${operation}`, {
+    const response = await app.request(`${PLANNER_API_PREFIX}/${operation}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     });
     expect(response.status).toBe(200);
@@ -119,8 +122,8 @@ test("actual parse failures write and package metadata under one validated gener
 test("required network evidence survives clean and rejected flexible details without admitting caller secrets", () => {
   const evidence = NetworkFailureDetailsSchema.parse({
     requested_url: "https://news.example/input?page=2", final_attempted_url: null,
-    failed_url: "https://news.example/robots.txt?token=private", http_status: 503, request_profile: "firefox",
-    response_evidence: null, robots_response_evidence: null, robots_http_status: 503, robots_failure: "http", attempt: null,
+    failed_url: "https://news.example/article?token=private", http_status: 503, request_profile: "firefox",
+    response_evidence: null, attempt: null,
   });
   const base = {
     run_id: "2026-10-21-700", correlation_id: randomUUID(), occurred_at: "2026-10-21T23:59:59Z",
