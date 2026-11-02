@@ -97,7 +97,8 @@ cancellation of a thread future.
 
 Shutdown closes admission, cancels owned requests and loading, and awaits
 owned recovery and stop operations within its declared deadline. A client
-disconnect produces one cancellation event and no HTTP status or body.
+disconnect produces one terminal request cancellation event and no HTTP status
+or body.
 Connected cleanup failures preserve the first error and any completed primary
 score. Request text is released at delivery; no result cache or history exists.
 
