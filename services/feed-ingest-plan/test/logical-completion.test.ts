@@ -14,6 +14,7 @@ import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parq
 import { settleHealthRows } from "../src/read-ledger-history/health-summary";
 import { foldDiscoveryHistory } from "../src/read-ledger-history/read-discovered-evidence";
 import { compactRows, registration, writeRows } from "./partition-fixtures";
+import { summarizeSelectionMetrics } from "../src/summarize-selection-metrics";
 
 const day = "2026-10-20";
 const contracts = {
@@ -21,8 +22,12 @@ const contracts = {
   "feed-health-state": FeedHealthStateRowContract, "plan-runs": PlanRunRowContract,
 };
 function facts() {
-  return plannerRecordings(day).map(record => ({
-    ...record, row: record.name === "plan-runs" ? { ...record.row, selected_count: 1 } : record.row,
+  const records = plannerRecordings(day);
+  const selected = SelectedArticleRowContract.schema.parse(records.find(record => record.name === "selected-articles")!.row);
+  return records.map(record => ({
+    ...record, row: record.name === "plan-runs" ? {
+      ...record.row, selected_count: 1, selection_metrics: summarizeSelectionMetrics([selected], true),
+    } : record.row,
   }));
 }
 
@@ -77,14 +82,16 @@ test("identical storage copies count once while distinct attempts retain their r
 test("a later explicit zero completion coexists with prior selections and failed-attempt work", async () => {
   const root = await mkdtemp(join(tmpdir(), "planner-zero-result-"));
   try {
-    const runs = [1, 2, 3].map(attempt => PlanRunRowContract.schema.parse({
-      ...plannerRecordings(day, attempt).find(record => record.name === "plan-runs")!.row,
-      selected_count: attempt === 1 ? 1 : 0, status: attempt === 2 ? "partial" : "completed",
-      failure_code: attempt === 2 ? "PLANNER_EXECUTION_FAILED" : null,
-    }));
     const selected = SelectedArticleRowContract.schema.parse(
       plannerRecordings(day).find(record => record.name === "selected-articles")!.row,
     );
+    const runs = [1, 2, 3].map(attempt => PlanRunRowContract.schema.parse({
+      ...plannerRecordings(day, attempt).find(record => record.name === "plan-runs")!.row,
+      selected_count: attempt === 1 ? 1 : 0, status: attempt === 2 ? "partial" : "completed",
+      selection_metrics: attempt === 1 ? summarizeSelectionMetrics([selected], true) : attempt === 2 ? null
+        : { selected_website_groups: 0, selected_feeds: 0, mean_substance_score: null },
+      failure_code: attempt === 2 ? "PLANNER_EXECUTION_FAILED" : null,
+    }));
     const health = [1, 2, 3].map(attempt => FeedHealthStateRowContract.schema.parse({
       ...plannerRecordings(day, attempt).find(record => record.name === "feed-health-state")!.row,
       articles_selected: attempt === 1 ? 1 : 0, article_requests: attempt,

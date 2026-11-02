@@ -5,7 +5,8 @@ import { z } from "zod";
 import {
   CandidateRejectionRecordSchema, FeedIngestCandidateSchema,
   ArticleContentEvidenceSchema,
-  FeedIngestEventSchema, FileEnvelopeSchema, PlannerFileEnvelopeSchema,
+  FeedIngestEventSchema, FileEnvelopeSchema, PlannerFileEnvelopeSchema, PlannerStoredFileEnvelopeSchema,
+  PlannerLedgerNameSchema, PLANNER_ROW_SCHEMA_VERSIONS,
   REASON_STAGES, REQUIRED_DETAILS, RejectionDetailsSchema,
   SourceSnapshotSchema, WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, FetchAttemptSchema, OPERATION_VERSION,
@@ -32,8 +33,7 @@ const url = "https://example.com/article";
 const digest = "a".repeat(64);
 const source = SourceSnapshotSchema.parse({
   feed_id: "example", feed_url: "https://example.com/feed", title: "Example",
-  tier: 4, status: "active",
-  weight: 1, applied_tier_weight: 0.6,
+  status: "active", weight: 1,
 });
 function candidate() {
   return FeedIngestCandidateSchema.parse({
@@ -69,16 +69,18 @@ function selection() {
   return SelectedArticleRowSchema.parse({
     run_id: run, attempt: 1, date: day, url_key: deriveUrlKey(url), feed_id: "example",
     publisher_id: null, canonical_url: url, title: "An article", categories: [],
-    author: null, published_at: at, published_at_source: "selection", tier: 1, weight: 1, applied_tier_weight: 0.5,
+    author: null, published_at: at, published_at_source: "selection", weight: 1,
+    word_count: 3, substance_word_count: 0,
     editorial_rank: 1, estimated_work: 3, worker_assignment: null,
     ratings: {
       base_article_score: 1.5, marginal_score: 1.25, recency_score: 1,
       feed_authority_score: 0.5, adjustments: [
-        { term: "feed-reliability", value: null }, { term: "publisher", value: 0 },
-        { term: "domain", value: -0.25 },
+        { term: "article_pass_rate", value: 0 }, { term: "substance_quality_score", value: 0 },
+        { term: "domain_diversity_penalty", value: -0.25 }, { term: "feed_diversity_penalty", value: 0 },
+        { term: "novelty_bonus", value: 0 },
       ],
     },
-    feed_limit: 3, exploration_slot: false, cap_relaxations: [], freshness_cutoff_at: at,
+    freshness_cutoff_at: at,
     timing_at: at, timing_basis: "first_seen", age_hours: 0,
   });
 }
@@ -101,7 +103,7 @@ function sourceRun() {
 function assessment() {
   return PlanRunRowSchema.parse({
     run_id: run, started_at: at, duration_ms: 0, status: "completed", failure_code: null,
-    selected_count: 0, strategy: "none", dispatch_count: 0, selected_articles_artifact: null,
+    selected_count: 0, selection_metrics: null, strategy: "none", dispatch_count: 0, selected_articles_artifact: null,
     api_timings: [], date: day, attempt: 1, lifecycle_window_days: 31, reliability_floor: 0.5,
     reliability_penalty_enabled: true, evaluated_at: at, request_report_closed_days: 7,
     reliability_window_days: 30, selection_started_at_utc: null,
@@ -324,6 +326,10 @@ describe("rejection evidence", () => {
     expect(SelectedArticleRowSchema.safeParse({ ...row, timing_basis: "fetched_at" }).success).toBe(false);
     expect(SelectedArticleRowSchema.safeParse({
       ...row, published_at_source: "selection", timing_basis: "unavailable", timing_at: null, age_hours: null,
+    }).success).toBe(false);
+    expect(SelectedArticleRowSchema.safeParse({
+      ...row, published_at_source: "selection", timing_basis: "unavailable", timing_at: null, age_hours: null,
+      ratings: { ...row.ratings, recency_score: 0, base_article_score: 0.5, marginal_score: 0.25 },
     }).success).toBe(true);
     expect(SelectedArticleRowSchema.safeParse({
       ...row, published_at_source: "other",
@@ -389,6 +395,22 @@ describe("rejection evidence", () => {
       ...planner, row_schema_version: PLAN_RUN_VERSION,
       ledger: "plan-runs", updated_at: null,
     }).success).toBe(true);
+    for (const ledger of PlannerLedgerNameSchema.options) {
+      const current = PLANNER_ROW_SCHEMA_VERSIONS[ledger];
+      for (const row_schema_version of ["2026-10-25", current, "2027-01-01"]) {
+        const stored = { ...planner, ledger, row_schema_version,
+          updated_at: ledger === "feed-health-state" ? at : null };
+        expect(PlannerStoredFileEnvelopeSchema.parse(stored)).toEqual(stored);
+        expect(PlannerFileEnvelopeSchema.safeParse(stored).success).toBe(row_schema_version === current);
+      }
+    }
+    for (const invalid of [
+      { version: "2026-10-29" }, { row_schema_version: "not-a-date" },
+      { ledger: "feed-health" }, { tier: "compact", period: null },
+      { file_id: row.unit_id }, { updated_at: null },
+    ]) {
+      expect(PlannerStoredFileEnvelopeSchema.safeParse({ ...planner, ...invalid }).success).toBe(false);
+    }
   });
 });
 
@@ -403,19 +425,28 @@ describe("current planner contracts", () => {
     for (const value of [-0.1, 1.1, Infinity, NaN]) expect(FeedHealthStateRowSchema.safeParse({ ...row, reliability: { ...row.reliability, success_fraction: value } }).success).toBe(false);
   });
 
-  test("keeps signed score adjustments distinct from unavailable values", () => {
+  test("requires all finite signed score terms in order and reconstructs their exact components", () => {
     const row = selection();
-    for (const value of [-1, 0, 0.25, null]) {
+    for (const value of [-1, 0, 0.25]) {
       expect(SelectedArticleRowSchema.safeParse({ ...row, ratings: {
-        ...row.ratings, adjustments: [{ term: "domain", value }],
+        ...row.ratings, marginal_score: row.ratings.base_article_score + value,
+        adjustments: row.ratings.adjustments.map(entry =>
+          entry.term === "domain_diversity_penalty" ? { ...entry, value } : entry),
       } }).success).toBe(true);
     }
-    for (const value of [Infinity, NaN]) expect(SelectedArticleRowSchema.safeParse({ ...row, ratings: {
-      ...row.ratings, adjustments: [{ term: "domain", value }],
+    for (const value of [Infinity, NaN, null]) expect(SelectedArticleRowSchema.safeParse({ ...row, ratings: {
+      ...row.ratings, adjustments: row.ratings.adjustments.map(entry =>
+        entry.term === "domain_diversity_penalty" ? { ...entry, value } : entry),
     } }).success).toBe(false);
-    expect(SelectedArticleRowSchema.safeParse({ ...row, ratings: {
-      ...row.ratings, adjustments: [{ term: 7, value: 0 }],
-    } }).success).toBe(false);
+    for (const adjustments of [
+      [], row.ratings.adjustments.slice(1), [...row.ratings.adjustments, row.ratings.adjustments[0]],
+      row.ratings.adjustments.toReversed(), [{ term: "domain", value: 0 }],
+    ]) expect(SelectedArticleRowSchema.safeParse({ ...row, ratings: { ...row.ratings, adjustments } }).success).toBe(false);
+    for (const patch of [
+      { base_article_score: row.ratings.base_article_score + 0.01 },
+      { marginal_score: row.ratings.marginal_score + 0.01 },
+      { recency_score: 0 }, { feed_authority_score: 0 },
+    ]) expect(SelectedArticleRowSchema.safeParse({ ...row, ratings: { ...row.ratings, ...patch } }).success).toBe(false);
   });
 
   test("records explicit empty runs and honest unavailable total duration", () => {

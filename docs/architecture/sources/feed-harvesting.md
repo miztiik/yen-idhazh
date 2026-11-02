@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-02
 
 How do configured feeds become sanitized article candidates?
 This build-time path leaves production Python discovery and extraction
@@ -9,9 +9,9 @@ unchanged. The [trust boundary](trust-boundary.md) governs fetched data.
 ## Public entry
 
 The service exports `loadHarvestInputs`, `readHarvestInputs` and
-`harvestFeeds`. Load the named planning, source, shared kind/tier and
-extraction configuration before work. The taxonomy contributes active source
-kinds and numeric tier weights, not vertical policy or article labels.
+`harvestFeeds`. Load the named planning, source and extraction configuration
+before work. Active feed lifecycle status controls enrollment; the planner
+does not load taxonomy for tier weights, activation or coverage checks.
 
 The actual harvester accepts validated context plus an optional recorded
 source-response boundary. Ordinary execution uses native Impit. One fetcher
@@ -28,11 +28,12 @@ Parsing saved bytes makes no network request.
 
 Candidates retain sanitized content, canonical URL identity, original offered
 ordinal and configured source facts. Those facts include nullable curated
-publisher ID, kind, form, tier, feed weight and applied tier weight.
+publisher ID, feed URL/title, lifecycle status and configured feed weight.
 They contain no inferred vertical, desk, lens, entity or quality judgment.
 
-Configuration fingerprints retain the actual content-affecting inputs.
-Reporting configuration does not change harvested content identity.
+Configuration fingerprints retain only validated inputs used by this planner,
+including effective scoring policy and source weights. The taxonomy registry
+is not an input. Reporting configuration does not change content identity.
 Missing feed fields do not renumber later entries. Page canonical tags,
 scripts and prose never grant a new fetch destination.
 
@@ -184,9 +185,15 @@ not measured optimum values. Zero delays are supported.
 
 Structured configured URL exclusions, real publication history and settled
 item failures can refuse a page before download. A dated entry strictly
-older than the effective global freshness cutoff also stops before page
-and robots requests. Equality remains admitted. An unavailable or too-future
-date retains the later first-sight or unknown-time path.
+older than the effective global known-age ceiling also stops before page
+and robots requests. Its default is 36 hours, or one positive finite run
+override, resolved before work. Equality passes. Trusted publication supplies
+age, otherwise captured first sight; absent usable timing remains unknown
+and eligible with zero recency. A too-future publication cannot manufacture
+freshness. Preflight and [screening](feed-screening.md#gates-and-timing)
+use the same captured UTC age clock and rule. Rejected offers retain
+discoveries, original ordinals and ordinary exclusion accounting without
+becoming technical source failures.
 
 A missing title retains page-title recovery. Actual HTML extraction keeps
 prose and byline but never executes scripts or loads page resources.

@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-02
 
 How do the API and CLI execute one real feed plan?
 Both compose the same units. The production Python news pipeline, digest
@@ -78,16 +78,19 @@ for drain and 5 seconds to confirm forced exit. The child also applies its own
 drain bound if its supervisor disappears. No process is detached, no process
 name is used for cleanup, and runner process tracking remains enabled.
 `POST /api/2026-10-31/plan` accepts optional numeric `article_limit`, `shards`,
-a configured partition strategy, and `institutional_age_hours`,
-`trade_press_age_hours`, `community_age_hours` arrays. Each age array is a
-strictly increasing nonempty list of positive hours. Unknown fields, strings in numeric API
+a configured partition strategy, and one optional `global_age_ceiling_hours`
+value. The age override is positive finite hours, defaulting to the configured
+36-hour ceiling when omitted. Unknown fields, strings in numeric API
 fields, invalid counts and null controls fail before work. CLI blanks mean
 omission. There is no date control.
 
 An article limit bounds the chosen result, not the offered input. Age eligibility
-uses the run's effective source-based age windows, resolved before article
-fetching and reused by screening, selection and reporting. An omitted age
-array retains that bucket's configured windows. Strategy `none` requires one
+uses the run's effective global ceiling, resolved before article fetching and
+reused by screening, selection and reporting. Known age equal to the ceiling
+passes; unknown timing stays eligible with null age and zero recency. The
+effective-policy report names the value and configuration/override origin.
+Retired age-array and allocation controls fail validation, not conversion.
+Strategy `none` requires one
 worker; other counts obey configured partition bounds, currently one through
 twenty with four by default. `partition.enabled=false` bypasses worker
 assignment without bypassing article selection.
@@ -121,6 +124,18 @@ follows selection. When disabled, there is no partition request: selected
 metadata keeps null worker assignments. Health recording and selected output
 are independent writes; useful selected output survives a health-save refusal.
 
+Once selection finishes, the run retains its selected count and
+`selection_metrics`, even if assignment or persistence then fails. A completed
+empty selection has zero website/feed counts and a null mean substance score.
+Null metrics mean selection did not complete, not that it completed with zero
+articles. Standalone selection and partition chains retain that same completion
+evidence in memory and save it with their run outcome. Document-only completion
+has null metrics. A saved standalone persistence failure is terminal for that
+batch: repeating it returns the same failure, not a successful write paired
+with stale failed run facts. A new selection or partition creates a new
+execution. The [audit page](feed-ingest-audit.md) owns the metric
+meanings and report wording; these summaries never change winners or scores.
+
 One execution has isolated run identity, attempt, clocks, counters, timings
 and batches. Run start supplies the accounting date. The saved parsed age
 clock is D19; the fresh selection/feedback clock is D22. Actual HTTP and feed
@@ -134,7 +149,7 @@ subtraction. If the original execution clock is unavailable, total duration
 is null. A restart does not resume a standalone chain.
 
 The [shared history load](planner-feed-history.md) captures saved health,
-discovery, exclusions and publisher linkage before fetching. It retains that
+discovery, publication-URL exclusions and settled failures before fetching. It retains that
 input in the live execution state, then applies actual current work before
 selection and finish. Its complete measured cost belongs in `plan-runs`, without
 per-candidate history reads or a separate persisted summary cache. The same
@@ -205,8 +220,20 @@ files bound its configured lookback. A failed read or missing referenced file
 does not prove absence; a successful empty local membership check does.
 Each execution keeps its new sightings separate from the saved baseline.
 
-The chosen result produces metadata-only Parquet and one text-bearing
-artifact. Health is batched by execution and actual UTC work day. A small
+The [selector](feed-curation.md) scans all admitted numerical records for each
+winner. It chooses the smaller of the article limit and distinct eligible URL
+supply, including through negative scores. Unused slots therefore mean
+exhausted unique supply. Partition assigns workers without reranking or
+backfilling; disabling it does not bypass selection.
+
+The same chosen identities produce metadata-only raw/compact Parquet and one
+original-text artifact. Each carries required `word_count` and
+`substance_word_count`, including measured zero, without recounting or changing
+the body/work estimate. Known timing remains signed and explicit; unknown
+timing remains null/`unavailable` with zero recency. Both variants carry the
+UTC global-policy cutoff, separate from publication fallback provenance.
+Every parsed identity has one screening, selected, duplicate or capacity
+outcome. Health is batched by execution and actual UTC work day. A small
 run row records completed, partial or failed outcome, including an explicit
 empty result. The [ledger reference](../../reference/feed-planner-ledgers.md)
 owns the exact fields and row identities.

@@ -1,6 +1,6 @@
 /** Keep one document chain's actual work and original clock isolated across concurrent requests. */
 import { FetchedDocumentSchema } from "@idhazh/common-contracts";
-import type { PlanApiTiming, CandidateRejectionRecord, DiscoveredArticleRow } from "@idhazh/common-contracts";
+import type { PlanApiTiming, PlanRunRow, CandidateRejectionRecord, DiscoveredArticleRow } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { createRunHealth } from "../run-health";
@@ -26,6 +26,7 @@ type ExecutionStateBase = {
   context: RunContext; started: number | null; api_timings: PlanApiTiming[];
   health_written: boolean; health_fingerprint: string | null; owns_choice: boolean;
   run_result?: Promise<Awaited<ReturnType<typeof recordPlanRun>>>;
+  completed_selection?: Pick<PlanRunRow, "selected_count" | "selection_metrics" | "evaluated_at" | "selection_started_at_utc">;
 };
 export type DocumentState = ExecutionStateBase & {
   plan_owned?: boolean;
@@ -95,7 +96,7 @@ export async function documentState(record: DocumentOperationContext, inputs: Pl
       const history = await preparePlanningHealth(inputs, context.now, { context, rows: [] }, baseline.health);
       return {
         kind: "document", context, history, work: createRunHealth(context,
-          inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source)), history.sources,
+          inputs.harvest.sources.map(source => sourceSnapshot(source)), history.sources,
           { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls,
             clock: runtime.observation_clock ?? (() => new Date()) }),
         fetcher: createPermittedFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),

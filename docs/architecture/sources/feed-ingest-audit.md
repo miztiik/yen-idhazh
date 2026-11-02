@@ -1,6 +1,6 @@
 # Feed planning completion
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-11-02
 
 What saved evidence proves that an isolated planning execution finished?
 The current planner writes its five declared formats and an independent
@@ -19,6 +19,21 @@ separate age and selection clocks, settings used and measured operation
 durations. Empty output is explicit. A missing file is not a zero-row result.
 The [ledger reference](../../reference/feed-planner-ledgers.md) defines every
 retained field.
+
+The required `selection_metrics` value describes actual chosen articles.
+It is null only when selection did not complete. A completed empty selection
+records zero website groups, zero feeds and a null mean substance score.
+A nonempty selection records distinct canonical website groups, distinct feed
+IDs and the arithmetic mean of the chosen substance-score adjustments.
+Website groups use the same configured resolver as
+[selection](feed-curation.md). Feed counts include the first choice from each
+feed even when its configured first-use bonus is zero. They do not measure
+historically new feeds. Substance points measure article shape, not factual
+accuracy. Missing, repeated or non-finite score evidence is an error, not zero.
+
+The operator report reads this saved object. It says "Selection not completed"
+for null metrics, rather than reporting zero diversity. Only the displayed
+mean is rounded using the existing report setting; saved values stay exact.
 
 ## What is checked and written
 
@@ -52,6 +67,14 @@ A failed later stage does not erase completed earlier files. Independent
 selected outputs still finalize when health saving fails, with a partial
 run and a typed cause. An unavailable file, skipped write or mismatched
 readback cannot report completed planning.
+
+Completed selection records retain their metrics and selected count if worker
+assignment or selected-output persistence fails. Both combined runs and
+standalone stage chains save that evidence. A selection-start clock alone does
+not prove that selection finished. Document-only completion and failures
+before a completed selection retain null metrics. Raw and compact plan-run
+Parquet and the run response carry the same native object; packing does not
+recalculate it.
 
 Sparse progress proves observed activity only. It does not prove persistence.
 The independent host instruments are optional and never establish planner

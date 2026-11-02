@@ -1,25 +1,19 @@
 /** Which harvested candidates pass the configured evidence-backed screening gates? */
-import { CandidateRejectionRecordSchema } from "@idhazh/common-contracts";
-import type { CandidateRejectionRecord, EffectiveFeedPolicy, FeedIngestCandidate, RejectionDetails } from "@idhazh/common-contracts";
+import { CandidateRejectionRecordSchema, ScreenedCandidateSchema } from "@idhazh/common-contracts";
+import type { CandidateRejectionRecord, ScreenedCandidate, RejectionDetails } from "@idhazh/common-contracts";
 import { resolvePolicy } from "../config/resolve-policy";
 import { findBlockedCategory } from "./category-guard";
 import { calculateFreshness } from "./freshness-decay";
-import type { FreshnessEvidence } from "./freshness-decay";
 import { matchUrlExclusion, urlExclusionMarker } from "../harvest-feeds/url-exclusions";
 import { validateScreeningInput } from "./screening-input";
-import type { HarvestObservation, ScreeningInput } from "./screening-input";
+import type { ScreeningInput } from "./screening-input";
 import { indexDiscoveredEvidence } from "./discovered-evidence";
 import { matchMediaArticle } from "../harvest-feeds/media-filter";
 import { excludeArticleContent } from "./content-filters";
 import { rejectArticleAge } from "../article-freshness-policy";
+import { createSubstanceScorer } from "./score-article-substance";
 
-export type ScreenedCandidate = {
-  candidate: FeedIngestCandidate;
-  policy: EffectiveFeedPolicy;
-  freshness: FreshnessEvidence;
-  observation: HarvestObservation | null;
-  discovered_availability: ScreeningInput["discovered"]["availability"];
-};
+export type { ScreenedCandidate } from "@idhazh/common-contracts";
 export type ScreeningResult = {
   admitted: ScreenedCandidate[];
   rejections: CandidateRejectionRecord[];
@@ -35,6 +29,7 @@ export async function screenArticleCandidates(
   const admitted: ScreenedCandidate[] = [];
   const rejections: CandidateRejectionRecord[] = [];
   const policy = resolvePolicy(planning);
+  const scoreSubstance = createSubstanceScorer(planning.config.curate_articles.substance);
   for (const candidate of candidates) {
     const observation = observations[candidate.candidate_id] ?? null;
     const freshness = calculateFreshness(candidate, discoveredByUrl.get(candidate.url_key), run.now, maxFutureHours, policy);
@@ -71,10 +66,14 @@ export async function screenArticleCandidates(
     } else if (candidate.word_count < required) {
       rejection = { drop_reason: "REJECTED_SCREENING_MIN_WORDS", details: { words_found: candidate.word_count, words_required: required } };
     } else {
-      rejection = rejectArticleAge(planning.config, candidate.source.tier, freshness.age_hours);
+      rejection = rejectArticleAge(planning.config, freshness.age_hours);
     }
     if (rejection === null) {
-      admitted.push({ candidate, policy, freshness, observation, discovered_availability: discovered.availability });
+      const { substance_word_count, substance_score } = scoreSubstance(candidate.title, candidate.article_text);
+      admitted.push(ScreenedCandidateSchema.parse({
+        candidate, policy, freshness: { ...freshness, substance_word_count, substance_score },
+        observation, discovered_availability: discovered.availability,
+      }));
     } else {
       rejections.push(CandidateRejectionRecordSchema.parse({
         date: run.now.slice(0, 10), correlation_id: candidate.correlation_id,

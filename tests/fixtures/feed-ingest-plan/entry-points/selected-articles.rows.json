@@ -9,39 +9,44 @@
     "author": "Page Reporter",
     "published_at": "2026-10-22T00:00:00Z",
     "published_at_source": "selection",
-    "tier": 2,
     "weight": 0.8,
-    "applied_tier_weight": 0.6,
+    "word_count": 118,
+    "substance_word_count": 112,
     "editorial_rank": 1,
     "estimated_work": 118,
     "worker_assignment": 0,
     "ratings": {
-      "base_article_score": 1.08,
-      "marginal_score": 1.08,
+      "base_article_score": 1.5593333333333332,
+      "marginal_score": 1.7093333333333331,
       "adjustments": [
         {
           "term": "article_pass_rate",
-          "value": null
-        },
-        {
-          "term": "publisher_exposure_current_run",
-          "value": null
-        },
-        {
-          "term": "website_group",
           "value": 0
+        },
+        {
+          "term": "substance_quality_score",
+          "value": 0.15933333333333333
+        },
+        {
+          "term": "domain_diversity_penalty",
+          "value": 0
+        },
+        {
+          "term": "feed_diversity_penalty",
+          "value": 0
+        },
+        {
+          "term": "novelty_bonus",
+          "value": 0.15
         }
       ],
       "recency_score": 0.6,
-      "feed_authority_score": 0.48
+      "feed_authority_score": 0.8
     },
-    "feed_limit": 1,
-    "exploration_slot": false,
-    "cap_relaxations": [],
     "timing_at": "2026-10-21T23:59:59Z",
     "timing_basis": "first_seen",
     "age_hours": 0,
-    "freshness_cutoff_at": "2026-10-19T23:59:59.000Z",
+    "freshness_cutoff_at": "2026-10-20T11:59:59.000Z",
     "run_id": "2026-10-21-700",
     "attempt": 3,
     "date": "2026-10-21"

@@ -8,12 +8,14 @@
     "feed_id": "recorded-news",
     "stage": "curate-article-portfolio",
     "reason_code": "REJECTED_GLOBAL_CAPACITY_REACHED",
-    "freshness_cutoff_at": "2026-10-19T23:59:59.000Z",
+    "freshness_cutoff_at": "2026-10-20T11:59:59.000Z",
     "http_status": null,
     "fetch_failure": null,
     "error_code": null,
     "robots": null,
     "robots_http_status": null,
-    "robots_failure": null
+    "robots_failure": null,
+    "pacing_time_ms": null,
+    "pacing_settings": null
   }
 ]

@@ -57,6 +57,42 @@ async function writeCarriedSummary(
   return { day, raw_files: written.files.map(file => `state/${file.path}`) };
 }
 
+test("saved deadlines and reliability survive different raw and compact row stamps", async () => {
+  const setup = await recording();
+  try {
+    const resting = FeedHealthStateRowSchema.parse({
+      ...setup.row, availability: "resting", strikes: 5, check_result: "confirmed-http-failure",
+      rest_until: "2026-10-27T10:00:00.123Z", first_confirmed_failure_at: "2026-10-25T05:00:00.000Z",
+      status: 503, outcome: "transient", items: 0,
+    });
+    await rewriteHealthFields(setup.path, [resting], schema);
+    const expected = (await preparePlanningHealth(setup.inputs, setup.now)).sources.get(resting.feed_id)!;
+    expect(expected).toMatchObject({
+      lifecycle: "resting", rest_until: resting.rest_until, availability_complete: true,
+      reliability: { productive: 4, attempted: 5, success_fraction: 0.8, production_factor: 0.8, complete: true },
+    });
+    for (const tier of ["raw", "compact"] as const) {
+      let path = setup.path;
+      if (tier === "compact") {
+        const compact = await compactRows(setup.inputs.outputRoot, "feed-health-state", resting.date,
+          FeedHealthStateRowContract, [resting], "monthly");
+        path = compact.path!;
+        await rm(setup.path);
+        setup.inputs.settings.inputs.feed_health_days = [{ day: resting.date, raw_files: [] }];
+      }
+      for (const stamp of ["2026-10-25", FeedHealthStateRowContract.schemaVersion, "2027-01-01"]) {
+        await rewriteHealthFields(path, [resting], schema, { stamp });
+        const before = await readFile(path);
+        const read = await preparePlanningHealth(setup.inputs, setup.now);
+        expect(read.sources.get(resting.feed_id)).toEqual(expected);
+        expect(read.uses.feed_rest.gaps).toEqual([]);
+        expect(read.uses.feed_reliability.gaps).toEqual([]);
+        expect(await readFile(path)).toEqual(before);
+      }
+    }
+  } finally { await setup.close(); }
+});
+
 test("carried reliability reuses the requested saved window even when the availability clock did not change", async () => {
   const setup = await recording();
   try {
@@ -126,7 +162,7 @@ test("saved availability and reliability survive missing check and unrelated acc
     const expected = (await preparePlanningHealth(setup.inputs, setup.now)).sources.get(setup.row.feed_id)!;
     expect(expected.reliability).toMatchObject({ productive: 4, attempted: 5, success_fraction: 0.8, complete: true });
     const variant = schema.omit({ checked_at: true, outcome: true, items: true, article_requests: true });
-    await rewriteHealthFields(setup.path, [variant.parse(setup.row)], variant);
+    await rewriteHealthFields(setup.path, [variant.parse(setup.row)], variant, { stamp: "2026-10-25" });
     const read = await preparePlanningHealth(setup.inputs, setup.now);
     expect(read.sources.get(setup.row.feed_id)).toEqual(expected);
     expect(read.uses.request_totals.partial_rows[0]).not.toHaveProperty("article_requests");
@@ -143,7 +179,7 @@ test("a missing reliability calculation recovers read facts without recalculatin
       status: 503, outcome: "transient", items: 0,
     });
     const variant = schema.omit({ reliability: true });
-    await rewriteHealthFields(setup.path, [variant.parse(resting)], variant);
+    await rewriteHealthFields(setup.path, [variant.parse(resting)], variant, { stamp: "2026-10-25" });
     const result = (await preparePlanningHealth(setup.inputs, setup.now)).sources.get(setup.row.feed_id)!;
     expect(result).toMatchObject({ lifecycle: "resting", strikes: 5, rest_until: resting.rest_until,
       availability_updated_at: resting.availability_updated_at, availability_complete: true });
@@ -247,7 +283,7 @@ test("finalized carry-forward Parquet reloads supported calculations without cla
     const context = resolveRunContext(setup.inputs.settings, setup.runtime.git_sha, new Date(setup.now), "703");
     const baseline = await readPlanningHistory(setup.inputs, setup.now, { context, rows: [] });
     const history = await preparePlanningHealth(setup.inputs, setup.now, { context, rows: [] }, baseline);
-    const source = sourceSnapshot(setup.inputs.harvest, setup.inputs.harvest.sources[0]!);
+    const source = sourceSnapshot(setup.inputs.harvest.sources[0]!);
     const carry = createFeedHealthRow(context, source, history.sources.get(source.feed_id), setup.now);
     const written = await recordFeedHealthState([carry], context, setup.inputs);
     const actual = await readPlannerParquet(join(setup.inputs.outputRoot, written.files[0]!.path), "feed-health-state", FeedHealthStateRowContract);
@@ -270,10 +306,9 @@ test("finalized carry-forward Parquet reloads supported calculations without cla
   } finally { await setup.close(); }
 });
 
-test("a refused old format or corrupt sibling preserves usable current decisions without restoring JSON", async () => {
+test("row stamps do not erase saved decisions beside a corrupt sibling", async () => {
   const setup = await recording();
   try {
-    const original = await readFile(setup.path);
     const sibling = await writeRows(setup.inputs.outputRoot, "feed-health-state", setup.row.date,
       FeedHealthStateRowContract, [{ ...setup.row, run_id: `${setup.row.date}-9000` }]);
     const siblingPath = join(setup.inputs.outputRoot, sibling.files[0]!.path);
@@ -282,11 +317,15 @@ test("a refused old format or corrupt sibling preserves usable current decisions
     let result = await preparePlanningHealth(setup.inputs, setup.now);
     expect(result.sources.get(setup.row.feed_id)).toMatchObject({ lifecycle: "eligible", availability_complete: true });
     expect(result.days[0]!.complete).toBe(false);
-    await rewriteHealthFields(setup.path, [setup.row], schema, { stamp: "2026-10-30" });
-    result = await preparePlanningHealth(setup.inputs, setup.now);
-    expect(result.sources.get(setup.row.feed_id)).toMatchObject({ lifecycle: "unknown", strikes: null,
-      availability_complete: false, reliability: { productive: null, attempted: null, complete: false } });
-    await writeFile(setup.path, original);
+    const expected = result.sources.get(setup.row.feed_id);
+    for (const stamp of ["2026-10-30", "2027-01-01"]) {
+      await rewriteHealthFields(setup.path, [setup.row], schema, { stamp });
+      const before = await readFile(setup.path);
+      result = await preparePlanningHealth(setup.inputs, setup.now);
+      expect(result.sources.get(setup.row.feed_id)).toEqual(expected);
+      expect(result.days[0]!.complete).toBe(false);
+      expect(await readFile(setup.path)).toEqual(before);
+    }
   } finally { await setup.close(); }
 });
 

@@ -1,7 +1,7 @@
 /** Execute one run through validated stage requests and retain honest failure output. */
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { FeedIngestEvent, PlanApiTiming, PlannerArticleEvidence, SelectedArticleRow } from "@idhazh/common-contracts";
+import type { FeedIngestEvent, PlanApiTiming, PlanRunRow, PlannerArticleEvidence, SelectedArticleRow } from "@idhazh/common-contracts";
 import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { harvestFeeds } from "./harvest-feeds/harvest-pool";
@@ -12,6 +12,7 @@ import type { ProgressRecord } from "./logging/progress-logger";
 import { resolvePlanRequest, PlanError } from "./api/plan-request";
 import { createStageLogger } from "./logging/structured-logger";
 import { recordPlanRun } from "./record-plan-run";
+import { summarizeSelectionMetrics } from "./summarize-selection-metrics";
 import { createPlanApp } from "./api/server";
 import {
   CollectionExistsResponseSchema, CollectionResponseSchema, CompletedCollectionSchema, CancelledCollectionSchema,
@@ -84,7 +85,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     createStageLogger(context, runtime.log)("plan", "failed", { failure_code: failureCode });
     const recorded = await recordPlanRun(inputs, context, {
       status: "failed", failure_code: failureCode, duration_ms: Math.round(performance.now() - started),
-      selected_count: 0, dispatch_count: 0, strategy: request.partition_strategy,
+      selected_count: 0, selection_metrics: null, dispatch_count: 0, strategy: request.partition_strategy,
       selected_articles_artifact: null, evaluated_at: context.now, selection_started_at_utc: null,
       api_timings: [{ operation: "feed-health-before-fetch",
         duration_ms: Math.round(performance.now() - started), status: "failed" }],
@@ -96,6 +97,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     const files: Partial<Record<"discovered_articles" | "selected_articles" | "rejected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>> = {};
     const batches: { parsed_batch_id?: string; selection_batch_id?: string; partition_batch_id?: string } = {};
     let selected: z.infer<typeof SelectionResponseSchema> | undefined;
+    let selectionMetrics: PlanRunRow["selection_metrics"] = null;
     let partitioned: z.infer<typeof PartitionResponseSchema> | undefined;
     let artifact: string | null = null;
     let failureCode: string | null = null;
@@ -190,6 +192,8 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       const selection = await call("select-articles", { batch_id: collected.batch_id }, SelectionResponseSchema);
       batches.selection_batch_id = selection.batch_id;
       selected = selection;
+      selectionMetrics = summarizeSelectionMetrics(selection.articles,
+        inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes);
       let outputId = selected.batch_id;
       if (inputs.harvest.config.partition.enabled) {
         const partition = await call("partition-articles", {
@@ -255,6 +259,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     const recorded = await recordPlanRun(inputs, context, {
       duration_ms: Math.round(performance.now() - started), status: outcome.status,
       failure_code: failureCode, selected_count: selected?.articles.length ?? 0,
+      selection_metrics: selectionMetrics,
       strategy: partitioned?.strategy ?? (inputs.harvest.config.partition.enabled ? request.partition_strategy : "none"),
       dispatch_count: partitioned?.dispatch_count ?? 0,
       selected_articles_artifact: artifact, api_timings: outcome.api_timings,

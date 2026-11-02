@@ -65,9 +65,6 @@ RUNS_MAY_OVERLAP: Final = frozenset({"digest.yml"})
 EXPECTED_WORKFLOWS: Final = {
     "backfill.yml": ("Vector backfill", frozenset({"workflow_dispatch"})),
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
-    "source-transport-test.yml": (
-        "Source transport tests", frozenset({"pull_request", "workflow_dispatch"}),
-    ),
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "digest-recovery.yml": ("Digest assembly recovery", frozenset({"workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
@@ -139,6 +136,7 @@ DISPATCH_READ_BY_NAME: Final = "read by name"
 DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("backfill.yml", "commit"): DISPATCH_BOOLEAN,
     ("backfill.yml", "days"): DISPATCH_READ_BY_NAME,
+    ("ci.yml", "capture_planner_recordings"): DISPATCH_BOOLEAN,
     ("digest-recovery.yml", "source_run"): DISPATCH_READ_BY_NAME,
     ("digest-recovery.yml", "check_only"): DISPATCH_BOOLEAN,
     # The one that decides a published address. See the two tests that run the

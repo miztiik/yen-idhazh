@@ -10,7 +10,7 @@ import { RecordedInstantSchema } from "./recorded-instant.schema";
 const screeningMetadata = {
   version: SCREENED_ARTICLE_VERSION,
   changelog: [
-    { version: SCREENED_ARTICLE_VERSION, change: "Declare raw timing, measured substance and text-free selection records." },
+    { version: SCREENED_ARTICLE_VERSION, change: "Require measured substance and source-weight policy without tier allocation." },
   ],
 };
 

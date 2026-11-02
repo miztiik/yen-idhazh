@@ -89,6 +89,62 @@ def test_documentation_only_changes_run_whitespace_not_application_gates() -> No
     assert not scope.get("if")
 
 
+def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs() -> None:
+    workflow = _load_workflows()["ci.yml"]
+    events = _mapping(workflow["on"], "CI events")
+    dispatch = _mapping(events["workflow_dispatch"], "CI dispatch")
+    inputs = _mapping(dispatch["inputs"], "CI inputs")
+    control = _mapping(inputs["capture_planner_recordings"], "planner recorder control")
+    assert control["type"] == "boolean"
+    assert control["default"] == "false"
+    assert control["required"] == "false"
+    job = _job(workflow, "planner-recordings")
+    assert job["if"] == (
+        "github.event_name == 'workflow_dispatch' && inputs.capture_planner_recordings == true"
+    )
+    assert not job.get("continue-on-error")
+    checkout = _step(workflow, "planner-recordings", "uses", "actions/checkout@v6")
+    assert _mapping(checkout["with"], "recorder checkout") == {
+        "ref": "${{ github.sha }}", "persist-credentials": "false",
+    }
+    capture = _step(
+        workflow, "planner-recordings", "name",
+        "Capture current planner recordings from the real offline API",
+    )
+    command = _script(capture, "offline planner recorder").splitlines()
+    assert command == [
+        "set -euo pipefail",
+        "trap 'unset IDHAZH_CAPTURE_PLANNER_RECORDINGS' EXIT",
+        "export IDHAZH_CAPTURE_PLANNER_RECORDINGS=1",
+        "bun run --cwd services/feed-ingest-plan test ./test/plan-entry-points.test.ts "
+        "--test-name-pattern '^one recorded API request writes a valid selected artifact$'",
+    ]
+    assert not capture.get("if")
+    assert not capture.get("continue-on-error")
+    upload = _step(workflow, "planner-recordings", "name", "Upload current planner recordings")
+    assert upload["uses"] == "actions/upload-artifact@v7"
+    assert not upload.get("if")
+    settings = _mapping(upload["with"], "planner recording artifact")
+    assert settings["name"] == "planner-current-recordings"
+    assert settings["if-no-files-found"] == "error"
+    paths = settings["path"]
+    assert isinstance(paths, str)
+    prefix = "tests/fixtures/feed-ingest-plan/entry-points/"
+    assert paths.splitlines() == [
+        prefix + name for name in (
+            "response.json", "health.json", "selected-articles.json",
+            "discovered-articles.rows.json", "selected-articles.rows.json",
+            "rejected-articles.rows.json", "feed-health-state.rows.json", "plan-runs.rows.json",
+        )
+    ]
+    gates = _job(workflow, "gates")
+    assert gates["if"] == "needs.scope.outputs.code == 'true'"
+    planner = _step(workflow, "gates", "name", "TypeScript feed planner and native audit evidence")
+    assert _script(planner, "ordinary planner gates").splitlines() == [
+        "bun install --frozen-lockfile", "bun run check", "bun run test",
+    ]
+
+
 def test_the_robots_job_runs_the_module_the_selector_keys_on() -> None:
     """The selector buys `robots` only when it selects the module this job runs,
     so the two must name the same file."""

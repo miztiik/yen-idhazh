@@ -31,7 +31,7 @@ function feed(items: { title?: string; path: string; date: string | null }[]) {
       item.date === null ? "" : `<pubDate>${item.date}</pubDate>`}</item>`).join("")}</channel></rss>`;
 }
 
-test("preflight uses the configured age ladder, strict boundary and future tolerance without fetching expired pages", async () => {
+test("preflight uses the global age ceiling, inclusive boundary and future tolerance without fetching expired pages", async () => {
   const root = await mkdtemp(join(tmpdir(), "early-age-"));
   try {
     const recordings = await readRecordings();
@@ -39,8 +39,8 @@ test("preflight uses the configured age ladder, strict boundary and future toler
     const run = { ...context(), clock: () => new Date("2026-10-22T12:00:00Z") };
     run.writer = { ...run.writer, run_id: "2026-10-22-700" };
     const items = [
-      { title: "Expired", path: "stale", date: "2026-10-21T05:59:59Z" },
-      { title: "Boundary", path: "boundary", date: "2026-10-22T00:00:00Z" },
+      { title: "Expired", path: "stale", date: "2026-10-20T23:59:59Z" },
+      { title: "Boundary", path: "boundary", date: "2026-10-21T00:00:00Z" },
       { title: "Undated", path: "undated", date: null },
       { title: "Beyond future tolerance", path: "future", date: "2026-10-23T00:00:00Z" },
       { title: "Within future tolerance", path: "near-future", date: "2026-10-22T13:00:00Z" },
@@ -85,7 +85,7 @@ test("preflight uses the configured age ladder, strict boundary and future toler
     run.exclusions = { ...history, published_window_days: 1 };
     const result = await harvestFeeds(loaded, run, { transport });
     expect(result.rejections.map(row => row.drop_reason).sort()).toEqual([
-      "ALREADY_PUBLISHED", "BLOCKED_URL_MARKER", "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE", "SETTLED_FAILURE",
+      "ALREADY_PUBLISHED", "BLOCKED_URL_MARKER", "REJECTED_SCREENING_AGE_CEILING", "SETTLED_FAILURE",
     ]);
     expect(history.history.published).toMatchObject({ required_day_count: 2, known_day_count: 1 });
     expect(history.history.published.missing_days).toHaveLength(1);
@@ -102,8 +102,8 @@ test("preflight uses the configured age ladder, strict boundary and future toler
       url_key: deriveUrlKey(blockedUrl), details: { matched_url_key: deriveUrlKey(blockedUrl), matched_url_marker: "fool.com/the-ascent/" },
     });
     const early = result.articles[0]!;
-    expect(early.rejection?.details.age_hours).toBeCloseTo(30 + 1 / 3600, 8);
-    expect(early.rejection?.details.max_age_hours).toBe(30);
+    expect(early.rejection?.details.age_hours).toBeCloseTo(36 + 1 / 3600, 8);
+    expect(early.rejection?.details.max_age_hours).toBe(36);
     expect(early.observation).toMatchObject({
       extraction: "not-attempted", http_status: null, paywall: null, robots: null,
       preflight_freshness: { timing_source: "published_at", timing_at: items[0]!.date },
@@ -137,7 +137,7 @@ test("collection records early losses once in native health counters without fet
     const stale = rows.find(row => row.feed_id === "recorded-news")!;
     expect(stale).toMatchObject({ items: 2, outcome: "ok", feed_reads: 1, productive_reads: 1, article_candidates: 0, articles_selected: 0 });
     expect(stale.rejection_counts).toEqual([{
-      subject: "article", stage: "harvest-feeds", reason_code: "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE", attribution: null, count: 2,
+      subject: "article", stage: "harvest-feeds", reason_code: "REJECTED_SCREENING_AGE_CEILING", attribution: null, count: 2,
     }]);
     const discoveries = batch.discovered.availability === "available" ? batch.discovered.rows : [];
     for (const path of ["stale-one", "stale-two"]) expect(discoveries.some(row =>
@@ -160,7 +160,7 @@ test("empty RSS and Atom category labels stay valid through candidate and select
     const candidates = entries.map((entry, ordinal) => FeedIngestCandidateSchema.parse({
       date: recorded.date, run_id: recorded.run_id, correlation_id: response.correlation_id,
       candidate_id: deriveCandidateId(recorded.run_id, article.feed_id, ordinal), entry_ordinal: ordinal,
-      feed_id: article.feed_id, source: sourceSnapshot(configured, configured.sources[0]!),
+      feed_id: article.feed_id, source: sourceSnapshot(configured.sources[0]!),
       canonical_url: article.canonical_url, url_key: article.url_key, title: entry.title ?? article.title,
       article_text: article.article_text, word_count: article.article_text.split(/\s+/).length,
       categories: entry.categories, author: entry.author, published_at: entry.published_at, fetched_at: recorded.evaluated_at,

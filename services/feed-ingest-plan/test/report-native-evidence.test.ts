@@ -88,7 +88,7 @@ test("report uses a staged earlier check at the saved pause instant, never a new
     const sourceRoot = fileURLToPath(new URL("../../../", import.meta.url));
     const paths = f.inputs.settings.inputs;
     for (const path of ["config/feed-ingest-plan-service.json",
-      paths.planning, paths.taxonomy, paths.sources, paths.extraction, paths.registrations]) {
+      paths.planning, paths.sources, paths.extraction, paths.registrations]) {
       const destination = join(root, path);
       await mkdir(dirname(destination), { recursive: true });
       await copyFile(join(sourceRoot, path), destination);

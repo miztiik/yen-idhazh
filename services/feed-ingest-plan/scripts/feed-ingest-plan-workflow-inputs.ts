@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { CommitShaSchema, PositiveCountSchema } from "@idhazh/common-contracts";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { parseCliRequest } from "../src/api/plan-request";
-import { parseAgeWindows, resolveRunPolicy, RunPolicyOverridesSchema } from "../src/config/resolve-run-policy";
+import { parseGlobalAgeCeiling, resolveRunPolicy, RunPolicyOverridesSchema } from "../src/config/resolve-run-policy";
 import type { PlanRequest } from "../src/api/plan-request";
 import type { RunPolicyOverrides } from "../src/config/resolve-run-policy";
 import { parseRawDocumentDumpControl, ServiceSettingsSchema } from "../src/config/service-settings";
@@ -26,9 +26,7 @@ export function readWorkflowRequest(environment: Record<string, string | undefin
     if (value !== undefined && value.trim() !== "") args.push(`${flag}=${value}`);
   }
   const overrides = RunPolicyOverridesSchema.parse({
-    institutional_age_hours: parseAgeWindows(environment.INSTITUTIONAL_AGE_HOURS),
-    trade_press_age_hours: parseAgeWindows(environment.TRADE_PRESS_AGE_HOURS),
-    community_age_hours: parseAgeWindows(environment.COMMUNITY_AGE_HOURS),
+    global_age_ceiling_hours: parseGlobalAgeCeiling(environment.GLOBAL_AGE_CEILING_HOURS),
   });
   return { request: parseCliRequest(args).request,
     policy_overrides: Object.fromEntries(Object.entries(overrides).filter(([, value]) => value !== undefined)) };

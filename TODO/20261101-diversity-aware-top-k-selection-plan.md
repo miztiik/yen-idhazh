@@ -84,9 +84,9 @@ Table C
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Prepare contracts and configuration | - | A | DONE | selection-contract-readiness | - | 77e2fd0b-3c3f-4e30-ab1e-c571119a90d7 |
-| C2 | 2 | Add substance scoring during screening | 1 | B | PENDING | - | - | - |
-| C3 | 3 | Replace the selection engine and its consumers | 2 | C | PENDING | - | - | - |
-| C4 | 4 | Add diversity run metrics and audit reporting | 3 | D | PENDING | - | - | - |
+| C2 | 2 | Add substance scoring during screening | 1 | B | DONE | article-substance-scoring | - | 78ec8fbd-56fc-4654-9a07-cec0ec44faa4 |
+| C3 | 3 | Replace the selection engine and its consumers | 2 | C | DONE | diversity-selection-engine | #1889 | c0109686-cc01-482a-ad99-250a1d6fe486 |
+| C4 | 4 | Add diversity run metrics and audit reporting | 3 | D | DONE | saved-selection-metrics | #1890 | c9f89a61-1e61-4c28-8439-3d8302b653cd |
 
 ## 2 - Row 1 - Prepare contracts and configuration
 
@@ -281,6 +281,7 @@ At step `t`, with already selected set `S_(t-1)`, the marginal score for an unse
 - **Scope:** Implement retained-paragraph measurement and the real compromise-based scorer, caching every existing survivor's measured count/score without adding an admission gate or changing selection and original article text.
 - **Files touched:**
   - `TODO/20261101-diversity-aware-top-k-selection-plan.md`
+  - `packages/feed-probe/bun.lock`
   - `services/feed-ingest-plan/package.json`
   - `services/feed-ingest-plan/bun.lock`
   - `services/feed-ingest-plan/src/screen-article-candidates/triage-gates.ts`
@@ -296,6 +297,7 @@ At step `t`, with already selected set `S_(t-1)`, the marginal score for an unse
   - `tests/fixtures/feed-ingest-plan/substance-score-cases.json` (new)
   - `docs/architecture/sources/article-substance-scoring.md` (new with the real scorer)
   - `docs/architecture/sources/feed-curation.md`
+  - `docs/architecture/sources/feed-ingest-policies.md`
   - `docs/architecture/sources/feed-screening.md`
 - **Acceptance gates:** Local: M1/M6, the service check and named screening/scoring/report cases; reuse row 1's unchanged common-contract record. Run the real library against recorded language/paragraph cases, every H1/H2 endpoint and invalid settings. Check K19-K21's unknown-age/empty-view admission, cheap-gate precedence and unchanged technical counts. Run the existing recorded API/CLI journey for output parity; no selected/rejection format or fixture rewrite is introduced here. CI: required checks on this PR candidate.
 - **Oracle:** Recorded articles and bounded boundary inputs produce H1-H13/H28/H29's exact retained counts/components and F2's required evidence. The admitted/refused identities, full-body text/counts and existing selector output stay unchanged, including unknown age and measured zero retained words. Cheap refusals still exit before paragraph analysis. This proves real measurement/cache and admission parity, not complete boilerplate removal, factual quality or final-ranking activation.
@@ -620,6 +622,10 @@ Table P
 - **Scope:** Activate the sole diversity-aware selector, delete the retired runtime and old-only tests, replace obsolete documentation with the new algorithm, and change required contracts and callers in the same cutover.
 - **Files touched:**
   - `TODO/20261101-diversity-aware-top-k-selection-plan.md`
+  - `.github/workflows/ci.yml`
+  - `backend/tests/workflows/test_ci_selection.py`
+  - `backend/tests/workflows/_harness.py`
+  - `backend/tests/workflows/test_triggers.py`
   - `config/feed-ingest-plan.json`
   - `config/feed-ingest-plan-service.json`
   - `packages/common-contracts/src/index.ts`
@@ -658,6 +664,9 @@ Table P
   - `services/feed-ingest-plan/src/curate-article-portfolio/editorial-selection.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/publisher-exposure.ts` (delete)
   - `services/feed-ingest-plan/src/curate-article-portfolio/select-diverse-articles.ts` (new)
+  - `services/feed-ingest-plan/src/reporting/selected-evidence-markdown.ts` (new)
+  - `services/feed-ingest-plan/src/reporting/plan-markdown.ts`
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts`
   - `services/feed-ingest-plan/src/select-articles.ts`
   - `services/feed-ingest-plan/src/api/selection-operation.ts`
   - `services/feed-ingest-plan/src/api/plan-response.schema.ts`
@@ -695,6 +704,8 @@ Table P
   - `services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts`
   - `services/feed-ingest-plan/test/diverse-selection.test.ts` (new)
+  - `services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts`
+  - `services/feed-ingest-plan/test/streamlined-report.test.ts`
   - `tests/fixtures/feed-ingest-plan/portfolio-cases.json`
   - `tests/fixtures/feed-ingest-plan/screening-cases.json`
   - `tests/fixtures/feed-ingest-plan/diverse-selection-cases.json` (new)
@@ -748,19 +759,25 @@ Table R
   - `packages/common-contracts/src/index.ts`
   - `packages/common-contracts/src/version.ts`
   - `packages/common-contracts/src/schemas/plan-run.schema.ts`
+  - `packages/common-contracts/test/rejection.test.ts` (current run constructors and metric validation)
   - `packages/common-contracts/test/schema-binding.ts`
   - `packages/ledger-file-writer/src/registration.ts`
   - `packages/ledger-file-writer/src/validate-planner-files.ts`
   - `packages/ledger-file-writer/test/planner-recordings.ts`
   - `packages/ledger-file-writer/test/parquet-parity.test.ts`
+  - `packages/ledger-file-writer/test/reader-integrity.test.ts` (current plan-run native read-side stamp)
   - `services/feed-ingest-plan/src/summarize-selection-metrics.ts` (new)
   - `services/feed-ingest-plan/src/record-plan-run.ts`
   - `services/feed-ingest-plan/src/run-feed-plan.ts`
   - `services/feed-ingest-plan/src/api/record-standalone-run.ts`
+  - `services/feed-ingest-plan/src/api/document-state.ts` (in-memory completed-selection evidence)
+  - `services/feed-ingest-plan/src/api/selection-operation.ts` (standalone failure recording)
+  - `services/feed-ingest-plan/src/api/partition-operation.ts` (failed-after-selection recording)
   - `services/feed-ingest-plan/src/api/persistence-operation.ts`
   - `services/feed-ingest-plan/src/api/plan-response.schema.ts`
   - `services/feed-ingest-plan/src/read-ledger-history/read-run-history.ts`
   - `services/feed-ingest-plan/src/reporting/run-facts-markdown.ts`
+  - `services/feed-ingest-plan/src/reporting/plan-markdown.ts` (configured mean display precision)
   - `services/feed-ingest-plan/test/selection-metrics.test.ts` (new)
   - `services/feed-ingest-plan/test/plan-recordings.ts`
   - `services/feed-ingest-plan/test/file-baseline-recording.ts`
@@ -769,7 +786,13 @@ Table R
   - `services/feed-ingest-plan/test/plan-engine.test.ts`
   - `services/feed-ingest-plan/test/file-baseline.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts`
+  - `services/feed-ingest-plan/test/run-facts-report.test.ts` (rendered metric states)
+  - `services/feed-ingest-plan/test/logical-completion.test.ts` (native completed-selection fixture facts)
+  - `services/feed-ingest-plan/test/operation-logging.test.ts` (terminal failed batch and fresh execution recovery)
   - `tests/fixtures/feed-ingest-plan/entry-points/response.json`
+  - `tests/fixtures/feed-ingest-plan/entry-points/plan-runs.rows.json` (actual recorder output)
+  - `tests/fixtures/feed-ingest-plan/entry-points/health.json` (actual recorder output)
+  - `tests/fixtures/feed-ingest-plan/entry-points/feed-health-state.rows.json` (actual recorder output)
   - `docs/architecture/sources/feed-ingest-audit.md`
   - `docs/architecture/sources/feed-plan-runner.md`
   - `docs/reference/feed-planner-ledgers.md`

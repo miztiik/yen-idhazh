@@ -1,6 +1,6 @@
 # Feed article partitioning
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-11-02
 
 How are chosen articles assigned to workers without changing the selection?
 Partitioning consumes one validated selected batch and returns the same
@@ -13,8 +13,15 @@ content, invalid ranks, mismatched execution facts and invalid work values
 fail before packing. No file path or caller article list replaces it.
 
 The work estimate is explicit evidence when supplied, otherwise extracted
-word count. Words are a work proxy, not a measured execution duration.
-Unknown timing, publisher and numeric adjustments stay unchanged.
+full-body `word_count`, never the retained-paragraph count. Words are a work
+proxy, not a measured execution duration. Assignment carries the exact selected
+identities, original sanitized text, both required `word_count` and
+`substance_word_count`, ranks and scores without recalculation. A measured
+zero retained count remains zero and cannot exceed the raw count.
+Known signed timing or null/`unavailable` timing, zero unknown-age recency,
+the required UTC policy cutoff and publication provenance stay unchanged.
+Publisher metadata and all five finite signed score adjustments also stay
+unchanged. Partition neither backfills nor reranks.
 
 ## Allocation and persistence
 
@@ -35,9 +42,9 @@ Empty selection has explicit empty metadata and an actual empty artifact.
 
 ## Named history and proof
 
-Current planner readers accept only the declared four-ledger format.
+Current planner readers accept only the declared current five-ledger formats.
 Metadata and artifact must agree on execution, attempt, date, identities,
-order, ranks, scores and assignments. Native verification also checks schema,
+order, both counts, timing, ranks, scores and assignments. Native verification also checks schema,
 footer and canonical digest. A missing selected file cannot stand in for a
 verified empty result.
 

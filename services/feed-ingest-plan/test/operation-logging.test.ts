@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
+import { SelectedFeedBatchSchema } from "@idhazh/common-contracts";
 import { selectedArtifactPath, rawDocumentContentsFilename } from "../src/selected-artifact-path";
 import { createPlanTestServer } from "./plan-test-server";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
@@ -12,6 +13,9 @@ import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
 import { recordedPersistenceBatch } from "./persistence-recordings";
 import { executePersistence } from "../src/api/persistence-operation";
+import { executePartition } from "../src/api/partition-operation";
+import { stageConfigFingerprint } from "../src/api/operation-context";
+import { stageStore } from "../src/api/stage-store";
 
 async function fetchFeed(f: Awaited<ReturnType<typeof recordedPlan>>) {
   const app = createPlanTestServer(f.inputs, f.runtime);
@@ -62,14 +66,22 @@ test("standalone document work logs failure addresses only and persistence logs 
       }
     }
     const batch = await recordedPersistenceBatch(f.inputs, f.runtime);
+    f.inputs.harvest.config.partition.enabled = true;
+    stageStore(f.inputs).replace("selected", SelectedFeedBatchSchema, {
+      ...batch, config_sha256: stageConfigFingerprint(f.inputs, f.runtime),
+    });
+    const assigned = await executePartition({ batch_id: batch.batch_id }, f.inputs, f.runtime);
     const blocked = join(f.directory, selectedArtifactPath(f.inputs.settings.inputs.artifact_root, batch.context));
     await mkdir(blocked, { recursive: true });
-    await expect(executePersistence({ batch_id: batch.batch_id }, f.inputs, f.runtime)).rejects.toThrow();
+    await expect(executePersistence({ batch_id: assigned.batch.batch_id }, f.inputs, f.runtime)).rejects.toThrow();
     expect(f.events.at(-1)).toMatchObject({ operation: "persist", phase: "failed", details: { failure_code: "PERSIST_FAILED" } });
     await rm(blocked, { recursive: true });
-    const persisted = await executePersistence({ batch_id: batch.batch_id }, f.inputs, f.runtime);
+    await expect(executePersistence({ batch_id: assigned.batch.batch_id }, f.inputs, f.runtime)).rejects.toThrow();
+    const recovery = await executePartition({ batch_id: batch.batch_id }, f.inputs, f.runtime);
+    expect(recovery.batch.context.run_id).not.toBe(assigned.batch.context.run_id);
+    const persisted = await executePersistence({ batch_id: recovery.batch.batch_id }, f.inputs, f.runtime);
     const count = f.events.length;
-    expect(await executePersistence({ batch_id: batch.batch_id }, f.inputs, f.runtime)).toEqual(persisted);
+    expect(await executePersistence({ batch_id: recovery.batch.batch_id }, f.inputs, f.runtime)).toEqual(persisted);
     expect(f.events).toHaveLength(count);
     expect(f.events.filter(event => event.operation === "persist").map(event => event.phase))
       .toEqual(["started", "failed", "started", "completed"]);

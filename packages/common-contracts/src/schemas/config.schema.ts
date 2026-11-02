@@ -102,51 +102,17 @@ export const FeedHarvestConfigSchema = z.strictObject({
 export const FeedTriageConfigSchema = FeedScreeningPolicySchema.extend({
   blocked_http_statuses: z.array(z.int().min(100).max(599)),
 });
-export const FeedSoftCapsSchema = z.strictObject({
-  max_source_share: PositiveSchema.max(1),
-  max_website_group_share: PositiveSchema.max(1),
-  min_distinct_sources: PositiveCountSchema,
-  relaxation_order: z.array(z.enum(["distinct_sources", "source_share"])),
-}).superRefine((value, ctx) => {
-  if (new Set(value.relaxation_order).size !== value.relaxation_order.length) {
-    reject(ctx, "relaxation_order must not repeat a limit", ["relaxation_order"]);
-  }
-});
 export const FeedWebsiteGroupingConfigSchema = z.strictObject({
   include_private_suffixes: z.boolean().default(true),
-});
-export const SourceBasedQualityBucketSchema = z.strictObject({
-  id: NonEmptySchema.regex(/^[a-z][a-z0-9-]*$/),
-  source_tier_id: PositiveCountSchema,
-  share_pct: z.number().finite().min(0).max(100),
-  buffer_pct: z.number().finite().min(0).max(100),
-  ladder_hours: z.array(PositiveSchema).min(1),
-}).superRefine((value, ctx) => {
-  if (value.share_pct + value.buffer_pct > 100) {
-    reject(ctx, "share_pct plus buffer_pct must not exceed 100", ["buffer_pct"]);
-  }
-  if (value.ladder_hours.some((hours, index) => index > 0 && hours <= value.ladder_hours[index - 1]!)) {
-    reject(ctx, "ladder_hours must be strictly increasing", ["ladder_hours"]);
-  }
-});
-export const SourceBasedQualityBucketsSchema = z.array(SourceBasedQualityBucketSchema).min(1).superRefine((buckets, ctx) => {
-  if (new Set(buckets.map(rule => rule.id)).size !== buckets.length) reject(ctx, "source_based_quality_buckets must not repeat a bucket id");
-  if (new Set(buckets.map(rule => rule.source_tier_id)).size !== buckets.length) reject(ctx, "source_based_quality_buckets must not repeat a source tier");
-  if (Math.abs(buckets.reduce((sum, rule) => sum + rule.share_pct, 0) - 100) > Number.EPSILON * 100) {
-    reject(ctx, "source_based_quality_buckets share_pct must sum to 100");
-  }
 });
 export const FeedCurateArticlesConfigSchema = FeedCurationPolicySchema.extend({
   article_limit: PositiveCountSchema,
   global_age_ceiling_hours: PositiveSchema,
   diversity: FeedDiversityPolicySchema,
   substance: FeedSubstancePolicySchema,
-  source_based_quality_buckets: SourceBasedQualityBucketsSchema,
   source_reliability_penalty_enabled: z.boolean().default(true).describe(
     "Apply measured source reliability separately from article quality. Remove this switch and its disabled path when isolated selection becomes the sole planner.",
   ),
-  soft_caps: FeedSoftCapsSchema,
-  exploration_slot_share: z.number().finite().min(0).max(1),
   website_grouping: FeedWebsiteGroupingConfigSchema.default({ include_private_suffixes: true }),
 });
 export const FeedPartitionConfigSchema = z.strictObject({
@@ -167,6 +133,8 @@ export const FeedSealConfigSchema = z.strictObject({
   compression: z.enum(["snappy", "zstd", "none"]),
 });
 export const FeedWorkflowReportingConfigSchema = z.strictObject({
+  score_decimal_places: z.int().min(0).max(100).default(3)
+    .describe("Displayed score precision within the ECMAScript Number.toFixed range; saved scores remain exact."),
   enabled: z.boolean().default(true).describe(
     "External reporting only. Remove this key, adapter, tests, and workflow invocation together when development reporting is no longer needed.",
   ),
@@ -203,7 +171,7 @@ export const FeedIngestConfigSchema = z.strictObject({
 }).meta({
   version: FEED_INGEST_CONFIG_VERSION,
   changelog: [
-    { version: FEED_INGEST_CONFIG_VERSION, change: "Declare global age, substance and diversity policy before selection activation." },
+    { version: FEED_INGEST_CONFIG_VERSION, change: "Use global age, substance and diversity scoring without tier allocation or selection caps." },
     { version: "2026-11-01", change: "Configure shared domain and publisher request pacing." },
     { version: "2026-11-01", change: "Use native browser profiles and configured safe response headers." },
   ],

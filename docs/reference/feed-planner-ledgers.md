@@ -1,6 +1,6 @@
 # Feed planner ledgers
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-02
 
 Which planner data is retained, and where is it stored?
 
@@ -97,45 +97,71 @@ independently calculated selections.
 | B2 | `run_id` | Artifact header / Parquet row | Yes | Link to `plan-runs`; preserve identity when compaction mixes runs |
 | B3 | `url_key` | Article | Yes | Stable article identity |
 | B4 | `feed_id` | Article | Yes | Identify the supplying feed |
-| B5 | `publisher_id` | Article | Yes | Curated publisher identity used by selection; nullable |
+| B5 | `publisher_id` | Article | Yes | Curated publisher metadata; nullable; not a selection count key |
 | B6 | `canonical_url` | Article | Yes | Validated article URL |
 | B7 | `title` | Article | Yes | Selected article metadata and summarizer input |
 | B8 | `categories` | Article | Yes | Original feed category strings; empty arrays remain empty arrays |
 | B9 | `article_text` | Artifact article | No | Sanitized summarizer input; never in committed Parquet or logs |
 | B10 | `author` | Article | Yes | Attribution; nullable |
 | B11 | `published_at` | Article | Yes | Trusted source publication or actual selection-start UTC instant; unknown source time does not make this null |
-| B12 | `tier` | Article | Yes | Configured tier used for this choice |
 | B13 | `weight` | Article | Yes | Configured feed weight actually used |
-| B14 | `applied_tier_weight` | Article | Yes | Applied tier multiplier |
 | B15 | `editorial_rank` | Article | Yes | Chosen order |
 | B16 | `estimated_work` | Article | Yes | Work estimate used for bin packing |
 | B17 | `worker_assignment` | Article | Yes | Zero-based partition assignment; null before partitioning |
-| B18 | `ratings.base_article_score` | Article | Yes | Priority before selection adjustments, not an article-quality verdict |
+| B18 | `ratings.base_article_score` | Article | Yes | Cached authority plus recency plus technical pass adjustment plus substance; includes both fixed adjustments |
 | B19 | `ratings.marginal_score` | Article | Yes | Actual score when chosen |
 | B20 | `ratings.adjustments[].term` | Article | Yes | Identify each evaluated adjustment |
-| B21 | `ratings.adjustments[].value` | Article | Yes | Signed contribution; null means unavailable, zero means a known no-op |
+| B21 | `ratings.adjustments[].value` | Article | Yes | Required finite signed contribution for each of the five terms; never null |
 | B22 | `ratings.recency_score` | Article | Yes | Actual recency contribution to the base score |
 | B23 | `ratings.feed_authority_score` | Article | Yes | Actual weighted feed-authority contribution to the base score |
-| B24 | `feed_limit` | Article | Yes | Per-feed share limit computed from the requested output count |
-| B25 | `exploration_slot` | Article | Yes | Explain a choice made through the exploration allocation |
-| B26 | `cap_relaxations` | Article | Yes | Record which configured caps were relaxed for this choice |
-| B27 | `timing_at` | Article | Yes | Publication/first-sight instant actually used for age |
-| B28 | `timing_basis` | Article | Yes | Explain the admitted age basis |
-| B29 | `age_hours` | Article | Yes | Age actually evaluated, not age at artifact upload |
+| B27 | `timing_at` | Article | Yes | UTC publication/first-sight instant actually used for age; null only for unavailable timing |
+| B28 | `timing_basis` | Article | Yes | `published_at`, `first_seen` or `unavailable`, consistent with B27/B29 |
+| B29 | `age_hours` | Article | Yes | Finite signed age actually evaluated, not age at upload; null only for unavailable timing |
 | B30 | `date` | Artifact header / Parquet row | Yes | Owning run's UTC accounting date, not publication date |
 | B31 | `evaluated_at` | Artifact header / D19 | In D19 | Save the evaluation clock once in the run ledger; include it in the self-contained artifact |
-| B32 | Removed | - | - | Fixed allowance bonuses no longer govern selection |
 | B33 | `attempt` | Artifact header / Parquet row | Yes | Owning workflow/run attempt; not a selection-idempotency key |
 | B34 | `published_at_source` | Article | Yes | `source` or `selection`; never infer provenance from the timestamp |
-| B35 | `freshness_cutoff_at` | Article | Yes | Actual admitted window's UTC cutoff against the saved evaluation clock; null for unknown age |
+| B35 | `freshness_cutoff_at` | Article | Yes | Required UTC global-policy cutoff against D19, including when age is unknown; not proof of freshness |
+| B36 | `word_count` | Article | Yes | Required nonnegative integer count of the complete sanitized body, copied from parsing |
+| B37 | `substance_word_count` | Article | Yes | Required nonnegative integer retained-paragraph count, copied from screening; includes measured zero and must be <= B36 |
 
 The compact `adjustments` list replaces the large existing score-evidence tree.
-It distinguishes unavailable evidence from a measured zero. It does not contain
-copied configuration or empty classification trees. Fields B22-B29 and B32 were
-included to explain real score components, quota/exploration decisions and age.
-Every numerical adjustment still active must be represented. These values
+Unavailable observed history remains null in its own evidence, but its score
+adjustment is numeric zero. A complete measured zero pass fraction still
+receives the configured floor penalty. The list does not contain copied
+configuration or empty classification trees. These values
 explain the chosen result; they do not preserve every losing candidate or
 promise a complete historical replay.
+
+### Table N - Required score adjustments in stored order
+
+| Id | Term | Meaning |
+| --- | --- | --- |
+| N1 | `article_pass_rate` | Fixed authority reduction from measured technical article-pass history; numeric zero when disabled or history is unavailable |
+| N2 | `substance_quality_score` | Fixed signed screening substance score, cached as `freshness.substance_score` before selection |
+| N3 | `domain_diversity_penalty` | Negative configured coefficient times squared pre-choice count for the canonical website key; numeric zero for its first winner |
+| N4 | `feed_diversity_penalty` | Negative configured coefficient times squared pre-choice feed count; numeric zero for its first winner |
+| N5 | `novelty_bonus` | Configured first-use feed bonus when that feed has no prior winner; otherwise zero; not historical or story novelty |
+
+Every selected row requires these five terms once in this order. The exact
+native-number reconstruction is:
+
+```text
+base_article_score = ((feed_authority_score + recency_score) + article_pass_rate) + substance_quality_score
+marginal_score = ((base_article_score + domain_diversity_penalty) + feed_diversity_penalty) + novelty_bonus
+```
+
+Static adjustments already belong to base; they are not added a second time.
+There is no nullable website penalty. The
+[curation calculation](../architecture/sources/feed-curation.md) owns the
+equations, configured inputs, tie rule and completion behavior.
+
+Both counts are required in metadata, text-artifact articles, API/stage
+payloads and raw/compact selected Parquet. Missing, null, fractional, negative
+or retained-greater-than-raw counts fail validation. Neither count is guessed,
+substituted or recalculated. Join chosen content by candidate identity,
+not the first matching URL; partition preserves both counts and the unchanged
+original body and full-body work estimate.
 
 `evaluated_at` records the clock actually used. A saved parsed batch can retain
 an earlier age-evaluation clock; the artifact must not substitute upload time
@@ -148,15 +174,25 @@ selection-start UTC instant, with `published_at_source = selection`. The
 spelling stays ISO 8601 with `Z`, as for source instants. This does not change
 B27-B29, the original first sight, freshness eligibility, recency or ranking.
 Unknown timing evidence stays in `timing_basis = unavailable`, `timing_at = null`
-and `age_hours = null`. It does not create a fabricated historical publication
+and `age_hours = null`, with `ratings.recency_score = 0`. Known timing requires
+a UTC instant and finite signed age with basis `published_at` or `first_seen`.
+Inconsistent combinations fail validation, not unknown timing. Both variants
+require B35, computed as D19 minus the effective global age ceiling.
+Unknown timing does not create a fabricated historical publication
 source or rewrite the selection-start fallback. The artifact and metadata
 projection use the same chosen values.
 
-The current native stamps are `2026-10-31` for discovery, selected articles,
-health, file envelopes, parsed/selected batches, private receipts and progress
-events. Candidate rejections and rejected-article rows use `2026-11-01` to
-retain request pacing evidence. Plan runs retain their unchanged current
-`2026-10-26` shape. Readers verify physical fields, file identity and canonical
+Current candidates and embedded source snapshots, feed offers/outcomes,
+parsed batches, selected/partitioned batches, selected metadata/artifacts/rows,
+screened evidence, candidate rejections and rejected-article rows use
+`2026-11-02`. Source snapshots contain only `feed_id`, nullable `publisher_id`,
+`feed_url`, `title`, lifecycle `status` and unit-interval `weight`.
+Enclosing private payloads must validate that same current source shape;
+a fetched-document body does not embed it.
+Discovery, health and file envelopes retain `2026-10-31`; progress events
+and fetched-document operation declarations retain `2026-11-01`.
+Plan runs use `2026-11-02` with required nullable selection metrics.
+Readers verify physical fields, file identity and canonical
 digest against the current format. Older formats refuse with diagnostics.
 Historical files remain unchanged; no migration or null-fill is applied.
 The [site publication stage](../architecture/publishing/planner-publication.md)
@@ -166,16 +202,11 @@ Empty categories stay arrays. The native Parquet and JSON comparison found
 that null increased both representations, so no nullable category shape is
 introduced.
 
-Use recency, curated tier/weight, the explicitly enabled measured article-pass
-adjustment and applicable feed/publisher/domain selection controls. Do not
-infer verticals, desks, lenses or article-quality verdicts here. Removing those
-classification-based controls is part of the runtime cutover,
-not merely a column rename.
-
-Existing genuine publication inputs may still support an already-declared
-publisher adjustment. If that linkage is unavailable, retain the existing
-explicit current-run fallback; never manufacture publication counts from
-selected counts. No publication-result columns are added to these ledgers.
+Use configured feed weight, recency, the technical pass adjustment, substance
+and current-run feed/website diversity terms. There is no taxonomy multiplier,
+source allocation or publication-exposure adjustment. Publication-URL and
+settled-failure exclusions remain external safety evidence, not publication
+counts inferred from selection. No publication-result columns are added.
 
 ## C. feed-health-state
 
@@ -311,11 +342,28 @@ failed runs.
 | D15 | `attempt` | Run | Identify the workflow/run attempt, where applicable |
 | D16 | `lifecycle_window_days` | Run | Actual represented-day limit used by this run |
 | D17 | `reliability_floor` | Run | Actual floor used for this run's saved factors |
-| D18 | `reliability_penalty_enabled` | Run | Whether the known reliability factor was applied to priority |
+| D18 | `reliability_penalty_enabled` | Run | Whether the measured technical article-pass adjustment was enabled |
 | D19 | `evaluated_at` | Run | Actual captured age/scoring clock used by the selected batch |
 | D20 | `request_report_closed_days` | Run | Actual closed-UTC-day window for the request-spend report; default seven |
 | D21 | `reliability_window_days` | Run | Actual represented-day feed-reliability lookback; current default 30 |
 | D22 | `selection_started_at_utc` | Run | Actual selection-start clock used to capture current feedback windows, distinct from a saved batch's older age clock |
+| D23 | `selection_metrics` | Run | Required nullable object; null only when selection did not complete, regardless of run status or a captured selection-start clock |
+| D24 | `selection_metrics.selected_website_groups` | Run | Distinct canonical website keys from the configured resolver; zero for completed empty selection; otherwise positive and <= D7 |
+| D25 | `selection_metrics.selected_feeds` | Run | Distinct selected feed IDs, including first uses with zero configured bonus; not historically new feeds; bounds match D24 |
+| D26 | `selection_metrics.mean_substance_score` | Run | Arithmetic mean of exactly one required finite `substance_quality_score` adjustment per selected row; null only for completed empty selection |
+
+A completed empty selection saves D23 with zero counts and null mean. A
+nonempty selection requires positive bounded counts and a finite signed mean.
+Missing, repeated or non-finite substance terms fail validation rather than
+being skipped or replaced with zero. These metrics use validated selected
+metadata, not another body analysis or selection pass.
+
+D23 and D7 survive later assignment or persistence failures, for combined and
+standalone runs. The response and raw/compact Parquet carry the same native
+object. Reports label null metrics "Selection not completed"; they never
+describe them as measured zero diversity. Current readers require the new
+plan-run stamp and field. Earlier formats refuse with diagnostics, and
+historical files remain unchanged without conversion or optional defaults.
 
 For `/plan`, timing entries describe internal phases, not HTTP self-calls.
 Record one span per major phase, not one span for every internal article
@@ -378,7 +426,7 @@ Original identifiers are quoted only to identify the old data.
 | F2 | `dispatches` | Selected metadata, order, work estimate and worker assignment; text in the artifact only | B; run-level strategy/count in D | Committed article text and duplicate nested candidate/selection copies |
 | F3 | `diversity` | Underlying feed/category/selection facts where already needed | B, C, D | Historical diversity metric series; not an input the selector needs to read |
 | F4 | `document-observations` | Request spend, feed failures, aggregate rejection causes; API/phase timings | C, D | Individual request/operation records, per-article timings, causal joins and correction chains |
-| F5 | `editorial-selections` | Chosen rank, effective tier/weight, actual scores, quota/exploration exceptions | B | Separate old selection format, copied configuration and classification trees |
+| F5 | `editorial-selections` | Chosen rank, configured feed weight and actual scores | B | Separate old selection format, tier factors, quota/exploration fields, copied configuration and classification trees |
 | F6 | `operational-state` | Relevant feed identity and reporting context only | C, D | Old qualified article-request-waste score and its revision/snapshot machinery |
 | F7 | `rejections` | Counts grouped by feed, subject, stage, reason and known attribution | C | Permanent rejected-article identities, titles, URLs and diagnostic payloads |
 | F8 | `source-runs` | Feed outcomes, selection counts, measured reliability; run summary and API timings | C, D | Repeated registry snapshots, publication/lead counts and completion proofs |
@@ -418,7 +466,7 @@ in the main tables; other generic identity columns are not added.
 | G17 | `diversity` | `value`, `unit`, `before_value`, `after_value`, `numerator`, `denominator`, `item_count`, `source_count` | Historical metrics removed. B/C/D retain independently measured base counts, not renamed copies of these metrics |
 | G18 | `diversity` | `history_coverage_days`, `history_required_days`, `algorithm_version`, `config_sha256`, `availability`, `unavailable_reason` | Old metric interpretation/proof removed; C21/C31 retain their own health/count completeness |
 | G19 | `editorial-selections` | `version`, `date`, `correlation_id` | B1/B30 and D; correlation copy removed |
-| G20 | `editorial-selections` | `candidate_id`, `feed_id`, `source`, `canonical_url`, `url_key` | B3-B6/B12-B14; candidate identity remains transient |
+| G20 | `editorial-selections` | `candidate_id`, `feed_id`, `source`, `canonical_url`, `url_key` | B3-B6/B13; candidate identity remains transient; old tier factors are not retained |
 | G21 | `editorial-selections` | `vertical`, `labels` | Removed from the proposed planner output/classification scope; not disguised as RSS categories |
 | G22 | `editorial-selections` | `editorial_rank`, `estimated_work` | B15-B16 |
 | G23 | `editorial-selections` | `ratings`, `policy` | Reduced chosen-score evidence in B and declared run settings in D; full policy tree removed |
@@ -452,17 +500,17 @@ in the main tables; other generic identity columns are not added.
 | ID | Old nested data | Retain or move | Deliberate loss |
 | --- | --- | --- | --- |
 | H1 | Candidate content identity, URL, title, categories, author and publication time | B3-B11; B9 is artifact-only | No committed article text; volatile offered-entry IDs/ordinals stay internal |
-| H2 | Candidate `fetched_at`, `word_count` | Actual age basis B27-B31 and work estimate B16 where used | No duplicated fetch timestamp/word-count column merely to restate another value |
-| H3 | Feed snapshot ID, publisher, tier, weight and applied tier weight | B4/B5/B12-B14; feed key C5 | Repeated title/feed URL/form/kind/status trees are not saved; live configuration remains authoritative |
+| H2 | Candidate `fetched_at`, `word_count` | Parser count B36, separate screening count B37, actual age basis B27-B31 and full-body work estimate B16 | No duplicated fetch timestamp; neither count is reconstructed downstream |
+| H3 | Feed snapshot ID, publisher, tier, weight and applied tier weight | B4/B5/B13; feed key C5 | Tier and applied tier weight are not retained; repeated title/feed URL/form/kind/status trees are not saved |
 | H4 | `labels` desk/lens/vertical/event/entity classification and origin fields | Not retained in the simplified planner scope; RSS strings remain B8 | Active classification-based rules are removed with that scope, not silently left without explanations |
-| H5 | Policy version/hash, admission thresholds, recency/authority coefficients, tier budgets and concentration coefficients | Runtime configuration; actual contributions B18-B26/B35 and explicit run settings D16-D18 | No full historical policy replay or repeated per-article configuration snapshots |
+| H5 | Policy version/hash, admission thresholds, recency/authority coefficients, tier budgets and concentration coefficients | Active scoring policy stays in configuration; chosen contributions B18-B23/B35 and explicit run settings D16-D18 | Tier budgets and hard concentration controls are not retained; no full historical policy replay or repeated per-article configuration snapshots |
 | H6 | Score base and marginal values | B18/B19 plus explicit components B22/B23 | None for explaining the two totals |
-| H7 | Numerical penalties and their availability | B20/B21; null remains unavailable, not a measured zero | Full nested operands/witness trees are not copied; this is not a promise of complete replay |
-| H8 | Feed limit, exploration and relaxed caps | B24-B26 | No allowance bonuses or witness objects |
+| H7 | Numerical penalties and their availability | B20/B21 require the five finite signed terms in Table N | Unavailable history remains observed null evidence with numeric zero adjustment; full operand/witness trees are not copied |
+| H8 | Feed limit, exploration and relaxed caps | Not retained | No source reservations, cap relaxation or reserved exploration fields |
 | H9 | Carrier outlets, representative and replacement references | Applicable duplicate handling can run in memory; B keeps the selected URL | No permanent competitor/carrier reconstruction; unused replacement scaffolding removed |
 | H10 | Rejection details: HTTP/timeout/word/age bounds, matched URL/date/marker, failure code, history window and diagnostics | Checks remain in execution; C keeps grouped causes and feed-level code/status | No historical per-article diagnostic dossier |
 | H11 | Fetch/extraction diagnostic trees, quality measurements and warnings | Sparse exceptional diagnostics outside ledger data; API duration in D | No routine copied article measurement trees |
-| H12 | Headline matches, weighted lens, watchlist and salience observations | Not silently promoted into scores; any retained active effect must appear in B20/B21 or B32 | No copied classification/voting history or invented vote bonus |
+| H12 | Headline matches, weighted lens, watchlist and salience observations | Only declared headline shape effects enter N2; lens/watchlist/salience do not add priority | No copied classification/voting history or invented vote bonus |
 | H13 | Completed-file IDs/digests/counts and logical completion commitments | Removed with the full-audit product | No claimed proof of historical complete-attempt reconstruction |
 | H14 | Raw/compact file envelopes and indexes | Minimal declared storage metadata and native packing still required | They are not a reason to add every old generic identity field to the new payload |
 
@@ -618,9 +666,27 @@ published-payload ceiling in `config/idhazh.json`.
 | M13 | `pacing_time_ms` | Measured total queue wait for the fetch, or null when unmeasured |
 | M14 | `pacing_settings` | Effective domain delay, publisher delay, jitter and enable setting |
 
-Row identity is run, attempt and candidate. Selected cutoffs use their admitted
-window. Age refusals use the failed threshold. An unopened older step is not
-an applied cutoff. Harvest rows require an actual offered URL identity, not a
+Current curation emits only `REJECTED_DUPLICATE_CANONICAL_CARRIER` for an
+unchosen carrier of a selected URL and `REJECTED_GLOBAL_CAPACITY_REACHED` for
+another eligible but unchosen candidate. Duplicate loss takes precedence.
+`REJECTED_SCREENING_AGE_CEILING` applies only to known age above the effective
+global ceiling, in harvest preflight or screening.
+`REJECTED_SCREENING_MIN_WORDS` remains a raw technical-word failure, never a
+retained-word threshold. Unknown age and measured zero retained words have
+no refusal code.
+
+The other active safety and content reasons remain `SOURCE_INACTIVE`,
+`FETCH_FAILED`, `FETCH_FAILED_HTTP`, `FETCH_TIMEOUT`, `EXTRACT_FAILED`,
+`EXTRACT_EMPTY`, `ALREADY_PUBLISHED`, `SETTLED_FAILURE`, `BLOCKED_URL_MARKER`,
+`PAYWALL_OR_BLOCKED`, `FEED_PARSE_FAILED`, `FEED_EMPTY`,
+`MISSING_REQUIRED_FIELDS`, `CATEGORY_EXCLUDED`, `MEDIA_CONTENT`,
+`PRESS_RELEASE` and `LINK_HEAVY`, with their declared stages and attribution.
+Age, content, publication and curation losses do not enter technical pass
+history. Quota, age-ladder and cap reasons are not active producer controls.
+
+Row identity is run, attempt and candidate. Known-over-age refusals use the
+effective global threshold and UTC cutoff. Selected rows carry that policy
+cutoff even when timing is unknown. Harvest rows require an actual offered URL identity, not a
 replacement for a malformed or absent address. Retries produce one terminal
 row per candidate and run, not one row per attempt; a recovered fetch produces
 no stale failure row. Run finalization retains completed failures if selection,
@@ -717,7 +783,7 @@ represented dates. When that metadata requires a missing compact file, the
 same live capture retains its path and missing-file gap for affected days;
 valid raw siblings remain usable without becoming complete coverage.
 
-All required health, discovery, exclusion and genuine publisher-linkage
+All required health, discovery, publication-URL exclusion and settled-failure
 records are captured before the first fetch and reused across stages.
 Current work stays separate. Later disk edits, additions, removals and remote
 commits do not change that execution. A new execution loads its own input.
@@ -746,7 +812,7 @@ pushes without rerunning producers or changing the caller's checkout.
 - No Git SHA, `unit_id`, revision chains, duplicate head files or hidden generic
   writer identity columns in these formats.
 - Replace the old assessment, rejection, diversity, editorial-selection,
-  dispatch, operation-history and operational-score formats with the four
+  dispatch, operation-history and operational-score formats with the five
   declared ledgers. Keep selected metadata in B, not separate duplicate
   `editorial-selections` and `dispatches` ledgers.
 - Remove full event exports, archived intermediate batches, copied policy trees
@@ -786,28 +852,32 @@ tables above explain field disposition; they are not migration instructions.
 
 ### TypeScript current-format refusal
 
-**User-approved ruling, 2026-10-31 UTC:** The planner accepts only current
-native formats, including private receipts and events. Older formats refuse
-instead of being converted. Missing current health fields affect their own
-calculation; they do not permit an old format or invented provenance.
+Full-row readers, writers, compaction, publication and current-run delivery
+require current native formats, as do private receipts and events. Other
+row formats refuse instead of being converted. Historical health calculations
+use the separate required-field rule below; a different row-version date does
+not make otherwise valid facts unusable.
 
-This is the maintainer-approved TypeScript exception to the read-side migration
-rule in `CLAUDE.md` section 11. Python's historical planner row readers and
-contract copies are retired. The gardener registry and scheduler remain; the
-published-file validator and compact writer use the current TypeScript
-contracts.
+The TypeScript current-format rule is the scoped exception to the read-side
+migration rule in `CLAUDE.md` section 11. Python's historical planner row
+readers and contract copies are retired. The gardener registry and scheduler
+remain; the published-file validator and compact writer use the current
+TypeScript contracts.
 
 The native planner reader has no migration table or historical physical schema.
 Strict full-row validation accepts only the current contract stamp. The health
-field reader checks that stamp, then validates required columns independently.
+field reader validates required columns independently of the stored row stamp.
 
 ### Field-based health history
 
-**User-approved ruling, 2026-10-31 UTC:** Health history reads accept only the
-current native health format. Earlier stamps refuse with diagnostics and are
-unchanged on disk. Missing or invalid fields in the current format affect only
-the calculation that requires them. Writers, compaction and publication still
-require the complete current row schema.
+Health history reads accept any valid stored row-version date within the
+supported file envelope. Each calculation validates only the fields it needs;
+an extra unrelated column or different row-version date does not discard usable
+evidence. Missing, invalid or conflicting required facts produce explicit gaps
+for their own use, not a failed planning request. Historical raw files, compact
+files and indexes remain unchanged: no migration, rewrite, deletion or null-fill
+is part of reading them. Writers, compaction, publication and current-run
+delivery still require the complete current row schema and stamp.
 
 The shared writer package exports `readStoredPlannerParquet` for stored-file
 validation and retains `readPlannerParquet` for strict full-row validation.
@@ -816,10 +886,11 @@ and whole-file canonical digest. Stored-file validation computes that digest
 from the actual Arrow columns, including nested and unrelated columns, not
 from the consumer's projection. A changed unrelated cell still fails integrity.
 An unsupported stored physical type fails explicitly rather than skipping
-part of the digest.
+part of the digest. The file-envelope format is unchanged. Strict reads retain
+their typed unsupported-format refusal for noncurrent row stamps.
 
 `readFeedHealthFieldsDay` in the planner service reads one named UTC day through
-the same filesystem membership and current native-file checks.
+the same named filesystem membership and stored-file integrity checks.
 It returns independent `uses`: `request_totals`, `feed_rest`,
 `feed_reliability` and `article_admission`. Their schemas are declared once in
 `packages/common-contracts/src/schemas/feed-health-fields.schema.ts`:
@@ -898,7 +969,7 @@ requests are counted. See the [workflow guide](../how-to/run-feed-ingest-plan-te
 for the report layout and technical-admission subtotal rules.
 
 The request report retains its unchanged current `2026-10-29` shape; selected
-and partitioned payloads use `2026-10-31`. Stage readers refuse earlier formats under the
+and partitioned payloads use `2026-11-02`. Stage readers refuse earlier formats under the
 TypeScript planner compatibility rule; no historical ledger is rewritten.
 The [operator report guide](../how-to/run-feed-ingest-plan-test.md) defines
 the partial-total marker and report-only ordering.

@@ -76,7 +76,7 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
     const matched = matchMediaArticle(vector.offered, identity.canonical_url, [], loaded.config);
     expect(matched !== null).toBe(vector.excluded);
     const article = await harvestArticle({
-      source: sourceSnapshot(loaded, loaded.sources[0]!),
+      source: sourceSnapshot(loaded.sources[0]!),
       entry: { entry_ordinal: 0, title: null, link: vector.offered, categories: [], author: null, published_at: null },
     }, loaded, createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport }), context());
     if (vector.excluded) {

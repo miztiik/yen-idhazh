@@ -18,7 +18,7 @@
   "packages": {
     "@idhazh/common-contracts": ["@idhazh/common-contracts@file:../common-contracts", { "dependencies": { "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "typescript": "^5.9.3" } }],
 
-    "@idhazh/feed-ingest-plan": ["@idhazh/feed-ingest-plan@file:../../services/feed-ingest-plan", { "dependencies": { "@idhazh/common-contracts": "file:../../packages/common-contracts", "@idhazh/data-delivery": "file:../../packages/data-delivery", "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer", "apache-arrow": "^21.2.0", "bottleneck": "2.19.5", "defuddle": "0.19.5", "feedsmith": "3.0.1", "hono": "^4.10.0", "impit": "0.14.8", "ipaddr.js": "2.5.0", "linkedom": "0.18.13", "parquet-wasm": "^0.9.0", "robots-parser": "3.0.1", "tidy-url": "1.18.3", "tldts": "^7.4.19", "turndown": "7.2.4", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "@types/turndown": "5.0.6", "typescript": "^5.9.3" } }],
+    "@idhazh/feed-ingest-plan": ["@idhazh/feed-ingest-plan@file:../../services/feed-ingest-plan", { "dependencies": { "@idhazh/common-contracts": "file:../../packages/common-contracts", "@idhazh/data-delivery": "file:../../packages/data-delivery", "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer", "apache-arrow": "^21.2.0", "bottleneck": "2.19.5", "compromise": "14.19.0", "defuddle": "0.19.5", "feedsmith": "3.0.1", "hono": "^4.10.0", "impit": "0.14.8", "ipaddr.js": "2.5.0", "linkedom": "0.18.13", "parquet-wasm": "^0.9.0", "robots-parser": "3.0.1", "tidy-url": "1.18.3", "tldts": "^7.4.19", "turndown": "7.2.4", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "@types/turndown": "5.0.6", "typescript": "^5.9.3" } }],
 
     "@mixmark-io/domino": ["@mixmark-io/domino@2.2.0", "", {}, "sha512-Y28PR25bHXUg88kCV7nivXrP2Nj2RueZ3/l/jdx6J9f8J4nsEGcgX0Qe6lt7Pa+J79+kPiJU3LguR6O/6zrLOw=="],
 
@@ -44,6 +44,8 @@
 
     "commander": ["commander@12.1.0", "", {}, "sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA=="],
 
+    "compromise": ["compromise@14.19.0", "", { "dependencies": { "efrt": "2.9.0", "suffix-thumb": "6.0.0" } }, "sha512-nA/ClpXt0PaS2Ne389wClhxFBBxV0el3nv6V7XFpoRRQBr8eCnV3Iv4ZY6C5H06UHq1k7bqth73nVc/hv/rrCg=="],
+
     "css-select": ["css-select@7.0.0", "", { "dependencies": { "boolbase": "^2.0.0", "css-what": "^8.0.0", "domhandler": "^6.0.1", "domutils": "^4.0.2", "nth-check": "^3.0.1" } }, "sha512-snmjEVXy+1LnwXdxhYvTMj1d9tOh4HxkA1YmoayVBeeyR2C14Pum7fcxJIm4SswYspVy866eYNwlH6xC3/VH5g=="],
 
     "css-what": ["css-what@8.0.0", "", {}, "sha512-DH0Bqq3DNp5tdOReuNyAA+Ev4Y2GS5FMbZpeTLP6C4CDi0h5nL0BmUPChXw3o/qbHLDWHl49sbNqQVY7bMSDdw=="],
@@ -59,6 +61,8 @@
     "domhandler": ["domhandler@6.0.1", "", { "dependencies": { "domelementtype": "^3.0.0" } }, "sha512-gYzvtM72ZtxQO0T048kd6HWSbbGCNOUwcnfQ01cqIJ4X2IYKFFHZ5mKvrQETcFXxsRObZulDaKmy//R7TPtsBg=="],
 
     "domutils": ["domutils@4.0.2", "", { "dependencies": { "dom-serializer": "^3.0.0", "domelementtype": "^3.0.0", "domhandler": "^6.0.0" } }, "sha512-qI4JLRKnSzqFqr7hAlS5xQDusBCjKSEG4t4+7aNrIQMHBcsC2TGEhuyABJdYkgSewL57PNLYEiibY2iPKhKpaA=="],
+
+    "efrt": ["efrt@2.9.0", "", {}, "sha512-ZMAvlcu4AfmtJ4K/0hs0uofVUZPSeLG/w4yOyZawQLl9YEy8iDKIxIIPsUAlS907clC7bgD17e73vi5unwNE/g=="],
 
     "entities": ["entities@7.0.1", "", {}, "sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA=="],
 
@@ -113,6 +117,8 @@
     "robots-parser": ["robots-parser@3.0.1", "", {}, "sha512-s+pyvQeIKIZ0dx5iJiQk1tPLJAWln39+MI5jtM8wnyws+G5azk+dMnMX0qfbqNetKKNgcWWOdi0sfm+FbQbgdQ=="],
 
     "strnum": ["strnum@2.5.1", "", { "dependencies": { "anynum": "^1.0.1" } }, "sha512-UM4nTLWzQiDBseVxUGxN0wJzIk0UU89Qi7pKXz9qISo+lhviJikTuikBsK/oFRlpvYHvSdz0TVoLyQ+sEpYwxA=="],
+
+    "suffix-thumb": ["suffix-thumb@6.0.0", "", {}, "sha512-HsCTMLaupbob5ZG//ZW6PSj446tHT5kSJ1qXS5F/qO2Nt13uAn6ZLPhJQ/H6bN/jVQCb+pcqe2psEwy4Mp5+Vw=="],
 
     "temml": ["temml@0.13.5", "", {}, "sha512-aPkDDgunanpLNL0ql32HbolqLep+w8DRcVXRql7rWrMt/PhczdLgL4UBYYVU3BYjCNjkGq4EqwIicu/zWr1iOg=="],
 

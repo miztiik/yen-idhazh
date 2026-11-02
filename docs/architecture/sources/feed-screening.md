@@ -1,6 +1,6 @@
 # Feed candidate screening
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-11-02
 
 Which parsed articles can reach numeric selection?
 Screening validates the complete server-owned candidate batch, current
@@ -30,7 +30,7 @@ parsed articles. An unavailable external history does not manufacture a
 publication or failure.
 
 Paywall or configured HTTP blocks, category exclusions, the configured
-`triage.min_words` minimum and the tier's maximum age retain their relative
+`triage.min_words` minimum and the global known-age ceiling retain their relative
 precedence. The same word minimum applies to every parsed article; feed
 classification labels do not change admission. Category matching uses whole
 trimmed, case-folded tags. One first failed gate produces one terminal
@@ -73,15 +73,41 @@ not recalculate a false zero from URL-scrubbed text.
 Age uses a trustworthy publication time, otherwise the earliest known global
 discovery by URL key. A timestamp exactly at the future tolerance is
 trusted; one beyond it is not. Age equal to the cutoff passes. Unknown time
-stays null with no invented recency bonus.
+stays null with timing source `unknown` and zero recency. Do not invent first
+sight or use fetch/current time as age evidence. A trusted publication can
+supply timing without a first-sight record; malformed timestamps fail native
+validation rather than becoming unknown.
 
 The parsed batch's saved age clock is D19. A later feedback refresh uses D22
 without changing that age clock. Signed age can be negative for an admitted
 near-future publication; only the ranking calculation floors it at zero.
 The selected metadata retains its actual timing basis and timestamp.
-The normal tier's final age step is checked before a tighter run override.
-An override cannot widen any tier window. Harvest preflight uses the same
-maximum envelope, not the initial fresh window, so it preserves viable backfill.
+The effective `curate_articles.global_age_ceiling_hours`, 36 hours by default,
+is resolved before fetching. One positive finite run override can replace it.
+Known age passes exactly when it is no greater than that ceiling; unknown
+age remains eligible subject to the other gates. Harvest preflight uses the
+same timing and ceiling rule when evidence is available, so known-over-age
+offers require no article or article-robots requests.
+Selected metadata preserves known timing or explicit null/`unavailable`
+timing and always carries the UTC policy cutoff. Its separate
+selection-time publication fallback never changes admission age or recency.
+
+## Cached substance evidence
+
+After all cheap gates pass, screening measures retained paragraphs once and
+caches their word count and signed substance score in the native admitted
+evidence. The shared schema checks that retained words do not exceed the
+parser's full-body count. Missing count or score fails validation rather than
+being filled with zero.
+
+The raw `triage.min_words` technical minimum still controls admission.
+Measured zero retained words stays admitted; unknown timing stays null with
+zero recency. Neither adds a refusal or changes technical pass counts.
+Original article text, raw count and full-body worker estimates stay unchanged.
+The selector consumes the cached substance score in its fixed base, then
+uses only numbers for successive choices.
+Paragraph, length, density and headline rules live in
+[article substance scoring](article-substance-scoring.md).
 
 ## Rejection persistence
 
@@ -99,7 +125,8 @@ not a selection pass. The global discovery join prevents another feed or fetch f
 renewing an undated article's age.
 Content exclusions retain successful feed downloads/parses, original offered
 ordinals, discovery evidence and actual request spend. Their grouped health reason
-has no source-failure attribution. Numeric selection and quotas are unchanged.
+has no source-failure attribution. Shape scores change ranking, not technical
+admission; soft diversity penalties cannot refuse an eligible candidate.
 
 ## See also
 

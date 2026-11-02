@@ -22,8 +22,9 @@ the native compatibility checks. The model extra is not part of ordinary CI.
 
 The first hosted run has two steps. First merge the fully checked feature PR
 that adds `.github/workflows/hhem-evaluation-api-test.yml` to the default
-branch. Then dispatch the exact merged ref. A feature-branch `--ref` cannot
-register a workflow that has never existed on the default branch.
+branch. Then dispatch a branch or tag containing the merged change.
+A feature-branch `--ref` cannot register a workflow that has never existed on
+the default branch.
 This is the platform's
 [manual-dispatch requirement](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
 Keep hosted verification pending until the real run succeeds; PR checks alone
@@ -38,7 +39,8 @@ is explicitly off. There is no model selector or engine matrix.
 
 The following command sends the named, project-authored `supported` fixture
 through standard input, not shell arguments or another text-bearing file.
-Replace `<merged-ref>` with the merged commit to verify.
+The CLI selects a branch or tag. Use `main` for the delivery run and record
+its actual `headSha`.
 
 ```powershell
 @'
@@ -52,7 +54,7 @@ print(json.dumps({
     "source_text": case["source_text"],
     "summary_text": case["summary_text"],
 }))
-'@ | python - | gh workflow run hhem-evaluation-api-test.yml --ref <merged-ref> --json
+'@ | python - | gh workflow run hhem-evaluation-api-test.yml --ref main --json
 ```
 
 The platform creates and retains the dispatch event. Do not put credentials in the
@@ -62,7 +64,7 @@ inserted into a command, environment expression, URL, log, summary or artifact.
 
 ## Inspect the real run
 
-Find the run and confirm its `headSha` is the selected ref:
+Find the run and confirm its `headSha` is the intended commit:
 
 ```powershell
 gh run list --workflow hhem-evaluation-api-test.yml --limit 5 --json databaseId,headSha,status,conclusion,url

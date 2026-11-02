@@ -42,7 +42,7 @@ test("health capture and raw/compact files retain truncated numbers without chan
   const day = "2026-10-20";
   const source = SourceSnapshotSchema.parse({
     feed_id: "recorded-news", feed_url: "https://news.example/feed.xml", title: "Recorded feed",
-    publisher_id: null, tier: 2, status: "active", weight: 0.8, applied_tier_weight: 0.6,
+    publisher_id: null, status: "active", weight: 0.8,
   });
   const seed = plannerRecordings(day).find(record => record.name === "feed-health-state")!;
   const rows = Array.from({ length: 22 }, (_, index) => FeedHealthStateRowSchema.parse({

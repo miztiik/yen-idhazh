@@ -46,7 +46,7 @@ export const ServiceSettingsSchema = z.strictObject({
     forced_exit_timeout_ms: PositiveCountSchema,
   }),
   inputs: z.strictObject({
-    planning: RelativePathSchema, taxonomy: RelativePathSchema, sources: RelativePathSchema,
+    planning: RelativePathSchema, sources: RelativePathSchema,
     extraction: RelativePathSchema, registrations: RelativePathSchema,
     output_root: RelativePathSchema, discovered_files: z.array(RelativePathSchema).default([]),
     published_url_lookback_days: NonNegativeSchema.optional(),

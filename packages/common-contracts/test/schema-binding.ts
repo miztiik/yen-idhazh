@@ -14,7 +14,7 @@ import {
   StageReferenceRequestSchema, PartitionArticlesRequestSchema,
   PlannerRejectionCountSchema, PlannerHealthDaySchema, PlannerRequestReportSchema,
   PlannerFeedEntrySchema, PlannerFeedOfferSchema,
-  SelectedArticleContentSchema, PlanRunRowSchema, PlanApiTimingSchema,
+  SelectedArticleContentSchema, PlanRunRowSchema, PlanApiTimingSchema, SelectionMetricsSchema,
   PlannerFileEnvelopeSchema, RecordedIdentitySchema,
   RowIdentitySchema,
   ROW_IDENTITY_COLUMN_VERSIONS, SourceSnapshotSchema, WriterIdentitySchema,
@@ -23,6 +23,7 @@ import {
   PublicationEntryInputSchema, PublicationInventoryInputSchema, PUBLICATION_INVENTORY_VERSION,
   RawArticleFreshnessSchema, AdmittedArticleFreshnessSchema, ScreenedCandidateSchema,
   NumericalSelectionInputSchema, NumericalSelectionOutputSchema,
+  FeedOutcomePayloadSchema,
 } from "../src/index";
 
 export const runtimeSchemas = {
@@ -30,6 +31,7 @@ export const runtimeSchemas = {
   ScreenedCandidate: ScreenedCandidateSchema, NumericalSelectionInput: NumericalSelectionInputSchema,
   NumericalSelectionOutput: NumericalSelectionOutputSchema,
   SourceSnapshot: SourceSnapshotSchema, FeedIngestCandidate: FeedIngestCandidateSchema,
+  FeedOutcomePayload: FeedOutcomePayloadSchema,
   WriterIdentity: WriterIdentitySchema, RowIdentity: RowIdentitySchema, FileEnvelope: FileEnvelopeSchema,
   PlannerFileEnvelope: PlannerFileEnvelopeSchema, FeedHealthRow: FeedHealthRowSchema,
   FetchedDocument: FetchedDocumentSchema,
@@ -54,6 +56,7 @@ export const runtimeSchemas = {
   FeedHealthStateRow: FeedHealthStateRowSchema, FeedHealthReliability: FeedHealthReliabilitySchema,
   FeedHealthRejectionCount: FeedHealthRejectionCountSchema, PlanRunRow: PlanRunRowSchema,
   PlanApiTiming: PlanApiTimingSchema,
+  SelectionMetrics: SelectionMetricsSchema,
 } satisfies Record<string, z.ZodType>;
 
 export const schemas = Object.fromEntries(
