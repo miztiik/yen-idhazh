@@ -542,3 +542,48 @@ def test_invalid_child_diagnostics_are_failed_without_forwarding_raw_output(
     assert child.process.poll() is not None
     output = capsys.readouterr()
     assert "PrivateRawChildCanary" not in output.out + output.err
+
+
+def test_inherited_library_output_cannot_corrupt_a_private_shutdown_receipt(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    child = OwnedService(
+        "hhem",
+        owned_child_command("raw_inherited_output"),
+        REPOSITORY,
+        StartupPacket(version=SCHEMA_VERSION, startup_id=REQUEST_ID, context=StartupContext()),
+        service_settings(),
+        load_manual_settings(REPOSITORY),
+    )
+    child.wait_ready(10000)
+    stopped = child.close(6000)
+    assert stopped.clean and stopped.worker_exit_confirmed is True
+    assert child.process.poll() == 0
+    output = capsys.readouterr()
+    assert "PrivateInheritedOutputCanary" not in output.out + output.err
+    assert "PrivateInheritedErrorCanary" not in output.out + output.err
+
+
+@pytest.mark.parametrize(
+    ("mode", "confirmed"), [("unclean_stop", True), ("unconfirmed_stop", False)]
+)
+def test_shutdown_still_fails_without_losing_an_observed_worker_exit(
+    mode: str,
+    confirmed: bool,
+) -> None:
+    child = OwnedService(
+        "hhem",
+        owned_child_command(mode),
+        REPOSITORY,
+        StartupPacket(version=SCHEMA_VERSION, startup_id=REQUEST_ID, context=StartupContext()),
+        service_settings(),
+        load_manual_settings(REPOSITORY),
+    )
+    child.wait_ready(10000)
+    with pytest.raises(WorkflowFailure) as failure:
+        child.close(6000)
+    assert failure.value.error.code == "SERVICE_STOP_FAILED"
+    assert child.process.poll() == 0
+    assert child.stopped is not None
+    assert child.stopped.worker_exit_confirmed is confirmed
+    assert not child.protocol_failed.is_set() and not child.events_failed.is_set()
