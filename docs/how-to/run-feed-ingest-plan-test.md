@@ -227,11 +227,12 @@ client, then closes the child pipe. Pipe closure also triggers child cleanup
 when the supervisor disappears. Only the exact spawned child can be forcibly
 killed. The server is never detached or kept alive across workflow steps.
 
-The Markdown report reads the body-free response, health result, captured
-effective settings and host fingerprint. Only Run outcome and Needs attention
-are visible. Per-feed article results, Request counts and coverage, Why
-articles were not selected, Effective settings and Execution measurements
-use closed-by-default folds. Routine notices do not repeat the tables;
+The Markdown report reads the body-free response, verified selected metadata,
+health result, captured effective settings and host fingerprint. Only Run
+outcome and Needs attention are visible. Per-feed article results, Request
+counts and coverage, Why articles were not selected, Selected article evidence,
+Effective settings and Execution measurements use closed-by-default folds.
+Routine notices do not repeat the tables;
 actionable run and progress warnings remain. The report cannot establish
 publication and stays separate from the delivery receipt.
 The workflow writes the summary into the existing downloadable Markdown

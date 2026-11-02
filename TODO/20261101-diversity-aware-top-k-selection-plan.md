@@ -702,6 +702,8 @@ Table P
   - `services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts`
   - `services/feed-ingest-plan/test/diverse-selection.test.ts` (new)
+  - `services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts`
+  - `services/feed-ingest-plan/test/streamlined-report.test.ts`
   - `tests/fixtures/feed-ingest-plan/portfolio-cases.json`
   - `tests/fixtures/feed-ingest-plan/screening-cases.json`
   - `tests/fixtures/feed-ingest-plan/diverse-selection-cases.json` (new)
