@@ -2,13 +2,13 @@
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import { tableFromIPC } from "apache-arrow";
 import {
   DateStampSchema, FileEnvelopeSchema, FOOTER_METADATA_KEYS, OPTIONAL_FOOTER_METADATA_KEYS,
   PLANNER_FOOTER_METADATA_KEYS, PLANNER_OPTIONAL_FOOTER_METADATA_KEYS,
   PlannerFileEnvelopeSchema, PlannerLedgerNameSchema, RowIdentitySchema, WriterIdentitySchema,
+  deriveUrlKey,
   SELECTED_ARTICLE_VERSION, SelectedArticlesArtifactSchema, SelectedArticleRowSchema,
   selectedArticleMetadata, validateEnvelopeContainer,
 } from "@idhazh/common-contracts";
@@ -161,7 +161,7 @@ async function readLedgerFixture(name: string): Promise<unknown> {
   return JSON.parse(await readFile(join(repositoryRoot, "tests", "fixtures", "ledger-file-writer", name), "utf8"));
 }
 async function withOutputRoot<T>(run: (root: string) => Promise<T>): Promise<T> {
-  const root = await mkdtemp(join(tmpdir(), "ledger-file-writer-"));
+  const root = await mkdtemp(join(repositoryRoot, ".ledger-file-writer-check-"));
   try { return await run(root); } finally { await rm(root, { recursive: true, force: true }); }
 }
 
@@ -332,7 +332,15 @@ describe("ledger Parquet readback", () => {
     await withOutputRoot(async root => {
       const recording = plannerRecordings().find(row => row.name === "selected-articles")!;
       const context = { ledger: recording.name, outputRoot: root, rowContract: recording.contract, registryEntry: registration(recording.name), ledgerSettings: compression, period: { tier: "raw" as const, covers: "2026-10-20" } };
-      for (const change of [{ article_text: "not allowed" }, { unit_id: "not allowed" }, { estimated_work: 0.5 }]) {
+      for (const change of [
+        { article_text: "not allowed" }, { unit_id: "not allowed" }, { estimated_work: 0.5 },
+        { word_count: undefined }, { substance_word_count: undefined },
+        { word_count: -1 }, { substance_word_count: -1 }, { word_count: 1.5 }, { substance_word_count: 0.5 },
+        { substance_word_count: Number(recording.row.word_count) + 1 },
+        { tier: 1 }, { applied_tier_weight: 1 }, { feed_limit: 1 },
+        { exploration_slot: false }, { cap_relaxations: [] },
+        { freshness_cutoff_at: null },
+      ]) {
         await expect(persistLedger({ ...context, rows: [{ ...recording.row, ...change }] })).rejects.toThrow();
       }
       await expect(persistLedger({ ...context, rows: [recording.row], rowContract: {
@@ -349,6 +357,41 @@ describe("ledger Parquet readback", () => {
         rowContract: health.contract, rows: [health.row, { ...health.row, attempt: 2 }],
       })).rejects.toThrow("one run attempt");
       expect(await readdir(root)).toEqual([]);
+    });
+  });
+
+  test("preserves both word counts, unknown age and exact scores through raw and compact selection files", async () => {
+    await withOutputRoot(async root => {
+      const recording = plannerRecordings().find(row => row.name === "selected-articles")!;
+      const known = SelectedArticleRowSchema.parse({ ...recording.row, substance_word_count: 2 });
+      const canonical_url = "https://example.org/article/unknown";
+      const unknown = SelectedArticleRowSchema.parse({
+        ...known, canonical_url, url_key: deriveUrlKey(canonical_url), editorial_rank: 2,
+        substance_word_count: 0, timing_at: null, timing_basis: "unavailable", age_hours: null,
+        ratings: { ...known.ratings, recency_score: 0, base_article_score: 0.5, marginal_score: 0.25 },
+      });
+      const context = {
+        ledger: recording.name, outputRoot: root, rowContract: recording.contract,
+        registryEntry: registration(recording.name), ledgerSettings: compression,
+      };
+      for (const period of [
+        { tier: "raw", covers: known.date },
+        { tier: "compact", period: "daily", covers: known.date, builtFrom: 1 },
+      ] as const) {
+        const written = period.tier === "raw"
+          ? await persistLedger({ ...context, rows: [known, unknown], period })
+          : await persistLedger({ ...context, rows: [known, unknown], period });
+        if (written.status !== "written") throw new Error("selected count evidence was not written");
+        const readback = await checkParquetReadback(recording.name, root, written.files, recording.contract.schema);
+        const rows = readback.files[0]!.rows.map(row => SelectedArticleRowSchema.parse(row));
+        expect(rows).toEqual(expect.arrayContaining([known, unknown]));
+        expect(rows.map(row => [row.word_count, row.substance_word_count]).sort())
+          .toEqual([[180, 0], [180, 2]]);
+        expect(rows.find(row => row.timing_basis === "unavailable")).toMatchObject({
+          timing_at: null, age_hours: null, substance_word_count: 0,
+          freshness_cutoff_at: unknown.freshness_cutoff_at, ratings: { recency_score: 0 },
+        });
+      }
     });
   });
 

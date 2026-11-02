@@ -28,7 +28,7 @@ export async function createParsedFeedBatch(input: {
   const { state, inputs, runtime } = input;
   const configured = inputs.harvest.sources.find(source => source.id === input.feed_id);
   if (configured === undefined) throw new Error("Parsed feed is not configured");
-  const source = sourceSnapshot(inputs.harvest, configured);
+  const source = sourceSnapshot(configured);
   const collection = collectionForRun(inputs, state.context.run_id);
   const offers: PlannerFeedOffer[] = [];
   const rejections = [];

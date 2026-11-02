@@ -1,16 +1,15 @@
 # Publisher identity
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-11-02
 
 How is a publisher ID created once, then kept stable as names and feeds change?
 
 **Status**: Eight reviewed publisher IDs name 20 active and retired feeds in
 the catalog. Other feed mappings remain unknown until publisher-owned evidence
-confirms their editorial identity. Soft publisher exposure is implemented in
-the isolated planner; its
-[selection contract](../sources/feed-curation.md#publisher-exposure-adjustment)
-owns the behavior and missing-history fallback. I Feed remains a design proposal, not a
-deployed engine.
+confirms their editorial identity. Recorded publisher identity remains metadata
+in the isolated planner. Its [selection contract](../sources/feed-curation.md)
+counts current winners by feed and canonical website, not publisher ID.
+I Feed remains a design proposal, not a deployed engine.
 
 ## The identity being named
 
@@ -169,16 +168,16 @@ There is no new semantic deduplication, qualitative assessment or story
 classification here. Factual verification and semantic claims of novelty or new
 developments are excluded; exact URL newness within a bounded seen window is
 allowed and does not establish story novelty. Existing story handling is
-unchanged. Day-aware publisher preferences use recorded publisher exposure and
-existing numeric priority; no article-quality comparison is made. They remain
-soft, not hard caps or a reason to block selection when history is missing.
-The existing [source-reliability penalty](../sources/feed-curation.md#inputs-and-independent-evidence)
+unchanged. The existing
+[technical pass adjustment](../sources/feed-curation.md#fixed-score-preparation)
 measures operational delivery, not article quality.
 
 Publisher identity is recorded through the existing planning and audit flow.
-The isolated planner uses that recorded ID for the separately approved
-[soft exposure preference](../sources/feed-curation.md#publisher-exposure-adjustment).
-This does not add mappings or change production Python selection.
+The isolated planner does not use that ID as a count key or score penalty.
+Its [current-run diversity calculation](../sources/feed-curation.md#current-score-and-exact-choice)
+uses independent feed and website counts. Missing publisher identity neither
+blocks selection nor removes either penalty. This does not add mappings,
+backfill historical identity or change production Python selection.
 
 ## Manual acceptance checklist
 

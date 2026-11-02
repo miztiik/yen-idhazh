@@ -9,8 +9,7 @@ export function loadPlanningConfig(config: unknown): PlanningConfig { return { c
 export function resolvePolicy(loaded: PlanningConfig): EffectiveFeedPolicy {
   const { blocked_http_statuses: _statuses, ...screening } = loaded.config.triage;
   const { article_limit: _limit, source_reliability_penalty_enabled: _reliability,
-    soft_caps: _caps, exploration_slot_share: _exploration, website_grouping: _websiteGrouping,
-    source_based_quality_buckets: _buckets,
+    website_grouping: _websiteGrouping,
     global_age_ceiling_hours: _ageCeiling, diversity: _diversity, substance: _substance,
     ...curateArticles } = loaded.config.curate_articles;
   return EffectiveFeedPolicySchema.parse({

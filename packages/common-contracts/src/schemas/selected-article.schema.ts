@@ -9,30 +9,42 @@ import {
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 
 export const SelectedArticleAdjustmentSchema = z.strictObject({
-  term: NonEmptySchema, value: FiniteSchema.nullable(),
+  term: z.enum(["article_pass_rate", "substance_quality_score", "domain_diversity_penalty", "feed_diversity_penalty", "novelty_bonus"]),
+  value: FiniteSchema,
 });
 export const SelectedArticleRatingsSchema = z.strictObject({
   base_article_score: FiniteSchema, marginal_score: FiniteSchema,
-  adjustments: z.array(SelectedArticleAdjustmentSchema),
+  adjustments: z.array(SelectedArticleAdjustmentSchema).length(SelectedArticleAdjustmentSchema.shape.term.options.length),
   recency_score: FiniteSchema, feed_authority_score: FiniteSchema,
+}).superRefine((value, ctx) => {
+  const terms = SelectedArticleAdjustmentSchema.shape.term.options;
+  if (value.adjustments.length !== terms.length
+    || value.adjustments.some((entry, index) => entry.term !== terms[index])) {
+    reject(ctx, "ratings require all five adjustments in their declared order", ["adjustments"]);
+    return;
+  }
+  const [pass, substance, domain, feed, novelty] = value.adjustments;
+  const base = ((value.feed_authority_score + value.recency_score) + pass!.value) + substance!.value;
+  const marginal = ((value.base_article_score + domain!.value) + feed!.value) + novelty!.value;
+  if (base !== value.base_article_score) reject(ctx, "base score must match its cached components", ["base_article_score"]);
+  if (marginal !== value.marginal_score) reject(ctx, "marginal score must match its ordered adjustments", ["marginal_score"]);
 });
 const MetadataFields = {
   url_key: Sha256Schema, feed_id: SlugSchema, publisher_id: SlugSchema.nullable(),
   canonical_url: UrlSchema, title: NonEmptySchema, categories: z.array(z.string()),
   author: z.string().nullable(), published_at: RecordedInstantSchema.nullable(),
   published_at_source: z.enum(["source", "selection"]),
-  tier: PositiveCountSchema, weight: FiniteSchema.min(0).max(1),
-  applied_tier_weight: FiniteSchema.min(0).max(1),
+  weight: FiniteSchema.min(0).max(1), word_count: CountSchema, substance_word_count: CountSchema,
   editorial_rank: PositiveCountSchema, estimated_work: CountSchema,
   worker_assignment: CountSchema.nullable(), ratings: SelectedArticleRatingsSchema,
-  feed_limit: CountSchema, exploration_slot: z.boolean(),
-  cap_relaxations: z.array(NonEmptySchema), timing_at: RecordedInstantSchema.nullable(),
+  timing_at: RecordedInstantSchema.nullable(),
   timing_basis: z.enum(["published_at", "first_seen", "unavailable"]),
-  age_hours: FiniteSchema.nullable(), freshness_cutoff_at: RecordedInstantSchema.nullable(),
+  age_hours: FiniteSchema.nullable(), freshness_cutoff_at: RecordedInstantSchema,
 };
 function validateMetadata(value: {
   canonical_url: string; url_key: string; timing_basis: string;
   timing_at: string | null; age_hours: number | null;
+  word_count: number; substance_word_count: number; ratings: { recency_score: number };
 }, ctx: z.RefinementCtx): void {
   checkUrlIdentity(value, ctx);
   if (/[?#]/.test(value.canonical_url)) reject(ctx, "current selected article address must not contain a query or fragment");
@@ -41,6 +53,8 @@ function validateMetadata(value: {
     || (!unavailable && (value.timing_at === null || value.age_hours === null))) {
     reject(ctx, "timing availability must match its instant and measured age");
   }
+  if (unavailable && value.ratings.recency_score !== 0) reject(ctx, "unknown timing requires zero recency");
+  if (value.substance_word_count > value.word_count) reject(ctx, "substance_word_count must not exceed word_count", ["substance_word_count"]);
 }
 function validatePublication(value: {
   published_at: string | null; published_at_source: string; timing_basis: string; timing_at: string | null;
@@ -55,7 +69,7 @@ function validatePublication(value: {
   }
 }
 const changelog = [
-  { version: SELECTED_ARTICLE_VERSION, change: "Require current selection rows and artifacts without older-format readers." },
+  { version: SELECTED_ARTICLE_VERSION, change: "Require both word counts, complete diversity scores and global timing without retired selection fields." },
   { version: "2026-10-29", change: "Identify query-free article selection." },
   { version: "2026-10-27", change: "Record the applied freshness cutoff and percentage-based feed limit." },
   { version: "2026-10-26", change: "Require source or selection publication provenance and refuse obsolete selected rows." },
@@ -97,12 +111,11 @@ export function selectedArticleMetadata(article: SelectedArtifactArticle): Selec
   return SelectedArticleMetadataSchema.parse({
     url_key: article.url_key, feed_id: article.feed_id, publisher_id: article.publisher_id,
     canonical_url: article.canonical_url, title: article.title, categories: article.categories,
-    author: article.author, published_at: article.published_at, published_at_source: article.published_at_source, tier: article.tier,
-    weight: article.weight, applied_tier_weight: article.applied_tier_weight,
+    author: article.author, published_at: article.published_at, published_at_source: article.published_at_source,
+    weight: article.weight, word_count: article.word_count, substance_word_count: article.substance_word_count,
     editorial_rank: article.editorial_rank, estimated_work: article.estimated_work,
     worker_assignment: article.worker_assignment, ratings: article.ratings,
-    feed_limit: article.feed_limit, exploration_slot: article.exploration_slot,
-    cap_relaxations: article.cap_relaxations, timing_at: article.timing_at,
+    timing_at: article.timing_at,
     timing_basis: article.timing_basis, age_hours: article.age_hours,
     freshness_cutoff_at: article.freshness_cutoff_at,
   });

@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-02
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -30,19 +30,18 @@ Completed planning is not proof of summarization or publication.
 ## Manual controls
 
 The dispatch form takes article limit, worker count, partition strategy and
-three independent article-age overrides. Their labels are:
-
-- `Institutional sources - article age windows (hours)`
-- `Trade press - article age windows (hours)`
-- `Community sources - article age windows (hours)`
-
-Each age input accepts a strictly increasing comma-separated list of positive
-hours, such as `24,36,48`. Blank optional values use configuration. Duplicate,
-decreasing, zero, negative and malformed age lists fail before collection.
+one optional `global_age_ceiling_hours` override. It accepts a single positive
+finite number of hours, such as `24` or `36`. Blank uses
+`curate_articles.global_age_ceiling_hours` from configuration, currently
+36 hours. Zero, negative, non-finite, malformed and comma-list values fail
+before collection; retired age-array controls are not aliases.
 Values are environment data, never interpolated shell code. The run resolves
 its own config before article fetch, screening, selection and reporting;
-concurrent requests cannot replace each other's age windows. The applied
-policy report shows each effective age list and its origin.
+concurrent requests cannot replace each other's ceiling. The applied
+policy report shows the one effective ceiling and its configuration or run
+override origin. The ceiling applies only to known age, with equality
+admitted. Unknown age stays eligible with zero recency and explicit missing
+timing evidence; it is not assumed to be new.
 For `none`, clear the worker count or set it to one.
 
 `dump_raw_document_contents` is a dropdown with the strings `false` and `true`;
@@ -56,8 +55,9 @@ to false. When enabled, only failed downloaded inputs may enter the
 `partition.enabled` in `config/feed-ingest-plan.json` defaults to true. Worker
 counts default to four, with configured bounds of one through twenty. When
 partitioning is disabled, selection still runs but worker assignment is
-bypassed. Source-based bucket shares and buffers remain 60/10, 30/5 and 10/5
-percent; age controls do not turn source authority into an article verdict.
+bypassed. Worker controls cannot change winners or fill missing article slots.
+The [selection rules](../architecture/sources/feed-curation.md) explain the
+global unique-URL capacity, cached scores and soft diversity adjustments.
 
 The workflow does not profile live planner CPU or RAM. It still records the
 configured host fingerprint and commits it with the planner ledgers.
@@ -254,10 +254,12 @@ Effective settings use one control per row with its effective value and
 source, including workflow overrides. Missing captured policy does not
 substitute committed defaults. The fold links to this guide at the workflow
 commit when that context is available. The article limit is a maximum, not a
-promise. Shares remain fractions and switches remain booleans.
-The authority coefficient is not a source-tier weight; the
-[curation rules](../architecture/sources/feed-curation.md#inputs-and-independent-evidence)
-define the separate feed and tier factors.
+promise. Switches remain booleans. The authority coefficient multiplies
+configured feed weight only; [curation](../architecture/sources/feed-curation.md#fixed-score-preparation)
+defines its contribution separately from measured substance and reliability.
+The report distinguishes the raw technical word minimum from retained-word
+score evidence, including measured zero, and accounts for terminal losses
+without presenting retired source allocations or exposure controls.
 Execution measurements hold the machine fingerprint, run identity, attempt
 and operation durations. Concurrent durations can overlap; their sum is not
 elapsed planning time.

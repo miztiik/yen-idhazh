@@ -12,6 +12,7 @@ import { formatPolicyTable, formatWorkflowPolicy } from "../scripts/feed-ingest-
 import { formatWorkflowAnnotation } from "../scripts/feed-ingest-plan-report-format";
 import { renderPlannerProgressMarkdown } from "../src/reporting";
 import { WorkflowHostFingerprintSchema } from "../scripts/feed-ingest-plan-host-fingerprint";
+import { renderSelectedEvidence } from "../src/reporting/selected-evidence-markdown";
 import { parseHTML } from "linkedom";
 
 async function fixture() {
@@ -20,6 +21,21 @@ async function fixture() {
   ).json();
   return rows.map(readFeedIngestEvent);
 }
+
+test("selected evidence preserves measured zero and refuses incomplete or foreign saved rows", async () => {
+  const row = await Bun.file(new URL(
+    "../../../tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json", import.meta.url)).json();
+  const run = { run_id: row.run_id, attempt: row.attempt, selected_count: 1 };
+  const document = parseHTML(Bun.markdown.html(renderSelectedEvidence([row], run))).document;
+  const cells = [...document.querySelectorAll("tbody td")].map(cell => cell.textContent);
+  expect(cells).toEqual(["J1", "1", row.feed_id, "180", "0", "1", "0", "1.5", "1.25", "first_seen"]);
+  expect(document.textContent).not.toContain(row.canonical_url);
+  expect(renderSelectedEvidence(undefined, run)).toContain("unavailable");
+  expect(renderSelectedEvidence([], { ...run, selected_count: 0 })).toContain("zero articles");
+  expect(() => renderSelectedEvidence([], run)).toThrow("complete execution");
+  expect(() => renderSelectedEvidence([{ ...row, attempt: row.attempt + 1 }], run)).toThrow("complete execution");
+  expect(() => renderSelectedEvidence([{ ...row, substance_word_count: null }], run)).toThrow("substance_word_count");
+});
 
 test("links the workflow guide at the recorded GitHub commit without assuming a repository", () => {
   expect(resolveWorkflowGuideUrl({})).toBeUndefined();
@@ -85,17 +101,14 @@ test("absent progress stays unavailable and zero counts do not certify publicati
   const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
   const policy = formatWorkflowPolicy({ config: {
     ...config, curate_articles: {
-      ...config.curate_articles, source_based_quality_buckets: config.curate_articles.source_based_quality_buckets.map(rule =>
-        ({ ...rule, ladder_hours: [6, 12] })),
+      ...config.curate_articles, global_age_ceiling_hours: 12,
     },
   },
     request: { article_limit: 10, shards: 4, partition_strategy: "bin-pack" },
     history: settings.collect, parser_concurrency: 4 }, true);
   expect(policy.notice).toContain("article limit: 10 (workflow override); article assignments: 4; strategy: bin-pack");
-  for (const rule of config.curate_articles.source_based_quality_buckets) {
-    expect(policy.rows.find(([name]) => name === `${rule.id} age steps (hours)`))
-      .toEqual([`${rule.id} age steps (hours)`, "6 / 12", "configuration"]);
-  }
+  expect(policy.rows.find(([name]) => name === "Maximum known age (hours)"))
+    .toEqual(["Maximum known age (hours)", "12", "configuration"]);
   expect(policy.rows.find(([name]) => name === "Article limit")).toEqual(["Article limit", "10", "workflow override"]);
   expect(policy.rows.find(([name]) => name === "Policy config version")?.[1]).toBe(config.version);
   expect(policy.rows.find(([name]) => name === "Feed-status history (represented UTC days)")?.[1])
@@ -123,7 +136,7 @@ test("escapes command data and refuses URLs or arbitrary progress fields", async
   expect(() => renderPlannerProgressMarkdown([{ ...events[0], url: "https://news.example/private" }])).toThrow();
 });
 
-test("effective report separates raw admission from cached soft scoring and retains active controls", async () => {
+test("effective report separates raw admission from active soft scoring without retired controls", async () => {
   const config = FeedIngestConfigSchema.parse(await Bun.file(
     new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json());
   const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
@@ -132,7 +145,7 @@ test("effective report separates raw admission from cached soft scoring and reta
   const cells = Object.fromEntries(policy.rows.map(([label, value]) => [label, value]));
   expect(cells).toMatchObject({
     "Raw technical minimum (full-body words)": "180",
-    "Substance scoring": "Measured once and cached; not used by current ranking",
+    "Substance scoring": "Measured once and cached in the base score",
     "Retained-word admission minimum": "None; measured zero stays eligible",
     "Paragraph retention (minimum words OR sentences)": "25 words OR 2 sentences",
     "Retained-word full-credit start (words)": "750",
@@ -143,11 +156,17 @@ test("effective report separates raw admission from cached soft scoring and reta
     "Maximum name/number-density points": "0.3",
     "Name/number signals per sentence for full credit": "1",
     "Maximum headline deduction (points)": "0.25",
-    "Per-feed share limit (fraction)": String(config.curate_articles.soft_caps.max_source_share),
-    "Exploration share (fraction)": String(config.curate_articles.exploration_slot_share),
+    "Maximum known age (hours)": String(config.curate_articles.global_age_ceiling_hours),
+    "Unknown age": "Eligible with null timing and zero recency points",
+    "Website squared-count penalty coefficient": String(config.curate_articles.diversity.lambda_domain),
+    "Feed squared-count penalty coefficient": String(config.curate_articles.diversity.lambda_feed),
+    "First-use feed bonus (points)": String(config.curate_articles.diversity.novelty_bonus),
   });
   expect(cells["Retained-word length curve"]).toContain("zero words / zero points");
-  expect(policy.notice).toContain("not used by current ranking");
+  expect(policy.notice).toContain("included in the base score");
+  for (const retired of ["Per-feed share limit (fraction)", "Exploration share (fraction)", "Publisher exposure weight"]) {
+    expect(cells).not.toHaveProperty(retired);
+  }
   const changed = structuredClone(input);
   changed.config.triage.min_words = 200;
   Object.assign(changed.config.curate_articles.substance, {
@@ -181,7 +200,7 @@ test("policy cells preserve effective JSON values and override sources without i
     config: { ...config, availability: { ...config.availability, consecutive_failed_checks_before_rest: 4 },
       harvest: { ...config.harvest, concurrency: 7, fetch_timeout_ms: 4321 },
       curate_articles: { ...config.curate_articles, source_authority_weight: 1.25, source_reliability_penalty_enabled: false } },
-    request: { article_limit: 17, shards: 3, partition_strategy: "round-robin" },
+    request: { article_limit: 17, shards: 3, partition_strategy: "round-robin", global_age_ceiling_hours: 24 },
     history: { ...settings.collect, availability_strikes_before_rest: 4, reliability_floor: 0.3 },
     parser_concurrency: 2,
   };
@@ -201,6 +220,7 @@ test("policy cells preserve effective JSON values and override sources without i
     "Availability controls": { value: "Recorded" },
     "Consecutive failed logical checks before rest": { value: "4", source: "configuration" },
     "Reliability floor (fraction)": { value: "0.3" },
+    "Maximum known age (hours)": { value: "24", source: "workflow override" },
   });
   expect(cells).not.toHaveProperty("Selection");
   expect(policy.notice).toContain("selection started: false");

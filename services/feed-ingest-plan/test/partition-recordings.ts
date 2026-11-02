@@ -25,14 +25,9 @@ export async function fixtureInput(options: { count?: number; words?: number[] }
     triage: { ...loaded.harvest.config.triage, min_words: 1 },
     curate_articles: {
       ...loaded.harvest.config.curate_articles,
-      article_limit: Math.max(1, options.words?.length ?? options.count ?? fixture.word_work.length), exploration_slot_share: 0,
+      article_limit: Math.max(1, options.words?.length ?? options.count ?? fixture.word_work.length),
       source_authority_weight: 0,
-      source_based_quality_buckets: [{ id: "institutional", source_tier_id: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
-      soft_caps: {
-        ...loaded.harvest.config.curate_articles.soft_caps, max_source_share: 1,
-        max_website_group_share: 1, min_distinct_sources: 1,
-      },
-      mmr_weights: { lambda_source: 0, lambda_website_group: 0 },
+      diversity: { lambda_domain: 0, lambda_feed: 0, novelty_bonus: 0 },
     },
   });
   const inputs = {
@@ -53,8 +48,7 @@ export async function fixtureInput(options: { count?: number; words?: number[] }
       feed_id: sourceId,
       source: {
         feed_id: sourceId, feed_url: "https://example.org/feed", title: "Recorded source",
-        tier: 1, status: "active",
-        weight: 1, applied_tier_weight: 1,
+        status: "active", weight: 1,
       },
       canonical_url: url, url_key: deriveUrlKey(url), title: `Recorded article ${ordinal}`,
       article_text: Array(work).fill(`word${ordinal}`).join(" "), word_count: work,
@@ -82,7 +76,6 @@ export async function fixtureInput(options: { count?: number; words?: number[] }
   });
   const curation = curateArticles({
     articles: screening.admitted, batch, inputs, health: new Map(), selectionStartedAt: context.now,
-    publications: { day: fixture.date, availability: "unavailable", counts: new Map() },
   });
   return { fixture, context, planning, inputs, batch, candidates, screening, curation };
 }

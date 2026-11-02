@@ -180,7 +180,7 @@ test("public harvest returns strict full text and streamed work facts without pe
   expect(logged).toEqual(expect.arrayContaining(result.rejections));
   const first = result.candidates[0]!;
   expect(FeedIngestCandidateSchema.parse(first)).toEqual(first);
-  expect(first.source).toEqual(sourceSnapshot(loaded, loaded.sources[0]!));
+  expect(first.source).toEqual(sourceSnapshot(loaded.sources[0]!));
   expect(result.candidates.find(candidate => candidate.feed_id === "recorded-atom")?.source.publisher_id)
     .toBe("recorded-publication");
   expect(first.canonical_url).toBe("https://news.example/story/");
@@ -242,13 +242,13 @@ test("public harvest returns strict full text and streamed work facts without pe
   await expect(inputs([], { publishers: [{ id: "retired-publication", display_name: "Retired Publication", status: "retired" }] }))
     .rejects.toThrow();
   const load = (sources: unknown, publishers: unknown = loaded.publishers) => loadHarvestInputs({
-    config: loaded.config, taxonomy: loaded.registry, sources: { feeds: sources, publishers }, extraction: loaded.extraction_settings,
+    config: loaded.config, sources: { feeds: sources, publishers }, extraction: loaded.extraction_settings,
   });
   expect(() => load(loaded.sources, [...loaded.publishers, ...loaded.publishers])).toThrow("publisher ids must be distinct");
   expect(() => load([source({ publisher_id: "undefined-publication" })])).toThrow("unknown publisher");
   expect(load([source()]).sources[0]?.publisher_id).toBeNull();
   const renamed = load(loaded.sources, loaded.publishers.map(publisher => ({ ...publisher, display_name: "Renamed Publication" })));
-  expect(sourceSnapshot(renamed, renamed.sources[0]!).publisher_id).toBe("recorded-publication");
+  expect(sourceSnapshot(renamed.sources[0]!).publisher_id).toBe("recorded-publication");
   expect(load([source({ status: "retired", retired_on: "2026-10-21" })]).sources[0]).toMatchObject({
     added_on: null, retirement_reason: null,
   });
@@ -636,7 +636,7 @@ test("configured quality rejection keeps parsing complete and reports measured r
 test("report settings remain available without changing the planning fingerprint", async () => {
   const baseline = await inputs();
   const load = (config: typeof baseline.config) => loadHarvestInputs({
-    config, taxonomy: baseline.registry, sources: { feeds: baseline.sources }, extraction: baseline.extraction_settings,
+    config, sources: { feeds: baseline.sources }, extraction: baseline.extraction_settings,
   });
   const enabled = load({
     ...baseline.config, workflow_reporting: { ...baseline.config.workflow_reporting, enabled: !baseline.config.workflow_reporting.enabled },
@@ -652,13 +652,12 @@ test("report settings remain available without changing the planning fingerprint
   expect(removalText.config_sha256).toBe(baseline.config_sha256);
   const catalogAnnotations = loadHarvestInputs({
     config: baseline.config,
-    taxonomy: { ...baseline.registry, verticals: [{ id: "catalog-only" }] },
     sources: { feeds: baseline.sources.map(feed => ({ ...feed, vertical: "unregistered-catalog-annotation" })) },
     extraction: baseline.extraction_settings,
   });
   expect(catalogAnnotations.config_sha256).toBe(baseline.config_sha256);
-  expect(sourceSnapshot(catalogAnnotations, catalogAnnotations.sources[0]!))
-    .toEqual(sourceSnapshot(baseline, baseline.sources[0]!));
+  expect(sourceSnapshot(catalogAnnotations.sources[0]!))
+    .toEqual(sourceSnapshot(baseline.sources[0]!));
   expect(load({ ...baseline.config, triage: { ...baseline.config.triage, recency_half_life_hours: baseline.config.triage.recency_half_life_hours + 1 } }).config_sha256)
     .not.toBe(baseline.config_sha256);
   for (const [knob, value] of [
@@ -668,62 +667,54 @@ test("report settings remain available without changing the planning fingerprint
     ["corroboration_min_words", 101], ["truncation_cap_tokens", 256],
   ] as const) {
     const changed = loadHarvestInputs({
-      config: baseline.config, taxonomy: baseline.registry, sources: { feeds: baseline.sources },
+      config: baseline.config, sources: { feeds: baseline.sources },
       extraction: { ...baseline.extraction_settings, extract: { ...baseline.extraction, [knob]: value } },
     });
     expect(changed.config_sha256, knob).not.toBe(baseline.config_sha256);
   }
   expect(() => loadHarvestInputs({
-    config: baseline.config, taxonomy: baseline.registry, sources: { feeds: baseline.sources },
+    config: baseline.config, sources: { feeds: baseline.sources },
     extraction: { ...baseline.extraction_settings,
       evaluation: { brief_compression_ceiling: baseline.extraction_settings.evaluation.brief_compression_ceiling / 2 } },
   })).toThrow("extract.min_source_words");
 });
 
-test("planner inputs ignore added feed labels while configured tiers retain their lifecycle", async () => {
+test("planner inputs ignore catalog tiers and labels while feed lifecycle remains effective", async () => {
   const baseline = await inputs();
   const configured = baseline.sources[0]!;
   const label = `planner-test-${configured.id}`;
   const labelled = { ...configured, kind: label, form: `${label}-form` };
   const relabelled = loadHarvestInputs({
-    config: baseline.config, taxonomy: baseline.registry,
+    config: baseline.config,
     sources: { feeds: [labelled] }, extraction: baseline.extraction_settings,
   });
   expect(relabelled.config_sha256).toBe(baseline.config_sha256);
   expect(relabelled.sources[0]).toEqual(baseline.sources[0]);
 
-  const tierId = baseline.sources[0]!.tier;
-  for (const status of ["active", "draft"] as const) for (const registryStatus of ["draft", "retired"] as const) {
-    const tierTaxonomy = {
-      ...baseline.registry, source_tiers: baseline.registry.source_tiers.map(tier => tier.id === tierId
-        ? { ...tier, status: registryStatus, retired_on: registryStatus === "retired" ? "2026-10-20" : null } : tier),
-    };
-    expect(() => loadHarvestInputs({
-      config: baseline.config, taxonomy: tierTaxonomy, sources: { feeds: [source({ status, tier: tierId })] }, extraction: baseline.extraction_settings,
-    })).toThrow("source tier must be active and registered");
+  for (const tier of [1, 999]) {
+    const changed = loadHarvestInputs({
+      config: baseline.config, sources: { feeds: [{ ...configured, tier }] }, extraction: baseline.extraction_settings,
+    });
+    expect(changed.sources).toEqual(baseline.sources);
+    expect(changed.sources[0]).not.toHaveProperty("tier");
+    expect(changed).not.toHaveProperty("registry");
+    expect(changed.config_sha256).toBe(baseline.config_sha256);
+    expect(sourceSnapshot(changed.sources[0]!)).toEqual(sourceSnapshot(configured));
   }
-  const historicalTierId = Math.max(...baseline.registry.source_tiers.map(tier => tier.id)) + 1;
-  const historical = source({ status: "retired", retired_on: "2026-10-20", tier: historicalTierId });
-  const historicalTaxonomy = {
-    ...baseline.registry, source_tiers: [...baseline.registry.source_tiers,
-      { id: historicalTierId, weight: baseline.registry.source_tiers[0]!.weight, status: "retired", retired_on: "2026-10-20" }],
-  };
+  const historical = source({ status: "retired", retired_on: "2026-10-20" });
   const loaded = loadHarvestInputs({
-    config: baseline.config, taxonomy: historicalTaxonomy, sources: { feeds: [historical] }, extraction: baseline.extraction_settings,
+    config: baseline.config, sources: { feeds: [historical] }, extraction: baseline.extraction_settings,
   });
   expect(loaded.sources[0]).toEqual(historical);
-  expect(() => loadHarvestInputs({
-    config: baseline.config, taxonomy: baseline.registry, sources: { feeds: [historical] }, extraction: baseline.extraction_settings,
-  })).toThrow(/source\.[a-z0-9]+(?:-[a-z0-9]+)*\.tier: missing registered snapshot weight/u);
   const transport = new RecordedTransport(await readRecordings());
   const result = await harvestFeeds(loaded, context(), { transport });
   expect(transport.requests).toEqual([]);
   expect(result.rejections[0]?.drop_reason).toBe("SOURCE_INACTIVE");
-  expect(result.feed_outcomes[0]?.source).toMatchObject({
-    tier: historicalTierId, applied_tier_weight: historicalTaxonomy.source_tiers.at(-1)!.weight,
-  });
+  expect(result.feed_outcomes[0]?.source).toMatchObject({ status: "retired", weight: historical.weight });
+  expect(result.feed_outcomes[0]?.source).not.toHaveProperty("tier");
+  expect(result.feed_outcomes[0]?.source).not.toHaveProperty("applied_tier_weight");
   expect(() => loadHarvestInputs({
-    config: baseline.config, taxonomy: baseline.registry, sources: { feeds: [source({ url: "******news.example/feed" })] },
+    config: baseline.config, sources: { feeds: [source({ url: "******news.example/feed" })] },
     extraction: { extract: baseline.extraction },
   })).toThrow("credentials");
 });

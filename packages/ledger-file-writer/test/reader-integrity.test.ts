@@ -125,13 +125,17 @@ test("current native article files round-trip and older envelopes refuse without
         const path = join(root, result.files[0]!.path);
         const original = await readFile(path);
         expect((await readPlannerParquet(path, recording.name, recording.contract)).rows).toEqual([row]);
-        for (const version of ["2026-10-25", "2026-10-27", "2026-10-29"]) {
+        const refusedStamps = [
+          ...["2026-10-25", "2026-10-27", "2026-10-29"].map(version => ["envelope_version", version] as const),
+          ...(recording.name === "selected-articles" ? [["schema_version", "2026-10-31"] as const] : []),
+        ];
+        for (const [field, version] of refusedStamps) {
           const bytes = original;
           const metadata = readMetadata(bytes);
           const footer = metadata.fileMetadata();
           try {
             const values = new Map(footer.keyValueMetadata());
-            values.set("envelope_version", version);
+            values.set(field, version);
             const table = tableFromIPC(readParquet(bytes).intoIPCStream());
             const rewritten = await serializeParquet(table, values, "snappy");
             await writeFile(path, rewritten.data);

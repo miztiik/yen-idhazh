@@ -13,12 +13,9 @@ export const DropReasonSchema = z.enum([
   "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER", "PAYWALL_OR_BLOCKED", "FEED_PARSE_FAILED",
   "FEED_EMPTY", "MISSING_REQUIRED_FIELDS", "CATEGORY_EXCLUDED",
   "MEDIA_CONTENT", "PRESS_RELEASE", "LINK_HEAVY",
-  "REJECTED_SCREENING_MIN_WORDS", "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE",
+  "REJECTED_SCREENING_MIN_WORDS", "REJECTED_SCREENING_AGE_CEILING",
   "REJECTED_DUPLICATE_CANONICAL_CARRIER",
-  "REJECTED_LADDER_WINDOW_NOT_ACTIVATED", "REJECTED_SLACK_DEFICIT_FULFILLED",
-  "REJECTED_GLOBAL_CAPACITY_REACHED", "REJECTED_SOURCE_SHARE_LIMIT_REACHED",
-  "REJECTED_DOMAIN_SHARE_LIMIT_REACHED", "REJECTED_TIER_BUFFER_CEILING_REACHED",
-  "REJECTED_DISTINCT_SOURCE_REQUIREMENT_UNMET",
+  "REJECTED_GLOBAL_CAPACITY_REACHED",
 ]);
 export type DropReason = z.infer<typeof DropReasonSchema>;
 export const RetainedRejectionReasonSchema = z.string().min(1).max(128)
@@ -57,27 +54,21 @@ export const REASON_STAGES: Readonly<Record<DropReason, readonly RejectionStage[
   MEDIA_CONTENT: ["harvest-feeds", "screen-article-candidates"],
   PRESS_RELEASE: ["screen-article-candidates"], LINK_HEAVY: ["screen-article-candidates"],
   REJECTED_SCREENING_MIN_WORDS: ["screen-article-candidates"],
-  REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE: ["harvest-feeds", "screen-article-candidates"],
+  REJECTED_SCREENING_AGE_CEILING: ["harvest-feeds", "screen-article-candidates"],
   REJECTED_DUPLICATE_CANONICAL_CARRIER: ["curate-article-portfolio"],
-  REJECTED_LADDER_WINDOW_NOT_ACTIVATED: ["curate-article-portfolio"],
-  REJECTED_SLACK_DEFICIT_FULFILLED: ["curate-article-portfolio"],
   REJECTED_GLOBAL_CAPACITY_REACHED: ["curate-article-portfolio"],
-  REJECTED_SOURCE_SHARE_LIMIT_REACHED: ["curate-article-portfolio"],
-  REJECTED_DOMAIN_SHARE_LIMIT_REACHED: ["curate-article-portfolio"],
-  REJECTED_TIER_BUFFER_CEILING_REACHED: ["curate-article-portfolio"],
-  REJECTED_DISTINCT_SOURCE_REQUIREMENT_UNMET: ["curate-article-portfolio"],
 };
 export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (keyof z.infer<typeof RejectionDetailsSchema>)[]>>> = {
   FETCH_FAILED_HTTP: ["http_status"], FETCH_TIMEOUT: ["timeout_ms"],
   REJECTED_SCREENING_MIN_WORDS: ["words_found", "words_required"],
-  REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE: ["age_hours", "max_age_hours"],
+  REJECTED_SCREENING_AGE_CEILING: ["age_hours", "max_age_hours"],
   ALREADY_PUBLISHED: ["matched_url_key", "published_on", "history_window_days"],
   SETTLED_FAILURE: ["matched_url_key", "failure_code"], BLOCKED_URL_MARKER: ["matched_url_key", "matched_url_marker"],
   MEDIA_CONTENT: ["media_match"],
   PRESS_RELEASE: ["content_evidence", "sample_chars_limit"],
   LINK_HEAVY: ["content_evidence", "max_link_density", "max_list_items", "words_found", "list_word_limit"],
 };
-export const CANDIDATE_REJECTION_VERSION = "2026-11-01";
+export const CANDIDATE_REJECTION_VERSION = "2026-11-02";
 export const CandidateRejectionRecordSchema = z.strictObject({
   version: z.literal(CANDIDATE_REJECTION_VERSION).default(CANDIDATE_REJECTION_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   feed_id: SlugSchema, feed_url: UrlSchema, subject: z.enum(["feed", "article"]),
@@ -123,10 +114,11 @@ export const CandidateRejectionRecordSchema = z.strictObject({
 }).meta({
   version: CANDIDATE_REJECTION_VERSION,
   changelog: [
-    { version: CANDIDATE_REJECTION_VERSION, change: "Retain request pacing evidence in fetch rejections." },
+    { version: CANDIDATE_REJECTION_VERSION, change: "Replace tier and allocation refusals with the global known-age ceiling." },
+    { version: "2026-11-01", change: "Retain request pacing evidence in fetch rejections." },
     { version: "2026-10-30", change: "Retain response byte-limit evidence in fetch diagnostics." },
     { version: "2026-10-29", change: "Retain fetch evidence and allow harvest failures without parsed candidate identities." },
-    { version: "2026-10-28", change: "Rename the feed identity from source_id to feed_id." },
+    { version: "2026-10-28", change: "Earlier changes are in git." },
   ],
 });
 export type CandidateRejectionRecord = z.infer<typeof CandidateRejectionRecordSchema>;

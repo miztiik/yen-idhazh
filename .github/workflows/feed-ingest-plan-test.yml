@@ -14,18 +14,8 @@ on:
         required: false
         default: '4'
         type: string
-      institutional_age_hours:
-        description: Institutional sources - article age windows (hours); increasing comma-separated steps; blank uses configuration
-        required: false
-        default: ''
-        type: string
-      trade_press_age_hours:
-        description: Trade press - article age windows (hours); increasing comma-separated steps; blank uses configuration
-        required: false
-        default: ''
-        type: string
-      community_age_hours:
-        description: Community sources - article age windows (hours); increasing comma-separated steps; blank uses configuration
+      global_age_ceiling_hours:
+        description: Optional positive maximum known article age in hours; blank uses configuration
         required: false
         default: ''
         type: string
@@ -109,9 +99,7 @@ jobs:
           ARTICLE_LIMIT: ${{ inputs.article_limit }}
           SHARDS: ${{ inputs.shards }}
           PARTITION_STRATEGY: ${{ inputs.partition_strategy }}
-          INSTITUTIONAL_AGE_HOURS: ${{ inputs.institutional_age_hours }}
-          TRADE_PRESS_AGE_HOURS: ${{ inputs.trade_press_age_hours }}
-          COMMUNITY_AGE_HOURS: ${{ inputs.community_age_hours }}
+          GLOBAL_AGE_CEILING_HOURS: ${{ inputs.global_age_ceiling_hours }}
           DUMP_RAW_DOCUMENT_CONTENTS: ${{ inputs.dump_raw_document_contents }}
         run: bun run services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts
 

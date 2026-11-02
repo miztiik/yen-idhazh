@@ -11,6 +11,7 @@ import { renderFailureEvidence } from "./failure-evidence-markdown";
 import type { ReportFailureEvidence } from "./failure-evidence-markdown";
 import { aggregateFeedResults, compareKnownDescending, formatDuration } from "./aggregate-feed-results";
 import { renderSelectionExclusions } from "./selection-exclusions-markdown";
+import { renderSelectedEvidence } from "./selected-evidence-markdown";
 
 export type MarkdownSection = Readonly<{ markdown: string; notice: string }>;
 export type PlannerMarkdownNotice = Readonly<{
@@ -20,7 +21,7 @@ export type PlannerMarkdown = Readonly<{
   markdown: string; notices: readonly PlannerMarkdownNotice[];
 }>;
 export type PlanMarkdownEvidence = Readonly<{
-  response: unknown; health?: unknown; policy?: MarkdownSection; host?: MarkdownSection;
+  response: unknown; health?: unknown; selected?: unknown; policy?: MarkdownSection; host?: MarkdownSection;
   maximum?: string;
   failures?: ReportFailureEvidence;
 }>;
@@ -113,6 +114,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
     "", "Technically eligible means original captures passing technical admission, not later screening. Each feed combines this run's UTC work days; one unknown constituent makes its exact total unavailable.",
     "", "</details>", "", requestReport.markdown,
     "", renderSelectionExclusions(health?.rows),
+    "", renderSelectedEvidence(input.selected, row),
     ...(input.policy === undefined ? [
       "", "<details>", "<summary>Effective settings</summary>", "",
       "## Table G - Effective settings", "", "| Id | Setting | Effective value | Source |",

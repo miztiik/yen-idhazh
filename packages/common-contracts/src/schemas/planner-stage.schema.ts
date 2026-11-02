@@ -80,6 +80,11 @@ export const PlannerFeedOfferSchema = z.strictObject({
   offer_id: Sha256Schema, source: SourceSnapshotSchema, entry: PlannerFeedEntrySchema,
   state: z.enum(["pending", "fetched", "parsed", "rejected"]),
   fetch_request_id: z.uuid({ version: "v4" }).nullable(),
+}).meta({
+  version: PARSED_FEED_BATCH_VERSION,
+  changelog: [
+    { version: PARSED_FEED_BATCH_VERSION, change: "Retain configured feed weights without planner tier fields." },
+  ],
 });
 export type PlannerFeedOffer = z.infer<typeof PlannerFeedOfferSchema>;
 export const PlannerRejectionCountSchema = z.strictObject({
@@ -119,10 +124,10 @@ export const ParsedFeedBatchSchema = z.strictObject({
 }).meta({
   version: PARSED_FEED_BATCH_VERSION,
   changelog: [
-    { version: PARSED_FEED_BATCH_VERSION, change: "Require the current parsed batch without older-format readers." },
+    { version: PARSED_FEED_BATCH_VERSION, change: "Retain candidates and offers without planner tier fields." },
+    { version: "2026-10-31", change: "Require the current parsed batch without older-format readers." },
     { version: "2026-10-30", change: "Retain parser deadlines, collection completion and response byte-limit evidence." },
     { version: "2026-10-29", change: "Identify parsed candidates produced with shared query-free article cleanup." },
-    { version: "2026-10-27T18:30", change: "Link standalone article batches to their original source-outcome receipt." },
     { version: "2026-10-25", change: "Earlier changes are in git." },
   ],
 });
@@ -136,8 +141,9 @@ export const SelectedFeedBatchSchema = z.strictObject({
 }).meta({
   version: SELECTED_ARTICLE_VERSION,
   changelog: [
-    { version: SELECTED_ARTICLE_VERSION, change: "Carry independent request totals with explicit counter coverage." },
-    { version: SELECTED_ARTICLE_VERSION, change: "Identify selections produced with shared query-free article cleanup." },
+    { version: SELECTED_ARTICLE_VERSION, change: "Carry both word counts, complete diversity scores and global timing." },
+    { version: "2026-10-31", change: "Carry independent request totals with explicit counter coverage." },
+    { version: "2026-10-31", change: "Identify selections produced with shared query-free article cleanup." },
     { version: "2026-10-27", change: "Carry terminal rejected article metadata with the complete selection." },
   ],
 });

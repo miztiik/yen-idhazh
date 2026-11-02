@@ -33,8 +33,7 @@ async function input() {
   const loaded = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
   const source = SourceSnapshotSchema.parse({
     feed_id: "recorded-news", feed_url: "https://news.example/feed.xml", title: "Recorded feed",
-    publisher_id: null, tier: 2,
-    status: "active", weight: 0.8, applied_tier_weight: 0.6,
+    publisher_id: null, status: "active", weight: 0.8,
   });
   return {
     loaded, sources: [source], now, policy: loaded.clock_config.collect, ...loaded.harvest.config.feedback,

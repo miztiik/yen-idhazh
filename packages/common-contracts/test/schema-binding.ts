@@ -23,6 +23,7 @@ import {
   PublicationEntryInputSchema, PublicationInventoryInputSchema, PUBLICATION_INVENTORY_VERSION,
   RawArticleFreshnessSchema, AdmittedArticleFreshnessSchema, ScreenedCandidateSchema,
   NumericalSelectionInputSchema, NumericalSelectionOutputSchema,
+  FeedOutcomePayloadSchema,
 } from "../src/index";
 
 export const runtimeSchemas = {
@@ -30,6 +31,7 @@ export const runtimeSchemas = {
   ScreenedCandidate: ScreenedCandidateSchema, NumericalSelectionInput: NumericalSelectionInputSchema,
   NumericalSelectionOutput: NumericalSelectionOutputSchema,
   SourceSnapshot: SourceSnapshotSchema, FeedIngestCandidate: FeedIngestCandidateSchema,
+  FeedOutcomePayload: FeedOutcomePayloadSchema,
   WriterIdentity: WriterIdentitySchema, RowIdentity: RowIdentitySchema, FileEnvelope: FileEnvelopeSchema,
   PlannerFileEnvelope: PlannerFileEnvelopeSchema, FeedHealthRow: FeedHealthRowSchema,
   FetchedDocument: FetchedDocumentSchema,

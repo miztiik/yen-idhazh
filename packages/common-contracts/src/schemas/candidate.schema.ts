@@ -24,10 +24,11 @@ export const FeedIngestCandidateSchema = z.strictObject({
 }).meta({
   version: FEED_INGEST_CANDIDATE_VERSION,
   changelog: [
-    { version: FEED_INGEST_CANDIDATE_VERSION, change: "Identify candidates with the shared query-free article cleanup policy." },
+    { version: FEED_INGEST_CANDIDATE_VERSION, change: "Retain configured source weights without planner tier fields." },
+    { version: "2026-10-31", change: "Identify candidates with the shared query-free article cleanup policy." },
     { version: "2026-10-28", change: "Rename the configured feed identity from source_id to feed_id." },
     { version: "2026-10-27", change: "Remove source classification fields from planner candidates." },
-    { version: "2026-10-25", change: "Bind candidates to their actual fetch and configured source facts." },
+    { version: "2026-10-25", change: "Earlier changes are in git." },
   ],
 });
 export const CandidateSchema = FeedIngestCandidateSchema;

@@ -13,7 +13,6 @@ import { readHealthCapture } from "./read-health-capture";
 import { createPlannerHistoryCache } from "./read-planner-history";
 import { readDiscoveredEvidence } from "./read-discovered-evidence";
 import { readExclusionEvidence } from "./read-exclusion-evidence";
-import { readPublisherPublication } from "./read-publisher-publication";
 import { resolveHealthDays } from "./resolve-health-days";
 import { closedRequestDays } from "./request-summary";
 import { defaultDayInput } from "./named-days";
@@ -23,7 +22,7 @@ import { requiredUtcDays } from "../utc-instant";
 export type CurrentHealthWork = { context: RunContext; rows: readonly FeedHealthStateRow[] };
 export function healthHistoryInput(inputs: PlanInputs, now: string, current?: CurrentHealthWork) {
   return {
-    root: inputs.root, now, sources: inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source)),
+    root: inputs.root, now, sources: inputs.harvest.sources.map(source => sourceSnapshot(source)),
     policy: inputs.clock_config.collect, ...inputs.harvest.config.feedback,
     lifecycle_policy: inputs.harvest.config.availability,
     concurrency: inputs.harvest.config.harvest.concurrency, health: inputs.registrations.feed_health_state,
@@ -100,7 +99,7 @@ export async function readRunHistory(inputs: PlanInputs, context: RunContext) {
   const requestDays = [...new Set(dates.flatMap(day =>
     closedRequestDays(`${day}T00:00:00Z`, healthInput.request_report_closed_days)))].sort();
   const planning = readPlanningHistory(inputs, now, current, cache);
-  const [health, requests, discovered, exclusions, publications] = await Promise.all([
+  const [health, requests, discovered, exclusions] = await Promise.all([
     planning,
     planning.then(() => readHealthCapture({ ...healthInput, current_rows: [] }, requestDays.map(day =>
       healthInput.health_days.find(value => value.day === day) ?? defaultDayInput(healthInput.health.prefix, day)), cache)),
@@ -121,16 +120,10 @@ export async function readRunHistory(inputs: PlanInputs, context: RunContext) {
       settledFailureDays: inputs.settings.inputs.settled_failure_days.filter(value => value.day === day),
       concurrency: inputs.harvest.config.harvest.concurrency,
     }))),
-    Promise.all(dates.map(day => readPublisherPublication({
-      root: inputs.root, day, published: inputs.registrations.published, item_health: inputs.registrations.item_health,
-      selections: inputs.registrations.selected_articles, published_days: inputs.settings.inputs.published_days,
-      health_days: inputs.settings.inputs.settled_failure_days, log: createStageLogger(context),
-    }))),
   ]);
   return {
     run_id: context.run_id, attempt: context.writer.attempt, health, requests, discovered,
     exclusions: new Map(dates.map((day, index) => [day, exclusions[index]!])),
-    publications: new Map(dates.map((day, index) => [day, publications[index]!])),
   };
 }
 export type RunHistory = Awaited<ReturnType<typeof readRunHistory>>;

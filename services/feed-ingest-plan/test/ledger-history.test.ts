@@ -9,7 +9,6 @@ import {
   SelectedArticleRowSchema,
 } from "@idhazh/common-contracts";
 import { persistLedger, PlannerUnsupportedFormatError } from "@idhazh/ledger-file-writer";
-import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import { tableFromIPC, tableToIPC } from "apache-arrow";
 import initializeParquet, {
   Table as WasmTable, WriterPropertiesBuilder, readMetadata, readParquet, writeParquet,
@@ -19,11 +18,7 @@ import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { readLedgerDay } from "../src/read-ledger-history/read-period";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { readPlannerDay } from "../src/read-ledger-history/read-planner-history";
-import { readPublisherPublication } from "../src/read-ledger-history/read-publisher-publication";
-import { classifyPublicationHistoryError } from "../src/read-ledger-history/classify-publication-history-error";
-import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
-import { ItemHealthPublicationSchema, PublishedRowSchema, PUBLISHED_ROW_SCHEMA_VERSION } from "../src/metrics/publication-evidence";
-import { ITEM_HEALTH_ROW_SCHEMA_VERSION } from "../src/read-ledger-history/item-health-version";
+import { PublishedRowSchema, PUBLISHED_ROW_SCHEMA_VERSION } from "../src/metrics/publication-evidence";
 import {
   compactRows, registration, settings, writer, writeRows,
 } from "./partition-fixtures";
@@ -180,7 +175,7 @@ test("planner compact members keep native validation and never fall through on a
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);
 
-test("explicit completed files retain integrity and genuine publications require an unambiguous publisher join", async () => {
+test("explicit completed files distinguish missing membership from an explicitly empty day", async () => {
   const root = await mkdtemp(join(tmpdir(), "history-raw-index-"));
   try {
     const written = await writeRows(join(root, "state"), "selected-articles", day, SelectedArticleRowContract, [selection()]);
@@ -197,88 +192,21 @@ test("explicit completed files retain integrity and genuine publications require
     expect(empty.represented).toBe(false);
     expect(empty.rows).toEqual([]);
 
-    const publisherRoot = join(root, "publisher");
-    const stateRoot = join(publisherRoot, "state");
-    const selected = { ...selection(), publisher_id: "recorded-publisher" };
-    const writerIdentity = writer(selected.run_id);
-    const identity = { date: day, run_id: selected.run_id, item_id: "recorded-item-01",
-      url_key: selected.url_key, source_id: selected.feed_id, stage: "publish" as const, outcome: "ok" as const };
-    const healthContract = { schema: ItemHealthPublicationSchema, schemaVersion: ITEM_HEALTH_ROW_SCHEMA_VERSION };
-    const health = await writeRows(stateRoot, "item-health", day, healthContract,
-      [identity, identity, { ...identity, stage: "extract" }], writerIdentity);
-    const publication = await writeRows(stateRoot, "published", day, publishedContract,
-      [{ version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: day, url_key: selected.url_key, item_id: identity.item_id }], writerIdentity);
-    const snapshots = await writeRows(stateRoot, "selected-articles", day, SelectedArticleRowContract, [selected]);
-    const localFiles = (written: PersistLedgerResult) => written.files.map(file => `state/${file.path}`);
-    const request = {
-      root: publisherRoot, day, published: registration("published"), item_health: registration("item-health"),
-      selections: registration("selected-articles"),
-      published_days: [{ day, raw_files: localFiles(publication) }], health_days: [{ day, raw_files: localFiles(health) }],
-    };
-    const counted = await readPublisherPublication(request);
-    expect(counted.availability).toBe("available");
-    expect(counted.counts.get("recorded-publisher")).toBe(1);
-    expect(counted.gaps).toEqual([]);
-    const notPublished = await readPublisherPublication({ ...request, published_days: [{ day, raw_files: [] }] });
-    expect(notPublished.availability).toBe("available");
-    expect(notPublished.counts.size).toBe(0);
-    const compact = await compactRows(stateRoot, "selected-articles", day, SelectedArticleRowContract,
-      [selected], "daily");
-    expect((await readPublisherPublication(request)).counts).toEqual(counted.counts);
-    const compactBytes = await readFile(compact.path!);
-    await rm(compact.path!);
-    expect((await readPublisherPublication(request)).counts).toEqual(counted.counts);
-    const rawPath = join(stateRoot, snapshots.files[0]!.path);
-    const rawBytes = await readFile(rawPath);
-    await rm(rawPath);
-    expect((await readPublisherPublication(request)).availability).toBe("unavailable");
-    await writeFile(rawPath, rawBytes);
-    await writeFile(compact.path!, compactBytes);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 60_000);
 
-    for (const row of [
-      { ...selected, run_id: `${day}-999999` },
-      { ...selected, publisher_id: null },
-    ]) {
-      const changed = await writeRows(stateRoot, "selected-articles", day, SelectedArticleRowContract, [row]);
-      expect(changed.status).toBe("written");
-      // Earlier local siblings remain visible; a later snapshot cannot hide them.
-      expect((await readPublisherPublication(request)).availability).toBe(row.publisher_id === null ? "unavailable" : "available");
-    }
-    const changedPublisher = await writeRows(stateRoot, "selected-articles", day, SelectedArticleRowContract,
-      [{ ...selected, attempt: 2, publisher_id: "conflicting-publisher" }]);
-    expect(changedPublisher.status).toBe("written");
-    const ambiguous = await readPublisherPublication(request);
-    expect(ambiguous.availability).toBe("unavailable");
-    expect(ambiguous.counts.size).toBe(0);
-    const extraOwner = await writeRows(stateRoot, "item-health", day, healthContract,
-      [{ ...identity, run_id: `${day}-2` }], writer(`${day}-2`));
-    const ownerGap = await readPublisherPublication({
-      ...request, health_days: [{ day, raw_files: [...localFiles(health), ...localFiles(extraOwner)] }],
-    });
-    expect(ownerGap.gaps).toContain("publication_owner_unavailable");
-
-    const invalidIndex = join(publisherRoot, "invalid-publication-index.json");
-    for (const contents of ["{", JSON.stringify({ version: "not-a-version" })]) {
-      await writeFile(invalidIndex, contents);
-      const invalid = await readPublisherPublication({
-        ...request, published_days: [{ day, raw_index: "invalid-publication-index.json" }],
-      });
-      expect(invalid.availability).toBe("unavailable");
-      expect(invalid.counts.size).toBe(0);
-      expect(invalid.gaps).toEqual(["invalid_publication_history"]);
-    }
-    for (const error of [new TypeError("programming error"), new Error("programming error"), new SyntaxError("programming error"), "not an error"]) {
-      expect(classifyPublicationHistoryError(error)).toBeNull();
-    }
-    expect(classifyPublicationHistoryError(new LedgerHistoryReadError("integrity diagnostic"))).toBe("integrity diagnostic");
+test("the surviving publication reader refuses genuine corrupt publication bytes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "history-publication-integrity-"));
+  try {
+    const publication = await writeRows(root, "published", day, publishedContract,
+      [{ version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: day, url_key: selection().url_key, item_id: "recorded-item-01" }],
+      writer(`${day}-1`));
+    const input: Parameters<typeof readLedgerDay>[0] = { ledger: "published", day, contract: publishedContract,
+      rawFiles: publication.files.map(file => join(root, file.path)) };
+    expect((await readLedgerDay(input)).rows).toHaveLength(1);
     for (const bytes of [new Uint8Array([1, 2, 3]), new Uint8Array(20)]) {
-      await writeFile(join(stateRoot, publication.files[0]!.path), bytes);
-      await expect(readLedgerDay({ ledger: "published", day, contract: publishedContract,
-        rawFiles: publication.files.map(file => join(stateRoot, file.path)) })).rejects.toThrow();
-      const corrupt = await readPublisherPublication(request);
-      expect(corrupt.availability).toBe("unavailable");
-      expect(corrupt.counts.size).toBe(0);
-      expect(corrupt.gaps).toEqual(["invalid_publication_history"]);
+      await writeFile(join(root, publication.files[0]!.path), bytes);
+      await expect(readLedgerDay(input)).rejects.toThrow();
     }
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 60_000);

@@ -49,7 +49,7 @@ test("large feeds retain every rejection without per-offer collection snapshots 
       .toHaveLength(admittedPerFeed * sources.length);
     expect(parsed.work_rows.reduce((sum, row) => sum + (row.article_requests ?? 0), 0))
       .toBe(admittedPerFeed * sources.length);
-    expect(parsed.exclusions.reduce((sum, row) => sum + (row.reason_code === "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE" ? row.count : 0), 0))
+    expect(parsed.exclusions.reduce((sum, row) => sum + (row.reason_code === "REJECTED_SCREENING_AGE_CEILING" ? row.count : 0), 0))
       .toBe(rejectedPerFeed * sources.length);
   } finally { await fixture.close(); }
 }, 120000);

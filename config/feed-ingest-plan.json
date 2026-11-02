@@ -141,24 +141,8 @@
         "punctuation_patterns": ["!{2,}", "\\?!", "!\\?"]
       }
     },
-    "source_based_quality_buckets": [
-      { "id": "institutional", "source_tier_id": 1, "share_pct": 60, "buffer_pct": 10, "ladder_hours": [24, 36, 48] },
-      { "id": "trade-press", "source_tier_id": 2, "share_pct": 30, "buffer_pct": 5, "ladder_hours": [24, 30] },
-      { "id": "community", "source_tier_id": 3, "share_pct": 10, "buffer_pct": 5, "ladder_hours": [24] }
-    ],
     "source_reliability_penalty_enabled": true,
     "source_authority_weight": 1.0,
-    "soft_caps": {
-      "max_source_share": 0.10,
-      "max_website_group_share": 0.15,
-      "min_distinct_sources": 12,
-      "relaxation_order": ["distinct_sources", "source_share"]
-    },
-    "mmr_weights": {
-      "lambda_source": 0.25,
-      "lambda_website_group": 0.15
-    },
-    "exploration_slot_share": 0.08,
     "website_grouping": {
       "include_private_suffixes": true
     }

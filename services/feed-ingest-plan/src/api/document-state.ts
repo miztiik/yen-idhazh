@@ -95,7 +95,7 @@ export async function documentState(record: DocumentOperationContext, inputs: Pl
       const history = await preparePlanningHealth(inputs, context.now, { context, rows: [] }, baseline.health);
       return {
         kind: "document", context, history, work: createRunHealth(context,
-          inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source)), history.sources,
+          inputs.harvest.sources.map(source => sourceSnapshot(source)), history.sources,
           { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls,
             clock: runtime.observation_clock ?? (() => new Date()) }),
         fetcher: createPermittedFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),

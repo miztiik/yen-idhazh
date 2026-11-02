@@ -14,15 +14,15 @@ export function selectedArticle(day = "2026-10-20") {
     publisher_id: null, canonical_url: "https://example.org/article/1", title: "Caf\u00e9 \u6771\u4eac",
     categories: ["world", "science"], article_text: "Sanitized artifact-only body.",
     author: null, published_at: `${day}T10:00:00.123Z`, published_at_source: "selection",
-    tier: 1, weight: 1, applied_tier_weight: 0.5,
+    weight: 1, word_count: 180, substance_word_count: 0,
     editorial_rank: 1, estimated_work: 180, worker_assignment: 0,
     ratings: {
       base_article_score: 1.5, marginal_score: 1.25, adjustments: [
-        { term: "feed-reliability", value: null }, { term: "publisher-exposure", value: 0 },
-        { term: "domain", value: -0.25 },
+        { term: "article_pass_rate", value: 0 }, { term: "substance_quality_score", value: 0 },
+        { term: "domain_diversity_penalty", value: -0.25 }, { term: "feed_diversity_penalty", value: 0 },
+        { term: "novelty_bonus", value: 0 },
       ], recency_score: 1, feed_authority_score: 0.5,
     },
-    feed_limit: 3, exploration_slot: false, cap_relaxations: [],
     timing_at: `${day}T10:00:00.123Z`, timing_basis: "first_seen", age_hours: 0,
     freshness_cutoff_at: `${day}T00:00:00Z`,
   });
