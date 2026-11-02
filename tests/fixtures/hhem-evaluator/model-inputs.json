@@ -1,0 +1,31 @@
+{
+  "version": "2026-11-02",
+  "provenance": "Project-authored fictional source and summary pairs for the standalone evaluator.",
+  "cases": [
+    {
+      "id": "supported",
+      "source_text": "The town library opened a reading room on Monday. It has twelve desks. Visitors can use the room without a booking.",
+      "summary_text": "The library opened a reading room with twelve desks."
+    },
+    {
+      "id": "contradicted",
+      "source_text": "The town library opened a reading room on Monday. It has twelve desks. Visitors can use the room without a booking.",
+      "summary_text": "The library closed its reading room and removed all desks."
+    },
+    {
+      "id": "other-source",
+      "source_text": "The garden club planted eight apple trees beside the river. Rain delayed work until Friday. Members water the trees each week.",
+      "summary_text": "The library opened a reading room with twelve desks."
+    },
+    {
+      "id": "privacy",
+      "source_text": "PrivateSourceCanary: A reading room opened beside the library. It has twelve desks.",
+      "summary_text": "PrivateSummaryCanary: A reading room has twelve desks."
+    },
+    {
+      "id": "whitespace-distinct",
+      "source_text": "The town library opened a reading room on Monday. It has twelve desks. Visitors can use the room without a booking.\n",
+      "summary_text": "The library opened a reading room with twelve desks."
+    }
+  ]
+}

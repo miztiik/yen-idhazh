@@ -1,11 +1,12 @@
-# HHEM evaluation API contracts
+# HHEM evaluation API
 
 **Last Updated**: 2026-11-02
 
 Which fields, identities and startup settings the independent HHEM evaluator
-accepts. The current package validates these contracts; it does not yet start
-an HTTP listener, load a model or serve scores. Existing pipeline evaluation
-and published data are unchanged.
+accepts. The package serves synchronous local CPU evaluations with one owned
+model process and bounded waiting. Existing pipeline evaluation and published
+data are unchanged. The [architecture](../architecture/evaluation/hhem-evaluation-api.md)
+owns admission, cancellation, model loading and failure handling.
 
 ## Native ownership and version
 
@@ -57,7 +58,7 @@ Table B - Result fields
 | Id | Field | Contract |
 | --- | --- | --- |
 | B1 | `version`, `status` | Current wire version; status is `complete`, `partial` or `failed`. |
-| B2 | `execution_id`, `request_id`, `correlation_id`, `terminal_event_id` | Execution UUIDv4; nullable caller UUIDv4 values before validation; nullable terminal UUIDv5 only when terminal logging fails. The later emitter must return the actual emitted terminal event's ID. |
+| B2 | `execution_id`, `request_id`, `correlation_id`, `terminal_event_id` | Execution UUIDv4; nullable caller UUIDv4 values before validation; nullable terminal UUIDv5 only when terminal logging fails. The parent returns the actual emitted terminal event's ID. |
 | B3 | `hhem`, `hhem_full`, `hhem_delta` | Nullable finite scores from zero to one. Delta is primary minus full, from minus one to one, and is null without both scores. |
 | B4 | `effective_settings` | The resolved control set, or null before valid resolution. |
 | B5 | `windows` | Nullable `primary` and `full` plans, each with positive `planned` and nonnegative `scored` counts; scored cannot exceed planned. `full_reused_primary` identifies full-source reuse. Unplanned counts are null. |
@@ -75,8 +76,8 @@ completed primary score.
 Disabled full comparison has no full counts, score, delta, details or timing.
 Identical-source reuse reports the full logical plan with zero additional
 scored windows, the primary score, mirrored details and null full timing.
-The contract checks result consistency; exact source equality and actual
-scoring belong to the subsequent runtime implementation.
+The parent compares the original strings exactly, validates each worker reply,
+and reduces only completed comparisons.
 
 Table C - Loaded model and owned worker identities
 
@@ -136,7 +137,7 @@ Table E - Strict event fields
 
 `encode_json_line` counts the complete UTF-8 JSONL record, including its
 newline, against `logging.max_event_bytes` and refuses overflow without
-truncation. The later emitter writes these records to stderr through
+truncation. The parent emitter writes these records to stderr through
 standard-library logging and propagates write failures. No raw child stderr,
 access logs, progress streams, exception representations or input bodies
 belong in these events.
@@ -155,9 +156,9 @@ Table F - Private native packets
 The native `WorkerCommand` and `WorkerReply` root models select packets by
 `kind` without adding a JSON wrapper. They reject unknown kinds and unsupported
 versions. `validate_window_reply` checks every command identity field. The
-subsequent controller must enforce one outstanding command, reject duplicate
-and stale replies and use bounded multiprocessing JSON byte pipes, not object
-pickle messages or a broker.
+controller enforces one outstanding command, rejects duplicate and stale
+replies, and uses bounded multiprocessing JSON byte pipes, not object pickle
+messages or a broker.
 
 ## Authored startup settings
 
@@ -195,7 +196,7 @@ not cores or threads; they do not promise full utilization.
 The package has its own manifest, lock and CPython 3.12 version file. It has no
 backend imports, backend installation dependency or root manifest change.
 Pydantic supplies validation, FastAPI/OpenAPI and Uvicorn supply the HTTP
-dependencies, and HTTPX supplies the eventual caller and in-process transport.
+dependencies, and HTTPX supplies in-process transport and caller support.
 Their cost is an independent Python dependency tree, not published-site bytes.
 FastAPI stays in the 0.121 release family to avoid an unused default telemetry
 API dependency.
@@ -206,7 +207,28 @@ The optional `model` extra selects Transformers 4.57.6, CPU-index PyTorch
 2.8.0, model-download library 0.36.0 and SentencePiece 0.2.1. It adds large CPU
 wheels; actual inference also requires the named model assets. Ordinary
 development and CI do not install this extra or download weights. Resolving
-their package metadata is not evidence that the official model loads.
+their package metadata alone is not evidence that the official model loads.
+
+## Standalone command and captured evidence
+
+Run `python -m hhem_evaluator` in the independent model environment. `--root`
+names the repository root and `--settings` names its committed settings file;
+both are required operator paths. `--enable` enables that invocation without
+editing the development flag. The effective setting is included in the
+service-configuration digest. There is one HTTP process, no reload or worker
+count control, and no request-selected executable or destination.
+
+`scripts/capture-model-recordings.py` uses that same production loader and
+official predictor. The named `tests/fixtures/hhem-evaluator/model-inputs.json`
+contains only project-authored fictional text. `model-predictions.json` stores
+actual finite predictions, exact input hashes, a UTC capture instant and the
+digest of `model-identity.json`. That identity records the actual loaded
+tensors, configuration, tokenizer assets and runtimes.
+
+The capture and cached-only reload demonstrate loading and prediction, not
+factual-accuracy calibration or hosted-runner speed. Ordinary tests use these
+recordings only at the model-call boundary; they do not install the model
+extra, download weights or expose a production replay mode.
 
 ## See also
 
@@ -214,3 +236,4 @@ their package metadata is not evidence that the official model loads.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - native schema ownership.
 - [../architecture/contracts/identity.md#6-hhem-execution-and-event-identity](../architecture/contracts/identity.md#6-hhem-execution-and-event-identity) - caller, execution and event identities.
 - [repository-layout.md](repository-layout.md) - package, configuration and fixture locations.
+- [../architecture/evaluation/hhem-evaluation-api.md](../architecture/evaluation/hhem-evaluation-api.md) - execution and failure ownership.

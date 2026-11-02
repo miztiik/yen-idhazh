@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "hhem-evaluator"
 version = "2026.11.2"
-description = "Independent native contracts for local HHEM evaluation."
+description = "Independent bounded local CPU HHEM evaluation API."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "pydantic>=2.12,<3",
@@ -50,7 +50,12 @@ python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 
+[[tool.mypy.overrides]]
+module = ["torch", "transformers", "huggingface_hub", "huggingface_hub.utils"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
-addopts = "-q --import-mode=importlib --disable-socket"
+pythonpath = ["src", "."]
+# asyncio uses Unix-domain sockets for local wake-up IPC, not an HTTP listener.
+addopts = "-q --import-mode=importlib --disable-socket --allow-unix-socket"

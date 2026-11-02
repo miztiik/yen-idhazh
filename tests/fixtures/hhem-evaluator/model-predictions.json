@@ -1,0 +1,32 @@
+{
+  "version": "2026-11-02",
+  "recorded_at": "2026-11-02T11:03:51.335933Z",
+  "model_identity_sha256": "5c2be9fc35e53395b873f57f6d88ec46cedfe30ec9ef986ac4ff4393969d1afe",
+  "cases": [
+    {
+      "id": "supported",
+      "input_sha256": "231e8a1d9071e483f2a2f4949795bb53cd3a74748e9560bb513834d32177da0a",
+      "score": 0.944246768951416
+    },
+    {
+      "id": "contradicted",
+      "input_sha256": "e4f08c3160fc1107fb161fe436a311f1f44b9a0dc8b27f3b6c224882d8712986",
+      "score": 0.05103925243020058
+    },
+    {
+      "id": "other-source",
+      "input_sha256": "b63531029a4fe4ad7b2cb2162dd3df840c5beee8d2fea3a949846270dd64906d",
+      "score": 0.003540699603036046
+    },
+    {
+      "id": "privacy",
+      "input_sha256": "d161be409f8149ce4c79ac7538e881f562b4f8a18b8f586906b9a328ec116cee",
+      "score": 0.9325369596481323
+    },
+    {
+      "id": "whitespace-distinct",
+      "input_sha256": "0ac315872b386796046e5129dca059ac05e77069958f333e1dda524781a61b18",
+      "score": 0.944246768951416
+    }
+  ]
+}

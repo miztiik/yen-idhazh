@@ -236,7 +236,37 @@ strict types and lint when the scope job selects code. It installs neither
 the backend nor the model extra. The named UUID test fails with preparation
 instructions when its real TypeScript dependency is absent; it never skips.
 These checks certify contracts and configuration, not model loading, scoring
-or HTTP lifecycle. Existing full-suite merge-candidate gates remain unchanged.
+by the real model. For a runtime change, use one combined selected invocation:
+
+```powershell
+uv run --frozen pytest tests/test_windows.py tests/test_scoring.py tests/test_api.py tests/test_worker_lifecycle.py tests/test_text_boundaries.py
+```
+
+The runtime cases compose the actual ASGI lifespan, owned multiprocessing byte
+pipes and recorded predictions at the model boundary. The primary/full timeout
+case must retain the exact primary maximum, confirm the old PID's exit, keep
+queued identities and deadlines, and load the same replacement identity.
+No ordinary test opens an HTTP listener or downloads model assets.
+The socket guard allows only Unix-domain sockets for local event-loop IPC.
+Windows asyncio needs an internal TCP socket pair and cannot run these ASGI
+cases under that guard. Record this platform limitation rather than weakening
+the guard; the complete isolated Linux CI suite remains authoritative.
+
+Real recordings are a separate operator check, not an ordinary test. From the
+service directory, prepare a separate environment so later model-free checks
+do not inherit optional model packages:
+
+```powershell
+$env:UV_PROJECT_ENVIRONMENT = Join-Path (Get-Location) 'var\model-venv'
+uv sync --frozen --extra model --group dev
+uv run --frozen --extra model python .\scripts\capture-model-recordings.py --root '..\..'
+```
+
+Keep the model-extra selector while using that environment. In a fresh shell,
+ordinary commands use the service's default model-free environment again.
+Commit only the named bounded fixtures and actual provenance, never `var/`,
+weights, caches or raw third-party diagnostics. A cached-only reload must match
+the captured model identity. Existing full-suite merge-candidate gates remain unchanged.
 The [service reference](../reference/hhem-evaluation-api.md) owns the fields
 and dependency boundary.
 

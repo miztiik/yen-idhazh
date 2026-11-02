@@ -55,6 +55,9 @@ backend/bin/
 # rows under state/ - never the intermediates.
 backend/var/
 
+# Independent evaluator model assets and disposable capture output.
+services/hhem-evaluator/var/
+
 # Exact-byte local copies of saved encoder artifacts, not authored dataset labels.
 corpus/story-dataset-1/vector-evidence/
 corpus/story-dataset-1/state.sqlite3*
