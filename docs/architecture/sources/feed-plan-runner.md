@@ -124,6 +124,18 @@ follows selection. When disabled, there is no partition request: selected
 metadata keeps null worker assignments. Health recording and selected output
 are independent writes; useful selected output survives a health-save refusal.
 
+Once selection finishes, the run retains its selected count and
+`selection_metrics`, even if assignment or persistence then fails. A completed
+empty selection has zero website/feed counts and a null mean substance score.
+Null metrics mean selection did not complete, not that it completed with zero
+articles. Standalone selection and partition chains retain that same completion
+evidence in memory and save it with their run outcome. Document-only completion
+has null metrics. A saved standalone persistence failure is terminal for that
+batch: repeating it returns the same failure, not a successful write paired
+with stale failed run facts. A new selection or partition creates a new
+execution. The [audit page](feed-ingest-audit.md) owns the metric
+meanings and report wording; these summaries never change winners or scores.
+
 One execution has isolated run identity, attempt, clocks, counters, timings
 and batches. Run start supplies the accounting date. The saved parsed age
 clock is D19; the fresh selection/feedback clock is D22. Actual HTTP and feed

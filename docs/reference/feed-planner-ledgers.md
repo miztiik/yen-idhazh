@@ -191,7 +191,7 @@ Enclosing private payloads must validate that same current source shape;
 a fetched-document body does not embed it.
 Discovery, health and file envelopes retain `2026-10-31`; progress events
 and fetched-document operation declarations retain `2026-11-01`.
-Plan runs retain their unchanged current `2026-10-26` shape.
+Plan runs use `2026-11-02` with required nullable selection metrics.
 Readers verify physical fields, file identity and canonical
 digest against the current format. Older formats refuse with diagnostics.
 Historical files remain unchanged; no migration or null-fill is applied.
@@ -347,6 +347,23 @@ failed runs.
 | D20 | `request_report_closed_days` | Run | Actual closed-UTC-day window for the request-spend report; default seven |
 | D21 | `reliability_window_days` | Run | Actual represented-day feed-reliability lookback; current default 30 |
 | D22 | `selection_started_at_utc` | Run | Actual selection-start clock used to capture current feedback windows, distinct from a saved batch's older age clock |
+| D23 | `selection_metrics` | Run | Required nullable object; null only when selection did not complete, regardless of run status or a captured selection-start clock |
+| D24 | `selection_metrics.selected_website_groups` | Run | Distinct canonical website keys from the configured resolver; zero for completed empty selection; otherwise positive and <= D7 |
+| D25 | `selection_metrics.selected_feeds` | Run | Distinct selected feed IDs, including first uses with zero configured bonus; not historically new feeds; bounds match D24 |
+| D26 | `selection_metrics.mean_substance_score` | Run | Arithmetic mean of exactly one required finite `substance_quality_score` adjustment per selected row; null only for completed empty selection |
+
+A completed empty selection saves D23 with zero counts and null mean. A
+nonempty selection requires positive bounded counts and a finite signed mean.
+Missing, repeated or non-finite substance terms fail validation rather than
+being skipped or replaced with zero. These metrics use validated selected
+metadata, not another body analysis or selection pass.
+
+D23 and D7 survive later assignment or persistence failures, for combined and
+standalone runs. The response and raw/compact Parquet carry the same native
+object. Reports label null metrics "Selection not completed"; they never
+describe them as measured zero diversity. Current readers require the new
+plan-run stamp and field. Earlier formats refuse with diagnostics, and
+historical files remain unchanged without conversion or optional defaults.
 
 For `/plan`, timing entries describe internal phases, not HTTP self-calls.
 Record one span per major phase, not one span for every internal article

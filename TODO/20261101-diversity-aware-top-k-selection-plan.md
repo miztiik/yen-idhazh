@@ -86,7 +86,7 @@ Table C
 | C1 | 1 | Prepare contracts and configuration | - | A | DONE | selection-contract-readiness | - | 77e2fd0b-3c3f-4e30-ab1e-c571119a90d7 |
 | C2 | 2 | Add substance scoring during screening | 1 | B | DONE | article-substance-scoring | - | 78ec8fbd-56fc-4654-9a07-cec0ec44faa4 |
 | C3 | 3 | Replace the selection engine and its consumers | 2 | C | DONE | diversity-selection-engine | #1889 | c0109686-cc01-482a-ad99-250a1d6fe486 |
-| C4 | 4 | Add diversity run metrics and audit reporting | 3 | D | PENDING | - | - | - |
+| C4 | 4 | Add diversity run metrics and audit reporting | 3 | D | DONE | saved-selection-metrics | #1890 | c9f89a61-1e61-4c28-8439-3d8302b653cd |
 
 ## 2 - Row 1 - Prepare contracts and configuration
 
@@ -759,19 +759,25 @@ Table R
   - `packages/common-contracts/src/index.ts`
   - `packages/common-contracts/src/version.ts`
   - `packages/common-contracts/src/schemas/plan-run.schema.ts`
+  - `packages/common-contracts/test/rejection.test.ts` (current run constructors and metric validation)
   - `packages/common-contracts/test/schema-binding.ts`
   - `packages/ledger-file-writer/src/registration.ts`
   - `packages/ledger-file-writer/src/validate-planner-files.ts`
   - `packages/ledger-file-writer/test/planner-recordings.ts`
   - `packages/ledger-file-writer/test/parquet-parity.test.ts`
+  - `packages/ledger-file-writer/test/reader-integrity.test.ts` (current plan-run native read-side stamp)
   - `services/feed-ingest-plan/src/summarize-selection-metrics.ts` (new)
   - `services/feed-ingest-plan/src/record-plan-run.ts`
   - `services/feed-ingest-plan/src/run-feed-plan.ts`
   - `services/feed-ingest-plan/src/api/record-standalone-run.ts`
+  - `services/feed-ingest-plan/src/api/document-state.ts` (in-memory completed-selection evidence)
+  - `services/feed-ingest-plan/src/api/selection-operation.ts` (standalone failure recording)
+  - `services/feed-ingest-plan/src/api/partition-operation.ts` (failed-after-selection recording)
   - `services/feed-ingest-plan/src/api/persistence-operation.ts`
   - `services/feed-ingest-plan/src/api/plan-response.schema.ts`
   - `services/feed-ingest-plan/src/read-ledger-history/read-run-history.ts`
   - `services/feed-ingest-plan/src/reporting/run-facts-markdown.ts`
+  - `services/feed-ingest-plan/src/reporting/plan-markdown.ts` (configured mean display precision)
   - `services/feed-ingest-plan/test/selection-metrics.test.ts` (new)
   - `services/feed-ingest-plan/test/plan-recordings.ts`
   - `services/feed-ingest-plan/test/file-baseline-recording.ts`
@@ -780,7 +786,13 @@ Table R
   - `services/feed-ingest-plan/test/plan-engine.test.ts`
   - `services/feed-ingest-plan/test/file-baseline.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts`
+  - `services/feed-ingest-plan/test/run-facts-report.test.ts` (rendered metric states)
+  - `services/feed-ingest-plan/test/logical-completion.test.ts` (native completed-selection fixture facts)
+  - `services/feed-ingest-plan/test/operation-logging.test.ts` (terminal failed batch and fresh execution recovery)
   - `tests/fixtures/feed-ingest-plan/entry-points/response.json`
+  - `tests/fixtures/feed-ingest-plan/entry-points/plan-runs.rows.json` (actual recorder output)
+  - `tests/fixtures/feed-ingest-plan/entry-points/health.json` (actual recorder output)
+  - `tests/fixtures/feed-ingest-plan/entry-points/feed-health-state.rows.json` (actual recorder output)
   - `docs/architecture/sources/feed-ingest-audit.md`
   - `docs/architecture/sources/feed-plan-runner.md`
   - `docs/reference/feed-planner-ledgers.md`

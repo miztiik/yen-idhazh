@@ -5,8 +5,11 @@ import { aggregateFeedResults, formatDuration } from "./aggregate-feed-results";
 
 export function renderRunFacts(
   row: PlanRunRow, feeds: readonly FeedHealthStateRow[] | undefined,
-  maximum?: string, paused?: number,
+  maximum?: string, paused?: number, decimalPlaces?: number,
 ) {
+  const mean = row.selection_metrics?.mean_substance_score;
+  const meanScore = mean == null ? "No selected articles"
+    : decimalPlaces === undefined ? String(mean) : String(Number(mean.toFixed(decimalPlaces)));
   const results = feeds === undefined ? undefined : aggregateFeedResults(feeds);
   const unavailable = results?.filter(feed => feed.article_candidates === null) ?? [];
   const known = feeds?.flatMap(feed => feed.article_candidates === null ? [] : [feed.article_candidates]);
@@ -19,6 +22,9 @@ export function renderRunFacts(
   const facts = [
     ["Result", `${row.status}${row.failure_code === null ? "" : `: ${row.failure_code}`}`],
     ["Selected / configured maximum", `${row.selected_count} / ${maximum ?? "Not recorded"}`],
+    ["Selected website groups", row.selection_metrics === null ? "Selection not completed" : String(row.selection_metrics.selected_website_groups)],
+    ["Selected feeds", row.selection_metrics === null ? "Selection not completed" : String(row.selection_metrics.selected_feeds)],
+    ["Mean substance score (points)", row.selection_metrics === null ? "Selection not completed" : meanScore],
     ["Technically eligible articles", eligibility],
     ["Feeds checked", feeds === undefined ? "Not recorded" : `${checked.size}${unknownChecks ? "; exact total unavailable" : ""}`],
     ["Feeds paused", paused === undefined ? "Not recorded" : String(paused)],
@@ -28,6 +34,7 @@ export function renderRunFacts(
     markdown: [
       "## Table A - Run outcome", "", "| Id | Measure | Result |", "| --- | --- | --- |",
       ...facts.map(([label, value], index) => `| A${index + 1} | ${label} | ${escapeMarkdown(value!)} |`),
+      "", "Feed counts describe this selection, not historically new feeds. Substance points measure article shape, not factual accuracy.",
     ].join("\n"),
     notice: `${row.status}; ${row.selected_count} selected articles; technically eligible articles: ${eligibility}.`,
   };

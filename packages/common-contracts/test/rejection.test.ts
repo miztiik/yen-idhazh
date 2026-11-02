@@ -102,7 +102,7 @@ function sourceRun() {
 function assessment() {
   return PlanRunRowSchema.parse({
     run_id: run, started_at: at, duration_ms: 0, status: "completed", failure_code: null,
-    selected_count: 0, strategy: "none", dispatch_count: 0, selected_articles_artifact: null,
+    selected_count: 0, selection_metrics: null, strategy: "none", dispatch_count: 0, selected_articles_artifact: null,
     api_timings: [], date: day, attempt: 1, lifecycle_window_days: 31, reliability_floor: 0.5,
     reliability_penalty_enabled: true, evaluated_at: at, request_report_closed_days: 7,
     reliability_window_days: 30, selection_started_at_utc: null,

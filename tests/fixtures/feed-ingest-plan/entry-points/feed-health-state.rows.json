@@ -6,7 +6,7 @@
     "permission": "allowed",
     "availability": "eligible",
     "strikes": 0,
-    "check_request_id": "100574c0-9691-49f2-9dda-c8667e7dfad8",
+    "check_request_id": "95aacde1-490d-46e1-87b4-059e25218ec0",
     "check_result": "valid-feed",
     "rest_until": null,
     "first_confirmed_failure_at": null,

@@ -87,7 +87,8 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
       || left.feed_id.localeCompare(right.feed_id));
   const requestReport = renderRequestReport(health?.request_report, health?.rows);
   const facts = renderRunFacts(row, health?.rows, input.maximum,
-    health?.availability?.feeds.filter(feed => feed.availability === "resting" || feed.availability === "retired").length);
+    health?.availability?.feeds.filter(feed => feed.availability === "resting" || feed.availability === "retired").length,
+    input.score_decimal_places);
   const gaps: [string, string, string][] = [];
   if (health?.request_report.complete !== true) gaps.push([
     "Historical evidence", "Request history incomplete or unavailable", "Exact historical totals unavailable; see Request counts and coverage",

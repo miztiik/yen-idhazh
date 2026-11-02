@@ -9,7 +9,7 @@ import {
   PLANNER_FOOTER_METADATA_KEYS, PLANNER_OPTIONAL_FOOTER_METADATA_KEYS,
   PlannerFileEnvelopeSchema, PlannerLedgerNameSchema, RowIdentitySchema, WriterIdentitySchema,
   deriveUrlKey,
-  SELECTED_ARTICLE_VERSION, SelectedArticlesArtifactSchema, SelectedArticleRowSchema,
+  SELECTED_ARTICLE_VERSION, SelectedArticlesArtifactSchema, SelectedArticleRowSchema, PlanRunRowSchema,
   selectedArticleMetadata, validateEnvelopeContainer,
 } from "@idhazh/common-contracts";
 import type { FileEnvelope, PlannerFileEnvelope } from "@idhazh/common-contracts";
@@ -325,6 +325,38 @@ describe("ledger Parquet readback", () => {
       });
       if (raw.status !== "written") throw new Error("global discovery minimum was not written");
       expect(raw.files.map(file => file.covers)).toEqual(["2026-10-20"]);
+    });
+  });
+
+  test("preserves complete, empty, not-completed and failed-after-selection metrics in raw and compact plan runs", async () => {
+    await withOutputRoot(async root => {
+      const recording = plannerRecordings().find(row => row.name === "plan-runs")!;
+      const states = [
+        { selected_count: 2, selection_metrics: { selected_website_groups: 1, selected_feeds: 2, mean_substance_score: -0.125 } },
+        { selected_count: 0, selection_metrics: { selected_website_groups: 0, selected_feeds: 0, mean_substance_score: null } },
+        { selected_count: 0, selection_metrics: null, status: "failed", failure_code: "SELECTION_FAILED" },
+        { selected_count: 2, selection_metrics: { selected_website_groups: 1, selected_feeds: 2, mean_substance_score: -0.125 },
+          status: "failed", failure_code: "PERSIST_FAILED" },
+      ];
+      const rows = states.map((state, index) => PlanRunRowSchema.parse({
+        ...recording.row, ...state, run_id: `2026-10-20-${index + 1}`,
+      }));
+      const context = {
+        ledger: recording.name, rowContract: recording.contract, outputRoot: root,
+        registryEntry: await registeredEntry(recording.name), ledgerSettings: compression,
+      };
+      for (const row of rows) {
+        const raw = await persistLedger({ ...context, rows: [row], period: { tier: "raw", covers: row.date } });
+        if (raw.status !== "written") throw new Error("Run metrics were not saved");
+        const readback = await checkParquetReadback("plan-runs", root, raw.files, PlanRunRowSchema);
+        expect(readback.files[0]!.rows).toEqual([row]);
+      }
+      const compact = await persistLedger({
+        ...context, rows, period: { tier: "compact", period: "daily", covers: "2026-10-20", builtFrom: rows.length },
+      });
+      if (compact.status !== "written") throw new Error("Run metrics were not packed");
+      const packed = await checkParquetReadback("plan-runs", root, compact.files, PlanRunRowSchema);
+      expect(packed.files[0]!.rows).toEqual(rows);
     });
   });
 

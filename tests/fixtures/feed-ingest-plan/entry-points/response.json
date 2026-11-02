@@ -1,42 +1,47 @@
 {
   "run_id": "2026-10-21-700",
   "started_at": "2026-10-21T23:59:59.999Z",
-  "duration_ms": 1153,
+  "duration_ms": 19904,
   "status": "completed",
   "failure_code": null,
   "selected_count": 1,
+  "selection_metrics": {
+    "selected_website_groups": 1,
+    "selected_feeds": 1,
+    "mean_substance_score": 0.15933333333333333
+  },
   "strategy": "bin-pack",
   "dispatch_count": 4,
   "selected_articles_artifact": "backend/var/feed-ingest-plan/2026-10-21-700/3/selected-articles.json",
   "api_timings": [
     {
       "operation": "feed-health-before-fetch",
-      "duration_ms": 30,
+      "duration_ms": 287,
       "status": "completed"
     },
     {
       "operation": "fetch",
-      "duration_ms": 781,
+      "duration_ms": 18209,
       "status": "completed"
     },
     {
       "operation": "feed-health-for-selection",
-      "duration_ms": 9,
+      "duration_ms": 20,
       "status": "completed"
     },
     {
       "operation": "select",
-      "duration_ms": 213,
+      "duration_ms": 770,
       "status": "completed"
     },
     {
       "operation": "partition",
-      "duration_ms": 3,
+      "duration_ms": 8,
       "status": "completed"
     },
     {
       "operation": "persist",
-      "duration_ms": 43,
+      "duration_ms": 308,
       "status": "completed"
     }
   ],
@@ -52,17 +57,17 @@
   "planning_complete": true,
   "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
   "batches": {
-    "parsed_batch_id": "7b7b643f-8ab3-44ec-aa46-37d143559c20",
-    "selection_batch_id": "55649e3b-8564-41f4-ab81-fdac49c92e53",
-    "partition_batch_id": "223fb080-5c3d-464c-b311-d41534418383"
+    "parsed_batch_id": "d4eaba11-3ecd-4108-a40b-1afc36c53f5a",
+    "selection_batch_id": "6148e504-4609-40a9-ba65-1b31c336e9c3",
+    "partition_batch_id": "02681702-c8b7-4c93-81f8-07a747c86df5"
   },
   "files": {
     "discovered_articles": {
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/discovered-articles/2026/10/21/01a19d04-de44-868b-8ee0-920e2d84c094.parquet",
-          "file_id": "01a19d04-de44-868b-8ee0-920e2d84c094",
+          "path": "raw/feed-ingest-plan/discovered-articles/2026/10/21/01a19d46-ad55-88cb-8cae-dd7dae14a939.parquet",
+          "file_id": "01a19d46-ad55-88cb-8cae-dd7dae14a939",
           "covers": "2026-10-21",
           "content_sha256": "cb68a24de5661af2f04213d9e91c525727d58f274a41e627d77444f31e808eef",
           "row_count": 2
@@ -73,8 +78,8 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/selected-articles/2026/10/21/01a19d04-dfb6-8c0c-b268-17b30b5a34a6.parquet",
-          "file_id": "01a19d04-dfb6-8c0c-b268-17b30b5a34a6",
+          "path": "raw/feed-ingest-plan/selected-articles/2026/10/21/01a19d46-b623-81d5-9199-29c1acad9690.parquet",
+          "file_id": "01a19d46-b623-81d5-9199-29c1acad9690",
           "covers": "2026-10-21",
           "content_sha256": "8bb632dd5e89124cfe1322cd682bf07c196926360aa4f1a6a63349a3005e4dc9",
           "row_count": 1
@@ -97,15 +102,15 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/21/01a19d04-df7e-819a-8528-d79617501d90.parquet",
-          "file_id": "01a19d04-df7e-819a-8528-d79617501d90",
+          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/21/01a19d46-b533-8ca5-82a3-55f31777460b.parquet",
+          "file_id": "01a19d46-b533-8ca5-82a3-55f31777460b",
           "covers": "2026-10-21",
-          "content_sha256": "8881f8f7013b688fd30d945de27a2bd964b62b41c854d43f978f23e39b8881ce",
+          "content_sha256": "477553ab1878e9179f60afcdabca5c4cb1aec53d48128eb308154c0580459819",
           "row_count": 1
         },
         {
-          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/22/01a19d04-df96-86f8-93f9-907ed2857944.parquet",
-          "file_id": "01a19d04-df96-86f8-93f9-907ed2857944",
+          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/22/01a19d46-b595-8895-a48f-3e5f78f01e20.parquet",
+          "file_id": "01a19d46-b595-8895-a48f-3e5f78f01e20",
           "covers": "2026-10-22",
           "content_sha256": "e3cad42a16e43ec4d38e069d66c386c56da7253cd20dd853a8ac41d28c16156d",
           "row_count": 1
@@ -116,10 +121,10 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/plan-runs/2026/10/21/01a19d04-dfdf-8289-b5be-25b2f523b2af.parquet",
-          "file_id": "01a19d04-dfdf-8289-b5be-25b2f523b2af",
+          "path": "raw/feed-ingest-plan/plan-runs/2026/10/21/01a19d46-b70f-897b-a184-2ee915daa693.parquet",
+          "file_id": "01a19d46-b70f-897b-a184-2ee915daa693",
           "covers": "2026-10-21",
-          "content_sha256": "9bb605c3fc2a52a346340fc7891f51a64404c482e3bab3159d25ccafc72c4a5e",
+          "content_sha256": "9987d5e1e5445b276f09e0502fb96a091ef36b3f5f3770d2d274dbb8a4aa049c",
           "row_count": 1
         }
       ]
