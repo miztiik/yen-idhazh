@@ -2,14 +2,13 @@
 
 from pathlib import Path
 
-from pydantic import ValidationError
-
 from hhem_evaluator.contracts.base import (
     ContextIdentity,
     NativeContract,
     PositiveCount,
     RelativePath,
 )
+from pydantic import ValidationError
 
 
 class PipelineSettings(NativeContract):

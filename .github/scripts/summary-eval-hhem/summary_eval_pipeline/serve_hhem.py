@@ -13,12 +13,11 @@ from pathlib import Path
 from typing import BinaryIO, TextIO
 
 import uvicorn
-from uvicorn.lifespan.on import LifespanOn
-
 from hhem_evaluator.contracts.base import SCHEMA_VERSION
 from hhem_evaluator.emit_events import EventWriter
 from hhem_evaluator.load_settings import load_settings
 from hhem_evaluator.serve_api import create_app
+from uvicorn.lifespan.on import LifespanOn
 
 from .channels import OwnedChannels, open_owned_channels
 from .control import ApiReady, ServiceStartFailed, ServiceStopped, StartupPacket

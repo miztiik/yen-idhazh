@@ -224,7 +224,8 @@ bun install --frozen-lockfile --cwd .\packages\common-contracts
 bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
 Set-Location .\services\hhem-evaluator
 uv sync --frozen --group dev
-uv run --frozen ruff check --config pyproject.toml src tests scripts ../../.github/scripts/summary-eval-hhem
+uv run --frozen ruff check src tests scripts
+uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-hhem
 uv run --frozen mypy src tests ../../.github/scripts/summary-eval-hhem/summary_eval_pipeline
 uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test_event_ids.py
 ```
@@ -277,7 +278,8 @@ repository root, then run the named modules from the service directory:
 bun install --frozen-lockfile --cwd .\services\host-probes
 bun install --frozen-lockfile --cwd .\services\host-fingerprints
 Set-Location .\services\hhem-evaluator
-uv run --frozen ruff check --config pyproject.toml src tests scripts ../../.github/scripts/summary-eval-hhem
+uv run --frozen ruff check src tests scripts
+uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-hhem
 uv run --frozen mypy src tests ../../.github/scripts/summary-eval-hhem/summary_eval_pipeline
 uv run --frozen pytest tests/test_host_profile_reader_parity.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_pipeline_report.py tests/test_manual_workflow.py
 ```

@@ -5,6 +5,7 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TextIO
 
 
@@ -26,7 +27,7 @@ def open_owned_channels() -> Iterator[OwnedChannels]:
     ):
         os.set_inheritable(control.fileno(), False)
         os.set_inheritable(events.fileno(), False)
-        with open(os.devnull, "w", encoding="utf-8") as discarded:
+        with Path(os.devnull).open("w", encoding="utf-8") as discarded:
             os.dup2(discarded.fileno(), sys.stdout.fileno())
             os.dup2(discarded.fileno(), sys.stderr.fileno())
         # Only a child launcher uses this scope. Keep raw stdio discarded

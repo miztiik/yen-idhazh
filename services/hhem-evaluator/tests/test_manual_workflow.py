@@ -9,7 +9,7 @@ import pytest
 from pydantic import ValidationError
 from summary_eval_pipeline.contracts import PipelineEvidence
 from summary_eval_pipeline.control import StartupPacket
-from summary_eval_pipeline.failures import WorkflowFailure
+from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.inputs import encode_request, read_manual_inputs
 from summary_eval_pipeline.settings import load_pipeline_settings
 
@@ -135,7 +135,7 @@ def test_platform_input_preserves_text_and_enforces_the_exact_encoded_request_bo
     exact = type(selected).model_validate_json(json.dumps(data))
     assert len(encode_request(read_manual_inputs(exact, manual))) == size
     data["listener"]["max_body_bytes"] = size - 1
-    with pytest.raises(WorkflowFailure) as failure:
+    with pytest.raises(WorkflowError) as failure:
         read_manual_inputs(type(selected).model_validate_json(json.dumps(data)), manual)
     assert failure.value.error.code == "INPUT_TOO_LARGE"
     # The caller read one platform-owned input and created no second text-bearing file.
@@ -160,7 +160,7 @@ def test_invalid_platform_inputs_fail_without_echoing_values(
     event = tmp_path / "event.json"
     write_event(event, inputs)
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
-    with pytest.raises(WorkflowFailure) as failure:
+    with pytest.raises(WorkflowError) as failure:
         read_manual_inputs(service_settings(), load_pipeline_settings(REPOSITORY))
     assert failure.value.error.code == "INPUT_INVALID"
     assert "PrivateValueCanary" not in str(failure.value)
@@ -178,7 +178,7 @@ def test_event_envelope_overflow_fails_instead_of_truncating(
     with event.open("wb") as stream:
         stream.write(b" " * (allowance + 1))
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
-    with pytest.raises(WorkflowFailure) as failure:
+    with pytest.raises(WorkflowError) as failure:
         read_manual_inputs(selected, manual)
     assert failure.value.error.code == "INPUT_TOO_LARGE"
 

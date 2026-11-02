@@ -2,9 +2,8 @@
 
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, ConfigDict, Field, RootModel
-
 from hhem_evaluator.contracts.base import Count, Milliseconds, NativeContract
+from pydantic import AwareDatetime, ConfigDict, Field, RootModel
 
 UnavailableReason = Literal[
     "unsupported_platform",

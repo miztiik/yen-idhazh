@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from summary_eval_pipeline.contracts import ServiceShutdown
 from summary_eval_pipeline.evaluation import evaluate, read_owned_health
-from summary_eval_pipeline.failures import WorkflowFailure
+from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.host_reader import measurement_complete
 from summary_eval_pipeline.http import call_local_api
 from summary_eval_pipeline.run import build_evidence
@@ -61,7 +61,7 @@ def test_actual_handlers_preserve_scores_including_error_http_results(
                 )
                 if status != 200:
                     errors.append(
-                        WorkflowFailure(
+                        WorkflowError(
                             "EVALUATION_FAILED",
                             "evaluation",
                             "hhem",
@@ -110,7 +110,7 @@ def test_actual_handlers_preserve_scores_including_error_http_results(
 def test_bad_identity_is_rejected_against_real_health() -> None:
     async def check() -> None:
         async with running_service() as service:
-            with pytest.raises(WorkflowFailure) as failure:
+            with pytest.raises(WorkflowError) as failure:
                 await read_owned_health(
                     service.client,
                     "http://127.0.0.1:3010",
@@ -173,7 +173,7 @@ def test_actual_health_response_enforces_the_exact_byte_allowance() -> None:
                     )
                     assert status == 200 and health.worker == service.worker.worker
                 else:
-                    with pytest.raises(WorkflowFailure) as failure:
+                    with pytest.raises(WorkflowError) as failure:
                         await call_local_api(
                             service.client,
                             "GET",

@@ -197,9 +197,9 @@ jobs:
         run: uv sync --frozen --group dev
 
       - name: Lint native service contracts
-        run: >-
-          uv run --frozen ruff check --config pyproject.toml
-          src tests scripts ../../.github/scripts/summary-eval-hhem
+        run: |
+          uv run --frozen ruff check src tests scripts
+          uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-hhem
 
       - name: Check strict service types
         run: uv run --frozen mypy src tests ../../.github/scripts/summary-eval-hhem/summary_eval_pipeline

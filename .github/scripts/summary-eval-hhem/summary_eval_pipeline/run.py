@@ -11,7 +11,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
-
 from hhem_evaluator.contracts.base import SCHEMA_VERSION, OutcomeStatus
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.service_settings import StartupContext
@@ -21,7 +20,7 @@ from hhem_evaluator.resolve_ids import create_execution_id
 from .contracts import Hardware, PipelineError, PipelineEvidence, ServiceShutdown
 from .control import ApiReady, HostReady, StartupPacket
 from .evaluation import evaluate, read_owned_health
-from .failures import WorkflowFailure
+from .failures import WorkflowError
 from .host_reader import MachineUsage, measurement_complete
 from .http import loopback_url
 from .inputs import read_manual_inputs
@@ -114,7 +113,7 @@ async def collect(root: Path) -> PipelineEvidence:
                 )
                 ready = await asyncio.to_thread(api.wait_ready, settings.worker.startup_timeout_ms)
                 if not isinstance(ready, ApiReady):
-                    raise WorkflowFailure("STARTUP_IDENTITY_MISMATCH", "startup", "hhem")
+                    raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", "hhem")
             base_url = loopback_url(settings.listener.host, settings.listener.port)
             with progress("Checking HHEM API health"):
                 await read_owned_health(
@@ -136,18 +135,18 @@ async def collect(root: Path) -> PipelineEvidence:
                         settings.worker.startup_timeout_ms,
                     )
                     if not isinstance(host_ready, HostReady):
-                        raise WorkflowFailure("STARTUP_IDENTITY_MISMATCH", "startup", "host")
+                        raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", "host")
                     hardware = host_ready.hardware
                     if hardware.status == "failed" or not host_ready.profile_started:
-                        errors.append(WorkflowFailure("HOST_FAILED", "host", "host").error)
-                except WorkflowFailure as failure:
+                        errors.append(WorkflowError("HOST_FAILED", "host", "host").error)
+                except WorkflowError as failure:
                     errors.append(failure.error)
             with progress("Doing HHEM summary evaluation"):
                 api.check_alive()
                 status, evaluation = await evaluate(client, base_url, request, settings, pipeline)
                 if status != 200:
                     errors.append(
-                        WorkflowFailure(
+                        WorkflowError(
                             "EVALUATION_FAILED",
                             "evaluation",
                             "hhem",
@@ -158,7 +157,7 @@ async def collect(root: Path) -> PipelineEvidence:
                 api.check_alive()
             with progress("Doing UniEval summary evaluation"):
                 print("Not run - future task.", flush=True)
-    except WorkflowFailure as failure:
+    except WorkflowError as failure:
         errors.append(failure.error)
     finally:
         with progress("Stopping measurement and owned HHEM API"):
@@ -170,7 +169,7 @@ async def collect(root: Path) -> PipelineEvidence:
                             if evaluation is not None and evaluation.status == "complete"
                             else "error"
                         )
-                except WorkflowFailure as failure:
+                except WorkflowError as failure:
                     errors.append(failure.error)
                 try:
                     timeout = (
@@ -180,7 +179,7 @@ async def collect(root: Path) -> PipelineEvidence:
                     )
                     await asyncio.to_thread(host.close, timeout)
                     host_stopped = True
-                except WorkflowFailure as failure:
+                except WorkflowError as failure:
                     host_stopped = False
                     errors.append(failure.error)
                 if host.stopped is not None:
@@ -189,7 +188,7 @@ async def collect(root: Path) -> PipelineEvidence:
                 try:
                     await asyncio.to_thread(api.close, settings.worker.shutdown_timeout_ms)
                     hhem_stopped = True
-                except WorkflowFailure as failure:
+                except WorkflowError as failure:
                     hhem_stopped = False
                     errors.append(failure.error)
     return build_evidence(

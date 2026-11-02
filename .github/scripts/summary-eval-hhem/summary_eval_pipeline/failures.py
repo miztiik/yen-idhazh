@@ -10,7 +10,7 @@ from .contracts import (
 )
 
 
-class WorkflowFailure(Exception):
+class WorkflowError(Exception):
     def __init__(
         self,
         code: FailureCode,

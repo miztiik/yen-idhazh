@@ -2,8 +2,6 @@
 
 from typing import Annotated, Literal
 
-from pydantic import Field, RootModel
-
 from hhem_evaluator.contracts.base import (
     CommitId,
     NativeContract,
@@ -12,6 +10,7 @@ from hhem_evaluator.contracts.base import (
     Uuid4,
 )
 from hhem_evaluator.contracts.service_settings import StartupContext
+from pydantic import Field, RootModel
 
 from .contracts import Hardware
 from .host_reader import MachineUsage

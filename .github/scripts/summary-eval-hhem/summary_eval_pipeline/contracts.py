@@ -2,8 +2,6 @@
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
-
 from hhem_evaluator.contracts.base import (
     SCHEMA_VERSION,
     NativeContract,
@@ -11,6 +9,7 @@ from hhem_evaluator.contracts.base import (
     SchemaVersion,
 )
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
+from pydantic import ConfigDict, Field, model_validator
 
 from .host_reader import HardwareRow, MachineUsage, measurement_complete
 
@@ -80,8 +79,8 @@ class ServiceShutdown(NativeContract):
 class PipelineEvidence(NativeContract):
     """Keep evaluator output independent of Markdown and input-text publication."""
 
-    model_config = {
-        "json_schema_extra": {
+    model_config = ConfigDict(
+        json_schema_extra={
             "version": SCHEMA_VERSION,
             "changelog": [
                 {
@@ -90,7 +89,7 @@ class PipelineEvidence(NativeContract):
                 }
             ],
         },
-    }
+    )
 
     version: SchemaVersion
     status: OutcomeStatus

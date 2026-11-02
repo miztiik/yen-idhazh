@@ -4,14 +4,13 @@ import asyncio
 import time
 
 import httpx
-
 from hhem_evaluator.contracts.base import API_PREFIX, EVALUATE_PATH
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.service_health import ServiceHealth
 from hhem_evaluator.contracts.service_settings import ServiceSettings
 
-from .failures import WorkflowFailure
+from .failures import WorkflowError
 from .http import call_local_api
 from .inputs import encode_request
 from .settings import PipelineSettings
@@ -37,18 +36,18 @@ async def read_owned_health(
             phase="health",
         )
         if health.service_instance_id != service_instance_id:
-            raise WorkflowFailure("STARTUP_IDENTITY_MISMATCH", "health", "hhem", status)
+            raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "health", "hhem", status)
         if status == 200 and health.status == "ready":
             return health
         if status != 503 or health.status != "loading":
-            raise WorkflowFailure("HEALTH_FAILED", "health", "hhem", status)
+            raise WorkflowError("HEALTH_FAILED", "health", "hhem", status)
         await asyncio.sleep(
             min(
                 pipeline.poll_interval_ms / 1000,
                 max(0, deadline - time.monotonic()),
             )
         )
-    raise WorkflowFailure("HEALTH_FAILED", "health", "hhem")
+    raise WorkflowError("HEALTH_FAILED", "health", "hhem")
 
 
 async def evaluate(
