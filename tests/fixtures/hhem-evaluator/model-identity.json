@@ -1,0 +1,15 @@
+{
+  "reference": "vectara/hallucination_evaluation_model",
+  "configured_revision": "8e4a2e6e96c708cc76c2344f7e4757df2515292c",
+  "loaded_revision": "8e4a2e6e96c708cc76c2344f7e4757df2515292c",
+  "foundation_reference": "google/flan-t5-base",
+  "foundation_revision": "7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+  "loaded_weights_sha256": "786b8b228288801b38d6a9128bf5041521b260f969d1f255bb6eceb294592546",
+  "loaded_config_sha256": "ea1d142c15ce9e2c2c2046dd2f4eefea1672b167a30bbaccdd85e3e4fbca1f08",
+  "service_config_sha256": "17395f0f3e3726401f6b70e5bffead5a21cd33b23e580d7dca161bcd8555d134",
+  "runtime_versions": {
+    "python": "3.12.12",
+    "pytorch": "2.8.0+cpu",
+    "transformers": "4.57.6"
+  }
+}

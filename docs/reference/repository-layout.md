@@ -35,7 +35,7 @@ question, and the four answers do not mix.
 | `.github/workflows/` | CI, the daily pipeline, and the Pages deploy | a person | no |
 | `.github/scripts/` | The independent `ai-pipeline.ts` experiment and `serve-evaluator.py`; no native API or workflow-support implementation | a person | no |
 | `services/feed-ingest-plan/`, `services/host-probes/` | Native API implementations plus their own workflow, report and controlled-host helpers under `scripts/`; offline cases under `test/` | a person | no |
-| `services/hhem-evaluator/` | Independent Python package, locked environment and native transient HHEM contracts; offline cases under `tests/`. Its committed startup settings are `config/hhem-evaluator/settings.json`; bounded shared vectors are `tests/fixtures/hhem-evaluator/event-id-vectors.json` | a person | no |
+| `services/hhem-evaluator/` | Independent local Python HHEM API, locked environment, native transient contracts and owned CPU scoring process; offline cases under `tests/`, production-loader capture under `scripts/`. Settings are `config/hhem-evaluator/settings.json`; bounded vectors and real model recordings are `tests/fixtures/hhem-evaluator/` | a person | no |
 | `packages/feed-probe/` | The standalone TypeScript feed access and article readability probe, its CLI, machine-readable reports and package-local tests | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
@@ -69,6 +69,7 @@ These exist on a developer machine and in CI. None is ever committed.
 | `backend/models/` | GGUF weights. 2.4 GB and 4.8 GB, against a 100 MB per-file ceiling |
 | `backend/bin/` | llama.cpp binaries, ~45 MB. Downloaded, not authored |
 | `backend/var/` | Run intermediates and caches. The committed record of a run is the digest plus the `state/` rows, never the workings |
+| `services/hhem-evaluator/var/` | Downloaded model assets, a separate optional model environment and disposable capture output; never published or committed |
 | `backend/var/evidence/` | Inside `backend/var/`, and named here because a person has to find it. One file per scored item, holding the article text and the summary a human labeller must read. Article bodies are not ours to republish, so this one is uncommittable on principle rather than on size |
 | `backend/var/council/` | Inside `backend/var/`, and named here for the same reason. **Everything one judging night carries between its jobs, and the only thing it carries**: the workflow uploads this directory and nothing else, so a file a tenant writes outside it is thrown away with the runner. One date a directory, and inside it a slot each for what was picked, what was judged, what the units measured and how each unit ended. A file is named `<date>-<tenant>-<unit>`, so eight units cannot land on one path and a file merged out of eight artifacts still says who wrote it. Nothing here is ever committed - a drawn row carries no verdict yet and the units rewrite it, while a row reaches the `content-similarity-judge/scored-pairs` ledger once, through the ledger door, already judged, and is never edited afterwards |
 | `frontend/build/` | The built bundle. Pages rebuilds it from source on every deploy |
