@@ -1,0 +1,9 @@
+{
+  "event_envelope_bytes": 65536,
+  "max_response_bytes": 2097152,
+  "control_max_bytes": 16384,
+  "http_connect_timeout_ms": 5000,
+  "poll_interval_ms": 100,
+  "pipeline_name": "hhem-evaluation-api-test",
+  "task_name": "evaluate-supplied-text"
+}

@@ -162,7 +162,7 @@ messages or a broker.
 
 ## Authored startup settings
 
-`config/hhem-evaluator/settings.json` supplies every operational value.
+`config/hhem-evaluator/settings.json` supplies the API's operational values.
 `load_settings` reads only its explicit path, validates it and returns frozen
 nested models and immutable asset inventories. Missing or invalid settings
 fail by name. There is no environment-selected model destination, source
@@ -230,6 +230,70 @@ factual-accuracy calibration or hosted-runner speed. Ordinary tests use these
 recordings only at the model-call boundary; they do not install the model
 extra, download weights or expose a production replay mode.
 
+## Manual caller and report
+
+`python -m hhem_evaluator.run_manual_evaluation --root <repository-root>`
+owns one invocation of the existing API and the existing Bun host probe.
+It reads only the platform's named dispatch event, sends one HTTP evaluation
+with `hhem_full: false`, and writes only the body-free `report.json` and
+`report.md` under `services/hhem-evaluator/var/workflow/`. Those two output
+paths form the workflow's artifact allowlist, not a text-selected destination.
+The [manual how-to](../how-to/run-hhem-evaluation-api.md) owns setup,
+first registration, dispatch and failure inspection.
+
+Table H - Manual caller controls
+
+| Id | File and field | Value and meaning |
+| --- | --- | --- |
+| H1 | `config/hhem-evaluator/workflow.json`: `event_envelope_bytes` | 65536 bytes (64 KiB), added to the API's request allowance when reading the platform event. The encoded API request must still fit its own allowance. Overflow is refused, never truncated. |
+| H2 | `max_response_bytes`, `control_max_bytes` | 2097152 bytes (2 MiB) per HTTP response; 16384 bytes (16 KiB) per private control line. |
+| H3 | `http_connect_timeout_ms`, `poll_interval_ms` | 5000 milliseconds (five seconds) for connection; 100 milliseconds between readiness observations. Overall response deadlines derive from the API's body, queue, evaluation and shutdown bounds, or the native host lifecycle bound plus connection time. |
+| H4 | `pipeline_name`, `task_name` | Committed ASCII run labels. Platform run identity and generated request/correlation UUIDs complete the metadata; neither text supplies a label. |
+| H5 | `config/hhem-evaluator/host-probes.json` | Native Zod-owned host settings on loopback port 3011. Task profiling and process RAM are on; machine RAM and cache probes are off. The existing global host settings are unchanged. |
+
+HTTPX disables proxy-environment use and redirects and bounds both time and
+response bytes. Error-status evaluator responses still pass through
+`EvaluationResult`; completed partial scores survive. Evaluation is never
+automatically retried. Private startup identity plus matching HTTP health
+proves the evaluator belongs to this caller. The host launcher announces
+readiness only after its existing server binds.
+
+`WorkflowReport` has the same initial native version and schema metadata as
+the service. It is an output of one run, not authority for another run; there
+is no old report shape to migrate. Unsupported versions fail validation.
+It adds no shared schema, ledger family or production evaluator dependency.
+
+Table I - Body-free workflow report
+
+| Id | Field | Meaning |
+| --- | --- | --- |
+| I1 | `version`, `status` | Current wire version; `complete` requires a complete evaluation, complete resource evidence and no caller failures. `partial` retains a primary score with incomplete work or evidence; `failed` has no completed primary score. |
+| I2 | `evaluation` | Nullable native `EvaluationResult`, including actual partial scores and terminal event identity. No second HHEM result schema. |
+| I3 | `resources.status`, `resources.reason` | Coverage is `complete`, `incomplete` or `unavailable`. A non-complete result names `configured_off`, `pin_unavailable`, `profile_start_failed`, `profile_stop_failed`, `worker_replaced`, `profile_interrupted` or `measurement_unavailable`. |
+| I4 | `resources.profile` | Nullable narrow projection of the native host profile: task identity, outcome, end reason, UTC endpoints, elapsed milliseconds, unavailable reasons and worker CPU/RAM summary. Raw samples, machine summaries and cache payloads are not copied. |
+| I5 | `resources.initial_worker`, `resources.final_worker` | Nullable native scoring-worker identities. Complete coverage requires the same PID/start-tick pair and generation across an explicit uninterrupted profile stop. A replacement never retargets the existing handle. |
+| I6 | `resources.runner`, `resources.shutdown` | Observed operating system, release, architecture and visible logical CPU count; separate stopped-child observations and nullable confirmation of model exit. These are conditions and lifetime evidence, not another CPU/RAM collector. |
+| I7 | `errors` | Closed safe failures with `code`, `phase`, `service`, nullable `http_status` and fixed `message`. Cleanup phase stays separate from the original failure. Raw bodies, exceptions and input-derived names are forbidden. |
+
+The host remains the field authority. The Python reader validates only the
+consumed fields and discards unconsumed ones. The named Bun bridge compares
+their type, requiredness, nullability and vocabulary with the actual native
+schemas; missing runtime preparation fails instead of skipping the check.
+The [host API](host-probe-api.md) and
+[measurement reference](host-metrics.md#whole-task-typescript-samples) own
+resource semantics and units. One-core CPU percent is not capped at 100.
+Stored memory remains KiB; Markdown also shows MiB. Null readings require
+their actual native reason. A missing final worker identity does not prove a
+replacement; it leaves coverage incomplete.
+
+The profile opens after model readiness and closes before worker shutdown,
+excluding download/load time. Both launchers observe parent-pipe EOF.
+Shutdown joins only owned children with declared bounded escalation. A
+host-service close precedes API shutdown, so even an undelivered handle cannot
+leave its collector observing a stopped worker. A
+measurement or cleanup failure cannot erase a validated evaluation. An HTTP
+or operational failure fails the workflow after available evidence is saved.
+
 ## See also
 
 - [../how-to/run-the-gates.md#independent-python-service-contracts](../how-to/run-the-gates.md#independent-python-service-contracts) - preparation and model-free checks.
@@ -237,3 +301,4 @@ extra, download weights or expose a production replay mode.
 - [../architecture/contracts/identity.md#6-hhem-execution-and-event-identity](../architecture/contracts/identity.md#6-hhem-execution-and-event-identity) - caller, execution and event identities.
 - [repository-layout.md](repository-layout.md) - package, configuration and fixture locations.
 - [../architecture/evaluation/hhem-evaluation-api.md](../architecture/evaluation/hhem-evaluation-api.md) - execution and failure ownership.
+- [../how-to/run-hhem-evaluation-api.md](../how-to/run-hhem-evaluation-api.md) - manual dispatch, evidence and cleanup.

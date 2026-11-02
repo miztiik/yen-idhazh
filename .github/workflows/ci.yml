@@ -133,6 +133,19 @@ jobs:
           bun install --frozen-lockfile --cwd packages/common-contracts
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
 
+      - name: Prepare the existing host profile implementation
+        working-directory: .
+        run: bun install --frozen-lockfile --cwd services/host-probes
+
+      - name: Check the caller launchers with the existing host compiler
+        working-directory: services/host-probes
+        run: >-
+          bun run --no-install node_modules/typescript/bin/tsc
+          --noEmit --target ESNext --module ESNext --moduleResolution Bundler
+          --strict --skipLibCheck --types bun
+          ../hhem-evaluator/scripts/serve-host-probes.ts
+          ../hhem-evaluator/tests/host-profile-bridge.ts
+
       - name: Install only the locked service development environment
         run: uv sync --frozen --group dev
 
@@ -142,7 +155,7 @@ jobs:
       - name: Check strict service types
         run: uv run --frozen mypy src tests
 
-      - name: Check offline service contracts and native UUID compatibility
+      - name: Check offline service and native compatibility
         run: uv run --frozen pytest
 
   gates:
