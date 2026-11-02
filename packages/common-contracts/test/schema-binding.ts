@@ -21,9 +21,14 @@ import {
   SelectedArticleRowSchema, SelectedArticleRatingsSchema, SelectedArticleAdjustmentSchema,
   SelectedArticleMetadataSchema, SelectedArtifactArticleSchema, SelectedArticlesArtifactSchema,
   PublicationEntryInputSchema, PublicationInventoryInputSchema, PUBLICATION_INVENTORY_VERSION,
+  RawArticleFreshnessSchema, AdmittedArticleFreshnessSchema, ScreenedCandidateSchema,
+  NumericalSelectionInputSchema, NumericalSelectionOutputSchema,
 } from "../src/index";
 
 export const runtimeSchemas = {
+  RawArticleFreshness: RawArticleFreshnessSchema, AdmittedArticleFreshness: AdmittedArticleFreshnessSchema,
+  ScreenedCandidate: ScreenedCandidateSchema, NumericalSelectionInput: NumericalSelectionInputSchema,
+  NumericalSelectionOutput: NumericalSelectionOutputSchema,
   SourceSnapshot: SourceSnapshotSchema, FeedIngestCandidate: FeedIngestCandidateSchema,
   WriterIdentity: WriterIdentitySchema, RowIdentity: RowIdentitySchema, FileEnvelope: FileEnvelopeSchema,
   PlannerFileEnvelope: PlannerFileEnvelopeSchema, FeedHealthRow: FeedHealthRowSchema,

@@ -65,4 +65,5 @@ jobs:
         run: |
           bun run --cwd services/feed-ingest-plan check
           bun run --cwd packages/feed-probe check
+          bun run --cwd packages/feed-probe test ./test/feed-probe.test.ts ./test/feed-probe-cli.test.ts
           bun run --cwd services/feed-ingest-plan test ./test/impit-transport.test.ts

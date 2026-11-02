@@ -14,7 +14,8 @@ import { extractArticle } from "../src/harvest-feeds/dom-extractor";
 import { attributeIngestOutcome } from "../src/attribute-ingest-outcomes";
 import { parseDocument } from "../src/harvest-feeds/parse-document";
 import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "../src/harvest-feeds/extraction-provenance";
-import { countWords, measureExtractionQuality } from "../src/harvest-feeds/extraction-quality";
+import { measureExtractionQuality } from "../src/harvest-feeds/extraction-quality";
+import { countWords } from "../src/count-article-words";
 import { extractSemanticContent } from "../src/harvest-feeds/semantic-extractor";
 import { deriveArticleIdentity, InvalidArticleUrlError } from "../src/harvest-feeds/article-identity";
 import { RecordedTransport, contentFilterPage, context, inputs, readContentFilters, readRecordings, source } from "./harvest-recordings";
@@ -30,6 +31,24 @@ function expectFeedParseObservations(facts: readonly DocumentWorkFact[], parsedS
       && fetch.feed_id === fact.feed_id && fetch.run_id === fact.run_id && fetch.outcome === "success")).toBe(true);
   }
 }
+
+test("shared word counting retains every explicit whitespace separator and required cached quality count", async () => {
+  for (const separator of [
+    "\t", "\n", "\v", "\f", "\r", "\u001c", "\u001d", "\u001e", "\u001f", " ",
+    "\u0085", "\u00a0", "\u1680", "\u2000", "\u2001", "\u2002", "\u2003", "\u2004",
+    "\u2005", "\u2006", "\u2007", "\u2008", "\u2009", "\u200a", "\u2028", "\u2029",
+    "\u202f", "\u205f", "\u3000",
+  ]) expect(countWords(`${separator}one${separator}${separator}two${separator}`)).toBe(2);
+  expect(countWords("")).toBe(0);
+  expect(countWords("one\u200btwo")).toBe(1);
+  expect(countWords("one\ufefftwo")).toBe(1);
+  const controls = (await inputs()).extraction;
+  const cachedWords = controls.min_source_words;
+  const quality = measureExtractionQuality("The body is not recounted.", cachedWords, null, controls);
+  expect(quality.source_word_count).toBe(cachedWords);
+  expect(quality.word_count).toBe(cachedWords);
+  expect(quality.too_short).toBe(false);
+});
 
 test("publisher reference validation accepts shared, distinct and unknown identities", () => {
   const publishers = PublisherDefinitionSchema.array().parse([
@@ -339,7 +358,7 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   expect(SANITIZER_FINGERPRINT).toMatch(/^idhazh-typescript-sanitizer-3-[a-f0-9]{64}$/);
   const implementation = createHash("sha256");
   for (const name of [
-    "dom-extractor.ts", "corroborated-words.ts", "extraction-quality.ts", "extraction-controls.ts",
+    "dom-extractor.ts", "../count-article-words.ts", "corroborated-words.ts", "extraction-quality.ts", "extraction-controls.ts",
     "parse-document.ts", "extraction-provenance.ts", "semantic-extractor.ts", "sanitize-dom.ts", "content-evidence.ts",
   ]) {
     implementation.update(name).update("\0").update(
@@ -398,15 +417,16 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   }
   const lineHeavy = `${extracted.article_text}\n${extracted.page_title!.split(/\s+/u).join("\n")}`;
   const shapeControls = { ...controls, prose_sentence_min: 1, prose_line_count_min: 1, prose_line_ratio_min: 0 };
-  expect(measureExtractionQuality(lineHeavy, null, shapeControls).not_prose).toBe(false);
-  expect(measureExtractionQuality(lineHeavy, null, { ...shapeControls, prose_line_ratio_min: 1 }).not_prose).toBe(true);
-  expect(measureExtractionQuality(lineHeavy, null, {
+  const lineWords = countWords(lineHeavy);
+  expect(measureExtractionQuality(lineHeavy, lineWords, null, shapeControls).not_prose).toBe(false);
+  expect(measureExtractionQuality(lineHeavy, lineWords, null, { ...shapeControls, prose_line_ratio_min: 1 }).not_prose).toBe(true);
+  expect(measureExtractionQuality(lineHeavy, lineWords, null, {
     ...shapeControls, prose_line_ratio_min: 1, prose_line_count_min: lineHeavy.split("\n").length + 1,
   }).not_prose).toBe(false);
-  expect(measureExtractionQuality(extracted.article_text, null, {
+  expect(measureExtractionQuality(extracted.article_text, extracted.word_count, null, {
     ...controls, prose_sentence_words_min: extracted.word_count + 1,
   }).not_prose).toBe(true);
-  expect(measureExtractionQuality(extracted.article_text, null, {
+  expect(measureExtractionQuality(extracted.article_text, extracted.word_count, null, {
     ...controls, min_source_words: extracted.word_count,
   }).too_short).toBe(false);
   const short = await extractArticle(bodies.article, "https://news.example/story", {

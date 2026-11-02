@@ -12,6 +12,7 @@ export * from "./schemas/telemetry.schema";
 export * from "./schemas/partition.schema";
 export * from "./schemas/event.schema";
 export * from "./schemas/policy.schema";
+export * from "./schemas/screened-article.schema";
 export * from "./schemas/config.schema";
 export * from "./schemas/ledger-index.schema";
 export * from "./schemas/host-fingerprint.schema";

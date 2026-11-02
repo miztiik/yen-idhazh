@@ -24,6 +24,7 @@ import {
 import type { FeedProbeOptions } from "../src/feed-probe";
 import {
   normalizeFeedUrl,
+  parseSourceCatalog,
   resolveFeedProbeTargets,
 } from "../src/source-selection";
 import {
@@ -220,6 +221,32 @@ test("normalized URL duplicate detection is stable", () => {
     .toBe("https://example.com/feed.xml");
   expect(normalizeFeedUrl("https://example.com/feed.xml?b=2&a=1"))
     .toBe("https://example.com/feed.xml?a=1&b=2");
+});
+
+test("catalog validation preserves defaults, classifications, lifecycle, bounds and duplicates", async () => {
+  const entry = { id: "recorded-feed", url: "https://feed.example/rss", status: "active" } as const;
+  expect(parseSourceCatalog({ feeds: [entry] }).sources).toEqual([{
+    ...entry, added_on: null, form: "article", kind: "reporting", publisher_id: null,
+    retired_on: null, retirement_reason: null, tier: 1, title: "Configured feed", weight: 1,
+  }]);
+  const classified = { ...entry, tier: 3, weight: 0, publisher_id: "recorded-publisher", vertical: "science" };
+  const retired = { ...entry, id: "retired-feed", url: "https://retired.example/rss", status: "retired" };
+  expect(parseSourceCatalog({ feeds: [classified], retired: [retired] }).sources)
+    .toMatchObject([classified, retired]);
+  expect(parseSourceCatalog(await sourceCatalog()).sources.map(source => source.tier)).toEqual([1, 2, 2]);
+  for (const patch of [
+    { tier: 0 }, { tier: 1.5 }, { tier: null }, { weight: -1 }, { weight: 1.1 },
+    { weight: Infinity }, { title: "" }, { id: "bad_ID" }, { publisher_id: "" },
+    { status: "retired" }, { status: "resting" }, { added_on: "yesterday" },
+    { url: "https://user:pass@feed.example/rss" }, { url: "ftp://feed.example/rss" },
+  ]) expect(() => parseSourceCatalog({ feeds: [{ ...entry, ...patch }] })).toThrow();
+  expect(() => parseSourceCatalog({ retired: [entry] })).toThrow("must use retired status");
+  expect(() => parseSourceCatalog({ feeds: [entry, entry] })).toThrow("Duplicate catalog source ID");
+  expect(() => parseSourceCatalog({ feeds: [
+    entry, { ...entry, id: "another-feed", url: "https://www.feed.example/rss/" },
+  ] })).toThrow("Duplicate catalog feed URL");
+  expect(() => parseSourceCatalog({ feeds: [entry], retired: [{ ...retired, id: entry.id }] }))
+    .toThrow("Duplicate catalog source ID");
 });
 
 test("safe report and trace paths stay relative and inside the repository", () => {

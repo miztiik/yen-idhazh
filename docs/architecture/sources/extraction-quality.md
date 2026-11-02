@@ -1,6 +1,6 @@
 # Measured extraction quality
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-11-02
 
 Which article-shape signals did the TypeScript parser measure, and what do
 they change? The shared `parseDocument` stage serves both `/parse` and `/plan`.
@@ -25,6 +25,14 @@ downstream cap, not a claim that it ran. Worker extraction retains ownership
 of that cut and its token estimate. Stored article input is not shortened to
 simulate it.
 
+The parser owns this full-body count. It counts sanitized primary text once
+with the shared Unicode-whitespace counter. If fallback returns different
+text, it counts that text once and compares the cached counts. The winning
+text and its count travel together into the returned article and quality
+measurement; quality requires that count and does not recalculate it.
+Retained-paragraph scoring is a separate measurement and does not change this
+count, the extraction thresholds or technical outcomes.
+
 `corroborated_word_count` is the largest qualifying independent statement of
 article length: a news-article JSON-LD `articleBody`, microdata `articleBody`,
 or the first article container whose first heading matches `og:title`.
@@ -33,6 +41,9 @@ body words are counted before sanitizer transformations, as in Python.
 Script, style and noscript text do not enter the tree witnesses. Malformed
 JSON-LD records the existing warning and does not erase other witnesses.
 A witness below `corroboration_min_words` does not qualify.
+Each witness keeps its independent count; it never reuses the extracted body's
+count. Sharing the counter's definition does not merge these measurements or
+remove the contamination check.
 
 `contaminated` is true when full extracted words divided by corroborated
 words strictly exceeds `corroboration_ratio_max`. It is null without a
@@ -79,6 +90,8 @@ required-title rejection remains; this increment does not change that contract.
 
 `extractor_version` names the installed Defuddle and Linkedom versions and a
 SHA-256 fingerprint of the fixed named extraction source files.
+The list includes the shared article word counter so a change to its definition
+also changes extraction provenance.
 `sanitizer_version` identifies the TypeScript sanitizer implementation and its
 source fingerprint, not a claim that Python executed.
 Source line endings are normalized before hashing so identical behavior has

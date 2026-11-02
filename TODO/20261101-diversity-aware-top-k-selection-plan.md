@@ -83,7 +83,7 @@ Table C
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Prepare contracts and configuration | - | A | PENDING | - | - | - |
+| C1 | 1 | Prepare contracts and configuration | - | A | DONE | selection-contract-readiness | - | 77e2fd0b-3c3f-4e30-ab1e-c571119a90d7 |
 | C2 | 2 | Add substance scoring during screening | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Replace the selection engine and its consumers | 2 | C | PENDING | - | - | - |
 | C4 | 4 | Add diversity run metrics and audit reporting | 3 | D | PENDING | - | - | - |
@@ -94,6 +94,8 @@ Table C
 - **Files touched:**
   - `TODO/20261101-diversity-aware-top-k-selection-plan.md`
   - `config/feed-ingest-plan.json`
+  - `.github/workflows/source-transport-test.yml`
+  - `docs/how-to/run-the-gates.md`
   - `packages/common-contracts/src/index.ts`
   - `packages/common-contracts/src/version.ts`
   - `packages/common-contracts/src/schemas/config.schema.ts`
@@ -110,9 +112,11 @@ Table C
   - `services/feed-ingest-plan/src/harvest-feeds/corroborated-words.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/dom-extractor.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/extraction-quality.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/extraction-provenance.ts`
   - `services/feed-ingest-plan/src/screen-article-candidates/freshness-decay.ts`
   - `services/feed-ingest-plan/test/harvest.test.ts`
   - `services/feed-ingest-plan/test/policy.test.ts`
+  - `services/feed-ingest-plan/test/plan-entry-points.test.ts`
   - `docs/architecture/sources/feed-curation.md`
   - `docs/architecture/sources/feed-ingest-policies.md`
   - `docs/architecture/sources/extraction-quality.md`
@@ -137,10 +141,10 @@ Table E
 
 | Id | # | Rejected alternative | Why rejected | Cost to take | Authority |
 | --- | --- | --- | --- | --- | --- |
-| E1 | 1 | Recount in every consumer | Repeats text work and allows count definitions to drift. | Additional body scans and another implementation to keep consistent. | Single calculation |
-| E2 | 2 | Cache by text hash across articles | Adds retained state when one body's local count is enough. | Hashing, cache memory, lifetime rules and collision handling. | Smallest sufficient cache |
-| E3 | 3 | Delete required contracts/configuration before replacing their callers | The current selector still reads buckets and writes required tier/cap fields; a removal-only PR fails runtime validation. | Convert the selector and every affected caller in that same PR, recreating the large release this phasing removes. | Working intermediate release |
-| E4 | 4 | Add legacy optional fields or a second schema to make early removal pass | Creates the compatibility machinery this replacement does not need. | Two format paths, test matrices and a later deletion. | One native format |
+| E1 | 1 | Recount downstream | Adds body scans and risks count drift. | Repeated scans and count-consistency work. | Single calculation |
+| E2 | 2 | Cross-article text-hash cache | Local counts need no shared cache. | Hashing, storage and lifetime/collision rules. | Smallest sufficient cache |
+| E3 | 3 | Remove contracts/configuration before callers | The active selector still requires them. | Replace all callers in one larger PR. | Working intermediate release |
+| E4 | 4 | Legacy optional fields or a second schema | Adds an unneeded compatibility path. | Two formats, test suites and later removal. | One native format |
 
 ## 3. Mathematical Model & Scoring Specification
 
@@ -511,15 +515,15 @@ Table L
 
 | Id | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- | --- |
-| L1 | 1 | Lazy max-heap with stale upper bounds and reinsertion | Adds candidate keys, refresh steps and queue state where a direct numeric scan expresses the same greedy rule. | Another data structure and edge-case suite; reconsider only when measured selection cost changes a real implementation choice. No unmeasured speed claim settles that question. | Smallest sufficient selection |
-| L2 | 2 | Reanalyze text or rebuild a filtered/sorted array for every winner | Only diversity counts change; fixed article evidence is already cached and a full numeric sweep needs neither operation. | Repeated text work or temporary arrays without a different result. | Cached scores, direct sweep |
-| L3 | 3 | Keep normalized website shares | Changes the declared absolute squared-count penalty as the selected population grows. | A different scoring rule, its explicit requirements and derived winner examples. | Count-based diversity |
-| L4 | 4 | Dual selector, feature switch or old-schema adapter | Leaves two production implementations for one replacement. | Another behavior matrix, activation/removal process and format handling. | Single cutover |
-| L5 | 5 | Preserve the old base meaning or add static terms to full base again | Either disagrees with the draft's BaseScore or double-counts substance/reliability. | One explicit versioned meaning and reader conversion under I17, without a bridge. | Draft arithmetic contract |
-| L6 | 6 | Keep unused tier registry or daily publisher-exposure inputs | Maintains reads, eligibility constraints and fingerprints for removed ranking behavior. | A named remaining planner consumer and its own purpose. Publication-URL safety history is not this rejected input. | Smallest used input set |
-| L7 | 7 | Regex-only sentence/name parsing, a finite acronym list or naive suffix stripping | Recreates the known abbreviation, one-word-name, acronym and inflection failures. | Maintain an English lexical system and its edge cases instead of J7's service dependency; a different parser needs recorded evidence of better behavior. | Library-based lexical analysis |
-| L8 | 8 | Live workflow dispatch as the merge gate | The workflow publishes committed data and is not a repeatable fixture check. | A separately named production observation and handling of real published output. | Repeatable native gates |
-| L9 | 9 | Release all preparation, language analysis, selection and audit work together | Couples independently verifiable outcomes and prevents the scorer and contract preparation from landing first. | A larger review, rollback and conflict surface without a required runtime dependency between every part. | Four sequential releases |
+| L1 | 1 | Lazy max-heap | Extra queue state for the same greedy rule. | Heap tests and maintenance; reconsider only if measured cost changes the design. | Smallest sufficient selection |
+| L2 | 2 | Per-choice text analysis or filtered/sorted arrays | Only feed/site counts change. | Repeated text scans or temporary arrays. | Cached scores, direct sweep |
+| L3 | 3 | Normalized website shares | Changes the absolute count-squared rule. | Different requirements, scoring and winner fixtures. | Count-based diversity |
+| L4 | 4 | Dual selector, feature switch or old-format adapter | Keeps two production paths. | Two behaviors/formats and later removal. | Single cutover |
+| L5 | 5 | Keep old base meaning or add static terms twice | Conflicts with I17's score decomposition. | Different versioned semantics and reader changes. | Draft arithmetic contract |
+| L6 | 6 | Unused tier/exposure inputs | Retains reads and fingerprints without ranking consumers. | A distinct consumer and its read/validation costs; URL safety stays. | Smallest used input set |
+| L7 | 7 | Custom lexical parsing or acronym lists | Reopens abbreviation, name, acronym and inflection failures. | Maintain those rules and show better recorded results than J7. | Library-based lexical analysis |
+| L8 | 8 | Live workflow as the merge gate | Writes real data; not a repeatable fixture check. | Separate production observation and output handling. | Repeatable native gates |
+| L9 | 9 | One PR for all four outcomes | Couples independently verifiable work. | Larger review, rollback and conflicts. | Four sequential releases |
 
 ### Local and delivery gates
 
@@ -732,9 +736,9 @@ Table R
 
 | Id | # | Rejected alternative | Why rejected | Cost to take | Authority |
 | --- | --- | --- | --- | --- | --- |
-| R1 | 1 | Leave selected fields optional until later cleanup | Reintroduces a legacy bridge despite complete native conversion being available. | A second format and later removal/testing work. | One active format |
-| R2 | 2 | Delay API/Parquet fixtures or obsolete policy reports until row 4 | Ships broken dependants or untruthful controls with the engine. | A knowingly failing intermediate release. | Working release |
-| R3 | 3 | Persist or accept a missing website penalty key | Grants unclassified hosts a diversification bypass. | Weaker concentration behavior and special cases in counts, scores and reports. | Canonical identity |
+| R1 | 1 | Optional selected fields until later | Keeps a legacy bridge. | Two formats and later cleanup. | One active format |
+| R2 | 2 | Defer required fixtures/reports to row 4 | Leaves broken readers or false controls. | A knowingly broken release. | Working release |
+| R3 | 3 | Missing website penalty key | Allows a diversity bypass. | Weaker diversity and extra cases. | Canonical identity |
 
 ## 6 - Row 4 - Add diversity run metrics and audit reporting
 
@@ -786,8 +790,8 @@ Table T
 
 | Id | # | Rejected alternative | Why rejected | Cost to take | Authority |
 | --- | --- | --- | --- | --- | --- |
-| T1 | 1 | A new scoring ledger or rewritten historical metrics | Duplicates current evidence and implies measurements old runs did not record. | Another contract, registry, writer, retention and migration path. | Existing plan-run ledger |
-| T2 | 2 | Zero-filled unknown metrics or average of only available scores | Makes incomplete evidence look measured and biases the reported mean. | A false audit result; unavailable evidence must stay explicit. | Measurement meaning |
+| T1 | 1 | New scoring ledger or rewritten historical metrics | Duplicates evidence or invents unrecorded measurements. | Another contract, registry, writer and retention path. | Existing plan-run ledger |
+| T2 | 2 | Zero-fill missing metrics or average available scores only | Disguises missing data and biases the mean. | False audit results. | Measurement meaning |
 
 ### Saved run metrics
 
@@ -800,29 +804,6 @@ Table U
 | U3 | `selection_metrics.selected_feeds` | Count of distinct selected feed_id values. This is also the number of first-use events, including when beta is configured to zero; it is not the number of historically new feeds or positive bonuses. Bounds match U2. |
 | U4 | `selection_metrics.mean_substance_score` | Arithmetic sum of the chosen rows' required substance_quality_score values divided by selected_count. Null for completed empty selection. A nonempty population requires one finite substance term per row; missing/duplicate/non-finite terms fail rather than being skipped or zero-filled. |
 | U5 | Validation and projection | The schema enforces zero counts/null mean for a completed empty population and positive bounded counts/finite mean for a nonempty one. Use the same native object in the response and raw/compact plan-run projection. Label null selection metrics as selection not completed, not zero diversity. |
-
-### Correction coverage
-
-Table V
-
-| Id | Concern | Resolution and release |
-| --- | --- | --- |
-| V1 | Missing-history penalty | H14/H18 and P9/P15 distinguish unmeasured from measured failure. Row 3 applies zero unmeasured adjustment; every unrepresented feed still receives the first-use bonus. |
-| V2 | One-word names | H4 uses library proper-name spans of one or more terms. Row 2's real recorded cases include one-word names. |
-| V3 | Acronyms and short-word shouting bypass | H8/H9 and G20/G22 require both the unexempt uppercase-word minimum and the inclusive headline-wide fraction. Only recognized acronyms leave the numerator, never the denominator. Row 2 checks P16-P18 with the real library; no short-word exemption remains. |
-| V4 | Abbreviation sentence splits | H3 uses compromise sentence boundaries without changing extraction-quality rules. Row 2 checks abbreviations and decimal punctuation. |
-| V5 | Raw-token opening mismatch | H7/H11 normalize noun and verb inflections before whole-term overlap. Row 2 checks inflections and substring false matches; arbitrary derivations/synonyms remain an explicit heuristic limit, not a claimed library capability. |
-| V6 | Short-article exclusion and long-article score jump | H1/H2 and P2-P4 use a soft ramp from zero retained words, a wider full-credit band and continuous taper to 0.80 length points at 6000 words, then clamp. Row 2 checks every endpoint without a retained-length refusal; no complete-score percentage penalty is implied. |
-| V7 | Excess selection machinery | I1-I7/J2-J6/N4 specify one cached-score array sweep, with fixed sequence/property checks and no queue module, stale bounds, step counters or second selector. Row 3 owns it. The sizing example is an operation bound, not a measured latency or pool limit. |
-| V8 | Shared-contract blast radius | D7 decouples the actual catalog-probe consumer in row 1. Q3/Q4 convert the native selected/stage/API/partition/writer chain in row 3; no legacy optional tier metadata or historic conversion. |
-| V9 | Missing website bypass | H20/H21 require canonical-URL grouping with normalized-host fallback. Row 3 tests absent supplied grouping and actual registrable-domain lookup failure. |
-| V10 | Large single release and late tests | C1-C4/N1-N10 define four sequential working PRs. Every row carries its required tests/fixtures/docs; removals stay with their callers, and row 4 adds audit capability rather than repairing earlier releases. |
-| V11 | Internal lexical API and View-based exclusion | H7 reads validated public JSON term output; H5 uses the public ProperNoun string selector. Row 2's recorded cases prove normalization, numeric/name separation and explicit failure on invalid library output without internal method access or unsafe casts. |
-| V12 | Unknown-age refusal and invented freshness | H15/H17/F6/K19 preserve unknown-age admission with zero recency and null timing evidence. Row 3 applies the global ceiling only to known age and keeps I19's consistent unknown variant in every selected projection/readback. No current-time substitute or technical-history penalty; old undated articles remain an explicit coverage trade-off. |
-| V13 | Boilerplate-inflated scoring | H28/H29 and K20/P21/P22 exclude discarded blocks from length, density and opening evidence without changing extraction or the worker's body. F22/P23 make retained-noise and short-prose limits explicit; no removal percentage is asserted. Row 2 owns measurement, row 3 owns both counts in selected output. |
-| V14 | Raw versus retained count drift | A12/F2/I9/K12 preserve both meanings and validate retained <= raw. G11's ramp has no admission floor; G26 and original technical history stay unchanged. Measured zero is valid and delivered, while missing count/score evidence fails validation instead of receiving a default. |
-| V15 | Incomplete retirement instructions | Table W names runtime deletions, helper removal, obsolete test/fixture disposal and surviving guarantees. N5/N7 and K22/M9 make their completion part of row 3, not optional later cleanup. |
-| V16 | New algorithm missing from living documentation | Table X assigns every current page and inbound-link repair to its release. K23/M7 require the new explanation, mathematics, examples, diagram and operator controls in place of obsolete answers; the plan is not the final algorithm reference. |
 
 ## 7 - Required retirement and documentation closure
 
