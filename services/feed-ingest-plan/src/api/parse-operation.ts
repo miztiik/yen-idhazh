@@ -141,7 +141,7 @@ export async function parseFetchedDocument(
     warnings: parsed.parsed?.warnings ?? [], quality: parsed.parsed?.quality ?? null,
   });
   const observation = PlannerHarvestObservationSchema.parse({
-    candidate_id: candidateId, http_status: artifact.http_status, robots: artifact.robots, fetch_failure: null,
+    candidate_id: candidateId, http_status: artifact.http_status, fetch_failure: null,
     paywall: parsed.parsed?.paywall ?? null, paywall_evidence: parsed.parsed?.paywall_evidence ?? "not-observed",
     extraction: parsed.parsed === null ? "failed" : parsed.parsed.article_text ? "success" : "empty",
     observed_at: artifact.observation.occurred_at, diagnostics,

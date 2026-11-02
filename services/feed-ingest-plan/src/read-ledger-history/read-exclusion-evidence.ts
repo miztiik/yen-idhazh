@@ -1,7 +1,7 @@
 /** Which named published and settled-failure rows exclude an article before page fetch? */
 import { resolve } from "node:path";
-import { ItemHealthFailureCodeSchema } from "@idhazh/common-contracts";
-import type { ItemHealthFailureCode } from "@idhazh/common-contracts";
+import { ItemHealthFailureCodeSchema, PlannerItemFailureCodeSchema } from "@idhazh/common-contracts";
+import type { ItemHealthFailureCode, PlannerItemFailureCode } from "@idhazh/common-contracts";
 import type { PublishedRow } from "../metrics/publication-evidence";
 import { readLedgerDay } from "./read-period";
 import { ItemHealthFailureProjectionContract } from "./item-health-failure";
@@ -103,12 +103,15 @@ export async function readExclusionEvidence(input: {
   }
 
   const codes = input.settledFailureCodes.map(code => ItemHealthFailureCodeSchema.parse(code));
-  const wantedCodes = new Set(codes);
-  if (codes.length !== wantedCodes.size) throw new Error("collect.settled_failure_codes must be distinct");
+  if (codes.length !== new Set(codes).size) throw new Error("collect.settled_failure_codes must be distinct");
+  const wantedCodes = new Set(codes.flatMap(code => {
+    const eligible = PlannerItemFailureCodeSchema.safeParse(code);
+    return eligible.success ? [eligible.data] : [];
+  }));
   if (wantedCodes.size === 0) return {
     published_on: publishedOn,
     published_rows: publishedRows,
-    settled_failure_codes: new Map<string, ItemHealthFailureCode>(),
+    settled_failure_codes: new Map<string, PlannerItemFailureCode>(),
     history: { published: coverage(publishedHeld), settled_failures: null },
   };
   const settledDays = namedDays(input.itemHealthRegistration.prefix, [now.slice(0, 10)],
@@ -122,14 +125,15 @@ export async function readExclusionEvidence(input: {
       fileCache: settledFileCache, indexCache,
     }),
   }));
-  const settledCodes = new Map<string, ItemHealthFailureCode>();
+  const settledCodes = new Map<string, PlannerItemFailureCode>();
   for (const { input: day, held } of settledHeld) {
     for (const { row: raw } of held.rows) {
       const row: ItemHealthFailureProjection = ItemHealthFailureProjectionContract.schema.parse(raw);
       if (row.date !== day.day) throw new Error("item-health row date differs from its named UTC day");
-      if (row.outcome !== "failed" || row.code === null || !wantedCodes.has(row.code)) continue;
+      const eligible = PlannerItemFailureCodeSchema.safeParse(row.code);
+      if (row.outcome !== "failed" || !eligible.success || !wantedCodes.has(eligible.data)) continue;
       const previous = settledCodes.get(row.url_key);
-      if (previous === undefined || row.code < previous) settledCodes.set(row.url_key, row.code);
+      if (previous === undefined || eligible.data < previous) settledCodes.set(row.url_key, eligible.data);
     }
   }
   return {

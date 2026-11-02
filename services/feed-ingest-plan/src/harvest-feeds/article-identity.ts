@@ -1,4 +1,4 @@
-/** Hash the same cleaned article address used for permission and download. */
+/** Hash the same cleaned article address used for download. */
 import { deriveUrlKey } from "@idhazh/common-contracts";
 import { cleanArticleUrl } from "./article-url";
 import type { ArticleUrlPolicy } from "./article-url";

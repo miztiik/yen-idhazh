@@ -91,7 +91,7 @@ test("closed request spend sums distinct attempts once without adding captured r
     outcome: "transient", items: 0, productive_reads: 0, failed_reads: 1 });
   const result = summarize(setup, [first, structuredClone(first), second, anotherRun]);
   expect(result.request_report.feeds[0]).toMatchObject({
-    feed_id: "recorded-news", feed_requests: 6, article_requests: 12, robots_requests: 0, counts_complete: true,
+    feed_id: "recorded-news", feed_requests: 6, article_requests: 12, counts_complete: true,
   });
   expect(result.sources.get("recorded-news")!.reliability).toMatchObject({
     productive: 99, attempted: 100, success_fraction: 0.99, production_factor: 0.99, complete: false,
@@ -115,8 +115,6 @@ test("represented-day reliability excludes skips and honors its floor rather tha
   expect(substituted.sources.get("recorded-news")!.reliability).toMatchObject({
     attempted: 2, productive: 0, from_day: "2026-01-01", production_factor: 0.8, complete: true,
   });
-  const denied = summarize(setup, [work(undefined, { outcome: "robots_denied", items: 0, permission: "denied" })]);
-  expect(denied.sources.get("recorded-news")!.reliability).toMatchObject({ productive: null, attempted: null });
 });
 
 test("missing work, nullable counters and partial days never become measured zero or perfect reliability", async () => {
@@ -125,10 +123,10 @@ test("missing work, nullable counters and partial days never become measured zer
   expect(unavailable.sources.get("recorded-news")!.reliability).toMatchObject({ productive: null, attempted: null, complete: false });
   expect(unavailable.sources.get("recorded-news")!.lifecycle).toBe("unknown");
   expect(unavailable.request_report).toMatchObject({ complete: false, feeds: [{
-    counts_complete: false, article_requests: null, feed_requests: null, robots_requests: null,
+    counts_complete: false, article_requests: null, feed_requests: null,
   }] });
   const unknown = summarize(setup, [work(undefined, {
-    counts_complete: false, article_requests: null, feed_requests: 0, robots_requests: 0,
+    counts_complete: false, article_requests: null, feed_requests: 0,
     checked_at: null, outcome: null, items: null,
   })]);
   expect(unknown.sources.get("recorded-news")!.reliability).toMatchObject({ productive: null, attempted: null });
@@ -203,7 +201,7 @@ test("a changed feed URL inherits neither the old endpoint reliability nor its r
     reliability: { productive: null, attempted: null, complete: false },
   });
   expect(result.request_report.feeds[0]).toMatchObject({
-    feed_requests: 0, article_requests: 0, robots_requests: 0, counts_complete: true,
+    feed_requests: 0, article_requests: 0, counts_complete: true,
   });
 });
 
@@ -223,7 +221,7 @@ test("known-empty closed days contribute zero while today's and future work stay
   const empty = summarize(setup, []);
   expect(empty.represented_days).toEqual([]);
   expect(empty.request_report.feeds[0]).toMatchObject({
-    counts_complete: true, feed_requests: 0, article_requests: 0, robots_requests: 0,
+    counts_complete: true, feed_requests: 0, article_requests: 0,
   });
   const result = summarize(setup, [
     work("2026-10-21", { article_requests: 100 }),
@@ -291,7 +289,7 @@ test("native history reads only named current-family days and rejects unbounded 
     const monthDays = Array.from({ length: 31 }, (_, index) => `2026-10-${String(index + 1).padStart(2, "0")}`);
     const packedRows = [
       work("2026-10-01", { outcome: "permanent", items: 0, productive_reads: 0, failed_reads: 1 }),
-      work("2026-10-02", { outcome: "robots_denied", permission: "denied", items: 0, productive_reads: 0, failed_reads: 0 }),
+      work("2026-10-02", { outcome: "skipped", items: 0, feed_reads: 0, productive_reads: 0, failed_reads: 0 }),
       work("2026-10-03", { outcome: "skipped", items: 0, feed_reads: 0, productive_reads: 0, failed_reads: 0 }),
       work("2026-10-30", { outcome: "permanent", items: 0, productive_reads: 0, failed_reads: 1, article_requests: 3 }),
     ];

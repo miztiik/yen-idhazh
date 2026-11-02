@@ -27,7 +27,7 @@ export function summarizeRequestReport(input: {
     const endpoint = inputEndpointKey(source.feed_url);
     const work = [...input.rows, ...input.partial_rows ?? []].filter(row => row.feed_id === source.feed_id
       && row.endpoint_key === endpoint && row.date !== undefined && requestDays.includes(row.date));
-    function summarize(field: "feed_requests" | "article_requests" | "robots_requests") {
+    function summarize(field: "feed_requests" | "article_requests") {
       const known = work.filter(row => typeof row[field] === "number");
       const unknown = work.filter(row => row[field] == null);
       const complete_days = requestDays.filter(day => input_complete && !missing_days.includes(day)
@@ -46,11 +46,10 @@ export function summarizeRequestReport(input: {
     }
     const feed = summarize("feed_requests");
     const article = summarize("article_requests");
-    const robots = summarize("robots_requests");
     return {
-      feed_id: source.feed_id, feed_requests: feed.total, article_requests: article.total, robots_requests: robots.total,
-      counts_complete: [feed, article, robots].every(counter => counter.coverage.status === "complete"),
-      coverage: { feed_requests: feed.coverage, article_requests: article.coverage, robots_requests: robots.coverage },
+      feed_id: source.feed_id, feed_requests: feed.total, article_requests: article.total,
+      counts_complete: [feed, article].every(counter => counter.coverage.status === "complete"),
+      coverage: { feed_requests: feed.coverage, article_requests: article.coverage },
     };
   });
   return PlannerRequestReportSchema.parse({

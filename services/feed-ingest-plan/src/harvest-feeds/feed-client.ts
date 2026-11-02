@@ -2,7 +2,7 @@
 import { FEED_OUTCOME_PAYLOAD_VERSION, FeedOutcomePayloadSchema } from "@idhazh/common-contracts";
 import type { CandidateRejectionRecord, FeedOutcomePayload, SourceSnapshot } from "@idhazh/common-contracts";
 import type { FeedEntry, HarvestContext } from "./harvest-types";
-import type { PermittedFetcher } from "./robots-policy";
+import type { SourceFetcher } from "./fetch-source";
 import { fetchRejection, recordRejection } from "./record-rejection";
 import { fetchDiagnostics } from "./fetch-diagnostics";
 import { parseDocument } from "./parse-document";
@@ -22,7 +22,7 @@ export function feedDocumentWork(source: SourceSnapshot, context: HarvestContext
 }
 
 export async function readFeed(
-  source: SourceSnapshot, fetcher: Pick<PermittedFetcher, "fetch">, context: HarvestContext, timeout_ms: number,
+  source: SourceSnapshot, fetcher: Pick<SourceFetcher, "fetch">, context: HarvestContext, timeout_ms: number,
 ): Promise<{ entries: FeedEntry[]; rejection: CandidateRejectionRecord | null; outcome: FeedOutcomePayload }> {
   const outcome: FeedOutcomePayload = {
     version: FEED_OUTCOME_PAYLOAD_VERSION, kind: "feed_outcome", source,

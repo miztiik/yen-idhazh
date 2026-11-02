@@ -5,8 +5,7 @@ import { observeDocument } from "./document-observation";
 import type { DocumentIdentity } from "./document-observation";
 import type { HarvestContext } from "./harvest-types";
 import { utcTimestamp } from "./harvest-types";
-import type { FetchResult, PermittedFetcher } from "./robots-policy";
-import type { FetchAttemptMeasurement } from "./robots-policy";
+import type { FetchResult, SourceFetcher, FetchAttemptMeasurement } from "./fetch-source";
 import { ArticleExtractionError } from "./dom-extractor";
 import { FeedParseError } from "./parse-feed";
 import { ParserError } from "./parser-error";
@@ -36,7 +35,6 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       ...(quality_rejection === undefined ? {} : { quality_rejection }),
       ...(phase === "failed" && fetched?.body_limit != null ? {
         body_limit: fetched.body_limit,
-        body_limit_source: fetched.robots_failure === "body-too-large" ? "robots" : "document",
       } : {}),
     }, phase === "failed" && scope.document_kind === "article" ? url : undefined,
     phase === "failed" && scope.document_kind === "feed" && url !== undefined
@@ -57,8 +55,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       response_evidence: attempt?.response_evidence ?? fetched.response_evidence ?? null,
       pacing_time_ms: attempt === null ? fetched.pacing_time_ms ?? null : attempt.pacing_wait_ms ?? 0,
       pacing_settings: fetched.pacing_settings ?? null,
-      robots_response_evidence: fetched.robots_response_evidence ?? null,
-      robots_http_status: fetched.robots_http_status ?? null, robots_failure: fetched.robots_failure ?? null, attempt,
+      attempt,
     });
   }
   const timestamp = () => utcTimestamp(context.observation_clock);
@@ -87,7 +84,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       publish("fetch", "started", null);
       publish("fetch", "failed", 0, url, failure_code);
     },
-    async fetch(fetcher: Pick<PermittedFetcher, "fetch">, url: string, cause: string | null = null, signal?: AbortSignal) {
+    async fetch(fetcher: Pick<SourceFetcher, "fetch">, url: string, cause: string | null = null, signal?: AbortSignal) {
       const started = performance.now();
       fetchedUrl = url;
       publish("fetch", "started", null);
@@ -105,13 +102,9 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
                 duration_ms: measurement.attempt.duration_ms,
               }, undefined, undefined, failureDetails({
                 body: null, http_status: measurement.attempt.http_status, failure: measurement.attempt.failure,
-                robots: null, final_attempted_url: measurement.final_attempted_url,
+                final_attempted_url: measurement.final_attempted_url,
                 pacing_time_ms: measurement.attempt.pacing_wait_ms ?? 0,
                 pacing_settings: measurement.pacing_settings,
-                ...(measurement.attempt.phase !== "robots" ? {} : {
-                  robots_http_status: measurement.attempt.http_status, robots_failure: measurement.attempt.failure,
-                  robots_response_evidence: measurement.attempt.response_evidence,
-                }),
               }, url, false, measurement.attempt));
             }
             await save(observation, {
@@ -151,7 +144,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
         failure = error instanceof ArticleExtractionError || error instanceof ParserError ? error.reason
           : error instanceof FeedParseError ? "malformed-feed" : null;
         publish("parse", "failed", Math.round(performance.now() - started), url, failure ?? "PARSE_FAILED", undefined, {
-          ...(capturedFetch ?? { body: null, http_status: null, failure: null, robots: null }),
+          ...(capturedFetch ?? { body: null, http_status: null, failure: null }),
           final_attempted_url: finalAttemptedUrl,
         });
         await save(observation, { outcome: "failed", failure_code: failure }, Math.round(performance.now() - started), null);
@@ -162,7 +155,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       const { quality_rejection, ...workResult } = result;
       publish("parse", workResult.outcome === "failed" ? "failed" : "completed",
         Math.round(performance.now() - started), url, workResult.failure_code, undefined, {
-          ...(capturedFetch ?? { body: null, http_status: null, failure: null, robots: null }),
+          ...(capturedFetch ?? { body: null, http_status: null, failure: null }),
           final_attempted_url: finalAttemptedUrl,
         });
       await save(observation, workResult, Math.round(performance.now() - started), null);

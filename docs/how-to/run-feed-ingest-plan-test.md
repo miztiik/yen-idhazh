@@ -101,6 +101,9 @@ extractor, complete public offer flow and CLI. Generated native files prove
 metadata/artifact agreement, original UTC work dates, incomplete history,
 distinct attempts and explicit empty or partial outcomes. No test contacts
 an external feed, starts a live workflow or requires local Python.
+Recorded transports capture each invocation before fixture lookup. Their
+traces must contain only feed/article targets and actual retries or redirects.
+Missing fixture responses cannot conceal an automatic extra request.
 
 The generated bare-origin case executes the actual commit CLI, checks the
 new remote metadata without raw-day indexes, replays it safely and verifies that
@@ -125,10 +128,13 @@ gh run download <run-id> --name planner-current-recordings --dir <temporary-dire
 ```
 
 The `planner-current-recordings` artifact is uploaded only after the recorder
-succeeds. It contains exactly eight files for
+succeeds. It contains eight files for
 `tests/fixtures/feed-ingest-plan/entry-points/`: `response.json`, `health.json`,
 `selected-articles.json` and the `discovered-articles`, `selected-articles`,
 `rejected-articles`, `feed-health-state` and `plan-runs` `.rows.json` files.
+It also contains `report-events.json`, the same request's validated progress
+events. This current fixture is captured, not rebuilt by changing an earlier
+event's version or inventing its timings.
 The capture switch is unset when the recorder step exits, including on failure.
 Review and commit only these generated current recordings, then run ordinary
 candidate CI without capture. Existing replay, CLI and full-suite gates remain
@@ -259,9 +265,9 @@ missing evidence. A paused feed is not a new request failure. Historical
 causes remain unavailable when report inputs do not contain them. Current
 feed HTTP status is shown only for an identified HTTP check tied to its saved
 failure code. The report reader verifies the exact rejected-article files named
-in this run's response before showing article HTTP, fetch and robots evidence.
+in this run's response before showing article HTTP, fetch and pacing evidence.
 It counts each terminal execution/candidate once; retries are not extra
-articles. A robots response never substitutes for an article response.
+articles. An unavailable target status remains unavailable.
 Detailed article rows replace the covered aggregate failure counts. Remaining
 aggregate counts keep their unknown status explicit.
 

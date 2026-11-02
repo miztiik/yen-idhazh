@@ -1,7 +1,7 @@
 /** Keep cleaned URLs as the sole article identity and preserve current-key deduplication. */
 import { expect, test } from "bun:test";
 import { deriveArticleIdentity } from "../src/harvest-feeds/article-identity";
-import { createPermittedFetcher } from "../src/harvest-feeds/robots-policy";
+import { createSourceFetcher } from "../src/harvest-feeds/fetch-source";
 import { recordedPlan } from "./plan-recordings";
 import { collectRecordedFeeds } from "./collection-recordings";
 import { executeSelection } from "../src/api/selection-operation";
@@ -31,7 +31,7 @@ test("scheme cleanup retains accepted offers while an oversized cleaned address 
     expect(new URL(expanded).href).toHaveLength(2091);
     held.inputs.harvest.config.harvest.tidy_urls = false;
     expect(() => deriveArticleIdentity(expanded, held.inputs.harvest.config.harvest)).toThrow("serialized article address");
-    const fetcher = createPermittedFetcher(
+    const fetcher = createSourceFetcher(
       held.inputs.harvest.config.harvest, held.inputs.harvest.extraction, held.runtime.boundary,
     );
     expect(await fetcher.fetch(expanded)).toMatchObject({ failure: "unsafe-target" });

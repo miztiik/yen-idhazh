@@ -15,7 +15,7 @@ test("replayed rejected raw rows reuse their file and refuse an existing corrupt
       run_id: "2026-10-20-1", attempt: 1, date: "2026-10-20",
       candidate_id: null, url_key: deriveUrlKey("https://example.com/article"),
       feed_id: "fixture-feed", stage: "harvest-feeds", reason_code: "EXTRACT_EMPTY",
-      freshness_cutoff_at: null, http_status: 200, robots: "allowed",
+      freshness_cutoff_at: null, http_status: 200,
     });
     const input = {
       ledger: "rejected-articles", outputRoot: root, rowContract: RejectedArticleRowContract,

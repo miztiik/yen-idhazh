@@ -343,10 +343,12 @@ A vertical will be retired. A feed will die quietly when a site is redesigned. B
 The **Feed Admission Check** is the source-entry review before adding or
 restoring a feed. The standalone TypeScript package
 [`packages/feed-probe`](../../../packages/feed-probe/) is a separate
-instrument for this check. It uses the standalone probe core, the production
-fetcher settings, public-address check, robots policy, bounded article count,
+instrument for this check. It uses the shared TypeScript source fetcher,
+configured request controls, public-address check and bounded article count,
 paywall evidence and text extractor. It makes no model call and changes neither
 curation nor the pipeline health ledgers.
+It fetches only feed and article targets; Python's separate robots policy is
+unchanged.
 
 The TypeScript probe is a minimum access check, not an editorial acceptance gate. Its
 current limits matter when reading a green exit code:

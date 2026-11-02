@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import {
   FeedHealthStateRowSchema, FeedIngestCandidateSchema, ParsedFeedBatchSchema, PartitionedFeedBatchSchema, PlanRunRowContract, SelectedArticleRowContract,
   SelectedArticlesArtifactSchema, deriveCandidateId, deriveUrlKey, selectedArticleMetadata,
@@ -99,7 +100,7 @@ function selectionInput(setup: Setup, articles: ScreenedCandidate[], options: {
       batch_id: randomUUID(), config_sha256: "b".repeat(64), context: setup.context, request: {},
       candidates: articles.map(value => value.candidate),
       observations: Object.fromEntries(articles.map(({ candidate }) => [candidate.candidate_id, {
-        candidate_id: candidate.candidate_id, http_status: 200, paywall: false, robots: "allowed",
+        candidate_id: candidate.candidate_id, http_status: 200, paywall: false,
         fetch_failure: null, extraction: "success", paywall_evidence: "none", observed_at: setup.context.now,
       }])),
       discovered: { availability: "unavailable" },
@@ -118,6 +119,48 @@ function names(result: ReturnType<typeof run>) { return result.articles.map(row 
 function adjustment(row: ReturnType<typeof run>["articles"][number], term: string) {
   return row.ratings.adjustments.find(value => value.term === term)?.value;
 }
+
+test("question headlines and retained openings complete real screening and selection", async () => {
+  const [setup, scoreCases, screeningCases] = await Promise.all([
+    inputs({ article_limit: 1 }),
+    Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/substance-score-cases.json", import.meta.url)).json(),
+    Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/screening-cases.json", import.meta.url)).json(),
+  ]);
+  const { questions } = z.object({ questions: z.array(z.object({ text: z.string() })) }).parse(scoreCases);
+  const { candidate: recording } = z.object({
+    candidate: z.object({ title: z.string(), article_text: z.string() }),
+  }).parse(screeningCases);
+  const original = article(setup.fixture.candidates[0]!, setup).candidate;
+  for (const question of questions) {
+    for (const [title, article_text] of [
+      [question.text, recording.article_text],
+      [recording.title, `${question.text} ${recording.article_text}`],
+    ] as const) {
+      const candidate = FeedIngestCandidateSchema.parse({
+        ...original, title, article_text, word_count: countWords(article_text),
+      });
+      const screened = await screenArticleCandidates({
+        candidates: [candidate], observations: {}, discovered: { availability: "unavailable" },
+        planning: setup.planning, clock_config: { collect: { max_future_hours: 0 } },
+        run: { now: setup.context.now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id },
+      });
+      expect(screened.rejections, title).toEqual([]);
+      expect(screened.admitted, title).toHaveLength(1);
+      const admitted = screened.admitted[0]!;
+      expect(admitted.candidate, title).toEqual(candidate);
+      expect(admitted.freshness.substance_word_count, title).toBe(candidate.word_count);
+      expect(admitted.freshness.substance_score, title).toBeGreaterThan(0);
+      const selected = curateArticles(selectionInput(setup, screened.admitted));
+      expect(selected.losses, title).toEqual([]);
+      expect(selected.articles, title).toHaveLength(1);
+      const chosen = selected.articles[0]!;
+      expect(chosen.article_text, title).toBe(candidate.article_text);
+      expect(chosen.word_count, title).toBe(candidate.word_count);
+      expect(chosen.substance_word_count, title).toBe(admitted.freshness.substance_word_count);
+      expect(adjustment(chosen, "substance_quality_score"), title).toBe(admitted.freshness.substance_score);
+    }
+  }
+});
 
 test("article-pass evidence controls the adjustment without using opposite RSS ratios", async () => {
   const setup = await inputs({ article_limit: 1, source_authority_weight: 1, source_reliability_penalty_enabled: true });
@@ -323,7 +366,7 @@ test("real screening joins the strongest duplicate body and preserves both count
     const parsed = ParsedFeedBatchSchema.parse({
       ...selectionInput(setup, screened.admitted).batch, candidates,
       observations: Object.fromEntries(candidates.map(candidate => [candidate.candidate_id, {
-        candidate_id: candidate.candidate_id, http_status: 200, paywall: false, robots: "allowed",
+        candidate_id: candidate.candidate_id, http_status: 200, paywall: false,
         fetch_failure: null, extraction: "success", paywall_evidence: "none", observed_at: setup.context.now,
       }])),
     });
@@ -454,7 +497,7 @@ test("real selection keeps source pass denominators and isolates a later run's h
     expect(fresh.health_rows[0]).toMatchObject({
       run_id: runContext.run_id, date: runContext.date, checked_at: null, outcome: null, items: null,
       feed_reads: 0, productive_reads: 0, failed_reads: 0, feed_requests: 0,
-      article_requests: 0, robots_requests: 0, article_candidates: 0, articles_selected: 1,
+      article_requests: 0, article_candidates: 0, articles_selected: 1,
     });
     expect(pair).toEqual(originalBatch);
   } finally { await recorded.close(); }

@@ -5,7 +5,7 @@ import {
   SourceSnapshotSchema, TimestampSchema,
   FetchFailureSchema, PlannerHarvestObservationSchema,
 } from "@idhazh/common-contracts";
-import type { FeedIngestConfig, FeedOutcomePayload, ItemHealthFailureCode, WriterIdentity } from "@idhazh/common-contracts";
+import type { FeedIngestConfig, FeedOutcomePayload, PlannerItemFailureCode, WriterIdentity } from "@idhazh/common-contracts";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { ProgressDetails, ProgressEventType } from "../logging/progress-logger";
 import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-history";
@@ -51,7 +51,7 @@ export type HarvestContext = {
   exclusions?: {
     published_window_days: number;
     published_on: ReadonlyMap<string, string>;
-    settled_failure_codes: ReadonlyMap<string, ItemHealthFailureCode>;
+    settled_failure_codes: ReadonlyMap<string, PlannerItemFailureCode>;
   };
   clock?: () => Date;
   observation_clock?: () => Date;

@@ -130,7 +130,7 @@ async function runRecordingAt(root: string) {
     assert.equal(baseline.discovered.rows.find(row => row.url_key === discovery.url_key)!.first_seen_at, discovery.first_seen_at);
     const changedHealth = healthRows.map(row => ({ ...row, availability: "eligible" as const, strikes: 0,
       rest_until: null, first_confirmed_failure_at: null,
-      feed_requests: 99, article_requests: 99, robots_requests: 99,
+      feed_requests: 99, article_requests: 99,
       reliability: { ...row.reliability!, productive: 1, attempted: 1, success_fraction: 1, production_factor: 1 } }));
     await rewriteHealthFields(join(stateRoot, rawHealth.files[0]!.path), changedHealth, z.object(FeedHealthStateRowContract.schema.shape));
     await compact("feed-health-state", FeedHealthStateRowContract, changedHealth, "2026-10", "monthly");

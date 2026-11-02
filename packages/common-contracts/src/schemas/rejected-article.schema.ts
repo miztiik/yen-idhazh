@@ -28,10 +28,10 @@ export const RejectedArticleRowSchema = z.strictObject({
 }).meta({
   version: REJECTED_ARTICLE_VERSION,
   changelog: [
+    { version: REJECTED_ARTICLE_VERSION, change: "Remove robots permission, status and failure columns." },
     { version: REJECTED_ARTICLE_VERSION, change: "Use current global age, duplicate-carrier and capacity loss causes." },
     { version: "2026-11-01", change: "Retain request pacing evidence in terminal fetch failures." },
     { version: "2026-10-31", change: "Require current rejection rows without historical physical schemas or null-fill migration." },
-    { version: "2026-10-29T20:15", change: "Retain terminal article fetch evidence and harvest failures without parsed candidate identities." },
     { version: "2026-10-29", change: "Earlier changes are in git." },
   ],
 });

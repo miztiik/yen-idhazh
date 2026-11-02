@@ -34,6 +34,12 @@
     { "title": "BIG NEWS NATO EU", "shouting": true },
     { "title": "BIG NEWS NATO EU AI", "shouting": false }
   ],
+  "questions": [
+    { "text": "Do researchers study rivers?", "terms": ["do", "researcher", "study", "river"] },
+    { "text": "How is the team doing?", "terms": ["how", "is", "the", "team", "do"] },
+    { "text": "Can we do better?", "terms": ["can", "we", "do", "better"] },
+    { "text": "Why are prices rising?", "terms": ["why", "is", "price", "rise"] }
+  ],
   "paragraphs": [
     {
       "name": "one-word names and multiword quantity",

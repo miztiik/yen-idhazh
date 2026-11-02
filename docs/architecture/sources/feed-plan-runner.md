@@ -77,7 +77,7 @@ killing only its owned child. Defaults allow 30 seconds for readiness, 10 second
 for drain and 5 seconds to confirm forced exit. The child also applies its own
 drain bound if its supervisor disappears. No process is detached, no process
 name is used for cleanup, and runner process tracking remains enabled.
-`POST /api/2026-10-31/plan` accepts optional numeric `article_limit`, `shards`,
+`POST /api/2026-11-02/plan` accepts optional numeric `article_limit`, `shards`,
 a configured partition strategy, and one optional `global_age_ceiling_hours`
 value. The age override is positive finite hours, defaulting to the configured
 36-hour ceiling when omitted. Unknown fields, strings in numeric API
@@ -140,6 +140,9 @@ One execution has isolated run identity, attempt, clocks, counters, timings
 and batches. Run start supplies the accounting date. The saved parsed age
 clock is D19; the fresh selection/feedback clock is D22. Actual HTTP and feed
 work use their own UTC occurrence dates, including work after midnight.
+Request counts belong to the instant each target dispatches, not the later
+response settlement or parsing instant. Only feed and article requests count;
+request-report completeness has no third request category.
 The workflow supplies the retry attempt as execution metadata; local runs use
 the first attempt. The caller supplies the producer identity at runtime when
 it has one; the standalone runner uses its named default. Neither value is a

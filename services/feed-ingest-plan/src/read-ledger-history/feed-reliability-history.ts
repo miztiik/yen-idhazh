@@ -18,7 +18,7 @@ export function settleLogicalFeedReads(rows: readonly Evidence[], now: string): 
     const parsed = FeedHealthReadFieldsSchema.safeParse(row);
     if (!parsed.success || row.checked_at == null || row.items == null || row.outcome == null
       || Date.parse(row.checked_at) > Date.parse(now)
-      || row.outcome === "skipped" || row.outcome === "robots_denied") continue;
+      || row.outcome === "skipped") continue;
     if (row.check_request_id !== null && row.check_request_id !== undefined) {
       const fact = JSON.stringify([row.checked_at, row.items, row.outcome]);
       const previous = seen.get(row.check_request_id);

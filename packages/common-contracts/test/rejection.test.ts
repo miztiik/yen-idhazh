@@ -13,7 +13,7 @@ import {
   RecordedInstantSchema, TimestampSchema,
   FEED_INGEST_CANDIDATE_VERSION, PARSED_FEED_BATCH_VERSION,
   PLAN_RUN_VERSION,
-  SELECTED_ARTICLE_VERSION, FEED_HEALTH_STATE_VERSION, ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
+  SELECTED_ARTICLE_VERSION, SELECTED_FEED_BATCH_VERSION, FEED_HEALTH_STATE_VERSION, ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
   PlannerHarvestObservationSchema, PlannerDiscoveredEvidenceSchema, PlannerDiscoveredRowSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
   PartitionArticlesRequestSchema, PlannerWorkEventSchema, DiscoveredArticleRowSchema,
@@ -23,6 +23,7 @@ import {
   RetainedRejectionReasonSchema, RejectedArticleRowSchema, ArticleFetchEvidenceSchema,
   CANDIDATE_REJECTION_VERSION, REJECTED_ARTICLE_VERSION,
   FEED_INGEST_EVENT_VERSION,
+  ItemHealthFailureCodeSchema, PlannerItemFailureCodeSchema, FetchFailureSchema,
 } from "../src/index";
 import { plannerStageSchemas, runtimeSchemas, schemas } from "./schema-binding";
 
@@ -87,7 +88,7 @@ function selection() {
 function sourceRun() {
   return FeedHealthStateRowSchema.parse({
     feed_id: "example", endpoint_key: deriveUrlKey(source.feed_url), checked_at: at,
-    permission: "allowed", availability: "eligible", strikes: 0,
+    availability: "eligible", strikes: 0,
     check_request_id: null, check_result: null, rest_until: null,
     first_confirmed_failure_at: null, failed_recovery_checks: 0,
     retired_at: null, retirement_reason: null, availability_updated_at: at, availability_complete: true,
@@ -96,7 +97,7 @@ function sourceRun() {
       through_day: null, production_factor: null, complete: false },
     date: day, feed_reads: 1, productive_reads: 1, failed_reads: 0,
     article_candidates: 1, articles_selected: 1, feed_requests: 1, article_requests: 1,
-    robots_requests: 0, counts_complete: true, rejection_counts: [], run_id: run,
+    counts_complete: true, rejection_counts: [], run_id: run,
     attempt: 1, items: 1, outcome: "ok",
   });
 }
@@ -121,7 +122,6 @@ describe("rejection evidence", () => {
   test("retains article response evidence separately from policy and health outcomes", () => {
     const evidence = {
       http_status: 200, fetch_failure: null, error_code: null,
-      robots: "allowed" as const, robots_http_status: 404, robots_failure: "http" as const,
       pacing_time_ms: 0, pacing_settings: null,
     };
     const transient = CandidateRejectionRecordSchema.parse({
@@ -136,11 +136,10 @@ describe("rejection evidence", () => {
     };
     expect(RejectedArticleRowSchema.parse(row)).toEqual(row);
     const unobserved = ArticleFetchEvidenceSchema.parse({});
-    expect(Object.values(unobserved)).toEqual([null, null, null, null, null, null, null, null]);
+    expect(Object.values(unobserved)).toEqual([null, null, null, null, null]);
     expect(RejectedArticleRowSchema.parse({ ...row, ...unobserved })).toMatchObject(unobserved);
     expect(ArticleFetchEvidenceSchema.parse({
-      http_status: null, fetch_failure: "robots-unknown", error_code: "ECONNRESET",
-      robots: "unknown", robots_http_status: null, robots_failure: "network",
+      http_status: null, fetch_failure: "network", error_code: "ECONNRESET",
       pacing_time_ms: null, pacing_settings: null,
     }).error_code).toBe("ECONNRESET");
     expect(RejectedArticleRowSchema.meta()?.version).toBe(REJECTED_ARTICLE_VERSION);
@@ -152,10 +151,10 @@ describe("rejection evidence", () => {
       fetch_failure: "body-too-large",
       body_limit: { configured_limit_bytes: 1024, observed_at_least_bytes: 1056 },
     }).body_limit).toEqual({ configured_limit_bytes: 1024, observed_at_least_bytes: 1056 });
-    expect(HarvestDiagnosticsSchema.parse({
+    expect(HarvestDiagnosticsSchema.safeParse({
       fetch_failure: "robots-unknown", robots_failure: "body-too-large",
       body_limit: { configured_limit_bytes: 30, observed_at_least_bytes: 59 },
-    }).body_limit).toEqual({ configured_limit_bytes: 30, observed_at_least_bytes: 59 });
+    }).success).toBe(false);
     for (const body_limit of [
       { configured_limit_bytes: 1024, observed_at_least_bytes: 1024 },
       { configured_limit_bytes: -1, observed_at_least_bytes: 1056 },
@@ -415,9 +414,32 @@ describe("rejection evidence", () => {
 });
 
 describe("current planner contracts", () => {
+  test("native failures and health reject retired robots facts while shared Python inputs retain them", () => {
+    for (const code of ["robots_denied", "robots_unreachable"]) {
+      expect(ItemHealthFailureCodeSchema.safeParse(code).success).toBe(true);
+      expect(PlannerItemFailureCodeSchema.safeParse(code).success).toBe(false);
+      expect(HarvestDiagnosticsSchema.safeParse({ failure_code: code }).success).toBe(false);
+      expect(RejectionDetailsSchema.safeParse({ failure_code: code }).success).toBe(false);
+    }
+    for (const code of ItemHealthFailureCodeSchema.options.filter(code =>
+      code !== "robots_denied" && code !== "robots_unreachable")) {
+      expect(PlannerItemFailureCodeSchema.parse(code)).toBe(code);
+    }
+    for (const failure of ["robots-denied", "robots-unknown"]) {
+      expect(FetchFailureSchema.safeParse(failure).success).toBe(false);
+    }
+    for (const patch of [
+      { permission: null }, { permission: "allowed" }, { robots_requests: 0 },
+      { check_result: "robots" }, { outcome: "robots_denied" },
+    ]) expect(FeedHealthStateRowSchema.safeParse({ ...sourceRun(), ...patch }).success).toBe(false);
+    for (const patch of [
+      { robots: null }, { robots_failure: null }, { robots_http_status: null }, { robots_response_evidence: null },
+    ]) expect(HarvestDiagnosticsSchema.safeParse(patch).success).toBe(false);
+  });
+
   test("keeps health counts integral and captured ratios within their domain", () => {
     const row = sourceRun();
-    for (const field of ["feed_reads", "productive_reads", "failed_reads", "article_candidates", "articles_selected", "feed_requests", "article_requests", "robots_requests", "items"]) {
+    for (const field of ["feed_reads", "productive_reads", "failed_reads", "article_candidates", "articles_selected", "feed_requests", "article_requests", "items"]) {
       for (const value of [0, 1, 42]) expect(FeedHealthStateRowSchema.safeParse({ ...row, [field]: value }).success).toBe(true);
       for (const value of [-1, 0.5, Infinity, NaN, true]) expect(FeedHealthStateRowSchema.safeParse({ ...row, [field]: value }).success).toBe(false);
     }
@@ -596,7 +618,7 @@ describe("current planner contracts", () => {
       ...parsed, version: PARSED_FEED_BATCH_VERSION, candidates: [batchCandidate],
       observations: {
         [batchCandidate.candidate_id]: {
-          candidate_id: batchCandidate.candidate_id, http_status: null, robots: "allowed",
+          candidate_id: batchCandidate.candidate_id, http_status: null,
           fetch_failure: "network", paywall: null, paywall_evidence: "not-observed",
           extraction: "not-attempted", observed_at: context.now, diagnostics: { fetch_failure: "network" },
         },
@@ -630,11 +652,11 @@ describe("current planner contracts", () => {
       request_report: { from_day: day, through_day: day, complete: false,
         missing_days: [day], unattributed_days: [], input_complete: true, feeds: [] },
     });
-    expect(selected.version).toBe(SELECTED_ARTICLE_VERSION);
+    expect(selected.version).toBe(SELECTED_FEED_BATCH_VERSION);
     expect(SelectedFeedBatchSchema.safeParse({ ...selected, version: "2026-10-27" }).success).toBe(false);
     expect(PartitionedFeedBatchSchema.parse({ ...selected, selection_batch_id: batch_id, strategy: "none", dispatch_count: 1, work: [0] }).version).toBe(selected.version);
     const observation = PlannerHarvestObservationSchema.parse({
-      candidate_id: digest, http_status: null, robots: null, fetch_failure: null, paywall: null,
+      candidate_id: digest, http_status: null, fetch_failure: null, paywall: null,
       paywall_evidence: "not-observed", extraction: "not-attempted", observed_at: context.now,
     });
     expect(observation.diagnostics).toBeNull();

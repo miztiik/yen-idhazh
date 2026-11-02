@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { FeedIngestCandidateSchema } from "./candidate.schema";
 import { WriterIdentitySchema } from "./envelope.schema";
-import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
+import { FetchFailureSchema, HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import { ArticleContentEvidenceSchema } from "./content-filter-evidence.schema";
 import { DiscoveredArticleRowSchema } from "./discovered-article.schema";
 import { SelectedArticleRowSchema } from "./selected-article.schema";
@@ -16,7 +16,7 @@ import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceSnapshotSchema } from "./source.schema";
 import { UrlSchema } from "./primitives";
 import {
-  PARSED_FEED_BATCH_VERSION, SELECTED_ARTICLE_VERSION,
+  PARSED_FEED_BATCH_VERSION, SELECTED_FEED_BATCH_VERSION,
 } from "../version";
 import { PlannerRequestReportSchema } from "./planner-request-report.schema";
 export { PlannerRequestReportSchema } from "./planner-request-report.schema";
@@ -44,11 +44,7 @@ export const PreflightFreshnessSchema = z.strictObject({
 export type PreflightFreshness = z.infer<typeof PreflightFreshnessSchema>;
 export const PlannerHarvestObservationSchema = z.strictObject({
   candidate_id: Sha256Schema, http_status: z.int().min(100).max(599).nullable(),
-  robots: z.enum(["allowed", "denied", "unknown"]).nullable(),
-  fetch_failure: z.enum([
-    "http", "timeout", "unsafe-target", "dns", "network", "robots-denied",
-    "robots-unknown", "body-too-large", "redirect-loop",
-  ]).nullable(),
+  fetch_failure: FetchFailureSchema.nullable(),
   paywall: z.boolean().nullable(),
   paywall_evidence: z.enum(["json-ld", "configured-marker", "none", "not-observed"]),
   extraction: z.enum(["success", "empty", "failed", "not-attempted"]),
@@ -124,27 +120,28 @@ export const ParsedFeedBatchSchema = z.strictObject({
 }).meta({
   version: PARSED_FEED_BATCH_VERSION,
   changelog: [
+    { version: PARSED_FEED_BATCH_VERSION, change: "Remove robots evidence and health counters from parsed work." },
     { version: PARSED_FEED_BATCH_VERSION, change: "Retain candidates and offers without planner tier fields." },
     { version: "2026-10-31", change: "Require the current parsed batch without older-format readers." },
     { version: "2026-10-30", change: "Retain parser deadlines, collection completion and response byte-limit evidence." },
-    { version: "2026-10-29", change: "Identify parsed candidates produced with shared query-free article cleanup." },
     { version: "2026-10-25", change: "Earlier changes are in git." },
   ],
 });
 export type ParsedFeedBatch = z.infer<typeof ParsedFeedBatchSchema>;
 export const SelectedFeedBatchSchema = z.strictObject({
-  ...batchIdentity, version: z.literal(SELECTED_ARTICLE_VERSION).default(SELECTED_ARTICLE_VERSION), parsed_batch_id: z.uuid({ version: "v4" }),
+  ...batchIdentity, version: z.literal(SELECTED_FEED_BATCH_VERSION).default(SELECTED_FEED_BATCH_VERSION), parsed_batch_id: z.uuid({ version: "v4" }),
   selection_started_at_utc: TimestampSchema, evaluated_at: TimestampSchema,
   articles: z.array(SelectedArticleContentSchema), health_rows: z.array(FeedHealthStateRowSchema),
   rejected_articles: z.array(RejectedArticleRowSchema),
   exclusions: z.array(PlannerRejectionCountSchema), request_report: PlannerRequestReportSchema,
 }).meta({
-  version: SELECTED_ARTICLE_VERSION,
+  version: SELECTED_FEED_BATCH_VERSION,
   changelog: [
-    { version: SELECTED_ARTICLE_VERSION, change: "Carry both word counts, complete diversity scores and global timing." },
+    { version: SELECTED_FEED_BATCH_VERSION, change: "Give private selections their own stamp and target-only health and reports." },
+    { version: "2026-11-02", change: "Carry both word counts, complete diversity scores and global timing." },
     { version: "2026-10-31", change: "Carry independent request totals with explicit counter coverage." },
     { version: "2026-10-31", change: "Identify selections produced with shared query-free article cleanup." },
-    { version: "2026-10-27", change: "Carry terminal rejected article metadata with the complete selection." },
+    { version: "2026-10-27", change: "Earlier changes are in git." },
   ],
 });
 export type SelectedFeedBatch = z.infer<typeof SelectedFeedBatchSchema>;

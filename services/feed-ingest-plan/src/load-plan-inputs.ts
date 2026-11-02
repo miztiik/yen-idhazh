@@ -1,7 +1,7 @@
 /** Which named authored files supply one validated planner invocation? */
 import { resolve } from "node:path";
 import { z } from "zod";
-import { ItemHealthFailureCodeSchema, NonNegativeSchema } from "@idhazh/common-contracts";
+import { ItemHealthFailureCodeSchema, PlannerItemFailureCodeSchema, NonNegativeSchema } from "@idhazh/common-contracts";
 import { readHarvestInputs } from "./harvest-feeds/load-harvest-inputs";
 import { ServiceSettingsSchema } from "./config/service-settings";
 import { FeedHistoryPolicySchema } from "./read-ledger-history/read-feed-history";
@@ -70,7 +70,13 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
     ?? extraction.collect.published_window_days;
   return {
     root, settings, harvest,
-    clock_config: { collect: { ...extraction.collect, published_window_days: publishedWindowDays } },
+    clock_config: { collect: {
+      ...extraction.collect, published_window_days: publishedWindowDays,
+      settled_failure_codes: extraction.collect.settled_failure_codes.flatMap(code => {
+        const eligible = PlannerItemFailureCodeSchema.safeParse(code);
+        return eligible.success ? [eligible.data] : [];
+      }),
+    } },
     ledgerSettings: extraction.ledger, registrations: selected,
     outputRoot: resolve(root, paths.output_root),
   };

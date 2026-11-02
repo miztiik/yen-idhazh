@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
-import { SelectedFeedBatchSchema, SelectedArticleRowContract } from "@idhazh/common-contracts";
+import { SelectedFeedBatchSchema, SelectedArticleRowContract, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { createPlanTestServer } from "./plan-test-server";
 import { recordedPlan } from "./plan-recordings";
 import { ArticleParserPool } from "../src/harvest-feeds/article-parser-pool";
@@ -16,7 +16,7 @@ import { collectRecordedFeeds } from "./collection-recordings";
 import { CompletedCollectionSchema } from "../src/api/collection-contracts";
 import { writeRows } from "./partition-fixtures";
 
-const prefix = "/api/2026-10-31";
+const prefix = PLANNER_API_PREFIX;
 const json = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
 test("HTTP health and refusals cannot start source work", async () => {
@@ -31,6 +31,7 @@ test("HTTP health and refusals cannot start source work", async () => {
     expect((await app.request(`${prefix}/plan`, json({ padding: "x".repeat(recorded.inputs.settings.listener.max_body_bytes) }))).status).toBe(413);
     expect((await app.request(`${prefix}/feeds`)).status).toBe(404);
     expect((await app.request("/api/2026-10-20/health")).status).toBe(404);
+    expect((await app.request("/api/2026-10-31/health")).status).toBe(404);
     expect((await app.request(`${prefix}/feed-health-state`, json({ batch_id: randomUUID(), action: "record" }))).status).toBe(503);
     recorded.inputs.settings.enabled = true;
     recorded.runtime.run_number = "9".repeat(512);
@@ -99,6 +100,9 @@ test("overlapping standalone documents keep independent identities and bounded l
     await parsing;
     expect((await app.request(`${prefix}/health`)).status).toBe(200);
     const parsed = await Promise.all(pending);
+    expect(recorded.transport.requests.map(request => request.url.href).sort()).toEqual([
+      "https://news.example/second", "https://news.example/story/",
+    ].sort());
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(recorded.inputs.settings.listener.parser_concurrency);
     expect(new Set(fetched.map(document => document.run_id)).size).toBe(2);

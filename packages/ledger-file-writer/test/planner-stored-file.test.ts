@@ -21,7 +21,6 @@ const registration = {
 const settings = { format: "parquet" as const, compression_raw: "snappy" as const, compression_compact: "zstd" as const };
 const storedSchema = z.object(RejectedArticleRowSchema.shape).omit({
   http_status: true, fetch_failure: true, error_code: true,
-  robots: true, robots_http_status: true, robots_failure: true,
   pacing_time_ms: true, pacing_settings: true,
 });
 
@@ -60,7 +59,10 @@ test("current rows round-trip and stored fields survive row stamps without null-
       ledger: "rejected-articles", outputRoot: root, rows: [current], rowContract: RejectedArticleRowContract,
       registryEntry: registration, ledgerSettings: settings, period: { tier: "raw", covers: day },
     });
-    expect((await readPlannerParquet(join(root, result.files[0]!.path), "rejected-articles", RejectedArticleRowContract)).rows).toEqual([current]);
+    const currentPath = join(root, result.files[0]!.path);
+    expect((await readPlannerParquet(currentPath, "rejected-articles", RejectedArticleRowContract)).rows).toEqual([current]);
+    const storedCurrent = await readStoredPlannerParquet(currentPath, "rejected-articles");
+    expect(Object.keys(storedCurrent.rows[0]!).sort()).toEqual(Object.keys(RejectedArticleRowSchema.shape).sort());
     for (const stamp of ["2026-10-27", "2026-10-29", "2026-10-29T20:15", "2026-10-31", "2026-11-01", "2027-01-01", REJECTED_ARTICLE_VERSION]) {
       const path = await writeStoredFields(root, stamp);
       const before = await readFile(path);

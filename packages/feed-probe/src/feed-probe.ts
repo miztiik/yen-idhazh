@@ -2,7 +2,7 @@
 import {
   FeedIngestConfigSchema,
   HarvestDiagnosticsSchema,
-  ItemHealthFailureCodeSchema,
+  PlannerItemFailureCodeSchema,
   FeedProbeRequestSchema,
   FeedProbeResultSchema,
 } from "@idhazh/common-contracts";
@@ -12,7 +12,7 @@ import type {
   FeedProbeResult,
   FeedProbeWarning,
   HarvestDiagnostics,
-  ItemHealthFailureCode,
+  PlannerItemFailureCode,
 } from "@idhazh/common-contracts";
 import { ArticleExtractionError } from "@idhazh/feed-ingest-plan/dom-extractor";
 import { fetchDiagnostics } from "@idhazh/feed-ingest-plan/fetch-diagnostics";
@@ -20,12 +20,10 @@ import { ExtractionControlsSchema } from "@idhazh/feed-ingest-plan/extraction-co
 import type { ExtractionControls } from "@idhazh/feed-ingest-plan/extraction-controls";
 import { parseDocument } from "@idhazh/feed-ingest-plan/parse-document";
 import { FeedParseError, parseFeed } from "@idhazh/feed-ingest-plan/parse-feed";
-import {
-  createPermittedFetcher,
-  createRequestPacing,
-} from "@idhazh/feed-ingest-plan/robots-policy";
-import type { RequestPacing } from "@idhazh/feed-ingest-plan/robots-policy";
-import type { FetchResult } from "@idhazh/feed-ingest-plan/robots-policy";
+import { createSourceFetcher } from "@idhazh/feed-ingest-plan/fetch-source";
+import type { FetchResult } from "@idhazh/feed-ingest-plan/fetch-source";
+import { createRequestPacing } from "@idhazh/feed-ingest-plan/request-pacing";
+import type { RequestPacing } from "@idhazh/feed-ingest-plan/request-pacing";
 import type { HarvestTransport } from "@idhazh/feed-ingest-plan/transport";
 
 export type FeedProbeOptions = {
@@ -82,10 +80,7 @@ export async function createFeedProbePacing(options: FeedProbeOptions = {}): Pro
 function timeoutDiagnostics(): HarvestDiagnostics {
   return HarvestDiagnosticsSchema.parse({
     http_status: null,
-    robots: null,
     fetch_failure: "timeout",
-    robots_failure: null,
-    robots_http_status: null,
     error_code: null,
     failure_code: "network_error",
     stopped_stage: "fetch",
@@ -115,9 +110,9 @@ function emptyFeedDiagnostics(result: FetchResult, fetchMs: number): HarvestDiag
   });
 }
 
-function itemFailureCode(diagnostics: HarvestDiagnostics | null): ItemHealthFailureCode {
+function itemFailureCode(diagnostics: HarvestDiagnostics | null): PlannerItemFailureCode {
   const value = diagnostics?.failure_code ?? null;
-  const parsed = ItemHealthFailureCodeSchema.safeParse(value);
+  const parsed = PlannerItemFailureCodeSchema.safeParse(value);
   return parsed.success && parsed.data !== "not_attempted" ? parsed.data : "unknown";
 }
 
@@ -193,7 +188,7 @@ export async function probeFeed(
     ...(options.request_pacing === undefined ? {} : { request_pacing: options.request_pacing }),
     include_private_suffixes: settings.include_private_suffixes,
   };
-  const fetcher = createPermittedFetcher(
+  const fetcher = createSourceFetcher(
     settings.harvest,
     settings.extraction,
     boundary,

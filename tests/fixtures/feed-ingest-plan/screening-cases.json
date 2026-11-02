@@ -30,7 +30,6 @@
     "http_status": 200,
     "paywall": false,
     "paywall_evidence": "none",
-    "robots": "allowed",
     "fetch_failure": null,
     "extraction": "success",
     "observed_at": "2026-10-21T12:00:00Z"

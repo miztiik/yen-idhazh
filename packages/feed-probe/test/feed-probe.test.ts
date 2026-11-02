@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   FEED_PROBE_SAMPLE_DEFAULT,
   FEED_PROBE_SAMPLE_MAX,
+  FEED_PROBE_VERSION,
   FeedProbeRequestSchema,
   FeedProbeResultSchema,
   FeedIngestConfigSchema,
@@ -22,10 +23,13 @@ type RecordedRoute = {
 };
 
 class RecordedFeedTransport implements HarvestTransport {
+  readonly requests: TransportRequest[] = [];
   constructor(private readonly routes: ReadonlyMap<string, RecordedRoute>) {}
 
   async request(input: TransportRequest): Promise<TransportResponse> {
-    const route = this.routes.get(input.url.href) ?? { status: 404, body: "" };
+    this.requests.push(input);
+    const route = this.routes.get(input.url.href);
+    if (route === undefined) throw new Error(`Missing recorded response for ${input.url.href}; network is not permitted`);
     return {
       status: route.status,
       body: route.body,
@@ -57,12 +61,6 @@ async function probeFeed(request: unknown, options: FeedProbeOptions = {}) {
     ...options,
     harvest: { ...harvest, request_pacing: { ...harvest.request_pacing, enabled: false } },
   });
-}
-
-function robotsRoute(): Record<string, RecordedRoute> {
-  return {
-    "https://fixture.test/robots.txt": { status: 404, body: "" },
-  };
 }
 
 test("strict request and result contracts apply the sample default and maximum", () => {
@@ -97,19 +95,20 @@ test("strict request and result contracts apply the sample default and maximum",
       diagnostics: null,
     }],
   });
-  expect(result.version).toBe("2026-10-28");
+  expect(result.version).toBe(FEED_PROBE_VERSION);
   expect(FeedProbeResultSchema.safeParse({ ...result, extra: true }).success).toBe(false);
 });
 
 test("one readable fixture article passes through production parsing and extraction", async () => {
-  const feed = await fixture("feed.xml");
+  const feed = (await fixture("feed.xml")).replace(
+    "https://fixture.test/article-three", "https://article-fixture.test/article-three",
+  );
   const article = await fixture("readable-article.html");
   const transport = await boundary({
-    ...robotsRoute(),
     "https://fixture.test/feed.xml": { status: 200, body: feed },
     "https://fixture.test/article-one": { status: 200, body: article },
     "https://fixture.test/article-two": { status: 200, body: article },
-    "https://fixture.test/article-three": { status: 200, body: article },
+    "https://article-fixture.test/article-three": { status: 200, body: article },
   });
 
   const result = await probeFeed(
@@ -121,11 +120,15 @@ test("one readable fixture article passes through production parsing and extract
   expect(result.passed).toBe(true);
   expect(result.readable_count).toBeGreaterThanOrEqual(1);
   expect(result.paywall_confirmed).toBe(false);
+  expect(transport.transport.requests.map(request => request.url.href)).toEqual([
+    "https://fixture.test/feed.xml", "https://fixture.test/article-one",
+    "https://fixture.test/article-two", "https://article-fixture.test/article-three",
+  ]);
+  expect(JSON.stringify(result)).not.toContain('"robots');
 });
 
 test("HTTP feed failure does not pass", async () => {
   const transport = await boundary({
-    ...robotsRoute(),
     "https://fixture.test/feed.xml": { status: 404, body: "" },
   });
   const result = await probeFeed(
@@ -138,50 +141,9 @@ test("HTTP feed failure does not pass", async () => {
   expect(result.failure_code).toBe("http_client_error");
 });
 
-test("observed article and feed robots warnings do not hide readable content", async () => {
-  const feed = await fixture("one-paywall-feed.xml");
-  const article = await fixture("readable-article.html");
-  const config = FeedIngestConfigSchema.parse(await Bun.file(new URL(
-    "../../../config/feed-ingest-plan.json", import.meta.url,
-  )).json());
-  const harvest = { ...config.harvest, article_robots_policy: "observe" as const };
-  for (const allowedFeed of [true, false]) {
-    const transport = await boundary({
-      "https://fixture.test/robots.txt": {
-        status: 200, body: `User-agent: *\nDisallow: /\n${allowedFeed ? "Allow: /feed.xml\n" : ""}`,
-      },
-      "https://fixture.test/feed.xml": { status: 200, body: feed },
-      "https://fixture.test/paywall-one": { status: 200, body: article },
-    });
-    const result = await probeFeed(
-      { feed_url: "https://fixture.test/feed.xml", sample_count: 1 }, { harvest, boundary: transport },
-    );
-    expect(result.passed).toBe(true);
-    expect(result.samples[0]?.diagnostics).toMatchObject({
-      robots: "denied", robots_http_status: 200, fetch_failure: null, http_status: 200,
-    });
-  }
-  const unavailable = await boundary({
-    ...robotsRoute(),
-    "https://fixture.test/feed.xml": {
-      status: 200, body: feed.replace("https://fixture.test/paywall-one", "https://article-fixture.test/paywall-one"),
-    },
-    "https://article-fixture.test/robots.txt": { status: 503, body: "" },
-    "https://article-fixture.test/paywall-one": { status: 200, body: article },
-  });
-  const result = await probeFeed(
-    { feed_url: "https://fixture.test/feed.xml", sample_count: 1 }, { harvest, boundary: unavailable },
-  );
-  expect(result.passed).toBe(true);
-  expect(result.samples[0]?.diagnostics).toMatchObject({
-    robots: "unknown", robots_http_status: 503, robots_failure: "http", fetch_failure: null, http_status: 200,
-  });
-});
-
 test("HTTP article failure does not pass", async () => {
   const feed = await fixture("one-paywall-feed.xml");
   const transport = await boundary({
-    ...robotsRoute(),
     "https://fixture.test/feed.xml": { status: 200, body: feed },
     "https://fixture.test/paywall-one": { status: 404, body: "" },
   });
@@ -198,7 +160,7 @@ test("HTTP article failure does not pass", async () => {
 });
 
 test("a pre-aborted operation is refused before transport", async () => {
-  const transport = await boundary(robotsRoute());
+  const transport = await boundary({});
   const controller = new AbortController();
   controller.abort();
 
@@ -210,13 +172,13 @@ test("a pre-aborted operation is refused before transport", async () => {
   expect(result.verdict).toBe("feed_failure");
   expect(result.passed).toBe(false);
   expect(result.diagnostics?.fetch_failure).toBe("timeout");
+  expect(transport.transport.requests).toEqual([]);
 });
 
 test("one paywall sample does not confirm paywall", async () => {
   const feed = await fixture("one-paywall-feed.xml");
   const article = await fixture("paywall-jsonld.html");
   const transport = await boundary({
-    ...robotsRoute(),
     "https://fixture.test/feed.xml": { status: 200, body: feed },
     "https://fixture.test/paywall-one": { status: 200, body: article },
   });
@@ -237,7 +199,6 @@ test("two matching paywall samples confirm paywall", async () => {
   const feed = await fixture("two-paywall-feed.xml");
   const article = await fixture("paywall-marker.html");
   const transport = await boundary({
-    ...robotsRoute(),
     "https://fixture.test/feed.xml": { status: 200, body: feed },
     "https://fixture.test/paywall-one": { status: 200, body: article },
     "https://fixture.test/paywall-two": { status: 200, body: article },
@@ -260,7 +221,6 @@ test("mixed paywall and readable samples pass but do not confirm paywall", async
   const paywall = await fixture("paywall-jsonld.html");
   const readable = await fixture("readable-article.html");
   const transport = await boundary({
-    ...robotsRoute(),
     "https://fixture.test/feed.xml": { status: 200, body: feed },
     "https://fixture.test/paywall-one": { status: 200, body: paywall },
     "https://fixture.test/article-one": { status: 200, body: readable },
@@ -279,7 +239,6 @@ test("mixed paywall and readable samples pass but do not confirm paywall", async
 test("malformed feed is refused cleanly", async () => {
   const feed = await fixture("malformed-feed.xml");
   const transport = await boundary({
-    ...robotsRoute(),
     "https://fixture.test/feed.xml": { status: 200, body: feed },
   });
 
@@ -298,7 +257,6 @@ test("malformed article metadata remains a warning and does not fail a readable 
   const feed = await fixture("undated-feed.xml");
   const article = await fixture("malformed-jsonld-article.html");
   const transport = await boundary({
-    ...robotsRoute(),
     "https://fixture.test/feed.xml": { status: 200, body: feed },
     "https://fixture.test/article-one": { status: 200, body: article },
   });

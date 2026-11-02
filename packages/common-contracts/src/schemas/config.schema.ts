@@ -86,9 +86,6 @@ export const FeedHarvestConfigSchema = z.strictObject({
   parse_timeout_ms: PositiveCountSchema.default(10000).describe(
     "Parse-request deadline in milliseconds, including worker queue time. The default is unmeasured.",
   ),
-  article_robots_policy: z.enum(["enforce", "observe"]).default("enforce").describe(
-    "Block article requests when robots permission is denied or unknown, or retain it as evidence without blocking. Feeds retain robots results as evidence and do not block safe feed requests.",
-  ),
   tidy_urls: z.boolean().describe(
     "Apply additional article cleanup before removing all queries and fragments. Remove this switch and the disabled path when additional cleanup becomes mandatory.",
   ),
@@ -171,6 +168,7 @@ export const FeedIngestConfigSchema = z.strictObject({
 }).meta({
   version: FEED_INGEST_CONFIG_VERSION,
   changelog: [
+    { version: FEED_INGEST_CONFIG_VERSION, change: "Remove article robots policy from target-only ingestion." },
     { version: FEED_INGEST_CONFIG_VERSION, change: "Use global age, substance and diversity scoring without tier allocation or selection caps." },
     { version: "2026-11-01", change: "Configure shared domain and publisher request pacing." },
     { version: "2026-11-01", change: "Use native browser profiles and configured safe response headers." },

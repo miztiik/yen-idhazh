@@ -12,9 +12,6 @@
     "http_status": null,
     "fetch_failure": null,
     "error_code": null,
-    "robots": null,
-    "robots_http_status": null,
-    "robots_failure": null,
     "pacing_time_ms": null,
     "pacing_settings": null
   }

@@ -5,9 +5,38 @@ import {
   samplePacingDelay,
   sourceDomainKey,
 } from "../src/harvest-feeds/request-pacing";
+import { createSourceFetcher } from "@idhazh/feed-ingest-plan/fetch-source";
+import { fetchDiagnostics } from "../src/harvest-feeds/fetch-diagnostics";
+import { RecordedTransport, inputs, readRecordings } from "./harvest-recordings";
 
 type Settings = Parameters<typeof createRequestPacing>[0];
 type DispatchRecord = { url: string; started: number; settled: number };
+
+test("source retries retain pacing evidence and dispatch only target requests on each fetch", async () => {
+  const loaded = await inputs([], { extraction: { max_retries: 1 } });
+  const recordings = await readRecordings();
+  const target = "https://news.example/second";
+  recordings.responses[target] = [{ status: 503, body: "" }, { status: 200, fixture: "article" }];
+  const transport = new RecordedTransport(recordings);
+  const config = {
+    ...loaded.config.harvest,
+    request_headers: { ...loaded.config.harvest.request_headers, secondary: null },
+    request_pacing: { ...loaded.config.harvest.request_pacing, ...settings() },
+  };
+  const fetcher = createSourceFetcher(config, loaded.extraction, { transport });
+  try {
+    const fetched = await fetcher.fetch(target, undefined, "article", undefined, "publisher-a");
+    const dispatched = fetched.attempts!.filter(attempt => attempt.phase === "target");
+    expect(dispatched.map(attempt => attempt.failure)).toEqual(["http", null]);
+    expect(dispatched.every(attempt => attempt.pacing_wait_ms !== null)).toBe(true);
+    expect(fetched.pacing_time_ms).toBe(fetched.attempts!.reduce((sum, attempt) => sum + (attempt.pacing_wait_ms ?? 0), 0));
+    expect(fetchDiagnostics(fetched, 0)).toMatchObject({
+      pacing_time_ms: fetched.pacing_time_ms, pacing_settings: config.request_pacing,
+    });
+    expect((await fetcher.fetch(target)).failure).toBeNull();
+    expect(transport.requests.map(request => request.url.href)).toEqual([target, target, target]);
+  } finally { await fetcher.close(); }
+});
 
 function deferred<T = void>() {
   let resolve!: (value: T) => void;

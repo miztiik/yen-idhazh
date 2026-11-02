@@ -1,6 +1,6 @@
 # Feed and article failure diagnostics
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-02
 
 Which operation failed, what evidence survives it, and which durations were
 actually measured? This is the isolated TypeScript planner's diagnostic
@@ -25,20 +25,18 @@ Table A - diagnostic fields
 
 | Id | Field | Meaning |
 | --- | --- | --- |
-| A1 | `http_status` | Last received target HTTP status, including a redirect or headers received before body failure. Null if no target responded. Never the robots-file status. |
-| A2 | `robots` | Permission for the checked target: allowed, denied or unknown. Null before permission was checked, including an unsafe redirect destination. |
-| A3 | `fetch_failure` | Exact terminal fetch cause: HTTP, timeout, unsafe target, DNS, network, robots denied, robots unknown, body size or redirect cycle. |
-| A4 | `robots_failure`, `robots_http_status` | The cached robots lookup's cause and last HTTP status. These distinguish a denied rule from an unreachable or unsafe robots document without inventing a target response. |
+| A1 | `http_status` | Last received target HTTP status, including a redirect or headers received before body failure. Null if no target responded. |
+| A3 | `fetch_failure` | Exact terminal target-fetch cause: HTTP, timeout, unsafe target, DNS, network, body size or redirect cycle. |
 | A5 | `error_code` | An actually available safe OS/TLS error token. Installed native error classes are classified by type, not message text. Unavailable DNS detail stays null. The wire format admits only uppercase letters, digits and underscores, up to 64 characters. |
 | A6 | `extraction_failure` | Missing document root, DOM depth overflow, empty extracted content or missing title. Successful body extraction with no title remains distinguishable from empty text. |
-| A7 | `failure_code` | The existing Python item-health vocabulary where meanings match, including the selected measured extraction signal. A signal alone is not a refusal. A configured quality rejection stays separate from successful parsing and is unresolved for source attribution. Unmatched conditions use `unknown`, with their exact typed `detail`, rather than pretending to be a network failure. |
+| A7 | `failure_code` | The applicable native subset of item-health causes, including the selected measured extraction signal. A signal alone is not a refusal. A configured quality rejection stays separate from successful parsing and is unresolved for source attribution. Unmatched conditions use `unknown`, with their exact typed `detail`, rather than pretending to be a network failure. |
 | A8 | `stopped_stage`, `detail` | The failed operation (`fetch`, `extract` or feed `parse`) and its fixed cause token. Feed parsing distinguishes malformed input from a successfully parsed empty feed. No fetched prose reaches this field. |
-| A9 | `fetch_ms` | Measured milliseconds around that item's complete permitted fetch, including native connection work, robots lookup or cache wait, retries, backoff, redirects and body reading. |
+| A9 | `fetch_ms` | Measured milliseconds around that item's complete source fetch, including native connection work, pacing wait, retries, backoff, redirects and body reading. |
 | A10 | `extract_ms` | Measured milliseconds around the synchronous article extractor, including typed failures. Null if extraction was not attempted. |
 | A11 | `warnings` | A bounded set of warning kinds. Currently `malformed-json-ld` identifies invalid publisher metadata without declaring the article failed. |
 | A12 | `quality` | Measured source/body words, independent publisher length, native shape signals, configured consequence and actual implementation fingerprints. Null before extraction or on historical rows. [Extraction quality](extraction-quality.md) owns each meaning and its unavailable readings. |
-| A13 | `body_limit` | The configured decoded-byte limit and bytes observed at cutoff as a lower bound. It is present only when a feed, article or robots response hit the limit; the remaining response is not read to obtain a full size. |
-| A14 | `response_evidence`, `robots_response_evidence` | Independent target and robots facts: content type, measured decoded bytes, declared content length if available, selected headers, truncation names and native browser profile. An absent response stays null. |
+| A13 | `body_limit` | The configured decoded-byte limit and bytes observed at cutoff as a lower bound. It is present only when a feed or article response hit the limit; the remaining response is not read to obtain a full size. |
+| A14 | `response_evidence` | Target facts: content type, measured decoded bytes, declared content length if available, selected headers, truncation names and native browser profile. An absent response stays null. |
 | A15 | `pacing_time_ms`, `pacing_settings` | The terminal record's summed measured queue wait and the effective domain delay, publisher delay, jitter and enable setting. Each actual attempt keeps its own `pacing_wait_ms`. |
 
 Null means unavailable or unperformed; zero milliseconds means a real
@@ -49,8 +47,8 @@ and extraction times. Feed parsing retains its separately measured
 
 Pacing wait is separate from network-attempt time and retry backoff. An attempt's
 `duration_ms` excludes both its queue wait and backoff; the enclosing fetch
-elapsed time includes them. A robots cache hit adds no request or wait;
-validation-only refusals record zero wait. Null pacing measurements mean they
+elapsed time includes them. Validation-only refusals record zero wait.
+Null pacing measurements mean they
 were not recorded. The slot covers application response or failure settlement
 plus cooldown, not any native response work that continues after a timeout.
 
@@ -67,8 +65,8 @@ response evidence and ordered attempt facts. Failed requests remain visible
 when a later retry or secondary profile succeeds. Terminal fetch/parse events
 carry captured evidence; a parse failure has no invented failed HTTP address.
 `requested_url` is the operation input, `final_attempted_url` is the last
-dispatched target, and `failed_url` is the actual failed request, including
-robots when its retrieval caused the refusal. Local validation has no failed
+dispatched target, and `failed_url` is the actual failed target request.
+Local validation has no failed
 request address. Redirect history preserves sanitized hop addresses and status.
 
 `harvest.response_diagnostics` initially selects `content-type`,
@@ -79,9 +77,8 @@ Values are printable ASCII; shortened values name their header in
 512 characters per value, independent of the flexible log-detail budget.
 Decoded size is measured before UTF-8 conversion. Native decompression may
 remove content length; no replacement length is invented.
-When a robots response hits the byte limit, the progress event marks
-`body_limit_source` as `robots`; otherwise the source is the feed or article
-response. A target address appears in the event only when its target request
+There is no response-source discriminator: all byte-limit evidence describes
+the feed or article target. A target address appears only when its request
 was actually dispatched.
 
 Existing rejection `details.http_status` and article observation status cells
@@ -135,32 +132,24 @@ cleanup cannot replace that status with an unclassified cancellation error.
 
 ## Historical records
 
-Current rejection rows and planner events use their declared current schema
-versions; source-run vocabulary and its stamp are unchanged. Python ledger
-declarations carry their changelog entries; TypeScript owns the event changelog.
-Earlier assessment rows without diagnostics migrate with null diagnostics;
-existing historical diagnostics gain null quality and null `body_limit`.
-Rejected-article rows use the current-only Parquet reader described below.
-Nothing
-reconstructs a missing HTTP status, error token or duration from a broad old
-rejection reason. The existing publication-time migration is unchanged.
-Source-run predecessors retain their counts and recorded completion proof.
-New native response evidence defaults to null on older transient diagnostics.
-The rejected-articles row now retains measured pacing time and the effective
-pacing settings. Its current schema requires the exact new row version and
-physical columns; older row versions are not migrated. Response header maps
-remain outside the rejected-article Parquet row. Current live stages and
-optional failure artifacts use the new native shape, without reopening old
+Current rejection rows, events, fetched documents and optional failed-input
+metadata use their declared `2026-11-02` contracts. Robots fields and request
+phases are absent, not null placeholders. Python-owned item-health vocabulary
+and saved files are unchanged. Nothing reconstructs a missing HTTP status,
+error token or duration from a broad earlier rejection reason.
+Rejected rows retain measured pacing time and effective settings; response
+header maps remain outside that Parquet row. Live stages do not reopen earlier
 transport captures.
 
 The native Parquet reader requires the current envelope version, row version
 and physical column set. It refuses older files rather than filling missing
 columns or rewriting their bytes. A current row with actual new diagnostics
 cannot be encoded as an older proof that would discard them.
-Historical event reads validate the original envelope and operation vocabulary
-before upgrading the stamp in memory. They accept only the recorded
-`2026-10-29T08:00` and `2026-10-30T22:25` event stamps; neither may contain the
-later `quality` operation. Historical files are not rewritten.
+Private documents and events also require their current stamp and shape.
+Health history uses its separate
+[required-field rule](../../reference/feed-planner-ledgers.md#field-based-health-history):
+retired enum values are field gaps, not translated outcomes or a whole-file
+refusal. Valid independent counters and calculations remain usable.
 
 ## Historical evidence limits
 
@@ -179,7 +168,7 @@ Requested addresses and dispatched targets are distinct evidence. A logged
 requested article address names the input to the fetcher, not the last redirect
 hop. Historical feed failure events may retain no addresses. A catalog address
 cannot replace an unrecorded final target. Status can come from a separate
-health or rejection record, but a robots status cannot supply target status.
+health or rejection record, but an absent target status remains unavailable.
 
 Missing historical records do not demonstrate a code defect. An observed
 target refusal does not establish its underlying cause. Absent bodies, parser
@@ -188,7 +177,7 @@ change request, media or response-limit policy.
 
 ## Remaining production differences
 
-No granular DNS, connect, TLS, first-byte, body, robots or retry timing is
+No granular DNS, connect, TLS, first-byte, body or retry timing is
 reported separately. The current transport supplies no such measurements;
 the complete fetch duration must not be divided into invented socket phases.
 Failed retry/profile attempts are retained in current events and optional
@@ -211,7 +200,7 @@ does not diagnose intent, prove a paywall or blame a publisher-wide problem.
 
 | Id | Evidence | Attribution |
 | --- | --- | --- |
-| B1 | A target request reports typed `http` failure with HTTP 401, 403, 404 or 410; or an article request is stopped by explicit `enforce` policy | `source` |
+| B1 | A target request reports typed `http` failure with HTTP 401, 403, 404 or 410 | `source` |
 | B2 | Article extraction reports typed `empty-content`; a feed parser reports its typed `malformed-feed` failure | `source` |
 | B3 | Local target validation rejects an unsafe address, the configured body limit stops a response, or the extractor reports its depth limit | `pipeline` |
 | B4 | Other HTTP failures (including 408 and 429), DNS, network, timeout, redirect-loop, missing document root/title or any untyped exception | `unresolved` |
@@ -243,8 +232,8 @@ One typed diagnostic object replaces loss-prone partial mappings. Separate
 extraction rejection reasons remove the false claim that a successful HTTP
 fetch failed. Native validation adapts existing cases and recordings only;
 no test cases, Python runtime dependency or test tooling are added.
-The Python failure-category subset uses string literals so the native Arrow
-writer can derive its column type without broadening the accepted vocabulary.
+One native failure schema narrows the shared item-health vocabulary, so input
+projection, diagnostics and probe output cannot drift into different choices.
 
 The page is separate because harvesting owns request behavior while this page
 owns the evidence that crosses its boundaries.

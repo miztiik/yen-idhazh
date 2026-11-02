@@ -9,11 +9,11 @@ import type { SourceHistoryEvidence } from "./read-ledger-history/read-feed-hist
 import type { FeedEntry, HarvestArticleResult } from "./harvest-feeds/harvest-types";
 import { deriveArticleIdentity, InvalidArticleUrlError } from "./harvest-feeds/article-identity";
 import { UnsafeTargetError } from "./harvest-feeds/safe-target";
-import { retryableStatus } from "./harvest-feeds/robots-policy";
+import { retryableStatus } from "./harvest-feeds/fetch-source";
 import { createFeedHealthRow } from "./health-row";
 import { classifyFeedFetchFailure, classifyParserResult } from "./availability/feed-lifecycle";
 import { attributeIngestOutcome } from "./attribute-ingest-outcomes";
-import type { FetchResult } from "./harvest-feeds/robots-policy";
+import type { FetchResult } from "./harvest-feeds/fetch-source";
 import { hasArticleCapture, resolveArticleSourceOutcome } from "./article-source-outcome";
 
 export function createRunHealth(context: RunContext, sources: readonly SourceSnapshot[],
@@ -113,7 +113,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       return FeedHealthStateRowSchema.parse({
       ...value, counts_complete: [
         value.feed_reads, value.productive_reads, value.failed_reads, value.article_candidates,
-        value.articles_selected, value.feed_requests, value.article_requests, value.robots_requests,
+        value.articles_selected, value.feed_requests, value.article_requests,
       ].every(count => count !== null),
       });
     });
@@ -136,8 +136,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       if (fact.run_id !== context.run_id || fact.attempt !== context.writer.attempt) throw new Error("Work fact belongs to another run attempt");
       if (fact.feed_id === null || fact.operation !== "attempt") return;
       const target = row(fact.feed_id, fact.occurred_at);
-      const field = fact.request_phase === "robots" ? "robots_requests"
-        : fact.document_kind === "feed" ? "feed_requests" : "article_requests";
+      const field = fact.document_kind === "feed" ? "feed_requests" : "article_requests";
       if (fact.request_coverage !== "complete" || fact.dispatched_request_count === null) {
         target.counts_complete = false;
         target[field] = null;
@@ -151,25 +150,21 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       target.check_result = fetched.failure === null ? null : classifyFeedFetchFailure(fetched);
       target.last_failure_code = fetched.failure === null ? null
         : fetched.failure === "timeout" ? "FETCH_TIMEOUT"
-          : fetched.failure === "http" ? "FETCH_FAILED_HTTP"
-            : fetched.failure === "robots-denied" ? "ROBOTS_DENIED" : "FETCH_FAILED";
-      target.permission = fetched.robots ?? "unknown";
+          : fetched.failure === "http" ? "FETCH_FAILED_HTTP" : "FETCH_FAILED";
       target.status = fetched.http_status;
-      target.feed_reads = fetched.failure === null ? null : fetched.failure === "robots-denied" || fetched.failure === "robots-unknown" ? 0 : 1;
+      target.feed_reads = fetched.failure === null ? null : 1;
       target.items = fetched.failure === null ? null : 0;
-      target.outcome = fetched.failure === null ? "ok" : fetched.failure === "robots-denied" || fetched.failure === "robots-unknown"
-        ? "robots_denied" : fetched.failure === "unsafe-target" ? "blocked"
+      target.outcome = fetched.failure === null ? "ok" : fetched.failure === "unsafe-target" ? "blocked"
         : fetched.failure === "http" && fetched.http_status !== null && !retryableStatus.has(fetched.http_status) ? "permanent" : "transient";
       target.productive_reads = fetched.failure === null ? null : 0;
       target.failed_reads = fetched.failure === null ? null : target.feed_reads;
       target.counts_complete = fetched.failure !== null
-        && target.feed_requests !== null && target.article_requests !== null && target.robots_requests !== null;
+        && target.feed_requests !== null && target.article_requests !== null;
     },
     unknownRequests(feedId: string, instant: string) {
       const target = row(feedId, instant);
       target.feed_requests = null;
       target.article_requests = null;
-      target.robots_requests = null;
       target.counts_complete = false;
     },
     feed(outcome: FeedOutcomePayload, entries: readonly FeedEntry[], checkedAt: string, fetched?: FetchResult, requestId?: string) {
@@ -184,19 +179,17 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
         pending.feed_reads = 0;
         pending.productive_reads = 0;
         pending.failed_reads = 0;
-        pending.counts_complete = pending.feed_requests !== null && pending.article_requests !== null && pending.robots_requests !== null;
+        pending.counts_complete = pending.feed_requests !== null && pending.article_requests !== null;
       }
       pendingReads.delete(outcome.source.feed_id);
       const failure = fetched?.failure ?? outcome.diagnostics?.fetch_failure ?? null;
       const status = fetched?.http_status ?? outcome.diagnostics?.http_status ?? null;
       const skipped = outcome.fetch_status === "not_requested";
-      const robots = failure === "robots-denied" || failure === "robots-unknown";
       target.checked_at = checkedAt;
       target.check_request_id = requestId ?? target.check_request_id;
       target.check_result = target.check_request_id === null ? null
         : outcome.parse_status === "success" || outcome.parse_status === "empty" ? "valid-feed"
           : classifyParserResult(outcome.diagnostics?.detail ?? "parser-failed");
-      target.permission = fetched?.robots ?? outcome.diagnostics?.robots ?? "unknown";
       target.status = status;
       target.items = new Set(entries.flatMap(entry => {
         if (entry.link === null) return [];
@@ -206,13 +199,13 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
           throw error;
         }
       })).size;
-      target.outcome = skipped ? "skipped" : robots ? "robots_denied" : failure === "unsafe-target" ? "blocked"
+      target.outcome = skipped ? "skipped" : failure === "unsafe-target" ? "blocked"
         : failure === "http" && status !== null ? retryableStatus.has(status) ? "transient" : "permanent"
         : outcome.fetch_status === "success" ? "ok" : "transient";
-      target.feed_reads = skipped || robots ? 0 : 1;
+      target.feed_reads = skipped ? 0 : 1;
       const productive = target.outcome === "ok" && target.items > 0;
       target.productive_reads = productive ? 1 : 0;
-      target.failed_reads = !skipped && !robots && !productive ? 1 : 0;
+      target.failed_reads = !skipped && !productive ? 1 : 0;
       if (target.check_result === "interrupted") {
         target.items = null;
         target.outcome = null;
@@ -220,7 +213,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
         target.productive_reads = null;
         target.failed_reads = null;
       }
-      target.counts_complete = target.feed_requests !== null && target.article_requests !== null && target.robots_requests !== null;
+      target.counts_complete = target.feed_requests !== null && target.article_requests !== null;
       if (target.check_result === "interrupted") target.counts_complete = false;
       target.last_failure_code = outcome.rejection_reason;
       if (outcome.rejection_reason !== null) {

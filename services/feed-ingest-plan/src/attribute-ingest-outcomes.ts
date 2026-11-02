@@ -28,8 +28,7 @@ export function attributeIngestOutcome(
     return "pipeline";
   }
 
-  if (evidence.failure_code === "robots-denied"
-    || evidence.failure_code === "malformed-feed"
+  if (evidence.failure_code === "malformed-feed"
     || ((evidence.operation === "fetch" || (
       evidence.operation === "attempt" && evidence.request_phase === "target"
     )) && evidence.failure_code === "http" && isHttpRefusal(evidence.http_status))) {

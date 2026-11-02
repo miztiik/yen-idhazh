@@ -50,7 +50,7 @@ async function writeCarriedSummary(
     availability: "resting", strikes: 5, rest_until: "2026-11-01T10:00:00.000Z",
     first_confirmed_failure_at: "2026-10-29T10:00:00.000Z", availability_updated_at: updatedAt,
     feed_reads: null, productive_reads: null, failed_reads: null, article_candidates: null,
-    articles_selected: null, feed_requests: null, article_requests: null, robots_requests: null,
+    articles_selected: null, feed_requests: null, article_requests: null,
     counts_complete: false, rejection_counts: [], reliability,
   });
   const written = await writeRows(setup.inputs.outputRoot, "feed-health-state", day, FeedHealthStateRowContract, [row]);
@@ -342,7 +342,7 @@ test("a real known skipped day expires the last measured read without carrying i
       ...measured, run_id: `${nextDay}-901`, date: nextDay,
       check_request_id: null, check_result: null, checked_at: null, outcome: null, items: null,
       feed_reads: 0, productive_reads: 0, failed_reads: 0, article_candidates: 0, articles_selected: 0,
-      feed_requests: 0, article_requests: 0, robots_requests: 0, rejection_counts: [],
+      feed_requests: 0, article_requests: 0, rejection_counts: [],
     });
     const saved = await writeRows(setup.inputs.outputRoot, "feed-health-state", nextDay, FeedHealthStateRowContract, [skipped]);
     setup.inputs.settings.inputs.feed_health_days.push({

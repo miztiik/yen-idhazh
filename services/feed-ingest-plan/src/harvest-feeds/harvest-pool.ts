@@ -6,7 +6,7 @@ import type { HarvestInputs } from "./load-harvest-inputs";
 import { sourceSnapshot } from "./load-harvest-inputs";
 import { feedDocumentWork, readFeed } from "./feed-client";
 import { harvestArticle } from "./harvest-article";
-import { createPermittedFetcher } from "./robots-policy";
+import { createSourceFetcher } from "./fetch-source";
 import type { HarvestTransport } from "./transport";
 import type { RequestPacing } from "./request-pacing";
 import { ArticleParserPool } from "./article-parser-pool";
@@ -59,7 +59,7 @@ export async function harvestFeeds(
   } = {},
 ): Promise<HarvestResult> {
   WriterIdentitySchema.parse(context.writer);
-  const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, {
+  const fetcher = createSourceFetcher(inputs.config.harvest, inputs.extraction, {
     ...boundary,
     include_private_suffixes: boundary.include_private_suffixes
       ?? inputs.config.curate_articles.website_grouping.include_private_suffixes,

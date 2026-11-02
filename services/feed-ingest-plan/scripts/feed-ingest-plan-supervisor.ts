@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { PlannerReadySchema, PlannerStartupSchema, PlannerStartupFailureSchema } from "../src/config/planner-startup";
 import type { PlannerStartup } from "../src/config/planner-startup";
 import type { PlanInputs } from "../src/load-plan-inputs";
@@ -39,7 +40,7 @@ export async function invokePlannerHttp(
         throw new PlanError("PLANNER_READY_IDENTITY", "Readiness does not match the owned child and invocation");
       }
       const hostname = inputs.settings.listener.hostname;
-      const base = `http://${hostname === "::1" ? "[::1]" : hostname}:${ready.port}/api/2026-10-31`;
+      const base = `http://${hostname === "::1" ? "[::1]" : hostname}:${ready.port}${PLANNER_API_PREFIX}`;
       await fetch(`${base}/health`, { signal }).then(async response => {
         const body = z.object({ identity: PlannerReadySchema, planner_enabled: z.boolean() }).parse(await response.json());
         if (response.status !== 200 || body.planner_enabled !== true
