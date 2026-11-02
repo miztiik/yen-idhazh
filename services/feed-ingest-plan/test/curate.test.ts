@@ -12,6 +12,7 @@ import { curateArticles } from "../src/curate-article-portfolio/editorial-select
 import { screenArticleCandidates } from "../src/screen-article-candidates/triage-gates";
 import type { ScreenedCandidate } from "../src/screen-article-candidates/triage-gates";
 import { calculateFreshness } from "../src/screen-article-candidates/freshness-decay";
+import { createSubstanceScorer } from "../src/screen-article-candidates/score-article-substance";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { resolveRunContext } from "../src/resolve-run-context";
 import type { SourceHistoryEvidence } from "../src/read-ledger-history/read-feed-history";
@@ -84,9 +85,11 @@ function article(spec: CandidateCase, setup: Setup): ScreenedCandidate {
     author: null, published_at: spec.published_at, fetched_at: fixture.observed_at,
   });
   const policy = resolvePolicy(planning);
+  const { substance_word_count, substance_score } = createSubstanceScorer(planning.config.curate_articles.substance)(
+    candidate.title, candidate.article_text);
   return {
     candidate, policy, observation: null, discovered_availability: "unavailable",
-    freshness: calculateFreshness(candidate, undefined, fixture.observed_at, 6, policy),
+    freshness: { ...calculateFreshness(candidate, undefined, fixture.observed_at, 6, policy), substance_word_count, substance_score },
   };
 }
 function selectionInput(setup: Setup, articles: ScreenedCandidate[], options: {
@@ -275,6 +278,26 @@ test("unavailable numeric evidence stays null while a measured zero stays zero",
   expect(known.ratings.marginal_score).toBe(absent.ratings.marginal_score);
 });
 
+test("cached substance is measured but cannot change the current selected output or losses", async () => {
+  const setup = await inputs();
+  const admitted = setup.fixture.candidates.map(spec => article(spec, setup));
+  const original = curateArticles(selectionInput(setup, admitted));
+  const before = structuredClone(admitted);
+  const changed = admitted.map((entry, index) => {
+    const { substance_word_count, substance_score } = createSubstanceScorer({
+      ...setup.planning.config.curate_articles.substance,
+      length_scores: { full: index === 0 ? 0 : 10 }, long_form_floor_score: 0,
+    })(entry.candidate.title, entry.candidate.article_text);
+    return { ...entry, freshness: { ...entry.freshness, substance_word_count, substance_score } };
+  });
+  expect(changed.map(entry => entry.freshness.substance_score)).not.toEqual(admitted.map(entry => entry.freshness.substance_score));
+  const compared = curateArticles(selectionInput(setup, changed));
+  expect(compared.articles).toEqual(original.articles);
+  expect(compared.losses.map(loss => ({ id: loss.article.candidate.candidate_id, reason: loss.reason })))
+    .toEqual(original.losses.map(loss => ({ id: loss.article.candidate.candidate_id, reason: loss.reason })));
+  expect(admitted).toEqual(before);
+});
+
 test("flooding duplicates cannot buy capacity or displace another qualifying source", async () => {
   const setup = await inputs({ article_limit: 2 });
   setup.planning.config.curate_articles.soft_caps.max_source_share = 0.5;
@@ -326,7 +349,10 @@ test("unknown timing stays unknown; first discovery keeps its own basis and time
   original.candidate.published_at = null;
   const firstSeenAt = "2026-10-20T11:00:00Z";
   for (const discovered of [undefined, { url_key: original.candidate.url_key, first_seen_at: firstSeenAt, date: "2026-10-20" }]) {
-    const offered = { ...original, freshness: calculateFreshness(original.candidate, discovered, setup.fixture.observed_at, 6, original.policy) };
+    const offered = { ...original, freshness: {
+      ...original.freshness,
+      ...calculateFreshness(original.candidate, discovered, setup.fixture.observed_at, 6, original.policy),
+    } };
     const row = curateArticles(selectionInput(setup, [offered])).articles[0]!;
     expect(row.published_at).toBe(setup.context.now);
     expect(row.published_at_source).toBe("selection");

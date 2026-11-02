@@ -28,6 +28,7 @@
     "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer",
     "apache-arrow": "^21.2.0",
     "bottleneck": "2.19.5",
+    "compromise": "14.19.0",
     "defuddle": "0.19.5",
     "feedsmith": "3.0.1",
     "hono": "^4.10.0",

@@ -84,7 +84,7 @@ Table C
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Prepare contracts and configuration | - | A | DONE | selection-contract-readiness | - | 77e2fd0b-3c3f-4e30-ab1e-c571119a90d7 |
-| C2 | 2 | Add substance scoring during screening | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Add substance scoring during screening | 1 | B | DONE | article-substance-scoring | - | 78ec8fbd-56fc-4654-9a07-cec0ec44faa4 |
 | C3 | 3 | Replace the selection engine and its consumers | 2 | C | PENDING | - | - | - |
 | C4 | 4 | Add diversity run metrics and audit reporting | 3 | D | PENDING | - | - | - |
 
@@ -281,6 +281,7 @@ At step `t`, with already selected set `S_(t-1)`, the marginal score for an unse
 - **Scope:** Implement retained-paragraph measurement and the real compromise-based scorer, caching every existing survivor's measured count/score without adding an admission gate or changing selection and original article text.
 - **Files touched:**
   - `TODO/20261101-diversity-aware-top-k-selection-plan.md`
+  - `packages/feed-probe/bun.lock`
   - `services/feed-ingest-plan/package.json`
   - `services/feed-ingest-plan/bun.lock`
   - `services/feed-ingest-plan/src/screen-article-candidates/triage-gates.ts`
@@ -296,6 +297,7 @@ At step `t`, with already selected set `S_(t-1)`, the marginal score for an unse
   - `tests/fixtures/feed-ingest-plan/substance-score-cases.json` (new)
   - `docs/architecture/sources/article-substance-scoring.md` (new with the real scorer)
   - `docs/architecture/sources/feed-curation.md`
+  - `docs/architecture/sources/feed-ingest-policies.md`
   - `docs/architecture/sources/feed-screening.md`
 - **Acceptance gates:** Local: M1/M6, the service check and named screening/scoring/report cases; reuse row 1's unchanged common-contract record. Run the real library against recorded language/paragraph cases, every H1/H2 endpoint and invalid settings. Check K19-K21's unknown-age/empty-view admission, cheap-gate precedence and unchanged technical counts. Run the existing recorded API/CLI journey for output parity; no selected/rejection format or fixture rewrite is introduced here. CI: required checks on this PR candidate.
 - **Oracle:** Recorded articles and bounded boundary inputs produce H1-H13/H28/H29's exact retained counts/components and F2's required evidence. The admitted/refused identities, full-body text/counts and existing selector output stay unchanged, including unknown age and measured zero retained words. Cheap refusals still exit before paragraph analysis. This proves real measurement/cache and admission parity, not complete boilerplate removal, factual quality or final-ranking activation.

@@ -6,9 +6,12 @@ How does the isolated planner choose articles from the admitted batch?
 It uses configured numeric rules and explicit factual evidence, not a model
 or an inferred subject classification.
 
-The configuration now declares future global-age, substance and diversity
-settings. They are preparation only: this selector still uses the bucket,
-tier and exposure rules below. The parser shares its word counter and passes
+The configuration declares future global-age and diversity settings.
+Screening now caches each survivor's measured retained-word count and substance
+score; this selector does not yet use them. It still uses the bucket,
+tier and exposure rules below. See
+[article substance scoring](article-substance-scoring.md) for the measurement.
+The parser shares its word counter and passes
 its cached full-body count into quality measurement; this does not change
 selection. See [policy settings](feed-ingest-policies.md) and
 [extraction measurement](extraction-quality.md).
