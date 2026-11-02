@@ -113,6 +113,8 @@ The caller owns only the two services it starts. A private startup packet and
 matching evaluator health prevent adoption of an occupied listener. The host
 launcher uses `config/hhem-evaluator/host-probes.json`; it leaves the global
 host configuration unchanged. Both launchers close on parent-pipe EOF.
+The API launcher's protocol channels are not inherited by model-library
+helpers. Raw runtime diagnostics cannot become control packets or native events.
 Finally, the caller stops the profile, then joins both owned services with
 bounded escalation. The host collector closes before the API worker, including
 when a failed start or stop left no usable profile handle.

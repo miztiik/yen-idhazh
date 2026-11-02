@@ -44,6 +44,7 @@ class OwnedService:
         self.terminal_seen = threading.Event()
         self.terminal_event: EvaluationEvent | None = None
         self.ready: ApiReady | HostReady | None = None
+        self.stopped: ServiceStopped | None = None
         self.closed = False
         try:
             self.process = subprocess.Popen(
@@ -195,14 +196,23 @@ class OwnedService:
                     raise WorkflowFailure("SERVICE_STOP_FAILED", "cleanup", self.service) from None
         for reader in self.readers:
             reader.join(timeout=self.settings.worker.forced_stop_ms / 1000)
-        stopped: ServiceStopped | None = None
         while not self.messages.empty():
             message = self.messages.get_nowait()
             if message is not None and isinstance(message.root, ServiceStopped):
-                stopped = message.root
+                observed = message.root
+                if (
+                    observed.startup_id != self.packet.startup_id
+                    or observed.pid != self.process.pid
+                    or observed.service != self.service
+                    or self.stopped is not None
+                ):
+                    self.protocol_failed.set()
+                else:
+                    self.stopped = observed
         for stream in (self.process.stdout, self.process.stderr):
             if stream is not None:
                 stream.close()
+        stopped = self.stopped
         if (
             escalated
             or self.process.returncode != 0
@@ -211,6 +221,7 @@ class OwnedService:
             or stopped.startup_id != self.packet.startup_id
             or stopped.pid != self.process.pid
             or stopped.service != self.service
+            or (self.service == "hhem" and stopped.worker_exit_confirmed is not True)
             or self.protocol_failed.is_set()
             or self.events_failed.is_set()
             or any(reader.is_alive() for reader in self.readers)

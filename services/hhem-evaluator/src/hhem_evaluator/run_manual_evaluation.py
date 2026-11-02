@@ -146,13 +146,7 @@ async def run_manual_evaluation(
                 else profile_timeout_ms
             )
             try:
-                stopped = await asyncio.to_thread(service.close, timeout_ms)
-                if service.service == "hhem":
-                    shutdown = shutdown.model_copy(
-                        update={
-                            "worker_exit_confirmed": stopped.worker_exit_confirmed,
-                        }
-                    )
+                await asyncio.to_thread(service.close, timeout_ms)
             except WorkflowFailure as failure:
                 observation.errors.append(failure.error)
             except OSError:
@@ -160,6 +154,10 @@ async def run_manual_evaluation(
                     WorkflowFailure("SERVICE_STOP_FAILED", "cleanup", service.service).error
                 )
             finally:
+                if service.service == "hhem" and service.stopped is not None:
+                    shutdown = shutdown.model_copy(
+                        update={"worker_exit_confirmed": service.stopped.worker_exit_confirmed}
+                    )
                 shutdown = shutdown.model_copy(
                     update={
                         f"{service.service}_stopped": service.process.poll() is not None,

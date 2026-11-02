@@ -294,6 +294,20 @@ leave its collector observing a stopped worker. A
 measurement or cleanup failure cannot erase a validated evaluation. An HTTP
 or operational failure fails the workflow after available evidence is saved.
 
+## Design rationale
+
+The caller's control packets and native events use non-inheritable private
+channels. Ordinary standard output and standard error can also be inherited
+by model-library helper processes, so mixing them with the protocol can corrupt
+an otherwise valid shutdown receipt. Raw runtime output stays discarded
+through interpreter shutdown; only declared packets and native events reach
+the caller.
+
+A service PID exiting does not prove that its model worker stopped. The
+receipt must explicitly confirm the supervisor's joined worker exit. A
+validated confirmation remains in the report even if another cleanup action
+fails; an unclean or unconfirmed shutdown still fails the workflow.
+
 ## See also
 
 - [../how-to/run-the-gates.md#independent-python-service-contracts](../how-to/run-the-gates.md#independent-python-service-contracts) - preparation and model-free checks.

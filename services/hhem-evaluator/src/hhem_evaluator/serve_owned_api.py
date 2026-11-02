@@ -10,21 +10,26 @@ import sys
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, TextIO
 
 import uvicorn
 from uvicorn.lifespan.on import LifespanOn
 
 from .contracts.base import SCHEMA_VERSION
 from .contracts.workflow_control import ApiReady, ServiceStartFailed, ServiceStopped, StartupPacket
+from .emit_events import EventWriter
 from .load_manual_settings import load_manual_settings
 from .load_settings import load_settings
+from .open_owned_channels import OwnedChannels, open_owned_channels
 from .serve_api import create_app
 
 
-def emit_control(packet: ApiReady | ServiceStopped | ServiceStartFailed) -> None:
-    sys.stdout.write(packet.model_dump_json() + "\n")
-    sys.stdout.flush()
+def emit_control(
+    packet: ApiReady | ServiceStopped | ServiceStartFailed,
+    stream: TextIO,
+) -> None:
+    stream.write(packet.model_dump_json() + "\n")
+    stream.flush()
 
 
 def watch_parent_lifetime(
@@ -51,6 +56,7 @@ async def serve_owned_api(
     root: Path,
     packet: StartupPacket,
     finished: threading.Event,
+    channels: OwnedChannels,
 ) -> None:
     selected = load_settings(root / "config" / "hhem-evaluator" / "settings.json")
     settings = type(selected).model_validate_json(
@@ -58,7 +64,9 @@ async def serve_owned_api(
     )
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         logging.getLogger(name).disabled = True
-    app = create_app(settings, root, packet.context)
+    app = create_app(
+        settings, root, packet.context, writer=EventWriter(settings.logging, channels.events)
+    )
     controller = app.state.controller
     config = uvicorn.Config(
         app,
@@ -105,7 +113,8 @@ async def serve_owned_api(
                     startup_id=packet.startup_id,
                     pid=os.getpid(),
                     service_instance_id=controller.instance_id,
-                )
+                ),
+                channels.control,
             )
         await serving
         confirmed = controller.worker.exit_confirmed
@@ -124,7 +133,8 @@ async def serve_owned_api(
                 pid=os.getpid(),
                 clean=clean,
                 worker_exit_confirmed=confirmed,
-            )
+            ),
+            channels.control,
         )
         if not clean:
             raise RuntimeError("Owned service shutdown was not clean")
@@ -140,33 +150,35 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
     args = parser.parse_args()
-    packet: StartupPacket | None = None
-    try:
-        root = args.root.resolve()
-        manual = load_manual_settings(root)
-        line = sys.stdin.buffer.readline(manual.control_max_bytes + 1)
-        if len(line) > manual.control_max_bytes or not line.endswith(b"\n"):
-            raise ValueError("Invalid private startup packet")
-        packet = StartupPacket.model_validate_json(line)
-        finished = threading.Event()
-        asyncio.run(serve_owned_api(root, packet, finished))
-        # Executor shutdown also belongs inside the parent-loss deadline.
-        finished.set()
-    except (Exception, SystemExit):
-        if packet is not None:
-            with contextlib.suppress(OSError):
-                emit_control(
-                    ServiceStartFailed(
-                        version=SCHEMA_VERSION,
-                        kind="failed",
-                        service="hhem",
-                        startup_id=packet.startup_id,
-                        pid=os.getpid(),
+    with open_owned_channels() as channels:
+        packet: StartupPacket | None = None
+        try:
+            root = args.root.resolve()
+            manual = load_manual_settings(root)
+            line = sys.stdin.buffer.readline(manual.control_max_bytes + 1)
+            if len(line) > manual.control_max_bytes or not line.endswith(b"\n"):
+                raise ValueError("Invalid private startup packet")
+            packet = StartupPacket.model_validate_json(line)
+            finished = threading.Event()
+            asyncio.run(serve_owned_api(root, packet, finished, channels))
+            # Executor shutdown also belongs inside the parent-loss deadline.
+            finished.set()
+        except (Exception, SystemExit):
+            if packet is not None:
+                with contextlib.suppress(OSError):
+                    emit_control(
+                        ServiceStartFailed(
+                            version=SCHEMA_VERSION,
+                            kind="failed",
+                            service="hhem",
+                            startup_id=packet.startup_id,
+                            pid=os.getpid(),
+                        ),
+                        channels.control,
                     )
-                )
-        # Native library and server failures cannot print raw diagnostics.
-        # Do not let Python's finalizers wait on an unconfirmed model child.
-        os._exit(1)
+            # Native library and server failures cannot print raw diagnostics.
+            # Do not let Python's finalizers wait on an unconfirmed model child.
+            os._exit(1)
 
 
 if __name__ == "__main__":
