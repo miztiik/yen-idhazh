@@ -11,7 +11,6 @@
     "concurrency": 24,
     "fetch_timeout_ms": 6000,
     "parse_timeout_ms": 10000,
-    "article_robots_policy": "observe",
     "tidy_urls": true,
     "request_headers": {
       "primary": {

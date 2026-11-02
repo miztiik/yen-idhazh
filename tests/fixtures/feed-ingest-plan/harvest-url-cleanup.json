@@ -49,16 +49,6 @@
       "offered": "https://www.google.com/url?url=http%3A%2F%2F10.0.0.7%2Fstory",
       "failure": "unsafe-target",
       "requests": []
-    },
-    {
-      "offered": "https://www.google.com/url?url=https%3A%2F%2Fdenied.example%2Fstory",
-      "failure": "robots-denied",
-      "requests": ["https://denied.example/robots.txt"]
-    },
-    {
-      "offered": "https://www.google.com/url?url=https%3A%2F%2Funknown.example%2Fstory",
-      "failure": "robots-unknown",
-      "requests": ["https://unknown.example/robots.txt"]
     }
   ]
 }

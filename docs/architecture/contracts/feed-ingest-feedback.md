@@ -1,6 +1,6 @@
 # Feed-ingest feedback
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-11-02
 
 Which actual feed work informs a later selection?
 The planner records per-run, per-feed facts for each actual UTC work day in
@@ -18,8 +18,8 @@ day files. Completed feed work is retained when a later stage fails.
 Terminal article-fetch and extraction failures also have individual rows in
 `rejected-articles`, written through the registered ledger writer at run or
 standalone-stage finalization. Each row keeps the actual article status,
-download failure and low-level code separately from robots permission, status
-and failure. Unobserved facts remain null. Retries do not create extra rows,
+download failure, low-level code and pacing evidence. Unobserved target facts
+remain null; removed permission fields are absent. Retries do not create extra rows,
 and successful recovery creates no stale rejection. Run finalization retains
 completed failures after a later stage fails, including when no article is
 selected. The [harvesting failure flow](../sources/feed-harvesting.md#work-facts-and-failures)
@@ -30,16 +30,15 @@ file compatibility are defined in
 [rejected articles](../../reference/feed-planner-ledgers.md#m-rejected-articles).
 
 Request counters increment at actual transport dispatch, after address
-validation and [the document's robots check](../sources/feed-harvesting.md#request-and-extraction-controls).
-An observed article robots warning does not become a failed article operation
-or a rejection after successful download and admission. Retries and redirects
-add real requests. A cache hit adds zero requests; validation and parsing do
+validation and existing pacing. Only actual feed and article target dispatches
+count, on their dispatch UTC day. Retries, redirects and secondary profiles
+add real requests; validation and parsing do
 not become HTTP requests. Unknown accounting remains null with incomplete coverage.
 
-A restarted standalone parse restores validated request facts from its saved
-fetch receipt. Those requests remain on their original UTC day. If a saved
-attempt cannot establish dispatched work, its count remains unknown rather
-than becoming complete zero.
+A standalone parse consumes its live fetched reference without a new request.
+Captured requests remain on their original UTC day. If an attempt cannot
+establish dispatched work, its count remains unknown rather than becoming
+complete zero.
 
 ## Independent summaries
 
@@ -50,7 +49,7 @@ calendar days ending before the actual selection-start day. See
 the settings and units.
 
 Only logical feed outcomes and distinct offered URLs determine native
-productivity. Rest and robots skips remain outside the reliability
+productivity. Rest skips remain outside the reliability
 denominator. Saved rolling reliability values are captured results; readers
 never add them as fresh daily contributions.
 

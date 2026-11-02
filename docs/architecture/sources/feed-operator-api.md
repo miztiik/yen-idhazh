@@ -1,6 +1,6 @@
 # Feed planning operator APIs
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-02
 
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
@@ -9,7 +9,7 @@ is the complete versioned route inventory.
 
 ## Independent fetch and parse endpoints
 
-`POST /api/2026-10-31/fetch` requires UUIDv4 `request_id` and
+`POST /api/2026-11-02/fetch` requires UUIDv4 `request_id` and
 `correlation_id`, an active configured `feed_id`, and `fetch_item_type`
 (`feed` or `article`).
 There is no public `source_id` alias. A feed request uses the configured
@@ -17,12 +17,14 @@ URL. An article request uses either an explicit permitted operator URL or
 the complete server-owned `batch_id` and `offer_id` pair, not both.
 No caller supplies a file path.
 
-The permitted fetcher uses native Impit with URL/name/literal-address checks, robots,
-redirect, retry, deadline and decoded-byte controls. Its strict response
+The source fetcher uses native Impit with URL/name/literal-address checks,
+redirect, retry, deadline, pacing and decoded-byte controls. It fetches only
+feed and article targets, with no automatic robots retrieval or enforcement.
+Its strict response
 contains a reference and body-free outcome, not fetched bytes. A failed
 fetch remains a typed failure.
 
-`POST /api/2026-10-31/parse` accepts `request_id`, `fetch_request_id`,
+`POST /api/2026-11-02/parse` accepts `request_id`, `fetch_request_id`,
 `article_id` and `correlation_id`. It claims the live fetched reference and checks configuration,
 URL hash, byte limit and identities, then parses without any network call.
 Missing or consumed references return HTTP 404. A reference already owned by
@@ -171,7 +173,7 @@ endpoint has no alias and returns ordinary HTTP 404.
 
 ## Safe-persist HTTP delivery
 
-`POST /api/2026-10-31/safe-persist-data` calls the existing verified metadata
+`POST /api/2026-11-02/safe-persist-data` calls the existing verified metadata
 adapter and `safe_persist_data`, not another Git implementation. Its strict
 request contains `runNumber`, `attempt` and `paths`, the exact completed paths
 relative to the run's state directory. The response retains the existing
@@ -231,7 +233,7 @@ recorded fixtures. The exception does not permit live source fetching in tests.
 ## Request flow
 
 The diagram shows every stage HTTP call made by
-`POST /api/2026-10-31/plan` on its trusted local listener. Every stage call
+`POST /api/2026-11-02/plan` on its trusted local listener. Every stage call
 uses actual loopback HTTP; no in-process transport substitutes for it. Selection
 uses the run's captured calculations and actual completed work but does not
 write health. The separate

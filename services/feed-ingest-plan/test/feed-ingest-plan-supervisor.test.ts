@@ -10,6 +10,7 @@ import { collectWorkflowFiles } from "../scripts/feed-ingest-plan-current-files"
 import { metadataRegistrations } from "./host-recordings";
 import { source } from "./harvest-recordings";
 import { writePlannerOutputRecording } from "./planner-output-recordings";
+import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 
 function assertReleased(port: number) {
   const probe = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response() });
@@ -88,7 +89,7 @@ test("cancellation during real recorded feed work reaps the child and releases i
       serverEntry: fixture.serverEntry, signal: cancellation.signal,
     });
     void pending.catch(() => {});
-    const health = `http://127.0.0.1:${fixture.inputs.settings.listener.port}/api/2026-10-31/health`;
+    const health = `http://127.0.0.1:${fixture.inputs.settings.listener.port}${PLANNER_API_PREFIX}/health`;
     const deadline = AbortSignal.timeout(fixture.inputs.settings.supervision.readiness_timeout_ms);
     let identity: ReturnType<typeof PlannerReadySchema.parse> | undefined;
     while (!identity) {

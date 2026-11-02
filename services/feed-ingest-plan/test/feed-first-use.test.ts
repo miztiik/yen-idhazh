@@ -8,7 +8,7 @@ import { recordedPlan } from "./plan-recordings";
 import { readPlannerOutputRecording } from "./planner-output-recordings";
 import { writeRows } from "./partition-fixtures";
 import { applyFeedCheck, classifyFeedFetchFailure, createUnknownFeedLifecycle, resolveFeedEligibility } from "../src/availability/feed-lifecycle";
-import { createPermittedFetcher } from "../src/harvest-feeds/robots-policy";
+import { createSourceFetcher } from "../src/harvest-feeds/fetch-source";
 
 test("native reloads preserve first-use rest and confirmed recovery retirement", async () => {
   const fixture = await recordedPlan();
@@ -58,7 +58,7 @@ test("recorded transport failure counts for first-use rest but not confirmed ret
   try {
     const source = fixture.inputs.harvest.sources[0]!;
     fixture.transport.recordings.responses[source.url] = [{ error: "ECONNRESET" }];
-    const fetcher = createPermittedFetcher(fixture.inputs.harvest.config.harvest, fixture.inputs.harvest.extraction, fixture.runtime.boundary);
+    const fetcher = createSourceFetcher(fixture.inputs.harvest.config.harvest, fixture.inputs.harvest.extraction, fixture.runtime.boundary);
     const fetched = await fetcher.fetch(source.url);
     expect(fetched.failure).toBe("network");
     const lifecycle = applyFeedCheck(createUnknownFeedLifecycle(), {

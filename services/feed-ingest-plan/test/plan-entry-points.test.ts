@@ -71,6 +71,7 @@ test("one recorded API request writes a valid selected artifact", async () => {
         writeFile(new URL("health.json", recordings), `${JSON.stringify(
           FeedHealthStateUpdateResponseSchema.parse(result.health), null, 2)}\n`),
         writeFile(new URL("selected-articles.json", recordings), `${JSON.stringify(artifact, null, 2)}\n`),
+        writeFile(new URL("../report-events.json", recordings), `${JSON.stringify(events, null, 2)}\n`),
       ]);
       async function captureRows<T extends object>(
         family: keyof typeof summary.files, ledger: Parameters<typeof readPlannerParquet>[1], contract: LedgerRowContract<T>,

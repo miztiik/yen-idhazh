@@ -4,7 +4,7 @@ import type { HarvestDiagnostics } from "@idhazh/common-contracts";
 import type { HarvestContext, OfferedArticle, HarvestArticleResult } from "./harvest-types";
 import { HarvestArticleResultSchema } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
-import type { PermittedFetcher } from "./robots-policy";
+import type { SourceFetcher } from "./fetch-source";
 import { extractArticle } from "./dom-extractor";
 import { fetchEvidence, fetchRejection, recordRejection } from "./record-rejection";
 import { fetchDiagnostics } from "./fetch-diagnostics";
@@ -13,7 +13,7 @@ import { documentWork, describeArticleParse } from "./document-work";
 import { prepareArticle, resolveArticleTitle } from "./prepare-article";
 
 export async function harvestArticle(
-  offered: OfferedArticle, inputs: HarvestInputs, fetcher: Pick<PermittedFetcher, "fetch">, context: HarvestContext,
+  offered: OfferedArticle, inputs: HarvestInputs, fetcher: Pick<SourceFetcher, "fetch">, context: HarvestContext,
 ): Promise<HarvestArticleResult> {
   const { source, entry } = offered;
   const prepared = prepareArticle(offered, inputs, context);
@@ -36,7 +36,7 @@ export async function harvestArticle(
   let diagnostics = fetchDiagnostics(fetched, Math.round(performance.now() - fetchStarted));
   const fetched_at = fetchedEvent.occurred_at;
   const fetchedObservation = {
-    ...observation, http_status: fetched.http_status, robots: fetched.robots,
+    ...observation, http_status: fetched.http_status,
     fetch_failure: fetched.failure, observed_at: fetched_at,
     diagnostics,
   };

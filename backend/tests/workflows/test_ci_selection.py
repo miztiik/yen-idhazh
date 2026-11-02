@@ -136,11 +136,15 @@ def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs(
             "discovered-articles.rows.json", "selected-articles.rows.json",
             "rejected-articles.rows.json", "feed-health-state.rows.json", "plan-runs.rows.json",
         )
-    ]
+    ] + ["tests/fixtures/feed-ingest-plan/report-events.json"]
     gates = _job(workflow, "gates")
     assert gates["if"] == "needs.scope.outputs.code == 'true'"
     planner = _step(workflow, "gates", "name", "TypeScript feed planner and native audit evidence")
     assert _script(planner, "ordinary planner gates").splitlines() == [
+        "bun install --frozen-lockfile", "bun run check", "bun run test",
+    ]
+    probe = _step(workflow, "gates", "name", "TypeScript feed probe")
+    assert _script(probe, "ordinary probe gates").splitlines() == [
         "bun install --frozen-lockfile", "bun run check", "bun run test",
     ]
 

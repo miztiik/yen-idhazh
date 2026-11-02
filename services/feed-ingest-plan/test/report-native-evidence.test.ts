@@ -26,7 +26,7 @@ async function terminalRows(f: Awaited<ReturnType<typeof plannerOutputRecording>
   const base = RejectedArticleRowSchema.array().parse(await Bun.file(new URL(
     "../../../tests/fixtures/feed-ingest-plan/entry-points/rejected-articles.rows.json", import.meta.url,
   )).json())[0]!;
-  return ["forbidden", "robots-unavailable"].map((name, index) => RejectedArticleRowSchema.parse({
+  return ["forbidden", "dns"].map((name, index) => RejectedArticleRowSchema.parse({
     ...base, run_id: f.response.run_id, attempt: f.response.attempt,
     candidate_id: index === 0 ? "a".repeat(64) : null, url_key: String(index + 1).repeat(64),
     stage: "harvest-feeds", reason_code: index === 0 ? "FETCH_FAILED_HTTP" : "FETCH_FAILED",
@@ -35,7 +35,7 @@ async function terminalRows(f: Awaited<ReturnType<typeof plannerOutputRecording>
   }));
 }
 
-test("workflow report reads terminal article 403 once and keeps robots 503 separate from unknown article status", async () => {
+test("workflow report reads terminal article 403 once and keeps DNS failure separate from unavailable status", async () => {
   const f = await plannerOutputRecording();
   try {
     const articles = await terminalRows(f);
@@ -57,9 +57,10 @@ test("workflow report reads terminal article 403 once and keeps robots 503 separ
     const exact = rows.filter(row => row[2]!.includes("article HTTP 403"));
     expect(exact).toHaveLength(1);
     expect(exact[0]![3]).toContain("1 affected article;");
-    const robots = rows.find(row => row[2]!.includes("robots HTTP 503"))!;
-    expect(robots[2]).toContain("article response status unavailable");
-    expect(robots[2]).not.toContain("article HTTP 503");
+    const unavailable = rows.find(row => row[2]!.includes("transport code: ENOTFOUND"))!;
+    expect(unavailable[2]).toContain("article response status unavailable");
+    expect(unavailable[2]).not.toContain("article HTTP");
+    expect(report.markdown.toLowerCase()).not.toContain("robots");
     expect(rows.filter(row => row[3]!.includes("recorded article failure"))).toHaveLength(1);
     expect(rows.find(row => row[3]!.includes("recorded article failure"))![3]).toContain("1 recorded article failure;");
     expect(report.markdown).not.toContain("paywall");
@@ -151,11 +152,11 @@ test("report uses a staged earlier check at the saved pause instant, never a new
       health: { ...health, rows: [{ ...carried, feed_reads: null, counts_complete: false }] } });
     expect(attention(unknownWork.markdown).find(row => row[2]!.includes("Coverage paused"))![3])
       .toContain("Current feed-check count unavailable");
-    const robotsCheck = renderPlanMarkdown({ response: f.response, health,
-      failures: { earlier_checks: [{ ...saved, check_result: "robots" }] } });
-    const robotsPause = attention(robotsCheck.markdown).find(row => row[2]!.includes("Coverage paused"))!;
-    expect(robotsPause[2]).toContain("Feed robots restriction");
-    expect(robotsPause[2]).not.toContain("HTTP 403");
+    const timeoutCheck = renderPlanMarkdown({ response: f.response, health,
+      failures: { earlier_checks: [{ ...saved, check_result: "timeout" }] } });
+    const timeoutPause = attention(timeoutCheck.markdown).find(row => row[2]!.includes("Coverage paused"))!;
+    expect(timeoutPause[2]).toContain("Feed request timed out");
+    expect(timeoutPause[2]).not.toContain("HTTP 403");
   } finally { await f.close(); }
 });
 

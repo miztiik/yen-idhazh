@@ -12,7 +12,7 @@ const rejection = health.rejection_counts.element.shape;
 
 export const FeedHealthRequestFieldsSchema = z.object({
   ...identity, feed_requests: health.feed_requests,
-  article_requests: health.article_requests, robots_requests: health.robots_requests,
+  article_requests: health.article_requests,
 });
 
 function checkWorkDay(value: { date: string; checked_at: string | null }, ctx: z.RefinementCtx) {

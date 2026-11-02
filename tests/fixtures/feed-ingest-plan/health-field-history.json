@@ -5,7 +5,6 @@
   "feed_id": "recorded-feed",
   "endpoint_key": "1111111111111111111111111111111111111111111111111111111111111111",
   "checked_at": "2026-10-25T10:00:00.123Z",
-  "permission": "allowed",
   "availability": "eligible",
   "strikes": 0,
   "check_request_id": "11111111-1111-4111-8111-111111111111",
@@ -27,7 +26,6 @@
   "articles_selected": 2,
   "feed_requests": 2,
   "article_requests": 4,
-  "robots_requests": 0,
   "counts_complete": true,
   "rejection_counts": [
     {

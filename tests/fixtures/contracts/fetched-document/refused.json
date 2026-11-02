@@ -6,7 +6,7 @@
   "body_sha256": null,
   "canonical_url": "https://news.example/feed.xml",
   "error_code": null,
-  "failure": "robots-denied",
+  "failure": "network",
   "http_status": null,
   "fetch_item_type": "feed",
   "observation": {
@@ -19,9 +19,6 @@
     "run_id": "2026-10-21-700",
     "feed_id": "recorded-news"
   },
-  "robots": "denied",
-  "robots_failure": null,
-  "robots_http_status": 200,
   "feed_id": "recorded-news",
   "pacing_time_ms": 0,
   "pacing_settings": {

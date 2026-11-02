@@ -4,7 +4,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   PlanRunRowSchema, PlanRunRowContract, SelectedArticleMetadataSchema, deriveUrlKey,
-  SelectedFeedBatchSchema, selectedArticleMetadata,
+  SelectedFeedBatchSchema, selectedArticleMetadata, PLANNER_API_PREFIX,
 } from "@idhazh/common-contracts";
 import { persistLedger, readPlannerParquet } from "@idhazh/ledger-file-writer";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
@@ -110,7 +110,7 @@ test("standalone persistence saves complete and empty metrics through actual raw
     try {
       const batch = await recordedPersistenceBatch(fixture.inputs, fixture.runtime, { empty });
       const before = structuredClone(batch.articles);
-      const response = await app.request("/api/2026-10-31/persist-selected-articles", json({ batch_id: batch.batch_id }));
+      const response = await app.request(`${PLANNER_API_PREFIX}/persist-selected-articles`, json({ batch_id: batch.batch_id }));
       expect(response.status).toBe(200);
       const persisted = PersistenceResponseSchema.parse(await response.json());
       const native = await readPlannerParquet(join(fixture.inputs.outputRoot, persisted.run_files!.files[0]!.path),
@@ -141,7 +141,7 @@ test("standalone persistence failure retains completed selection and honest coun
     const directory = join(fixture.inputs.outputRoot, "raw", "feed-ingest-plan");
     await mkdir(directory, { recursive: true });
     await writeFile(join(directory, "selected-articles"), "recorded obstruction");
-    const response = await app.request("/api/2026-10-31/persist-selected-articles", json({ batch_id: batch.batch_id }));
+    const response = await app.request(`${PLANNER_API_PREFIX}/persist-selected-articles`, json({ batch_id: batch.batch_id }));
     expect(response.status).toBe(500);
     const [row] = await savedRuns(fixture.inputs, batch.context.date);
     expect(row).toMatchObject({
@@ -150,7 +150,7 @@ test("standalone persistence failure retains completed selection and honest coun
     });
     expect(row!.api_timings.at(-1)).toMatchObject({ operation: "persist", status: "failed" });
     await rm(join(directory, "selected-articles"));
-    const repeated = await app.request("/api/2026-10-31/persist-selected-articles", json({ batch_id: batch.batch_id }));
+    const repeated = await app.request(`${PLANNER_API_PREFIX}/persist-selected-articles`, json({ batch_id: batch.batch_id }));
     expect(repeated.status).toBe(500);
     expect(await savedRuns(fixture.inputs, batch.context.date)).toEqual([row!]);
   } finally { await app.close(); await fixture.close(); }
@@ -167,7 +167,7 @@ test("standalone partition failure retains the completed selected population", a
       ...batch, config_sha256: stageConfigFingerprint(fixture.inputs, fixture.runtime),
       articles: batch.articles.map(article => ({ ...article, editorial_rank: 2 })),
     });
-    const response = await app.request("/api/2026-10-31/partition-articles", json({ batch_id: batch.batch_id }));
+    const response = await app.request(`${PLANNER_API_PREFIX}/partition-articles`, json({ batch_id: batch.batch_id }));
     expect(response.status).toBe(500);
     const [row] = await savedRuns(fixture.inputs, batch.context.date);
     expect(row).toMatchObject({
@@ -185,17 +185,17 @@ test("real standalone selection saves completed-empty, nonempty and failed outco
     if (mode === "selection-failed") fixture.inputs.harvest.config.curate_articles.substance.headline.punctuation_patterns = ["["];
     const app = createPlanTestServer(fixture.inputs, fixture.runtime);
     try {
-      const fetchedResponse = await app.request("/api/2026-10-31/fetch", json({
+      const fetchedResponse = await app.request(`${PLANNER_API_PREFIX}/fetch`, json({
         request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news",
         fetch_item_type: "article", url: "https://news.example/second",
       }));
       const fetched = FetchResponseSchema.parse(await fetchedResponse.json());
-      const parsedResponse = await app.request("/api/2026-10-31/parse", json({
+      const parsedResponse = await app.request(`${PLANNER_API_PREFIX}/parse`, json({
         request_id: randomUUID(), fetch_request_id: fetched.fetch_request_id,
         article_id: fetched.article_id, correlation_id: fetched.correlation_id,
       }));
       const parsed = ParseResponseSchema.parse(await parsedResponse.json());
-      const response = await app.request("/api/2026-10-31/select-articles", json({ batch_id: parsed.batch_id }));
+      const response = await app.request(`${PLANNER_API_PREFIX}/select-articles`, json({ batch_id: parsed.batch_id }));
       if (mode === "selection-failed") {
         expect(response.status).toBe(400);
         expect(await response.json()).toMatchObject({ code: "INVALID_INPUT" });
@@ -211,7 +211,7 @@ test("real standalone selection saves completed-empty, nonempty and failed outco
       expect(selection.articles.length).toBe(mode === "empty" ? 0 : 1);
       const state = await currentExecutionState(fixture.inputs, selection.run_id);
       const metrics = state!.completed_selection!.selection_metrics;
-      const persistedResponse = await app.request("/api/2026-10-31/persist-selected-articles", json({ batch_id: selection.batch_id }));
+      const persistedResponse = await app.request(`${PLANNER_API_PREFIX}/persist-selected-articles`, json({ batch_id: selection.batch_id }));
       expect(persistedResponse.status).toBe(200);
       const persisted = PersistenceResponseSchema.parse(await persistedResponse.json());
       const native = await readPlannerParquet(join(fixture.inputs.outputRoot, persisted.run_files!.files[0]!.path),

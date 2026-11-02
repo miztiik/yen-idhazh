@@ -3,6 +3,7 @@ import { z } from "zod";
 import { CountSchema, NonEmptySchema, reject } from "./primitives";
 import { HttpResponseEvidenceSchema } from "./http-response-evidence.schema";
 import { RequestPacingSettingsSchema } from "./config.schema";
+import { PlannerItemFailureCodeSchema } from "./planner-item-failure.schema";
 
 export const ExtractionSignalSchema = z.enum(["contaminated", "boilerplate", "not_prose", "too_short"]);
 export const ExtractionQualitySchema = z.strictObject({
@@ -27,8 +28,7 @@ export const ExtractionQualitySchema = z.strictObject({
 export type ExtractionQuality = z.infer<typeof ExtractionQualitySchema>;
 
 export const FetchFailureSchema = z.enum([
-  "http", "timeout", "unsafe-target", "dns", "network", "robots-denied",
-  "robots-unknown", "body-too-large", "redirect-loop",
+  "http", "timeout", "unsafe-target", "dns", "network", "body-too-large", "redirect-loop",
 ]);
 export const BodyLimitEvidenceSchema = z.strictObject({
   configured_limit_bytes: CountSchema, observed_at_least_bytes: CountSchema,
@@ -44,20 +44,12 @@ export const ExtractionFailureSchema = z.enum([
 ]);
 const HarvestDiagnosticsBaseSchema = z.strictObject({
   http_status: z.int().min(100).max(599).nullable().default(null),
-  robots: z.enum(["allowed", "denied", "unknown"]).nullable().default(null),
   fetch_failure: FetchFailureSchema.nullable().default(null),
-  robots_failure: FetchFailureSchema.nullable().default(null),
-  robots_http_status: z.int().min(100).max(599).nullable().default(null),
   body_limit: BodyLimitEvidenceSchema.nullable().default(null),
   error_code: z.string().max(64).regex(/^[A-Z][A-Z0-9_]*$/).nullable().default(null),
   response_evidence: HttpResponseEvidenceSchema.nullable().default(null),
-  robots_response_evidence: HttpResponseEvidenceSchema.nullable().default(null),
   extraction_failure: ExtractionFailureSchema.nullable().default(null),
-  failure_code: z.enum([
-    "robots_denied", "robots_unreachable", "blocked_address", "http_client_error",
-    "http_rate_limited", "http_server_error", "network_error", "no_text", "no_title", "unknown",
-    ...ExtractionSignalSchema.options,
-  ]).nullable().default(null),
+  failure_code: PlannerItemFailureCodeSchema.nullable().default(null),
   stopped_stage: z.enum(["fetch", "extract", "parse"]).nullable().default(null),
   detail: z.enum([
     ...FetchFailureSchema.options, ...ExtractionFailureSchema.options, "malformed-feed", "empty-feed",
@@ -70,23 +62,22 @@ const HarvestDiagnosticsBaseSchema = z.strictObject({
   warnings: z.array(z.enum(["malformed-json-ld", "semantic-dom-fallback"])).max(2).default([]),
   quality: ExtractionQualitySchema.nullable().default(null),
 }).meta({
-  version: "2026-11-01",
+  version: "2026-11-02",
   changelog: [
+    { version: "2026-11-02", change: "Remove robots evidence and restrict native failures to applicable item outcomes." },
     { version: "2026-11-01", change: "Retain measured request pacing and effective settings." },
     { version: "2026-11-01", change: "Retain bounded native response evidence; missing historical evidence stays null." },
     { version: "2026-10-30", change: "Distinguish parser deadline, cancellation and worker failures from source failures." },
   ],
 });
 export const HarvestDiagnosticsSchema = HarvestDiagnosticsBaseSchema.superRefine((value, ctx) => {
-  if (value.body_limit !== null && value.fetch_failure !== "body-too-large"
-    && value.robots_failure !== "body-too-large") {
-    reject(ctx, "byte-limit evidence requires a body-too-large fetch or robots failure", ["body_limit"]);
+  if (value.body_limit !== null && value.fetch_failure !== "body-too-large") {
+    reject(ctx, "byte-limit evidence requires a body-too-large target failure", ["body_limit"]);
   }
 });
 export type HarvestDiagnostics = z.infer<typeof HarvestDiagnosticsSchema>;
 export const ArticleFetchEvidenceSchema = HarvestDiagnosticsBaseSchema.pick({
   http_status: true, fetch_failure: true, error_code: true,
-  robots: true, robots_http_status: true, robots_failure: true,
   pacing_time_ms: true, pacing_settings: true,
 });
 export type ArticleFetchEvidence = z.infer<typeof ArticleFetchEvidenceSchema>;

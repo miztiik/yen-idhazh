@@ -1,4 +1,4 @@
-/** Clean one article address identically for identity, permission and dispatch. */
+/** Clean one article address identically for identity and dispatch. */
 import type { FeedIngestConfig } from "@idhazh/common-contracts";
 import { UrlSchema } from "@idhazh/common-contracts";
 import { cleanHttpRequestTarget } from "./http-request-target";

@@ -5,7 +5,7 @@ import {
 import type { CandidateRejectionRecord, DropReason, HarvestDiagnostics, RejectionDetails, SourceSnapshot } from "@idhazh/common-contracts";
 import type { HarvestContext } from "./harvest-types";
 import { utcTimestamp } from "./harvest-types";
-import type { FetchResult } from "./robots-policy";
+import type { FetchResult } from "./fetch-source";
 
 export function fetchRejection(result: FetchResult, timeout_ms: number, diagnostics: HarvestDiagnostics | null): {
   reason: DropReason; details: Partial<RejectionDetails>;
@@ -22,8 +22,7 @@ export function fetchRejection(result: FetchResult, timeout_ms: number, diagnost
 export function fetchEvidence(result: FetchResult) {
   return {
     http_status: result.http_status, fetch_failure: result.failure,
-    error_code: result.error_code ?? null, robots: result.robots,
-    robots_http_status: result.robots_http_status ?? null, robots_failure: result.robots_failure ?? null,
+    error_code: result.error_code ?? null,
     pacing_time_ms: result.pacing_time_ms ?? null, pacing_settings: result.pacing_settings ?? null,
   };
 }

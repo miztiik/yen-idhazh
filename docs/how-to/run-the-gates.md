@@ -340,21 +340,13 @@ Native total-body timeout is a separate API failure case; immediate socket
 closure is not an additional API latency gate. Run it on Linux in
 merge-candidate CI. Ordinary source tests keep their recorded HTTP boundary;
 they do not access the open web.
-The separate `source-transport-test.yml` workflow runs this oracle on Linux
-with committed, frozen dependencies. It also runs the existing
-`feed-probe.test.ts` and `feed-probe-cli.test.ts` cases to verify parsing,
-catalog selection and recorded probe behavior, not only their types.
-Production `ci.yml`
-has no added native-platform job. The separate workflow runs for named source
-changes in a pull request and supports manual dispatch on a candidate branch:
-`gh workflow run source-transport-test.yml --ref <candidate-branch>`.
-Its summary records the checked-out code SHA, candidate ref, run and attempt;
-logs retain the effective profiles, attempt timeout and measured host.
-A new workflow can run from a pull request before it is available for manual
-dispatch on the default branch. If a local registry cannot
-install a native patch, CI can prepare and verify its normal manifest and
-generated locks before they enter the branch. Ordinary candidate CI must
-then verify the committed files; a dependency-preparation run is not its verdict.
+The existing `ci.yml` gates job runs this oracle in the ordinary full service
+suite on Linux with frozen dependencies. Its probe step also runs
+`feed-probe.test.ts` and `feed-probe-cli.test.ts`, including real parsing,
+catalog selection and recorded transport, not only their types.
+The retired `source-transport-test.yml` workflow is not a gate or dispatch
+target. A local native preparation or recording run does not replace ordinary
+merge-candidate CI.
 
 For planner file-input changes, also run the shared writer's `check` and
 `test/planner-day-files.test.ts`. Combine `file-baseline.test.ts`,
@@ -379,7 +371,8 @@ origins.
 The committed inputs under
 `tests/fixtures/feed-ingest-plan/entry-points/` contain the API response,
 health response, selected text artifact and five native ledger row transcripts
-from the same verified API test. To replace them, set
+from the same verified API test. Its validated sparse progress also supplies
+`tests/fixtures/feed-ingest-plan/report-events.json`. To replace them, set
 `IDHAZH_CAPTURE_PLANNER_RECORDINGS=1` for that test, then unset it before
 ordinary checks. The test reads actual Parquet output and validates each
 transcript with its native row model before cleanup; it does not generate

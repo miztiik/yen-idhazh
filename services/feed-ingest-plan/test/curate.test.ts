@@ -99,7 +99,7 @@ function selectionInput(setup: Setup, articles: ScreenedCandidate[], options: {
       batch_id: randomUUID(), config_sha256: "b".repeat(64), context: setup.context, request: {},
       candidates: articles.map(value => value.candidate),
       observations: Object.fromEntries(articles.map(({ candidate }) => [candidate.candidate_id, {
-        candidate_id: candidate.candidate_id, http_status: 200, paywall: false, robots: "allowed",
+        candidate_id: candidate.candidate_id, http_status: 200, paywall: false,
         fetch_failure: null, extraction: "success", paywall_evidence: "none", observed_at: setup.context.now,
       }])),
       discovered: { availability: "unavailable" },
@@ -323,7 +323,7 @@ test("real screening joins the strongest duplicate body and preserves both count
     const parsed = ParsedFeedBatchSchema.parse({
       ...selectionInput(setup, screened.admitted).batch, candidates,
       observations: Object.fromEntries(candidates.map(candidate => [candidate.candidate_id, {
-        candidate_id: candidate.candidate_id, http_status: 200, paywall: false, robots: "allowed",
+        candidate_id: candidate.candidate_id, http_status: 200, paywall: false,
         fetch_failure: null, extraction: "success", paywall_evidence: "none", observed_at: setup.context.now,
       }])),
     });
@@ -454,7 +454,7 @@ test("real selection keeps source pass denominators and isolates a later run's h
     expect(fresh.health_rows[0]).toMatchObject({
       run_id: runContext.run_id, date: runContext.date, checked_at: null, outcome: null, items: null,
       feed_reads: 0, productive_reads: 0, failed_reads: 0, feed_requests: 0,
-      article_requests: 0, robots_requests: 0, article_candidates: 0, articles_selected: 1,
+      article_requests: 0, article_candidates: 0, articles_selected: 1,
     });
     expect(pair).toEqual(originalBatch);
   } finally { await recorded.close(); }

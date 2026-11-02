@@ -1,13 +1,11 @@
 /** Translate actual fetch outcomes into bounded evidence and the production failure vocabulary. */
 import { HarvestDiagnosticsSchema } from "@idhazh/common-contracts";
 import type { HarvestDiagnostics } from "@idhazh/common-contracts";
-import type { FetchResult } from "./robots-policy";
+import type { FetchResult } from "./fetch-source";
 
 function failureCode(result: FetchResult): HarvestDiagnostics["failure_code"] {
   switch (result.failure) {
     case null: return null;
-    case "robots-denied": return "robots_denied";
-    case "robots-unknown": return "robots_unreachable";
     case "unsafe-target": return "blocked_address";
     case "http":
       if (result.http_status === 429) return "http_rate_limited";
@@ -21,12 +19,10 @@ function failureCode(result: FetchResult): HarvestDiagnostics["failure_code"] {
 
 export function fetchDiagnostics(result: FetchResult, fetch_ms: number | null): HarvestDiagnostics {
   return HarvestDiagnosticsSchema.parse({
-    http_status: result.http_status, robots: result.robots, fetch_failure: result.failure,
-    robots_failure: result.robots_failure ?? null, robots_http_status: result.robots_http_status ?? null,
+    http_status: result.http_status, fetch_failure: result.failure,
     body_limit: result.body_limit ?? null,
     error_code: result.error_code ?? null,
     response_evidence: result.response_evidence ?? null,
-    robots_response_evidence: result.robots_response_evidence ?? null,
     pacing_time_ms: result.pacing_time_ms ?? null,
     pacing_settings: result.pacing_settings ?? null,
     failure_code: failureCode(result), stopped_stage: result.failure === null ? null : "fetch",

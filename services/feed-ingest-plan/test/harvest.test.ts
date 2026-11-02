@@ -127,8 +127,6 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
     const replay = await readRecordings();
     replay.responses["https://news.example/feed.xml"] = [{ status: 200, body: body.replaceAll("image/jpeg", "video/mp4") }];
     for (const entry of media.slice(1)) if (entry.link !== null) {
-      const url = new URL(entry.link);
-      replay.responses[`${url.origin}/robots.txt`] = [{ status: 200, body: "User-agent: *\nAllow: /\n" }];
       replay.responses[deriveArticleIdentity(entry.link, (await inputs()).config.harvest).canonical_url] = [{ status: 200, fixture: "article" }];
     }
     const transport = new RecordedTransport(replay);
@@ -139,7 +137,7 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
       details: { media_match: "enclosure", matched_media_type_prefix: "video/" },
     });
     expect(result.articles[0]?.observation).toMatchObject({
-      http_status: null, robots: null, extraction: "not-attempted",
+      http_status: null, extraction: "not-attempted",
     });
     expect(transport.requests.some(request => request.url.href === media[0]!.link)).toBe(false);
     expect(result.feed_outcomes[0]).toMatchObject({ fetch_status: "success", parse_status: "success", parsed_count: media.length });
@@ -168,6 +166,11 @@ test("public harvest returns strict full text and streamed work facts without pe
   const runContext = context(record => logged.push(record));
   const facts = recordHarvestObservations(runContext);
   const result = await harvestFeeds(loaded, runContext, { transport });
+  expect(transport.requests.map(request => request.url.href).sort()).toEqual([
+    "https://news.example/feed.xml", "https://news.example/feed.xml",
+    "https://news.example/story/", "https://news.example/story/", "https://news.example/second",
+    "https://atom.example/feed.xml", "https://atom.example/entry", "https://atom.example/undated",
+  ].sort());
   expect(facts.filter(row => row.operation === "attempt")
     .reduce((count, row) => count + row.dispatched_request_count!, 0)).toBe(transport.requests.length);
   expect(facts.every(row => DocumentWorkFactSchema.safeParse(row).success)).toBe(true);
@@ -220,17 +223,16 @@ test("public harvest returns strict full text and streamed work facts without pe
   expect(result.feed_outcomes[0]?.parse_duration_ms).toBeGreaterThanOrEqual(0);
   expect(result.feed_outcomes[2]?.fetch_duration_ms).toBeNull();
   expect(result.articles[0]?.observation).toMatchObject({
-    http_status: 200, robots: "allowed", paywall: false, paywall_evidence: "none", extraction: "success",
+    http_status: 200, paywall: false, paywall_evidence: "none", extraction: "success",
   });
   expect(result.articles[0]?.observation.diagnostics).toMatchObject({
-    http_status: 200, robots: "allowed", fetch_failure: null, extraction_failure: null,
+    http_status: 200, fetch_failure: null, extraction_failure: null,
     failure_code: null, stopped_stage: null, warnings: [],
   });
   expect(result.articles[0]?.observation.diagnostics?.fetch_ms).toBeGreaterThanOrEqual(0);
   expect(result.articles[0]?.observation.diagnostics?.extract_ms).toBeGreaterThanOrEqual(0);
   expect(result.articles[1]?.observation.diagnostics).toBeNull();
   const requests = transport.requests.map(request => request.url.href);
-  expect(requests.filter(url => url.endsWith("/robots.txt"))).toHaveLength(2);
   expect(requests.some(url => /private.js|style.css|meta-data|frame/.test(url))).toBe(false);
   expect(transport.peak).toBeLessThanOrEqual(loaded.config.harvest.concurrency);
   expect(transport.peak).toBe(2);

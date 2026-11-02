@@ -82,7 +82,7 @@ actual request spend. This exception does not alter other families'
 compact-first precedence or generic writer identities.
 
 Logical feed-read settlement still prefers a productive outcome and then a
-definitely later recorded check. Rest and robots skips do not enter the
+definitely later recorded check. Rest skips do not enter the
 reliability denominator. Captured rolling fractions are never summed.
 Current producers save only `reliability.success_fraction` and
 `reliability.production_factor` downward to three decimal places:
@@ -92,7 +92,7 @@ can save numeric `0.5`. JSON numbers do not retain trailing zeros.
 Both values come from the original integer counts; article-pass rates,
 selection scores and semantic similarity retain their own precision.
 No general precision setting is introduced. Current health writers use
-`2026-10-31`. Historical raw and compact files with other valid row-version dates
+`2026-11-02`. Historical raw and compact files with other valid row-version dates
 remain usable when their required fields validate. Readers verify the supported
 file envelope, registered ledger, named membership, raw filename identity and
 canonical digest over every stored column before projection. Extra columns
@@ -100,6 +100,9 @@ do not affect a calculation, but remain part of that integrity check.
 Required-field gaps are partial evidence, not a migration or a failed planning
 request. Full-row reads, new writes, compaction, publication and current-run
 delivery still require the complete current row schema and stamp.
+Retired outcome or check-result values are gaps for those fields only.
+Valid request counters and supported saved calculations remain independently
+usable; removed robots counters are not required for request completeness.
 No historical file or index is rewritten, deleted or null-filled by a read.
 Compaction preserves saved values rather than rounding them again.
 Uncertain time order remains uncertain under
@@ -168,6 +171,9 @@ are not publication evidence. Selection does not read publisher-exposure
 counts or selected-metadata linkage. Curated publisher identity remains
 metadata; current-run diversity counts use feed IDs and canonical website
 keys, as [curation](feed-curation.md#current-score-and-exact-choice) defines.
+Shared item-health files retain their Python format. Native input projection
+ignores `robots_denied` and `robots_unreachable` without rejecting their files;
+other configured same-day earlier failures still exclude an article.
 
 ## Design rationale
 

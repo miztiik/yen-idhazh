@@ -9,7 +9,7 @@ import {
   FeedProbeVerdictSchema,
   FeedProbeWarningSchema,
   HarvestDiagnosticsSchema,
-  ItemHealthFailureCodeSchema,
+  PlannerItemFailureCodeSchema,
   SlugSchema,
   UrlSchema,
 } from "@idhazh/common-contracts";
@@ -19,7 +19,6 @@ export const FeedProbeReportSchema = z.strictObject({
   feed_id: SlugSchema,
   feed_url: UrlSchema,
   http_status: z.int().min(100).max(599).nullable(),
-  robots: z.enum(["allowed", "denied", "unknown"]).nullable(),
   timings_ms: z.strictObject({
     total: CountSchema,
     feed: CountSchema.nullable(),
@@ -39,14 +38,15 @@ export const FeedProbeReportSchema = z.strictObject({
   passed: z.boolean(),
   paywall_confirmed: z.boolean(),
   paywall_evidence: FeedProbePaywallEvidenceSchema,
-  failure_code: ItemHealthFailureCodeSchema.nullable(),
+  failure_code: PlannerItemFailureCodeSchema.nullable(),
   diagnostics: HarvestDiagnosticsSchema.nullable(),
   warnings: z.array(FeedProbeWarningSchema).max(5),
   samples: z.array(FeedProbeArticleSampleSchema).max(10),
 }).meta({
   version: FEED_PROBE_VERSION,
   changelog: [
-    { version: FEED_PROBE_VERSION, change: "Declare strict machine-readable feed-probe report lines." },
+    { version: FEED_PROBE_VERSION, change: "Remove robots permission and evidence from native probe reports." },
+    { version: "2026-10-28", change: "Declare strict machine-readable feed-probe report lines." },
   ],
 });
 export type FeedProbeReport = z.infer<typeof FeedProbeReportSchema>;
@@ -60,7 +60,8 @@ export const FeedProbeReportSummarySchema = z.strictObject({
 }).meta({
   version: FEED_PROBE_VERSION,
   changelog: [
-    { version: FEED_PROBE_VERSION, change: "Declare strict feed-probe JSON summary output." },
+    { version: FEED_PROBE_VERSION, change: "Carry target-only probe reports in the JSON summary." },
+    { version: "2026-10-28", change: "Declare strict feed-probe JSON summary output." },
   ],
 });
 export type FeedProbeReportSummary = z.infer<typeof FeedProbeReportSummarySchema>;
@@ -95,7 +96,6 @@ export function buildFeedProbeReport(
     feed_id: feedId,
     feed_url: feedUrl,
     http_status: feedDiagnostics?.http_status ?? null,
-    robots: feedDiagnostics?.robots ?? null,
     timings_ms: {
       total: Math.max(0, Math.round(totalMs)),
       feed: feedDiagnostics?.fetch_ms ?? null,

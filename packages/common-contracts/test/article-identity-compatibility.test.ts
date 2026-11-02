@@ -60,7 +60,7 @@ test("current document construction succeeds and old documents and batches refus
   const document = await Bun.file(new URL("../../../tests/fixtures/contracts/fetched-document/refused.json", import.meta.url)).json();
   const currentDocument = FetchedDocumentSchema.parse({ ...document, version: OPERATION_VERSION });
   expect(currentDocument.version).toBe(OPERATION_VERSION);
-  for (const version of ["2026-10-28", "2026-10-29", "2026-10-30"]) {
+  for (const version of ["2026-10-28", "2026-10-29", "2026-10-30", "2026-11-01"]) {
     expect(FetchedDocumentSchema.safeParse({ ...currentDocument, version }).success).toBe(false);
   }
   const recordedBatch = await Bun.file(new URL("../../../tests/fixtures/contracts/parsed-feed-batch/empty.json", import.meta.url)).json();

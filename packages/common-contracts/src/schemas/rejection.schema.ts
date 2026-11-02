@@ -5,7 +5,7 @@ import {
   RejectionStageSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, checkUrlIdentity, reject,
 } from "./primitives";
 import { ArticleFetchEvidenceSchema, HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
-import { ItemHealthFailureCodeSchema } from "./item-health-failure.schema";
+import { PlannerItemFailureCodeSchema } from "./planner-item-failure.schema";
 import { ArticleContentEvidenceSchema } from "./content-filter-evidence.schema";
 
 export const DropReasonSchema = z.enum([
@@ -34,7 +34,7 @@ export const RejectionDetailsSchema = z.strictObject({
   words_found: CountSchema.nullable().default(null), words_required: PositiveCountSchema.nullable().default(null),
   age_hours: NonNegativeSchema.nullable().default(null), max_age_hours: PositiveSchema.nullable().default(null),
   matched_url_key: Sha256Schema.nullable().default(null), published_on: DateStampSchema.nullable().default(null),
-  failure_code: ItemHealthFailureCodeSchema.nullable().default(null), matched_url_marker: NonEmptySchema.nullable().default(null),
+  failure_code: PlannerItemFailureCodeSchema.nullable().default(null), matched_url_marker: NonEmptySchema.nullable().default(null),
   history_window_days: PositiveCountSchema.nullable().default(null), diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
   media_match: z.enum(["enclosure", "url"]).nullable().default(null),
   matched_media_type_prefix: NonEmptySchema.nullable().default(null),
@@ -114,10 +114,10 @@ export const CandidateRejectionRecordSchema = z.strictObject({
 }).meta({
   version: CANDIDATE_REJECTION_VERSION,
   changelog: [
+    { version: CANDIDATE_REJECTION_VERSION, change: "Remove robots evidence and inapplicable settled-failure reasons." },
     { version: CANDIDATE_REJECTION_VERSION, change: "Replace tier and allocation refusals with the global known-age ceiling." },
     { version: "2026-11-01", change: "Retain request pacing evidence in fetch rejections." },
     { version: "2026-10-30", change: "Retain response byte-limit evidence in fetch diagnostics." },
-    { version: "2026-10-29", change: "Retain fetch evidence and allow harvest failures without parsed candidate identities." },
     { version: "2026-10-28", change: "Earlier changes are in git." },
   ],
 });

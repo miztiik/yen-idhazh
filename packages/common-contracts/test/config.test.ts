@@ -32,6 +32,16 @@ if (Bun.argv.includes("--emit-schemas")) {
     expect(config).not.toHaveProperty("curate");
   });
 
+  test("current harvesting refuses the removed article robots setting without a replacement mode", async () => {
+    const config = await readConfig();
+    expect(configs.FeedIngestConfigSchema.parse(config).harvest).not.toHaveProperty("article_robots_policy");
+    for (const article_robots_policy of ["enforce", "observe", false, null]) {
+      expect(() => configs.FeedIngestConfigSchema.parse({
+        ...config, harvest: { ...config.harvest, article_robots_policy },
+      })).toThrow("article_robots_policy");
+    }
+  });
+
   test("schema-valid planner settings can change without a live-value assertion", async () => {
     const config = configs.FeedIngestConfigSchema.parse(await readConfig());
     const changed = {

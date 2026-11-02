@@ -87,7 +87,7 @@ is resolved before fetching. One positive finite run override can replace it.
 Known age passes exactly when it is no greater than that ceiling; unknown
 age remains eligible subject to the other gates. Harvest preflight uses the
 same timing and ceiling rule when evidence is available, so known-over-age
-offers require no article or article-robots requests.
+offers require no article requests.
 Selected metadata preserves known timing or explicit null/`unavailable`
 timing and always carries the UTC policy cutoff. Its separate
 selection-time publication fallback never changes admission age or recency.

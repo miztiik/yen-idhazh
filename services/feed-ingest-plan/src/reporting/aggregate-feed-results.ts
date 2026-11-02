@@ -3,7 +3,7 @@ import type { FeedHealthStateRow } from "@idhazh/common-contracts";
 
 export const runCounterFields = [
   "articles_selected", "article_candidates", "feed_reads",
-  "article_requests", "feed_requests", "robots_requests",
+  "article_requests", "feed_requests",
 ] as const;
 type CounterField = typeof runCounterFields[number];
 export type FeedResult = { feed_id: string } & Record<CounterField, number | null>;
@@ -15,7 +15,7 @@ export function aggregateFeedResults(rows: readonly FeedHealthStateRow[]): FeedR
     const result: FeedResult = {
       feed_id: row.feed_id, articles_selected: row.articles_selected,
       article_candidates: row.article_candidates, feed_reads: row.feed_reads,
-      article_requests: row.article_requests, feed_requests: row.feed_requests, robots_requests: row.robots_requests,
+      article_requests: row.article_requests, feed_requests: row.feed_requests,
     };
     for (const field of runCounterFields) {
       result[field] = previous === undefined ? row[field]

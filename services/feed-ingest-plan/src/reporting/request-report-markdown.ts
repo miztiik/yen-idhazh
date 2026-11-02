@@ -3,8 +3,8 @@ import type { FeedHealthStateRow, PlannerRequestReport } from "@idhazh/common-co
 import { escapeMarkdown } from "./markdown-format";
 import { aggregateFeedResults, compareKnownDescending } from "./aggregate-feed-results";
 
-const fields = ["article_requests", "feed_requests", "robots_requests"] as const;
-const labels = { article_requests: "Article", feed_requests: "Feed", robots_requests: "Robots" };
+const fields = ["article_requests", "feed_requests"] as const;
+const labels = { article_requests: "Article", feed_requests: "Feed" };
 type CoverageRow = { applies: string[]; recorded: number; complete: number; missing: number; window: string; expected: number };
 
 export function renderRequestReport(requests: PlannerRequestReport | undefined, health?: readonly FeedHealthStateRow[]) {
@@ -80,8 +80,8 @@ export function renderRequestReport(requests: PlannerRequestReport | undefined, 
       "<details>", "<summary>Request counts and coverage</summary>", "",
       "Partial totals contain recorded requests only. Missing counts are not estimates. Zero is known zero.",
       "", "## Table D - Request counts by feed", "",
-      "| Id | Period | Feed | Article requests | Feed requests | Robots requests | Coverage |",
-      "| --- | --- | --- | --- | --- | --- | --- |",
+      "| Id | Period | Feed | Article requests | Feed requests | Coverage |",
+      "| --- | --- | --- | --- | --- | --- |",
       ...countRows.map((cells, index) => `| D${index + 1} | ${cells.map(escapeMarkdown).join(" | ")} |`),
       ...(health === undefined ? ["", "This run's request counts were not recorded."] : []),
       ...(requests === undefined ? ["", "Request history was not recorded."] : []),

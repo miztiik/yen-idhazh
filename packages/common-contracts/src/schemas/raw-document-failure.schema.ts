@@ -4,7 +4,7 @@ import { NonEmptySchema } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { FetchedDocumentSchema, RequestIdSchema } from "./planner-operation.schema";
 
-export const RAW_DOCUMENT_FAILURE_VERSION = "2026-11-01" as const;
+export const RAW_DOCUMENT_FAILURE_VERSION = "2026-11-02" as const;
 export const FailedDocumentMetadataSchema = z.strictObject(FetchedDocumentSchema.shape).omit({
   body: true, observation: true, attempt_observations: true, canonical_url: true,
 }).extend({
@@ -14,8 +14,9 @@ export const FailedDocumentMetadataSchema = z.strictObject(FetchedDocumentSchema
 }).meta({
   version: RAW_DOCUMENT_FAILURE_VERSION,
   changelog: [
-    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Retain request pacing measurements and effective settings." },
-    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Project failed input to body-free diagnostic metadata." },
+    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Remove robots fields from failed-document metadata." },
+    { version: "2026-11-01", change: "Retain request pacing measurements and effective settings." },
+    { version: "2026-11-01", change: "Project failed input to body-free diagnostic metadata." },
   ],
 });
 export const RawDocumentFailureSchema = z.strictObject({
@@ -32,8 +33,9 @@ export const RawDocumentFailureSchema = z.strictObject({
 }).meta({
   version: RAW_DOCUMENT_FAILURE_VERSION,
   changelog: [
-    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Preserve request pacing evidence in body-free failures." },
-    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Remove bodies and repeated run identity from failure diagnostics." },
+    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Retain target-only fetched metadata in failure artifacts." },
+    { version: "2026-11-01", change: "Preserve request pacing evidence in body-free failures." },
+    { version: "2026-11-01", change: "Remove bodies and repeated run identity from failure diagnostics." },
   ],
 });
 export type RawDocumentFailure = z.infer<typeof RawDocumentFailureSchema>;

@@ -8,6 +8,7 @@ export * from "./schemas/rejection.schema";
 export * from "./schemas/harvest-diagnostics.schema";
 export * from "./schemas/content-filter-evidence.schema";
 export * from "./schemas/item-health-failure.schema";
+export * from "./schemas/planner-item-failure.schema";
 export * from "./schemas/telemetry.schema";
 export * from "./schemas/partition.schema";
 export * from "./schemas/event.schema";

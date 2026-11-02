@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { FEED_PROBE_VERSION } from "../version";
 import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
-import { ItemHealthFailureCodeSchema } from "./item-health-failure.schema";
+import { PlannerItemFailureCodeSchema } from "./planner-item-failure.schema";
 import { PlannerHarvestObservationSchema } from "./planner-stage.schema";
 import { CountSchema, UrlSchema } from "./primitives";
 
@@ -18,7 +18,8 @@ export const FeedProbeRequestSchema = z.strictObject({
 }).meta({
   version: FEED_PROBE_VERSION,
   changelog: [
-    { version: FEED_PROBE_VERSION, change: "Declare strict feed probe request and result contracts." },
+    { version: FEED_PROBE_VERSION, change: "Identify the target-only probe request protocol." },
+    { version: "2026-10-28", change: "Declare strict feed probe request and result contracts." },
   ],
 });
 export type FeedProbeRequest = z.infer<typeof FeedProbeRequestSchema>;
@@ -32,7 +33,8 @@ export const FeedProbeArticleSampleSchema = z.strictObject({
 }).meta({
   version: FEED_PROBE_VERSION,
   changelog: [
-    { version: FEED_PROBE_VERSION, change: "Keep article sample evidence body-free and bounded." },
+    { version: FEED_PROBE_VERSION, change: "Use target-only diagnostics in bounded body-free samples." },
+    { version: "2026-10-28", change: "Keep article sample evidence body-free and bounded." },
   ],
 });
 export type FeedProbeArticleSample = z.infer<typeof FeedProbeArticleSampleSchema>;
@@ -61,7 +63,7 @@ export const FeedProbeResultSchema = z.strictObject({
   readable_count: CountSchema,
   paywall_sample_count: CountSchema,
   paywall_evidence: FeedProbePaywallEvidenceSchema,
-  failure_code: ItemHealthFailureCodeSchema.nullable(),
+  failure_code: PlannerItemFailureCodeSchema.nullable(),
   diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
   warnings: z.array(FeedProbeWarningSchema).max(5).default([]),
   samples: z.array(FeedProbeArticleSampleSchema).max(FEED_PROBE_SAMPLE_MAX).default([]),
@@ -101,7 +103,8 @@ export const FeedProbeResultSchema = z.strictObject({
 }).meta({
   version: FEED_PROBE_VERSION,
   changelog: [
-    { version: FEED_PROBE_VERSION, change: "Declare strict feed probe request and result contracts." },
+    { version: FEED_PROBE_VERSION, change: "Remove robots evidence and inapplicable item failures from probe output." },
+    { version: "2026-10-28", change: "Declare strict feed probe request and result contracts." },
   ],
 });
 export type FeedProbeResult = z.infer<typeof FeedProbeResultSchema>;
