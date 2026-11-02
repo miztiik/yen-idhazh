@@ -160,6 +160,16 @@ class EvaluationController:
         except EvaluationFailure as failure:
             await self.fail_active(state, failure.error)
         except asyncio.CancelledError:
+            if not state.recovery_started:
+                try:
+                    state.emitter.emit(
+                        "full" if state.primary_score is not None else "primary",
+                        "cancelled",
+                        EventDetails(),
+                        cause=state.emitter.last_event_id,
+                    )
+                except EvaluationFailure as failure:
+                    state.errors.append(failure.error)
             await self.recover(state)
             raise
         finally:

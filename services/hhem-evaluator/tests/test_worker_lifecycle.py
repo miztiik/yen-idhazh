@@ -7,6 +7,7 @@ import pytest
 
 from hhem_evaluator.contracts.base import API_PREFIX, SCHEMA_VERSION
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
+from hhem_evaluator.contracts.service_health import ServiceHealth
 from hhem_evaluator.contracts.worker_message import ScoreWindow
 from hhem_evaluator.fail_evaluation import EvaluationFailure
 from hhem_evaluator.resolve_ids import create_execution_id
@@ -182,6 +183,12 @@ def test_queued_expiry_and_disconnect_do_not_stop_the_active_worker() -> None:
                 and event.phase == "cancelled"
             ]
             assert len(terminal) == 1
+            cause = next(
+                event
+                for event in service.log.events
+                if event.event_id == terminal[0].caused_by_event_id
+            )
+            assert cause.operation == "queue" and cause.phase == "cancelled"
 
     asyncio.run(check())
 
@@ -221,6 +228,12 @@ def test_active_disconnect_stops_only_its_worker_and_sends_no_response() -> None
                 and event.phase == "cancelled"
             ]
             assert len(terminal) == 1
+            cause = next(
+                event
+                for event in service.log.events
+                if event.event_id == terminal[0].caused_by_event_id
+            )
+            assert cause.operation == "primary" and cause.phase == "cancelled"
 
     asyncio.run(check())
 
@@ -328,6 +341,11 @@ def test_unverifiable_process_handle_cannot_start_a_second_model() -> None:
     async def check() -> None:
         inputs, _, _ = read_recordings(REPOSITORY)
         case = inputs.cases[0]
+        observed: EvaluationResult | None = None
+        observed_status: int | None = None
+        observed_health: ServiceHealth | None = None
+        generation: int | None = None
+        replacement_count: int | None = None
         with pytest.raises(EvaluationFailure) as shutdown:
             async with running_service(scenarios=(Scenario(actions=("block",)),)) as service:
                 assert (await service.worker.handshake())["phase"] == "loading"
@@ -349,13 +367,18 @@ def test_unverifiable_process_handle_cannot_start_a_second_model() -> None:
                 assert not process.is_alive()
                 process.close()
                 response = await active
-                assert response.status_code == 500
-                codes = {error["code"] for error in response.json()["errors"]}
-                assert "WORKER_EXITED" in codes and "WORKER_STOP_FAILED" in codes
-                assert service.app.state.controller.health().status == "failed"
-                assert service.worker.generation == 1
-                assert not service.worker.confirmed_before_spawn
+                observed_status = response.status_code
+                observed = EvaluationResult.model_validate_json(response.content)
+                observed_health = service.app.state.controller.health()
+                generation = service.worker.generation
+                replacement_count = len(service.worker.confirmed_before_spawn)
         assert shutdown.value.error.code == "WORKER_STOP_FAILED"
+        assert observed_status == 500
+        assert observed is not None
+        codes = {error.code for error in observed.errors}
+        assert "WORKER_EXITED" in codes and "WORKER_STOP_FAILED" in codes
+        assert observed_health is not None and observed_health.status == "failed"
+        assert generation == 1 and replacement_count == 0
 
     asyncio.run(check())
 
