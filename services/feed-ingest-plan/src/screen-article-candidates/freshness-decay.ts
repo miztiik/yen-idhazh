@@ -1,16 +1,11 @@
 /** How old is the trusted publication time, and what recency bonus does it earn? */
-import type { EffectiveFeedPolicy, FeedIngestCandidate } from "@idhazh/common-contracts";
+import type { EffectiveFeedPolicy, FeedIngestCandidate, RawArticleFreshness } from "@idhazh/common-contracts";
 import type { DiscoveredRow } from "./discovered-evidence";
 import { UtcInstantSchema } from "../utc-instant";
 
 const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 
-export type FreshnessEvidence = {
-  timing_at: string | null;
-  timing_source: "published_at" | "first_seen" | "unknown";
-  age_hours: number | null;
-  recency_bonus: number;
-};
+export type FreshnessEvidence = RawArticleFreshness;
 
 export function calculateFreshness(
   candidate: Pick<FeedIngestCandidate, "published_at">,

@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-01",
+  "version": "2026-11-02",
   "availability": {
     "consecutive_failed_checks_before_rest": 5,
     "rest_hours": 24,
@@ -107,6 +107,40 @@
   },
   "curate_articles": {
     "article_limit": 100,
+    "global_age_ceiling_hours": 36,
+    "diversity": {
+      "lambda_domain": 0.04,
+      "lambda_feed": 0.02,
+      "novelty_bonus": 0.15
+    },
+    "substance": {
+      "word_count_ramp_end": 750,
+      "word_count_sweet_spot_max": 3500,
+      "word_count_plateau_start": 6000,
+      "length_scores": { "full": 1.0 },
+      "long_form_floor_score": 0.80,
+      "entity_density_weight": 0.30,
+      "entity_density_full_credit": 1.0,
+      "headline_hype_penalty": 0.25,
+      "substantive_paragraph_min_words": 25,
+      "substantive_paragraph_min_sentences": 2,
+      "headline": {
+        "shouting_weight": 0.10,
+        "punctuation_weight": 0.10,
+        "opening_mismatch_weight": 0.05,
+        "opening_text_max_characters": 2000,
+        "keyword_min_letters": 4,
+        "shouting_min_letters": 2,
+        "shouting_min_words": 2,
+        "shouting_min_uppercase_fraction": 0.50,
+        "stop_words": [
+          "a", "an", "the", "and", "or", "but", "for", "nor", "so", "yet",
+          "as", "at", "by", "in", "of", "on", "to", "with", "from", "into",
+          "is", "are", "was", "were", "be", "been", "this", "that", "these", "those"
+        ],
+        "punctuation_patterns": ["!{2,}", "\\?!", "!\\?"]
+      }
+    },
     "source_based_quality_buckets": [
       { "id": "institutional", "source_tier_id": 1, "share_pct": 60, "buffer_pct": 10, "ladder_hours": [24, 36, 48] },
       { "id": "trade-press", "source_tier_id": 2, "share_pct": 30, "buffer_pct": 5, "ladder_hours": [24, 30] },

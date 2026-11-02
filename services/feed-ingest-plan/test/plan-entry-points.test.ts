@@ -39,6 +39,12 @@ test("one recorded API request writes a valid selected artifact", async () => {
     expect(artifact.attempt).toBe(summary.attempt);
     expect(artifact.articles).toHaveLength(1);
     expect(artifact.articles[0]!.article_text.length).toBeGreaterThan(0);
+    const recorded = SelectedArticlesArtifactSchema.parse(await Bun.file(new URL("selected-articles.json", recordings)).json());
+    expect(artifact.articles.map(article => ({
+      url_key: article.url_key, feed_id: article.feed_id, canonical_url: article.canonical_url, article_text: article.article_text,
+    }))).toEqual(recorded.articles.map(article => ({
+      url_key: article.url_key, feed_id: article.feed_id, canonical_url: article.canonical_url, article_text: article.article_text,
+    })));
     const selected = (await Promise.all(summary.files.selected_articles!.files.map(file =>
       readPlannerParquet(join(fixture.inputs.outputRoot, file.path), "selected-articles", SelectedArticleRowContract))))
       .flatMap(file => file.rows);

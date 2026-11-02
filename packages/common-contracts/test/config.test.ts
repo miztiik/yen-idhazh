@@ -61,6 +61,64 @@ if (Bun.argv.includes("--emit-schemas")) {
       .toEqual(config.harvest.request_pacing);
   });
 
+  test("prepared scoring policy validates numeric bounds, curve order and trusted headline patterns", async () => {
+    const config = await readConfig();
+    const curate = configs.FeedCurateArticlesConfigSchema.parse(config.curate_articles);
+    const substance = curate.substance;
+    for (const patch of [
+      { word_count_ramp_end: 0 }, { word_count_ramp_end: 1.5 },
+      { word_count_sweet_spot_max: substance.word_count_ramp_end - 1 },
+      { word_count_plateau_start: substance.word_count_sweet_spot_max },
+      { length_scores: { full: -1 } }, { length_scores: { full: Infinity } },
+      { long_form_floor_score: substance.length_scores.full + 1 },
+      { long_form_floor_score: -1 }, { entity_density_weight: -1 },
+      { entity_density_full_credit: 0 }, { entity_density_full_credit: Infinity },
+      { headline_hype_penalty: -1 }, { headline_hype_penalty: NaN },
+      { substantive_paragraph_min_words: 0 }, { substantive_paragraph_min_words: 1.5 },
+      { substantive_paragraph_min_sentences: 0 }, { substantive_paragraph_min_sentences: 1.5 },
+      { min_words: 100 }, { word_count_decline_end: 9000 }, { offset: 1 },
+    ]) expect(policies.FeedSubstancePolicySchema.safeParse({ ...substance, ...patch }).success).toBe(false);
+    for (const name of ["lambda_domain", "lambda_feed", "novelty_bonus"] as const) {
+      expect(policies.FeedDiversityPolicySchema.parse({ ...curate.diversity, [name]: 0 })[name]).toBe(0);
+      for (const value of [-1, Infinity, NaN, null]) {
+        expect(policies.FeedDiversityPolicySchema.safeParse({ ...curate.diversity, [name]: value }).success).toBe(false);
+      }
+    }
+    for (const name of [
+      "shouting_weight", "punctuation_weight", "opening_mismatch_weight",
+      "opening_text_max_characters", "keyword_min_letters", "shouting_min_letters", "shouting_min_words",
+      "shouting_min_uppercase_fraction",
+    ] as const) {
+      for (const value of [-1, Infinity, NaN, null]) {
+        expect(policies.FeedHeadlinePolicySchema.safeParse({ ...substance.headline, [name]: value }).success).toBe(false);
+      }
+    }
+    for (const patch of [
+      { shouting_min_uppercase_fraction: 1.01 }, { opening_text_max_characters: 0 },
+      { keyword_min_letters: 1.5 }, { shouting_min_letters: 0 }, { shouting_min_words: 0 },
+      { stop_words: ["the", "the"] }, { stop_words: ["The"] }, { stop_words: [""] },
+      { punctuation_patterns: [] }, { punctuation_patterns: [""] }, { punctuation_patterns: ["["] },
+      { punctuation_patterns: ["\\u{invalid}"] },
+    ]) expect(policies.FeedHeadlinePolicySchema.safeParse({ ...substance.headline, ...patch }).success).toBe(false);
+    expect(() => policies.FeedHeadlinePolicySchema.parse({
+      ...substance.headline, punctuation_patterns: ["["],
+    })).toThrow("punctuation_patterns");
+    for (const value of [0, -1, Infinity, NaN, null]) {
+      expect(configs.FeedCurateArticlesConfigSchema.safeParse({ ...curate, global_age_ceiling_hours: value }).success).toBe(false);
+    }
+    expect(policies.FeedSubstancePolicySchema.parse({
+      ...substance, word_count_sweet_spot_max: substance.word_count_ramp_end,
+      long_form_floor_score: substance.length_scores.full,
+    }).long_form_floor_score).toBe(substance.length_scores.full);
+    expect(policies.FeedHeadlinePolicySchema.parse({
+      ...substance.headline, shouting_min_uppercase_fraction: 0,
+    }).shouting_min_uppercase_fraction).toBe(0);
+    expect(policies.FeedHeadlinePolicySchema.parse({
+      ...substance.headline, shouting_min_uppercase_fraction: 1,
+    }).shouting_min_uppercase_fraction).toBe(1);
+    expect(configs.FeedIngestConfigSchema.safeParse({ ...config, version: "2026-11-01" }).success).toBe(false);
+  });
+
   test("source-based budgets use distinct bucket IDs and source-tier mappings", () => {
     const rules = [
       { id: "community-first", source_tier_id: 3, share_pct: 60, buffer_pct: 10, ladder_hours: [12, 24] },

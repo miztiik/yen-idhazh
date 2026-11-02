@@ -6,7 +6,8 @@ import type { HarvestDiagnostics } from "@idhazh/common-contracts";
 import { sanitizeText } from "./sanitize-text";
 import type { ExtractionControls } from "./extraction-controls";
 import type { ExtractionQuality } from "@idhazh/common-contracts";
-import { measureExtractionQuality, countWords } from "./extraction-quality";
+import { measureExtractionQuality } from "./extraction-quality";
+import { countWords } from "../count-article-words";
 import { corroborateWords } from "./corroborated-words";
 import { extractSemanticArticle } from "./semantic-extractor";
 import { sanitizeDomText } from "./sanitize-dom";
@@ -133,21 +134,24 @@ async function extractDocument(html: string, configuredUrl: string, config: Extr
   }
   let markdown = extracted?.content ?? "";
   let text = sanitizeText(markdown);
-  if (primaryError !== undefined || countWords(text) < config.min_source_words) {
+  let words = countWords(text);
+  if (primaryError !== undefined || words < config.min_source_words) {
     const fallback = extractSemanticArticle(html, config.semantic_fallback);
-    if (fallback.article_text && countWords(fallback.article_text) > countWords(text)) {
+    const fallbackWords = fallback.article_text === text ? words : countWords(fallback.article_text);
+    if (fallback.article_text && fallbackWords > words) {
       text = fallback.article_text;
+      words = fallbackWords;
       markdown = fallback.markdown;
       paywall.warnings.push("semantic-dom-fallback");
     } else if (primaryError !== undefined) throw primaryError;
   }
   return {
     article_text: text,
-    word_count: countWords(text),
+    word_count: words,
     author: cleanText(extracted?.author ?? "") || recovered.author,
     page_title: cleanText(extracted?.title ?? "") || recovered.page_title,
     ...paywall,
-    quality: text && !paywall.paywall ? measureExtractionQuality(text, corroborated, config) : null,
+    quality: text && !paywall.paywall ? measureExtractionQuality(text, words, corroborated, config) : null,
     content_evidence: text ? measureArticleContent(markdown, config.press_release_filter) : null,
   };
 }

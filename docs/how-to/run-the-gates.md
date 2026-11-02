@@ -311,7 +311,10 @@ closure is not an additional API latency gate. Run it on Linux in
 merge-candidate CI. Ordinary source tests keep their recorded HTTP boundary;
 they do not access the open web.
 The separate `source-transport-test.yml` workflow runs this oracle on Linux
-with committed, frozen dependencies. Production `ci.yml`
+with committed, frozen dependencies. It also runs the existing
+`feed-probe.test.ts` and `feed-probe-cli.test.ts` cases to verify parsing,
+catalog selection and recorded probe behavior, not only their types.
+Production `ci.yml`
 has no added native-platform job. The separate workflow runs for named source
 changes in a pull request and supports manual dispatch on a candidate branch:
 `gh workflow run source-transport-test.yml --ref <candidate-branch>`.

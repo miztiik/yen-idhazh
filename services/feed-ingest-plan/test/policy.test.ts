@@ -77,6 +77,12 @@ test("reporting and global portfolio controls cannot change candidate policies",
     curate_articles: {
       ...config.curate_articles, article_limit: 5,
       soft_caps: { ...config.curate_articles.soft_caps, max_source_share: 0.2 },
+      global_age_ceiling_hours: 12,
+      diversity: { lambda_domain: 1, lambda_feed: 2, novelty_bonus: 0 },
+      substance: {
+        ...config.curate_articles.substance, word_count_ramp_end: 100,
+        substantive_paragraph_min_words: 10, substantive_paragraph_min_sentences: 3,
+      },
     },
     feedback: { lifecycle_window_days: 5, request_report_closed_days: 2 },
     partition: { ...config.partition, default_shards: 2 },

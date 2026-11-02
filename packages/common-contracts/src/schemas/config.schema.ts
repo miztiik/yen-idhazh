@@ -4,8 +4,9 @@ import {
   NonEmptySchema, PositiveCountSchema, PositiveSchema, reject,
 } from "./primitives";
 import {
-  FeedCurationPolicySchema, FeedScreeningPolicySchema,
+  FeedCurationPolicySchema, FeedDiversityPolicySchema, FeedScreeningPolicySchema, FeedSubstancePolicySchema,
 } from "./policy.schema";
+import { FEED_INGEST_CONFIG_VERSION } from "../version";
 import { RequestProfileSchema, ResponseDiagnosticsConfigSchema } from "./http-response-evidence.schema";
 
 export const FeedUrlExclusionSchema = z.strictObject({
@@ -137,6 +138,9 @@ export const SourceBasedQualityBucketsSchema = z.array(SourceBasedQualityBucketS
 });
 export const FeedCurateArticlesConfigSchema = FeedCurationPolicySchema.extend({
   article_limit: PositiveCountSchema,
+  global_age_ceiling_hours: PositiveSchema,
+  diversity: FeedDiversityPolicySchema,
+  substance: FeedSubstancePolicySchema,
   source_based_quality_buckets: SourceBasedQualityBucketsSchema,
   source_reliability_penalty_enabled: z.boolean().default(true).describe(
     "Apply measured source reliability separately from article quality. Remove this switch and its disabled path when isolated selection becomes the sole planner.",
@@ -181,7 +185,7 @@ export const FeedLifecyclePolicySchema = z.strictObject({
 });
 export type FeedLifecyclePolicy = z.infer<typeof FeedLifecyclePolicySchema>;
 export const FeedIngestConfigSchema = z.strictObject({
-  version: z.literal("2026-11-01"),
+  version: z.literal(FEED_INGEST_CONFIG_VERSION),
   availability: FeedLifecyclePolicySchema,
   harvest: FeedHarvestConfigSchema,
   content_filters: FeedContentFiltersConfigSchema,
@@ -197,8 +201,9 @@ export const FeedIngestConfigSchema = z.strictObject({
     default: {}, type: "object", additionalProperties: false,
   }),
 }).meta({
-  version: "2026-11-01",
+  version: FEED_INGEST_CONFIG_VERSION,
   changelog: [
+    { version: FEED_INGEST_CONFIG_VERSION, change: "Declare global age, substance and diversity policy before selection activation." },
     { version: "2026-11-01", change: "Configure shared domain and publisher request pacing." },
     { version: "2026-11-01", change: "Use native browser profiles and configured safe response headers." },
   ],
