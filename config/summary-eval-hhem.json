@@ -4,6 +4,7 @@
   "control_max_bytes": 16384,
   "http_connect_timeout_ms": 5000,
   "poll_interval_ms": 100,
-  "pipeline_name": "hhem-evaluation-api-test",
-  "task_name": "evaluate-supplied-text"
+  "pipeline_name": "summary-eval-hhem",
+  "task_name": "summary-eval-hhem",
+  "output_directory": "backend/var/summary-eval-hhem"
 }

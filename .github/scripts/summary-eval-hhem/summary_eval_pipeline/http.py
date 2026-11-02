@@ -6,9 +6,9 @@ from typing import Literal
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from .contracts.workflow_report import FailurePhase
-from .fail_manual_evaluation import WorkflowFailure
-from .load_manual_settings import ManualSettings
+from .contracts import FailurePhase
+from .failures import WorkflowError
+from .settings import PipelineSettings
 
 
 def loopback_url(host: Literal["127.0.0.1", "::1"], port: int) -> str:
@@ -21,8 +21,8 @@ async def call_local_api[Result: BaseModel](
     method: Literal["GET", "POST"],
     url: str,
     contract: type[Result],
-    manual: ManualSettings,
-    timeout_ms: int,
+    manual: PipelineSettings,
+    timeout_ms: float,
     *,
     service: Literal["hhem", "host"],
     phase: FailurePhase,
@@ -41,21 +41,21 @@ async def call_local_api[Result: BaseModel](
             ) as response:
                 status = response.status_code
                 if response.headers.get("content-encoding", "identity") != "identity":
-                    raise WorkflowFailure("RESPONSE_INVALID", phase, service, status)
+                    raise WorkflowError("RESPONSE_INVALID", phase, service, status)
                 length = response.headers.get("content-length")
                 if length is not None and (not length.isascii() or not length.isdecimal()):
-                    raise WorkflowFailure("RESPONSE_INVALID", phase, service, status)
+                    raise WorkflowError("RESPONSE_INVALID", phase, service, status)
                 if length is not None and int(length) > manual.max_response_bytes:
-                    raise WorkflowFailure("RESPONSE_TOO_LARGE", phase, service, status)
+                    raise WorkflowError("RESPONSE_TOO_LARGE", phase, service, status)
                 encoded = bytearray()
                 async for chunk in response.aiter_bytes():
                     if len(encoded) + len(chunk) > manual.max_response_bytes:
-                        raise WorkflowFailure("RESPONSE_TOO_LARGE", phase, service, status)
+                        raise WorkflowError("RESPONSE_TOO_LARGE", phase, service, status)
                     encoded.extend(chunk)
                 try:
                     result = contract.model_validate_json(encoded)
                 except ValidationError:
-                    raise WorkflowFailure("RESPONSE_INVALID", phase, service, status) from None
+                    raise WorkflowError("RESPONSE_INVALID", phase, service, status) from None
                 return status, result
     except (httpx.HTTPError, TimeoutError):
-        raise WorkflowFailure("HTTP_FAILED", phase, service) from None
+        raise WorkflowError("HTTP_FAILED", phase, service) from None

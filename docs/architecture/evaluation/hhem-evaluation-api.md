@@ -65,16 +65,21 @@ model loader and `predict` on CPU with the original floating-point weights.
 The foundation provides no second set of model weights. Prediction and
 replacement loads use local files; a replacement cannot download assets.
 
-Loaded tensor names, dtypes, shapes and bytes are hashed in sorted-name order.
-A separate digest covers the actual configuration, effective prompt and named
-configuration, tokenizer and model-code assets. Local snapshot paths become
-immutable logical identities before hashing. The effective service settings
-have their own digest. Replacement must match the initial loaded identity,
-not merely its configured label or revision.
+Identity is the configured and observed immutable revisions plus the actual
+Python, model-runtime and model-library versions. The loader checks named
+snapshot locations against the selected revisions. It does not scan or hash
+loaded tensors, tokenizer assets or service settings. Replacement must match
+the initial revision/runtime identity and uses the frozen startup settings.
 
 The application does not set CPU affinity, quotas, memory limits or fixed
 compute thread counts. One active model process limits concurrency, not the
 host resources the runtime may use.
+
+The selected model accepts variable-length inputs without an application token
+cutoff. Its inherited tokenizer warning is not a hard context limit. Word
+windows bound each call's source length; they do not prove a token count or a
+RAM requirement. Long inputs still cost memory and time and can fail within
+the declared evaluation deadline.
 
 ## Cancellation and shutdown
 
@@ -129,6 +134,16 @@ call cannot be reliably stopped by cancelling a thread future. Per-window
 validated progress keeps a completed primary score outside that process.
 Finite reservations bound input memory before validation, rather than only
 bounding requests after their bodies have already been read.
+
+Pinned upstream revisions identify the selected assets without another
+startup pass over all weights. Offline recording provenance remains separate:
+the reader verifies each original identity JSON before adapting historical
+fields. Removing runtime digests does not replace or re-score the recordings.
+
+The API produces scores and structured events only. Workflow startup, shared
+host measurement and Markdown publication live
+[outside the service](../../reference/summary-evaluation-workflow.md), so a
+caller does not need report or hardware code to use the evaluator.
 
 ## See also
 

@@ -2,15 +2,15 @@
 
 from typing import Literal
 
-from .contracts.workflow_report import (
+from .contracts import (
     FAILURE_MESSAGES,
     FailureCode,
     FailurePhase,
-    WorkflowError,
+    PipelineError,
 )
 
 
-class WorkflowFailure(Exception):
+class WorkflowError(Exception):
     def __init__(
         self,
         code: FailureCode,
@@ -18,7 +18,7 @@ class WorkflowFailure(Exception):
         service: Literal["hhem", "host", "caller"] = "caller",
         http_status: int | None = None,
     ) -> None:
-        self.error = WorkflowError(
+        self.error = PipelineError(
             code=code,
             phase=phase,
             service=service,

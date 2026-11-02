@@ -134,7 +134,8 @@ def test_failed_full_comparison_preserves_completed_primary(action: Action) -> N
             assert result.windows.primary is not None and result.windows.primary.scored == 1
             assert result.windows.full is not None and result.windows.full.scored == 0
             assert result.model is not None
-            assert result.model.loaded_weights_sha256 == identity.loaded_weights_sha256
+            assert result.model.loaded_revision == identity.loaded_revision
+            assert result.model.reference == identity.reference
             assert result.worker is not None and result.worker.pid == old_pid
             assert service.worker.confirmed_before_spawn[0][0] == old_pid
             assert service.worker.worker is not None and service.worker.worker.generation == 2

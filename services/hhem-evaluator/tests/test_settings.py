@@ -20,8 +20,8 @@ def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model
     settings = load_settings(SETTINGS_FILE)
     assert settings.version == "2026-11-02"
     assert not settings.enabled
-    assert settings.scoring.chunk_words == 900
-    assert settings.scoring.chunk_overlap_words == 100
+    assert settings.scoring.chunk_words == 5000
+    assert settings.scoring.chunk_overlap_words == 500
     assert settings.scoring.max_windows_per_comparison == 256
     assert not settings.response.hhem_full
     assert not settings.response.include_window_details
@@ -76,7 +76,7 @@ def test_settings_freeze_the_effective_snapshot_not_the_file(tmp_path: Path) -> 
     )
     original = resolve_request(request, settings)
     current = resolve_request(request, load_settings(path))
-    assert original.chunk_words == 900
+    assert original.chunk_words == 5000
     assert not original.hhem_full
     assert not original.include_window_details
     assert current.chunk_words == 1500
@@ -118,7 +118,7 @@ def test_defaults_resolve_before_geometry_validation_and_text_is_not_substituted
     with pytest.raises(RequestResolutionError) as failure:
         resolve_request(
             EvaluateRequest(
-                source_text="Source.", summary_text="Summary.", chunk_overlap_words=900
+                source_text="Source.", summary_text="Summary.", chunk_overlap_words=5000
             ),
             settings,
         )
@@ -173,7 +173,7 @@ def test_full_comparison_never_substitutes_primary_source() -> None:
     [
         (("scoring", "chunk_words"), "900"),
         (("scoring", "chunk_words"), True),
-        (("scoring", "chunk_overlap_words"), 900),
+        (("scoring", "chunk_overlap_words"), 5000),
         (("scoring", "max_windows_per_comparison"), 0),
         (("hhem", "model", "revision"), "main"),
         (("hhem", "foundation", "revision"), "short"),

@@ -14,11 +14,14 @@ owns admission, cancellation, model loading and failure handling.
 models and their on-demand JSON Schemas. Every schema has date-stamped
 `version` and `changelog` metadata. The initial version is `2026-11-02`.
 Results, health, events, settings and worker packets require this wire version;
-unsupported or missing versions fail validation. There is no older service
-payload to migrate and no legacy contract registration.
+unsupported or missing versions fail validation. Runtime model identity has
+no tensor, configuration or service-settings digests. The recording reader
+verifies historical fixture provenance against the original complete JSON,
+then reads its revision and runtime fields. It does not rewrite recorded scores.
 
 The protocol reserves `GET /api/2026-11-02/health`,
-`POST /api/2026-11-02/evaluate` and `GET /api/2026-11-02/openapi.json`.
+`POST /api/2026-11-02/summary-eval-hhem` and `GET /api/2026-11-02/openapi.json`.
+The existing `/evaluate` route remains callable as a compatibility alias.
 The request body's version comes from that route, not a body field. These
 are protocol names, not listener settings. No interactive documentation UI,
 streaming, polling or result-history endpoint is defined.
@@ -83,7 +86,7 @@ Table C - Loaded model and owned worker identities
 
 | Id | Shape | Fields |
 | --- | --- | --- |
-| C1 | Model | `reference`, `configured_revision`, `loaded_revision`, `foundation_reference`, `foundation_revision`, `loaded_weights_sha256`, `loaded_config_sha256`, `service_config_sha256`, `runtime_versions`. Revisions are full lowercase commit IDs; hashes are lowercase SHA-256 digests. Runtime versions name `python`, `pytorch`, `transformers`. These fields describe actual loaded tensors/configuration, not model labels. Contract examples are not load evidence. |
+| C1 | Model | `reference`, `configured_revision`, `loaded_revision`, `foundation_reference`, `foundation_revision`, `runtime_versions`. Revisions are full lowercase upstream commit IDs; runtime versions name `python`, `pytorch`, `transformers`. Loaded revisions come from the selected local snapshots, not a computed digest. Contract examples are not load evidence. |
 | C2 | Worker | Positive `generation` and `pid`, nullable decimal-string `start_ticks`, nullable `pin_unavailable_reason`. The process is the owned scorer, not HTTP. A pin and unavailable reason are mutually exclusive; one is required. Replacements advance generation. |
 | C3 | Unavailable pin | `unsupported_platform`, `process_not_found`, `process_read_failed`, `process_identity_invalid`, `process_identity_too_large`. No exception text or invented start tick. |
 
@@ -148,7 +151,7 @@ Table F - Private native packets
 | --- | --- | --- |
 | F1 | `bootstrap` | `version`, `settings`, `assets`, `context`. Settings are validated and frozen; `assets.model` and `assets.foundation` must equal the configured immutable asset identities. Context is the separate typed startup context. No article text. |
 | F2 | `worker_started` | `version`, `worker`. Reports ownership separately from loaded readiness. |
-| F3 | `ready` | `version`, `worker`, `model`. Requires all loaded fingerprints. |
+| F3 | `ready` | `version`, `worker`, `model`. Requires observed loaded revisions and runtime versions. |
 | F4 | `worker_failed` | `version`, `worker`, `error`. Requires a closed worker-phase startup error without a window; it is not incomplete readiness. |
 | F5 | `score_window` | `version`, `execution_id`, `generation`, `comparison`, `window_index`, `start_word`, `end_word`, `source_text`, `summary_text`. Comparison is `primary` or `full`; the nonempty end-exclusive range must match the source window's word count. This is the only text-bearing outbound packet. |
 | F6 | `window_scored`, `window_failed` | The same version/execution/generation/comparison/window/range identity, nullable finite `score`, nullable nonnegative `scoring_ms`, nullable closed `error`. Success requires a score without error; failure requires an error without score. Its error phase and window index must match. |
@@ -176,7 +179,7 @@ Table G - Initial settings and units
 | G1 | `enabled` | `false` during development. The field declares removal when the standalone API is released after real-model workflow verification. |
 | G2 | `hhem.model`, `hhem.foundation` | Required references, full immutable revisions and finite named file lists in the committed settings. The model revision is `8e4a2e6e96c708cc76c2344f7e4757df2515292c`; the foundation revision is `7bcac572ce56db69c1ea7c8af255c5d7c9672fc2`. Foundation files are tokenizer/config assets, not another model's weights. |
 | G3 | `hhem.cache_directory` | `services/hhem-evaluator/var/model-cache`, a relative POSIX operator path; never a request control. |
-| G4 | `scoring.chunk_words`, `scoring.chunk_overlap_words`, `scoring.max_windows_per_comparison` | 900 words per window, 100 words of regular overlap and at most 256 planned windows per comparison. Reject a larger plan; never drop windows. |
+| G4 | `scoring.chunk_words`, `scoring.chunk_overlap_words`, `scoring.max_windows_per_comparison` | 5000 words per window, 500 words of regular overlap and at most 256 planned windows per comparison. Reject a larger plan; never drop windows. |
 | G5 | `response.hhem_full`, `response.include_window_details` | Both `false`; independent permanent optional API controls. |
 | G6 | `listener.host`, `listener.port` | `127.0.0.1`, port 3010. Only configured loopback literals `127.0.0.1` and `::1` validate. |
 | G7 | `listener.max_body_bytes`, `listener.body_read_timeout_ms` | 1048576 bytes (1 MiB) and 5000 milliseconds (five seconds) for bounded input reads. |
@@ -214,99 +217,25 @@ their package metadata alone is not evidence that the official model loads.
 Run `python -m hhem_evaluator` in the independent model environment. `--root`
 names the repository root and `--settings` names its committed settings file;
 both are required operator paths. `--enable` enables that invocation without
-editing the development flag. The effective setting is included in the
-service-configuration digest. There is one HTTP process, no reload or worker
+editing the development flag. There is one HTTP process, no reload or worker
 count control, and no request-selected executable or destination.
 
 `scripts/capture-model-recordings.py` uses that same production loader and
 official predictor. The named `tests/fixtures/hhem-evaluator/model-inputs.json`
 contains only project-authored fictional text. `model-predictions.json` stores
 actual finite predictions, exact input hashes, a UTC capture instant and the
-digest of `model-identity.json`. That identity records the actual loaded
-tensors, configuration, tokenizer assets and runtimes.
+digest of the original `model-identity.json`. That is offline recording
+provenance, not runtime hashing. New captures record the loaded revisions and
+runtimes. Historical recording identities retain their original bytes.
 
 The capture and cached-only reload demonstrate loading and prediction, not
 factual-accuracy calibration or hosted-runner speed. Ordinary tests use these
 recordings only at the model-call boundary; they do not install the model
 extra, download weights or expose a production replay mode.
 
-## Manual caller and report
-
-`python -m hhem_evaluator.run_manual_evaluation --root <repository-root>`
-owns one invocation of the existing API and the existing Bun host probe.
-It reads only the platform's named dispatch event, sends one HTTP evaluation
-with `hhem_full: false`, and writes only the body-free `report.json` and
-`report.md` under `services/hhem-evaluator/var/workflow/`. Those two output
-paths form the workflow's artifact allowlist, not a text-selected destination.
-The [manual how-to](../how-to/run-hhem-evaluation-api.md) owns setup,
-first registration, dispatch and failure inspection.
-
-Table H - Manual caller controls
-
-| Id | File and field | Value and meaning |
-| --- | --- | --- |
-| H1 | `config/hhem-evaluator/workflow.json`: `event_envelope_bytes` | 65536 bytes (64 KiB), added to the API's request allowance when reading the platform event. The encoded API request must still fit its own allowance. Overflow is refused, never truncated. |
-| H2 | `max_response_bytes`, `control_max_bytes` | 2097152 bytes (2 MiB) per HTTP response; 16384 bytes (16 KiB) per private control line. |
-| H3 | `http_connect_timeout_ms`, `poll_interval_ms` | 5000 milliseconds (five seconds) for connection; 100 milliseconds between readiness observations. Overall response deadlines derive from the API's body, queue, evaluation and shutdown bounds, or the native host lifecycle bound plus connection time. |
-| H4 | `pipeline_name`, `task_name` | Committed ASCII run labels. Platform run identity and generated request/correlation UUIDs complete the metadata; neither text supplies a label. |
-| H5 | `config/hhem-evaluator/host-probes.json` | Native Zod-owned host settings on loopback port 3011. Task profiling and process RAM are on; machine RAM and cache probes are off. The existing global host settings are unchanged. |
-
-HTTPX disables proxy-environment use and redirects and bounds both time and
-response bytes. Error-status evaluator responses still pass through
-`EvaluationResult`; completed partial scores survive. Evaluation is never
-automatically retried. Private startup identity plus matching HTTP health
-proves the evaluator belongs to this caller. The host launcher announces
-readiness only after its existing server binds.
-
-`WorkflowReport` has the same initial native version and schema metadata as
-the service. It is an output of one run, not authority for another run; there
-is no old report shape to migrate. Unsupported versions fail validation.
-It adds no shared schema, ledger family or production evaluator dependency.
-
-Table I - Body-free workflow report
-
-| Id | Field | Meaning |
-| --- | --- | --- |
-| I1 | `version`, `status` | Current wire version; `complete` requires a complete evaluation, complete resource evidence and no caller failures. `partial` retains a primary score with incomplete work or evidence; `failed` has no completed primary score. |
-| I2 | `evaluation` | Nullable native `EvaluationResult`, including actual partial scores and terminal event identity. No second HHEM result schema. |
-| I3 | `resources.status`, `resources.reason` | Coverage is `complete`, `incomplete` or `unavailable`. A non-complete result names `configured_off`, `pin_unavailable`, `profile_start_failed`, `profile_stop_failed`, `worker_replaced`, `profile_interrupted` or `measurement_unavailable`. |
-| I4 | `resources.profile` | Nullable narrow projection of the native host profile: task identity, outcome, end reason, UTC endpoints, elapsed milliseconds, unavailable reasons and worker CPU/RAM summary. Raw samples, machine summaries and cache payloads are not copied. |
-| I5 | `resources.initial_worker`, `resources.final_worker` | Nullable native scoring-worker identities. Complete coverage requires the same PID/start-tick pair and generation across an explicit uninterrupted profile stop. A replacement never retargets the existing handle. |
-| I6 | `resources.runner`, `resources.shutdown` | Observed operating system, release, architecture and visible logical CPU count; separate stopped-child observations and nullable confirmation of model exit. These are conditions and lifetime evidence, not another CPU/RAM collector. |
-| I7 | `errors` | Closed safe failures with `code`, `phase`, `service`, nullable `http_status` and fixed `message`. Cleanup phase stays separate from the original failure. Raw bodies, exceptions and input-derived names are forbidden. |
-
-The host remains the field authority. The Python reader validates only the
-consumed fields and discards unconsumed ones. The named Bun bridge compares
-their type, requiredness, nullability and vocabulary with the actual native
-schemas; missing runtime preparation fails instead of skipping the check.
-The [host API](host-probe-api.md) and
-[measurement reference](host-metrics.md#whole-task-typescript-samples) own
-resource semantics and units. One-core CPU percent is not capped at 100.
-Stored memory remains KiB; Markdown also shows MiB. Null readings require
-their actual native reason. A missing final worker identity does not prove a
-replacement; it leaves coverage incomplete.
-
-The profile opens after model readiness and closes before worker shutdown,
-excluding download/load time. Both launchers observe parent-pipe EOF.
-Shutdown joins only owned children with declared bounded escalation. A
-host-service close precedes API shutdown, so even an undelivered handle cannot
-leave its collector observing a stopped worker. A
-measurement or cleanup failure cannot erase a validated evaluation. An HTTP
-or operational failure fails the workflow after available evidence is saved.
-
-## Design rationale
-
-The caller's control packets and native events use non-inheritable private
-channels. Ordinary standard output and standard error can also be inherited
-by model-library helper processes, so mixing them with the protocol can corrupt
-an otherwise valid shutdown receipt. Raw runtime output stays discarded
-through interpreter shutdown; only declared packets and native events reach
-the caller.
-
-A service PID exiting does not prove that its model worker stopped. The
-receipt must explicitly confirm the supervisor's joined worker exit. A
-validated confirmation remains in the report even if another cleanup action
-fails; an unclean or unconfirmed shutdown still fails the workflow.
+The [workflow reference](summary-evaluation-workflow.md) owns orchestration,
+host measurement, report contracts and private launcher channels. None of
+that code belongs to the evaluator package.
 
 ## See also
 
@@ -316,3 +245,4 @@ fails; an unclean or unconfirmed shutdown still fails the workflow.
 - [repository-layout.md](repository-layout.md) - package, configuration and fixture locations.
 - [../architecture/evaluation/hhem-evaluation-api.md](../architecture/evaluation/hhem-evaluation-api.md) - execution and failure ownership.
 - [../how-to/run-hhem-evaluation-api.md](../how-to/run-hhem-evaluation-api.md) - manual dispatch, evidence and cleanup.
+- [summary-evaluation-workflow.md](summary-evaluation-workflow.md) - pipeline-owned host evidence and Markdown reporting.

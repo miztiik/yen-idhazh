@@ -3,7 +3,7 @@
 **Last Updated**: 2026-11-02
 
 How to send supplied source and summary text to the independent CPU evaluator
-and inspect evidence from its actual scoring process. This procedure is
+and inspect its score and whole-machine measurements. This procedure is
 project-specific because it uses the committed model selection, named workflow
 and existing host instrument. It does not fetch an article or make a summary.
 
@@ -14,6 +14,9 @@ For local development, use CPython 3.12, uv and Bun. From the repository root:
 
 ```powershell
 bun install --frozen-lockfile --cwd .\services\host-probes
+bun install --frozen-lockfile --cwd .\services\host-fingerprints
+bun install --frozen-lockfile --cwd .\packages\common-contracts
+bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
 uv sync --frozen --group dev --project .\services\hhem-evaluator
 ```
 
@@ -57,10 +60,12 @@ print(json.dumps({
 '@ | python - | gh workflow run hhem-evaluation-api-test.yml --ref main --json
 ```
 
-The platform creates and retains the dispatch event. Do not put credentials in the
-inputs. The caller reads only the named `GITHUB_EVENT_PATH`, with its declared
-byte allowance, and makes no additional text-bearing file. Neither text is
-inserted into a command, environment expression, URL, log, summary or artifact.
+The platform creates and retains the dispatch event. **Both texts also appear
+in the expandable Markdown summary and report artifact.** Do not supply
+credentials or private material. The caller reads only the named
+`GITHUB_EVENT_PATH`, within its declared byte allowance. Neither text enters
+a command, environment expression, URL or log. The API result and JSON
+evidence remain body-free.
 
 ## Inspect the real run
 
@@ -69,26 +74,27 @@ Find the run and confirm its `headSha` is the intended commit:
 ```powershell
 gh run list --workflow hhem-evaluation-api-test.yml --limit 5 --json databaseId,headSha,status,conclusion,url
 gh run view <run-id> --log
-gh run download <run-id> --name hhem-evaluation-report --dir <evidence-directory>
+gh run download <run-id> --name summary-eval-hhem-report --dir <evidence-directory>
 ```
 
-The artifact contains only `report.json` and `report.md`. The JSON uses the
-native workflow-report reader; the Markdown gives a short, body-free view.
-Inspect the score, loaded revisions and digests, scoring process ID (PID) and
-kernel start-time counter, terminal event link, timings, resource interval and
-owned shutdown.
-The event link must name the actual emitted terminal request event.
+The artifact contains only `evaluation.json` and `report.md`. Report Creator
+writes one Markdown file and appends the same file to the summary. Its model
+configuration, actual-work and hardware tables show the loaded revision,
+score, seconds rounded upward to three decimal places, machine readings and
+worker details. Expand each text disclosure to check the supplied pair.
+`summary-eval-unieval` must say it was not run and have no numeric score or time.
+The JSON retains the actual terminal request event ID for comparison with logs.
 
-Normal enabled evidence requires a complete evaluation, the same initial and
-final worker, an explicit uninterrupted profile stop, actual process CPU and
-sampled RAM, and clean shutdown. An unavailable reading alone does not complete
+Normal enabled evidence requires a complete evaluation, an explicit
+uninterrupted profile stop, actual machine CPU and sampled RAM, and
+confirmed clean owned shutdown. An unavailable reading alone does not complete
 the hosted proof, even if scoring succeeded.
 
-CPU is percent of one core, not a share of the whole machine. One busy core
-means 100 percent; a process using several cores can exceed 100 percent.
-Stored RAM uses Linux KiB; the summary also shows MiB. The sampled maximum is
-the largest observed resident memory reading, not a promise to catch every
-short peak. Actual host conditions and measured intervals appear beside it.
+CPU is a share of the whole machine, from zero to 100 percent. Background
+work is included. This is not HHEM process usage or percent of one core.
+Stored RAM counters use KiB; the summary shows closing machine use in MiB,
+not peak memory. Actual hardware and UTC
+measurement endpoints appear beside it.
 See the [host measurement reference](../reference/host-metrics.md#whole-task-typescript-samples)
 for the instrument's meaning and limitations.
 
@@ -106,26 +112,27 @@ validated with the same native result reader, so completed partial scores
 are not lost. Actual HTTP or operational failures make the workflow step fail.
 Missing measurements remain null with the native reason, never invented zeroes.
 
-An exited, reused or replaced worker makes resource coverage incomplete.
-The existing handle is never moved to another process, and interrupted CPU
-percentages or RAM peaks are never added into a claimed whole-run reading.
-Disabled profiling is reported explicitly without preventing scoring.
+Cancelled or interrupted measurement is not complete coverage. Missing
+readings retain exact native reasons. Worker replacement remains an API
+failure concern, not a reason to relabel machine readings as worker usage.
 
 The caller owns only the two services it starts. A private startup packet and
 matching evaluator health prevent adoption of an occupied listener. The host
-launcher uses `config/hhem-evaluator/host-probes.json`; it leaves the global
-host configuration unchanged. Both launchers close on parent-pipe EOF.
+helper uses the existing TypeScript hardware API and task-profile SDK.
+It selects whole-machine CPU/RAM while leaving shared host configuration
+files unchanged. Hardware ledger files stay disposable; there is no Git
+commit or push. Both launchers close on parent-pipe EOF.
 The API launcher's protocol channels are not inherited by model-library
 helpers. Raw runtime diagnostics cannot become control packets or native events.
 Finally, the caller stops the profile, then joins both owned services with
-bounded escalation. The host collector closes before the API worker, including
-when a failed start or stop left no usable profile handle.
+bounded escalation. The host collector closes before the API worker.
 It neither detaches helpers nor kills processes by name.
 An unconfirmed shutdown is a failure, not successful delivery.
 
 ## See also
 
 - [../reference/hhem-evaluation-api.md](../reference/hhem-evaluation-api.md) - native fields, bounds and report meanings.
+- [../reference/summary-evaluation-workflow.md](../reference/summary-evaluation-workflow.md) - report format and host measurement ownership.
 - [../reference/host-probe-api.md](../reference/host-probe-api.md) - existing pinned-process commands.
 - [run-the-gates.md#independent-python-service-contracts](run-the-gates.md#independent-python-service-contracts) - offline preparation and checks.
 - [../architecture/evaluation/hhem-evaluation-api.md](../architecture/evaluation/hhem-evaluation-api.md) - the actual scoring controller and lifetime boundary.

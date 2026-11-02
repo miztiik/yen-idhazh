@@ -44,6 +44,13 @@ fields, versions and startup settings. Caller-saved responses are outputs of
 one run, not inputs to a later run; adding such a reader requires a persisted
 contract design first.
 
+The manual HHEM workflow's same-run evidence and private launcher packets
+live outside that API, under
+`.github/scripts/summary-eval-hhem/summary_eval_pipeline/`. The
+[workflow reference](../../reference/summary-evaluation-workflow.md) owns
+their fields and the narrow reader held against native TypeScript host
+schemas. The evaluator package does not import these workflow contracts.
+
 ## Recursive ledger types
 
 Source classification uses open string kind identifiers and positive integer

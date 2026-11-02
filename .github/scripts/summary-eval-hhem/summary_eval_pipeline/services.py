@@ -1,6 +1,7 @@
 """How are only this caller's service children started, identified and joined?"""
 
 import contextlib
+import json
 import queue
 import subprocess
 import sys
@@ -9,19 +10,19 @@ import time
 from pathlib import Path
 from typing import Literal
 
+from hhem_evaluator.contracts.evaluation_event import EvaluationEvent
+from hhem_evaluator.contracts.service_settings import ServiceSettings
 from pydantic import ValidationError
 
-from .contracts.evaluation_event import EvaluationEvent
-from .contracts.service_settings import ServiceSettings
-from .contracts.workflow_control import (
+from .control import (
     ApiReady,
     HostReady,
     ServiceControl,
     ServiceStopped,
     StartupPacket,
 )
-from .fail_manual_evaluation import WorkflowFailure
-from .load_manual_settings import ManualSettings
+from .failures import WorkflowError
+from .settings import PipelineSettings
 
 # The private protocol emits one ready packet and one stopped packet, then EOF.
 CONTROL_PACKET_CAPACITY = 3
@@ -35,7 +36,7 @@ class OwnedService:
         root: Path,
         packet: StartupPacket,
         settings: ServiceSettings,
-        manual: ManualSettings,
+        manual: PipelineSettings,
     ) -> None:
         self.service, self.packet, self.settings, self.manual = service, packet, settings, manual
         self.messages: queue.Queue[ServiceControl | None] = queue.Queue(CONTROL_PACKET_CAPACITY)
@@ -46,6 +47,7 @@ class OwnedService:
         self.ready: ApiReady | HostReady | None = None
         self.stopped: ServiceStopped | None = None
         self.closed = False
+        self.finish_sent = False
         try:
             self.process = subprocess.Popen(
                 command,
@@ -55,7 +57,7 @@ class OwnedService:
                 stderr=subprocess.PIPE if service == "hhem" else subprocess.DEVNULL,
             )
         except OSError:
-            raise WorkflowFailure("STARTUP_FAILED", "startup", service) from None
+            raise WorkflowError("STARTUP_FAILED", "startup", service) from None
         self.readers = [threading.Thread(target=self._read_control, daemon=True)]
         if service == "hhem":
             self.readers.append(threading.Thread(target=self._read_events, daemon=True))
@@ -121,12 +123,12 @@ class OwnedService:
         deadline = time.monotonic() + timeout_ms / 1000
         while True:
             if self.protocol_failed.is_set():
-                raise WorkflowFailure("CHILD_PROTOCOL_FAILED", "startup", self.service)
+                raise WorkflowError("CHILD_PROTOCOL_FAILED", "startup", self.service)
             if self.events_failed.is_set():
-                raise WorkflowFailure("EVENT_STREAM_FAILED", "startup", self.service)
+                raise WorkflowError("EVENT_STREAM_FAILED", "startup", self.service)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise WorkflowFailure("STARTUP_FAILED", "startup", self.service)
+                raise WorkflowError("STARTUP_FAILED", "startup", self.service)
             try:
                 message = self.messages.get(
                     timeout=min(remaining, self.manual.poll_interval_ms / 1000)
@@ -134,34 +136,34 @@ class OwnedService:
                 break
             except queue.Empty:
                 if self.process.poll() is not None:
-                    raise WorkflowFailure("CHILD_EXITED", "startup", self.service) from None
+                    raise WorkflowError("CHILD_EXITED", "startup", self.service) from None
         if self.protocol_failed.is_set():
-            raise WorkflowFailure("CHILD_PROTOCOL_FAILED", "startup", self.service)
+            raise WorkflowError("CHILD_PROTOCOL_FAILED", "startup", self.service)
         packet = message.root if message is not None else None
         if packet is None or self.process.poll() is not None:
-            raise WorkflowFailure("CHILD_EXITED", "startup", self.service)
+            raise WorkflowError("CHILD_EXITED", "startup", self.service)
         if not isinstance(packet, ApiReady | HostReady):
-            raise WorkflowFailure("STARTUP_FAILED", "startup", self.service)
+            raise WorkflowError("STARTUP_FAILED", "startup", self.service)
         if (
             packet.startup_id != self.packet.startup_id
             or packet.pid != self.process.pid
             or packet.service != self.service
         ):
-            raise WorkflowFailure("STARTUP_IDENTITY_MISMATCH", "startup", self.service)
+            raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", self.service)
         self.ready = packet
         return packet
 
     def check_alive(self) -> None:
         if self.process.poll() is not None:
-            raise WorkflowFailure("CHILD_EXITED", "evaluation", self.service)
+            raise WorkflowError("CHILD_EXITED", "evaluation", self.service)
         if self.protocol_failed.is_set():
-            raise WorkflowFailure("CHILD_PROTOCOL_FAILED", "evaluation", self.service)
+            raise WorkflowError("CHILD_PROTOCOL_FAILED", "evaluation", self.service)
         if self.events_failed.is_set():
-            raise WorkflowFailure("EVENT_STREAM_FAILED", "evaluation", self.service)
+            raise WorkflowError("EVENT_STREAM_FAILED", "evaluation", self.service)
 
     def confirm_terminal(self, event_id: str | None, execution_id: str) -> None:
         if not self.terminal_seen.wait(self.manual.http_connect_timeout_ms / 1000):
-            raise WorkflowFailure("EVENT_STREAM_FAILED", "evaluation", self.service)
+            raise WorkflowError("EVENT_STREAM_FAILED", "evaluation", self.service)
         event = self.terminal_event
         if (
             self.events_failed.is_set()
@@ -169,11 +171,26 @@ class OwnedService:
             or event.event_id != event_id
             or event.execution_id != execution_id
         ):
-            raise WorkflowFailure("EVENT_STREAM_FAILED", "evaluation", self.service)
+            raise WorkflowError("EVENT_STREAM_FAILED", "evaluation", self.service)
+
+    def finish_measurement(self, outcome: str) -> None:
+        """Send an explicit closing outcome; EOF alone is cancellation."""
+        if self.service != "host" or self.finish_sent or outcome not in ("success", "error"):
+            raise WorkflowError("CHILD_PROTOCOL_FAILED", "cleanup", self.service)
+        if self.process.stdin is None:
+            raise WorkflowError("SERVICE_STOP_FAILED", "cleanup", self.service)
+        try:
+            self.process.stdin.write(
+                json.dumps({"kind": "stop", "outcome": outcome}).encode() + b"\n"
+            )
+            self.process.stdin.flush()
+            self.finish_sent = True
+        except OSError:
+            raise WorkflowError("SERVICE_STOP_FAILED", "cleanup", self.service) from None
 
     def close(self, timeout_ms: int) -> ServiceStopped:
         if self.closed:
-            raise WorkflowFailure("SERVICE_STOP_FAILED", "cleanup", self.service)
+            raise WorkflowError("SERVICE_STOP_FAILED", "cleanup", self.service)
         self.closed = True
         escalated = False
         if self.process.stdin is not None:
@@ -193,7 +210,7 @@ class OwnedService:
                 try:
                     self.process.wait(timeout=self.settings.worker.forced_stop_ms / 1000)
                 except subprocess.TimeoutExpired:
-                    raise WorkflowFailure("SERVICE_STOP_FAILED", "cleanup", self.service) from None
+                    raise WorkflowError("SERVICE_STOP_FAILED", "cleanup", self.service) from None
         for reader in self.readers:
             reader.join(timeout=self.settings.worker.forced_stop_ms / 1000)
         while not self.messages.empty():
@@ -226,5 +243,5 @@ class OwnedService:
             or self.events_failed.is_set()
             or any(reader.is_alive() for reader in self.readers)
         ):
-            raise WorkflowFailure("SERVICE_STOP_FAILED", "cleanup", self.service)
+            raise WorkflowError("SERVICE_STOP_FAILED", "cleanup", self.service)
         return stopped

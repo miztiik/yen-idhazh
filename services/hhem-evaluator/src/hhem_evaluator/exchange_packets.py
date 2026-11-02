@@ -68,9 +68,6 @@ def reply_byte_limit(bootstrap: WorkerBootstrap, generation: int) -> int:
             loaded_revision=settings.hhem.model.revision,
             foundation_reference=settings.hhem.foundation.reference,
             foundation_revision=settings.hhem.foundation.revision,
-            loaded_weights_sha256="f" * 64,
-            loaded_config_sha256="f" * 64,
-            service_config_sha256="f" * 64,
             runtime_versions=RuntimeVersions(
                 python="x" * RUNTIME_VERSION_MAX_CHARS,
                 pytorch="x" * RUNTIME_VERSION_MAX_CHARS,

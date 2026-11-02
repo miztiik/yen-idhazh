@@ -9,15 +9,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AwareDatetime
+from pydantic import AwareDatetime, TypeAdapter
 
 from hhem_evaluator.contracts.base import NativeContract, NonblankText, SchemaVersion, Score, Sha256
 from hhem_evaluator.contracts.model_identity import ModelIdentity
 from hhem_evaluator.contracts.service_settings import ServiceSettings
 from hhem_evaluator.exchange_packets import ByteChannel
-from hhem_evaluator.fingerprint_model import canonical_bytes, settings_digest
 from hhem_evaluator.load_model import Predictor
 from hhem_evaluator.run_worker import run_worker
+from scripts.recording_json import canonical_bytes
 
 type Action = Literal["score", "hold", "block", "crash", "invalid", "raise"]
 
@@ -47,6 +47,14 @@ class ModelPredictions(NativeContract):
     cases: tuple[RecordedPrediction, ...]
 
 
+class RecordedLegacyFingerprints(NativeContract):
+    """Read historical fixture provenance, never runtime identity fields."""
+
+    loaded_weights_sha256: Sha256
+    loaded_config_sha256: Sha256
+    service_config_sha256: Sha256
+
+
 def read_recordings(
     root: Path,
 ) -> tuple[ModelInputs, ModelPredictions, ModelIdentity]:
@@ -56,9 +64,26 @@ def read_recordings(
         replies = ModelPredictions.model_validate_json(
             (directory / "model-predictions.json").read_bytes()
         )
-        identity = ModelIdentity.model_validate_json(
+        raw_identity = TypeAdapter(dict[str, object]).validate_json(
             (directory / "model-identity.json").read_bytes()
         )
+        if (
+            hashlib.sha256(canonical_bytes(raw_identity)).hexdigest()
+            != replies.model_identity_sha256
+        ):
+            raise AssertionError(
+                "The predictions and captured model identity do not belong together."
+            )
+        identity_payload = dict(raw_identity)
+        legacy_fields = set(RecordedLegacyFingerprints.model_fields)
+        if legacy_fields.intersection(identity_payload):
+            RecordedLegacyFingerprints.model_validate(
+                {key: identity_payload[key] for key in legacy_fields if key in identity_payload}
+            )
+            identity_payload = {
+                key: value for key, value in identity_payload.items() if key not in legacy_fields
+            }
+        identity = ModelIdentity.model_validate_json(json.dumps(identity_payload))
     except FileNotFoundError:
         raise AssertionError(
             "Capture real fixtures with scripts/capture-model-recordings.py in the model "
@@ -66,10 +91,6 @@ def read_recordings(
         ) from None
     if len({case.id for case in inputs.cases}) != len(inputs.cases):
         raise AssertionError("The model input fixture contains duplicate case identities.")
-    if hashlib.sha256(canonical_bytes(identity.model_dump(mode="json"))).hexdigest() != (
-        replies.model_identity_sha256
-    ):
-        raise AssertionError("The predictions and captured model identity do not belong together.")
     if {case.id for case in inputs.cases} != {reply.id for reply in replies.cases}:
         raise AssertionError("The prediction fixture does not cover the named model inputs.")
     if len(replies.cases) != len(inputs.cases):
@@ -142,13 +163,11 @@ class RecordedLoader:
         self.control.send_bytes(json.dumps({"phase": "loading", "local_only": local_only}).encode())
         if self.scenario.hold_loading:
             self.control.recv_bytes(1)
-        observed = identity.model_copy(update={"service_config_sha256": settings_digest(settings)})
+        observed = identity
         if self.scenario.changed_identity:
             observed = observed.model_copy(
                 update={
-                    "loaded_config_sha256": hashlib.sha256(
-                        b"changed cached configuration"
-                    ).hexdigest()
+                    "loaded_revision": "0" * 40,
                 }
             )
         return RecordedPredictor(

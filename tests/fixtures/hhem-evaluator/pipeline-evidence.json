@@ -1,0 +1,22 @@
+{
+  "version": "2026-11-02",
+  "status": "failed",
+  "evaluation": null,
+  "hardware": null,
+  "machine": null,
+  "shutdown": {
+    "hhem_stopped": null,
+    "host_stopped": null,
+    "worker_exit_confirmed": null
+  },
+  "unieval": "not_implemented",
+  "errors": [
+    {
+      "code": "INPUT_INVALID",
+      "phase": "input",
+      "service": "caller",
+      "http_status": null,
+      "message": "The named dispatch inputs are invalid."
+    }
+  ]
+}

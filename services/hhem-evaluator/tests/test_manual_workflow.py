@@ -7,13 +7,11 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-
-from hhem_evaluator.contracts.workflow_control import StartupPacket
-from hhem_evaluator.contracts.workflow_report import WorkflowReport
-from hhem_evaluator.fail_manual_evaluation import WorkflowFailure
-from hhem_evaluator.load_manual_settings import load_manual_settings
-from hhem_evaluator.read_manual_inputs import encode_request, read_manual_inputs
-from hhem_evaluator.report_evaluation import REPORT_DIRECTORY
+from summary_eval_pipeline.contracts import PipelineEvidence
+from summary_eval_pipeline.control import StartupPacket
+from summary_eval_pipeline.failures import WorkflowError
+from summary_eval_pipeline.inputs import encode_request, read_manual_inputs
+from summary_eval_pipeline.settings import load_pipeline_settings
 
 from .contract_examples import REPOSITORY, read_contract
 from .service_cases import service_settings
@@ -68,7 +66,8 @@ def test_named_workflow_is_manual_read_only_and_has_exactly_two_text_inputs() ->
     text = "\n".join(strings(outside_form))
     assert not re.search(r"\$\{\{[^}]*\binputs\b", text)
     assert "source_text" not in text and "summary_text" not in text
-    assert "run_manual_evaluation --root ../.." in text
+    assert "summary-eval-hhem/run.py --root ../.." in text
+    assert "summary-eval-hhem/report.py --root ../.." in text
     assert "--extra model --no-dev" in text
     for forbidden in (
         "git commit",
@@ -93,9 +92,10 @@ def test_named_workflow_is_manual_read_only_and_has_exactly_two_text_inputs() ->
     ]
     assert len(uploads) == 1 and uploads[0]["if"] == "always()"
     paths = str(mapping(uploads[0]["with"])["path"]).splitlines()
+    output = load_pipeline_settings(REPOSITORY).output_directory
     assert paths == [
-        REPORT_DIRECTORY + "/report.json",
-        REPORT_DIRECTORY + "/report.md",
+        output + "/evaluation.json",
+        output + "/report.md",
     ]
 
 
@@ -125,7 +125,7 @@ def test_platform_input_preserves_text_and_enforces_the_exact_encoded_request_bo
     write_event(event, {"source_text": source, "summary_text": summary})
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
     selected = service_settings()
-    manual = load_manual_settings(REPOSITORY)
+    manual = load_pipeline_settings(REPOSITORY)
     request = read_manual_inputs(selected, manual)
     assert request.source_text == source and request.summary_text == summary
     assert request.hhem_full is False
@@ -135,7 +135,7 @@ def test_platform_input_preserves_text_and_enforces_the_exact_encoded_request_bo
     exact = type(selected).model_validate_json(json.dumps(data))
     assert len(encode_request(read_manual_inputs(exact, manual))) == size
     data["listener"]["max_body_bytes"] = size - 1
-    with pytest.raises(WorkflowFailure) as failure:
+    with pytest.raises(WorkflowError) as failure:
         read_manual_inputs(type(selected).model_validate_json(json.dumps(data)), manual)
     assert failure.value.error.code == "INPUT_TOO_LARGE"
     # The caller read one platform-owned input and created no second text-bearing file.
@@ -160,8 +160,8 @@ def test_invalid_platform_inputs_fail_without_echoing_values(
     event = tmp_path / "event.json"
     write_event(event, inputs)
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
-    with pytest.raises(WorkflowFailure) as failure:
-        read_manual_inputs(service_settings(), load_manual_settings(REPOSITORY))
+    with pytest.raises(WorkflowError) as failure:
+        read_manual_inputs(service_settings(), load_pipeline_settings(REPOSITORY))
     assert failure.value.error.code == "INPUT_INVALID"
     assert "PrivateValueCanary" not in str(failure.value)
     assert "Source." not in failure.value.error.model_dump_json()
@@ -173,19 +173,19 @@ def test_event_envelope_overflow_fails_instead_of_truncating(
 ) -> None:
     event = tmp_path / "event.json"
     selected = service_settings()
-    manual = load_manual_settings(REPOSITORY)
+    manual = load_pipeline_settings(REPOSITORY)
     allowance = selected.listener.max_body_bytes + manual.event_envelope_bytes
     with event.open("wb") as stream:
         stream.write(b" " * (allowance + 1))
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
-    with pytest.raises(WorkflowFailure) as failure:
+    with pytest.raises(WorkflowError) as failure:
         read_manual_inputs(selected, manual)
     assert failure.value.error.code == "INPUT_TOO_LARGE"
 
 
 def test_named_report_fixture_is_native_and_private_control_forbids_text() -> None:
-    fixture = REPOSITORY / "tests" / "fixtures" / "hhem-evaluator" / "workflow-report.json"
-    report = WorkflowReport.model_validate_json(fixture.read_bytes())
+    fixture = REPOSITORY / "tests" / "fixtures" / "hhem-evaluator" / "pipeline-evidence.json"
+    report = PipelineEvidence.model_validate_json(fixture.read_bytes())
     assert report.version == "2026-11-02" and report.evaluation is None
     packet: dict[str, object] = {
         "version": "2026-11-02",
@@ -195,10 +195,10 @@ def test_named_report_fixture_is_native_and_private_control_forbids_text() -> No
     read_contract(StartupPacket, packet)
     with pytest.raises(ValidationError):
         read_contract(StartupPacket, {**packet, "source_text": "PrivateSourceCanary"})
-    assert WorkflowReport.model_json_schema()["version"] == "2026-11-02"
+    assert PipelineEvidence.model_json_schema()["version"] == "2026-11-02"
     with pytest.raises(ValidationError):
         read_contract(
-            WorkflowReport,
+            PipelineEvidence,
             {
                 **report.model_dump(mode="json"),
                 "summary_text": "PrivateSummaryCanary",

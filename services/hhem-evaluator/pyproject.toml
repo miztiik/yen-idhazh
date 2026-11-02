@@ -56,6 +56,6 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "."]
+pythonpath = ["src", ".", "../../.github/scripts/summary-eval-hhem"]
 # asyncio uses Unix-domain sockets for local wake-up IPC, not an HTTP listener.
 addopts = "-q --import-mode=importlib --disable-socket --allow-unix-socket"

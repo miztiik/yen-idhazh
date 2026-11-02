@@ -9,7 +9,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from .contracts.base import API_PREFIX
+from .contracts.base import API_PREFIX, EVALUATE_PATH
 from .contracts.error_detail import ErrorDetail
 from .contracts.evaluate_request import EvaluateRequest
 from .contracts.evaluation_result import EvaluationResult
@@ -70,7 +70,7 @@ def create_app(
             await controller.shutdown()
 
     app = FastAPI(
-        title="Local HHEM evaluation",
+        title="summary-eval-hhem",
         version=settings.version,
         docs_url=None,
         redoc_url=None,
@@ -86,8 +86,10 @@ def create_app(
         observed = controller.health()
         return JSONResponse(observed.model_dump(mode="json"), status_code=observed.http_status)
 
+    # Keep the existing route callable while clients adopt the named operation.
+    @app.post(f"{API_PREFIX}/evaluate", include_in_schema=False, deprecated=True)
     @app.post(
-        f"{API_PREFIX}/evaluate",
+        EVALUATE_PATH,
         response_model=EvaluationResult,
         responses={
             status: {"model": EvaluationResult}
