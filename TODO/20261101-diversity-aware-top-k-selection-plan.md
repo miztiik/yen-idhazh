@@ -624,6 +624,8 @@ Table P
   - `TODO/20261101-diversity-aware-top-k-selection-plan.md`
   - `.github/workflows/ci.yml`
   - `backend/tests/workflows/test_ci_selection.py`
+  - `backend/tests/workflows/_harness.py`
+  - `backend/tests/workflows/test_triggers.py`
   - `config/feed-ingest-plan.json`
   - `config/feed-ingest-plan-service.json`
   - `packages/common-contracts/src/index.ts`
