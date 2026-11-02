@@ -30,7 +30,7 @@
       "max_header_value_chars": 256
     },
     "request_pacing": {
-      "enabled": true,
+      "enabled": false,
       "domain_delay_ms": 1000,
       "publisher_delay_ms": 1000,
       "jitter_ms": 500
