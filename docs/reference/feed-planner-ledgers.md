@@ -1,17 +1,8 @@
 # Feed planner ledgers
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-03
 
-Which planner data is retained, and where is it stored?
-
-**Status**: Current five-ledger contract for the isolated TypeScript planner.
-TypeScript owns planner settings, events, requests, private receipts, stage
-payloads, ledgers and their file validation. Python keeps the gardener
-scheduler, which delegates planner row validation and compaction to TypeScript.
-
-**Scope**: Retained storage and audit contracts for the isolated planner.
-These formats do not authorize production worker integration or prove
-publication; see [planning completion](../architecture/sources/feed-ingest-audit.md#partial-results-and-boundaries).
+Which data does each feed planner ledger retain?
 
 **Five committed ledgers**, all under `state/raw/feed-ingest-plan/`:
 
@@ -21,21 +12,12 @@ publication; see [planning completion](../architecture/sources/feed-ingest-audit
 - `feed-health-state`
 - `plan-runs`
 
-`selected-articles` also has a GitHub Actions artifact representation containing
-`article_text` for the summarizer. That artifact is not another ledger.
-Committed selected rows never contain `article_text`.
+Selected text is written to a separate workflow artifact for the summarizer.
+It is not stored in committed selected rows.
 
-Breaking format changes and removal of old planner-family raw and compact
-ledgers are approved within the
-[clean-break boundary](#approved-clean-break-delivery). New-family shared-ledger
-storage support is in scope; the separate Python news pipeline remains
-unchanged. This page defines the retained formats and their current readers
-and writers.
-
-Use section letters and field IDs when reviewing, for example "C20" or "B12-B14".
-Keep IDs stable during iteration; do not reuse a removed field's ID.
-Metadata is stored once per file, not repeated on every row. Every nested field
-is listed below; there are no hidden policy or assessment payloads.
+The TypeScript schemas own planner settings, events, requests, receipts, stage
+payloads and these ledgers. Python runs the gardener scheduler and delegates
+planner validation and compaction to the TypeScript writer.
 
 ## Contents
 
@@ -45,14 +27,11 @@ is listed below; there are no hidden policy or assessment payloads.
 - [D. plan-runs](#d-plan-runs)
 - [M. rejected-articles](#m-rejected-articles)
 - [E. Dates, counters and compaction](#e-dates-counters-and-compaction)
-- [F. Screenshot ledger mapping](#f-screenshot-ledger-mapping)
-- [G. Declared payload field mapping](#g-declared-payload-field-mapping)
-- [H. Nested payload mapping](#h-nested-payload-mapping)
-- [K. API inventory](#k-api-inventory)
 - [L. Lookback summaries](#l-lookback-summaries)
 - [TypeScript contract ownership](#typescript-contract-ownership)
-- [Shared rules and removals](#shared-rules-and-removals)
-- [Design rationale](#design-rationale)
+- [Raw-day membership](#raw-day-membership)
+- [Field-based health history](#field-based-health-history)
+- [TypeScript current-format refusal](#typescript-current-format-refusal)
 
 ## A. discovered-articles
 
@@ -68,26 +47,13 @@ articles never selected.
 | A3 | `first_seen_at` | Row | Establish age for undated articles; never reset on rediscovery |
 | A4 | `date` | Row | UTC date of first discovery; explicit day-partition/query key |
 
-No `feed_id` or `publisher_id`: the discovery reader does not
-need them. Feed attribution belongs in health and selected output; publisher
-identity belongs in selected metadata and the curated registry.
-
-The planner reads the configured `discovered_articles.lookback_days` of prior
-UTC days plus today. This setting belongs to the TypeScript planner; it does
-not replace the native pipeline's separate `collect.seen_window_days`.
-
 ## B. selected-articles
 
 **Committed metadata ledger plus artifact handoff.** Compute each selected
 article once in memory, then serialize two representations:
 
-- GitHub Actions artifact: selected metadata plus `article_text`.
+- Workflow artifact: selected metadata plus `article_text`.
 - Committed Parquet: the declared metadata fields, without `article_text`.
-
-Use an explicit allowlisted metadata projection with its own strict schema.
-Do not mutate the shared object with `pop`, `delete` or another in-place removal:
-that could remove the text before the artifact is produced. Do not maintain two
-independently calculated selections.
 
 ### Table B - Selected article fields
 
@@ -125,17 +91,13 @@ independently calculated selections.
 | B36 | `word_count` | Article | Yes | Required nonnegative integer count of the complete sanitized body, copied from parsing |
 | B37 | `substance_word_count` | Article | Yes | Required nonnegative integer retained-paragraph count, copied from screening; includes measured zero and must be <= B36 |
 
-The compact `adjustments` list replaces the large existing score-evidence tree.
-Unavailable observed history remains null in its own evidence, but its score
-adjustment is numeric zero. A complete measured zero pass fraction still
-receives the configured floor penalty. The list does not contain copied
-configuration or empty classification trees. These values
-explain the chosen result; they do not preserve every losing candidate or
-promise a complete historical replay.
+Unavailable history remains null in its evidence and contributes a zero
+adjustment. A measured zero pass fraction still receives the configured floor
+penalty.
 
 ### Table N - Required score adjustments in stored order
 
-| Id | Term | Meaning |
+| ID | Term | Meaning |
 | --- | --- | --- |
 | N1 | `article_pass_rate` | Fixed authority reduction from measured technical article-pass history; numeric zero when disabled or history is unavailable |
 | N2 | `substance_quality_score` | Fixed signed screening substance score, cached as `freshness.substance_score` before selection |
@@ -143,72 +105,24 @@ promise a complete historical replay.
 | N4 | `feed_diversity_penalty` | Negative configured coefficient times squared pre-choice feed count; numeric zero for its first winner |
 | N5 | `novelty_bonus` | Configured first-use feed bonus when that feed has no prior winner; otherwise zero; not historical or story novelty |
 
-Every selected row requires these five terms once in this order. The exact
-native-number reconstruction is:
+Every selected row requires these five terms once in this order. The score is
+reconstructed in the stored order:
 
 ```text
 base_article_score = ((feed_authority_score + recency_score) + article_pass_rate) + substance_quality_score
 marginal_score = ((base_article_score + domain_diversity_penalty) + feed_diversity_penalty) + novelty_bonus
 ```
 
-Static adjustments already belong to base; they are not added a second time.
-There is no nullable website penalty. The
-[curation calculation](../architecture/sources/feed-curation.md) owns the
-equations, configured inputs, tie rule and completion behavior.
+Static adjustments are part of the base score and are not added twice. The
+[curation rules](../architecture/sources/feed-curation.md) define the
+calculation, configured inputs and tie rule.
 
-Both counts are required in metadata, text-artifact articles, API/stage
-payloads and raw/compact selected Parquet. Missing, null, fractional, negative
-or retained-greater-than-raw counts fail validation. Neither count is guessed,
-substituted or recalculated. Join chosen content by candidate identity,
-not the first matching URL; partition preserves both counts and the unchanged
-original body and full-body work estimate.
-
-`evaluated_at` records the clock actually used. A saved parsed batch can retain
-an earlier age-evaluation clock; the artifact must not substitute upload time
-or a later API call's start time.
-
-Only an entry-level, timezone-qualified source instant can supply publication
-time. A feed's build or update date cannot date its articles. After admission
-and choice, an absent or untrusted source date uses D22, the actual captured
-selection-start UTC instant, with `published_at_source = selection`. The
-spelling stays ISO 8601 with `Z`, as for source instants. This does not change
-B27-B29, the original first sight, freshness eligibility, recency or ranking.
-Unknown timing evidence stays in `timing_basis = unavailable`, `timing_at = null`
-and `age_hours = null`, with `ratings.recency_score = 0`. Known timing requires
-a UTC instant and finite signed age with basis `published_at` or `first_seen`.
-Inconsistent combinations fail validation, not unknown timing. Both variants
-require B35, computed as D19 minus the effective global age ceiling.
-Unknown timing does not create a fabricated historical publication
-source or rewrite the selection-start fallback. The artifact and metadata
-projection use the same chosen values.
-
-Current candidates and embedded source snapshots, feed offers/outcomes,
-parsed batches, selected/partitioned batches, selected metadata/artifacts/rows,
-screened evidence, candidate rejections and rejected-article rows use
-`2026-11-02`. Source snapshots contain only `feed_id`, nullable `publisher_id`,
-`feed_url`, `title`, lifecycle `status` and unit-interval `weight`.
-Enclosing private payloads must validate that same current source shape;
-a fetched-document body does not embed it.
-Discovery and file envelopes retain `2026-10-31`. Health rows, progress events,
-fetched documents, failed-input metadata and probe output use `2026-11-02`.
-Private selected and partitioned batches use `SELECTED_FEED_BATCH_VERSION`,
-independently of the unchanged selected-article record stamp.
-Plan runs use `2026-11-02` with required nullable selection metrics.
-Readers verify physical fields, file identity and canonical
-digest against the current format. Older formats refuse with diagnostics.
-Historical files remain unchanged; no migration or null-fill is applied.
-The [site publication stage](../architecture/publishing/planner-publication.md)
-omits refused planner bytes and marks their copied index coverage unavailable.
-
-Empty categories stay arrays. The native Parquet and JSON comparison found
-that null increased both representations, so no nullable category shape is
-introduced.
-
-Use configured feed weight, recency, the technical pass adjustment, substance
-and current-run feed/website diversity terms. There is no taxonomy multiplier,
-source allocation or publication-exposure adjustment. Publication-URL and
-settled-failure exclusions remain external safety evidence, not publication
-counts inferred from selection. No publication-result columns are added.
+`evaluated_at` is the age and scoring clock captured for the selected batch.
+When no trusted entry-level publication time exists, `published_at` uses the
+captured selection-start time and `published_at_source` is `selection`. This
+display timestamp does not change age evidence, freshness or ranking.
+Unavailable timing is represented by null timing fields and a zero recency
+score. Both known and unavailable timing require the captured freshness cutoff.
 
 ## C. feed-health-state
 
@@ -233,7 +147,6 @@ totals or add together saved rolling reliability results.
 | C7 | `checked_at` | Feed/run/day | Actual feed-check time; nullable when this work day had no feed check |
 | C9 | `availability` | Feed/run/day | Supported computed eligibility, rest, retirement or unknown state |
 | C10 | `strikes` | Feed/run/day | Observed logical failure streak; a supported lower bound when earlier history is partial, null before known checks |
-| C11 | Removed | - | UTC rest deadlines replace skipped-run counting |
 | C12 | `last_failure_code` | Feed/run/day | Explain the run's latest feed failure without free-text payloads |
 | C13 | `status` | Feed/run/day | Actual feed HTTP status; nullable; not catalog membership |
 | C14 | `reliability.productive` | Captured lookback | Productive reads in the measured lookback used for this run |
@@ -271,51 +184,18 @@ totals or add together saved rolling reliability results.
 | C48 | `availability_updated_at` | Saved calculation | Actual check instant that last changed the calculation; carry-forward does not advance it |
 | C49 | `availability_complete` | Saved calculation | Whether the complete lifecycle calculation is supported; not source reachability |
 
-Retired field IDs: C3 moved to D16; C4 moved to D17; C17 moved to D21. These
-settings belong once to the run, rather than repeated on every feed row or
-assumed constant across compacted files. The API supplies
-`reliability.window_days` from the linked D21 value.
-Fields C8 and C30 are removed, with no replacement columns.
+Run counters describe that run and work day, not cumulative daily totals.
+Daily opportunity totals sum per-run decisions and do not claim unique articles.
+Request totals measure dispatched work, not waste or blame.
 
-Run counters are accumulated during that run only. Daily opportunity counts
-sum those per-run decisions; they do not claim unique articles across the day.
-Planning yield is calculated from selected/candidate counts. Request totals
-measure spend, not blame.
+The writer treats a read as productive only when `outcome == "ok"` and
+`items > 0`. `items` counts distinct offered canonical URLs, not raw entries,
+extracted articles or selected articles.
 
-`outcome` preserves the native target-download result. An HTTP success
-can therefore record `ok` even when the feed is empty or parsing fails.
-`last_failure_code = FEED_PARSE_FAILED` identifies the latter; it does not
-rewrite the download outcome. A human-facing feed read result combines that
-outcome, the usable URL count and the failure code.
-
-The current writer's productivity test remains `outcome == "ok"` and
-`items > 0`; `ok` with zero items is a failed/nonproductive read.
-Its `items` counts distinct offered canonical URLs across candidates and
-article-level rejections. It is not automatically the raw XML-entry count,
-extracted-article count or selected count. C39-C40 preserve that distinction
-rather than silently changing the score when replacing the old health writer.
-
-Captured reliability fields C14-C16 and C18-C21 describe the lookback evaluated
-for this run. They are not additive counters. API daily views aggregate the relevant
-run counters, never C14-C21. Storage copies must be deduplicated by the declared
-execution/feed/day identity; genuinely repeated work is not erased merely
-because another attempt happened. Feed reliability/rest still use their native
-logical-read settlement and skip rules. Missing evidence remains unavailable,
-not perfect reliability. Feed titles, configuration and retirement settings are
-joined from the registry.
-
-The global Python health ledger and `frontend/public/source-health.json` remain
-unchanged. A future TypeScript health view must derive its operational data
-from this ledger, not create another authority. Planning cannot supply
-publication statistics.
-
-No publication counts, publication-based retirement countdown, article text or
-individual request history.
-
-The seven-day request component is a spend report only, not a qualified waste
-score or ranking penalty. Known HTTP costs remain attributed to the feed whose
-work incurred them; missing accounting stays unknown. Detailed causal request
-history and the former request-score qualification fields are not required.
+Saved reliability values describe the lookback evaluated for that run; they
+are not additive counters. Readers aggregate run counters separately and
+deduplicate repeated storage representations without discarding distinct work.
+Missing evidence remains unknown.
 
 ## D. plan-runs
 
@@ -353,29 +233,17 @@ failed runs.
 | D25 | `selection_metrics.selected_feeds` | Run | Distinct selected feed IDs, including first uses with zero configured bonus; not historically new feeds; bounds match D24 |
 | D26 | `selection_metrics.mean_substance_score` | Run | Arithmetic mean of exactly one required finite `substance_quality_score` adjustment per selected row; null only for completed empty selection |
 
-A completed empty selection saves D23 with zero counts and null mean. A
-nonempty selection requires positive bounded counts and a finite signed mean.
-Missing, repeated or non-finite substance terms fail validation rather than
-being skipped or replaced with zero. These metrics use validated selected
-metadata, not another body analysis or selection pass.
+An empty completed selection has zero counts and a null mean. A nonempty
+selection requires positive bounded counts and a finite mean. Missing or
+repeated substance-score terms fail validation. The metrics come from selected
+metadata, not a second analysis.
 
-D23 and D7 survive later assignment or persistence failures, for combined and
-standalone runs. The response and raw/compact Parquet carry the same native
-object. Reports label null metrics "Selection not completed"; they never
-describe them as measured zero diversity. Current readers require the new
-plan-run stamp and field. Earlier formats refuse with diagnostics, and
-historical files remain unchanged without conversion or optional defaults.
+Selection metrics and the selected count remain recorded if a later assignment
+or persistence step fails. A null metric means selection did not complete; it
+does not mean measured zero.
 
-For `/plan`, timing entries describe internal phases, not HTTP self-calls.
-Record one span per major phase, not one span for every internal article
-operation. Standalone APIs record their request-level spans. There are no
+Timings describe measured API operations or major plan phases. They do not form
 per-article trace trees.
-
-The two health calculations are intentional: one uses pre-request evidence;
-the other adds current work before selection to that same saved input. New rows store their
-distinct purposes, not two position-dependent copies of one name. A reader
-preserves an older `feed-health-summary` value and labels its purpose
-unrecorded; list position cannot prove which calculation it was.
 
 ## E. Dates, counters and compaction
 
@@ -392,274 +260,47 @@ unrecorded; list position cannot prove which calculation it was.
 time, first discovery, actual feed checks and run start describe different
 events; they are not replaced by one fabricated common timestamp.
 
-The proposed physical write is one batched health Parquet per run per UTC work
-day. A normal single-day run produces one file containing all its feed rows,
-not one file per feed/request/article. A run crossing 00:00 UTC may need two
-day files. Completed feed evidence must remain recordable when later article
-work fails.
+The health ledger groups all feed rows from one run and UTC work day. A run
+crossing midnight can write two day files. Completed feed work remains
+recordable when a later stage fails.
 
-Example: one execution records `failed_reads = 1`, and another records
-`failed_reads = 1` for the same feed/day. The daily view reports two failed
-checks after removing duplicate storage representations. Neither execution
-writes the cumulative two back as its own contribution.
-
-Daily request-spend totals include real dispatched work from distinct
-attempts, including failed attempts. Deduplicating raw/compact representations
-must not discard that work. Logical lifecycle settlement and request-spend
-accounting are different views of these records.
-
-Compaction preserves the row identity and recorded values while packing files.
-It does not calculate new scores, sum captured lookback totals, change their
-evaluation clock or make missing data complete. This is not a proposal for a
-new generic retry, replay or correction engine.
-
-## F. Screenshot ledger mapping
-
-The screenshot names eight ledgers; it does not display their columns. The
-mapping below uses the actual declared row contracts behind those names.
-Original identifiers are quoted only to identify the old data.
-
-### Table F - All eight old ledgers
-
-| ID | Old ledger | Relevant facts retained | Destination | Deliberately removed |
-| --- | --- | --- | --- | --- |
-| F1 | `article-assessments` | Chosen article identity, age evidence, actual score components; rejection reason totals | B, C | Per-article/per-stage historical assessments, diagnostic trees and model-verdict placeholders |
-| F2 | `dispatches` | Selected metadata, order, work estimate and worker assignment; text in the artifact only | B; run-level strategy/count in D | Committed article text and duplicate nested candidate/selection copies |
-| F3 | `diversity` | Underlying feed/category/selection facts where already needed | B, C, D | Historical diversity metric series; not an input the selector needs to read |
-| F4 | `document-observations` | Request spend, feed failures, aggregate rejection causes; API/phase timings | C, D | Individual request/operation records, per-article timings, causal joins and correction chains |
-| F5 | `editorial-selections` | Chosen rank, configured feed weight and actual scores | B | Separate old selection format, tier factors, quota/exploration fields, copied configuration and classification trees |
-| F6 | `operational-state` | Relevant feed identity and reporting context only | C, D | Old qualified article-request-waste score and its revision/snapshot machinery |
-| F7 | `rejections` | Counts grouped by feed, subject, stage, reason and known attribution | C | Permanent rejected-article identities, titles, URLs and diagnostic payloads |
-| F8 | `source-runs` | Feed outcomes, selection counts, measured reliability; run summary and API timings | C, D | Repeated registry snapshots, publication/lead counts and completion proofs |
-
-The not-yet-active snapshot/head design is also superseded by this proposal.
-It is not a ninth screenshot ledger and is not retained beside the lean
-health data.
-
-## G. Declared payload field mapping
-
-All 177 top-level payload fields from the eight screenshot row contracts are
-accounted for below: 38 + 4 + 28 + 25 + 14 + 22 + 15 + 31.
-Nested objects count once in that total; section H states what happens inside
-them. Shared writer identity is reduced to the explicit date/run/attempt fields
-in the main tables; other generic identity columns are not added.
-
-### Table G - Complete top-level field disposition
-
-| ID | Old ledger | Old declared fields | Destination or removal |
-| --- | --- | --- | --- |
-| G1 | `article-assessments` | `version` | File `schema_version`; no repeated row stamp |
-| G2 | `article-assessments` | `date`, `correlation_id`, `observed_at` | Relevant UTC dates in B/C/D; correlation and per-assessment time history removed |
-| G3 | `article-assessments` | `candidate_id`, `feed_id`, `source`, `canonical_url`, `url_key`, `categories` | Selected-only identity/configuration subset in B; A keeps first sight; transient candidate identity is not a new durable key |
-| G4 | `article-assessments` | `labels` | Planner classification dossier removed; original RSS categories remain B8 |
-| G5 | `article-assessments` | `stage`, `decision`, `reason` | Terminal rejection counts in C32-C37 and chosen order in B15; no per-stage article diary |
-| G6 | `article-assessments` | `policy` | Runtime configuration; only declared run settings in D and actual applied values in B are retained |
-| G7 | `article-assessments` | `timing_at`, `timing_basis`, `age_hours` | Selected-only age evidence B27-B29 |
-| G8 | `article-assessments` | `max_age_hours`, `extracted_word_count`, `source_form`, `extraction_outcome`, `word_threshold`, `author_present`, `publisher_identity`, `attribution_status`, `paywall`, `required_fields_present`, `suitability_status` | Technical checks remain in execution; failures become C reason counts; author/publisher identity of selected articles remains in B; no permanent check-by-check record |
-| G9 | `article-assessments` | `informative_verdict_status`, `informative_verdict`, `informative_evaluator_version`, `suitability_verdict_status`, `suitability_verdict`, `suitability_evaluator_version` | Removed: article-quality judgements are not this planner's task |
-| G10 | `article-assessments` | `diagnostics`, `score_evidence`, `score_evidence_status` | Chosen scores in B18-B29; per-article diagnostics and duplicate availability wrappers removed |
-| G11 | `dispatches` | `version` | B1 |
-| G12 | `dispatches` | `content` | Lean selected content in B; detailed nested disposition in H |
-| G13 | `dispatches` | `selection` | Lean selection evidence in B; no second copy of article/configuration |
-| G14 | `dispatches` | `partition` | B17 worker assignment; D8-D9 strategy and worker count |
-| G15 | `diversity` | `version`, `date`, `correlation_id`, `run_id`, `as_of` | Required run identity/date in D; metric-series identity and correlation copies removed |
-| G16 | `diversity` | `metric`, `basis`, `window_start`, `window_end`, `dimension`, `stage`, `window_days`, `dimension_value`, `top_k` | Removed with historical diversity analysis; not repurposed as feed-reliability fields |
-| G17 | `diversity` | `value`, `unit`, `before_value`, `after_value`, `numerator`, `denominator`, `item_count`, `source_count` | Historical metrics removed. B/C/D retain independently measured base counts, not renamed copies of these metrics |
-| G18 | `diversity` | `history_coverage_days`, `history_required_days`, `algorithm_version`, `config_sha256`, `availability`, `unavailable_reason` | Old metric interpretation/proof removed; C21/C31 retain their own health/count completeness |
-| G19 | `editorial-selections` | `version`, `date`, `correlation_id` | B1/B30 and D; correlation copy removed |
-| G20 | `editorial-selections` | `candidate_id`, `feed_id`, `source`, `canonical_url`, `url_key` | B3-B6/B13; candidate identity remains transient; old tier factors are not retained |
-| G21 | `editorial-selections` | `vertical`, `labels` | Removed from the proposed planner output/classification scope; not disguised as RSS categories |
-| G22 | `editorial-selections` | `editorial_rank`, `estimated_work` | B15-B16 |
-| G23 | `editorial-selections` | `ratings`, `policy` | Reduced chosen-score evidence in B and declared run settings in D; full policy tree removed |
-| G24 | `document-observations` | `version`, `correlation_id`, `observed_run_id`, `observed_attempt` | File schema plus C34/C38 and D2/D15; no per-operation correlation record |
-| G25 | `document-observations` | `event_id`, `caused_by_event_id`, `corrects_event_id`, `correction_revision` | Removed with historical causal/correction accounting |
-| G26 | `document-observations` | `feed_id`, `publisher_id`, `article_id`, `candidate_id` | Feed identity in C; selected article/publisher identity in B; no operation-level identity rows |
-| G27 | `document-observations` | `document_kind`, `operation`, `outcome`, `attribution`, `failure_code`, `http_status`, `dispatched_request_count`, `request_coverage` | C28-C31 request totals/coverage, C12/C13/C40 feed outcomes, C32-C37 grouped causes; individual article HTTP outcomes are not retained |
-| G28 | `document-observations` | `occurred_at`, `duration_ms`, `request_phase`, `request_sequence`, `retry` | C7 feed-check time and D API timings; request totals include actual retries/hops; individual operation clocks/order removed |
-| G29 | `operational-state` | `version`, `date`, `written_at_utc`, `evidence_cutoff_utc`, `feed_id` | Relevant schema/run/feed context in C/D; old request-score cutoff removed with that score |
-| G30 | `operational-state` | `state_revision`, `parent_revision`, `code_revision`, `policy_version` | Removed revision/reproduction machinery; no Git SHA |
-| G31 | `operational-state` | `window_days`, `window_start`, `window_end`, `evidence_start_utc`, `evidence_end_utc` | Seven-day date-window concept retained for the spend report L3/D20, not the old score. D21/C18/C19 describe the separate native feed-reliability window |
-| G32 | `operational-state` | `measured_target_requests`, `measured_source_wasted_requests`, `observed_attempted_opportunities`, `observed_measured_opportunities`, `measured_coverage`, `qualification_status`, `request_waste_ratio`, `operational_penalty` | Raw request spend remains C28-C30; causal waste, qualification and article-cost penalty deliberately removed, not reconstructed from totals |
-| G33 | `rejections` | `version`, `date`, `correlation_id`, `rejected_at` | Schema and UTC accounting date retained at output grain; per-rejected-article clocks/correlation removed |
-| G34 | `rejections` | `feed_id`, `feed_url`, `subject`, `stage`, `drop_reason` | C5/C32/C35/C36; feed URL comes from registry |
-| G35 | `rejections` | `candidate_id`, `url_key`, `canonical_url`, `title`, `categories` | No permanent rejected-article record. A may retain the URL key for first sight; B keeps content only if selected |
-| G36 | `rejections` | `details` | Known feed failure code/status and grouped reasons in C; detailed per-article failure payload removed |
-| G37 | `source-runs` | `version`, `date`, `run_id`, `correlation_id`, `attempt` | Schema plus D2/D14/D15 and C22/C34/C38; correlation copy removed |
-| G38 | `source-runs` | `feed_id`, `source`, `status` | Feed identity in C, selected applied configuration in B, registry membership remains configuration. Old catalog `status` is not C13's HTTP status |
-| G39 | `source-runs` | `fetch_status`, `parse_status`, `last_failure_at`, `last_failure_reason` | C7/C12/C13/C32-C40 outcomes and grouped causes; no duplicated per-feed duration/diagnostic tree |
-| G40 | `source-runs` | `parsed_count`, `harvested_count`, `fresh_count`, `duplicate_count`, `eligible_count`, `normalized_count`, `selected_count` | Relevant offered URLs C39, admitted candidates C26, selected C27 and rejected reasons C32-C37; exact old stage-population series removed |
-| G41 | `source-runs` | `published_count`, `lead_count` | Removed: planning does not know downstream publication/lead results |
-| G42 | `source-runs` | `drop_reasons` | C32/C33/C35-C37 grouped rejection counts |
-| G43 | `source-runs` | `fetch_duration_ms`, `parse_duration_ms` | D11-D13 records actual API/phase spans; old per-feed spans are not falsely summed into parallel wall time |
-| G44 | `source-runs` | `history_success_fraction`, `history_success_attempts`, `history_window_days` | C16/C15/D21 native reliability evidence |
-| G45 | `source-runs` | `observation_phase`, `observed_at`, `expected_source_count`, `completion_evidence` | D run result and relevant check/evaluation clocks; per-feed completion-proof copies and publication-observer phase removed |
-
-## H. Nested payload mapping
-
-### Table H - No hidden retained payload trees
-
-| ID | Old nested data | Retain or move | Deliberate loss |
-| --- | --- | --- | --- |
-| H1 | Candidate content identity, URL, title, categories, author and publication time | B3-B11; B9 is artifact-only | No committed article text; volatile offered-entry IDs/ordinals stay internal |
-| H2 | Candidate `fetched_at`, `word_count` | Parser count B36, separate screening count B37, actual age basis B27-B31 and full-body work estimate B16 | No duplicated fetch timestamp; neither count is reconstructed downstream |
-| H3 | Feed snapshot ID, publisher, tier, weight and applied tier weight | B4/B5/B13; feed key C5 | Tier and applied tier weight are not retained; repeated title/feed URL/form/kind/status trees are not saved |
-| H4 | `labels` desk/lens/vertical/event/entity classification and origin fields | Not retained in the simplified planner scope; RSS strings remain B8 | Active classification-based rules are removed with that scope, not silently left without explanations |
-| H5 | Policy version/hash, admission thresholds, recency/authority coefficients, tier budgets and concentration coefficients | Active scoring policy stays in configuration; chosen contributions B18-B23/B35 and explicit run settings D16-D18 | Tier budgets and hard concentration controls are not retained; no full historical policy replay or repeated per-article configuration snapshots |
-| H6 | Score base and marginal values | B18/B19 plus explicit components B22/B23 | None for explaining the two totals |
-| H7 | Numerical penalties and their availability | B20/B21 require the five finite signed terms in Table N | Unavailable history remains observed null evidence with numeric zero adjustment; full operand/witness trees are not copied |
-| H8 | Feed limit, exploration and relaxed caps | Not retained | No source reservations, cap relaxation or reserved exploration fields |
-| H9 | Carrier outlets, representative and replacement references | Applicable duplicate handling can run in memory; B keeps the selected URL | No permanent competitor/carrier reconstruction; unused replacement scaffolding removed |
-| H10 | Rejection details: HTTP/timeout/word/age bounds, matched URL/date/marker, failure code, history window and diagnostics | Checks remain in execution; C keeps grouped causes and feed-level code/status | No historical per-article diagnostic dossier |
-| H11 | Fetch/extraction diagnostic trees, quality measurements and warnings | Sparse exceptional diagnostics outside ledger data; API duration in D | No routine copied article measurement trees |
-| H12 | Headline matches, weighted lens, watchlist and salience observations | Only declared headline shape effects enter N2; lens/watchlist/salience do not add priority | No copied classification/voting history or invented vote bonus |
-| H13 | Completed-file IDs/digests/counts and logical completion commitments | Removed with the full-audit product | No claimed proof of historical complete-attempt reconstruction |
-| H14 | Raw/compact file envelopes and indexes | Minimal declared storage metadata and native packing still required | They are not a reason to add every old generic identity field to the new payload |
-
-## K. API inventory
-
-These are local operator services, not a backend for the published site.
-Each row names one implemented operation. The safe-persist listener runs only
-during workflow finalization. The selected persistence operation replaces the old route; there is
-no permanent compatibility API.
-
-### Table K - HTTP operations
-
-| ID | Service | Method and full path | Current role |
-| --- | --- | --- | --- |
-| K1 | Feed planner | `GET /api/2026-11-02/health` | Implemented: listener/enablement check only, not a feed-reliability query |
-| K2 | Feed planner | `POST /api/2026-11-02/plan` | Runs the shared stages and finalizes the five ledgers and selected text artifact |
-| K3 | Feed planner | `POST /api/2026-11-02/fetch` | Fetches only a configured feed or operator-authorized article target and its validated redirect hops |
-| K4 | Feed planner | `POST /api/2026-11-02/parse` | Consumes one live fetched feed or article without network calls; feed parsing returns body-free offers and a server-owned batch |
-| K5 | Feed planner | `POST /api/2026-11-02/select-articles` | Implemented combined admission/ranking; no selection-idempotency requirement or input-count cap |
-| K6 | Feed planner | `POST /api/2026-11-02/partition-articles` | Implemented worker assignment/bin packing; does not reselect |
-| K7 | Feed planner | `POST /api/2026-11-02/persist-selected-articles` | Writes B without text and produces its text-bearing artifact; the removed persistence route returns ordinary HTTP 404 |
-| K8 | Feed planner | `POST /api/2026-11-02/feed-health-state` | Explicit `summarize` or `record` for a server-owned batch; returns C, target-only request spend, the reliability window and actual write receipts when recorded |
-| K9 | Host fingerprints | `GET /api/2026-10-20/health` | Implemented separate service health check |
-| K10 | Host fingerprints | `POST /api/2026-10-20/fingerprint` | Implemented optional machine collection/persistence; not mandatory planner evidence |
-| K11 | Host probes | `GET /api/2026-10-20/sample` | Implemented standalone machine CPU/RAM sample |
-| K12 | Host probes | `POST /api/2026-10-24/start-task-profile` | Implemented optional explicitly pinned process profiling |
-| K13 | Host probes | `POST /api/2026-10-24/stop-task-profile` | Implemented stop/readback for that profile |
-| K14 | Host probes | `POST /api/2026-10-24/cache/latency` | Implemented optional owned cache benchmark; not planner article timing |
-| K15 | Feed planner | `POST /api/2026-11-02/collections` | Starts one run-owned collection and captures eligible feeds, run identity and policy |
-| K16 | Feed planner | `POST /api/2026-11-02/collections/complete` | Requires terminal feed/article work, saves discovery and harvested rejections, and returns the complete global batch |
-| K17 | Feed planner | `POST /api/2026-11-02/collections/cancel` | Cancels owned work, blocks partial-input selection, and returns rejection receipts and a partial-health batch reference |
-| K18 | Safe persist | `GET /api/2026-11-02/health` | Confirms the separately supervised delivery child, not planner enablement or feed health |
-| K19 | Safe persist | `POST /api/2026-11-02/safe-persist-data` | Reuses verified current metadata delivery through `safe_persist_data`; accepts only run number, attempt and exact completed paths |
-| K20 | Feed planner | `POST /api/2026-11-02/collections/finalize` | Drains owned work and raw diagnostics, then returns final status, failure cause and actual timing snapshot |
-| K21 | Feed planner | `POST /api/2026-11-02/collections/release` | Releases a finalized run/attempt after health summary; makes its in-memory batch eligible for bounded eviction |
-| K22 | Feed planner | `POST /api/2026-11-02/collections/exists` | Reports collection ownership after an ambiguous startup response without starting work |
-
-The health responses belong to separate listeners; planner and safe persist use
-the same versioned path at different workflow steps. The standalone RAM
-HTTP proof uses K11; it is not another RAM API. The ledger writer is a library
-and CLI, not an additional HTTP service. The safe-persist endpoint reuses the
-existing delivery package and adapter. No `GET /feeds` or read-only
-`GET /feed-health-state` route currently exists.
-Planner and delivery routes use the shared `PLANNER_API_PREFIX` for
-`2026-11-02`; earlier dated routes have no alias.
-
-K3 uses `feed_id`, not an old `source_id` alias. Article work can reference a
-server-owned `batch_id` and `offer_id`; an explicit operator URL remains a
-separate permitted control. K5 waits until every offer is terminal. K8 checks
-the default-off service flag before reading a batch or body-free live run state.
-Fetch, parse and plan have no request journal or replay/reopening support.
-`Idempotency-Key` is refused before work. The optional
-[raw-document failure artifact](../architecture/sources/feed-operator-api.md#failure-only-raw-document-artifact)
-is not a ledger and never enters selected metadata or Git delivery.
+Compaction preserves row identity and recorded values. It does not recalculate
+scores, add saved lookback values, change evaluation clocks or turn missing
+evidence into complete data.
 
 ## L. Lookback summaries
 
-The shared TypeScript health operation reads native planner rows and supplies
-K8 and selection. It is not K1's listener health response.
+These current settings govern lifecycle, feed-read reliability and request
+spend.
 
 ### Table L - Independent windows
 
 | ID | Component | Current default and unit | Retained meaning |
 | --- | --- | --- | --- |
-| L1 | Lifecycle/rest | `feedback.lifecycle_window_days = 31` represented UTC days | Use the newest named represented days, not 31 fabricated consecutive dates; preserve endpoint and native rest ordering |
-| L2 | Feed-read reliability | `collect.reliability_window_days = 30` represented days; `collect.reliability_floor = 0.5` | Productive / evidence-bearing feed reads, with the configured floor; keep the existing feed metric and expose incomplete evidence |
-| L3 | Request-spend report | `feedback.request_report_closed_days = 7` closed UTC calendar days | Sum observed feed/article target request spend, not a waste score or ranking penalty |
+| L1 | Lifecycle/rest | `feedback.lifecycle_window_days = 31` represented UTC days | Select named represented days for lifecycle evidence |
+| L2 | Feed-read reliability | `collect.reliability_window_days = 30` represented days; `collect.reliability_floor = 0.5` | Measure productive feed reads and apply the configured floor |
+| L3 | Request-spend report | `feedback.request_report_closed_days = 7` closed UTC calendar days | Sum observed feed and article requests; not a waste score or ranking penalty |
 
-**Confirmed decision:** Retain the seven-day component as a feed request-spend
-report only. Remove the qualified causal request-waste score. Its
-measured-opportunity qualification and normalized CPU/memory/request weights
-are not reused for this report. This does not silently enable a feed-reliability
-fallback when request data is unavailable.
-
-All three windows use UTC. The 31-day lifecycle and seven-day request windows
-are not interchangeable reliability windows. The 30-day feed-read window
-already exists in current configuration. The cutover keeps those meanings
-rather than changing 30 to 31 or using the seven-day request window for
-feed-read scoring.
-
-Represented membership follows native coverage. A daily entry contributes its
-day only when it has rows. A nonempty monthly or yearly entry contributes
-every calendar day in that declared cover, including a covered day with no
-feed row. This is named evidence, not padding outside the inventory.
-Covered membership never invents a feed check or request; denominators and
-counters still come only from actual rows. Known-empty daily entries are not
-lifecycle or reliability members. Missing, refused or lost evidence stays
-explicitly incomplete.
-
-The shared operation:
-
-1. Capture the trusted selection/feedback clock once in D22. Ordinary age
-   evaluation may retain the earlier parsed-batch clock in D19.
-2. Resolve only named raw/compact inputs for the configured window inventory.
-   The same bounded read can serve L1 and L2. No repository/history scan or
-   copied snapshot of every input is introduced.
-3. Validate and settle run/feed/endpoint records using their declared identities.
-   Raw/compact overlap is one representation of the same fact; distinct actual
-   work remains visible. Missing/corrupt input is a gap, not a zero.
-4. Reuse the saved feed-read calculation for the requested covered dates.
-   Without that exact window, prefer the latest covered window ending no later
-   than the request and the nearest start when end dates match. Existing
-   partial-evidence handling remains when no such window is known.
-   Adjust only known entering/leaving reads; recover from actual outcome/items
-   evidence only when a calculation is missing or unusable. Exclude rest
-   skips, retain counts, bounds and completeness, and never add saved fractions.
-5. Calculate the L3 report over the seven closed UTC days ending yesterday,
-   relative to D22. Sum C28-C29 and return report bounds and completeness.
-   Unknown request coverage is exposed; do not infer waste, blame or zero cost.
-6. Record the run's own health counters in C. Do not copy cumulative seven- or
-   31-day request totals into each new run's counter fields. K8 returns the
-   body-free summary; it does not create another summary ledger or JSON authority.
-
-`/plan` calls the shared TypeScript reader before selection, then the shared
-recording/update operation after selection while partitioning can proceed.
-These are real HTTP requests to stage APIs on the same trusted local listener,
-not direct calls into stage execution modules. They do not imply process isolation
-or an external message broker. Standalone
-`/select-articles` does not acquire an implicit update side effect; K8 remains
-an explicit operator operation.
-
-One live input set retains its validated native records. Pre-fetch health
-governs rest before requests start. Selection recalculates health at D22 from
-that baseline plus completed work, so the older parsed age clock does not freeze
-feedback or supported window adjustments. D11-D13 include both measured
-calculations. There is no per-candidate history read or persistent result cache.
+The windows use UTC and serve different calculations. Unknown or missing
+evidence remains incomplete; saved reliability values are not added as daily
+counters.
 
 ## M. rejected-articles
 
-Explicit selection persistence writes one row for each parsed candidate not
-selected, including runs with zero selected articles. Run finalization also
-retains completed terminal article-fetch and extraction failures. Standalone
-fetch and parse operations save those failures when their stage completes.
-Raw downloaded bodies are not required to read these retained facts.
-This ledger has no title, body, policy or score
-tree and no explorer consent.
-Without explorer consent, its files are not staged in the site and it has no
-published-payload ceiling in `config/idhazh.json`.
+This ledger records parsed candidates that were not selected and completed
+article fetch or extraction failures. It does not store titles, article text,
+policy trees or scores. Completed failures remain available when a later
+stage fails.
 
 ### Table M - Rejected article fields
 
-| Id | Field | Meaning |
+| ID | Field | Meaning |
 | --- | --- | --- |
 | M1 | `schema_version` | File metadata declaring the current row format |
 | M2 | `run_id`, `attempt`, `date` | Execution identity and its UTC accounting day |
 | M3 | `candidate_id` | Original offered or parsed candidate identity; null only for a harvest failure without one |
 | M4 | `url_key`, `feed_id` | Canonical URL hash and supplying feed |
-| M5 | `stage`, `reason_code` | Terminal harvest failure or final screening/curation refusal; retained rows accept bounded historical reason strings |
+| M5 | `stage`, `reason_code` | Terminal harvest failure or final screening/curation refusal |
 | M6 | `freshness_cutoff_at` | Applied UTC age cutoff, or null when no cutoff was applied |
 | M7 | `http_status` | Actual article target response status, or null if not observed |
 | M8 | `fetch_failure` | Typed terminal download failure, or null when no fetch failure was observed |
@@ -667,390 +308,36 @@ published-payload ceiling in `config/idhazh.json`.
 | M13 | `pacing_time_ms` | Measured total queue wait for the fetch, or null when unmeasured |
 | M14 | `pacing_settings` | Effective domain delay, publisher delay, jitter and enable setting |
 
-Field IDs M10-M12 are retired. Current rows have no permission fields or
-placeholders.
+Rows are identified by run, attempt and candidate. Retries produce one
+terminal row per candidate and run; a recovered fetch does not leave a stale
+failure row. Grouped health counters remain the source for health totals, so
+rejection rows are not counted again.
+See [harvesting](../architecture/sources/feed-harvesting.md#work-facts-and-failures)
+for when completed failure rows are written.
 
-Current curation emits only `REJECTED_DUPLICATE_CANONICAL_CARRIER` for an
-unchosen carrier of a selected URL and `REJECTED_GLOBAL_CAPACITY_REACHED` for
-another eligible but unchosen candidate. Duplicate loss takes precedence.
-`REJECTED_SCREENING_AGE_CEILING` applies only to known age above the effective
-global ceiling, in harvest preflight or screening.
-`REJECTED_SCREENING_MIN_WORDS` remains a raw technical-word failure, never a
-retained-word threshold. Unknown age and measured zero retained words have
-no refusal code.
-
-The other active safety and content reasons remain `SOURCE_INACTIVE`,
-`FETCH_FAILED`, `FETCH_FAILED_HTTP`, `FETCH_TIMEOUT`, `EXTRACT_FAILED`,
-`EXTRACT_EMPTY`, `ALREADY_PUBLISHED`, `SETTLED_FAILURE`, `BLOCKED_URL_MARKER`,
-`PAYWALL_OR_BLOCKED`, `FEED_PARSE_FAILED`, `FEED_EMPTY`,
-`MISSING_REQUIRED_FIELDS`, `CATEGORY_EXCLUDED`, `MEDIA_CONTENT`,
-`PRESS_RELEASE` and `LINK_HEAVY`, with their declared stages and attribution.
-Age, content, publication and curation losses do not enter technical pass
-history. Quota, age-ladder and cap reasons are not active producer controls.
-
-Row identity is run, attempt and candidate. Known-over-age refusals use the
-effective global threshold and UTC cutoff. Selected rows carry that policy
-cutoff even when timing is unknown. Harvest rows require an actual offered URL identity, not a
-replacement for a malformed or absent address. Retries produce one terminal
-row per candidate and run, not one row per attempt; a recovered fetch produces
-no stale failure row. Run finalization retains completed failures if selection,
-partitioning or selected-output persistence later fails; see the
-[write timing and process-loss limit](../architecture/sources/feed-harvesting.md#work-facts-and-failures).
-Feed-health counters
-remain grouped and never count these detail rows again.
-The workflow report verifies the current run's named rejection files and uses
-these fields in Needs attention. Terminal execution/candidate identities are
-counted once, and their detail replaces covered health aggregates rather than
-adding a second article count. Target status and transport failure stay distinct.
-Earlier pause explanations use validated staged health checks, not rejection
-rows or parsed job logs; see the
-[report evidence rules](../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures).
-Reporting changes no API shape, ledger columns, schemas or stored bytes.
-Repeated writes of an identical raw rejection batch use the same physical
-file identity and verify that existing file before reusing it. Other planner
-ledgers keep their existing file identities.
-
-The reader requires the exact current row version and physical Arrow columns.
-Older row versions and shapes are refused; they are not migrated or rewritten.
-Compaction reads only files accepted by the current contract and writes the
-current format. Known current reasons keep their stage checks; unknown or
-retired reason strings remain readable evidence when they follow the bounded
-uppercase reason-code pattern.
+The [current TypeScript contract](../architecture/sources/planner-feed-history.md)
+defines row validation and historical read behavior.
 
 ## TypeScript contract ownership
 
-The Zod schemas under `packages/common-contracts/src/schemas/` are the sole
-contract authority for planner configuration, events, requests, private
-receipts, stage payloads and the five planner ledgers. The TypeScript writer
-validates and writes planner Parquet and artifacts. Python has no planner row,
-stage or configuration model and no cross-language comparison copy. Native
-Python ledger readers refuse planner rows; the published-file check delegates
-their validation to TypeScript.
-
-This delegation starts the native Bun CLI by its absolute local path while
-using the built site as its working directory. Requests name files relative
-to that site. The publication runtime action installs locked packages and
-proves startup before expensive work; it does not substitute an empty request
-for the actual published-file check. Local preparation is in
-[Run the gates](../how-to/run-the-gates.md#independent-typescript-packages-and-services).
-
-The Python gardener remains the scheduler for every ledger family. Its shared
-compact-index records are maintenance marks, not planner row contracts. For
-planner data, the gardener hands one named bounded period to the TypeScript
-adapter, which validates exact local raw and compact Parquet members and returns
-verified bytes and exact source paths. Initial checkout supplies those files.
-The transient request and result use `2026-11-01`; neither accepts `revision`
-or `revision-changed`. Source sizes/digests, target guards, native file validation
-and exact deletion sets remain. No planner row or file-envelope format changes.
-Python applies that result through its existing pass and final shard publisher,
-which checks replacements and deletions against the supplied initial code identity.
-
-Planner contracts still carry current schema stamps and changelogs. The
-version checks have no Python copy. Rejected-article compatibility and
-[article cleanup compatibility](#article-cleanup-compatibility) belong to
-the native TypeScript reader. The TypeScript tests and the real
-gardener-adapter integration test own this boundary. Health consumers use the separate
-[field-read contract](#field-based-health-history) rather than full-row compliance.
+Schemas under `packages/common-contracts/src/schemas/` define these rows.
+The gardener delegates planner validation and compaction to the TypeScript
+writer.
 
 ## Raw-day membership
 
-The five planner ledgers have no active raw-day `index.json` reader or writer.
-Their data remains in immutable UUID Parquet siblings under
-`state/raw/feed-ingest-plan/<ledger>/YYYY/MM/DD/`. Historical derived JSON lists
-are left inert; this change does not scan or rewrite the corpus. TypeScript
-planner history also does not read compact-index JSON: it checks exact
-yearly, monthly and daily Parquet paths in precedence order. The gardener's
-shared compact indexes remain its scheduling marks and are not planner row
-contracts. Other ledger families keep their own history readers.
+See the [bounded day membership rules](../architecture/sources/planner-feed-history.md#named-evidence-and-independent-windows).
 
-Configuration names a finite UTC lookback or explicit bounded UTC days.
-The initial checkout or explicitly supplied input directory is the file
-authority. The shared writer's filesystem helper lists only one exact registered
-UTC-day directory at a time. A successful absent-directory check proves no local
-raw members; an omitted day or a failed check does not. A directory may contain
-zero or many regular UUID Parquet files. An old regular `index.json` is ignored,
-not parsed. Other filenames, nonregular members and wrong roots produce explicit
-gaps, while valid siblings remain usable. There is no state-root walk,
-replacement saved catalog or run discovery.
+## Field-based health history
 
-Planner day input carries `day` and optional complete `raw_files`. A supplied
-set must equal the local directory membership; omitted or additional members
-make the read incomplete, and repeated members refuse. `raw_revision`,
-`raw_index` and planner compact `indexes` are not accepted. Files retain their
-native footer, current schema, canonical digest, filename, ledger, date and
-regular-path checks. No reader queries a commit or rejects a file solely because
-it is untracked.
+See the [health history rules](../architecture/sources/planner-feed-history.md#missing-and-refused-evidence).
 
-An explicitly named missing member remains missing, not empty. Health period
-selection uses the existing compact indexes and publication inventory to choose
-represented dates. When that metadata requires a missing compact file, the
-same live capture retains its path and missing-file gap for affected days;
-valid raw siblings remain usable without becoming complete coverage.
+## TypeScript current-format refusal
 
-All required health, discovery, publication-URL exclusion and settled-failure
-records are captured before the first fetch and reused across stages.
-Current work stays separate. Later disk edits, additions, removals and remote
-commits do not change that execution. A new execution loads its own input.
-Completed current-output files are read directly from the writer's exact
-results with native validation; that is not an archive membership proof.
-No new persisted manifest or private input-copy directory is introduced.
-
-Yearly, monthly and daily compact precedence is unchanged. Planner raw
-siblings still join the selected compact representation so newly appended
-work is not hidden by an earlier packed period. Source windows and health
-represented-day membership keep their existing meanings. Publication accepts
-only exact completed immutable paths and independently registered permissions;
-reading a day grants no permission to publish it. The publisher builds a
-private candidate on fresh main, refuses byte collisions and retries normal
-pushes without rerunning producers or changing the caller's checkout.
-
-## Shared rules and removals
-
-- No article text in committed ledgers, committed repository files or normal-run logs.
-- Counts and durations use integers. Genuine two-state facts use booleans.
-  Ratios and weights remain numeric. Unknown is not zero or false.
-- Schema versions are date stamps stored once per file.
-- Ledger identity is known from its registered output, not a repeated `ledger`
-  column. `date`, `run_id` and `attempt` are retained where required by the
-  explicit main tables, not injected as a generic identity tree.
-- No Git SHA, `unit_id`, revision chains, duplicate head files or hidden generic
-  writer identity columns in these formats.
-- Replace the old assessment, rejection, diversity, editorial-selection,
-  dispatch, operation-history and operational-score formats with the five
-  declared ledgers. Keep selected metadata in B, not separate duplicate
-  `editorial-selections` and `dispatches` ledgers.
-- Remove full event exports, archived intermediate batches, copied policy trees
-  and planner classifications.
-- Keep technical admission, safety, freshness, selection and partitioning.
-  Article quality is not judged here.
-- TypeScript URL/name/literal-address, redirect and sanitization checks remain.
-  Its transport does not perform project DNS lookup or socket pinning.
-  Robots retrieval, parsing, enforcement, cache and permission fields are absent;
-  Python's separate fetching policy is unchanged.
-- Actual existing published/item outcomes remain external exclusion inputs.
-  They are not written or inferred by planning.
-- Ordinary planning does not require machine fingerprints or CPU/RAM/cache/copy
-  proofs. Their independent tools in K remain available.
-- Existing rest fields do not claim completion of the
-  [deferred controls](../architecture/contracts/feed-ingest-feedback.md#deferred-controls).
-  No unused future-policy columns
-  are preallocated, and those policy tasks are not silently cancelled.
-- The separate Python news pipeline remains unchanged. Planner persistence,
-  row readers and compaction use TypeScript contracts; the Python gardener
-  retains scheduling and shared maintenance indexes.
-
-## Design rationale
-
-### Keep the field review together
-
-The field lists, old-to-new mappings, API inventory and window definitions
-answer one question: which planner data is retained and where. They remain
-together so each retained field can be reviewed against its old source and
-consumer without losing the stable review IDs. Current behavior belongs in
-the linked subsystem pages, not a second execution narrative.
-
-### Approved clean-break delivery
-
-**User approval, 2026-10-25 UTC:** Replace the old planner formats in their
-actual code paths. No old-to-new migrators, compatibility readers, aliases or
-dual writers are required or permitted for this replacement. The old-to-new
-tables above explain field disposition; they are not migration instructions.
-
-### TypeScript current-format refusal
-
-Full-row readers, writers, compaction, publication and current-run delivery
-require current native formats, as do private receipts and events. Other
-row formats refuse instead of being converted. Historical health calculations
-use the separate required-field rule below; a different row-version date does
-not make otherwise valid facts unusable.
-
-The TypeScript current-format rule is the scoped exception to the read-side
-migration rule in `CLAUDE.md` section 11. Python's historical planner row
-readers and contract copies are retired. The gardener registry and scheduler
-remain; the published-file validator and compact writer use the current
-TypeScript contracts.
-
-The native planner reader has no migration table or historical physical schema.
-Strict full-row validation accepts only the current contract stamp. The health
-field reader validates required columns independently of the stored row stamp.
-
-### Field-based health history
-
-Health history reads accept any valid stored row-version date within the
-supported file envelope. Each calculation validates only the fields it needs;
-an extra unrelated column or different row-version date does not discard usable
-evidence. Missing, invalid or conflicting required facts produce explicit gaps
-for their own use, not a failed planning request. Historical raw files, compact
-files and indexes remain unchanged: no migration, rewrite, deletion or null-fill
-is part of reading them. Writers, compaction, publication and current-run
-delivery still require the complete current row schema and stamp.
-
-The shared writer package exports `readStoredPlannerParquet` for stored-file
-validation and retains `readPlannerParquet` for strict full-row validation.
-Both verify the registered ledger, supported file envelope, raw filename,
-and whole-file canonical digest. Stored-file validation computes that digest
-from the actual Arrow columns, including nested and unrelated columns, not
-from the consumer's projection. A changed unrelated cell still fails integrity.
-An unsupported stored physical type fails explicitly rather than skipping
-part of the digest. The file-envelope format is unchanged. Strict reads retain
-their typed unsupported-format refusal for noncurrent row stamps.
-
-`readFeedHealthFieldsDay` in the planner service reads one named UTC day through
-the same named filesystem membership and stored-file integrity checks.
-It returns independent `uses`: `request_totals`, `feed_rest`,
-`feed_reliability` and `article_admission`. Their schemas are declared once in
-`packages/common-contracts/src/schemas/feed-health-fields.schema.ts`:
-
-- Every use requires `date`, `run_id`, `attempt`, `feed_id` and `endpoint_key`.
-- Request totals require only `feed_requests` and `article_requests`.
-- Lifecycle reads expose the saved C9-C10 and C43-C49 calculation plus actual
-  C7, C13, C39-C42 check facts for independent recovery.
-- Reliability reads expose its saved C14-C21 calculation and the actual read
-  identity, time, outcome and items needed only when that calculation is missing.
-  Actual check times must agree with the UTC work day.
-- Article admission requires `article_candidates`, `counts_complete` and the
-  rejection reason, count, subject and attribution fields.
-
-Each use returns validated `rows`, `partial_rows` containing only individually
-valid fields from rejected rows, and `gaps` naming the use, field, UTC day,
-missing/invalid reason and row identity when known. A row with invalid identity
-is never exposed as partial attributable evidence. Null remains null, and
-missing or invalid counters are omitted from partial rows, never replaced with
-zero. This lets a later request report account for each counter independently.
-File coverage (`complete`, `represented`, file `gaps`) is separate from field
-coverage: `complete` alone never proves every required counter is known.
-Earlier extra columns still participate in the whole-file digest, but removed
-robots columns do not affect request completeness. A retired enum value in a
-required outcome or check field is an invalid-field gap, not a translated
-result; independently valid saved calculations remain available in partial rows.
-
-Identical copies of a fact count once. Conflicting copies refuse the affected
-fact before projection and produce identity-bearing gaps. Unrelated valid
-sibling evidence remains usable. The identity
-includes the endpoint and run attempt, so neither changed endpoints nor real
-repeated work collapse into another fact. Missing request columns do not remove
-valid feed-check evidence. Saved lifecycle snapshots from independent runs are
-selected by actual check order, never added together. Reliability snapshots
-answer different questions when their covered dates differ. Select the requested
-window before comparing check clocks; a carried zero-read result remains usable
-even when its availability clock did not advance. True same-window clock
-ambiguity remains incomplete. Production planning, standalone document work,
-selection and health summaries use these field projections. Strict full-row
-validation remains on the write and maintenance paths.
-
-`readFeedHistory` returns rest, feed-read reliability and article-admission
-inputs from the named represented-day inventory. The live input load captures
-those records before combined or standalone fetch work. `preparePlanningHealth`
-derives current calculations from that baseline and actual work. It does not
-calculate historical request totals. Current-run request recording is unchanged.
-
-`readRequestHistory` reads only the configured closed calendar days and returns
-validated request rows, partial request rows, field gaps and file coverage.
-`prepareRequestReport` is its request-only reporting entry point.
-The live input load also retains closed-day request fields, including the
-entering boundary day. Selection and explicit health summaries calculate their
-report from those records without reopening history. Missing report-only files
-remain explicit gaps and do not prevent collection.
-
-The request report adds each usable feed and article counter
-independently, including individually valid fields from partial rows.
-Absent, invalid and null counters remain unknown; a known zero is retained.
-For each feed and counter, `coverage` declares `status` (`complete`, `partial`
-or `none`), `known_records`, `unknown_records`, `recorded_days` and
-`complete_days`. Recorded days have at least one usable counter. Complete days
-have complete file evidence and no unknown matching counter or unattributable
-record. Known-empty complete windows produce zero; incomplete windows without
-any usable counter produce null, not an estimated zero.
-
-`missing_days` names missing or incomplete day files. `unattributed_days`
-names days with invalid row identities that cannot be assigned to a feed.
-`input_complete` preserves the staged-input gap flag; when false, no day can
-be claimed complete, but known counters remain usable. Unknown-record counts
-cover attributable rows only; missing files and unattributable rows are
-reported separately, never presented as a count of lost records. Each
-counter is complete only when all configured closed days are complete.
-Feed and report completeness require every counter to be complete.
-
-The workflow's Request counts and coverage fold shows This run separately
-from this historical window. It shares identical coverage rows across feeds
-and categories and lists exceptions without repeating per-feed paragraphs.
-Partial counters have no cell asterisk; one note states that only recorded
-requests are counted. See the [workflow guide](../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures)
-for the report layout and technical-admission subtotal rules.
-
-The request report retains its unchanged current `2026-10-29` shape; selected
-and partitioned payloads use `2026-11-02`. Stage readers refuse earlier formats under the
-TypeScript planner compatibility rule; no historical ledger is rewritten.
-The [operator report guide](../how-to/run-feed-ingest-plan-test.md) defines
-the partial-total marker and report-only ordering.
-
-Before projection, stored and finalized in-memory facts from the current run
-and attempt are excluded. Supplied current work then replaces that execution.
-Endpoint matching and productive logical-read settlement remain unchanged.
-A required-field gap affects only its use and matching endpoint, or all feeds
-when identity is invalid. Supported individual rest and retirement decisions
-survive unrelated gaps; unknown availability alone permits an active feed.
-Article admission
-is unknown if any required evidence is missing. Incomplete feed-read ratios
-remain labelled incomplete and are not substituted for the article-admission
-rate used by selection.
-
-### Article cleanup compatibility
-
-Article identity and initial request cleanup remove every article query string
-and fragment. Only the current cleaned key is used for discovery, publication
-and settled failures. Feed capture identity and separate Python discovery are
-unchanged.
-
-Older planner rows, artifacts, batches and events refuse. Current constructor
-defaults are not stored-file migrations. Fetched documents use their current
-native declaration in live memory; no stored request receipt is read or replayed.
-
-Targeted deletion of the same eight obsolete ledger prefixes named in Table F
-under both `state/raw/feed-ingest-plan/` and
-`state/compact/feed-ingest-plan/` is permitted, including their compact files
-and indexes. It does not authorize deletion of either broader root, other
-families, the global Python `feed-health` data or the historical corpus, a
-Python news-pipeline rewrite, or a Git history rewrite.
-
-Registration alone cannot make the native file reader and compactor accept
-the declared minimal metadata. Include new-family native file-format,
-readback, settlement and daily/monthly/yearly packing support, plus the
-TypeScript Parquet reader. Do not restore `unit_id` or hidden generic identity
-fields to fit the existing infrastructure. Keep every other family's current
-protocol unchanged, and remove dead old-family native models and exports with
-their replacement. These are shared-ledger storage changes, not changes to
-Python news fetching, selection, summarization or publication.
-
-The runtime cutover uses typed events and asynchronous, bounded concurrent
-work. Independent requests and work may overlap; each fetch must precede its
-parse, selection waits for its complete eligible input, and partitioning waits
-for selection. Health recording and reporting may overlap partitioning after
-selection. Do not serialize all runs through one global queue. Existing fetch
-safety checks and the artifact-only article-text boundary remain unchanged.
-
-### Share each bounded health capture
-
-A run captures available input once and reuses its saved or recovered
-calculations. Selection and finish apply known actual work to that captured
-calculation; they do not reconstruct unchanged history. Rest deadlines still
-use the current UTC clock. A different run can capture later published input
-without changing this run's decisions.
-
-Health C is the existing saved-calculation store. Known partial values and
-supported skipped-feed decisions are written there at finish. Request reporting
-remains a separate bounded calendar-day calculation. No availability sidecar,
-extra ledger, reservation, migration reader or intermediate data commit is used.
-
-Missing earlier history does not erase actual observed failures. Partial
-snapshots retain observed streak and recovery counts as supported lower bounds.
-Uncertain transport counts for logical rest, never for confirmed retirement.
-A known window with zero measured reads retains zero counts and null fractions.
+See the [current-format rules](../architecture/sources/planner-feed-history.md#raw-and-compact-copies).
 
 ## See also
 
-- [I Feed scope](../architecture/sources/i-feed.md#continuing-this-work) - deferred policy, worker, Python and console work.
 - [Selection rules](../architecture/sources/feed-curation.md) - current selection behavior.
 - [Feed history and reliability](../architecture/sources/planner-feed-history.md) - current native readers and represented-day rules.
 - [Operator API](../architecture/sources/feed-operator-api.md) - current planner routes and contracts.
-- [Host probe API](host-probe-api.md) - independent optional host operations.
