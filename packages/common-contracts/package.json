@@ -3,14 +3,26 @@
   "version": "2026.10.20",
   "private": true,
   "type": "module",
-  "description": "Zod contracts for planner payloads, shared native ledger schemas and observation-order rules. Browser callers import only the framework-free observation-order source module.",
-  "exports": "./src/index.ts",
+  "description": "Native payload contracts, event and operation metadata, and observation-order rules. Browser callers import only the framework-free observation-order module.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schemas/cloud-event": "./src/schemas/cloud-event.schema.ts",
+    "./schemas/operation-metadata": "./src/schemas/operation-metadata.schema.ts",
+    "./create-cloud-event": "./src/create-cloud-event.ts",
+    "./read-cloud-event": "./src/read-cloud-event.ts",
+    "./create-operation-context": "./src/create-operation-context.ts",
+    "./propagate-trace-context": "./src/propagate-trace-context.ts",
+    "./load-event-sources": "./src/load-event-sources.ts",
+    "./observation-order": "./src/observation-order.ts"
+  },
   "scripts": {
     "check": "tsc --noEmit",
     "test": "bun test",
     "schema-binding": "bun run test/schema-binding.ts"
   },
   "dependencies": {
+    "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/core": "2.12.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {
