@@ -1,11 +1,10 @@
 # Feed planning operator APIs
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-03
 
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
-[Table K](../../reference/feed-planner-ledgers.md#k-api-inventory)
-is the complete versioned route inventory.
+The sections below define each operation and its current request and response.
 
 ## Independent fetch and parse endpoints
 
