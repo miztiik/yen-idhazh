@@ -85,11 +85,11 @@ test("one Git delivery precedes the report and prepares only the selected handof
     expect(await readFile(join(f.repository, ".git", "index"))).toEqual(indexBefore);
     const artifacts = join(f.directory, "artifacts");
     expect((await readdir(artifacts)).sort()).toEqual([
-      "700-3-delivery-result.json", "700-3-selected-articles.json", "feed-ingest-report-2026-10-21-700.md",
+      "700-3-delivery-result.json", "700-3-response.json", "700-3-selected-articles.json", "feed-ingest-report-2026-10-21-700.md",
     ]);
     const inventory: FeedIngestEvent[] = [];
     expect(await publishUploadInventory({ directory: artifacts, runNumber: "700",
-      write: event => { inventory.push(event); } })).toBe(3);
+      write: event => { inventory.push(event); } })).toBe(4);
     expect(inventory.flatMap(event => typeof event.details.file === "string" ? [event.details.file] : []).sort())
       .toEqual((await readdir(artifacts)).sort());
     const selected = await readFile(join(f.repository, f.summary.selected_articles_artifact!));

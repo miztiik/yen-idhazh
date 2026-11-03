@@ -49,13 +49,16 @@ export type PlannerFailure = z.infer<typeof PlannerFailureSchema>;
 export type PlannerFailureDetail = z.infer<typeof PlannerFailureDetailSchema>;
 export type PlannerFailureOperation = z.infer<typeof PlannerFailureOperationSchema>;
 export type PlannerFailureExecution = z.infer<typeof PlannerFailureExecutionSchema>;
+export const PlannerFailureReadSchema = PlannerFailureSchema.safeExtend({
+  schema_version: PlannerFailureSchema.shape.schema_version.unwrap(),
+});
 
 export const PlannerErrorResponseSchema = z.strictObject({
   code: z.string().min(1).max(64).regex(/^[A-Z][A-Z0-9_]*$/),
   issues: z.array(z.strictObject({
     field: z.string().max(256).nullable(), message: z.string().min(1).max(256),
   })).min(1).max(MAX_PLANNER_ERROR_ISSUES),
-  failure: PlannerFailureSchema.nullable().default(null),
+  failure: PlannerFailureReadSchema.nullable().default(null),
 }).meta({
   version: PLANNER_FAILURE_VERSION,
   changelog: [

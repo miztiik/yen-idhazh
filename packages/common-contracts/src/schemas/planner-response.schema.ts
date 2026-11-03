@@ -3,7 +3,7 @@ import { z } from "zod";
 import { CountSchema, NonEmptySchema, RelPathSchema, Sha256Schema } from "./primitives";
 import { RequestIdSchema } from "./planner-operation.schema";
 import { PlanRunRowSchema } from "./plan-run.schema";
-import { PlannerErrorResponseSchema, PlannerFailureSchema } from "./planner-failure.schema";
+import { PlannerErrorResponseSchema, PlannerFailureReadSchema } from "./planner-failure.schema";
 
 export const PLANNER_RESPONSE_VERSION = "2026-11-02" as const;
 export const PlannerLedgerWriteResultSchema = z.discriminatedUnion("status", [
@@ -28,7 +28,7 @@ export const PlannerRunResponseSchema = PlanRunRowSchema.safeExtend({
   assignments: z.array(z.strictObject({
     url_key: Sha256Schema, editorial_rank: CountSchema.positive(), worker_assignment: CountSchema.nullable(),
   })),
-  failure: PlannerFailureSchema.nullable().default(null),
+  failure: PlannerFailureReadSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
   if (value.planning_complete !== (value.status === "completed") || value.selected_url_keys.length !== value.selected_count
     || value.assignments.length !== value.selected_count || new Set(value.selected_url_keys).size !== value.selected_count) {

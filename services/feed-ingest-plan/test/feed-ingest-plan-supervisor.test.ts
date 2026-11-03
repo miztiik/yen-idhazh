@@ -33,7 +33,7 @@ test("an occupied port fails without stopping or planning against the unrelated 
   try {
     await expect(invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
       serverEntry: fixture.serverEntry,
-    })).rejects.toThrow("could not bind");
+    })).rejects.toMatchObject({ code: "PLANNER_BIND_FAILED" });
     expect(requests).toBe(0);
     expect(await Bun.file(join(fixture.evidence, "response.json")).exists()).toBe(false);
     expect((await fetch(`http://127.0.0.1:${occupied.port}`)).status).toBe(200);
@@ -72,7 +72,7 @@ test("identity mismatch refuses HTTP work and closes the owned child", async () 
     };
     await expect(invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
       serverEntry: fixture.serverEntry,
-    })).rejects.toThrow("Readiness does not match");
+    })).rejects.toMatchObject({ code: "PLANNER_READY_IDENTITY" });
     expect(await Bun.file(join(fixture.evidence, "response.json")).exists()).toBe(false);
     await assertReleased(fixture.startup.settings.listener.port);
   } finally { await fixture.close(); }
@@ -104,7 +104,7 @@ test("cancellation during real recorded feed work reaps the child and releases i
     expect(identity.nonce).toBe(fixture.startup.nonce);
     await awaitRecordedRequest(fixture.directory, deadline);
     cancellation.abort(new Error("Recorded workflow cancellation"));
-    await expect(pending).rejects.toThrow("Recorded workflow cancellation");
+    await expect(pending).rejects.toMatchObject({ failure: { safe_cause: "cancelled" } });
     expect(() => process.kill(identity!.pid, 0)).toThrow();
     await assertReleased(fixture.inputs.settings.listener.port);
   } finally { cancellation.abort(); await pending?.catch(() => {}); await fixture.close(); }
@@ -154,7 +154,7 @@ test("a short real child failure preserves existing native diagnostics and its o
     fixture.startup.settings.enabled = false;
     await expect(invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
       serverEntry: fixture.serverEntry,
-    })).rejects.toThrow("HTTP readiness does not match the owned child");
+    })).rejects.toMatchObject({ code: "PLANNER_READY_IDENTITY" });
     const collected = await collectWorkflowFiles({
       root: fixture.directory, directory: fixture.evidence,
       identity: { run_id: "2026-10-21-700", attempt: 3, git_sha: fixture.startup.runtime.git_sha },

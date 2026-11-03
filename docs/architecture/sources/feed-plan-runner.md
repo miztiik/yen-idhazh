@@ -241,7 +241,7 @@ run row records completed, partial or failed outcome, including an explicit
 empty result. The [ledger reference](../../reference/feed-planner-ledgers.md)
 owns the exact fields and row identities.
 
-Only sparse body-free progress and failure events leave the runtime. Each JSONL
+Progress and failure events are sparse and body-free. Each JSONL
 line has a strict run envelope and a flexible `details` object; callers may
 name required detail keys for an event. The publisher marks missing requested
 keys or unsafe details with `details._compliance.status` set to
@@ -286,7 +286,13 @@ has a separate writer and upload. Run completion drains and closes its writer.
 An append or close failure keeps completed metadata and selected text available
 while marking the run incomplete; it does not replace an earlier failure.
 The supervised child finishes remaining writers during shutdown before
-artifact preparation. With the flag off, no diagnostic file is created.
+artifact preparation. With the raw-document flag off, no raw diagnostic file
+is created.
+
+[Run diagnostics](planner-run-diagnostics.md) retain safe original execution
+failures in the existing response and report. They also define the separate
+private entity file for original titles and full sanitized article text.
+Recognized names never enter these progress events or selection scores.
 
 ## Design rationale
 

@@ -45,7 +45,14 @@ export async function prepareWorkflowArtifacts(input: {
   const gitSha = CommitShaSchema.parse(input.identity?.git_sha ?? input.gitSha);
   const outputs: Record<string, string> = {};
   const failures: unknown[] = [];
-  const runId = input.runId ?? input.identity?.run_id;
+  const responsePath = join(input.directory, "response.json");
+  let savedResponse: ReturnType<typeof PlannerSavedResponseSchema.parse> | undefined;
+  if (await Bun.file(responsePath).exists()) {
+    try { savedResponse = PlannerSavedResponseSchema.parse(await Bun.file(responsePath).json()); }
+    catch (error) { failures.push(error); }
+  }
+  const runId = input.runId ?? input.identity?.run_id ?? (savedResponse !== undefined && "planning_complete" in savedResponse
+    ? savedResponse.run_id : savedResponse?.failure?.execution.run_id ?? undefined);
   if (runId !== undefined) {
     WriterIdentitySchema.shape.run_id.parse(runId);
     if (runId.slice(11) !== run) throw new Error("Diagnostic artifact run differs from the executed workflow");
@@ -103,22 +110,13 @@ export async function prepareWorkflowArtifacts(input: {
   }
   await retain("delivery", join(input.directory, "delivery-result.json"), "delivery-result.json");
   const reportFilename = input.reportFilename === undefined
-    ? workflowReportFilename({ runNumber: run, ...(input.runId === undefined ? {} : { runId: input.runId }) })
+    ? workflowReportFilename({ runNumber: run, ...(runId === undefined ? {} : { runId }) })
     : z.string().regex(/^feed-ingest-report-\d{4}-\d{2}-\d{2}-\d+\.md$/).parse(input.reportFilename);
   if (!reportFilename.endsWith(`-${run}.md`)) throw new Error("Report artifact run differs from the executed workflow");
   await retain("report", join(input.directory, reportFilename), reportFilename, true);
-  const responsePath = join(input.directory, "response.json");
-  let savedResponse: ReturnType<typeof PlannerSavedResponseSchema.parse> | undefined;
-  if (await Bun.file(responsePath).exists()) {
-    try {
-      savedResponse = PlannerSavedResponseSchema.parse(await Bun.file(responsePath).json());
-      await retain("response", responsePath, "response.json");
-    } catch (error) { failures.push(error); }
-  }
-  if (!await Bun.file(responsePath).exists()
-    && !await Bun.file(join(input.directory, "host-fingerprint.json")).exists()
-    || savedResponse !== undefined && !("planning_complete" in savedResponse)
-      && !await Bun.file(join(input.directory, "host-fingerprint.json")).exists()) {
+  if (savedResponse !== undefined) await retain("response", responsePath, "response.json");
+  if (!await Bun.file(join(input.directory, "host-fingerprint.json")).exists()
+    && (savedResponse === undefined || !("planning_complete" in savedResponse))) {
     if (failures.length) throw new AggregateError(failures, "Diagnostic artifact preparation failed");
     return outputs;
   }

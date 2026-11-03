@@ -15,6 +15,7 @@ import { PlanError } from "./plan-error";
 const sourceRoot = fileURLToPath(new URL("../../../../", import.meta.url)).replaceAll("\\", "/").replace(/\/$/, "");
 export type FailureCaptureOptions = {
   operation: PlannerFailureOperation; limits?: FailureCaptureLimits;
+  cancelled?: boolean;
   execution?: PlannerFailureExecution | Pick<PlannerStageContext, "run_id" | "correlation_id" | "writer">;
 };
 const unavailableExecution: PlannerFailureExecution = { run_id: null, attempt: null, correlation_id: null, git_sha: null };
@@ -79,7 +80,7 @@ function failureDetail(error: unknown, options: FailureCaptureOptions, limit: nu
   const code = PlannerFailureDetailSchema.shape.system_code.safeParse(ownValue(error, "code"));
   const system_code = code.success ? code.data : null;
   const message = ownValue(error, "message");
-  const safe_cause: PlannerFailureDetail["safe_cause"] = error_type === "ZodError"
+  const safe_cause: PlannerFailureDetail["safe_cause"] = options.cancelled ? "cancelled" : error_type === "ZodError"
     || (error instanceof PlanError && ["INVALID_INPUT", "INVALID_REQUEST"].includes(error.code)) ? "invalid-input"
     : error_type === "AbortError" || (error instanceof PlanError && error.code.endsWith("_CANCELLED")) ? "cancelled"
     : system_code !== null ? "system-error"
@@ -153,7 +154,7 @@ export function withPlannerFailure(error: unknown, options: FailureCaptureOption
     });
   }
   const code = error instanceof PlanError ? error.code : error instanceof z.ZodError ? "INVALID_INPUT" : "PLAN_FAILED";
-  return new PlanError(code, "Planner operation did not complete", error instanceof PlanError ? error.field : null,
+  return new PlanError(code, `${code}: Planner operation did not complete`, error instanceof PlanError ? error.field : null,
     { cause: error, failure: capturePlannerFailure(error, options) });
 }
 

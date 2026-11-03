@@ -9,6 +9,7 @@ import { isMetadataDeliveryConfirmed, MetadataDeliveryResultSchema } from "./fee
 import { parseRawDocumentDumpControl } from "../src/config/service-settings";
 import { articleEntitiesFilename, rawDocumentContentsFilename } from "../src/selected-artifact-path";
 import { ARTICLE_ENTITY_ARTIFACT_DIRECTORY, RAW_DOCUMENT_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-artifacts";
+import { capturePlannerFailure, runtimeFailureExecution } from "../src/api/plan-failure";
 
 const OutcomeSchema = z.enum(["success", "failure", "cancelled", "skipped"]);
 
@@ -45,6 +46,10 @@ export async function finishRunOutput(input: {
   const commit = input.commitOutcome === undefined ? finalization : OutcomeSchema.parse(input.commitOutcome);
   const report = input.reportOutcome === undefined ? finalization : OutcomeSchema.parse(input.reportOutcome);
   const failures: unknown[] = [];
+  const capture = { operation: "workflow" as const, execution: runtimeFailureExecution({
+    git_sha: gitSha, attempt: input.attempt,
+    ...(input.runId === undefined ? {} : { captured_at: input.runId.slice(0, 10), run_number: input.runNumber }),
+  }) };
   if (collection !== "success" || input.planningComplete !== "true") {
     failures.push(new Error("Article collection did not complete"));
   }
@@ -103,13 +108,14 @@ export async function finishRunOutput(input: {
         ? error.code : describePlanError(error, input.root).code;
       const reason = error instanceof PlanError ? error.message : `Temporary output cleanup failed during ${operation}`;
       failures.push(new Error(reason, { cause: error }));
-      console.error(JSON.stringify({ event: "workflow_cleanup_refused", operation, code, reason }));
+      console.error(JSON.stringify({ event: "workflow_cleanup_refused", operation, code,
+        failure: capturePlannerFailure(error, capture) }));
     }
   }
   console.error(JSON.stringify({
     event: "workflow_output_finished", collection, commit, report, finalization, upload,
     cleanup: cleaned ? "removed" : "retained", status: failures.length ? "failed" : "completed",
-    failures: failures.map(error => error instanceof Error ? error.message : "Unknown completion failure"),
+    failures: failures.map(error => capturePlannerFailure(error, capture)),
   }));
   if (failures.length) throw new AggregateError(failures, "Run output is incomplete; confirmed commits and artifacts are retained");
 }

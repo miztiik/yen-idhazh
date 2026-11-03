@@ -7,6 +7,7 @@ import {
   DiscoveredArticleRowContract, FeedHealthStateRowContract, FeedIngestEventSchema,
   PlanRunRowContract, RejectedArticleRowContract, SelectedArticleRowContract,
   SelectedArticlesArtifactSchema, selectedArticleMetadata,
+  readArticleEntities,
 } from "@idhazh/common-contracts";
 import type { LedgerRowContract } from "@idhazh/ledger-file-writer";
 import { invokePlannerHttp } from "../scripts/feed-ingest-plan-supervisor";
@@ -15,6 +16,7 @@ import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-stat
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { recordedPlannerProcess } from "./planner-process-recordings";
 import { summarizeSelectionMetrics } from "../src/summarize-selection-metrics";
+import { articleEntitiesPath } from "../src/selected-artifact-path";
 
 const recordings = new URL("../../../tests/fixtures/feed-ingest-plan/entry-points/", import.meta.url);
 
@@ -40,6 +42,11 @@ test("one recorded API request writes a valid selected artifact", async () => {
     expect(artifact.attempt).toBe(summary.attempt);
     expect(artifact.articles).toHaveLength(1);
     expect(artifact.articles[0]!.article_text.length).toBeGreaterThan(0);
+    const entities = (await readFile(join(fixture.directory, articleEntitiesPath(
+      fixture.inputs.settings.inputs.artifact_root, { run_id: summary.run_id, writer: { attempt: summary.attempt } },
+    )), "utf8")).trim().split("\n").map(line => readArticleEntities(JSON.parse(line)));
+    expect(entities.length).toBeGreaterThanOrEqual(artifact.articles.length);
+    expect(entities.every(record => record.run_id === summary.run_id && record.attempt === summary.attempt)).toBe(true);
     expect(summary.selection_metrics).toEqual(summarizeSelectionMetrics(artifact.articles, true));
     const runs = await Promise.all(summary.files.plan_runs!.files.map(file =>
       readPlannerParquet(join(fixture.inputs.outputRoot, file.path), "plan-runs", PlanRunRowContract)));

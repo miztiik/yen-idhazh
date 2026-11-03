@@ -57,6 +57,10 @@ test("safe failures reject raw stacks, absolute sources and unbounded causes", (
     causes: [], omitted_causes: 0,
   });
   expect(() => PlannerFailureSchema.parse({ ...failure, stack: "Private raw stack" })).toThrow();
+  const { schema_version: _missing, ...unversioned } = failure;
+  expect(() => PlannerErrorResponseSchema.parse({
+    code: "PLAN_FAILED", issues: [{ field: null, message: "Planner operation did not complete" }], failure: unversioned,
+  })).toThrow();
   expect(() => PlannerFailureSchema.parse({
     ...failure, source: { file: "C:/private/article.ts", line: 1 },
   })).toThrow();

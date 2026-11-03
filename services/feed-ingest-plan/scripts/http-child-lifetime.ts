@@ -52,7 +52,8 @@ export async function superviseHttpChild<T>(input: {
   const controls = input.settings.supervision;
   const cancellation = new AbortController();
   const signal = AbortSignal.any([cancellation.signal, ...(input.signal === undefined ? [] : [input.signal])]);
-  signal.throwIfAborted();
+  if (signal.aborted) throw withPlannerFailure(signal.reason, { ...input.capture,
+    operation: input.capture?.operation ?? "workflow", cancelled: true });
   const child = Bun.spawn([process.execPath, input.serverEntry], {
     cwd: input.root, stdin: "pipe", stdout: "pipe", stderr: "inherit",
   });
@@ -78,7 +79,8 @@ export async function superviseHttpChild<T>(input: {
     completed = true;
     return result;
   } catch (error) {
-    original = withPlannerFailure(error, input.capture ?? { operation: "workflow" });
+    original = withPlannerFailure(error, { ...input.capture, operation: input.capture?.operation ?? "workflow",
+      cancelled: signal.aborted && error === signal.reason });
     throw original;
   } finally {
     const close = async () => {
@@ -183,11 +185,13 @@ export async function runHttpChild(
     });
     await closing;
   } catch (error) {
-    original = withPlannerFailure(error, capture);
+    const captured = withPlannerFailure(error, capture);
+    original = new PlanError(error instanceof PlanError ? error.code : `${kind}_STARTUP_FAILED`,
+      "HTTP child operation did not complete", null, { cause: error, failure: captured.failure });
     console.log(JSON.stringify({
       event: `${kind.toLowerCase()}_startup_failed`,
       code: original.code,
-      message: "HTTP child operation did not complete",
+      message: `${original.code}: HTTP child operation did not complete`,
       failure: original.failure,
     }));
     throw original;

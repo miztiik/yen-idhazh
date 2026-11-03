@@ -21,6 +21,9 @@ import type { recordPlanRun } from "../record-plan-run";
 import { selectedArtifactPath } from "../selected-artifact-path";
 import type { DocumentOperationContext } from "./operation-context";
 import type { FetchedDocumentReference } from "./stage-store";
+import { finishArticleEntities } from "../record-article-entities";
+import { writeJsonLine } from "../logging/structured-logger";
+import { describePlanError } from "./plan-request";
 
 type ExecutionStateBase = {
   context: RunContext; started: number | null; api_timings: PlanApiTiming[];
@@ -50,6 +53,11 @@ function statesForExecution(inputs: PlanInputs, runId: string) {
   while (states.size >= inputs.settings.listener.max_stage_batches && !states.has(runId)) {
     const expired = [...states.keys()].find(id => !stageStore(inputs).isRunActive(id));
     if (expired === undefined) throw new PlanError("REQUEST_BUSY", "Run capacity is occupied by active work");
+    const state = states.get(expired);
+    if (state !== undefined) void state.then(value => finishArticleEntities(inputs, value.context)).catch(error => {
+      writeJsonLine({ event: "planner_expired_entity_output_failed",
+        ...describePlanError(error, inputs.root, { operation: "write-entities", limits: inputs.settings.diagnostics.failure }) });
+    });
     stageStore(inputs).forgetRun(expired);
     states.delete(expired);
   }

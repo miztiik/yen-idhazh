@@ -68,7 +68,8 @@ export async function deliverWorkflowMetadataHttp(input: {
       },
     });
   } catch (error) {
-    const failure = withPlannerFailure(error, capture);
+    const failure = withPlannerFailure(error, { ...capture,
+      cancelled: options.signal?.aborted === true && error === options.signal.reason });
     const result = MetadataDeliveryResultSchema.parse({
       status: "failed", commit: null, files: request.paths.length, paths: request.paths,
     });

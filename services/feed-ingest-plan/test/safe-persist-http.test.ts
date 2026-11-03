@@ -175,7 +175,7 @@ test("an occupied port cannot reuse an earlier successful receipt or stop anothe
       fetch() { requests++; return new Response("Unrelated listener"); },
     });
     try {
-      await expect(deliverWorkflowMetadataHttp(inputFor(f))).rejects.toThrow("could not bind");
+      await expect(deliverWorkflowMetadataHttp(inputFor(f))).rejects.toMatchObject({ code: "SAFE_PERSIST_BIND_FAILED" });
       expect(requests).toBe(0);
       expect((await fetch(`http://127.0.0.1:${occupied.port}`)).status).toBe(200);
       expect(MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json()))
@@ -205,7 +205,7 @@ test("cancelled HTTP startup creates no Git delivery and leaves no listener", as
     const cancellation = new AbortController();
     cancellation.abort(new Error("Recorded delivery cancellation"));
     await expect(deliverWorkflowMetadataHttp(inputFor(f), { signal: cancellation.signal }))
-      .rejects.toThrow("Recorded delivery cancellation");
+      .rejects.toMatchObject({ failure: { safe_cause: "cancelled" } });
     expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
     expect(MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json()).status).toBe("failed");
     await assertReleased(f.inputs.settings.listener.port);
