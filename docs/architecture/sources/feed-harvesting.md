@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-03
 
 How do configured feeds become sanitized article candidates?
 This build-time path leaves production Python discovery and extraction
@@ -282,9 +282,19 @@ response termination. Network activity may therefore overlap after a timeout,
 even though application requests sharing a pacing key do not overlap.
 Streamed native errors may be untyped; their messages are not used to invent
 a timeout class or safe error code.
-The separate `source-transport-test.yml` workflow runs this same native
-API test on Linux and records the actual candidate SHA.
-Production CI keeps its existing full-candidate checks.
+
+A source request that fails before a usable response is a local download
+failure; sibling work continues. The classifier recognizes the installed
+`HTTPError` and `RequestError` families, including their subclasses, rather
+than matching exception names or message text. The saved `network` value means
+the request failed without a more precise proven cause; it does not claim a
+DNS, TLS or timeout diagnosis. Typed timeouts and caller cancellation keep
+their existing precedence. Native exceptions remain unchanged, and available
+safe error codes are retained. A rejected response has no invented HTTP status
+or response evidence. Arbitrary execution errors and unrecognized native
+exceptions still fail the operation.
+The ordinary `ci.yml` gates job runs the native transport test on Linux with
+frozen dependencies as part of the complete service suite.
 
 ## Dependencies and cost
 
