@@ -1,12 +1,12 @@
-// .github/scripts/ai-pipeline.ts
+/** How do inference and evaluation phases retain their real results and measurements? */
 import http from "node:http";
 import https from "node:https";
 import fs from "node:fs";
 import os from "node:os";
-import crypto from "node:crypto";
 import { execSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { performance } from "node:perf_hooks";
+import { pathToFileURL } from "node:url";
 
 import { parseHTML } from "linkedom";
 import { Defuddle } from "defuddle/node";
@@ -14,6 +14,21 @@ import { parseFeed } from "feedsmith";
 import { TidyURL } from "tidy-url";
 import { loadModelRuntime, type ModelRuntime } from "../../services/summarizer/src/config/load-model-runtime.js";
 import { buildModelRequest, readModelContent } from "../../services/summarizer/src/services/model-request.service.js";
+import {
+  createCloudEvent,
+  createRootContext,
+  createChildContext,
+  loadEventSources,
+  type OperationMetadata,
+} from "../../packages/common-contracts/src/index.ts";
+import {
+  PipelineEventDataSchema,
+  PipelineInputError,
+  readPipelineEvents,
+  selectStructuredOutputs,
+  type PipelineEvent,
+} from "./read-pipeline-events.ts";
+import { prepareEvaluationRequest, readEvaluationResponse } from "./prepare-evaluation-request.ts";
 
 // -------------------------------------------------------------
 // 0. CONFIGURATION & STRUCTURED SCHEMAS
@@ -73,11 +88,9 @@ export const STRICT_SUMMARY_JSON_SCHEMA = {
 };
 
 // -------------------------------------------------------------
-// 1. STRUCTURED JSONL LOGGER & UUIDs
+// 1. STRUCTURED JSONL LOGGER
 // -------------------------------------------------------------
-const UUIDV5_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
-
-export function logStructured(level: "INFO" | "WARN" | "ERROR", message: string, meta: Record<string, any> = {}): void {
+export function logStructured(level: "INFO" | "WARN" | "ERROR", message: string, meta: Record<string, unknown> = {}): void {
   const record = {
     timestamp: new Date().toISOString(),
     level,
@@ -85,35 +98,6 @@ export function logStructured(level: "INFO" | "WARN" | "ERROR", message: string,
     ...meta,
   };
   process.stdout.write(JSON.stringify(record) + "\n");
-}
-
-function uuidToBytes(uuid: string): Buffer {
-  return Buffer.from(uuid.replace(/-/g, ""), "hex");
-}
-
-export function generateUuidV5(name: string, namespace: string = UUIDV5_NAMESPACE): string {
-  const nsBytes = uuidToBytes(namespace);
-  const hash = crypto.createHash("sha1");
-  hash.update(nsBytes);
-  hash.update(Buffer.from(name, "utf8"));
-  const digest = hash.digest();
-
-  digest[6] = (digest[6] & 0x0f) | 0x50; // Version 5
-  digest[8] = (digest[8] & 0x3f) | 0x80; // Variant RFC 4122
-
-  const hex = digest.subarray(0, 16).toString("hex");
-  return [
-    hex.substring(0, 8),
-    hex.substring(8, 12),
-    hex.substring(12, 16),
-    hex.substring(16, 20),
-    hex.substring(20, 32),
-  ].join("-");
-}
-
-export function buildDeterministicEventId(runnerName: string, shardId: string, sourceUrl: string, eventType: string): string {
-  const seed = `runner:${runnerName}:shard:${shardId}:source:${sourceUrl}:event:${eventType}`;
-  return `evt_${generateUuidV5(seed)}`;
 }
 
 // -------------------------------------------------------------
@@ -441,16 +425,6 @@ export interface SummaryStructuredOutput {
   quality_metrics?: QualityEvaluationMetrics;
 }
 
-export interface PipelineEvent<T = any> {
-  eventId: string;
-  eventType: string;
-  timestamp: string;
-  correlationId: string;
-  durationMs: number;
-  cumulativeMs: number;
-  payload: T;
-}
-
 // -------------------------------------------------------------
 // 5. CLASSIFIERS & PARSERS
 // -------------------------------------------------------------
@@ -650,10 +624,9 @@ async function fetchHtmlWithFallback(url: string): Promise<string> {
       const html = await res.text();
       if (html.length > 200) return html;
     }
-  } catch (err: any) {
+  } catch {
     logStructured("WARN", "Primary fetch failed, engaging secondary fallback footprint", {
-      url,
-      error: err.message,
+      code: "PRIMARY_FETCH_FAILED",
     });
   }
 
@@ -779,8 +752,8 @@ export async function extractDirectUrl(
       emitEvent("URL_DEFUDDLE_EXTRACTED", { url, title, wordCount });
       return { title, content, wordCount };
     }
-  } catch (err: any) {
-    logStructured("WARN", "Defuddle extraction failed, engaging semantic DOM parser", { url, error: err.message });
+  } catch {
+    logStructured("WARN", "Defuddle extraction failed, engaging semantic DOM parser", { code: "EXTRACTION_FAILED" });
   }
 
   const fallback = extractSemanticDomFallback(document);
@@ -955,7 +928,7 @@ async function collectAndClassifyFeedArticles(
         acceptedArticles.push(candidate);
       }
     } catch (err: any) {
-      logStructured("WARN", "Candidate extraction skipped upon error", { url: targetUrl, error: err.message });
+      logStructured("WARN", "Candidate extraction skipped upon error", { code: "CANDIDATE_EXTRACTION_FAILED" });
       evaluatedArticles.push(candidate);
     }
   }
@@ -1217,91 +1190,64 @@ function postPythonEvaluation(urlStr: string, payload: any): Promise<any> {
 // -------------------------------------------------------------
 export class AIEventPipeline extends EventEmitter {
   private auditLog: PipelineEvent[] = [];
-  public correlationId: string;
+  public readonly context: OperationMetadata;
   private runnerMetadata: RunnerMetadata;
   private hostFingerprint: HostFingerprint;
   private jsonlFilePath: string;
   private pipelineStartTime: number;
   private lastEventTime: number;
 
-  constructor(runnerMetadata: RunnerMetadata, existingCorrelationId?: string, jsonlFilePath = "pipeline-events.jsonl") {
+  constructor(runnerMetadata: RunnerMetadata, private readonly eventSource: string, jsonlFilePath = "pipeline-events.jsonl") {
     super();
     this.runnerMetadata = runnerMetadata;
     this.hostFingerprint = getHostFingerprint();
-    this.correlationId = existingCorrelationId || crypto.randomUUID();
+    this.context = createRootContext();
     this.jsonlFilePath = jsonlFilePath;
     this.pipelineStartTime = performance.now();
     this.lastEventTime = this.pipelineStartTime;
   }
 
   public loadPriorEvents(): void {
-    if (!fs.existsSync(this.jsonlFilePath)) return;
-    try {
-      const lines = fs.readFileSync(this.jsonlFilePath, "utf8").split("\n").filter(Boolean);
-      this.auditLog = lines
-        .map((l) => {
-          try {
-            return JSON.parse(l);
-          } catch {
-            return null;
-          }
-        })
-        .filter((e): e is PipelineEvent => e !== null && typeof e.eventId === "string");
-
-      // Maintain monotonic cumulativeMs across discrete GitHub Actions workflow phases
-      if (this.auditLog.length > 0) {
-        const lastEvent = this.auditLog[this.auditLog.length - 1];
-        const priorCumulativeMs = typeof lastEvent.cumulativeMs === "number" ? lastEvent.cumulativeMs : 0;
-        this.pipelineStartTime = performance.now() - priorCumulativeMs;
-        this.lastEventTime = performance.now();
-      }
-
-      logStructured("INFO", "Hydrated historical pipeline events from disk", {
-        path: this.jsonlFilePath,
-        count: this.auditLog.length,
-      });
-    } catch (err: any) {
-      logStructured("WARN", "Failed hydrating historical pipeline events", { error: err.message });
+    this.auditLog = readPipelineEvents(this.jsonlFilePath);
+    // Keep the existing cumulative counter across phases, excluding the offline gap.
+    const lastEvent = this.auditLog.at(-1);
+    if (lastEvent) {
+      this.pipelineStartTime = performance.now() - lastEvent.data.cumulativeMs;
+      this.lastEventTime = performance.now();
     }
+    logStructured("INFO", "Loaded saved pipeline events", { count: this.auditLog.length });
   }
 
-  public logEvent(eventType: string, payload: any, sourceUrl: string = "pipeline-lifecycle"): PipelineEvent {
+  public logEvent(type: string, result: unknown, context: OperationMetadata = this.context): PipelineEvent {
     const now = performance.now();
     const durationMs = Math.round(now - this.lastEventTime);
     const cumulativeMs = Math.round(now - this.pipelineStartTime);
     this.lastEventTime = now;
 
-    const eventId = buildDeterministicEventId(
-      this.runnerMetadata.runnerName,
-      this.runnerMetadata.shardId,
-      sourceUrl,
-      eventType
-    );
-
-    const event: PipelineEvent = {
-      eventId,
-      eventType,
-      timestamp: new Date().toISOString(),
-      correlationId: this.correlationId,
-      durationMs,
-      cumulativeMs,
-      payload,
-    };
+    // Keep the existing JSONL representation, including omitted optional properties.
+    const data: unknown = JSON.parse(JSON.stringify({ result, durationMs, cumulativeMs }));
+    const event = createCloudEvent({
+      source: this.eventSource,
+      type,
+      context,
+      data,
+      parseData: value => PipelineEventDataSchema.parse(value),
+    });
 
     this.auditLog.push(event);
 
     const jsonlLine = JSON.stringify(event);
     fs.appendFileSync(this.jsonlFilePath, jsonlLine + "\n", "utf8");
 
-    logStructured("INFO", `Pipeline Event: ${eventType}`, {
-      eventId,
-      eventType,
-      correlationId: this.correlationId,
+    logStructured("INFO", "Pipeline event recorded", {
+      id: event.id,
+      type,
+      traceparent: event.traceparent,
       durationMs,
       cumulativeMs,
     });
 
-    this.emit(eventType, event);
+    this.emit(type, event);
     return event;
   }
 
@@ -1319,6 +1265,7 @@ export class AIEventPipeline extends EventEmitter {
     modelRuntime: ModelRuntime;
     maxWordLength: number;
   }): Promise<SummaryStructuredOutput> {
+    const context = createChildContext(this.context);
     const {
       sourceType,
       sourceIdentifier,
@@ -1344,10 +1291,9 @@ export class AIEventPipeline extends EventEmitter {
           originalWords: words.length,
           maxAllowedWords: maxWordLength,
         },
-        sourceIdentifier
+        context
       );
       logStructured("WARN", "Article exceeded maximum configured length and was truncated", {
-        sourceIdentifier,
         originalWords: words.length,
         maxWordLength,
       });
@@ -1375,7 +1321,7 @@ export class AIEventPipeline extends EventEmitter {
         wordCount: words.length,
         charCount: targetText.length,
       },
-      sourceIdentifier
+      context
     );
 
     const pageSizeBytes = getSystemPageSizeBytes();
@@ -1415,7 +1361,7 @@ export class AIEventPipeline extends EventEmitter {
         wordCount: words.length,
         charCount: targetText.length,
       },
-      sourceIdentifier
+      context
     );
 
     let tickCounter = 0;
@@ -1461,8 +1407,7 @@ export class AIEventPipeline extends EventEmitter {
     } catch (err: any) {
       targetLevelError = err.message || "Unknown completion failure";
       logStructured("ERROR", "Target-level LLM inference exception trapped", {
-        sourceIdentifier,
-        error: targetLevelError,
+        code: "INFERENCE_FAILED",
       });
       this.logEvent(
         "INFERENCE_FAILED",
@@ -1471,7 +1416,7 @@ export class AIEventPipeline extends EventEmitter {
           sourceIdentifier,
           error: targetLevelError,
         },
-        sourceIdentifier
+        context
       );
     } finally {
       clearInterval(progressTimer);
@@ -1547,7 +1492,7 @@ export class AIEventPipeline extends EventEmitter {
           cpuMetrics,
           rawOutput: rawContent,
         },
-        sourceIdentifier
+        context
       );
     }
 
@@ -1599,7 +1544,7 @@ export class AIEventPipeline extends EventEmitter {
       error_flag: Boolean(targetLevelError),
     };
 
-    this.logEvent("OUTPUT_STRUCTURED", structuredResult, sourceIdentifier);
+    this.logEvent("OUTPUT_STRUCTURED", structuredResult, context);
     return structuredResult;
   }
 }
@@ -1813,23 +1758,14 @@ export function publishStepSummary(
     ``,
     `---`,
     ``,
-    `## ⚡ Deterministic Event Audit Trail (RFC 4122 UUIDv5)`,
+    `## Pipeline event audit`,
     ``,
-    `| Event Type | Deterministic UUIDv5 | Timestamp | Step Duration (ms) | Cumulative Time (ms) |`,
+    `| Event Type | Event ID | Time (UTC) | Log gap (ms) | Cumulative time (ms) |`,
     `| :--- | :--- | :--- | :--- | :--- |`,
     ...events.map(
       (e) =>
-        `| \`${e.eventType}\` | \`${e.eventId}\` | \`${e.timestamp}\` | **\`+${e.durationMs} ms\`** | **\`${e.cumulativeMs} ms\`** |`
+        `| \`${e.type}\` | \`${e.id}\` | \`${e.time}\` | **\`+${e.data.durationMs} ms\`** | **\`${e.data.cumulativeMs} ms\`** |`
     ),
-    ``,
-    `<details>`,
-    `<summary><b>Inspect Full Event Stream Payloads (${events.length} Events - JSON)</b></summary>`,
-    ``,
-    `\`\`\`json`,
-    JSON.stringify(events, null, 2),
-    `\`\`\``,
-    ``,
-    `</details>`,
     ``,
     `---`,
     ``,
@@ -1957,42 +1893,23 @@ async function main() {
   const phase = (process.argv.find((a) => a.startsWith("--phase="))?.split("=")[1] || "infer").toLowerCase();
   const modelName = modelRuntime.request.model;
   const pipelineEventsPath = process.env.PIPELINE_EVENTS_PATH || "pipeline-events.jsonl";
+  const sources = await loadEventSources(new URL("../../config/typescript-event-sources.json", import.meta.url));
 
   // -------------------------------------------------------------
-  // PHASE 2: EVALUATION (CLIENT HTTP DISPATCH)
-  // -------------------------------------------------------------
-
-// -------------------------------------------------------------
   // PHASE 2: EVALUATION (SEQUENTIAL DISPATCH & TELEMETRY INGESTION)
   // -------------------------------------------------------------
   if (phase === "eval") {
     logStructured("INFO", "Executing Phase 2: Sequential UniEval Quality Audit");
-    if (!fs.existsSync(pipelineEventsPath)) {
-      logStructured("WARN", "No pipeline events file found. Skipping evaluation phase.", { path: pipelineEventsPath });
-      return;
-    }
-
-    const lines = fs.readFileSync(pipelineEventsPath, "utf8").split("\n").filter(Boolean);
-    const structuredEvents = lines
-      .map((l) => {
-        try {
-          return JSON.parse(l);
-        } catch {
-          return null;
-        }
-      })
-      .filter((e) => e && e.eventType === "OUTPUT_STRUCTURED");
+    const pipeline = new AIEventPipeline(runnerMetadata, sources.workflow, pipelineEventsPath);
+    pipeline.loadPriorEvents();
+    const structuredEvents = selectStructuredOutputs(pipeline.getEventHistory());
 
     if (structuredEvents.length === 0) {
       logStructured("WARN", "No OUTPUT_STRUCTURED events discovered in pipeline events. Exiting.");
       return;
     }
 
-    const correlationId = structuredEvents[0].correlationId;
-    const pipeline = new AIEventPipeline(runnerMetadata, correlationId, pipelineEventsPath);
-    pipeline.loadPriorEvents();
-
-    pipeline.logEvent("QUALITY_EVALUATION_STARTED", { articleCount: structuredEvents.length }, "evaluation-phase");
+    pipeline.logEvent("QUALITY_EVALUATION_STARTED", { articleCount: structuredEvents.length });
 
     let evalFailedCount = 0;
     let upstreamSkippedCount = 0;
@@ -2002,20 +1919,19 @@ async function main() {
     // Dispatch sequentially to avoid HTTP backlog timeout
     for (let idx = 0; idx < structuredEvents.length; idx++) {
       const event = structuredEvents[idx];
-      const payload: SummaryStructuredOutput = event.payload;
+      const payload = event.data.result;
       const output: SummaryStructuredOutput = { ...payload };
+      const { context, request } = prepareEvaluationRequest(event, pipeline.context, runnerMetadata);
 
-      logStructured("INFO", `Evaluating target (${idx + 1}/${structuredEvents.length})`, {
-        headline: output.headline,
-        sourceIdentifier: output.source_audit?.sourceIdentifier,
+      logStructured("INFO", "Evaluating target", {
+        target: idx + 1,
+        total: structuredEvents.length,
       });
 
       // Upstream inference failure: skip gracefully without failing the evaluation phase
       if (payload.error_flag) {
         upstreamSkippedCount++;
-        logStructured("WARN", "Skipping quality evaluation on target that failed upstream inference", {
-          headline: output.headline,
-        });
+        logStructured("WARN", "Skipping quality evaluation on target that failed upstream inference", { target: idx + 1 });
 
         pipeline.logEvent(
           "QUALITY_EVALUATION_SKIPPED",
@@ -2024,7 +1940,7 @@ async function main() {
             sourceTitle: output.headline,
             reason: "Target failed upstream Phase 1 LLM inference",
           },
-          output.source_audit?.sourceIdentifier || "evaluation-target"
+          context
         );
 
         if (!output.host_fingerprint) output.host_fingerprint = getHostFingerprint();
@@ -2034,15 +1950,7 @@ async function main() {
       }
 
       try {
-        const data = await postPythonEvaluation(`${PYTHON_EVAL_SERVER_URL}/v1/evaluate`, {
-          correlationId,
-          runnerName: runnerMetadata.runnerName,
-          shardId: runnerMetadata.shardId,
-          sourceIdentifier: payload.source_audit.sourceIdentifier,
-          sourceTitle: payload.headline,
-          sourceText: payload.source_audit.extractedText,
-          summaryText: payload.analytic_synthesis,
-        });
+        const data = readEvaluationResponse(await postPythonEvaluation(`${PYTHON_EVAL_SERVER_URL}/v1/evaluate`, request));
 
         evaluatedCount++;
         output.quality_metrics = data.metrics;
@@ -2054,31 +1962,31 @@ async function main() {
             sourceTitle: output.headline,
             metrics: data.metrics,
           },
-          output.source_audit?.sourceIdentifier || "evaluation-target"
+          context
         );
 
         // Ingest the evaluation microservice hardware telemetry into the event stream
-        if (data.event?.payload?.serverTelemetry) {
+        if (data.serverTelemetry) {
           pipeline.logEvent(
             "EVALUATION_SERVER_TELEMETRY",
             {
               sourceIdentifier: output.source_audit?.sourceIdentifier,
-              serverTelemetry: data.event.payload.serverTelemetry,
+              serverTelemetry: data.serverTelemetry,
             },
-            output.source_audit?.sourceIdentifier || "evaluation-target"
+            context
           );
         }
 
         pipeline.logEvent(
           "OUTPUT_ENRICHED",
           output,
-          output.source_audit?.sourceIdentifier || "evaluation-target"
+          context
         );
-      } catch (err: any) {
+      } catch {
         evalFailedCount++;
         logStructured("ERROR", "Evaluation service request failed for target", {
-          headline: output.headline,
-          error: err.message,
+          target: idx + 1,
+          code: "EVALUATION_REQUEST_FAILED",
         });
       }
 
@@ -2094,8 +2002,7 @@ async function main() {
         evaluatedCount,
         upstreamSkippedCount,
         evalFailedCount,
-      },
-      "evaluation-phase"
+      }
     );
 
     const retainedFeedAudit = updatedOutputs.find((o) => o.source_audit?.feedAudit)?.source_audit?.feedAudit;
@@ -2173,8 +2080,7 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
   const maxAgeHours = parseFloat(process.env.FEED_MAX_AGE_HOURS || "24");
   const goalCount = parseInt(process.env.ARTICLE_COUNT_GOAL || "1", 10);
   const maxWordLength = parseInt(process.env.MAX_WORD_LENGTH || String(DEFAULT_ARTICLE_CONFIG.maxWordLength), 10);
-
-  const pipeline = new AIEventPipeline(runnerMetadata, undefined, pipelineEventsPath);
+  const pipeline = new AIEventPipeline(runnerMetadata, sources.workflow, pipelineEventsPath);
 
   interface IngestionTarget {
     sourceType: SourceAudit["sourceType"];
@@ -2188,14 +2094,14 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
 
   if (inputSource === "feed") {
     feedAudit = await collectAndClassifyFeedArticles(DEFAULT_ARTICLE_CONFIG.feedUrls, maxAgeHours, goalCount, (type, payload) =>
-      pipeline.logEvent(type, payload, "feed-crawler")
+      pipeline.logEvent(type, payload)
     );
 
     for (const art of feedAudit.acceptedArticles) {
       let content = art.extractedMarkdown;
       if (!content) {
         try {
-          const res = await extractDirectUrl(art.url, (type, payload) => pipeline.logEvent(type, payload, art.url));
+          const res = await extractDirectUrl(art.url, (type, payload) => pipeline.logEvent(type, payload));
           content = res.content;
           art.title = res.title || art.title;
         } catch {
@@ -2214,9 +2120,9 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
     }
   } else if (inputSource === "url") {
     const tidy = cleanUrlWithTidy(rawUrl);
-    pipeline.logEvent("URL_TIDIED", { rawUrl, cleanUrl: tidy.cleanUrl, reduction: tidy.reduction }, tidy.cleanUrl);
+    pipeline.logEvent("URL_TIDIED", { rawUrl, cleanUrl: tidy.cleanUrl, reduction: tidy.reduction });
     const extracted = await extractDirectUrl(tidy.cleanUrl, (type, payload) =>
-      pipeline.logEvent(type, payload, tidy.cleanUrl)
+      pipeline.logEvent(type, payload)
     );
     targets.push({
       sourceType: "URL",
@@ -2236,9 +2142,9 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
   const results: SummaryStructuredOutput[] = [];
   for (let i = 0; i < targets.length; i++) {
     const t = targets[i];
-    logStructured("INFO", `Processing Ingestion Target (${i + 1}/${targets.length})`, {
-      title: t.sourceTitle,
-      sourceIdentifier: t.sourceIdentifier,
+    logStructured("INFO", "Processing ingestion target", {
+      target: i + 1,
+      total: targets.length,
     });
 
     const result = await pipeline.executeSingleArticle({
@@ -2262,7 +2168,11 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
   });
 }
 
-main().catch((err) => {
-  logStructured("ERROR", "Unhandled fatal pipeline exception", { error: err.message, stack: err.stack });
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error: unknown) => {
+    logStructured("ERROR", "Pipeline failed", error instanceof PipelineInputError
+      ? { code: error.code, line: error.line }
+      : { code: "PIPELINE_FAILED" });
+    process.exit(1);
+  });
+}
