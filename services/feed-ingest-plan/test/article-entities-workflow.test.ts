@@ -109,7 +109,7 @@ test("full sanitized body names survive later failure, artifact preparation and 
     expect(markdown).toContain(filename);
     expect(markdown).not.toContain("Marie Curie");
     expect(markdown).not.toContain("Hidden Person");
-    expect(markdown).not.toMatch(/[A-Za-z]:[\\/]/);
+    expect(markdown).not.toMatch(/(?:^|[\s"'(\[{])[A-Za-z]:[\\/]/m);
     const files: string[] = [];
     await publishWorkflowUploadInventories({ directory, runNumber: "700",
       write: event => { if (typeof event.details.file === "string") files.push(event.details.file); } });

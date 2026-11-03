@@ -29,6 +29,9 @@ test("real API receipts survive a missing planner result and keep byte-valued ca
   const f = await fixture();
   try {
     const directory = join(f.directory, "evidence");
+    await mkdir(join(f.directory, "config"), { recursive: true });
+    await copyFile(new URL("../../../config/feed-ingest-plan-service.json", import.meta.url),
+      join(f.directory, "config", "feed-ingest-plan-service.json"));
     const host = await recordedWorkflowHost(directory, identity);
     const paths = await verifyHostFingerprint(join(directory, "state"), host.response, host.registrations, identity);
     expect(paths).toEqual(host.response.files.map(file => file.path));
