@@ -196,7 +196,7 @@
     {"added_on": "2026-10-26","form": "article","id": "voiceofcontext-substack","kind": "analysis","publisher_id": "voice-of-context","retired_on": null,"retirement_reason": null,"status": "active","tier": 3,"title": "Voice of Context","url": "https://voiceofcontext.substack.com/feed","vertical": "world","weight": 0.75},
     {"added_on": null,"form": "article","id": "voxdev","kind": "research","publisher_id": "voxdev","retired_on": null,"retirement_reason": null,"status": "active","tier": 1,"title": "VoxDev","url": "https://voxdev.org/rss.xml","vertical": "business-economy","weight": 0.95},
     {"added_on": null,"form": "article","id": "windpower-eng","kind": "reporting","publisher_id": "windpower-engineering","retired_on": null,"retirement_reason": null,"status": "active","tier": 2,"title": "Windpower Engineering","url": "https://www.windpowerengineering.com/feed/","vertical": "energy","weight": 0.85},
-    {"added_on": null,"form": "article","id": "wired-ai","kind": "reporting","publisher_id": "wired","retired_on": null,"retirement_reason": null,"status": "active","title": "WIRED - AI","url": "https://www.wired.com/feed/tag/ai/latest/rss","vertical": "ai","weight": 0.95},
+    {"added_on": null,"form": "article","id": "wired-ai","kind": "reporting","publisher_id": "wired","retired_on": null,"retirement_reason": null,"status": "active","tier": 2,"title": "WIRED - AI","url": "https://www.wired.com/feed/tag/ai/latest/rss","vertical": "ai","weight": 0.95},
     {"added_on": null,"form": "article","id": "world-nuclear-news","kind": "reporting","publisher_id": "world-nuclear-news","retired_on": null,"retirement_reason": null,"status": "active","tier": 2,"title": "World Nuclear News","url": "https://www.world-nuclear-news.org/rss","vertical": "energy","weight": 0.85},
     {"added_on": null,"form": "article","id": "wto-news","kind": "government","publisher_id": "wto","retired_on": null,"retirement_reason": null,"status": "active","tier": 1,"title": "World Trade Organization","url": "https://www.wto.org/library/rss/latest_news_e.xml","vertical": "business-economy","weight": 1.0},
     {"added_on": null,"form": "article","id": "yale-e360","kind": "reporting","publisher_id": "yale-e360","retired_on": null,"retirement_reason": null,"status": "active","tier": 2,"title": "Yale Environment 360","url": "https://e360.yale.edu/feed.xml","vertical": "energy","weight": 0.95},
@@ -427,7 +427,7 @@
     {"display_name": "ZDNET","id": "zdnet"}
   ],
   "retired": [
-    {"added_on": "2026-10-26","form": "article","id": "yahoo-finance","kind": "reporting","publisher_id": "yahoo-finance","retired_on": "2026-11-03","retirement_reason": "feed_404","status": "active","tier": 2,"title": "Yahoo Finance","url": "https://finance.yahoo.com/news/rssindex","vertical": "business-economy","weight": 0.75},
+    {"added_on": "2026-10-26","form": "article","id": "yahoo-finance","kind": "reporting","publisher_id": "yahoo-finance","retired_on": "2026-11-03","retirement_reason": "feed_404","status": "retired","tier": 2,"title": "Yahoo Finance","url": "https://finance.yahoo.com/news/rssindex","vertical": "business-economy","weight": 0.75},
     {"added_on": null,"form": "article","id": "eleuther-ai","kind": "research","publisher_id": "eleutherai","retired_on": "2026-10-26","retirement_reason": "feed_404","status": "retired","tier": 1,"title": "EleutherAI","url": "https://blog.eleuther.ai/index.xml","vertical": "ai","weight": 0.95},
     {"added_on": null,"form": "article","id": "ht-business","kind": "reporting","publisher_id": "hindustan-times","retired_on": "2026-09-06","retirement_reason": null,"status": "retired","tier": 2,"title": "Hindustan Times - Business","url": "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml","vertical": "india","weight": 0.85},
     {"added_on": null,"form": "article","id": "livemint-companies","kind": "reporting","publisher_id": "mint","retired_on": "2026-09-06","retirement_reason": null,"status": "retired","tier": 2,"title": "Mint - Companies","url": "https://www.livemint.com/rss/companies","vertical": "india","weight": 0.9},
@@ -488,6 +488,10 @@
     {"added_on": null,"form": "article","id": "energymonitor","kind": "reporting","publisher_id": "energy-monitor","retired_on": "2026-09-16","retirement_reason": null,"status": "retired","tier": 2,"title": "Energy Monitor","url": "https://www.energymonitor.ai/feed/","vertical": "energy","weight": 0.85},
     {"added_on": null,"form": "article","id": "lemonde-en","kind": "reporting","publisher_id": "le-monde","retired_on": "2026-09-16","retirement_reason": null,"status": "retired","tier": 2,"title": "Le Monde English","url": "https://www.lemonde.fr/en/rss/une.xml","vertical": "world","weight": 0.95},
     {"added_on": null,"form": "article","id": "offshore-wind","kind": "reporting","publisher_id": "offshorewind","retired_on": "2026-09-16","retirement_reason": null,"status": "retired","tier": 2,"title": "offshoreWIND.biz","url": "https://www.offshorewind.biz/feed/","vertical": "energy","weight": 0.8}
-  ]
+  ],
+  "salience": [
+    {"id": "hn-best","retired_on": null,"status": "active","title": "Hacker News best","url": "https://hnrss.org/best"},
+    {"id": "hn-frontpage","retired_on": null,"status": "active","title": "Hacker News front page","url": "https://hnrss.org/frontpage"}
+  ],
   "version": "2026-10-27"
 }
