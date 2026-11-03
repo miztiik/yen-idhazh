@@ -1,6 +1,6 @@
 # Measuring article substance
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-03
 
 How does screening measure article shape without changing the source text?
 It measures retained paragraphs once and caches `substance_word_count` and
@@ -86,6 +86,16 @@ allowlist is used.
 Punctuation flags once if any configured Unicode pattern matches. Defaults
 match repeated exclamation marks and mixed question/exclamation marks.
 Patterns are prepared once per screening invocation, not per article.
+
+Opening comparison checks whether the headline and retained opening share any
+selected headline keyword. Temporary word lists treat ordinary forms of the
+same word as equal: `researchers` becomes `researcher`, `studied` becomes
+`study`, and `rivers` becomes `river`. Thus "Researchers study river" matches
+"The researchers studied rivers. The team measured samples." Different word
+forms do not cause a mismatch deduction. Neither the saved headline nor the
+article is rewritten. This is only a word-sharing check: one shared keyword
+does not prove an accurate headline, and a paraphrase using different words
+can still receive the deduction.
 
 For opening overlap, lowercase separate headline and bounded-opening documents,
 then run public `compute('root')` without rewriting sentences. Use a validated
