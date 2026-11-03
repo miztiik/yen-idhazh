@@ -8,6 +8,19 @@ const encoded = new Map([
 const server = createServer((request, response) => {
   const path = new URL(request.url, "http://127.0.0.1").pathname.slice(1);
   process.send({ agent: request.headers["user-agent"] ?? "" });
+  if (path === "closed-before-headers") {
+    request.socket.destroy();
+    return;
+  }
+  if (path === "invalid-response-header") {
+    request.socket.end("HTTP/1.1 200 OK\r\nContent-Length: invalid\r\n\r\n");
+    return;
+  }
+  if (path === "request-success") {
+    response.writeHead(200, { "content-type": "text/plain" });
+    response.end(payload);
+    return;
+  }
   if (path === "no-headers" || path === "late-headers") {
     let timer;
     response.once("close", () => {

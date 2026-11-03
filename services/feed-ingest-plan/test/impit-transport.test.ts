@@ -5,10 +5,13 @@ import { join } from "node:path";
 import { once } from "node:events";
 import { createImpitTransport } from "../src/harvest-feeds/impit-transport";
 import { BodyLimitError, ResponseReadError } from "../src/harvest-feeds/transport";
-import { TimeoutError } from "impit";
+import type { TransportRequest } from "../src/harvest-feeds/transport";
+import { classifyTransportFailure, readTransportErrorCode } from "../src/harvest-feeds/classify-transport-failure";
+import { createSourceFetcher } from "../src/harvest-feeds/fetch-source";
+import { HTTPError, RemoteProtocolError, TimeoutError } from "impit";
 import { inputs } from "./harvest-recordings";
 
-test("native profiles decode compressed bodies and retain status at cutoff and cancellation", async () => {
+test("native requests retain local failures, decoded limits, profiles and cancellation", async () => {
   const configured = await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
   const loaded = await inputs(undefined, { harvest: { fetch_timeout_ms: configured.harvest.fetch_timeout_ms } });
   const payload = Buffer.from("generated response ".repeat(300));
@@ -38,6 +41,49 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
     timeout_ms: loaded.config.harvest.fetch_timeout_ms };
   const target = (path: string) => new URL(`http://127.0.0.1:${port}/${path}`);
   try {
+    const failure = await transport.request({ ...base, url: target("closed-before-headers") })
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(RemoteProtocolError);
+    expect(classifyTransportFailure(failure, base.signal)).toBe("network");
+    expect(readTransportErrorCode(failure)).toBeNull();
+    const invalidHeaders = await transport.request({ ...base, url: target("invalid-response-header") })
+      .catch((error: unknown) => error);
+    expect(invalidHeaders).toBeInstanceOf(HTTPError);
+    if (!(invalidHeaders instanceof HTTPError)) throw new Error("Native response did not retain its HTTP error", { cause: invalidHeaders });
+    expect(invalidHeaders.constructor).toBe(HTTPError);
+    expect(classifyTransportFailure(invalidHeaders, base.signal)).toBe("network");
+    expect(readTransportErrorCode(invalidHeaders)).toBeNull();
+    const fetchedInputs = await inputs(undefined, { extraction: { max_retries: 1 } });
+    const dispatched: TransportRequest[] = [];
+    const counts: number[] = [];
+    const fetcher = createSourceFetcher(fetchedInputs.config.harvest, fetchedInputs.extraction, {
+      transport: {
+        request(input) {
+          dispatched.push(input);
+          return transport.request({ ...input, url: target(input.url.pathname.slice(1)) });
+        },
+      },
+    });
+    try {
+      const failed = await fetcher.fetch("https://news.example/invalid-response-header",
+        async measurement => { counts.push(measurement.dispatched_request_count); });
+      expect(failed).toMatchObject({
+        body: null, http_status: null, failure: "network", error_code: null, response_evidence: null,
+      });
+      const expectedProfiles = [
+        fetchedInputs.config.harvest.request_headers.primary, fetchedInputs.config.harvest.request_headers.secondary,
+      ].filter(profile => profile !== null).flatMap(profile =>
+        Array.from({ length: fetchedInputs.extraction.max_retries + 1 }, () => profile.browser));
+      const attempts = failed.attempts?.filter(attempt => attempt.phase === "target");
+      expect(attempts?.map(attempt => attempt.request_profile)).toEqual(expectedProfiles);
+      expect(dispatched.map(request => request.profile.browser)).toEqual(expectedProfiles);
+      expect(attempts?.every(attempt => attempt.failure === "network" && attempt.http_status === null
+        && attempt.error_code === null && attempt.response_evidence === null)).toBe(true);
+      expect(counts.reduce((total, count) => total + count, 0)).toBe(dispatched.length);
+      expect(await fetcher.fetch("https://news.example/request-success", undefined, "feed")).toMatchObject({
+        body: payload.toString(), http_status: 200, failure: null,
+      });
+    } finally { await fetcher.close(); }
     for (const encoding of ["gzip", "br", "deflate"]) {
       const result = await transport.request({ ...base, url: target(encoding) });
       expect(result.body).toBe(payload.toString());

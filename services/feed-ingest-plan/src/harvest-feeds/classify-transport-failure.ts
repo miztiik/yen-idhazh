@@ -1,7 +1,7 @@
 /** Classify one source failure while preserving a proven cutoff and available safe codes. */
 import { constants as osConstants } from "node:os";
 import { HarvestDiagnosticsSchema } from "@idhazh/common-contracts";
-import { NetworkError, TimeoutError, DecodingError, ProtocolError, StreamError } from "impit";
+import { HTTPError, RequestError, TimeoutError, StreamError } from "impit";
 import type { FetchFailure } from "./harvest-types";
 import { BodyLimitError, ResponseReadError, readBodyLimitEvidence } from "./transport";
 import { UnsafeTargetError } from "./safe-target";
@@ -15,8 +15,7 @@ export function classifyTransportFailure(error: unknown, signal: AbortSignal): F
   }
   if (error instanceof UnsafeTargetError || error instanceof InvalidArticleUrlError) return "unsafe-target";
   if (signal.aborted || error instanceof TimeoutError) return "timeout";
-  if (error instanceof NetworkError || error instanceof ProtocolError || error instanceof DecodingError
-    || error instanceof StreamError) return "network";
+  if (error instanceof HTTPError || error instanceof RequestError || error instanceof StreamError) return "network";
   const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
   if (cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string") {
     if (["ENOTFOUND", "EAI_AGAIN", "ENODATA"].includes(cause.code)) return "dns";

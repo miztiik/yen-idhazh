@@ -3,7 +3,10 @@ import { expect, test } from "bun:test";
 import { BodyLimitError, ResponseReadError, readBodyLimitEvidence } from "../src/harvest-feeds/transport";
 import { classifyTransportFailure, readTransportErrorCode } from "../src/harvest-feeds/classify-transport-failure";
 import { HttpResponseEvidenceSchema } from "@idhazh/common-contracts";
-import { ConnectError, ConnectTimeout } from "impit";
+import {
+  ConnectError, ConnectTimeout, HTTPError, HTTPStatusError, RequestError, TransportError,
+  ProxyError, ProxyTunnelError, ProxyAuthRequired, UnsupportedProtocol, TooManyRedirects,
+} from "impit";
 
 test("a proven cutoff wins over later cancellation and retains combined cleanup evidence", () => {
   const evidence = HttpResponseEvidenceSchema.parse({
@@ -32,6 +35,25 @@ test("native exception types classify failures without inventing message-derived
   expect(readBodyLimitEvidence(network)).toBeUndefined();
   const unknown = new Error("unrecognized local failure");
   expect(() => classifyTransportFailure(unknown, signal)).toThrow(unknown);
+});
+
+test("installed HTTP and request error families stay local without accepting error-name lookalikes", () => {
+  const signal = new AbortController().signal;
+  for (const NativeError of [
+    HTTPError, HTTPStatusError, RequestError, TransportError, ProxyError,
+    ProxyTunnelError, ProxyAuthRequired, UnsupportedProtocol, TooManyRedirects,
+  ]) {
+    const error = new NativeError("DNS detail ENOTFOUND is message text, not a proven code");
+    expect(classifyTransportFailure(error, signal)).toBe("network");
+    expect(readTransportErrorCode(error)).toBeNull();
+    expect(readBodyLimitEvidence(error)).toBeUndefined();
+    expect(classifyTransportFailure(error, AbortSignal.abort())).toBe("timeout");
+  }
+  for (const error of [
+    new TypeError("local execution failed"),
+    Object.assign(new Error("unrecognized local failure"), { name: "HTTPError" }),
+    Object.assign(new Error("unrecognized local failure"), { name: "RequestError" }),
+  ]) expect(() => classifyTransportFailure(error, signal)).toThrow(error);
 });
 
 test("response disposal keeps native timeout and its separate cleanup failure", () => {
