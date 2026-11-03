@@ -1,0 +1,5 @@
+{
+  "planner": "/services/feed-ingest-plan",
+  "summarizer": "/services/summarizer",
+  "workflow": "/workflows/ai-pipeline"
+}

@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-03
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
@@ -15,6 +15,19 @@ also read those files directly from the configured repository; it does not
 depend on a site rebuild. Each copied file includes every column, and the
 repository that commits it is public, so none of its columns is private
 ([what the site holds for the door](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
+
+## TypeScript metadata is not a trace recorder
+
+The shared TypeScript library defines event occurrence, execution and operation
+metadata. The [identity contract](../architecture/contracts/identity.md#4-native-typescript-event-and-operation-metadata)
+owns its fields, creation and W3C propagation rules. Service formats remain
+owned by their current contracts.
+
+The OpenTelemetry API and core codec packages supply metadata only. They install
+no provider, tracing SDK, instrumentation, recorder, exporter or collector.
+They add no timing tree, trace file, output directory, telemetry switch or
+shutdown flush. Python's envelopes, local span writer and SDK prohibition below
+remain unchanged.
 
 ## The envelope
 
@@ -179,13 +192,6 @@ timeline remain. An operator inspects a particular item's parent-linked trace
 instead; expired detail is reported as unavailable, never reconstructed from
 settled health or treated as zero. No extra committed aggregate or public
 payload is needed for that question.
-
-On 2026-10-02, miztiik authorized merging this retirement while a content run
-was active, after all CI checks passed. This was a one-time exception to the
-retirement's quiet-window requirement. An older run retains its checkout and
-may still attempt to publish the removed files; new runs neither read nor
-write them. The exception grants no permission to cancel a run or rewrite
-history.
 
 ## See also
 

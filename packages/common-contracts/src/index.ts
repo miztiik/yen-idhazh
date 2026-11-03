@@ -1,4 +1,4 @@
-/** Which runtime schemas and inferred types form the shared planning contract? */
+/** Which runtime contracts and explicit metadata helpers do native consumers share? */
 export * from "./version";
 export * from "./schemas/primitives";
 export * from "./schemas/source.schema";
@@ -39,3 +39,10 @@ export * from "./schemas/planner-file-validation.schema";
 export * from "./schemas/planner-publication.schema";
 export * from "./schemas/feed-probe.schema";
 export * from "./schemas/http-response-evidence.schema";
+export * from "./schemas/operation-metadata.schema";
+export * from "./schemas/cloud-event.schema";
+export * from "./create-operation-context";
+export * from "./create-cloud-event";
+export * from "./read-cloud-event";
+export * from "./propagate-trace-context";
+export * from "./load-event-sources";

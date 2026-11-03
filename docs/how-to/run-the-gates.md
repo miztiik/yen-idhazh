@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-03
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -314,6 +314,27 @@ Use actual Parquet readback and named recorded compatibility fixtures for
 schema, footer, identifier and canonical-digest checks. These results do not
 claim that a Python reader was executed. Persisted-contract changes still
 require the approval and compatibility rules in `CLAUDE.md`.
+
+For shared event and operation metadata, run the focused native flow and the
+existing identity cases:
+
+```powershell
+npm --prefix .\frontend run test:changed -- --list
+bun install --frozen-lockfile --cwd .\packages\common-contracts
+bun run --cwd .\packages\common-contracts check
+bun run --cwd .\packages\common-contracts test .\test\metadata-flow.test.ts .\test\article-identity-compatibility.test.ts
+bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
+bun run --cwd .\packages\ledger-file-writer check
+bun run --cwd .\packages\ledger-file-writer test .\test\uuid.test.ts
+```
+
+The flow uses the real shared factories, codec and application reader with the
+named selected-article recording. It checks distinct occurrences, unchanged
+replay, parent/input relationships, state propagation and explicit source
+loading. It does not certify service work ownership, live delivery or a tracing
+runtime. Ordinary CI installs the pinned codec dependencies through the
+publication runtime and runs the full common/native suites. Browser callers
+still use the independent observation-order module.
 
 For planner entry-point changes, use the named native selection from the
 repository root:

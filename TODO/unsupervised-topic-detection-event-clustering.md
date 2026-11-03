@@ -1,6 +1,6 @@
 # Unsupervised topic detection and event clustering
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-11-03
 
 Group reports of the same occurrence, connect distinct developments, and publish a short explanation without losing the underlying reports.
 
@@ -65,6 +65,10 @@ Merging duplicate Event Clusters consolidates representations of the same event.
 | A5 | Story Edge | UUIDv5 from a fixed namespace and encoded source Event Cluster ID, target ID, and relation type |
 
 UUIDv5 uses SHA-1 internally; use the standard namespace/name algorithm, not a raw digest. ULID ordering reflects identifier creation, not event chronology, and does not establish a global order across independent writers.
+
+`cluster_id` identifies a news cluster, not a delivered event occurrence or an
+operation. It remains a domain ULID; the shared event and operation
+[identity contract](../docs/architecture/contracts/identity.md) does not change it.
 
 `text_sha` identifies canonical sanitized source text. `representation_revision` identifies one frozen materialization, not merely a model name: fresh generations can differ under the same model. Replay reuses the stored materialization. Changed summary, frames, vectors, entities, or tokenization create a new representation revision. Reweighting BM25 from new corpus statistics does not.
 
@@ -399,7 +403,7 @@ Dense search uses the selected compatible vector representation; full-text retri
 
 `frames` contains whole frames selected by resolved results. Candidate frames and unresolved reasons remain in their own fields for inspection; they are not combined into a synthetic frame. The primary frame is absent when its required roles remain disputed. A changed resolution that changes frozen semantic content uses a new representation revision.
 
-The original `event_id`, `topic_id`, `story_id`, and `is_syndicated_dup` fields remain available through a current-document projection that joins this record to assignments and copy decisions. The original `gliner_entities` becomes typed `entities`. Predicate-linked GLiNER and LLM outputs remain complete frame candidates; the selected frame records its extractor and resolution provenance.
+The `cluster_id`, `topic_id`, `story_id`, and `is_syndicated_dup` fields are available through a current-document projection that joins this record to assignments and copy decisions. The supplied entity field becomes typed `entities`. Predicate-linked GLiNER and LLM outputs remain complete frame candidates; the selected frame records its extractor and resolution provenance.
 
 ### Assignment, contribution, and observation schemas
 
@@ -510,7 +514,7 @@ story_edges {
 }
 ```
 
-`story_dag_id` references `story_dags`, correcting the supplied reference to an edge table. `source_event_id` and `target_event_id` in a view resolve to these Event Cluster IDs. The supplied `MERGE/BRANCH` edge label is not an identity operation: branching and convergence are graph structures, while merging duplicate Event Clusters is a recorded correction.
+`story_dag_id` references `story_dags`, correcting the supplied reference to an edge table. View `source_cluster_id` and `target_cluster_id` use these same Event Cluster IDs. The supplied `MERGE/BRANCH` edge label is not an identity operation: branching and convergence are graph structures, while merging duplicate Event Clusters is a recorded correction.
 
 `relation_score` is not the same-event Joining score and is not a calibrated probability unless its assessment establishes that interpretation. Preserve direct edge evidence even when an indirect path exists. Validate self-links, endpoint existence, direction, and cycles after all affected changes join.
 
@@ -523,7 +527,7 @@ event_associations {
   version: DateStamp
   record_revision: utf8
   association_id: utf8
-  event_ids: fixed_size_list<ULID, 2>
+  cluster_ids: fixed_size_list<ULID, 2>
   relation_type: utf8              # RELATED; no chronological or causal assertion
   direction_status: utf8           # unknown
   status: utf8                     # supported, uncertain, retracted
@@ -601,7 +605,7 @@ This mapping preserves fields whose supplied names or meanings differ from the s
 
 ```text
 topics.topic_id                 -> topics.topic_domain_id
-event_clusters.event_id         -> event_clusters.cluster_id
+event_clusters.cluster_id       -> Event Cluster identity
 event_clusters.topic_id         -> event_clusters.topic_domain_ids
 event_clusters.story_id         -> story_dag_id, referencing story_dags
 event_clusters.dispersion_radius -> admission_distance_mean for the source recurrence;
@@ -610,13 +614,13 @@ event_clusters.velocity         -> activity_score with its definition/evaluation
 event_clusters.member_count     -> retained member_count; n_C uses semantic_contributor_count
 event_clusters.t_earliest        -> supported temporal_envelope lower bound
 event_clusters.t_latest          -> supported temporal_envelope upper bound
-documents.event_id              -> current document_assignments.cluster_id
+documents.cluster_id            -> current document_assignments.cluster_id
 documents.topic_id/story_id     -> current assignment/routing projection
 documents.sparse_tokens         -> sparse_token_counts and derived BM25 representation
 documents.gliner_entities       -> typed entities; predicate roles remain in frames
 documents.is_syndicated_dup     -> copy-decision projection, nullable when unresolved
-story_edges.source_event_id     -> source_cluster_id
-story_edges.target_event_id     -> target_cluster_id
+story_edges.source_cluster_id   -> source Event Cluster identity
+story_edges.target_cluster_id   -> target Event Cluster identity
 story_edges.edge_weight         -> relation_score internally; view weight is separate
 story_edges.story_id            -> story_dag_id, referencing story_dags
 ```
@@ -1474,7 +1478,7 @@ StoryGraphView {
   availability: utf8
   missing_evidence_reasons: list<utf8>
   nodes: list<{
-    event_id: ULID
+    cluster_id: ULID
     representative_document_id: UUIDv5?
     canonical_title: utf8?
     summary: utf8?
@@ -1502,8 +1506,8 @@ StoryGraphView {
   }>
   edges: list<{
     edge_id: UUIDv5
-    source_event_id: ULID
-    target_event_id: ULID
+    source_cluster_id: ULID
+    target_cluster_id: ULID
     edge_type: utf8
     relation_score: float32?
     weight: float64?
@@ -1513,7 +1517,7 @@ StoryGraphView {
   }>
   related_events_unordered: list<{
     association_id: utf8
-    event_ids: fixed_size_list<ULID, 2>
+    cluster_ids: fixed_size_list<ULID, 2>
     relation_type: utf8             # RELATED
     direction_status: utf8          # unknown
     evidence_refs: list<EvidenceRef>
@@ -1525,7 +1529,7 @@ The source's scalar `agent` and `target` display values are retained as particip
 
 `core_frame.frame_resolution_ref` resolves by `document_id` and the selected `frame_id`, then follows the unique resolution selecting that frame. `resolver_version` identifies the selection rules, not the identity of a result. A missing or non-unique reference prevents that trusted frame from being projected.
 
-Unresolved primary-frame candidates are not projected as a trusted `core_frame`. The separately named unordered collection has no source/target direction, path weight, or backbone flag. It records the provisional related-event policy and must be excluded from directed traversal. The original source JSON examples below remain unchanged and illustrate the earlier narrower shape.
+Unresolved primary-frame candidates are not projected as a trusted `core_frame`. The separately named unordered collection has no source/target direction, path weight, or backbone flag. It records the provisional related-event policy and must be excluded from directed traversal. The JSON examples below use the same cluster identity names and otherwise illustrate the earlier narrower shape.
 
 Report-link eligibility follows `uncertain_copy_handling` for new public lists. This cannot erase a previously published item address, saved source content, or evidence. Store the applied policy in view metadata or a referenced handling record so a missing entry has an explainable cause.
 
@@ -1533,7 +1537,7 @@ The source example describes semiconductor export-control coverage, with a topic
 
 #### Supplied topic and graph examples
 
-These source examples are retained in full so the concrete field usage is not lost. They are **illustrative source material**, not validated news, measured scores, or schema-valid production fixtures. Their abbreviated/prefixed IDs, scalar event times, and `GOV` label need the mappings above. The example's seven-day reader window is not the selected **15-day configurable active-search window**.
+These examples retain the supplied content with cluster identity names. They are **illustrative source material**, not validated news, measured scores, or schema-valid production fixtures. Their abbreviated/prefixed IDs, scalar event times, and `GOV` label need the mappings above. The example's seven-day reader window is not the selected **15-day configurable active-search window**.
 
 ```json
 {
@@ -1572,7 +1576,7 @@ These source examples are retained in full so the concrete field usage is not lo
   },
   "nodes": [
     {
-      "event_id": "event_01J9W5... (ULID)",
+      "cluster_id": "cluster_01J9W5... (ULID)",
       "canonical_title": "Dutch Government Signals Broadened Lithography Tool Oversight",
       "summary": "Officials from the Dutch Ministry of Foreign Affairs indicated that upcoming export adjustments would encompass certain deep ultraviolet (DUV) lithography units previously exempt.",
       "t_event": "2026-09-28T11:15:00Z",
@@ -1587,7 +1591,7 @@ These source examples are retained in full so the concrete field usage is not lo
       }
     },
     {
-      "event_id": "event_01J9Y7... (ULID)",
+      "cluster_id": "cluster_01J9Y7... (ULID)",
       "canonical_title": "ASML Confirms Direct Dutch Licensing Requirements for NXT:1980 Systems",
       "summary": "ASML confirmed that export licenses for shipment of its Twinscan NXT:1980 systems to Chinese customers must now be approved directly by The Hague rather than European trade authorities.",
       "t_event": "2026-10-02T14:30:00Z",
@@ -1604,8 +1608,8 @@ These source examples are retained in full so the concrete field usage is not lo
   ],
   "edges": [
     {
-      "source_event_id": "event_01J9W5...",
-      "target_event_id": "event_01J9Y7...",
+      "source_cluster_id": "cluster_01J9W5...",
+      "target_cluster_id": "cluster_01J9Y7...",
       "edge_type": "CAUSAL_PROGRESSION",
       "weight": 0.82,
       "is_backbone_edge": true
@@ -1616,9 +1620,9 @@ These source examples are retained in full so the concrete field usage is not lo
 
 #### Field mapping from the supplied projection
 
-The source's `topic_id`, `story_id`, and `event_id` remain view fields and resolve to `topic_domain_id`, `story_dag_id`, and `cluster_id` in logical state. `t_event` is expanded from an unconditional instant to supported time evidence. `is_backbone_node` and `is_backbone_edge` remain view flags, not authoritative membership or relationship facts.
+View `topic_id` and `story_id` resolve to `topic_domain_id` and `story_dag_id` in logical state. View `cluster_id`, `source_cluster_id`, `target_cluster_id` and `cluster_ids` use the logical cluster identities directly, with no second field vocabulary. `t_event` is expanded from an unconditional instant to supported time evidence. `is_backbone_node` and `is_backbone_edge` remain view flags, not authoritative membership or relationship facts.
 
-The supplied examples used prefixed and abbreviated IDs such as `story_...` and `event_...`. These are placeholders; valid serialized views use the identity formats in Table A. Selection windows are configured independently of the 15-day ordinary active-search window.
+The examples use prefixed and abbreviated IDs such as `story_...` and `cluster_...`. These are placeholders; valid serialized views use the identity formats in Table A. Selection windows are configured independently of the 15-day ordinary active-search window.
 
 ## Evaluation and control registry
 
