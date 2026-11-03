@@ -1,9 +1,11 @@
 /** Which API and CLI controls are valid before a feed can be requested? */
 import { z } from "zod";
-import { relative } from "node:path";
 import { PositiveCountSchema } from "@idhazh/common-contracts";
 import type { FeedIngestConfig } from "@idhazh/common-contracts";
 import { resolvePartitionRequest } from "../partition-article-shards/partition-input";
+import { PlanError } from "./plan-error";
+export { PlanError } from "./plan-error";
+export { describePlanError } from "./plan-failure";
 
 export const PlanRequestSchema = z.strictObject({
   article_limit: PositiveCountSchema.optional(),
@@ -11,12 +13,6 @@ export const PlanRequestSchema = z.strictObject({
   partition_strategy: z.enum(["bin-pack", "round-robin", "none"]).optional(),
 });
 export type PlanRequest = z.infer<typeof PlanRequestSchema>;
-export class PlanError extends Error {
-  constructor(readonly code: string, message: string, readonly field: string | null = null) {
-    super(message);
-    this.name = "PlanError";
-  }
-}
 
 export function resolvePlanRequest(raw: unknown, config: FeedIngestConfig) {
   const request = PlanRequestSchema.parse(raw);
@@ -63,22 +59,4 @@ export function parseCliRequest(args: readonly string[]) {
     throw new PlanError("INVALID_REQUEST", "serve mode accepts controls in each API request only", "mode");
   }
   return { mode, request: PlanRequestSchema.parse(raw) };
-}
-
-export function describePlanError(error: unknown, root?: string) {
-  const message = (value: string) => root === undefined ? value : value.replaceAll(root, ".").replaceAll("\\", "/");
-  if (error instanceof z.ZodError) return {
-    code: "INVALID_INPUT", issues: error.issues.flatMap(issue =>
-      (issue.code === "unrecognized_keys" ? issue.keys.map(key => [...issue.path, key]) : [issue.path])
-        .map(path => ({ field: path.map(String).join(".") || "body", message: message(issue.message) }))),
-  };
-  if (error instanceof PlanError) return {
-    code: error.code, issues: [{ field: error.field, message: message(error.message) }],
-  };
-  return {
-    code: "PLAN_FAILED",
-    issues: [{ field: error instanceof Error && "path" in error && typeof error.path === "string" && root !== undefined
-      ? relative(root, error.path).replaceAll("\\", "/") : null,
-    message: error instanceof Error ? message(error.message) : "Unknown planner failure" }],
-  };
 }

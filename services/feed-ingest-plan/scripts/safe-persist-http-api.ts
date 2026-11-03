@@ -8,10 +8,13 @@ import { writeJsonLine } from "../src/logging/structured-logger";
 import { deliverWorkflowMetadata } from "./feed-ingest-plan-deliver";
 import { SafePersistHttpRequestSchema } from "./feed-ingest-plan-delivery-result";
 import type { SafePersistHttpReadySchema } from "./feed-ingest-plan-delivery-result";
+import { withPlannerFailure } from "../src/api/plan-failure";
+import type { FailureCaptureLimits } from "../src/config/service-settings";
 
 export function createSafePersistApp(input: {
   root: string; directory: string; maxBodyBytes: number; gitSha: string;
   identity: z.infer<typeof SafePersistHttpReadySchema>; signal: AbortSignal;
+  failureLimits?: FailureCaptureLimits;
 }) {
   const app = new Hono<{ Bindings: { beginDelivery?: () => void } }>();
   app.use(`${PLANNER_API_PREFIX}/*`, bodyLimit({
@@ -32,11 +35,18 @@ export function createSafePersistApp(input: {
     input.signal.throwIfAborted();
     c.req.raw.signal.throwIfAborted();
     c.env?.beginDelivery?.();
-    const result = await deliverWorkflowMetadata({
+    let result;
+    try { result = await deliverWorkflowMetadata({
       root: input.root, directory: input.directory, runNumber: request.runNumber,
       attempt: request.attempt, currentRunFiles: JSON.stringify(request.paths),
       gitSha: input.gitSha,
-    });
+    }); } catch (error) {
+      throw withPlannerFailure(error, {
+        operation: "commit-ledgers", execution: {
+          run_id: null, attempt: request.attempt, correlation_id: null, git_sha: input.gitSha,
+        }, ...(input.failureLimits === undefined ? {} : { limits: input.failureLimits }),
+      });
+    }
     writeJsonLine({
       event: "safe_persist_http_completed", run_number: request.runNumber, attempt: request.attempt,
       status: result.status, commit: result.commit, files: result.files,
@@ -45,15 +55,12 @@ export function createSafePersistApp(input: {
   });
   app.notFound(c => c.json({ code: "NOT_FOUND", issues: [{ field: "route", message: "Unknown API route" }] }, 404));
   app.onError((error, c) => {
-    const failure = describePlanError(error, input.root);
-    const code = "code" in error && typeof error.code === "string" ? error.code : failure.code;
-    writeJsonLine({ event: "safe_persist_http_failed", code });
-    return c.json({
-      ...failure, code,
-      issues: failure.issues.map(issue => ({
-        ...issue, message: issue.message.replaceAll(input.directory, "feed-ingest-plan").replaceAll("\\", "/"),
-      })),
-    }, ["INVALID_INPUT", "INVALID_REQUEST"].includes(code) ? 400 : 500);
+    const failure = describePlanError(error, input.root, {
+      operation: "commit-ledgers",
+      ...(input.failureLimits === undefined ? {} : { limits: input.failureLimits }),
+    });
+    writeJsonLine({ event: "safe_persist_http_failed", code: failure.code, failure: failure.failure });
+    return c.json(failure, ["INVALID_INPUT", "INVALID_REQUEST"].includes(failure.code) ? 400 : 500);
   });
   return app;
 }

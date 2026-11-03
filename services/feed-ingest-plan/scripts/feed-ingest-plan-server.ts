@@ -9,6 +9,8 @@ import { servePlan } from "../src/api/server";
 import { PlanError } from "../src/api/plan-request";
 import { runHttpChild } from "./http-child-lifetime";
 import { writeJsonLine } from "../src/logging/structured-logger";
+import { capturePlannerFailure, runtimeFailureExecution, withPlannerFailure } from "../src/api/plan-failure";
+import { describePlanError } from "../src/api/plan-request";
 
 export async function restorePlannerStartup(startup: PlannerStartup, root = process.cwd()) {
   const inputs = await loadPlanInputs(root, undefined, startup.settings);
@@ -28,8 +30,16 @@ export async function runPlannerServer(
     const startup = PlannerStartupSchema.parse(message);
     return {
       shutdownTimeoutMs: startup.settings.supervision.shutdown_timeout_ms,
+      capture: { operation: "listener-start", execution: runtimeFailureExecution(startup.runtime),
+        limits: startup.settings.diagnostics.failure },
       start: async signal => {
-        const { inputs, runtime } = await restore(startup);
+        let restored: Awaited<ReturnType<typeof restore>>;
+        try { restored = await restore(startup); }
+        catch (error) {
+          throw withPlannerFailure(error, { operation: "listener-start", execution: runtimeFailureExecution(startup.runtime),
+            limits: startup.settings.diagnostics.failure });
+        }
+        const { inputs, runtime } = restored;
         signal.throwIfAborted();
         const identity = PlannerReadySchema.parse({
           event: "planner_ready", nonce: startup.nonce, pid: process.pid,
@@ -38,8 +48,12 @@ export async function runPlannerServer(
         let server: ReturnType<typeof servePlan>;
         try { server = servePlan(inputs, { ...runtime, signal }, identity); }
         catch (error) {
-          const code = error instanceof Error && "code" in error ? String(error.code) : "LISTEN_FAILED";
-          throw new PlanError("PLANNER_BIND_FAILED", `Planner loopback listener could not bind: ${code}`);
+          throw new PlanError("PLANNER_BIND_FAILED", "Planner loopback listener could not bind", null, {
+            cause: error, failure: capturePlannerFailure(error, {
+              operation: "listener-start", execution: runtimeFailureExecution(startup.runtime),
+              limits: startup.settings.diagnostics.failure,
+            }),
+          });
         }
         return { server, ready: { ...identity, port: server.port } };
       },
@@ -52,8 +66,7 @@ if (import.meta.main) {
   catch (error) {
     writeJsonLine({
       event: "planner_server_failed",
-      code: error instanceof PlanError ? error.code : "PLANNER_STARTUP_FAILED",
-      ...(error instanceof PlanError ? { message: error.message } : {}),
+      ...describePlanError(error, undefined, { operation: "listener-start" }),
     });
     process.exitCode = 2;
   }

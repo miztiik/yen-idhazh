@@ -143,8 +143,8 @@ test("manual controls exercise the planner API and keep only required outputs", 
   });
   expect(plan.run).not.toContain("${{");
   const closing = steps.slice(steps.indexOf(plan) + 1);
-  expect(closing).toHaveLength(7);
-  const [cancellation, commit, report, finalize, upload, , finish] = closing;
+  expect(closing).toHaveLength(8);
+  const [cancellation, commit, report, finalize, upload, , entityUpload, finish] = closing;
   expect(controls.write_report).toMatchObject({ default: true, type: "boolean", required: false });
   expect(commit?.id).toBe("commit");
   expect(commit?.if).toBe("${{ always() }}");
@@ -179,7 +179,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(finalize?.run).not.toContain("git push");
   expect(upload?.id).toBe("upload");
   expect(upload?.uses).toBe("actions/upload-artifact@v7");
-  expect(steps.filter(step => step.uses === upload?.uses)).toHaveLength(2);
+  expect(steps.filter(step => step.uses === upload?.uses)).toHaveLength(3);
   expect(upload?.with?.archive).not.toBe(false);
   expect(upload?.with?.name).toBe("collect-and-select-articles-${{ github.run_id }}-${{ github.run_attempt }}");
   expect(upload?.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.finalize.outputs.artifact_directory }}");
@@ -187,6 +187,11 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(upload?.if).toContain("steps.finalize.outputs.artifact_directory != ''");
   expect(upload?.with?.["if-no-files-found"]).toBe("error");
   expect(upload?.with?.["include-hidden-files"]).toBe(false);
+  expect(entityUpload?.id).toBe("upload-article-entities");
+  expect(entityUpload?.if).toBe("${{ always() && steps.finalize.outputs.article_entities != '' }}");
+  expect(entityUpload?.with?.name).toBe("article-entities-${{ github.run_id }}-${{ github.run_attempt }}");
+  expect(entityUpload?.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.finalize.outputs.article_entities }}");
+  expect(entityUpload?.with?.["if-no-files-found"]).toBe("error");
   expect(finish?.if).toContain("always()");
   expect(finish?.run).toBe("bun run services/feed-ingest-plan/scripts/finish-run-output.ts");
   expect(finish?.env).toEqual({
@@ -200,6 +205,9 @@ test("manual controls exercise the planner API and keep only required outputs", 
     RAW_DOCUMENT_CONTENTS: "${{ steps.finalize.outputs.raw_document_contents }}",
     RAW_UPLOAD_OUTCOME: "${{ steps.upload-raw-documents.outcome }}",
     RAW_UPLOAD_ARTIFACT_ID: "${{ steps.upload-raw-documents.outputs.artifact-id }}",
+    ARTICLE_ENTITIES: "${{ steps.finalize.outputs.article_entities }}",
+    ENTITY_UPLOAD_OUTCOME: "${{ steps.upload-article-entities.outcome }}",
+    ENTITY_UPLOAD_ARTIFACT_ID: "${{ steps.upload-article-entities.outputs.artifact-id }}",
   });
   expect(text).toContain("/state/raw/feed-ingest-plan/");
   expect(text).toContain("/state/compact/feed-ingest-plan/");
@@ -319,7 +327,8 @@ test("hostile dispatch strings fail in the actual adapter before loading inputs 
   const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
   expect(await child.exited).toBe(2);
   expect(output).toBe("");
-  expect(JSON.parse(errors)).toEqual({ event: "planner_workflow_failed", code: "INVALID_INPUT" });
+  expect(JSON.parse(errors)).toMatchObject({ event: "planner_workflow_failed", code: "INVALID_INPUT",
+    failure: { error_type: "ZodError", safe_cause: "invalid-input" } });
   expect(errors).not.toContain("injected");
 });
 

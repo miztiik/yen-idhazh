@@ -89,7 +89,8 @@ test("public request errors retain their fields without exposing checkout paths"
   if (invalid.success) throw new Error("The typed request must refuse a numeric string");
   expect(describePlanError(invalid.error).issues[0]!.field).toBe("article_limit");
   expect(describePlanError(new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled")))
-    .toEqual({ code: "PLANNER_DISABLED", issues: [{ field: "enabled", message: "Planner is disabled" }] });
+    .toMatchObject({ code: "PLANNER_DISABLED", issues: [{ field: "enabled", message: "Planner is disabled" }],
+      failure: { error_type: "PlanError" } });
   try {
     parseCliRequest(["--cli", "--freshness-hours=18"]);
     throw new Error("The CLI must refuse an unknown control");
@@ -103,7 +104,8 @@ test("public request errors retain their fields without exposing checkout paths"
     path: join(root, "state", "blocked"),
   }), root);
   expect(failure.code).toBe("PLAN_FAILED");
-  expect(failure.issues[0]!.field).toBe("state/blocked");
+  expect(failure.issues[0]!.field).toBeNull();
+  expect(failure.failure?.source?.file).toBe("services/feed-ingest-plan/test/plan-cli.test.ts");
   expect(JSON.stringify(failure)).not.toContain(root);
 });
 
@@ -121,7 +123,8 @@ test("standalone startup refuses missing or invalid supplied code identity with 
     expect(status).toBe(1);
     expect(output).toBe("");
     expect(JSON.parse(error.trim())).toMatchObject({
-      event: "planner_error", issues: [expect.objectContaining({ message: expect.stringContaining("GITHUB_SHA") })],
+      event: "planner_error", code: "INVALID_INPUT", issues: [expect.objectContaining({ field: "git_sha" })],
+      failure: { safe_cause: "invalid-input" },
     });
   }
 });

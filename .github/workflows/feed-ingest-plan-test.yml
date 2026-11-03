@@ -157,6 +157,16 @@ jobs:
           include-hidden-files: false
           if-no-files-found: error
 
+      - name: Upload article entities
+        id: upload-article-entities
+        if: ${{ always() && steps.finalize.outputs.article_entities != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: article-entities-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.finalize.outputs.article_entities }}
+          include-hidden-files: false
+          if-no-files-found: error
+
       - name: Finish and clean up
         if: ${{ always() }}
         env:
@@ -173,4 +183,7 @@ jobs:
           RUN_ID: ${{ steps.plan.outputs.run_id }}
           RAW_UPLOAD_OUTCOME: ${{ steps.upload-raw-documents.outcome }}
           RAW_UPLOAD_ARTIFACT_ID: ${{ steps.upload-raw-documents.outputs.artifact-id }}
+          ARTICLE_ENTITIES: ${{ steps.finalize.outputs.article_entities }}
+          ENTITY_UPLOAD_OUTCOME: ${{ steps.upload-article-entities.outcome }}
+          ENTITY_UPLOAD_ARTIFACT_ID: ${{ steps.upload-article-entities.outputs.artifact-id }}
         run: bun run services/feed-ingest-plan/scripts/finish-run-output.ts

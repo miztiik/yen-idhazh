@@ -1,16 +1,19 @@
 /** Serve safe-persist HTTP only for the lifetime of its finalizer's private startup pipe. */
 import { resolve } from "node:path";
-import { PlanError } from "../src/api/plan-request";
+import { PlanError, describePlanError } from "../src/api/plan-request";
 import { writeJsonLine } from "../src/logging/structured-logger";
 import { SafePersistHttpReadySchema, SafePersistHttpStartupSchema } from "./feed-ingest-plan-delivery-result";
 import { createSafePersistApp } from "./safe-persist-http-api";
 import { runHttpChild } from "./http-child-lifetime";
+import { capturePlannerFailure } from "../src/api/plan-failure";
 
 export function runSafePersistServer(root = process.cwd()) {
   return runHttpChild("SAFE_PERSIST", message => {
     const startup = SafePersistHttpStartupSchema.parse(message);
     return {
       shutdownTimeoutMs: startup.settings.supervision.shutdown_timeout_ms,
+      capture: { operation: "listener-start", limits: startup.settings.diagnostics.failure,
+        execution: { run_id: null, attempt: null, correlation_id: null, git_sha: startup.git_sha } },
       start: async signal => {
         signal.throwIfAborted();
         const identity = SafePersistHttpReadySchema.parse({
@@ -21,6 +24,7 @@ export function runSafePersistServer(root = process.cwd()) {
           root, directory: resolve(root, startup.output_root), identity, signal,
           gitSha: startup.git_sha,
           maxBodyBytes: startup.settings.listener.max_body_bytes,
+          failureLimits: startup.settings.diagnostics.failure,
         });
         let server: ReturnType<typeof Bun.serve>;
         try {
@@ -32,8 +36,12 @@ export function runSafePersistServer(root = process.cwd()) {
             },
           });
         } catch (error) {
-          const code = error instanceof Error && "code" in error ? String(error.code) : "LISTEN_FAILED";
-          throw new PlanError("SAFE_PERSIST_BIND_FAILED", `Safe-persist loopback listener could not bind: ${code}`);
+          throw new PlanError("SAFE_PERSIST_BIND_FAILED", "Safe-persist loopback listener could not bind", null, {
+            cause: error, failure: capturePlannerFailure(error, {
+              operation: "listener-start", limits: startup.settings.diagnostics.failure,
+              execution: { run_id: null, attempt: null, correlation_id: null, git_sha: startup.git_sha },
+            }),
+          });
         }
         return { server, ready: { ...identity, port: server.port } };
       },
@@ -46,7 +54,7 @@ if (import.meta.main) {
   catch (error) {
     writeJsonLine({
       event: "safe_persist_server_failed",
-      code: error instanceof PlanError ? error.code : "SAFE_PERSIST_STARTUP_FAILED",
+      ...describePlanError(error, undefined, { operation: "listener-start" }),
     });
     process.exitCode = 2;
   }

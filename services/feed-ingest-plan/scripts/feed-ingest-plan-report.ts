@@ -1,7 +1,7 @@
 /** Write the reusable planner Markdown into the workflow run summary. */
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { FeedIngestConfigSchema, WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
+import { FeedIngestConfigSchema, WriterIdentitySchema, PlannerSavedResponseSchema } from "../../../packages/common-contracts/src/index";
 import { z } from "zod";
 import { PlanResponseSchema } from "../src/api/plan-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-state.schema";
@@ -16,6 +16,8 @@ import { formatWorkflowAnnotation } from "./feed-ingest-plan-report-format";
 import { readReportFailureEvidence } from "./feed-ingest-plan-report-evidence";
 import type { ReportFailureEvidence } from "../src/reporting/failure-evidence-markdown";
 import { verifyParquetFiles } from "./feed-ingest-plan-verification";
+import { ServiceSettingsSchema } from "../src/config/service-settings";
+import { articleEntitiesFilename, articleEntitiesPath } from "../src/selected-artifact-path";
 
 export type WorkflowReportEvidence = {
   response: unknown; health?: unknown; selected?: unknown; policy?: unknown; host?: unknown;
@@ -25,7 +27,11 @@ export type WorkflowReportEvidence = {
 export function renderWorkflowPlanMarkdown(
   input: WorkflowReportEvidence, documentationUrl = resolveWorkflowGuideUrl(process.env),
 ): PlannerMarkdown {
-  const response = PlanResponseSchema.parse(input.response);
+  const response = PlannerSavedResponseSchema.parse(input.response);
+  if (!("planning_complete" in response)) {
+    const host = formatHostFingerprintSummary(input.host);
+    return renderUnavailablePlanMarkdown({ failure: response.failure, host: { markdown: host.cells, notice: host.notice } });
+  }
   const policy = formatPolicyTable(input.policy, response.selection_started_at_utc !== null, documentationUrl);
   const host = formatHostFingerprintSummary(input.host);
   return renderPlanMarkdown({
@@ -72,6 +78,8 @@ export async function readExecutionEvidence(directory: string, root?: string): P
     const file = Bun.file(join(directory, name));
     if (await file.exists()) evidence[key] = await file.json();
   }
+  const saved = PlannerSavedResponseSchema.parse(response);
+  if (!("planning_complete" in saved)) return evidence;
   evidence.failures = await readReportFailureEvidence({
     directory, ...(root === undefined ? {} : { root }), response, health: evidence.health,
   });
@@ -118,8 +126,27 @@ export async function writeWorkflowReport(input: {
     const host = formatHostFingerprintSummary(await hostFile.exists() ? await hostFile.json() : undefined);
     report = renderUnavailablePlanMarkdown({ host: { markdown: host.cells, notice: host.notice } });
   }
-  const markdown = report.markdown;
-  const filename = workflowReportFilename(input);
+  let entityEvidence = "Entity output could not be checked because execution identity was not recorded.";
+  const responseFile = Bun.file(join(input.directory, "response.json"));
+  const response = await responseFile.exists() ? PlannerSavedResponseSchema.parse(await responseFile.json()) : undefined;
+  const runId = input.runId ?? (response !== undefined && "planning_complete" in response
+    ? response.run_id : response?.failure?.execution.run_id ?? undefined);
+  if (runId !== undefined) {
+    const settingsFile = Bun.file(join(input.root, "config", "feed-ingest-plan-service.json"));
+    const attempt = response !== undefined && "planning_complete" in response ? response.attempt : response?.failure?.execution.attempt;
+    if (!await settingsFile.exists()) {
+      entityEvidence = "Entity output could not be checked because service settings were not recorded.";
+    } else if (attempt != null) {
+      const settings = ServiceSettingsSchema.parse(await settingsFile.json());
+      const context = { run_id: runId, writer: { attempt } };
+      entityEvidence = "No entity file was written for this run. Missing output is not a successful empty entity set.";
+      if (await Bun.file(join(input.root, articleEntitiesPath(settings.inputs.artifact_root, context))).exists()) {
+        entityEvidence = `Available private file: \`${articleEntitiesFilename(context)}\`. Each JSONL line is one article record and states incomplete or truncated evidence. Entity names are not included in this report or in progress logs.`;
+      }
+    }
+  }
+  const markdown = `${report.markdown}\n\n## Per-run named entities\n\nPeople, places and organizations are recognized from the original title and full sanitized extracted article, not downloaded HTML. These names do not change scores or checks that decide whether an article is eligible.\n\n${entityEvidence}\n`;
+  const filename = workflowReportFilename({ ...input, ...(runId === undefined ? {} : { runId }) });
   await writeFile(join(input.directory, filename), markdown + diagnostics, "utf8");
   await appendFile(input.summaryPath, markdown, "utf8");
   for (const notice of report.notices) console.log(formatWorkflowAnnotation(notice));

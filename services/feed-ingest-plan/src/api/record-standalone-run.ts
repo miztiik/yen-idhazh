@@ -7,10 +7,22 @@ import { recordPlanRun } from "../record-plan-run";
 import { stageStore } from "./stage-store";
 import { summarizeSelectionMetrics } from "../summarize-selection-metrics";
 import type { RunContext } from "../resolve-run-context";
+import { finishArticleEntities } from "../record-article-entities";
+import { finishRawDocumentFailures } from "../dump-raw-document-failure";
+import { withPlannerFailure } from "./plan-failure";
 
 async function saveOutcome(inputs: PlanInputs, state: ExecutionState, values: Parameters<typeof recordPlanRun>[2]) {
   if (state.run_result !== undefined) return state.run_result;
-  const result = recordPlanRun(inputs, state.context, values);
+  const result = (async () => {
+    const outputs = await Promise.allSettled([
+      finishArticleEntities(inputs, state.context), finishRawDocumentFailures(inputs, state.context),
+    ]);
+    const failures = outputs.flatMap(result => result.status === "rejected" ? [result.reason] : []);
+    if (failures.length) throw withPlannerFailure(new AggregateError(failures, "Standalone diagnostics could not be closed"), {
+      operation: "persist", execution: state.context, limits: inputs.settings.diagnostics.failure,
+    });
+    return recordPlanRun(inputs, state.context, values);
+  })();
   state.run_result = result;
   try { return await result; }
   catch (error) {

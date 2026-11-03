@@ -2,7 +2,7 @@
 import { z } from "zod";
 import {
   NonEmptySchema, PlanApiTimingSchema, PlannerStageContextSchema, PositiveCountSchema, RequestIdSchema,
-  RunIdSchema, SlugSchema,
+  RunIdSchema, SlugSchema, PlannerFailureSchema,
 } from "@idhazh/common-contracts";
 import { PlanRequestSchema } from "./plan-request";
 import { StageWriteResultSchema } from "./stage-response.schema";
@@ -29,6 +29,7 @@ export const CancelledCollectionSchema = z.strictObject({
 });
 export const FinalizeCollectionRequestSchema = z.strictObject({
   collection_id: RequestIdSchema, failure_code: NonEmptySchema.nullable(),
+  failure: PlannerFailureSchema.nullable().default(null),
   collection_timing: z.strictObject({
     duration_ms: z.int().nonnegative(), status: z.enum(["completed", "failed"]),
   }),
@@ -36,6 +37,7 @@ export const FinalizeCollectionRequestSchema = z.strictObject({
 export const FinalizedCollectionSchema = z.strictObject({
   collection_id: RequestIdSchema, status: z.enum(["completed", "partial", "failed"]),
   failure_code: NonEmptySchema.nullable(), api_timings: z.array(PlanApiTimingSchema),
+  failure: PlannerFailureSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
   if ((value.status === "completed") !== (value.failure_code === null)) {
     ctx.addIssue({ code: "custom", message: "Only a completed collection has no failure cause" });

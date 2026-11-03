@@ -62,6 +62,12 @@ global unique-URL capacity, cached scores and soft diversity adjustments.
 The workflow does not profile live planner CPU or RAM. It still records the
 configured host fingerprint and commits it with the planner ledgers.
 
+Each enabled manual run also writes the separate
+[article-entity diagnostic](../architecture/sources/planner-run-diagnostics.md#recognized-article-names).
+Its authored `diagnostics.named_entities` limits bound output, not input text.
+There is no extra dispatch switch. Names never enter job progress logs or
+committed ledgers.
+
 ## Local offline checks
 
 Inspect `npm run test:changed -- --list` from `frontend/`. For service-only
@@ -173,7 +179,7 @@ Startup and finalization validate the supplied `GITHUB_SHA`; they do not query
 `HEAD`. The safe-persist child receives that identity through its existing
 private startup pipe, never through public planning or delivery controls.
 
-Five tasks follow `Collect and select articles with a supervised server`:
+Six tasks follow `Collect and select articles with a supervised server`:
 
 1. `Commit ledgers and write report` starts its own supervised
    [safe-persist HTTP child](../architecture/sources/feed-operator-api.md#safe-persist-http-delivery)
@@ -192,7 +198,8 @@ Five tasks follow `Collect and select articles with a supervised server`:
 3. `Upload run artifacts` uploads that prepared directory as one archive named
    `collect-and-select-articles-<run>-<attempt>`, including after finalization
    failure. It contains `<run>-<attempt>-selected-articles.json` for the next
-   summarizer, plus the delivery result and Markdown report when available.
+   summarizer, plus the delivery result, body-free response and Markdown report
+   when available.
    The summarizer downloads this named artifact and reads its selected JSON
    file, not a ledger. Article bodies never enter the Git request.
 4. `Upload failed document metadata` runs only when the dropdown is `true` and a
@@ -203,8 +210,14 @@ Five tasks follow `Collect and select articles with a supervised server`:
    and no debug upload. Failed collection still prepares and uploads available
    diagnostics; no successful raw input, extracted-text substitute or new
    retention policy is added.
-5. `Finish and clean up` checks collection, finalization and the normal upload's
-   returned artifact identity, plus the diagnostic upload when applicable.
+5. `Upload article entities` uploads the closed private JSONL file as
+   `article-entities-<run>-<attempt>` whenever it was written, including after
+   later planner failure. Its one file is
+   `article-entities-<UTC-day>-<numeric-run-id>-<attempt>.jsonl`. Each article
+   record distinguishes empty name sets, incomplete analysis and omitted
+   names. No file means no upload, not a successful empty result.
+6. `Finish and clean up` checks collection, finalization and the normal upload's
+   returned artifact identity, plus both diagnostic uploads when applicable.
    It rechecks the saved result and exact Git
    delivery receipt before removing only the temporary run directory.
    An earlier collection failure still fails the job after completed
@@ -220,7 +233,7 @@ When the metadata commit is not confirmed, the same artifact also contains
 `uncommitted-metadata-<run>-<attempt>/`: only the exact validated current-run
 metadata files and `current-run-files.json`. It can contain multiple UTC-day
 files. No whole temporary root or private parsed/rejected
-population is uploaded. Raw diagnostics never enter this normal archive or
+population is uploaded. Raw diagnostics and recognized names never enter this normal archive or
 the metadata Git request. Invalid evidence fails preparation while independently
 verified files remain recoverable. Cancellation skips new Git delivery while
 still attempting the report and recovery upload.
@@ -243,6 +256,10 @@ actionable run and progress warnings remain. The report cannot establish
 publication and stays separate from the delivery receipt.
 The workflow writes the summary into the existing downloadable Markdown
 artifact, with per-feed exclusion diagnostics appended only to that artifact.
+The same report explains the original execution error and bounded related
+causes without copying exception text or raw stacks. The body-free
+`<run>-<attempt>-response.json` remains in the normal archive for the same
+evidence in structured form.
 Reporting is controlled by `workflow_reporting.enabled`; it cannot change
 ledger bytes or establish completion.
 The exported Markdown renderer and its separation from production digest

@@ -69,6 +69,14 @@ Public responses, progress and commit manifests contain no article bodies.
 The downloaded body remains private in memory for its one parse operation.
 Extracted article text continues through selection and its separate artifact.
 
+Unexpected failures retain one shared
+[safe execution projection](planner-run-diagnostics.md#safe-execution-context)
+through API refusals, logs and the run report. Missing source locations stay
+unavailable; later cancellation or cleanup cannot replace the original cause.
+Article parsing also prepares the separate
+[private entity file](planner-run-diagnostics.md#recognized-article-names)
+without adding names to HTTP responses or progress logs.
+
 ## Structured operation logs
 
 Standalone fetch, parse and persistence use the same structured publisher
@@ -156,7 +164,7 @@ Table A
 | A5 | `collections` | Starts one run-owned collection with a UUIDv4 `collection_id` and validated planning controls. Returns the captured UTC context and configured feed IDs, not article text. |
 | A6 | `collections/complete` | Accepts `collection_id`; refuses until every required feed and offered article has a terminal outcome. Saves discovery and harvested-rejection evidence and exposes the complete global batch for selection. |
 | A7 | `collections/cancel` | Accepts `collection_id`; cancels owned work and prevents selection. Returns harvested-rejection receipts and a batch reference for explicit partial-health recording. |
-| A8 | `collections/finalize` | Accepts measured collection timing and the orchestration failure cause after stage writes settle. Drains owned work and raw diagnostics, then returns state-based status, failure cause and timing snapshot. |
+| A8 | `collections/finalize` | Accepts measured collection timing and safe orchestration failure context after stage writes settle. Drains owned work and both private diagnostics, then returns state-based status, retained failure context and timing snapshot. |
 | A9 | `collections/release` | Accepts `run_id` and `attempt`; releases a finalized collection after its later health-summary attempt. This does not erase written files. |
 | A10 | `collections/exists` | Accepts `collection_id`; reports whether the owner still holds that collection after an ambiguous startup response. |
 

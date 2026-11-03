@@ -20,10 +20,16 @@ import { finishRawDocumentFailures } from "../dump-raw-document-failure";
 import { stageStore } from "./stage-store";
 import { createRequestPacing } from "../harvest-feeds/request-pacing";
 import type { RequestPacing } from "../harvest-feeds/request-pacing";
+import { finishArticleEntities } from "../record-article-entities";
+import { runtimeFailureExecution, withPlannerFailure } from "./plan-failure";
+import { plannerFailureOperation } from "./planner-failure-operation";
+import { retainFailureThroughCleanup } from "./retain-failure-through-cleanup";
+import { PlanError } from "./plan-error";
 
 const apiPrefix = PLANNER_API_PREFIX;
 const activeApps = new WeakMap<PlanInputs, number>();
 const requestPacingByInputs = new WeakMap<PlanInputs, RequestPacing>();
+const pendingRequestsByInputs = new WeakMap<PlanInputs, Set<Promise<void>>>();
 function requestPacingFor(inputs: PlanInputs) {
   let pacing = requestPacingByInputs.get(inputs);
   if (pacing === undefined) {
@@ -39,6 +45,17 @@ function requestPacingFor(inputs: PlanInputs) {
 export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity?: PlannerReady) {
   const app = new Hono<{ Bindings: PlanningBindings }>();
   const requestPacing = requestPacingFor(inputs);
+  let pending = pendingRequestsByInputs.get(inputs);
+  if (pending === undefined) { pending = new Set(); pendingRequestsByInputs.set(inputs, pending); }
+  const requests = pending;
+  let closed = false;
+  const failureExecution = () => {
+    const capturedAt = runtime.captured_at ?? runtime.clock?.().toISOString();
+    return runtimeFailureExecution({ ...runtime, ...(capturedAt === undefined ? {} : { captured_at: capturedAt }) });
+  };
+  const closeCapture = () => ({
+    operation: "listener-close" as const, execution: failureExecution(), limits: inputs.settings.diagnostics.failure,
+  });
   const parserPool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
   const requestRuntime = () => ({
     ...runtime,
@@ -47,6 +64,13 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity
       include_private_suffixes: inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes,
     },
     parser_pool: parserPool,
+  });
+  app.use(`${apiPrefix}/*`, async (_c, next) => {
+    if (closed) throw new PlanError("REQUEST_INCOMPLETE", "Planner listener is closing");
+    const operation = Promise.resolve().then(next);
+    requests.add(operation);
+    try { await operation; }
+    finally { requests.delete(operation); }
   });
   app.use(`${apiPrefix}/*`, bodyLimit({
     maxSize: inputs.settings.listener.max_body_bytes,
@@ -63,8 +87,11 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity
   app.route(apiPrefix, feedHealthStateRoute(inputs, requestRuntime));
   app.notFound(c => c.json({ code: "NOT_FOUND", issues: [{ field: "route", message: "Unknown API route" }] }, 404));
   app.onError((error, c) => {
-    const failure = describePlanError(error, inputs.root);
-    writeJsonLine({ event: "planner_error", code: failure.code });
+    const failure = describePlanError(error, inputs.root, {
+      operation: plannerFailureOperation(c.req.path.replace(`${apiPrefix}/`, "")),
+      execution: failureExecution(), limits: inputs.settings.diagnostics.failure,
+    });
+    writeJsonLine({ event: "planner_error", code: failure.code, failure: failure.failure });
     const status = failure.code === "PLANNER_DISABLED" ? 503
       : ["INVALID_INPUT", "INVALID_REQUEST"].includes(failure.code) ? 400
       : ["REQUEST_BUSY", "REQUEST_CONFLICT", "REQUEST_INCOMPLETE", "FETCH_UNAVAILABLE", "BATCH_INCOMPLETE", "ARTICLE_EXCLUDED"].includes(failure.code) ? 409
@@ -75,20 +102,24 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity
   let closing: Promise<void> | undefined;
   return Object.assign(app, { close() {
     if (closing !== undefined) return closing;
+    closed = true;
     if (runtime.parser_pool === undefined) parserPool.close();
     const remaining = (activeApps.get(inputs) ?? 1) - 1;
     activeApps.set(inputs, remaining);
     if (remaining === 0) requestPacingByInputs.delete(inputs);
     closing = remaining > 0 ? Promise.resolve() : (async () => {
       const failures: unknown[] = [];
-      try { await finishRawDocumentFailures(inputs); }
-      catch (error) { failures.push(error); }
-      finally {
-        if (activeApps.get(inputs) === 0) { stageStore(inputs).releaseDocuments(); activeApps.delete(inputs); }
-      }
+      while (requests.size) await Promise.allSettled([...requests]);
+      const outputs = await Promise.allSettled([finishRawDocumentFailures(inputs), finishArticleEntities(inputs)]);
+      for (const result of outputs) if (result.status === "rejected") failures.push(result.reason);
       try { await requestPacing.close(); }
-      catch (error) { failures.push(error); }
-      if (failures.length) throw new AggregateError(failures, "Planner listener cleanup failed");
+      catch (error) { failures.push(withPlannerFailure(error, closeCapture())); }
+      finally {
+        if (activeApps.get(inputs) === 0) {
+          stageStore(inputs).releaseDocuments(); activeApps.delete(inputs); pendingRequestsByInputs.delete(inputs);
+        }
+      }
+      if (failures.length) throw withPlannerFailure(new AggregateError(failures, "Planner listener cleanup failed"), closeCapture());
     })();
     return closing;
   } });
@@ -105,13 +136,23 @@ export function servePlan(inputs: PlanInputs, runtime: PlanRuntime, identity?: P
     },
   }); } catch (error) {
     void app.close().catch(failure => writeJsonLine({
-      event: "planner_close_failed", code: describePlanError(failure, inputs.root).code,
+      event: "planner_close_failed", ...describePlanError(failure, inputs.root, {
+        operation: "listener-close", execution: runtimeFailureExecution(runtime), limits: inputs.settings.diagnostics.failure,
+      }),
     }));
     throw error;
   }
   return {
     get port() { return server.port; },
     get hostname() { return server.hostname; },
-    async stop(force = false) { try { await server.stop(force); } finally { await app.close(); } },
+    async stop(force = false) {
+      try { await server.stop(force); }
+      catch (error) {
+        throw await retainFailureThroughCleanup(error, {
+          operation: "listener-close", execution: runtimeFailureExecution(runtime), limits: inputs.settings.diagnostics.failure,
+        }, [{ operation: "listener-close", execute: () => app.close() }]);
+      }
+      await app.close();
+    },
   };
 }

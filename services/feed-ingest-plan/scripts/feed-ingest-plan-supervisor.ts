@@ -11,6 +11,7 @@ import { PlanError } from "../src/api/plan-request";
 import type { PlanRequest } from "../src/api/plan-request";
 import { requestPlannerHttp } from "./feed-ingest-plan-http-client";
 import { superviseHttpChild } from "./http-child-lifetime";
+import { runtimeFailureExecution } from "../src/api/plan-failure";
 
 export function createPlannerStartup(inputs: PlanInputs, runtime: PlannerStartup["runtime"]) {
   return PlannerStartupSchema.parse({
@@ -26,11 +27,13 @@ export async function invokePlannerHttp(
   return superviseHttpChild({
     root: inputs.root, kind: "PLANNER", settings: inputs.settings,
     startup: PlannerStartupSchema.parse(startup),
+    capture: { operation: "workflow", execution: runtimeFailureExecution(startup.runtime),
+      limits: inputs.settings.diagnostics.failure },
     serverEntry: options.serverEntry ?? fileURLToPath(new URL("./feed-ingest-plan-server.ts", import.meta.url)),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ready: async (message, pid, signal) => {
       const ready = z.union([PlannerReadySchema, PlannerStartupFailureSchema]).parse(message);
-      if (ready.event === "planner_startup_failed") throw new PlanError(ready.code, ready.message);
+      if (ready.event === "planner_startup_failed") throw new PlanError(ready.code, ready.message, null, { failure: ready.failure });
       if (ready.pid !== pid || ready.nonce !== startup.nonce
         || JSON.stringify(ready.runtime) !== JSON.stringify(startup.runtime)
         || ready.port !== inputs.settings.listener.port) {

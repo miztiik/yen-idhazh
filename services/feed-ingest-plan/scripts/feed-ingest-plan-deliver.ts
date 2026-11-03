@@ -11,6 +11,8 @@ import { verifyMetadataFile } from "./feed-ingest-plan-metadata";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { collectWorkflowFiles, readWorkflowDeliveryContext } from "./feed-ingest-plan-current-files";
 import { MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result";
+import { runtimeFailureExecution, withPlannerFailure } from "../src/api/plan-failure";
+import { retainFailureThroughCleanup } from "../src/api/retain-failure-through-cleanup";
 import { describePlanError } from "../src/api/plan-request";
 import { RelativePathSchema } from "../src/config/service-settings";
 import { z } from "zod";
@@ -66,11 +68,14 @@ export async function deliverWorkflowMetadata(input: {
   root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number; gitSha: string;
 }) {
   const paths = z.array(RelativePathSchema).parse(JSON.parse(input.currentRunFiles));
+  let execution = runtimeFailureExecution({ git_sha: input.gitSha, attempt: input.attempt });
   try {
     const context = await readWorkflowDeliveryContext({
       ...input,
     });
+    execution = { ...execution, run_id: context.identity.run_id };
     const completed = await collectWorkflowFiles({ ...input, ...context });
+    if (completed.response !== undefined) execution.correlation_id = completed.response.correlation_id;
     if ([...paths].sort().join("\n") !== [...completed.paths].sort().join("\n")) {
       throw new Error("Delivery paths differ from the validated completed API output");
     }
@@ -90,17 +95,17 @@ export async function deliverWorkflowMetadata(input: {
     await writeFile(join(input.directory, "delivery-result.json"), JSON.stringify(result));
     return result;
   } catch (error) {
+    const capture = { operation: "commit-ledgers" as const, execution };
+    const failure = withPlannerFailure(error, capture);
     const result = MetadataDeliveryResultSchema.parse({ status: "failed", commit: null, files: paths.length, paths });
-    await writeFile(join(input.directory, "delivery-result.json"), JSON.stringify(result));
     writeJsonLine({
       event: "planner_metadata_delivery_failed",
       ...result,
-      code: error instanceof Error ? error.name : "UnknownError",
-      reason: error instanceof Error
-        ? error.message.replaceAll(input.directory, "feed-ingest-plan").replaceAll(input.root, ".").replaceAll("\\", "/")
-        : "Unknown delivery failure",
+      code: failure.code, failure: failure.failure,
     });
-    throw error;
+    throw await retainFailureThroughCleanup(failure, capture, [{
+      operation: "record-run", execute: () => writeFile(join(input.directory, "delivery-result.json"), JSON.stringify(result)),
+    }]);
   }
 }
 

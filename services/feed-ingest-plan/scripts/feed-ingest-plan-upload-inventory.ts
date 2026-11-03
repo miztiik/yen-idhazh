@@ -4,12 +4,12 @@ import { join } from "node:path";
 import { stat } from "node:fs/promises";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import { createStageLogger, writeJsonLine } from "../src/logging/structured-logger";
-import { RAW_DOCUMENT_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-artifacts";
+import { ARTICLE_ENTITY_ARTIFACT_DIRECTORY, RAW_DOCUMENT_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-artifacts";
 
 export async function publishWorkflowUploadInventories(input: {
   directory: string; runNumber: string; write?: (event: FeedIngestEvent) => void;
 }) {
-  for (const name of ["artifacts", RAW_DOCUMENT_ARTIFACT_DIRECTORY]) {
+  for (const name of ["artifacts", RAW_DOCUMENT_ARTIFACT_DIRECTORY, ARTICLE_ENTITY_ARTIFACT_DIRECTORY]) {
     const directory = join(input.directory, name);
     try { await stat(directory); }
     catch (error) {

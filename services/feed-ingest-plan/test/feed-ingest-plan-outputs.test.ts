@@ -22,6 +22,8 @@ test("captured native output retains selected text separately from its strict me
   try {
     const { response: summary, outputs, health, artifact } = fixture;
     const directory = join(fixture.directory, "evidence");
+    await mkdir(join(fixture.directory, "config"), { recursive: true });
+    await writeFile(join(fixture.directory, "config", "feed-ingest-plan-service.json"), JSON.stringify(fixture.inputs.settings));
     await mkdir(directory);
     await writeFile(join(directory, "response.json"), JSON.stringify(summary));
     const paths: string[] = JSON.parse(outputs.current_run_files!);

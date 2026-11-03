@@ -2,39 +2,35 @@
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { CommitShaSchema, WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
+import { CommitShaSchema, WriterIdentitySchema, PlannerSavedResponseSchema } from "../../../packages/common-contracts/src/index";
 import { collectWorkflowFiles, readWorkflowDeliveryContext } from "./feed-ingest-plan-current-files";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { isMetadataDeliveryConfirmed, MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result";
 import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 import { safe_persist_data } from "@idhazh/data-delivery";
 import { parseRawDocumentDumpControl, ServiceSettingsSchema } from "../src/config/service-settings";
-import { rawDocumentContentsPath, rawDocumentContentsFilename } from "../src/selected-artifact-path";
+import {
+  articleEntitiesFilename, articleEntitiesPath, rawDocumentContentsPath, rawDocumentContentsFilename,
+} from "../src/selected-artifact-path";
 import { workflowReportFilename } from "./feed-ingest-plan-report";
+import { describePlanError } from "../src/api/plan-request";
 
 // This separate upload directory is an artifact packaging protocol, not a content or retention setting.
 export const RAW_DOCUMENT_ARTIFACT_DIRECTORY = "raw-document-artifacts";
+export const ARTICLE_ENTITY_ARTIFACT_DIRECTORY = "article-entity-artifacts";
 
-async function prepareRawDocumentArtifact(input: {
-  root: string; directory: string; runNumber: string; attempt: number;
-  dumpRawDocumentContents?: boolean; runId?: string;
+async function preparePrivateDiagnostic(input: {
+  root: string; directory: string; sourcePath: string; filename: string; artifactDirectory: string;
 }) {
-  if (input.dumpRawDocumentContents !== true || !input.runId) return undefined;
-  const runId = WriterIdentitySchema.shape.run_id.parse(input.runId);
-  if (runId.slice(11) !== input.runNumber) throw new Error("Raw document artifact run differs from the executed workflow");
-  const settings = ServiceSettingsSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan-service.json")).json());
-  const sourcePath = rawDocumentContentsPath(settings.inputs.artifact_root, {
-    run_id: runId, writer: { attempt: input.attempt },
-  });
+  const { sourcePath, filename } = input;
   if (!await Bun.file(join(input.root, sourcePath)).exists()) return undefined;
-  const filename = rawDocumentContentsFilename({ run_id: runId, writer: { attempt: input.attempt } });
   await safe_persist_data({
     sourceRoot: input.root,
     files: [{ sourcePath, targetPath: filename }],
     permittedPaths: [filename],
-    destination: { kind: "artifact-directory", directory: join(input.directory, RAW_DOCUMENT_ARTIFACT_DIRECTORY) },
+    destination: { kind: "artifact-directory", directory: join(input.directory, input.artifactDirectory) },
   });
-  return `${RAW_DOCUMENT_ARTIFACT_DIRECTORY}/${filename}`;
+  return `${input.artifactDirectory}/${filename}`;
 }
 
 export async function prepareWorkflowArtifacts(input: {
@@ -49,16 +45,51 @@ export async function prepareWorkflowArtifacts(input: {
   const gitSha = CommitShaSchema.parse(input.identity?.git_sha ?? input.gitSha);
   const outputs: Record<string, string> = {};
   const failures: unknown[] = [];
-  try {
-    const path = await prepareRawDocumentArtifact({ ...input, runNumber: run, attempt });
-    if (path !== undefined) {
-      outputs.raw_document_contents = path;
-      if (input.outputPath !== undefined) await writeGitHubOutputs(input.outputPath, { raw_document_contents: path });
+  const responsePath = join(input.directory, "response.json");
+  let savedResponse: ReturnType<typeof PlannerSavedResponseSchema.parse> | undefined;
+  if (await Bun.file(responsePath).exists()) {
+    try { savedResponse = PlannerSavedResponseSchema.parse(await Bun.file(responsePath).json()); }
+    catch (error) { failures.push(error); }
+  }
+  const runId = input.runId ?? input.identity?.run_id ?? (savedResponse !== undefined && "planning_complete" in savedResponse
+    ? savedResponse.run_id : savedResponse?.failure?.execution.run_id ?? undefined);
+  if (runId !== undefined) {
+    WriterIdentitySchema.shape.run_id.parse(runId);
+    if (runId.slice(11) !== run) throw new Error("Diagnostic artifact run differs from the executed workflow");
+    try {
+      const settings = ServiceSettingsSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan-service.json")).json());
+      const context = { run_id: runId, writer: { attempt } };
+      const diagnostics = [
+        { key: "raw_document_contents", enabled: input.dumpRawDocumentContents === true,
+          sourcePath: rawDocumentContentsPath(settings.inputs.artifact_root, context),
+          filename: rawDocumentContentsFilename(context), artifactDirectory: RAW_DOCUMENT_ARTIFACT_DIRECTORY },
+        { key: "article_entities", enabled: true,
+          sourcePath: articleEntitiesPath(settings.inputs.artifact_root, context),
+          filename: articleEntitiesFilename(context), artifactDirectory: ARTICLE_ENTITY_ARTIFACT_DIRECTORY },
+      ];
+      for (const diagnostic of diagnostics) {
+        if (!diagnostic.enabled) continue;
+        try {
+          const path = await preparePrivateDiagnostic({ ...input, ...diagnostic });
+          if (path === undefined) {
+            console.error(JSON.stringify({ event: "planner_diagnostic_unavailable", artifact: diagnostic.key }));
+            continue;
+          }
+          outputs[diagnostic.key] = path;
+          if (input.outputPath !== undefined) await writeGitHubOutputs(input.outputPath, { [diagnostic.key]: path });
+        } catch (error) {
+          failures.push(error);
+          console.error(JSON.stringify({ event: "planner_diagnostic_artifact_failed", artifact: diagnostic.key,
+            ...describePlanError(error, input.root, { operation: "prepare-artifacts", limits: settings.diagnostics.failure }) }));
+        }
+      }
+    } catch (error) {
+      failures.push(error);
+      console.error(JSON.stringify({ event: "planner_diagnostic_settings_failed",
+        ...describePlanError(error, input.root, { operation: "prepare-artifacts" }) }));
     }
-  } catch (error) {
-    failures.push(error);
-    console.error(JSON.stringify({ event: "planner_raw_document_artifact_failed",
-      code: error instanceof Error ? error.name : "UnknownError" }));
+  } else {
+    console.error(JSON.stringify({ event: "planner_diagnostic_unavailable", reason: "execution_identity_unavailable" }));
   }
   async function writeOutput(key: string, path: string) {
     outputs[key] = path;
@@ -79,14 +110,14 @@ export async function prepareWorkflowArtifacts(input: {
   }
   await retain("delivery", join(input.directory, "delivery-result.json"), "delivery-result.json");
   const reportFilename = input.reportFilename === undefined
-    ? workflowReportFilename({ runNumber: run, ...(input.runId === undefined ? {} : { runId: input.runId }) })
+    ? workflowReportFilename({ runNumber: run, ...(runId === undefined ? {} : { runId }) })
     : z.string().regex(/^feed-ingest-report-\d{4}-\d{2}-\d{2}-\d+\.md$/).parse(input.reportFilename);
   if (!reportFilename.endsWith(`-${run}.md`)) throw new Error("Report artifact run differs from the executed workflow");
   await retain("report", join(input.directory, reportFilename), reportFilename, true);
-  const responsePath = join(input.directory, "response.json");
-  if (!await Bun.file(responsePath).exists()
-    && !await Bun.file(join(input.directory, "host-fingerprint.json")).exists()) {
-    if (failures.length) throw new AggregateError(failures, "Raw document artifact preparation failed");
+  if (savedResponse !== undefined) await retain("response", responsePath, "response.json");
+  if (!await Bun.file(join(input.directory, "host-fingerprint.json")).exists()
+    && (savedResponse === undefined || !("planning_complete" in savedResponse))) {
+    if (failures.length) throw new AggregateError(failures, "Diagnostic artifact preparation failed");
     return outputs;
   }
   const context = input.identity !== undefined && input.registrations !== undefined

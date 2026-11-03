@@ -1,21 +1,14 @@
 /** Declare metadata-only API responses for selection, partitioning and persistence. */
 import { z } from "zod";
 import {
-  CountSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, RequestIdSchema, RunIdSchema, Sha256Schema,
+  CountSchema, NonNegativeSchema, PositiveCountSchema, RequestIdSchema, RunIdSchema,
   SelectedArticleRowSchema, PlannerRejectionCountSchema, PlannerRequestReportSchema, TimestampSchema,
+  PlannerLedgerWriteResultSchema,
 } from "@idhazh/common-contracts";
 import { RelativePathSchema } from "../config/service-settings";
 
-export const StageWriteResultSchema = z.discriminatedUnion("status", [
-  z.strictObject({ status: z.literal("written"), files: z.array(z.strictObject({
-    path: RelativePathSchema, file_id: z.uuid(), covers: NonEmptySchema,
-    content_sha256: Sha256Schema, row_count: CountSchema,
-  })).min(1) }),
-  z.strictObject({ status: z.literal("empty"), files: z.tuple([]) }),
-]);
-export const StageErrorResponseSchema = z.strictObject({
-  code: NonEmptySchema, issues: z.array(z.strictObject({ field: z.string().nullable(), message: NonEmptySchema })).min(1),
-});
+export { PlannerLedgerWriteResultSchema as StageWriteResultSchema, PlannerErrorResponseSchema as StageErrorResponseSchema } from "@idhazh/common-contracts";
+const StageWriteResultSchema = PlannerLedgerWriteResultSchema;
 export const SelectionResponseSchema = z.strictObject({
   batch_id: RequestIdSchema, parsed_batch_id: RequestIdSchema, run_id: RunIdSchema,
   selection_started_at_utc: TimestampSchema, evaluated_at: TimestampSchema,

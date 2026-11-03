@@ -2,6 +2,16 @@
   "enabled": false,
   "removal_condition": "Remove the enablement flag when the planner is approved for production use.",
   "dump_raw_document_contents": false,
+  "diagnostics": {
+    "failure": {
+      "max_stack_chars": 16384,
+      "max_causes": 3
+    },
+    "named_entities": {
+      "max_entities": 256,
+      "max_entity_chars": 160
+    }
+  },
   "listener": {
     "hostname": "127.0.0.1",
     "port": 8787,

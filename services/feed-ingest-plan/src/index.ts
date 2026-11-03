@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { CommitShaSchema } from "@idhazh/common-contracts";
 import { loadPlanInputs } from "./load-plan-inputs";
 import type { PlanInputs } from "./load-plan-inputs";
-import { parseCliRequest, describePlanError } from "./api/plan-request";
+import { parseCliRequest, describePlanError, PlanError } from "./api/plan-request";
 import { servePlan } from "./api/server";
 import { runFeedPlan, summarizePlan } from "./run-feed-plan";
 import type { PlanRuntime } from "./run-feed-plan";
@@ -17,7 +17,7 @@ export async function main(args: readonly string[], options: {
   let runtime = options.runtime;
   if (runtime === undefined) {
     const identity = CommitShaSchema.safeParse(process.env.GITHUB_SHA);
-    if (!identity.success) throw new Error("GITHUB_SHA: a valid checkout commit or supplied runtime identity is required");
+    if (!identity.success) throw new PlanError("INVALID_INPUT", "A valid supplied code identity is required", "git_sha", { cause: identity.error });
     runtime = { git_sha: identity.data };
   }
   CommitShaSchema.parse(runtime.git_sha);
