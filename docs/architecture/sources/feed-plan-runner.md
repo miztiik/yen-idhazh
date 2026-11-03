@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-03
 
 How do the API and CLI execute one real feed plan?
 Both compose the same units. The production Python news pipeline, digest
@@ -77,10 +77,8 @@ killing only its owned child. Defaults allow 30 seconds for readiness, 10 second
 for drain and 5 seconds to confirm forced exit. The child also applies its own
 drain bound if its supervisor disappears. No process is detached, no process
 name is used for cleanup, and runner process tracking remains enabled.
-`POST /api/2026-11-02/plan` accepts optional numeric `article_limit`, `shards`,
-a configured partition strategy, and one optional `global_age_ceiling_hours`
-value. The age override is positive finite hours, defaulting to the configured
-36-hour ceiling when omitted. Unknown fields, strings in numeric API
+`POST /api/2026-11-02/plan` accepts optional numeric `article_limit` and `shards`,
+plus a configured `partition_strategy`. Unknown fields, strings in numeric API
 fields, invalid counts and null controls fail before work. CLI blanks mean
 omission. There is no date control.
 
