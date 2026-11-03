@@ -249,7 +249,7 @@ jobs:
       - uses: ./.github/actions/publication-runtime
         if: needs.scope.outputs.code == 'true'
 
-      - name: Shared native contracts and metadata
+      - name: Shared contract bindings
         if: needs.scope.outputs.code == 'true'
         working-directory: packages/common-contracts
         run: |
