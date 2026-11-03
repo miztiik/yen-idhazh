@@ -1,16 +1,22 @@
-// services/summarizer/src/api/serve-http-api.ts
+/** How does each HTTP request retain its own pipeline context and event history? */
 import http from "node:http";
-import { loadEnvConfig } from "../config/load-env-config.js";
+import { createChildContext, createRootContext } from "@idhazh/common-contracts/create-operation-context";
+import { readTraceContext, writeTraceContext } from "@idhazh/common-contracts/propagate-trace-context";
+import type { ModelRuntime } from "../config/load-model-runtime.js";
 import { SummarizeRequestSchema } from "../schemas/export-all-schemas.js";
 import { PipelineEventBus } from "../services/dispatch-event.service.js";
 import { orchestratePipeline } from "../pipeline/orchestrate-pipeline.service.js";
 import { getMemorySnapshot, detectL3Cache } from "../services/collect-telemetry.service.js";
 import { renderGithubStepSummary } from "../reporters/render-github-summary.reporter.js";
 
-export function createHttpServer(port?: number) {
-  const env = loadEnvConfig();
-  const listenPort = port || env.PORT;
+type SummarizerServerOptions = {
+  port: number;
+  runtime: ModelRuntime;
+  eventSource: string;
+  eventFilePath?: string;
+};
 
+export function createHttpServer(options: SummarizerServerOptions) {
   const server = http.createServer(async (req, res) => {
     const parsedUrl = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
 
@@ -32,6 +38,12 @@ export function createHttpServer(port?: number) {
 
     // 3. Summarization Ingestion API Endpoint
     if (req.method === "POST" && parsedUrl.pathname === "/api/summarize") {
+      const incoming = readTraceContext(req.headers);
+      const context = incoming ? createChildContext(incoming) : createRootContext();
+      for (const [name, value] of Object.entries(writeTraceContext(context))) {
+        res.setHeader(name, value);
+      }
+      const eventBus = new PipelineEventBus(options.eventSource, options.eventFilePath);
       let body = "";
       req.on("data", (chunk) => (body += chunk));
       req.on("end", async () => {
@@ -45,20 +57,26 @@ export function createHttpServer(port?: number) {
             return;
           }
 
-          const eventBus = new PipelineEventBus(env.RUNNER_NAME, env.SHARD_ID);
-          const result = await orchestratePipeline(validationResult.data, eventBus, env.modelRuntime);
+          const result = await orchestratePipeline(
+            validationResult.data, eventBus, options.runtime, context,
+          );
 
           // If running inside CI, automatically publish the Step Summary
           if (process.env.GITHUB_STEP_SUMMARY) {
-            renderGithubStepSummary(env.modelRuntime.request.model, result, eventBus.getEventHistory());
+            renderGithubStepSummary(options.runtime.request.model, result, eventBus.getEventHistory());
           }
 
           res.writeHead(200);
           res.end(JSON.stringify({ success: true, data: result }));
-        } catch (err: any) {
-          console.error("[API_ERROR]", err);
+        } catch (err) {
+          console.error(JSON.stringify({
+            code: "SUMMARIZE_FAILED", traceId: context.traceId, spanId: context.spanId,
+          }));
           res.writeHead(500);
-          res.end(JSON.stringify({ error: "Pipeline execution failed", message: err.message }));
+          res.end(JSON.stringify({
+            error: "Pipeline execution failed",
+            message: err instanceof Error ? err.message : "Unknown pipeline failure.",
+          }));
         }
       });
       return;
@@ -72,8 +90,8 @@ export function createHttpServer(port?: number) {
   return {
     server,
     start: () => {
-      server.listen(listenPort, () => {
-        console.log(`🚀 Summarizer API Server listening on http://127.0.0.1:${listenPort}`);
+      server.listen(options.port, () => {
+        console.error(JSON.stringify({ code: "SUMMARIZER_LISTENING", port: options.port }));
       });
     },
   };

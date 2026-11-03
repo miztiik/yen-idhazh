@@ -1,75 +1,68 @@
+/** How are one request's validated events delivered and saved privately? */
 import fs from "node:fs";
-import crypto from "node:crypto";
 import { EventEmitter } from "node:events";
-import type { PipelineEvent, PipelineEventType } from "../schemas/export-all-schemas.js";
+import { createCloudEvent } from "@idhazh/common-contracts/create-cloud-event";
+import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
+import {
+  parsePipelineEventData,
+  readPipelineEvent,
+  type PipelineEvent,
+  type PipelineEventData,
+  type PipelineEventType,
+} from "../schemas/pipeline-event.schema.js";
 
-const RFC_4122_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
-
-function uuidToBytes(uuid: string): Buffer {
-  return Buffer.from(uuid.replace(/-/g, ""), "hex");
-}
-
-export function generateUuidV5(name: string, namespace: string = RFC_4122_NAMESPACE): string {
-  const nsBytes = uuidToBytes(namespace);
-  const hash = crypto.createHash("sha1");
-  hash.update(nsBytes);
-  hash.update(Buffer.from(name, "utf8"));
-  const digest = hash.digest();
-
-  digest[6] = (digest[6] & 0x0f) | 0x50; // Version 5
-  digest[8] = (digest[8] & 0x3f) | 0x80; // Variant RFC 4122
-
-  const hex = digest.subarray(0, 16).toString("hex");
-  return [
-    hex.substring(0, 8),
-    hex.substring(8, 12),
-    hex.substring(12, 16),
-    hex.substring(16, 20),
-    hex.substring(20, 32),
-  ].join("-");
+export function readPipelineEvents(jsonlFilePath: string): PipelineEvent[] {
+  const lines = fs.readFileSync(jsonlFilePath, "utf8").split(/\r?\n/);
+  if (lines.at(-1) === "") lines.pop();
+  return lines.map((line, index) => {
+    try {
+      return readPipelineEvent(JSON.parse(line));
+    } catch (cause) {
+      throw new Error(`Invalid summarizer event at line ${index + 1}.`, { cause });
+    }
+  });
 }
 
 export class PipelineEventBus extends EventEmitter {
-  private auditLog: PipelineEvent[] = [];
-  private readonly correlationId: string;
-  private readonly runnerName: string;
-  private readonly shardId: string;
-  private readonly jsonlFilePath: string;
+  private readonly auditLog: PipelineEvent[] = [];
 
-  constructor(runnerName: string, shardId: string, jsonlFilePath = "pipeline-events.jsonl") {
+  constructor(
+    private readonly source: string,
+    private readonly jsonlFilePath = "pipeline-events.jsonl",
+  ) {
     super();
-    this.runnerName = runnerName;
-    this.shardId = shardId;
-    this.correlationId = `corr-${Date.now()}`;
-    this.jsonlFilePath = jsonlFilePath;
   }
 
-  private createEventId(eventType: string, epochMs: number): string {
-    const seed = `runner:${this.runnerName}:shard:${this.shardId}:epoch:${epochMs}:event:${eventType}`;
-    return `evt-${generateUuidV5(seed)}`;
-  }
-
-  public emitEvent<T = unknown>(eventType: PipelineEventType, payload: T): PipelineEvent<T> {
-    const epochMs = Date.now();
+  public emitEvent<T extends PipelineEventType>(
+    type: T,
+    data: PipelineEventData<T>,
+    context: OperationMetadata,
+  ): PipelineEvent<T> {
     const event: PipelineEvent<T> = {
-      eventId: this.createEventId(eventType, epochMs),
-      eventType,
-      timestamp: new Date(epochMs).toISOString(),
-      correlationId: this.correlationId,
-      payload,
+      ...createCloudEvent({
+        source: this.source,
+        type,
+        context,
+        data,
+        parseData: value => parsePipelineEventData(type, value),
+      }),
+      type,
     };
-
+    fs.appendFileSync(this.jsonlFilePath, JSON.stringify(event) + "\n", "utf8");
     this.auditLog.push(event);
-
-    const jsonlLine = JSON.stringify(event);
-    fs.appendFileSync(this.jsonlFilePath, jsonlLine + "\n", "utf8");
-    console.log(`[JSONL_EVENT] ${jsonlLine}`);
-
-    this.emit(eventType, event);
+    console.error(JSON.stringify({
+      code: "SUMMARIZER_EVENT",
+      id: event.id,
+      type: event.type,
+      time: event.time,
+      traceId: context.traceId,
+      spanId: context.spanId,
+    }));
+    this.emit(type, event);
     return event;
   }
 
   public getEventHistory(): PipelineEvent[] {
-    return this.auditLog;
+    return structuredClone(this.auditLog);
   }
 }

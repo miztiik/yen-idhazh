@@ -1,5 +1,7 @@
+/** How is the selected model called without changing its request protocol? */
 import http from "node:http";
 import https from "node:https";
+import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
 import type { ModelRuntime } from "../config/load-model-runtime.js";
 import { buildModelRequest, readModelContent } from "./model-request.service.js";
 import { RawModelAnalysisSchema, type RawModelAnalysis } from "../schemas/export-all-schemas.js";
@@ -14,6 +16,7 @@ export interface LlamaInferenceTimings {
 }
 
 export interface LlamaInferenceResponse {
+  context: OperationMetadata;
   rawContent: string;
   parsedAnalysis: RawModelAnalysis;
   usage: {
@@ -113,8 +116,11 @@ Definitions for classification axes:
 export async function queryLlamaServer(
   runtime: ModelRuntime,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  context: OperationMetadata,
+  onDispatched?: (context: OperationMetadata) => void,
 ): Promise<LlamaInferenceResponse> {
+  onDispatched?.(context);
   const payload = buildModelRequest(runtime, systemPrompt, userPrompt, { type: "json_object" });
 
   const endpoint = new URL("/v1/chat/completions", runtime.base_url).href;
@@ -139,6 +145,7 @@ export async function queryLlamaServer(
   const completionTokens = response.usage?.completion_tokens ?? response.timings?.predicted_n ?? 0;
 
   return {
+    context,
     rawContent,
     parsedAnalysis: parseResult.data,
     usage: {

@@ -75,8 +75,9 @@ jobs:
           sudo swapon /swapfile
 
       - name: Install Dependencies
-        working-directory: services/summarizer
-        run: bun install --frozen-lockfile
+        run: |
+          bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd services/summarizer
 
       - name: Start selected model
         uses: ./.github/actions/model-server
@@ -90,13 +91,11 @@ jobs:
         env:
           PORT: 9932
           CONFIG_ROOT: ${{ github.workspace }}/${{ env.CONFIG_ROOT }}
-          RUNNER_NAME: ${{ runner.name }}
-          SHARD_ID: ${{ github.job }}
           LLAMA_PID_FILE: ${{ github.workspace }}/llama-server.pid
         run: |
           set -euo pipefail
           cd services/summarizer
-          bun run src/index.ts > backend_ts_server_log.log 2>&1 &
+          bun run src/start-api-server.ts > backend_ts_server_log.log 2>&1 &
           API_PID=$!
           echo "$API_PID" > .summarizer_api.pid
           for _ in {1..30}; do
@@ -123,8 +122,9 @@ jobs:
             '{url: $url, input_text: $input_text, system_prompt: $system_prompt}')
           RESPONSE=$(curl -sf -X POST http://127.0.0.1:9932/api/summarize \
             -H "Content-Type: application/json" --data-binary "$REQUEST")
-          echo "$RESPONSE" | jq .
           echo "$RESPONSE" | jq -e '.success == true' > /dev/null
+          echo "$RESPONSE" | jq '{success, prompt_tokens: .data.token_metrics.prompt_tokens,
+            completion_tokens: .data.token_metrics.completion_tokens}'
 
       - name: Stop local processes
         if: always()

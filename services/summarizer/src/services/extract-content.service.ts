@@ -1,17 +1,32 @@
+/** How is one source fetched and extracted with explicit operation context? */
+import { createChildContext } from "@idhazh/common-contracts/create-operation-context";
+import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
 import { parseHTML } from "linkedom";
 import { Defuddle } from "defuddle/node";
+import type { PipelineEventData } from "../schemas/pipeline-event.schema.js";
 
 export interface ExtractedDocument {
   title: string;
   content: string;
   wordCount: number;
+  context: OperationMetadata;
 }
+
+type ExtractionProgress = {
+  [T in "URL_HTTP_FETCH_STARTED" | "URL_HTTP_FETCH_COMPLETED" | "URL_DEFUDDLE_EXTRACTED"]: {
+    type: T;
+    data: PipelineEventData<T>;
+    context: OperationMetadata;
+  };
+}["URL_HTTP_FETCH_STARTED" | "URL_HTTP_FETCH_COMPLETED" | "URL_DEFUDDLE_EXTRACTED"];
 
 export async function extractContentFromUrl(
   url: string,
-  onProgress?: (step: "FETCH_STARTED" | "FETCH_COMPLETED" | "PARSED", details: any) => void
+  context: OperationMetadata,
+  onProgress?: (progress: ExtractionProgress) => void,
 ): Promise<ExtractedDocument> {
-  onProgress?.("FETCH_STARTED", { url });
+  const fetchContext = createChildContext(context);
+  onProgress?.({ type: "URL_HTTP_FETCH_STARTED", data: { url }, context: fetchContext });
 
   const headers = {
     "User-Agent":
@@ -20,7 +35,6 @@ export async function extractContentFromUrl(
     "Accept-Language": "en-US,en;q=0.9",
   };
 
-  console.log(`[SCRAPER] 🌐 Querying URL: ${url}`);
   const response = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
 
   if (!response.ok) {
@@ -28,12 +42,19 @@ export async function extractContentFromUrl(
   }
 
   const html = await response.text();
-  onProgress?.("FETCH_COMPLETED", { url, bytes: Buffer.byteLength(html, "utf8") });
+  onProgress?.({
+    type: "URL_HTTP_FETCH_COMPLETED",
+    data: { url, bytes: Buffer.byteLength(html, "utf8") },
+    context: fetchContext,
+  });
 
   if (html.length < 100) {
     throw new Error(`Received insufficient HTML payload (${html.length} bytes)`);
   }
 
+  const parseContext = createChildContext(context, {
+    links: [{ traceId: fetchContext.traceId, spanId: fetchContext.spanId }],
+  });
   const { document } = parseHTML(html);
   const fallbackTitle = document.title || "Web Document";
   const defuddleResult: any = await Defuddle(document, url, { markdown: true });
@@ -46,8 +67,9 @@ export async function extractContentFromUrl(
   const wordCount = content.split(/\s+/).filter(Boolean).length;
   const title = defuddleResult.title || fallbackTitle;
 
-  onProgress?.("PARSED", { url, title, wordCount });
-  console.log(`[SCRAPER] ✅ Successfully extracted with Defuddle: "${title}" (${wordCount} words)`);
+  onProgress?.({
+    type: "URL_DEFUDDLE_EXTRACTED", data: { url, title, wordCount }, context: parseContext,
+  });
 
-  return { title, content, wordCount };
+  return { title, content, wordCount, context: parseContext };
 }

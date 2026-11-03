@@ -1,0 +1,23 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\n  \"headline\": \"Running Local LLMs on Edge Devices and CI Runners\",\n  \"executive_summary\": \"The document presents a concise statement about local large language models (LLMs), emphasizing their ability to run transformer architectures directly on edge devices and continuous integration (CI) runners. The central value proposition is privacy and data security: by executing these models locally, users avoid transmitting sensitive or proprietary data over third-party APIs. This framing positions local LLM deployment as a solution for organizations concerned about data leakage, compliance requirements, latency, cost of API usage, and the desire to retain full control over their AI workloads without depending on external cloud providers.\",\n  \"key_points\": [\n    \"Local LLMs enable transformer architectures to run directly on edge devices, reducing reliance on centralized or cloud infrastructure.\",\n    \"They can also be deployed on continuous integration runners, allowing model inference and processing within automated software pipelines.\",\n    \"A primary benefit is avoiding the transmission of data over third-party APIs, which addresses privacy and security concerns.\",\n    \"Local deployment keeps sensitive information in-house rather than sending it to external services that may log or store inputs.\",\n    \"The approach supports organizations seeking control over their AI workloads without depending on cloud providers.\"\n  ],\n  \"sentiment\": \"positive\",\n  \"stance_on_change\": \"progressivism\",\n  \"stance_on_economic_power\": \"not_applicable\",\n  \"stance_on_state_power\": \"not_applicable\",\n  \"stance_on_borders\": \"not_applicable\",\n  \"stance_on_personal_sphere\": \"civil_libertarianism\"\n}"
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 703,
+    "completion_tokens": 340,
+    "total_tokens": 1043
+  },
+  "timings": {
+    "prompt_ms": 112537,
+    "predicted_ms": 78021,
+    "prompt_per_second": 6.25,
+    "predicted_per_second": 4.34
+  }
+}
