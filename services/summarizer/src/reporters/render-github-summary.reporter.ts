@@ -1,3 +1,4 @@
+/** Which summary and saved event identities belong in the private job report? */
 import fs from "node:fs";
 import type { SummaryStructuredOutput, PipelineEvent } from "../schemas/export-all-schemas.js";
 
@@ -10,8 +11,8 @@ export function renderGithubStepSummary(
   const sm = result.swap_metrics;
   const sa = result.source_audit;
 
-  console.log(
-    `::notice title=AI Pipeline Succeeded (${modelName})::📥 Ingest: ${tm.prompt_tokens_per_second} t/s (${tm.prompt_tokens}t) | ⚡ Gen: ${tm.completion_tokens_per_second} t/s (${tm.completion_tokens}t) | ⏱️ Time: ${(tm.total_duration_ms / 1000).toFixed(1)}s | 💾 Peak Swap: ${sm.peak_server_swap_mb} MB`
+  console.error(
+    `::notice title=AI Pipeline Succeeded::Input: ${tm.prompt_tokens_per_second} tokens/s (${tm.prompt_tokens} tokens) | Output: ${tm.completion_tokens_per_second} tokens/s (${tm.completion_tokens} tokens) | Time: ${(tm.total_duration_ms / 1000).toFixed(1)}s | Peak swap: ${sm.peak_server_swap_mb} MB`
   );
 
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
@@ -19,6 +20,8 @@ export function renderGithubStepSummary(
 
   const lines: string[] = [
     `# 🧠 AI Transformer Pipeline Execution Report`,
+    ``,
+    `Model: \`${modelName}\``,
     ``,
     `## ⏱️ Token Performance & Ingestion Rates`,
     ``,
@@ -110,11 +113,11 @@ export function renderGithubStepSummary(
     ``,
     `---`,
     ``,
-    `## ⚡ Event-Driven Audit Trail (UUIDv5)`,
+    `## Event occurrences`,
     ``,
-    `| Event Type | RFC 4122 UUIDv5 | Timestamp |`,
-    `| :--- | :--- | :--- |`,
-    ...events.map((e) => `| \`${e.eventType}\` | \`${e.eventId}\` | \`${e.timestamp}\` |`),
+    `| Event type | Occurrence UUID | Time (UTC) | Operation context |`,
+    `| :--- | :--- | :--- | :--- |`,
+    ...events.map((e) => `| \`${e.type}\` | \`${e.id}\` | \`${e.time}\` | \`${e.traceparent}\` |`),
     ``,
     `<details>`,
     `<summary><b>Inspect Full Event Stream Payloads (JSON)</b></summary>`,

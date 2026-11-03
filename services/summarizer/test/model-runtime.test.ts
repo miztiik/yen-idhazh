@@ -1,56 +1,18 @@
 // Prove that new declarations reach real chat requests without a model-name branch.
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { createChildContext, createRootContext } from "@idhazh/common-contracts/create-operation-context";
 import { loadModelRuntime } from "../src/config/load-model-runtime.js";
 import { EnvironmentVariablesSchema } from "../src/schemas/environment-variable.schema.js";
 import { buildModelRequest, readModelContent } from "../src/services/model-request.service.js";
 import { queryLlamaServer } from "../src/services/query-llama.service.js";
 import { orchestratePipeline } from "../src/pipeline/orchestrate-pipeline.service.js";
 import { PipelineEventBus } from "../src/services/dispatch-event.service.js";
-
-const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
-
-function readJson(relativePath: string) {
-  return JSON.parse(readFileSync(path.join(repositoryRoot, relativePath), "utf8"));
-}
-
-function withConfig(run: (root: string, entry: Record<string, any>) => void | Promise<void>) {
-  const root = path.join(repositoryRoot, "backend", "var", `summarizer-contract-${randomUUID()}`);
-  mkdirSync(root, { recursive: true });
-  for (const name of [
-    "idhazh.json", "ledgers.json", "sources.json", "taxonomy.json", "watchlist.json",
-    "llm_council.json", "appearance.json",
-  ]) {
-    cpSync(path.join(repositoryRoot, "config", name), path.join(root, name));
-  }
-  const council = readJson("config/llm_council.json");
-  mkdirSync(path.join(root, "judges"));
-  for (const name of council.judge_names) {
-    cpSync(path.join(repositoryRoot, "config", "judges", `${name}.json`), path.join(root, "judges", `${name}.json`));
-  }
-  const pointer = readJson("config/idhazh.json");
-  const entry = readJson(path.join("config", pointer.models_file)).summarizer;
-  const modelFile = { version: "2026-10-24", summarizer: entry };
-  pointer.models_file = "models/independent-substitution.json";
-  mkdirSync(path.join(root, "models"));
-  writeFileSync(path.join(root, "idhazh.json"), JSON.stringify(pointer));
-  writeFileSync(path.join(root, pointer.models_file), JSON.stringify(modelFile));
-  return Promise.resolve()
-    .then(() => run(root, entry))
-    .finally(() => rmSync(root, { recursive: true, force: true }));
-}
-
-function writeEntry(root: string, entry: Record<string, any>) {
-  writeFileSync(
-    path.join(root, "models", "independent-substitution.json"),
-    JSON.stringify({ version: "2026-10-24", summarizer: entry }),
-  );
-}
+import { readJson, repositoryRoot, withConfig, writeEntry } from "./model-recordings.js";
+import { withRecordedModel } from "./pipeline-recordings.js";
 
 test("a previously unseen declaration supplies all sampling and template values", { timeout: 120000 }, () =>
   withConfig((root, entry) => {
@@ -82,6 +44,26 @@ test("a previously unseen declaration supplies all sampling and template values"
     assert.deepEqual(request.response_format, { type: "json_object" });
     assert.equal(request.stream, false);
   }));
+
+test("inference callbacks retain the supplied parent and input link with a real recorded result", { timeout: 120000 }, () =>
+  withConfig(root => withRecordedModel(root, async ({ runtime }) => {
+    const parent = createRootContext({ traceState: "test=recorded" });
+    const input = createRootContext();
+    const context = createChildContext(parent, {
+      links: [{ traceId: input.traceId, spanId: input.spanId }],
+    });
+    let dispatched = 0;
+    const result = await queryLlamaServer(runtime, "System instruction", "Article text", context, operation => {
+      dispatched += 1;
+      assert.deepEqual(operation, context);
+    });
+    assert.equal(dispatched, 1);
+    assert.deepEqual(result.context, context);
+    const recorded = readJson("tests/fixtures/typescript-metadata/summarizer-model-response.json");
+    assert.equal(result.rawContent, recorded.choices[0].message.content);
+    assert.deepEqual(result.parsedAnalysis, JSON.parse(result.rawContent));
+    assert.deepEqual(result.usage, recorded.usage);
+  })));
 
 test("a template with no reasoning switch accepts an empty or arbitrary keyword map", { timeout: 120000 }, () =>
   withConfig((root, entry) => {
@@ -171,7 +153,7 @@ test("the real HTTP caller sends selected settings and rejects incompatible reco
       writeEntry(root, entry);
       const runtime = loadModelRuntime(root);
       await assert.rejects(
-        () => queryLlamaServer(runtime, "System instruction", "Article text"),
+        () => queryLlamaServer(runtime, "System instruction", "Article text", createRootContext()),
         /Model response failed RawModelAnalysisSchema/,
       );
       assert.equal(received.length, 1);
@@ -183,17 +165,18 @@ test("the real HTTP caller sends selected settings and rejects incompatible reco
         response_style: "short", reasoning_mode: false,
       });
       await assert.rejects(
-        () => queryLlamaServer(runtime, "System instruction", "Article text"),
+        () => queryLlamaServer(runtime, "System instruction", "Article text", createRootContext()),
         /Model response failed RawModelAnalysisSchema/,
       );
+      const eventBus = new PipelineEventBus(readJson("config/typescript-event-sources.json").summarizer);
       await assert.rejects(() => orchestratePipeline({
         input_text: "Article text", url: "", system_prompt: "System instruction",
         server_url: "https://wrong.example",
-      }, new PipelineEventBus("recorded-runner", "one-item"), runtime), /committed model_server.base_url/);
+      }, eventBus, runtime, createRootContext()), /committed model_server.base_url/);
       await assert.rejects(() => orchestratePipeline({
         input_text: "Article text", url: "", system_prompt: "System instruction",
         model_name: "not-selected",
-      }, new PipelineEventBus("recorded-runner", "one-item"), runtime), /selected model declaration/);
+      }, eventBus, runtime, createRootContext()), /selected model declaration/);
       assert.equal(received.length, 2);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
