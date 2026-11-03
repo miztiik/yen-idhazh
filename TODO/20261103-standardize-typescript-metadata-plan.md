@@ -44,7 +44,7 @@ Table C - PR sequence
 | C2 | 2 | Convert the planner and every planner caller | 1 | B | IN-FLIGHT | - | - | - |
 | C3 | 3 | Convert host profiling without breaking Python control | 1, 2 | C | PENDING | - | - | - |
 | C4 | 4 | Convert summarizer event metadata | 1 | B | IN-FLIGHT | - | - | - |
-| C5 | 5 | Convert phased workflow events and continuation | 1 | B | IN-FLIGHT | - | - | - |
+| C5 | 5 | Convert phased workflow events and continuation | 1 | B | DONE | jubilant-telegram | - | Workflow metadata |
 
 ## 2. Exact current-to-target replacements
 

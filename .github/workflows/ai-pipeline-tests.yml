@@ -1,6 +1,18 @@
 name: Yen-Summarizers
 
 on:
+  pull_request:
+    paths:
+      - '.github/scripts/ai-pipeline.ts'
+      - '.github/scripts/read-pipeline-events.ts'
+      - '.github/scripts/prepare-evaluation-request.ts'
+      - '.github/scripts/test/workflow-handoff.test.ts'
+      - '.github/workflows/ai-pipeline-tests.yml'
+      - 'packages/common-contracts/**'
+      - 'config/typescript-event-sources.json'
+      - 'tests/fixtures/typescript-metadata/workflow-output-event.json'
+      - 'tests/fixtures/typescript-metadata/evaluator-request.json'
+      - 'tests/fixtures/typescript-metadata/evaluator-response.json'
   workflow_dispatch:
     inputs:
       input_source:
@@ -42,7 +54,33 @@ on:
         default: 'You are a precise, objective intelligence analyst. Your mandate is to produce a faithful, high-density synthesis of the provided document.'
 
 jobs:
+  workflow-handoff:
+    runs-on: ubuntu-latest
+    name: Saved workflow handoff
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'latest'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Prepare locked metadata and existing workflow dependencies
+        run: |
+          bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd services/summarizer
+          npm install --no-save --package-lock=false --no-audit --no-fund defuddle linkedom feedsmith tidy-url
+      - name: Check the real saved handoff without model dispatch
+        run: |
+          bun run --no-install ./packages/common-contracts/node_modules/typescript/bin/tsc \
+            --noEmit --target ESNext --module ESNext --moduleResolution Bundler \
+            --strict --skipLibCheck --allowImportingTsExtensions --types bun \
+            --typeRoots packages/common-contracts/node_modules/@types \
+            .github/scripts/ai-pipeline.ts .github/scripts/test/workflow-handoff.test.ts
+          bun test ./.github/scripts/test/workflow-handoff.test.ts
+
   run-pipeline:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: Phased LLM Inference & UniEval Audit
     env:
@@ -67,6 +105,10 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Install Shared Metadata Dependencies
+        working-directory: packages/common-contracts
+        run: bun install --frozen-lockfile
 
       - name: Install
         run: |

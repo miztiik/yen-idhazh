@@ -1,0 +1,9 @@
+{
+  "correlationId": "b3d0cc9c-47d2-4b41-8a45-60ee093a1de8",
+  "runnerName": "recorded-runner",
+  "shardId": "recorded-shard",
+  "sourceIdentifier": "https://example.invalid/recorded-article",
+  "sourceTitle": "Recorded document",
+  "sourceText": "The recorded document uses three symbols to express numbers.",
+  "summaryText": "The document explains base-three notation."
+}
