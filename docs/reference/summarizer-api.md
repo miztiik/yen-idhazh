@@ -47,6 +47,41 @@ The CLI starts a fresh execution and writes its complete result as JSON on
 standard output. Diagnostics go to standard error and contain only identifiers,
 event types, counts, codes or measurements.
 
+## URL extraction limitation
+
+URL-only extraction currently fails during parsing after the page fetch.
+The extractor passes a `linkedom` `Document` to `Defuddle` from `defuddle/node`.
+That Node entry point accepts `string | JSDOM`; for a non-string argument it
+reads `dom.window.document`. The supplied document has no `window`.
+
+The [recorded verification](#recorded-verification) proves direct-text and real
+source-failure fallback metadata, not successful URL extraction.
+
+A separate repair must construct and pass a real `JSDOM` instance from the
+fetched HTML and URL, with script execution and extra resource loading disabled.
+It must read the fallback title from that document and close its window after
+parsing. Do not pass an HTML string to the Node adapter: that branch enables
+`resources: "usable"`. The adapter preserves options on an existing instance.
+
+The repair affects:
+
+- `services/summarizer/src/services/extract-content.service.ts`.
+- `services/summarizer/package.json` and `services/summarizer/bun.lock`:
+  declare the already installed `jsdom` peer directly; remove `linkedom` only
+  if this is its last caller.
+- A named offline case under `services/summarizer/test/`, based on
+  `tests/fixtures/feed-probe/readable-article.html`.
+- `docs/reference/summarizer-api.md`, to replace this limitation with the
+  checked URL behavior.
+
+The offline check must serve the readable article from an ephemeral loopback
+listener, with script, stylesheet, image and frame references pointing only to
+that listener. Call the real extractor and require the substantive article
+title/text, a successful parse callback and correct fetch-to-parse context.
+Assert that only the main page was requested and no script-produced content or
+other script side effects occurred. This repair and success-path check are not
+implemented.
+
 ## Private event records
 
 Each request has its own event bus and history. `getEventHistory()` returns a
