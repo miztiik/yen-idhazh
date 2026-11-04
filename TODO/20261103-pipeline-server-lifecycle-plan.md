@@ -161,6 +161,7 @@ Table I - PR sequence
   - `services/typescript-api/test/api-composition.test.ts`
   - `services/typescript-api/test/server-events.test.ts`
   - `services/typescript-api/test/write-server-events.ts`
+  - `services/typescript-api/test/profile-report-recording.ts`
   - `services/feed-ingest-plan/package.json`
   - `services/feed-ingest-plan/src/config/service-settings.ts`
   - `services/feed-ingest-plan/src/config/planner-startup.ts`

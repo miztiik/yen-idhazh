@@ -88,6 +88,10 @@ observed lifecycle facts. Native module diagnostics are projected to this
 body-free form before live output or mirroring. Private startup/control
 packets remain on stdout. Article bodies, prompts, model output, secrets,
 raw headers and raw exception text are not server-log fields.
+Routine task-profile reports are validated with the native measurement model
+and omitted from server diagnostics. Their measurements and task outcomes
+remain in the native API result; a successful measurement is not a server
+error.
 
 An open, write or close failure marks the file mirror unavailable and emits
 one explicit safe stderr warning. It does not fail useful API work. There is

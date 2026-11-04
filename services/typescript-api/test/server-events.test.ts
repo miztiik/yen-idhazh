@@ -15,6 +15,7 @@ import { FINGERPRINT_PATH } from "@idhazh/host-fingerprints/api";
 import { loadHonoSettings } from "../src/load-settings";
 import { readServerEvidence } from "../src/read-server-evidence";
 import { superviseApiTask } from "../src/supervise-api-task";
+import { TaskProfileSchema } from "@idhazh/host-probes/profile";
 
 async function writeEvents(directory: string, run: ServerRun, moduleLine?: string) {
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL("./write-server-events.ts", import.meta.url))], {
@@ -47,6 +48,40 @@ test("server restarts append identical live CloudEvents without private bodies o
     expect(new Set(events.map(event => event.id)).size).toBe(events.length);
     expect(events.filter(event => event.data.phase === "starting")).toHaveLength(2);
     expect(events.every(event => event.source === "/fixtures/typescript-api")).toBe(true);
+    expect(events.find(event => event.data.code === "RECORDED_FAILURE")?.data.severity).toBe("error");
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("a real successful default profile report is not a server error or a repeated measurement dump", async () => {
+  const child = Bun.spawn([process.execPath, fileURLToPath(new URL("./profile-report-recording.ts", import.meta.url))], {
+    stdout: "pipe", stderr: "pipe",
+  });
+  const [output, error, code] = await Promise.all([
+    new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+  ]);
+  expect(code, error).toBe(0);
+  expect(JSON.parse(output)).toEqual({ native_http_status: 200, result: "stopped", task_outcome: "success" });
+  const records = error.trim().split("\n").map(line => ({ line, data: JSON.parse(line) }));
+  const reported = records.filter(record => record.data.event === "task_profile");
+  expect(reported).toHaveLength(1);
+  expect(TaskProfileSchema.parse(reported[0]!.data.profile).outcome).toBe("success");
+  const directory = await mkdtemp(join(tmpdir(), "api-profile-events-"));
+  const run = { run_id: "700", attempt: 3, started_at: "2026-11-04T00:00:00Z", context: createRootContext() };
+  try {
+    const projected = await writeEvents(directory, run, reported[0]!.line);
+    const events = projected.error.trim().split("\n")
+      .map(line => readCloudEvent(JSON.parse(line), value => ServerEventDataSchema.parse(value)));
+    expect(events.map(event => event.data.phase)).toEqual(["starting", "stopped"]);
+    expect(projected.error).not.toContain("profile-report-regression");
+    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(projected.error);
+    const invalid = await writeEvents(directory, run, JSON.stringify({
+      event: "task_profile", profile: { body: "PRIVATE_BODY" },
+    }));
+    const warnings = invalid.error.trim().split("\n")
+      .map(line => readCloudEvent(JSON.parse(line), value => ServerEventDataSchema.parse(value)));
+    expect(warnings.find(event => event.data.phase === "module_failed")?.data)
+      .toMatchObject({ severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
+    expect(invalid.error).not.toContain("PRIVATE_BODY");
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

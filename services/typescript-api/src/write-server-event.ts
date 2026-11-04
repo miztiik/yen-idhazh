@@ -5,6 +5,7 @@ import type { z } from "zod";
 import {
   createChildContext, createCloudEvent, FeedIngestEventDataSchema, readCloudEvent,
 } from "@idhazh/common-contracts";
+import { TaskProfileSchema } from "@idhazh/host-probes/profile";
 import { ServerEventDataSchema, serverLogFilename } from "./server-evidence";
 import type { ApiGroup, ServerRun } from "./server-evidence";
 
@@ -68,6 +69,11 @@ export function createServerEventWriter(input: { directory: string; source: stri
       }
       if ("event" in raw && raw.event === "safe_persist_http_completed") {
         record({ phase: "operation_completed" }, true, "safe_persist_http_completed");
+        return;
+      }
+      if ("event" in raw && raw.event === "task_profile") {
+        const profile = TaskProfileSchema.safeParse("profile" in raw ? raw.profile : undefined);
+        if (!profile.success) record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
         return;
       }
       const code = "code" in raw && typeof raw.code === "string" && /^[A-Z][A-Z0-9_]*$/.test(raw.code)
