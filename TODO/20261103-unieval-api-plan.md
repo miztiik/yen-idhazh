@@ -1,7 +1,7 @@
 # UniEval API integration plan
 
-**Last Updated**: 2026-11-03
-**Level**: 5 - plan only; full-source scoring is specified below. Runtime implementation waits for the named prerequisites.
+**Last Updated**: 2026-11-04
+**Level**: 5 - API delivery in progress; workflow integration waits for its named prerequisites.
 
 ## 0. Operating contract
 
@@ -21,7 +21,7 @@ Table A - Intent and execution
 | A10 | Execution | One maintainer; parallel N = 1 because the API and integration rows share native contracts, process handling and gate documentation. |
 | A11 | Protected files | Do not modify `CLAUDE.md` or `AGENTS.md`. Keep approval narratives and personal attributions out of code and documentation. |
 
-Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan; parallel N = 1 because the rows share integration files; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan; parallel N = 1 because the rows share integration files; honor the ESCALATE triggers in section 0.
 
 Table B - Scope boundaries
 
@@ -77,7 +77,7 @@ Table F - PR sequence
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| F1 | 1 | Add a real UniEval route to the Python API | - | A | PENDING | - | - | - |
+| F1 | 1 | Add a real UniEval route to the Python API | - | A | IN-FLIGHT | didactic-memory | - | - |
 | F2 | 2 | Run UniEval in the existing summary workflow | 1 | B | PENDING | - | - | - |
 
 ## 2. Row #1 - Add a real UniEval route to the Python API
@@ -87,23 +87,44 @@ Table F - PR sequence
 - **Files touched - target inventory to confirm against merged C2:**
   - `services/hhem-evaluator/pyproject.toml`
   - `services/hhem-evaluator/uv.lock`
+  - `services/hhem-evaluator/src/hhem_evaluator/__main__.py`
   - `services/hhem-evaluator/src/hhem_evaluator/serve_api.py`
-  - `services/hhem-evaluator/src/hhem_evaluator/api_settings.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/guard_local_requests.py`
   - `services/hhem-evaluator/src/hhem_evaluator/unieval_router.py`
   - `services/hhem-evaluator/src/hhem_evaluator/control_unieval.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/dispatch_unieval.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/fail_unieval.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/load_model.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/load_model_assets.py`
   - `services/hhem-evaluator/src/hhem_evaluator/load_unieval.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/load_unieval_resources.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/load_unieval_settings.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/maintain_unieval_worker.py`
   - `services/hhem-evaluator/src/hhem_evaluator/plan_unieval_windows.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/prepare_unieval_resources.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/reduce_unieval.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/run_worker.py`
   - `services/hhem-evaluator/src/hhem_evaluator/score_unieval.py`
   - `services/hhem-evaluator/src/hhem_evaluator/unieval_worker.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/watch_worker_parent.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/contracts/api_health.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/contracts/api_settings.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/contracts/server_contract.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/contracts/server_event.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/contracts/unieval_contract.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/contracts/unieval_error.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/contracts/unieval_recording.py`
   - `services/hhem-evaluator/src/hhem_evaluator/contracts/unieval_request.py`
   - `services/hhem-evaluator/src/hhem_evaluator/contracts/unieval_result.py`
   - `services/hhem-evaluator/src/hhem_evaluator/contracts/unieval_settings.py`
   - `services/hhem-evaluator/src/hhem_evaluator/contracts/unieval_worker_message.py`
-  - `services/hhem-evaluator/src/hhem_evaluator/contracts/service_health.py`
+  - `services/hhem-evaluator/tests/test_server_events.py`
+  - `services/hhem-evaluator/tests/test_settings.py`
   - `services/hhem-evaluator/tests/unieval_cases.py`
   - `services/hhem-evaluator/tests/test_unieval_contracts.py`
   - `services/hhem-evaluator/tests/test_unieval_api.py`
   - `services/hhem-evaluator/tests/test_unieval_scoring.py`
+  - `services/hhem-evaluator/tests/test_unieval_reduction.py`
   - `services/hhem-evaluator/tests/test_unieval_windows.py`
   - `services/hhem-evaluator/tests/test_unieval_worker.py`
   - `services/hhem-evaluator/scripts/prepare-unieval-resources.py`
@@ -115,7 +136,10 @@ Table F - PR sequence
   - `config/fastapi-server.json`
   - `.github/workflows/ci.yml`
   - `docs/architecture/evaluation/unieval-api.md`
+  - `docs/architecture/evaluation/local-model-api.md`
   - `docs/reference/unieval-api.md`
+  - `docs/reference/fastapi-server.md`
+  - `docs/how-to/run-unieval-evaluation-api.md`
   - `docs/architecture/contracts/identity.md`
   - `docs/how-to/run-the-gates.md`
 

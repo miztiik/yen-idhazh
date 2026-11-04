@@ -21,7 +21,7 @@ def main() -> None:
     parser.add_argument("--settings", type=Path, required=True)
     parser.add_argument("--api-settings", type=Path)
     parser.add_argument("--model-config", type=Path)
-    parser.add_argument("--routes", nargs="*", choices=("hhem", "llama"))
+    parser.add_argument("--routes", nargs="*", choices=("hhem", "llama", "unieval"))
     args = parser.parse_args()
     root = args.root.resolve()
     try:

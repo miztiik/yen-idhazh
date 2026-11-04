@@ -1,5 +1,6 @@
-"""How does one FastAPI lifespan compose explicit HHEM and native llama routes?"""
+"""How does one FastAPI lifespan compose independent evaluator and native llama routes?"""
 
+import asyncio
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -10,7 +11,7 @@ import httpx
 from fastapi import FastAPI
 from starlette.responses import JSONResponse
 
-from .contracts.api_health import ApiHealth, DisabledHhemHealth
+from .contracts.api_health import ApiHealth, DisabledEvaluatorHealth
 from .contracts.api_settings import ApiSettings
 from .contracts.base import API_PREFIX
 from .contracts.llama_result import LlamaHealth
@@ -18,15 +19,20 @@ from .contracts.llama_settings import LlamaSettings
 from .contracts.server_contract import SERVER_SCHEMA_VERSION
 from .contracts.server_event import ApiDiagnosticData
 from .contracts.service_settings import ServiceSettings, StartupContext
+from .contracts.unieval_settings import UnievalSettings
 from .control_service import EvaluationController
+from .control_unieval import UnievalController
 from .emit_events import EventWriter
 from .forward_llama import LlamaForwarder
 from .guard_local_requests import GuardLocalRequests
 from .hhem_router import create_hhem_router
 from .llama_router import create_llama_router, declare_llama_request_schema
 from .load_llama_settings import load_llama_settings
+from .load_unieval_settings import load_unieval_settings
+from .maintain_unieval_worker import UnievalSupervisor
 from .maintain_worker import WorkerSupervisor
 from .resolve_ids import create_execution_id
+from .unieval_router import create_unieval_router
 
 
 def create_app(
@@ -39,6 +45,8 @@ def create_app(
     writer: EventWriter | None = None,
     llama_settings: LlamaSettings | None = None,
     llama_transport: httpx.AsyncBaseTransport | None = None,
+    unieval_settings: UnievalSettings | None = None,
+    unieval_supervisor: UnievalSupervisor | None = None,
 ) -> FastAPI:
     if "hhem" in api.enabled_routes:
         if settings is None:
@@ -71,6 +79,18 @@ def create_app(
         else None
     )
     instance_id = controller.instance_id if controller is not None else create_execution_id()
+    unieval: UnievalController | None = None
+    if "unieval" in api.enabled_routes:
+        selected_unieval = unieval_settings or load_unieval_settings(root, api)
+        if (
+            selected_unieval.listener != api.listener
+            or selected_unieval.logging != api.logging
+            or selected_unieval.worker.shutdown_timeout_ms > api.shutdown_timeout_ms
+        ):
+            raise ValueError("UniEval must use the shared listener, logging and shutdown bounds")
+        unieval = UnievalController(
+            selected_unieval, root, events, instance_id, supervisor=unieval_supervisor
+        )
     forwarder: LlamaForwarder | None = None
     if selected is not None:
         forwarder = LlamaForwarder(api, selected, events, transport=llama_transport)
@@ -85,22 +105,22 @@ def create_app(
                 await forwarder.start()
             if controller is not None:
                 await controller.start()
+            if unieval is not None:
+                await unieval.start()
             yield
         except BaseException as error:
             failure = error
             raise
         finally:
-            cleanup: list[BaseException] = []
+            stopping = []
             if forwarder is not None:
-                try:
-                    await forwarder.close()
-                except BaseException as error:
-                    cleanup.append(error)
+                stopping.append(forwarder.close())
             if controller is not None:
-                try:
-                    await controller.shutdown()
-                except BaseException as error:
-                    cleanup.append(error)
+                stopping.append(controller.shutdown())
+            if unieval is not None:
+                stopping.append(unieval.shutdown())
+            outcomes = await asyncio.gather(*stopping, return_exceptions=True)
+            cleanup = [outcome for outcome in outcomes if isinstance(outcome, BaseException)]
             try:
                 events.diagnostic(
                     ApiDiagnosticData(
@@ -133,14 +153,17 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.controller, app.state.forwarder, app.state.events = controller, forwarder, events
+    app.state.unieval = unieval
     app.state.service_instance_id = instance_id
     app.state.api_settings = api
     app.state.ready_emitted = False
-    app.add_middleware(GuardLocalRequests, settings=api, controller=controller)
+    app.add_middleware(GuardLocalRequests, settings=api, controller=controller, unieval=unieval)
     if controller is not None:
         app.include_router(create_hhem_router(controller))
     if forwarder is not None:
         app.include_router(create_llama_router(forwarder))
+    if unieval is not None:
+        app.include_router(create_unieval_router(unieval))
 
     @app.get("/health", response_model=ApiHealth)
     async def health() -> JSONResponse:
@@ -149,11 +172,10 @@ def create_app(
             if forwarder is not None
             else LlamaHealth(status="disabled", http_status=None, failure_code=None)
         )
-        hhem = controller.health() if controller is not None else DisabledHhemHealth()
-        states = [
-            hhem.status if component == "hhem" else native.status
-            for component in api.enabled_routes
-        ]
+        hhem = controller.health() if controller is not None else DisabledEvaluatorHealth()
+        observed_unieval = unieval.health() if unieval is not None else DisabledEvaluatorHealth()
+        components = {"hhem": hhem, "llama": native, "unieval": observed_unieval}
+        states = [components[component].status for component in api.enabled_routes]
         status = (
             "disabled"
             if not states
@@ -183,6 +205,7 @@ def create_app(
                 "status": status,
                 "hhem": hhem,
                 "llama": native,
+                "unieval": observed_unieval,
                 "log_file": events.log_file,
                 "log_available": events.log_available,
             }

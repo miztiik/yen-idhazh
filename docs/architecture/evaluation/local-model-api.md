@@ -1,8 +1,8 @@
 # How one Python API serves local model operations
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 
-How the shared FastAPI application serves HHEM and native llama generation
+How the shared FastAPI application serves HHEM, UniEval and native llama generation
 without coupling their model lifetimes. Exact routes, settings and diagnostics
 live in the [server reference](../../reference/fastapi-server.md).
 
@@ -24,6 +24,12 @@ The scoring wire contract does not change merely because its configuration
 is assembled from two named files.
 With HHEM disabled, no scoring controller or worker is constructed, and the
 shared entry point does not read HHEM's settings.
+
+UniEval has its own explicit router, frozen settings, finite queue and owned
+model process. Its [four-score calculation](unieval-api.md) is not an
+HHEM window rule or a generic evaluator plugin. Disabled UniEval neither
+loads its optional dependencies nor reads its configuration. Enabled
+components retain separate observed health and completed results.
 
 The native llama executable stays in a separate process on a private port.
 Its phase owns acquisition, launch, exact-child readiness and process exit.
@@ -57,7 +63,9 @@ existing worker controller. Disconnect closes the outstanding HTTP operation.
 It does not claim to stop the separately owned native llama process; the
 phase still has to stop and join that process.
 
-Both component cleanups run even when another cleanup fails. A single failure
+Enabled component cleanups run concurrently, each within its declared wait,
+so adding another independent worker does not add their shutdown waits.
+Every cleanup still runs when another fails. A single failure
 keeps its native exception type; multiple original and cleanup failures are
 retained separately in the raised group.
 HHEM's existing parent-loss watcher, bounded worker replacement and confirmed
@@ -86,5 +94,6 @@ remain native rather than acquiring a second sampling or summary policy.
 
 - [../../reference/fastapi-server.md](../../reference/fastapi-server.md) - shared API contract and settings.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - HHEM scoring and cancellation.
+- [unieval-api.md](unieval-api.md) - independent UniEval scoring and source coverage.
 - [../../reference/summary-evaluation-workflow.md](../../reference/summary-evaluation-workflow.md) - current caller and machine control.
 - [../../how-to/run-the-gates.md#independent-python-service-contracts](../../how-to/run-the-gates.md#independent-python-service-contracts) - offline composition checks.

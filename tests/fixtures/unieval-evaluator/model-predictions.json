@@ -1,0 +1,211 @@
+{
+  "version": "2026-11-04",
+  "recorded_at": "2026-11-04T10:43:40.447772Z",
+  "model_identity_sha256": "46bee67edfd07a8f88b299f62912210dcf25b45a0b34284fe2cfb82ec415e746",
+  "cases": [
+    {
+      "id": "distributed-support",
+      "input_sha256": "1bd03ee801984c380b22fd7a902d2b1e0042ab18dfe75f2d64769f7da187d45d",
+      "effective_settings": {
+        "consistency_source_mode": "all_source_windows",
+        "max_input_tokens": 256,
+        "source_window_tokens": 32,
+        "source_overlap_tokens": 8,
+        "max_source_windows": 256,
+        "max_comparisons": 4096,
+        "source_budget_tokens": 32
+      },
+      "work": {
+        "fluency": {
+          "planned": 2,
+          "completed": 0
+        },
+        "coherence": {
+          "planned": 1,
+          "completed": 0
+        },
+        "consistency": {
+          "planned": 6,
+          "completed": 0
+        },
+        "relevance": {
+          "planned": 1,
+          "completed": 0
+        },
+        "summary_sentences": 2,
+        "source_characters": 330,
+        "source_spans": [
+          {
+            "start": 0,
+            "end": 142
+          },
+          {
+            "start": 110,
+            "end": 260
+          },
+          {
+            "start": 219,
+            "end": 330
+          }
+        ]
+      },
+      "errors": [],
+      "comparisons": [
+        {
+          "dimension": "fluency",
+          "index": 0,
+          "sentence_index": 0,
+          "source_index": null,
+          "prompt_sha256": "71234483a95fdff1f5ac591c39d8b7ce3b9622ab0881766b0686f1b379620244",
+          "score": 0.9604337769959227
+        },
+        {
+          "dimension": "fluency",
+          "index": 1,
+          "sentence_index": 1,
+          "source_index": null,
+          "prompt_sha256": "afa867252382111e84bbf82594adb7bf21f059ac192230be4c86a0f00d7cc8eb",
+          "score": 0.9244078966788976
+        },
+        {
+          "dimension": "coherence",
+          "index": 0,
+          "sentence_index": null,
+          "source_index": null,
+          "prompt_sha256": "3cbd8f81f0acf19537c79c416f38a62d456f5dd0d060148e16ba193a8968eef8",
+          "score": 0.9899783237957775
+        },
+        {
+          "dimension": "relevance",
+          "index": 0,
+          "sentence_index": null,
+          "source_index": null,
+          "prompt_sha256": "8010268cfda530b61996ddabb84f42b910600062c13db26d2e4b252ad0f24f6a",
+          "score": 0.9929205118926797
+        },
+        {
+          "dimension": "consistency",
+          "index": 0,
+          "sentence_index": 0,
+          "source_index": 0,
+          "prompt_sha256": "1cd29d656fc008497efa310b1d2ccdace4672ec16b8b9b739252f5d687f38699",
+          "score": 0.9707947279065439
+        },
+        {
+          "dimension": "consistency",
+          "index": 1,
+          "sentence_index": 0,
+          "source_index": 1,
+          "prompt_sha256": "63fa70f353ef788612399b1a28f3107ba45829ac69cfa3d3788b0ce13f855e61",
+          "score": 0.0155428083954856
+        },
+        {
+          "dimension": "consistency",
+          "index": 2,
+          "sentence_index": 0,
+          "source_index": 2,
+          "prompt_sha256": "3919fa4968c018f3d6eafdb71c3c641b5fe5c8b20d58186c2a34eb4342bea449",
+          "score": 0.008080729208025692
+        },
+        {
+          "dimension": "consistency",
+          "index": 3,
+          "sentence_index": 1,
+          "source_index": 0,
+          "prompt_sha256": "74fa9a1054670bca36d0e359850ea3216b6767acc3717bae36c5a8d680ded768",
+          "score": 0.32927755507220585
+        },
+        {
+          "dimension": "consistency",
+          "index": 4,
+          "sentence_index": 1,
+          "source_index": 1,
+          "prompt_sha256": "5cc5a430fdef8e5eb05d84408c3af904e8c0b62a6cac1837a5246c2ad61a415f",
+          "score": 0.03726768021836118
+        },
+        {
+          "dimension": "consistency",
+          "index": 5,
+          "sentence_index": 1,
+          "source_index": 2,
+          "prompt_sha256": "5f4c25080b0ae0827f2a49bfbf472a0ebf7b99470512908c5bcff91acba8d6a1",
+          "score": 0.01199085508490003
+        }
+      ]
+    },
+    {
+      "id": "contradicted",
+      "input_sha256": "c7632ac630e93469aa3783e6268cbb09186567299018e167f12b223d209e2466",
+      "effective_settings": {
+        "consistency_source_mode": "full_source_prompt",
+        "max_input_tokens": 256,
+        "source_window_tokens": 32,
+        "source_overlap_tokens": 8,
+        "max_source_windows": 256,
+        "max_comparisons": 4096,
+        "source_budget_tokens": null
+      },
+      "work": {
+        "fluency": {
+          "planned": 1,
+          "completed": 0
+        },
+        "coherence": {
+          "planned": 1,
+          "completed": 0
+        },
+        "consistency": {
+          "planned": 1,
+          "completed": 0
+        },
+        "relevance": {
+          "planned": 1,
+          "completed": 0
+        },
+        "summary_sentences": 1,
+        "source_characters": 58,
+        "source_spans": [
+          {
+            "start": 0,
+            "end": 58
+          }
+        ]
+      },
+      "errors": [],
+      "comparisons": [
+        {
+          "dimension": "fluency",
+          "index": 0,
+          "sentence_index": 0,
+          "source_index": null,
+          "prompt_sha256": "375fa1a27e86f9815c059e41ed8c0941781f0c4b97dc3325ea70f5865c86d868",
+          "score": 0.9687945365801788
+        },
+        {
+          "dimension": "coherence",
+          "index": 0,
+          "sentence_index": null,
+          "source_index": null,
+          "prompt_sha256": "6e7d48a6bc0745bf757f9140dc85fbab7b9de24dc4d908e0630eddd7e708651f",
+          "score": 0.7340096522384962
+        },
+        {
+          "dimension": "relevance",
+          "index": 0,
+          "sentence_index": null,
+          "source_index": null,
+          "prompt_sha256": "b4712558ba683482724011023acde3713cdbc41b7477c74e571b7c65a25dfa04",
+          "score": 0.9197450461278778
+        },
+        {
+          "dimension": "consistency",
+          "index": 0,
+          "sentence_index": 0,
+          "source_index": 0,
+          "prompt_sha256": "9479463a12debefb660b5646d88a081a77f32f9c295dc66b28a8f9c84e36e109",
+          "score": 0.7895782883132431
+        }
+      ]
+    }
+  ]
+}
