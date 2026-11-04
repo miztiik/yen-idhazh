@@ -1,6 +1,8 @@
 """Which status follows from one phase's actual work, instruments and confirmed cleanup?"""
 
+from hhem_evaluator.contracts.api_health import ApiHealth
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
+from hhem_evaluator.contracts.unieval_result import UnievalResult
 
 from .contracts import (
     WORKFLOW_VERSION,
@@ -11,8 +13,9 @@ from .contracts import (
     RunIdentity,
     ServerOutcome,
     ServiceShutdown,
+    phase_status,
 )
-from .host_reader import MachineUsage, measurement_complete
+from .host_reader import MachineUsage
 
 
 def build_evidence(
@@ -24,32 +27,27 @@ def build_evidence(
     *,
     run: RunIdentity,
     phase: PhaseName,
+    reference_summary_sha256: str,
     servers: tuple[ServerOutcome, ...] = (),
     generation_sha256: str | None = None,
+    unieval: UnievalResult | None = None,
+    api_health: ApiHealth | None = None,
+    evaluation_request_id: str | None = None,
+    evaluation_correlation_id: str | None = None,
 ) -> PhaseEvidence:
-    work = (
-        evaluation is not None and evaluation.status == "complete"
-        if phase == "evaluation"
-        else shutdown.llama_stopped is True
-    )
-    complete = (
-        work
-        and hardware is not None
-        and hardware.status == "collected"
-        and measurement_complete(machine)
-        and not errors
-        and shutdown.api_stopped is True
-        and shutdown.host_stopped is True
-        and (phase != "evaluation" or shutdown.worker_exit_confirmed is True)
-    )
     return PhaseEvidence(
         version=WORKFLOW_VERSION,
         run=run,
         phase=phase,
-        status="complete"
-        if complete
-        else ("partial" if evaluation is not None and evaluation.hhem is not None else "failed"),
+        status=phase_status(
+            phase, evaluation, unieval, hardware, machine, shutdown, api_health, tuple(errors)
+        ),
         evaluation=evaluation,
+        unieval=unieval,
+        api_health=api_health,
+        evaluation_request_id=evaluation_request_id,
+        evaluation_correlation_id=evaluation_correlation_id,
+        reference_summary_sha256=reference_summary_sha256,
         hardware=hardware,
         machine=machine,
         shutdown=shutdown,

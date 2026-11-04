@@ -116,8 +116,10 @@ async def generate_summary(
         prepared.status != "complete"
         or selected.identity != prepared.selected
         or text_sha256(inputs.source_text) != prepared.source_sha256
+        or text_sha256(inputs.reference_summary_text) != prepared.reference_summary_sha256
         or loaded.sha256 != selected.identity.sha256
         or loaded.model_id != selected.identity.model_id
+        or loaded.weights_path != f"backend/models/{selected.identity.filename}"
     ):
         raise WorkflowError("RECEIPT_INVALID", "generation")
     body = json.dumps(
@@ -167,6 +169,7 @@ async def generate_summary(
         selected=prepared.selected,
         loaded=loaded,
         source_sha256=prepared.source_sha256,
+        reference_summary_sha256=prepared.reference_summary_sha256,
         summary_sha256=text_sha256(answer.summary),
         summary_text=answer.summary,
         status="complete",

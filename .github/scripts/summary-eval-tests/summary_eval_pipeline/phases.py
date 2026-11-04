@@ -1,4 +1,4 @@
-"""How does one visible generation or HHEM step retain work before closing its children?"""
+"""How does one visible model phase retain work before closing its children?"""
 
 import asyncio
 import contextlib
@@ -10,9 +10,11 @@ from pathlib import Path
 
 import httpx
 from hhem_evaluator.api_settings import load_api_settings
-from hhem_evaluator.contracts.evaluation_result import EvaluationResult
+from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.service_settings import StartupContext
+from hhem_evaluator.contracts.unieval_request import UnievalRequest
 from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.load_unieval_settings import load_unieval_settings
 from hhem_evaluator.resolve_ids import create_execution_id
 
 from .contracts import (
@@ -25,7 +27,8 @@ from .contracts import (
     text_sha256,
 )
 from .control import ApiReady, HostReady, StartupPacket
-from .evaluation import bind_evaluation, evaluate, read_owned_health
+from .evaluate_pair import EvaluatorOutcomes, evaluate_pair
+from .evaluation import bind_evaluations, read_owned_health
 from .failures import WorkflowError
 from .generation import generate_summary, read_turn_markers
 from .http import loopback_url
@@ -83,14 +86,15 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
         "generation-phase.json" if phase == "generation" else "evaluation.json"
     )
     services = PhaseServices(prepared.run)
-    evaluation: EvaluationResult | None = None
+    outcomes = EvaluatorOutcomes()
+    requests: tuple[EvaluateRequest, UnievalRequest] | None = None
     receipt: GenerationReceipt | None = None
     hardware: Hardware | None = None
     errors: list[PipelineError] = []
 
     def evidence() -> PhaseEvidence:
         return build_evidence(
-            evaluation,
+            outcomes.hhem,
             hardware,
             services.machine,
             services.shutdown(),
@@ -99,10 +103,16 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
             phase=phase,
             servers=tuple(services.servers),
             generation_sha256=text_sha256(receipt.model_dump_json()) if receipt else None,
+            reference_summary_sha256=prepared.reference_summary_sha256,
+            unieval=outcomes.unieval,
+            api_health=services.health,
+            evaluation_request_id=requests[0].request_id if requests else None,
+            evaluation_correlation_id=requests[0].correlation_id if requests else None,
         )
 
     try:
-        request = None
+        startup_timeout_ms = settings.worker.startup_timeout_ms
+        unieval_settings = None
         if phase == "evaluation":
             receipt = read_result(
                 directory / "generation.json", GenerationReceipt, pipeline.max_response_bytes
@@ -110,9 +120,11 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
             previous = read_result(
                 directory / "generation-phase.json", PhaseEvidence, pipeline.max_response_bytes
             )
-            request = bind_evaluation(
+            requests = bind_evaluations(
                 prepared, inputs, receipt, previous, settings.listener.max_body_bytes
             )
+            unieval_settings = load_unieval_settings(root, shared)
+            startup_timeout_ms = max(startup_timeout_ms, unieval_settings.worker.startup_timeout_ms)
         packet = StartupPacket(
             version=WORKFLOW_VERSION,
             startup_id=create_execution_id(),
@@ -123,8 +135,10 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
             ),
             git_sha=prepared.run.git_sha,
             attempt=prepared.run.attempt,
-            request_id=request.request_id if request is not None else create_execution_id(),
-            correlation_id=request.correlation_id if request is not None else create_execution_id(),
+            request_id=requests[0].request_id if requests is not None else create_execution_id(),
+            correlation_id=(
+                requests[0].correlation_id if requests is not None else create_execution_id()
+            ),
             run=prepared.run,
             phase=phase,
         )
@@ -144,23 +158,26 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                 pipeline,
             )
             services.api = api
-            ready = await asyncio.to_thread(api.wait_ready, settings.worker.startup_timeout_ms)
+            ready = await asyncio.to_thread(api.wait_ready, startup_timeout_ms)
             if not isinstance(ready, ApiReady):
                 raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", "api")
             origin = loopback_url(shared.listener.host, shared.listener.port)
-            services.health = await guard_work(
+            health = await guard_work(
                 read_owned_health(
                     client,
                     origin,
                     ready.service_instance_id,
                     settings,
                     pipeline,
-                    "llama" if phase == "generation" else "hhem",
+                    ("llama",) if phase == "generation" else ("hhem", "unieval"),
+                    startup_timeout_ms,
+                    errors=errors,
                 ),
                 api,
                 services.native,
                 pipeline,
             )
+            services.health = health
             services.startup_ms = (time.monotonic() - services.api_started) * 1000
             try:
                 host = OwnedService(
@@ -208,22 +225,25 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                 # Save the accepted answer before any instrument or service cleanup.
                 write_result(directory / "generation.json", receipt)
             else:
-                if request is None:
+                if requests is None or unieval_settings is None:
                     raise WorkflowError("RECEIPT_INVALID", "input")
-                status, observed = await guard_work(
-                    evaluate(client, origin, request, settings, pipeline), api, None, pipeline
+                await guard_work(
+                    evaluate_pair(
+                        client,
+                        origin,
+                        requests,
+                        health,
+                        settings,
+                        unieval_settings,
+                        pipeline,
+                        outcomes,
+                        errors,
+                        lambda: write_result(destination, evidence()),
+                    ),
+                    api,
+                    None,
+                    pipeline,
                 )
-                if (
-                    observed.request_id != request.request_id
-                    or observed.correlation_id != request.correlation_id
-                ):
-                    raise WorkflowError("RECEIPT_INVALID", "evaluation", "hhem")
-                evaluation = observed
-                if status != 200:
-                    errors.append(
-                        WorkflowError("EVALUATION_FAILED", "evaluation", "hhem", status).error
-                    )
-                write_result(destination, evidence())
     except WorkflowError as error:
         errors.append(error.error)
     except asyncio.CancelledError:
@@ -242,6 +262,7 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                 selected=prepared.selected,
                 loaded=services.native.loaded if services.native is not None else None,
                 source_sha256=prepared.source_sha256,
+                reference_summary_sha256=prepared.reference_summary_sha256,
                 summary_sha256=None,
                 summary_text=None,
                 status="failed",
@@ -254,9 +275,16 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
         work_complete = (
             receipt is not None and receipt.status == "complete"
             if phase == "generation"
-            else evaluation is not None and evaluation.status == "complete"
+            else (
+                outcomes.hhem is not None
+                and outcomes.hhem.status == "complete"
+                and outcomes.unieval is not None
+                and outcomes.unieval.status == "complete"
+            )
         )
-        await asyncio.to_thread(services.close, settings, shared, errors, work_complete)
+        await asyncio.to_thread(
+            services.close, settings, shared, errors, work_complete, unieval_settings
+        )
     result = evidence()
     write_result(destination, result)
     return result

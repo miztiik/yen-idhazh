@@ -138,7 +138,7 @@ Table I - PR sequence
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | I1 | 1 | Serve TypeScript APIs together in the feed workflow | - | A | DONE | sturdy-waffle (shared-hono-server) | #1908 | Shared Hono server |
 | I2 | 2 | Serve HHEM and llama through one FastAPI application | - | B | DONE | fuzzy-giggle (shared-fastapi-server) | #1906 | Shared FastAPI server |
-| I3 | 3 | Deliver the live summary-eval-tests workflow | 1, 2 | C | IN-FLIGHT | probable-couscous (summary-evaluation-workflow) | - | Summary evaluation workflow |
+| I3 | 3 | Deliver the live summary-eval-tests workflow | 1, 2 | C | DONE - P11 verified | probable-couscous (summary-evaluation-workflow) | #1912, #1914, #1915 | Summary evaluation workflow |
 
 ## 2. Row #1 - Serve TypeScript APIs together in the feed workflow
 
@@ -343,7 +343,7 @@ Table O - Alternatives not selected
 
 - **Scope:** Replace the HHEM-only workflow with config-selected summarization followed by HHEM evaluation of that generated summary, using the preceding servers.
 - **Correction level:** 3 for workflow/report integration; pause for an additional native contract or model change.
-- **Delivery state:** Implementation and focused checks belong to this PR. P11 remains PENDING until the registered workflow runs on the intended merged revision and its actual artifacts and process exits are inspected.
+- **Delivery state:** P11 is complete at `da477920af93167ecacbbb17c8a73a2da278f35f`. Two separate registered dispatches, [default model](https://github.com/miztiik/yen-idhazh/actions/runs/41920488195) and [alternate model](https://github.com/miztiik/yen-idhazh/actions/runs/41921299745), generated once from the same named source and scored each exact answer with real HHEM. Native artifacts confirm distinct selected/loaded weights, source and answer hashes, actual machine readings, explicit successful profile close, clean server exits and joined HHEM workers. This closes the HHEM-only row, not the separate UniEval live proof.
 - **Files touched:**
   - `.github/workflows/summary-eval-tests.yml` - new workflow.
   - `.github/workflows/hhem-evaluation-api-test.yml` - remove on cutover.

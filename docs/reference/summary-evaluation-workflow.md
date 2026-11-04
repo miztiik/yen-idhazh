@@ -9,7 +9,8 @@ operations.
 
 ## One model and one generated answer
 
-The form requires `source_text`. Optional `models_file` is a JSON path relative
+The form requires `source_text` and `reference_summary_text`. Optional
+`models_file` is a JSON path relative
 to `config/`, such as `models/ornith-1.5-9b-q5km.json`. The form default matches
 `config/idhazh.json.models_file`; blank uses that committed pointer. The existing
 model validator and declaration loader refuse invalid paths, missing assets and
@@ -18,7 +19,7 @@ settings declared for different weights before model startup.
 One dispatch selects one summarizer. A comparison is another dispatch with a
 different declaration, not a matrix, model loop or shared-default edit. The
 declaration supplies the actual pinned weights, companions, revisions, hashes,
-native flags, sampling and template settings. It does not select HHEM's model.
+native flags, sampling and template settings. It selects neither evaluator's model.
 `config/summary-eval-tests.json` holds the fixed generation instruction.
 
 There is no supplied-summary input. Source text enters only the user-data turn;
@@ -26,7 +27,16 @@ it never selects a shell argument, filename, model destination or system
 instruction. The selected model's request builder constrains the response to
 title and summary fields. The final-answer reader excludes reasoning and
 refuses missing, empty, invalid or unfinished answers, including output stopped
-by its token limit. HHEM receives the validated summary field unchanged.
+by its token limit. Both evaluators receive the validated summary field unchanged.
+
+The operator supplies the reference independently for this source before
+generation. The bounded event reader preserves its exact UTF-8 bytes and
+preparation saves its SHA-256 identity. Its text goes only to UniEval and the
+escaped report, never generation, HHEM, diagnostic logs or process controls.
+Missing, invalid or oversized reference input blocks preparation; the input
+object must fit the shared request byte allowance before generation. Independence comes from
+input provenance, not string inequality: an independently supplied reference
+may happen to equal the answer. There is no generated or substituted reference.
 
 ## Visible tasks and owned children
 
@@ -34,9 +44,9 @@ Table A - Task order
 
 | Id | Task | Work and ownership |
 | --- | --- | --- |
-| A1 | Prepare | Install frozen Bun and Python model dependencies, validate inputs, copy named configuration inputs into the disposable run directory, and acquire the pinned native executable and declared files. |
+| A1 | Prepare | Install frozen Bun and Python model dependencies, validate source/reference/model inputs, capture the reference hash, copy named configuration inputs, and acquire pinned native and UniEval assets, tokenizer and sentence resources. |
 | A2 | Generate | Start the actual native model and FastAPI's llama-only component, verify their identities, generate through FastAPI, atomically save the answer, then close and reap both. |
-| A3 | Evaluate | Re-read the same bounded platform event and saved generation. Require the current run, attempt, revision, source, model and confirmed native shutdown before starting HHEM. Score exactly that saved pair through FastAPI. |
+| A3 | Evaluate | Re-read the bounded event and generation. Require the current run, attempt, revision, source, answer, model, reference and confirmed native shutdown. Start HHEM and UniEval on the same FastAPI address; score the saved pair independently. |
 | A4 | Report | Read saved results only. Write combined JSON and escaped Markdown; append that exact Markdown to the step summary. Do not start a server or repeat generation. |
 | A5 | Retain | Upload available results/report on success or failure. Upload server diagnostics after errors or cancellation, with platform-default retention. |
 
@@ -75,7 +85,17 @@ PID before it executes the native binary. A parent lost before protection was
 armed therefore cannot leave an adopted model running. No detached production
 launcher, PID database,
 process-name kill, separate per-API listener or cross-step ownership is used.
-The native model is stopped before HHEM loads.
+The native model is stopped before either evaluator loads. Each evaluator has
+its own worker. Shared health keeps their states separate; one failed or
+unfinished component does not prevent a ready sibling from returning its
+actual result. A failed request does not cancel its sibling, retry scoring or
+regenerate the answer.
+
+If a later shared-health transport request fails, the caller retains its last
+identity-validated component observations and records that actual failure.
+Only a component already observed ready may score. Identity or response
+validation failures remain hard refusals, and the health failure prevents
+overall completion even when a sibling returns a score.
 
 ## Same-run files and status
 
@@ -87,10 +107,10 @@ Table B - Named output under `backend/var/summary-eval-tests/`
 
 | Id | File | Meaning |
 | --- | --- | --- |
-| B1 | `run.json` | Platform run/attempt, UTC start, source revision, selected declaration identity and exact source hash captured before startup; preparation status and safe errors are atomically updated in this same file. |
-| B2 | `generation.json` | The same identities, observed loaded model, exact source hash, validated final `summary_text`, its hash, generation status and safe errors. This is the one answer handoff. |
+| B1 | `run.json` | Platform run/attempt, UTC start, source revision, selected declaration, exact source and independent reference hashes captured before startup; preparation status and safe errors are atomically updated here. |
+| B2 | `generation.json` | The same identities, observed loaded model, source/reference hashes, validated final `summary_text`, answer hash, generation status and safe errors. This is the one answer handoff. |
 | B3 | `generation-phase.json` | Generation measurements, server observations, cleanup and errors, bound to the exact saved receipt. |
-| B4 | `evaluation.json` | Body-free native HHEM result and evaluation-phase measurements, server observations and cleanup, bound to that same receipt. |
+| B4 | `evaluation.json` | Imported native HHEM and UniEval results, actual per-worker readiness, request identities, reference hash, machine readings and independent shutdown observations, bound to that receipt. |
 | B5 | `results.json`, `report.md` | Combined native outcome and its escaped human report. |
 | B6 | `logs/` | Append-only per-role CloudEvents JSONL files and current native Hono server evidence. Not Git or site output. |
 
@@ -108,21 +128,27 @@ the disposable-file readers are current-only.
 
 Generation saves the accepted answer before measurement or shutdown. Evaluation
 checks the exact run, attempt, revision, source and declaration, the receipt's
-answer hash and the generation phase's receipt hash. Failed, stale, absent or
+answer and reference hashes, both native response request identities and the
+generation phase's receipt hash. Only UniEval receives the reference, unchanged.
+Failed, stale, absent or
 incomplete generation cannot start a scorer. There is no regeneration,
 supplied-answer fallback or zero score for work not run.
 
 A completed score survives a later measurement, shutdown or report error.
 Original API/process errors and cleanup failures remain separate. Combined
-completion requires completed generation and HHEM work, collected hardware,
+completion requires completed generation, complete HHEM and all four UniEval
+dimensions, collected hardware,
 actual CPU/RAM observations, an uninterrupted explicit profile close and clean
-confirmed shutdown. A retained primary score with any required failure is
-partial; no completed primary score is failed. UniEval is explicitly not run:
-its later integration adds no score or duration here.
+confirmed shutdown. Any completed evaluator score with a required failure is partial.
+Without a completed score, the workflow is failed. A genuine computed zero is retained. Failed or
+oversized UniEval dimensions remain null with their native errors; completed
+dimensions and the other evaluator's result survive. Error HTTP responses are
+validated and read, not discarded.
 
 Phase shutdown distinguishes `api_stopped`, the shared FastAPI application's
-exit, from HHEM's `worker_exit_confirmed`. Generation starts no evaluator worker
-and does not claim that one stopped.
+exit, from HHEM's `worker_exit_confirmed` and the independent
+`unieval_worker_exit_confirmed`. Neither worker flag stands for the other.
+Generation starts no evaluator worker and does not claim either exit.
 
 Machine CPU is zero to 100 percent for the whole machine, including background
 work. Stored RAM uses KiB; the report displays closing use in MiB, not peak use.
@@ -156,15 +182,18 @@ No Hono log or server outcome is invented when validation stops the helper
 before its supervisor starts.
 
 Only the declared generation result and escaped report contain the generated
-summary. The report re-reads the bounded event for its source disclosure.
-Both disclosures are literal text, not interpreted HTML. If their escaped
+summary. The report re-reads the bounded event for source and independent
+reference disclosures. All three are literal text, not interpreted HTML. If their escaped
 Markdown exceeds the platform's one-MiB step-summary limit, report publication
 fails explicitly while retaining the complete report artifact.
 Validated HTTP results and actual exits establish success, not terminal-log
 matching.
 
-The report leads with actual work and failures before detailed model and
-hardware evidence. Each failure names its service and any observed HTTP status;
+The report leads with actual work and failures before the four named scores,
+their plain meanings, actual consistency mode, source spans, sentence and
+comparison counts, model identities and hardware evidence. The
+[native UniEval reference](unieval-api.md) owns score meanings and limitations.
+There is no overall grade or publication rule. Each failure names its service and any observed HTTP status;
 cleanup errors also name the generation or evaluation phase that owned them.
 Beside server-log availability it directs failed or cancelled runs to
 `Artifacts -> summary-eval-tests-server-logs`, using the matching filename in
@@ -174,7 +203,10 @@ the server table.
 
 Separate preparation, generation, evaluation and reporting keep model memory
 lifetimes visible. One saved answer allows real service restarts without
-changing what an evaluator sees. Named run-local configuration copies reuse
+changing what an evaluator sees. Capturing the independent reference before
+generation prevents a generated-answer fallback without forbidding coincidental
+text equality. Independent native results retain useful work when a sibling
+fails. Named run-local configuration copies reuse
 the current model and machine readers without editing shared defaults or
 adding another server configuration authority.
 
@@ -194,3 +226,4 @@ UTF-8 answers without changing accepted text.
 - [Shared TypeScript API](typescript-api-server.md)
 - [Model-file selection](../concepts/config/model-file.md)
 - [Native HHEM operation](hhem-evaluation-api.md)
+- [Native UniEval operation](unieval-api.md)

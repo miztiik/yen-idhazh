@@ -46,9 +46,11 @@ def test_named_workflow_selects_one_declaration_with_the_current_pointer_default
     triggers = mapping(workflow["on"])
     assert set(triggers) == {"workflow_dispatch"}
     inputs = mapping(mapping(triggers["workflow_dispatch"])["inputs"])
-    assert set(inputs) == {"source_text", "models_file"}
+    assert set(inputs) == {"source_text", "models_file", "reference_summary_text"}
     source, model = mapping(inputs["source_text"]), mapping(inputs["models_file"])
     assert source["type"] == "string" and source["required"] is True
+    reference = mapping(inputs["reference_summary_text"])
+    assert reference["type"] == "string" and reference["required"] is True
     assert model["type"] == "string" and model["required"] is False and "options" not in model
     pointer = json.loads((REPOSITORY / "config" / "idhazh.json").read_bytes())["models_file"]
     assert model["default"] == pointer
@@ -137,10 +139,15 @@ def test_platform_input_preserves_exact_source_and_blank_model_selection(
 ) -> None:
     event = tmp_path / "event.json"
     source = "  PrivateSourceCanary\n$(`never run this`)  "
-    write_event(event, {"source_text": source, "models_file": ""})
+    reference = "  PrivateReferenceCanary\nindependent reference.  "
+    write_event(
+        event,
+        {"source_text": source, "reference_summary_text": reference, "models_file": ""},
+    )
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
     inputs = read_manual_inputs(service_settings(), load_pipeline_settings(REPOSITORY))
     assert inputs.source_text == source and inputs.models_file == ""
+    assert inputs.reference_summary_text == reference
     assert list(tmp_path.iterdir()) == [event]
 
 
@@ -154,6 +161,10 @@ def test_platform_input_preserves_exact_source_and_blank_model_selection(
         {"source_text": True},
         {"source_text": " \n"},
         {"source_text": "Source.", "models_file": None},
+        {"source_text": "Source.", "reference_summary_text": None},
+        {"source_text": "Source.", "reference_summary_text": True},
+        {"source_text": "Source.", "reference_summary_text": " \n"},
+        {"source_text": "Source.", "reference_summary_text": "\ud800"},
     ],
 )
 def test_invalid_platform_inputs_fail_without_echoing_values(
@@ -162,7 +173,10 @@ def test_invalid_platform_inputs_fail_without_echoing_values(
     inputs: dict[str, object],
 ) -> None:
     event = tmp_path / "event.json"
-    write_event(event, inputs)
+    valid = {"reference_summary_text": "Independent reference.", **inputs}
+    if inputs == {"source_text": "Source.", "summary_text": "Supplied answer."}:
+        valid = inputs
+    write_event(event, valid)
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
     with pytest.raises(WorkflowError) as failure:
         read_manual_inputs(service_settings(), load_pipeline_settings(REPOSITORY))
@@ -181,6 +195,26 @@ def test_event_envelope_overflow_fails_instead_of_truncating(
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
     with pytest.raises(WorkflowError) as failure:
         read_manual_inputs(selected, manual)
+    assert failure.value.error.code == "INPUT_TOO_LARGE"
+
+
+def test_reference_must_fit_the_shared_input_allowance_before_generation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event = tmp_path / "event.json"
+    settings, pipeline = service_settings(), load_pipeline_settings(REPOSITORY)
+    write_event(
+        event,
+        {
+            "source_text": "Source.",
+            "reference_summary_text": "R" * settings.listener.max_body_bytes,
+        },
+    )
+    assert event.stat().st_size < settings.listener.max_body_bytes + pipeline.event_envelope_bytes
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    with pytest.raises(WorkflowError) as failure:
+        read_manual_inputs(settings, pipeline)
     assert failure.value.error.code == "INPUT_TOO_LARGE"
 
 

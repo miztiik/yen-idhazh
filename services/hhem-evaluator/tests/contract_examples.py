@@ -14,6 +14,7 @@ from hhem_evaluator.contracts.evaluation_progress import (
 )
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.model_identity import ModelIdentity, RuntimeVersions
+from hhem_evaluator.contracts.unieval_result import UnievalResult
 from hhem_evaluator.contracts.worker_identity import WorkerIdentity
 from hhem_evaluator.contracts.worker_message import ScoreWindow, WindowOutcome
 from hhem_evaluator.load_settings import load_settings
@@ -130,4 +131,55 @@ def example_window_outcome() -> WindowOutcome:
         score=0.75,
         scoring_ms=0,
         error=None,
+    )
+
+
+def example_unieval_result(reference_hash: str) -> UnievalResult:
+    """Supply zero-valued contract examples, not model prediction evidence."""
+    from hhem_evaluator.api_settings import load_api_settings
+    from hhem_evaluator.contracts.unieval_contract import UNIEVAL_VERSION
+    from hhem_evaluator.contracts.unieval_request import EffectiveUnievalControls
+    from hhem_evaluator.contracts.unieval_result import (
+        DimensionWork,
+        SourceSpan,
+        UnievalModelIdentity,
+        UnievalScores,
+        UnievalTimings,
+        UnievalWork,
+    )
+    from hhem_evaluator.load_unieval_settings import load_unieval_settings
+
+    api = load_api_settings(API_SETTINGS_FILE)
+    settings = load_unieval_settings(REPOSITORY, api)
+    model = UnievalModelIdentity.model_validate_json(
+        (
+            REPOSITORY / "tests" / "fixtures" / "unieval-evaluator" / "model-identity.json"
+        ).read_bytes()
+    )
+    work = DimensionWork(planned=1, completed=1)
+    return UnievalResult(
+        version=UNIEVAL_VERSION,
+        status="complete",
+        execution_id=OPERATION_ID,
+        request_id=REQUEST_ID,
+        correlation_id=CORRELATION_ID,
+        reference_summary_sha256=reference_hash,
+        model=model,
+        worker=example_worker().model_copy(update={"pid": 1235}),
+        effective_settings=EffectiveUnievalControls(
+            **settings.scoring.model_dump(),
+            source_budget_tokens=settings.scoring.source_window_tokens,
+        ),
+        scores=UnievalScores(fluency=0.0, coherence=0.0, consistency=0.0, relevance=0.0),
+        work=UnievalWork(
+            fluency=work,
+            coherence=work,
+            consistency=work,
+            relevance=work,
+            summary_sentences=1,
+            source_characters=1,
+            source_spans=(SourceSpan(start=0, end=1),),
+        ),
+        timings_ms=UnievalTimings(queue_wait=0, scoring=0, total=0),
+        errors=(),
     )

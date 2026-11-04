@@ -40,6 +40,7 @@ def selected_root(directory: Path) -> None:
         "summary-eval-tests.json",
         "fastapi-server.json",
         "hhem-evaluator/settings.json",
+        "unieval-evaluator.json",
     ):
         (config / name).parent.mkdir(parents=True, exist_ok=True)
         (config / name).write_bytes((REPOSITORY / "config" / name).read_bytes())
@@ -48,13 +49,19 @@ def selected_root(directory: Path) -> None:
 def handoff_case() -> tuple[ManualInputs, PreparedRun, GenerationReceipt]:
     cases, _, _ = read_recordings(REPOSITORY)
     case = cases.cases[0]
-    inputs = ManualInputs(source_text=case.source_text)
+    inputs = ManualInputs(
+        source_text=case.source_text,
+        reference_summary_text=(
+            "The library opened a reading room on Monday, with twelve desks and no booking."
+        ),
+    )
     selected = select_model(REPOSITORY, "")
     prepared = PreparedRun(
         version=WORKFLOW_VERSION,
         run=example_run(),
         selected=selected.identity,
         source_sha256=text_sha256(inputs.source_text),
+        reference_summary_sha256=text_sha256(inputs.reference_summary_text),
         status="complete",
         errors=(),
     )
@@ -69,6 +76,7 @@ def handoff_case() -> tuple[ManualInputs, PreparedRun, GenerationReceipt]:
             sha256=prepared.selected.sha256,
         ),
         source_sha256=prepared.source_sha256,
+        reference_summary_sha256=prepared.reference_summary_sha256,
         summary_text=case.summary_text,
         summary_sha256=text_sha256(case.summary_text),
         status="complete",

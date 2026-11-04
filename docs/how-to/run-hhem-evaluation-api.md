@@ -3,7 +3,7 @@
 **Last Updated**: 2026-11-04
 
 How to dispatch `summary-eval-tests.yml` and inspect the generated answer,
-actual HHEM score, machine readings and owned-process cleanup. This procedure
+actual HHEM and four UniEval scores, machine readings and owned-process cleanup. This procedure
 is project-specific because it uses committed model declarations and the
 named shared services.
 
@@ -18,40 +18,33 @@ Keep live verification pending until a real model run has been inspected.
 Registration, offline recordings and green PR checks do not prove live
 generation, evaluator loading, host observations or cleanup.
 
-## Select one model and supply the source
+## Select one model and supply the source and independent reference
 
-The form requires `source_text`. Optional `models_file` is the committed JSON
+The form requires `source_text` and an independently written
+`reference_summary_text` for that source. The reference is captured before
+generation and sent only to UniEval, not to the summarizer or HHEM.
+Optional `models_file` is the committed JSON
 path relative to `config/`, not a repository identifier or a `config/`-prefixed
 path. Its prefilled value matches `config/idhazh.json.models_file`. Blank uses
 that pointer. The [model reference](../concepts/config/model-file.md) owns
 declaration validation and pinned file semantics.
 
 One run selects one summarizer. To compare declarations, dispatch separate
-runs with the same source. The generation instruction stays fixed in
+runs with the same source and reference. The generation instruction stays fixed in
 `config/summary-eval-tests.json`; neither dispatch changes the shared pointer.
 There is no manual summary input or model matrix.
 
-This command sends the named, project-authored source fixture through standard
+This command sends the named, project-authored source/reference fixture through standard
 input, not command arguments. Use the intended merged ref and retain its actual
 `headSha` with the result.
 
 ```powershell
-@'
-import json
-from pathlib import Path
-
-path = Path("tests") / "fixtures" / "hhem-evaluator" / "model-inputs.json"
-cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
-case = next(value for value in cases if value["id"] == "supported")
-print(json.dumps({
-    "source_text": case["source_text"],
-    "models_file": "",
-}))
-'@ | python - | gh workflow run summary-eval-tests.yml --ref main --json
+Get-Content -Raw .\tests\fixtures\unieval-evaluator\workflow-inputs.json |
+  gh workflow run summary-eval-tests.yml --ref main --json
 ```
 
-The platform retains the source event. **The source and generated summary also
-appear in the expandable report; the generated summary is in its declared
+The platform retains the input event. **Source, generated summary and independent
+reference appear in the expandable report; the generated summary is in its declared
 result artifact.** Do not supply private material or credentials. Diagnostic
 logs and evaluator JSON remain body-free.
 
@@ -66,13 +59,24 @@ gh run download <run-id> --name summary-eval-tests-report --dir <evidence-direct
 The [workflow reference](../reference/summary-evaluation-workflow.md) owns the
 named artifacts and field meanings. Confirm that the report's selected
 declaration, loaded model and answer match `generation.json`. HHEM must score
-that exact same-run answer after confirmed native-model shutdown. A failed
-generation must leave HHEM not run, without a zero score or numeric duration.
-UniEval remains explicitly not run until its separate integration lands.
+that exact same-run answer after confirmed native-model shutdown. UniEval must
+score the identical source/answer pair and identify the independently supplied
+reference hash. A failed generation must leave both evaluators not run, without
+a zero score or numeric duration.
+
+The named fixture requires multiple tokenizer-sized source windows. With the
+pinned tokenizer, even its complete source-only coherence prompt exceeds the
+original 1024-token cutoff. Inspect the actual generated answer's native
+coherence prompt: it must exceed that cutoff and fit the configured total
+allowance without clipping. Require all four actual scores, every planned
+sentence/window comparison, source spans from zero through the source's final
+character, and both joined worker exits. Three completed dimensions, an
+unexercised larger setting or an offline recording cannot close live proof.
 
 The report contains separate phase and server outcomes, actual startup times,
 shutdown results and log names. An unavailable observation remains unavailable.
-Normal completion needs a complete HHEM result, actual hardware and
+Normal completion needs a complete HHEM result and all four UniEval dimensions,
+actual hardware and
 whole-machine CPU/RAM, explicit uninterrupted profile close and clean confirmed
 shutdown. A score alone does not close live verification.
 
@@ -85,7 +89,7 @@ cannot guarantee final upload.
 
 If preparation fails, inspect `run.json` and the report's Preparation row before
 looking for a generation receipt. The original safe preparation error is kept;
-generation and HHEM remain not run. Missing server logs are expected before
+generation and both evaluators remain not run. Missing server logs are expected before
 server startup. `ASSET_AUTH_MISSING` means the preparation step did not receive
 the platform token needed by the existing pinned-release lookup.
 
@@ -111,5 +115,6 @@ readiness and process controls. The published site needs neither server.
 
 - [Summary workflow fields](../reference/summary-evaluation-workflow.md)
 - [HHEM API](../reference/hhem-evaluation-api.md)
+- [UniEval API](../reference/unieval-api.md)
 - [Whole-machine measurements](../reference/host-metrics.md)
 - [Gate commands](run-the-gates.md)

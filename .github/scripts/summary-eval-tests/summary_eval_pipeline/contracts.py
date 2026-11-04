@@ -4,6 +4,7 @@ import hashlib
 from datetime import timedelta
 from typing import Annotated, Final, Literal, Self
 
+from hhem_evaluator.contracts.api_health import ApiHealth
 from hhem_evaluator.contracts.base import (
     CommitId,
     ContextIdentity,
@@ -14,9 +15,12 @@ from hhem_evaluator.contracts.base import (
     PositiveCount,
     RelativePath,
     Sha256,
+    Uuid4,
     validate_text,
 )
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
+from hhem_evaluator.contracts.unieval_contract import DIMENSIONS
+from hhem_evaluator.contracts.unieval_result import UnievalResult
 from pydantic import AfterValidator, AwareDatetime, ConfigDict, Field, model_validator
 
 from idhazh.contracts.app_config import ModelsFile
@@ -27,7 +31,7 @@ from .host_reader import HardwareRow, MachineUsage, measurement_complete
 WORKFLOW_VERSION: Final = "2026-11-04"
 WorkflowVersion = Literal["2026-11-04"]
 PhaseName = Literal["generation", "evaluation"]
-ServiceName = Literal["api", "hhem", "host", "llama", "caller"]
+ServiceName = Literal["api", "hhem", "unieval", "host", "llama", "caller"]
 # Cause codes are protocol identifiers with the same wire bound as context identities.
 SourceCode = Annotated[str, Field(pattern=r"^[A-Z][A-Z0-9_]{0,127}$")]
 FailureCode = Literal[
@@ -101,6 +105,10 @@ class WorkflowContract(NativeContract):
             "changelog": [
                 {
                     "version": WORKFLOW_VERSION,
+                    "change": "Bind both evaluators and worker exits to one answer and reference.",
+                },
+                {
+                    "version": WORKFLOW_VERSION,
                     "change": "Retain safe machine-helper failure cause codes.",
                 },
                 {
@@ -110,10 +118,6 @@ class WorkflowContract(NativeContract):
                 {
                     "version": WORKFLOW_VERSION,
                     "change": "Use native string-length constraints for generation text.",
-                },
-                {
-                    "version": WORKFLOW_VERSION,
-                    "change": "Retain the selected run when generation has not started.",
                 },
                 {
                     "version": "2026-11-02",
@@ -170,6 +174,7 @@ class PreparedRun(WorkflowContract):
     run: RunIdentity
     selected: ModelSelection
     source_sha256: Sha256
+    reference_summary_sha256: Sha256
     status: Literal["pending", "complete", "failed"]
     errors: tuple[PipelineError, ...]
 
@@ -204,6 +209,7 @@ class GenerationReceipt(WorkflowContract):
     selected: ModelSelection
     loaded: LoadedModel | None
     source_sha256: Sha256
+    reference_summary_sha256: Sha256
     summary_sha256: Sha256 | None
     summary_text: NonblankText | None
     status: Literal["complete", "failed"]
@@ -239,7 +245,10 @@ class Hardware(HardwareRow):
 class ServiceShutdown(WorkflowContract):
     api_stopped: bool | None
     host_stopped: bool | None
-    worker_exit_confirmed: bool | None
+    worker_exit_confirmed: bool | None = Field(description="Observed HHEM worker exit.")
+    unieval_worker_exit_confirmed: bool | None = Field(
+        default=None, description="Observed UniEval worker exit, independent of HHEM."
+    )
     llama_stopped: bool | None = None
 
 
@@ -255,12 +264,71 @@ class ServerOutcome(WorkflowContract):
     cleanup_error_code: str | None = None
 
 
+def has_completed_score(evaluation: EvaluationResult | None, unieval: UnievalResult | None) -> bool:
+    return (evaluation is not None and evaluation.hhem is not None) or (
+        unieval is not None
+        and any(getattr(unieval.scores, dimension) is not None for dimension in DIMENSIONS)
+    )
+
+
+def phase_status(
+    phase: PhaseName,
+    evaluation: EvaluationResult | None,
+    unieval: UnievalResult | None,
+    hardware: Hardware | None,
+    machine: MachineUsage | None,
+    shutdown: ServiceShutdown,
+    health: ApiHealth | None,
+    errors: tuple[PipelineError, ...],
+) -> OutcomeStatus:
+    work = (
+        evaluation is not None
+        and evaluation.status == "complete"
+        and unieval is not None
+        and unieval.status == "complete"
+        and health is not None
+        and health.enabled_routes == ("hhem", "unieval")
+        and health.status == "ready"
+        and health.hhem.status == "ready"
+        and health.unieval.status == "ready"
+        if phase == "evaluation"
+        else shutdown.llama_stopped is True
+    )
+    clean = (
+        shutdown.api_stopped is True
+        and shutdown.host_stopped is True
+        and (
+            phase != "evaluation"
+            or (
+                shutdown.worker_exit_confirmed is True
+                and shutdown.unieval_worker_exit_confirmed is True
+            )
+        )
+    )
+    complete = (
+        work
+        and clean
+        and hardware is not None
+        and hardware.status == "collected"
+        and measurement_complete(machine)
+        and not errors
+    )
+    if complete:
+        return "complete"
+    return "partial" if has_completed_score(evaluation, unieval) else "failed"
+
+
 class PhaseEvidence(WorkflowContract):
     version: WorkflowVersion
     run: RunIdentity
     phase: PhaseName
     status: OutcomeStatus
     evaluation: EvaluationResult | None
+    unieval: UnievalResult | None = None
+    api_health: ApiHealth | None = None
+    evaluation_request_id: Uuid4 | None = None
+    evaluation_correlation_id: Uuid4 | None = None
+    reference_summary_sha256: Sha256
     hardware: Hardware | None
     machine: MachineUsage | None
     shutdown: ServiceShutdown
@@ -270,32 +338,64 @@ class PhaseEvidence(WorkflowContract):
 
     @model_validator(mode="after")
     def require_consistent_status(self) -> Self:
-        score = self.evaluation is not None and self.evaluation.hhem is not None
-        work = (
-            self.evaluation is not None and self.evaluation.status == "complete"
-            if self.phase == "evaluation"
-            else self.shutdown.llama_stopped is True
+        expected = phase_status(
+            self.phase,
+            self.evaluation,
+            self.unieval,
+            self.hardware,
+            self.machine,
+            self.shutdown,
+            self.api_health,
+            self.errors,
         )
-        clean = (
-            self.shutdown.api_stopped is True
-            and self.shutdown.host_stopped is True
-            and (self.phase != "evaluation" or self.shutdown.worker_exit_confirmed is True)
-        )
-        complete = (
-            work
-            and clean
-            and self.hardware is not None
-            and self.hardware.status == "collected"
-            and measurement_complete(self.machine)
-            and not self.errors
-        )
-        expected = "complete" if complete else "partial" if score else "failed"
         if self.status != expected:
             raise ValueError("Status must describe actual work, measurements and cleanup")
-        if self.phase == "generation" and self.evaluation is not None:
+        if self.phase == "generation" and (self.evaluation is not None or self.unieval is not None):
             raise ValueError("Generation does not score a summary")
-        if self.evaluation is not None and self.generation_sha256 is None:
-            raise ValueError("Scoring evidence requires the exact generation receipt identity")
+        if self.phase == "generation" and (
+            self.shutdown.worker_exit_confirmed is not None
+            or self.shutdown.unieval_worker_exit_confirmed is not None
+        ):
+            raise ValueError("Generation starts no evaluator worker and cannot claim its exit")
+        for result in (self.evaluation, self.unieval):
+            if result is None:
+                continue
+            if (
+                self.generation_sha256 is None
+                or self.reference_summary_sha256 is None
+                or self.evaluation_request_id is None
+                or self.evaluation_correlation_id is None
+                or result.request_id != self.evaluation_request_id
+                or result.correlation_id != self.evaluation_correlation_id
+            ):
+                raise ValueError("Scoring requires the bound receipt and actual request identities")
+        if (
+            self.unieval is not None
+            and self.unieval.reference_summary_sha256 != self.reference_summary_sha256
+        ):
+            raise ValueError("UniEval must identify the independent reference")
+        if self.api_health is not None:
+            for name, result in (("hhem", self.evaluation), ("unieval", self.unieval)):
+                observed = getattr(self.api_health, name)
+                if observed.status == "ready" and (
+                    observed.service_instance_id != self.api_health.service_instance_id
+                ):
+                    raise ValueError("Component readiness must identify this owned application")
+                if result is not None and (
+                    (result.model is not None and result.model != observed.model)
+                    or (result.worker is not None and result.worker != observed.worker)
+                ):
+                    raise ValueError("Evaluator results must retain their observed loaded identity")
+            hhem_worker, unieval_worker = (
+                self.api_health.hhem.worker,
+                self.api_health.unieval.worker,
+            )
+            if (
+                hhem_worker is not None
+                and unieval_worker is not None
+                and hhem_worker.pid == unieval_worker.pid
+            ):
+                raise ValueError("The evaluators require independently owned worker processes")
         return self
 
 
@@ -306,7 +406,6 @@ class PipelineEvidence(WorkflowContract):
     generation: GenerationReceipt | None
     generation_phase: PhaseEvidence | None
     evaluation_phase: PhaseEvidence | None
-    unieval: Literal["not_run"]
     errors: tuple[PipelineError, ...]
 
     @model_validator(mode="after")
@@ -322,6 +421,7 @@ class PipelineEvidence(WorkflowContract):
             or generation.run != self.prepared.run
             or generation.selected != self.prepared.selected
             or generation.source_sha256 != self.prepared.source_sha256
+            or generation.reference_summary_sha256 != self.prepared.reference_summary_sha256
         ):
             raise ValueError("Generation requires the captured run's completed preparation")
         if (
@@ -340,25 +440,28 @@ class PipelineEvidence(WorkflowContract):
                     and (observed.generation_sha256 != text_sha256(generation.model_dump_json()))
                 ):
                     raise ValueError("Every phase must retain the exact saved generation")
+                if observed is not None and (
+                    observed.reference_summary_sha256 != generation.reference_summary_sha256
+                ):
+                    raise ValueError("Every phase must retain the independent reference identity")
         if phase is not None and phase.phase != "generation":
             raise ValueError("Generation evidence requires the generation phase")
         if evaluation is not None and evaluation.phase != "evaluation":
             raise ValueError("Evaluation evidence requires the evaluation phase")
         if (
             evaluation is not None
-            and evaluation.evaluation is not None
+            and (evaluation.evaluation is not None or evaluation.unieval is not None)
             and (
                 generation is None
                 or generation.status != "complete"
                 or phase is None
                 or phase.shutdown.llama_stopped is not True
+                or phase.shutdown.api_stopped is not True
             )
         ):
             raise ValueError("Scoring requires the current answer and confirmed native shutdown")
-        score = (
-            evaluation is not None
-            and evaluation.evaluation is not None
-            and evaluation.evaluation.hhem is not None
+        score = evaluation is not None and has_completed_score(
+            evaluation.evaluation, evaluation.unieval
         )
         complete = (
             generation is not None

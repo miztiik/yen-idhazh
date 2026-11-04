@@ -4,11 +4,13 @@ import html
 from collections.abc import Sequence
 from decimal import ROUND_CEILING, Decimal
 
+from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.service_settings import ServiceSettings
 
-from .contracts import PhaseName, PipelineError, PipelineEvidence
+from .contracts import PhaseEvidence, PhaseName, PipelineError, PipelineEvidence
 from .host_reader import measurement_complete
 from .inputs import ManualInputs
+from .report_models import model_rows
 
 
 def format_seconds(milliseconds: float | None) -> str:
@@ -49,6 +51,38 @@ def describe_error(error: PipelineError, task: PhaseName | None = None) -> str:
     return f"- {' / '.join(location)}: {error.code}{cause} - {error.message}"
 
 
+def describe_evaluator(status: str | None, phase: PhaseEvidence | None, service: str) -> str:
+    if status is not None:
+        return status
+    failures = (
+        [
+            error
+            for error in phase.errors
+            if error.service == service and error.phase == "evaluation"
+        ]
+        if phase
+        else []
+    )
+    if any(error.code == "TASK_CANCELLED" for error in failures):
+        return "Cancelled - no result"
+    return "Failed - no valid result" if failures else "Not run"
+
+
+def describe_hhem(result: EvaluationResult | None) -> str:
+    if result is None:
+        return "-"
+    score = (
+        f"{result.hhem} source support (0-1)" if result.hhem is not None else "Score unavailable"
+    )
+    windows = result.windows.primary
+    work = (
+        f"{windows.scored} / {windows.planned} source windows complete"
+        if windows is not None
+        else "Source windows not planned"
+    )
+    return f"{score}; {work}"
+
+
 def render_report(
     evidence: PipelineEvidence,
     inputs: ManualInputs,
@@ -57,42 +91,7 @@ def render_report(
 ) -> str:
     generation, evaluation = evidence.generation, evidence.evaluation_phase
     result = evaluation.evaluation if evaluation is not None else None
-    selected = evidence.prepared.selected if evidence.prepared is not None else None
-    loaded = generation.loaded if generation is not None else None
-    evaluator = result.model if result is not None else None
-    model_rows = [
-        (
-            "Summarizer declaration (relative to config/)",
-            selected.models_file if selected else "Not selected",
-        ),
-        ("Declared summarizer", selected.model_id if selected else "Not selected"),
-        ("Loaded summarizer", loaded.model_id if loaded else "Not loaded"),
-        ("Native process PID", loaded.pid if loaded else "Not available"),
-        ("Weight repository", selected.repo if selected else "Not available"),
-        ("Weight revision", selected.revision if selected else "Not available"),
-        ("Weight file", selected.filename if selected else "Not available"),
-        ("Weight SHA-256 (content identity)", loaded.sha256 if loaded else "Not available"),
-        (
-            "Declaration SHA-256 (settings identity)",
-            selected.declaration_sha256 if selected else "Not available",
-        ),
-        ("HHEM model", evaluator.reference if evaluator else "Not loaded"),
-        ("HHEM loaded revision", evaluator.loaded_revision if evaluator else "Not loaded"),
-        ("HHEM foundation", evaluator.foundation_reference if evaluator else "Not loaded"),
-        ("HHEM foundation revision", evaluator.foundation_revision if evaluator else "Not loaded"),
-        (
-            "HHEM runtime",
-            (
-                f"Python {evaluator.runtime_versions.python}; "
-                f"PyTorch {evaluator.runtime_versions.pytorch}; "
-                f"Transformers {evaluator.runtime_versions.transformers}"
-            )
-            if evaluator
-            else "Not loaded",
-        ),
-        ("HHEM source window", f"{settings.scoring.chunk_words} words"),
-        ("HHEM overlap", f"{settings.scoring.chunk_overlap_words} words"),
-    ]
+    unieval = evaluation.unieval if evaluation is not None else None
     work_rows = [
         ("Preparation", evidence.prepared.status if evidence.prepared else "Not run", "-", "-"),
         (
@@ -103,12 +102,42 @@ def render_report(
         ),
         (
             "HHEM",
-            result.status if result else "Not run",
-            str(result.hhem) if result and result.hhem is not None else "-",
+            describe_evaluator(result.status if result else None, evaluation, "hhem"),
+            describe_hhem(result),
             format_seconds(result.timings_ms.total if result else None),
         ),
-        ("UniEval", "Not run - separate workflow integration", "-", "-"),
+        (
+            "UniEval",
+            describe_evaluator(unieval.status if unieval else None, evaluation, "unieval"),
+            (
+                f"{sum(value is not None for value in unieval.scores.model_dump().values())}"
+                " of 4 dimensions complete"
+            )
+            if unieval
+            else "-",
+            format_seconds(unieval.timings_ms.total if unieval else None),
+        ),
     ]
+    score_rows = []
+    for dimension, meaning in (
+        ("fluency", "Natural wording; mean across summary sentences."),
+        ("coherence", "Logical flow of the complete summary with the complete source."),
+        ("consistency", "Support for summary claims under the recorded source mode."),
+        ("relevance", "Agreement with the independent reference, not source coverage."),
+    ):
+        dimension_work = getattr(unieval.work, dimension) if unieval else None
+        score_rows.append(
+            (
+                dimension,
+                getattr(unieval.scores, dimension) if unieval else None,
+                meaning,
+                (
+                    f"{dimension_work.completed} / {dimension_work.planned}"
+                    if dimension_work and dimension_work.planned is not None
+                    else "Not planned"
+                ),
+            )
+        )
     readings: list[tuple[object, ...]] = []
     servers: list[tuple[object, ...]] = []
     errors = [describe_error(error) for error in evidence.errors]
@@ -147,9 +176,24 @@ def render_report(
                 (
                     phase.phase,
                     "HHEM worker",
-                    f"PID {worker.pid}; generation {worker.generation}; "
-                    f"start ticks {worker.start_ticks}",
+                    f"process ID {worker.pid}; worker start number {worker.generation}; "
+                    f"kernel start ticks {worker.start_ticks}",
                 )
+            )
+        if phase.unieval is not None and phase.unieval.worker is not None:
+            worker = phase.unieval.worker
+            readings.append(
+                (
+                    phase.phase,
+                    "UniEval worker",
+                    f"process ID {worker.pid}; worker start number {worker.generation}; "
+                    f"kernel start ticks {worker.start_ticks}",
+                )
+            )
+        if phase.api_health is not None:
+            readings.extend(
+                (phase.phase, f"{name} startup state", getattr(phase.api_health, name).status)
+                for name in ("hhem", "unieval")
             )
         cpu = machine.cpu.value if machine else None
         total = machine.samples[-1].memory_kb.total if machine else None
@@ -200,7 +244,12 @@ def render_report(
                     if machine
                     else "Not available",
                 ),
-                (phase.phase, "Model-worker exit confirmed", phase.shutdown.worker_exit_confirmed),
+                (phase.phase, "HHEM worker exit confirmed", phase.shutdown.worker_exit_confirmed),
+                (
+                    phase.phase,
+                    "UniEval worker exit confirmed",
+                    phase.shutdown.unieval_worker_exit_confirmed,
+                ),
             ]
         )
         for server in phase.servers:
@@ -227,34 +276,54 @@ def render_report(
         "# summary-eval-tests",
         f"**Result:** {evidence.status}",
         "## Actual work",
-        table("A", ("Task", "Status", "Source support (0-1)", "Time (seconds)"), work_rows),
+        table("A", ("Task", "Status", "Result", "Time (seconds)"), work_rows),
+        "HHEM reports source support from zero to one: the best completed source window, "
+        "not proof that every claim is true.",
     ]
     if result is not None:
         errors.extend(
             f"- evaluation / hhem / {error.phase}: {error.code} - {error.message}"
             for error in result.errors
         )
+    if unieval is not None:
+        errors.extend(
+            f"- evaluation / unieval / {error.dimension or 'request'}: "
+            f"{error.code} - {error.message}"
+            for error in unieval.errors
+        )
     if errors:
         sections.extend(["## Errors", "\n".join(dict.fromkeys(errors))])
     sections.extend(
         [
+            "## UniEval scores",
+            table(
+                "B",
+                ("Dimension", "Score (0-1)", "Meaning", "Completed / planned comparisons"),
+                score_rows,
+            ),
+            "All four scores are required. Missing work is not zero. Segmented consistency "
+            "checks every source window for every summary sentence, then averages each "
+            "sentence's best score. It cannot join evidence across windows and may miss "
+            "contradictions outside the best match. Coherence and relevance each use one "
+            "complete prompt, not window averages. Longer prompts do not establish "
+            "judging accuracy.",
             "## Model configuration",
-            table("B", ("Setting", "Value"), model_rows),
+            table("C", ("Setting", "Value"), model_rows(evidence, settings)),
             f"[Committed evaluator settings]({config_url})",
             "## Hardware",
             "CPU and RAM readings cover the whole machine, including background work.",
-            table("C", ("Phase", "Reading", "Value"), readings),
+            table("D", ("Phase", "Reading", "Value"), readings),
             "## Owned servers",
             (
                 "For failed or cancelled runs, open this run's **Artifacts -> "
                 "summary-eval-tests-server-logs** and choose the matching filename "
-                "from **Log file** in Table D."
+                "from **Log file** in Table E."
                 if servers
                 else "No server log files were recorded. The server-log artifact is absent "
                 "when no server starts."
             ),
             table(
-                "D",
+                "E",
                 (
                     "Phase",
                     "Server",
@@ -277,6 +346,10 @@ def render_report(
                 if generation and generation.summary_text
                 else "Not generated"
             )
+            + "</pre>\n</details>",
+            "<details>\n<summary>Independent reference summary</summary>\n\n"
+            "Supplied before generation; sent only to UniEval.\n\n<pre>"
+            + html.escape(inputs.reference_summary_text)
             + "</pre>\n</details>",
         ]
     )

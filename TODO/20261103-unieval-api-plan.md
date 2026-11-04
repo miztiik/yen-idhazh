@@ -78,7 +78,7 @@ Table F - PR sequence
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | F1 | 1 | Add a real UniEval route to the Python API | - | A | DONE #1909 | didactic-memory | #1909 | - |
-| F2 | 2 | Run UniEval in the existing summary workflow | 1 | B | PENDING | - | - | - |
+| F2 | 2 | Run UniEval in the existing summary workflow | 1 | B | IN-FLIGHT - live proof pending | unieval-workflow-integration | - | - |
 
 ## 2. Row #1 - Add a real UniEval route to the Python API
 
@@ -184,6 +184,7 @@ Table I - API alternatives not selected
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/contracts.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/control.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/evaluation.py`
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/evaluate_pair.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/generation.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/inputs.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/model_selection.py`
@@ -194,6 +195,12 @@ Table I - API alternatives not selected
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/settings.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/run.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/report.py`
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/report_models.py`
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/report_task.py`
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/preparation.py`
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/phases.py`
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/phase_result.py`
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/phase_services.py`
   - `config/fastapi-server.json`
   - `config/summary-eval-tests.json`
   - `services/hhem-evaluator/tests/pipeline_cases.py`
@@ -203,7 +210,14 @@ Table I - API alternatives not selected
   - `services/hhem-evaluator/tests/test_pipeline_evaluation.py`
   - `services/hhem-evaluator/tests/test_pipeline_lifetime.py`
   - `services/hhem-evaluator/tests/test_pipeline_report.py`
+  - `services/hhem-evaluator/tests/test_pipeline_preparation.py`
+  - `services/hhem-evaluator/tests/test_evaluator_response_binding.py`
+  - `services/hhem-evaluator/tests/test_unieval_workflow.py`
+  - `services/hhem-evaluator/tests/test_unieval_workflow_fixture.py`
+  - `services/hhem-evaluator/tests/test_workflow_outcomes.py`
+  - `services/hhem-evaluator/tests/test_workflow_health_isolation.py`
   - `tests/fixtures/hhem-evaluator/pipeline-evidence.json`
+  - `tests/fixtures/unieval-evaluator/workflow-inputs.json`
   - `docs/reference/summary-evaluation-workflow.md`
   - `docs/how-to/run-hhem-evaluation-api.md`
   - `docs/how-to/run-the-gates.md`

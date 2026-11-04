@@ -91,6 +91,7 @@ class UnievalScenario:
     fail_at: int | None = None
     block_at: int | None = None
     crash_at: int | None = None
+    load_failure: bool = False
 
 
 @dataclass
@@ -123,6 +124,8 @@ class RecordedUnievalLoader:
     scenario: UnievalScenario
 
     def __call__(self, settings: UnievalSettings, root: Path) -> RecordedUnievalPredictor:
+        if self.scenario.load_failure:
+            raise ValueError("PrivateModelLoadFailureCanary")
         _, predictions, identity = read_unieval_recordings()
         assert identity.loaded_revision == settings.assets.model.revision
         return RecordedUnievalPredictor(

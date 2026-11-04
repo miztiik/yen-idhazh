@@ -41,21 +41,25 @@ def private_output_case(packet: StartupPacket, mode: str) -> None:
             channels.control,
         )
         sys.stdin.buffer.read(1)
-        unconfirmed = mode == "unconfirmed_stop"
-        worker = subprocess.Popen(
-            [
-                sys.executable,
-                "-c",
-                "import sys; print('PrivateInheritedOutputCanary',flush=True); "
-                "print('PrivateInheritedErrorCanary',file=sys.stderr,flush=True)"
-                + ("; sys.stdin.buffer.read(1)" if unconfirmed else ""),
-            ],
-            stdin=subprocess.PIPE if unconfirmed else subprocess.DEVNULL,
-        )
+        blocked = (mode == "unconfirmed_stop", mode == "unconfirmed_unieval_stop")
+        workers = [
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    "import sys; print('PrivateInheritedOutputCanary',flush=True); "
+                    "print('PrivateInheritedErrorCanary',file=sys.stderr,flush=True)"
+                    + ("; sys.stdin.buffer.read(1)" if held else ""),
+                ],
+                stdin=subprocess.PIPE if held else subprocess.DEVNULL,
+            )
+            for held in blocked
+        ]
         try:
-            if not unconfirmed:
-                worker.wait(timeout=5)
-            confirmed = worker.poll() is not None
+            for worker, held in zip(workers, blocked, strict=True):
+                if not held:
+                    worker.wait(timeout=5)
+            confirmed = [worker.poll() is not None for worker in workers]
             emitter.emit("service", "completed", EventDetails(status="stopping"), cause=cause)
             emit_control(
                 ServiceStopped(
@@ -65,18 +69,20 @@ def private_output_case(packet: StartupPacket, mode: str) -> None:
                     startup_id=packet.startup_id,
                     pid=os.getpid(),
                     clean=mode != "unclean_stop",
-                    worker_exit_confirmed=confirmed,
+                    worker_exit_confirmed=confirmed[0],
+                    unieval_worker_exit_confirmed=confirmed[1],
                 ),
                 channels.control,
             )
         finally:
-            if worker.stdin is not None:
-                worker.stdin.close()
-            try:
-                worker.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                worker.kill()
-                worker.wait(timeout=5)
+            for worker in workers:
+                if worker.stdin is not None:
+                    worker.stdin.close()
+                try:
+                    worker.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    worker.kill()
+                    worker.wait(timeout=5)
 
 
 def main() -> None:
@@ -110,7 +116,12 @@ def main() -> None:
         )
         sys.stdout.flush()
         raise SystemExit(1)
-    if mode in ("raw_inherited_output", "unclean_stop", "unconfirmed_stop"):
+    if mode in (
+        "raw_inherited_output",
+        "unclean_stop",
+        "unconfirmed_stop",
+        "unconfirmed_unieval_stop",
+    ):
         private_output_case(packet, mode)
         return
     if mode == "early_exit":

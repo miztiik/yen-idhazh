@@ -109,6 +109,7 @@ def test_inherited_output_cannot_corrupt_a_private_shutdown_receipt(
     child.wait_ready(CHILD_STARTUP_MS)
     stopped = child.close(6000)
     assert stopped.clean and stopped.worker_exit_confirmed is True
+    assert stopped.unieval_worker_exit_confirmed is True
     assert child.process.poll() == 0
     output = str(capsys.readouterr())
     assert "PrivateInheritedOutputCanary" not in output
@@ -116,9 +117,16 @@ def test_inherited_output_cannot_corrupt_a_private_shutdown_receipt(
 
 
 @pytest.mark.parametrize(
-    ("mode", "confirmed"), [("unclean_stop", True), ("unconfirmed_stop", False)]
+    ("mode", "confirmed", "unieval_confirmed"),
+    [
+        ("unclean_stop", True, True),
+        ("unconfirmed_stop", False, True),
+        ("unconfirmed_unieval_stop", True, False),
+    ],
 )
-def test_unclean_shutdown_preserves_an_observed_worker_exit(mode: str, confirmed: bool) -> None:
+def test_unclean_shutdown_preserves_each_observed_worker_exit(
+    mode: str, confirmed: bool, unieval_confirmed: bool
+) -> None:
     child = start_child("api", mode)
     child.wait_ready(CHILD_STARTUP_MS)
     with pytest.raises(WorkflowError) as failure:
@@ -126,6 +134,7 @@ def test_unclean_shutdown_preserves_an_observed_worker_exit(mode: str, confirmed
     assert failure.value.error.code == "SERVICE_STOP_FAILED"
     assert child.process.poll() == 0
     assert child.stopped is not None and child.stopped.worker_exit_confirmed is confirmed
+    assert child.stopped.unieval_worker_exit_confirmed is unieval_confirmed
     assert not child.protocol_failed.is_set() and not child.events_failed.is_set()
 
 
@@ -151,7 +160,30 @@ def test_original_work_failure_and_both_real_cleanup_failures_remain_separate() 
     ]
     assert api.process.poll() is not None and host.process.poll() is not None
     assert services.shutdown().worker_exit_confirmed is True
+    assert services.shutdown().unieval_worker_exit_confirmed is True
     assert services.shutdown().api_stopped is False
+
+
+def test_unieval_cleanup_failure_preserves_the_original_error_and_independent_hhem_exit() -> None:
+    api = start_child("api", "unconfirmed_unieval_stop")
+    api.wait_ready(CHILD_STARTUP_MS)
+    original = WorkflowError("EVALUATION_FAILED", "evaluation", "unieval").error
+    errors = [original]
+    services = PhaseServices(example_run(), api=api)
+    services.close(
+        service_settings(),
+        load_api_settings(REPOSITORY / "config" / "fastapi-server.json"),
+        errors,
+        False,
+    )
+    assert errors[0] == original
+    assert [(error.phase, error.service) for error in errors[1:]] == [
+        ("cleanup", "api"),
+        ("cleanup", "unieval"),
+    ]
+    assert services.shutdown().worker_exit_confirmed is True
+    assert services.shutdown().unieval_worker_exit_confirmed is False
+    assert api.process.poll() is not None
 
 
 @pytest.mark.parametrize("failure", ["open", "write"])
