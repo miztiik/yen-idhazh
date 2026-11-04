@@ -11,8 +11,9 @@ from typing import Protocol, cast
 
 from .contracts.error_detail import ErrorDetail
 from .contracts.model_identity import ModelIdentity, RuntimeVersions
-from .contracts.service_settings import ModelAssetSettings, ServiceSettings
+from .contracts.service_settings import ServiceSettings
 from .fail_evaluation import EvaluationFailure
+from .load_model_assets import resolve_snapshot
 
 
 class Prediction(Protocol):
@@ -48,30 +49,6 @@ def quiet_model_output() -> Iterator[None]:
                 os.close(original)
 
 
-def _snapshot(selection: ModelAssetSettings, cache: Path, local_only: bool) -> Path:
-    from huggingface_hub import hf_hub_download
-
-    directory: Path | None = None
-    for filename in selection.files:
-        asset = Path(
-            hf_hub_download(
-                repo_id=selection.reference,
-                revision=selection.revision,
-                filename=filename,
-                cache_dir=str(cache),
-                local_files_only=local_only,
-            )
-        )
-        if asset.name != filename or asset.parent.name != selection.revision:
-            raise ValueError("The downloaded asset does not identify the selected revision.")
-        if directory is not None and asset.parent != directory:
-            raise ValueError("The selected assets do not share an immutable snapshot.")
-        directory = asset.parent
-    if directory is None:
-        raise ValueError("The selected asset inventory is empty.")
-    return directory
-
-
 @dataclass
 class CpuPredictor:
     """Keep the official model call and finite scalar validation at one boundary."""
@@ -100,12 +77,14 @@ def load_model(settings: ServiceSettings, root: Path, *, local_only: bool) -> Pr
             os.environ["HF_MODULES_CACHE"] = str(cache / "modules")
             import torch
             import transformers
-            from huggingface_hub.utils import disable_progress_bars
+            from huggingface_hub.utils.tqdm import disable_progress_bars
             from transformers import AutoConfig, AutoModelForSequenceClassification
 
             disable_progress_bars()
-            model_directory = _snapshot(settings.hhem.model, cache, local_only)
-            foundation_directory = _snapshot(settings.hhem.foundation, cache, local_only)
+            model_directory = resolve_snapshot(settings.hhem.model, cache, local_only=local_only)
+            foundation_directory = resolve_snapshot(
+                settings.hhem.foundation, cache, local_only=local_only
+            )
             config = AutoConfig.from_pretrained(
                 str(model_directory), trust_remote_code=True, local_files_only=True
             )

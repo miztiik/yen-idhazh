@@ -1,13 +1,9 @@
 """How does one owned child load once and return a validated outcome per window?"""
 
-import multiprocessing
-import os
-import signal
-import sys
 import threading
 import time
 from pathlib import Path
-from typing import Final, Protocol
+from typing import Protocol
 
 from pydantic import ValidationError
 
@@ -27,47 +23,11 @@ from .exchange_packets import ByteChannel
 from .fail_evaluation import EvaluationFailure
 from .load_model import Predictor, load_model, quiet_model_output
 from .read_process_identity import read_process_identity
-
-# Linux defines this operation in its process-control ABI.
-PR_SET_PDEATHSIG: Final = 1
+from .watch_worker_parent import arm_parent_exit, watch_parent
 
 
 class ModelLoader(Protocol):
     def __call__(self, settings: ServiceSettings, root: Path, *, local_only: bool) -> Predictor: ...
-
-
-def _arm_parent_exit() -> None:
-    """Make Linux owner loss independent of whether native prediction releases the GIL."""
-    if sys.platform != "linux":
-        return
-    import ctypes
-
-    parent = multiprocessing.parent_process()
-    if parent is None:
-        raise EvaluationFailure(ErrorDetail.from_code("INTERNAL_ERROR", "worker"))
-    library = ctypes.CDLL(None, use_errno=True)
-    library.prctl.argtypes = [
-        ctypes.c_int,
-        ctypes.c_ulong,
-        ctypes.c_ulong,
-        ctypes.c_ulong,
-        ctypes.c_ulong,
-    ]
-    library.prctl.restype = ctypes.c_int
-    if library.prctl(PR_SET_PDEATHSIG, signal.SIGKILL, 0, 0, 0) != 0:
-        raise EvaluationFailure(ErrorDetail.from_code("INTERNAL_ERROR", "worker"))
-    if os.getppid() != parent.pid:
-        os._exit(0)
-
-
-def _watch_parent(lifetime: ByteChannel) -> None:
-    try:
-        lifetime.recv_bytes(1)
-    except (EOFError, OSError):
-        pass
-    finally:
-        # Owner loss is a process boundary, including while native prediction blocks.
-        os._exit(0)
 
 
 def _score(predictor: Predictor, command: ScoreWindow) -> WindowOutcome:
@@ -121,7 +81,7 @@ def run_worker(
 ) -> None:
     """Own real pipes and the lifetime watcher; inject only the model-call boundary."""
     with quiet_model_output():
-        threading.Thread(target=_watch_parent, args=(lifetime,), daemon=True).start()
+        threading.Thread(target=watch_parent, args=(lifetime,), daemon=True).start()
         try:
             bootstrap = WorkerCommand.model_validate_json(
                 channel.recv_bytes(max_command_bytes)
@@ -137,7 +97,7 @@ def run_worker(
                 .encode("utf-8")
             )
             try:
-                _arm_parent_exit()
+                arm_parent_exit()
                 predictor = loader(bootstrap.settings, root, local_only=generation > 1)
             except EvaluationFailure as failure:
                 channel.send_bytes(

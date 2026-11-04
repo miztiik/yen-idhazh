@@ -197,6 +197,9 @@ jobs:
       - name: Install only the locked service development environment
         run: uv sync --frozen --group dev
 
+      - name: Prepare pinned tokenizer and sentence resources without model weights
+        run: uv run --frozen python scripts/prepare-unieval-resources.py --root ../..
+
       - name: Lint native service contracts
         run: |
           uv run --frozen ruff check src tests scripts

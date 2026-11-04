@@ -1,6 +1,6 @@
 # Shared local Python API
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 
 Which routes and startup settings the single FastAPI application exposes.
 This is a local workflow service, not a backend for the published site.
@@ -12,7 +12,7 @@ process ownership and failure handling.
 `config/fastapi-server.json` owns the listener, explicit component selection,
 diagnostic settings and HTTP transport bounds. The frozen native models live
 in `services/hhem-evaluator/src/hhem_evaluator/contracts/`. Shared settings,
-health, llama data and CloudEvents schemas have version `2026-11-03`.
+health, llama data and CloudEvents schemas have version `2026-11-04`.
 They are current-only: an old event envelope or old authored listener location
 is rejected, not read through an alias.
 
@@ -23,7 +23,7 @@ Table A - Listener and component selection
 | A1 | `listener.host`, `listener.port` | Loopback `127.0.0.1`, port 3010. The host can also be the literal `::1`. |
 | A2 | `listener.max_body_bytes` | At most 1048576 bytes, or 1 MiB, per input body. |
 | A3 | `listener.body_read_timeout_ms` | An absolute input-read deadline of 5000 milliseconds, or five seconds. |
-| A4 | `enabled_routes` | A distinct list drawn from `hhem` and `llama`. The development default is an empty list. Its declaring field names the removal condition. |
+| A4 | `enabled_routes` | A distinct list drawn from `hhem`, `llama` and `unieval`. The development default is an empty list. Its declaring field names the removal condition. |
 | A5 | `shutdown_timeout_ms` | 15000 milliseconds, or fifteen seconds, for forwarding-request shutdown and Uvicorn's graceful wait. When HHEM is enabled, this cannot be shorter than its worker shutdown wait. |
 
 Table B - Native operations
@@ -35,6 +35,8 @@ Table B - Native operations
 | B3 | `POST /api/2026-11-02/summary-eval-hhem` | The existing [native evaluation operation](hhem-evaluation-api.md). Registered only with HHEM enabled. There is no `/evaluate` alias. |
 | B4 | `POST /v1/chat/completions` | Nonstreaming native llama generation. Registered only with llama enabled. |
 | B5 | `GET /api/2026-11-02/openapi.json` | The application's current native schemas. There is no interactive documentation UI. |
+| B6 | `POST /api/2026-11-02/summary-eval-unieval` | The [four-score UniEval operation](unieval-api.md), with an independent reference summary. |
+| B7 | `GET /api/2026-11-02/summary-eval-unieval/health` | UniEval's observed model/worker/queue state, independent of the other components. |
 
 Disabled operation routes return HTTP 404. Shared health explicitly reports
 disabled components; it does not claim their models loaded. Browser origins,
@@ -118,5 +120,6 @@ returns normally. Its bound socket and diagnostic file still close.
 
 - [../architecture/evaluation/local-model-api.md](../architecture/evaluation/local-model-api.md) - composition and owned lifetimes.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - unchanged scoring requests, results and worker packets.
+- [unieval-api.md](unieval-api.md) - independent full-source evaluation and four-score results.
 - [../concepts/config/model-file.md](../concepts/config/model-file.md) - selected model authority.
 - [../how-to/run-the-gates.md#independent-python-service-contracts](../how-to/run-the-gates.md#independent-python-service-contracts) - focused offline checks.

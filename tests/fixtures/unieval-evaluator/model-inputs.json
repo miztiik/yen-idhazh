@@ -1,0 +1,37 @@
+{
+  "version": "2026-11-04",
+  "cases": [
+    {
+      "id": "distributed-support",
+      "request": {
+        "source_text": "The council approved a new library on Monday. Construction will start in June. The site has room for a reading garden and a classroom. Funding for the building comes from the town budget. The project team will publish a construction schedule. At the end of the meeting, the council confirmed that the library will open next March.",
+        "summary_text": "Construction of the new library will start in June. It will open next March.",
+        "reference_summary_text": "The council approved a library whose construction starts in June and whose opening is planned for next March."
+      },
+      "controls": {
+        "consistency_source_mode": "all_source_windows",
+        "max_input_tokens": 256,
+        "source_window_tokens": 32,
+        "source_overlap_tokens": 8,
+        "max_source_windows": 256,
+        "max_comparisons": 4096
+      }
+    },
+    {
+      "id": "contradicted",
+      "request": {
+        "source_text": "The museum closes on Tuesday. Admission is free on Friday.",
+        "summary_text": "The museum closes on Friday.",
+        "reference_summary_text": "Tuesday is the museum's closing day; Friday admission is free."
+      },
+      "controls": {
+        "consistency_source_mode": "full_source_prompt",
+        "max_input_tokens": 256,
+        "source_window_tokens": 32,
+        "source_overlap_tokens": 8,
+        "max_source_windows": 256,
+        "max_comparisons": 4096
+      }
+    }
+  ]
+}

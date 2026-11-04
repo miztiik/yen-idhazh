@@ -224,6 +224,7 @@ bun install --frozen-lockfile --cwd .\packages\common-contracts
 bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
 Set-Location .\services\hhem-evaluator
 uv sync --frozen --group dev
+uv run --frozen python .\scripts\prepare-unieval-resources.py --root '..\..'
 uv run --frozen ruff check src tests scripts
 uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-hhem
 uv run --frozen mypy src tests ../../.github/scripts/summary-eval-hhem/summary_eval_pipeline
@@ -236,6 +237,11 @@ The isolated `hhem-evaluator` CI job runs the complete offline service suite,
 strict types and lint when the scope job selects code. It installs neither
 the backend nor the model extra. The named UUID test fails with preparation
 instructions when its real TypeScript dependency is absent; it never skips.
+The model-free environment includes the pinned tokenizer and sentence-rule
+libraries for UniEval. Preparation fetches only their named resources, not
+Torch or weights; tests read them locally. The
+[UniEval run guide](run-unieval-evaluation-api.md) owns model preparation and
+actual prediction capture.
 These checks certify contracts and configuration, not model loading, scoring
 by the real model. For a runtime change, use one combined selected invocation:
 
