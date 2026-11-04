@@ -1,6 +1,6 @@
 /** Own one complete collection and refuse selection before all its work settles. */
 import { createChildContext, PlanApiTimingSchema } from "@idhazh/common-contracts";
-import type { OperationLink, PlannerStageContext, PlannerFeedOffer } from "@idhazh/common-contracts";
+import type { OperationLink, PlannerFeedOffer } from "@idhazh/common-contracts";
 import type { HarvestArticleResult } from "../harvest-feeds/harvest-types";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
@@ -44,17 +44,28 @@ export type Collection = {
   pending_offers: number;
 };
 const collections = new WeakMap<PlanInputs, Map<string, Collection>>();
-const pendingContexts = new WeakMap<PlanInputs, Map<string, PlannerStageContext>>();
+const pendingContexts = new WeakMap<PlanInputs, Map<string, RunContext>>();
+const collectionOwners = new WeakMap<Collection, RunContext>();
 const startingCollections = new WeakMap<PlanInputs, Set<string>>();
-export function prepareCollectionContext(inputs: PlanInputs, id: string, context: PlannerStageContext) {
+export function prepareCollectionContext(inputs: PlanInputs, context: RunContext) {
   let pending = pendingContexts.get(inputs);
   if (pending === undefined) { pending = new Map(); pendingContexts.set(inputs, pending); }
+  if (pending.has(context.traceId) || collections.get(inputs)?.has(context.traceId)
+    || startingCollections.get(inputs)?.has(context.traceId)
+    || [...pending.values()].some(value => value.run_id === context.run_id)
+    || stageStore(inputs).isRunActive(context.run_id)) {
+    throw new PlanError("REQUEST_CONFLICT", "Collection execution already belongs to live work", "traceId");
+  }
   if (pending.size >= inputs.settings.listener.max_stage_batches) throw new PlanError("REQUEST_BUSY", "Collection startup capacity is occupied");
-  if (pending.has(id)) throw new PlanError("REQUEST_CONFLICT", "Collection startup is already prepared", "traceId");
-  pending.set(id, stageContext(context));
+  pending.set(context.traceId, context);
 }
-export function discardCollectionContext(inputs: PlanInputs, id: string) {
-  pendingContexts.get(inputs)?.delete(id);
+export function discardCollectionContext(inputs: PlanInputs, context: RunContext) {
+  const pending = pendingContexts.get(inputs);
+  if (pending?.get(context.traceId) === context) pending.delete(context.traceId);
+}
+export function ownsPreparedCollection(inputs: PlanInputs, context: RunContext) {
+  const collection = collections.get(inputs)?.get(context.traceId);
+  return collection !== undefined && collectionOwners.get(collection) === context;
 }
 function held(inputs: PlanInputs) {
   let value = collections.get(inputs);
@@ -84,24 +95,30 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
   if (owned.has(operation.traceId) || starting.has(operation.traceId)) {
     throw new PlanError("REQUEST_CONFLICT", "Collection execution already exists", "traceId");
   }
+  const pending = pendingContexts.get(inputs);
+  const prepared = pending?.get(operation.traceId);
+  if (prepared !== undefined && operation.parentSpanId !== prepared.spanId) {
+    throw new PlanError("REQUEST_CONFLICT", "Collection startup belongs to another operation", "traceId");
+  }
+  const context: RunContext = prepared === undefined
+    ? resolveRunContext(inputs.settings, runtime.git_sha, runtime.clock?.() ?? new Date(),
+      runtime.run_number, operation, runtime.captured_at, runtime.attempt, runtime.producer)
+    : { ...stageContext(prepared), ...operation };
+  const stages = stageStore(inputs);
+  if ([...owned.values()].some(value => value.context.run_id === context.run_id)
+    || stages.isRunActive(context.run_id)
+    || [...(pending?.values() ?? [])].some(value => value !== prepared && value.run_id === context.run_id)) {
+    throw new PlanError("REQUEST_CONFLICT", "Execution identity already belongs to live work", "traceId");
+  }
   if (owned.size + starting.size >= inputs.settings.listener.max_stage_batches) {
     const finished = [...owned].find(([, value]) => value.status !== "collecting"
       && !stageStore(inputs).isRunActive(value.context.run_id));
     if (finished === undefined) throw new PlanError("REQUEST_BUSY", "Collection capacity is occupied by active work", "traceId");
     owned.delete(finished[0]);
   }
-  const prepared = pendingContexts.get(inputs)?.get(operation.traceId);
-  const context: RunContext = prepared === undefined
-    ? resolveRunContext(inputs.settings, runtime.git_sha, runtime.clock?.() ?? new Date(),
-      runtime.run_number, operation, runtime.captured_at, runtime.attempt, runtime.producer)
-    : { ...prepared, ...operation };
-  pendingContexts.get(inputs)?.delete(operation.traceId);
-  if ([...owned.values()].some(value => value.context.run_id === context.run_id)) {
-    throw new PlanError("REQUEST_CONFLICT", "Execution identity already belongs to a collection", "traceId");
-  }
+  if (prepared !== undefined) pending?.delete(operation.traceId);
   starting.add(operation.traceId);
   const record = captureDocumentContext(inputs, runtime, context);
-  const stages = stageStore(inputs);
   stages.retainRun(context.run_id);
   try {
     const state = await documentState(record, inputs, runtime);
@@ -114,10 +131,12 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
     const eligible = new Set(availability.eligible_feed_ids);
     const feeds = new Map(inputs.harvest.sources.filter(source => source.status === "active" && eligible.has(source.id))
       .map(source => [source.id, { state: "pending" as const, parse: null }]));
-    owned.set(operation.traceId, { context, request: controls, state, feeds, parses: new Map(),
+    const collection: Collection = { context, request: controls, state, feeds, parses: new Map(),
       offers: new Map(), results: new Map(), pending_offers: 0,
       config_sha256: record.config_sha256, signal: new AbortController(), status: "collecting",
-      closing: false, finalizing: false, operations: new Set() });
+      closing: false, finalizing: false, operations: new Set() };
+    owned.set(operation.traceId, collection);
+    if (prepared !== undefined) collectionOwners.set(collection, prepared);
     return { ...operationMetadata(context), context: stageContext(context), feeds: [...feeds.keys()] };
   } catch (error) {
     throw await retainFailureThroughCleanup(error, {

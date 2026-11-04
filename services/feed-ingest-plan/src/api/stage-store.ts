@@ -116,10 +116,17 @@ export class StageStore {
     }
   }
   releaseDocuments() {
-    this.documents.clear();
-    this.documentRequests.clear();
-    this.retainedRuns.clear();
-    this.documentRuns.clear();
+    for (const [id, document] of this.documents) {
+      if (this.retainedRuns.has(document.context.run_id)) continue;
+      this.documents.delete(id);
+      this.documentRequests.delete(id);
+      if (document.claimant !== undefined) this.documentRequests.delete(document.claimant);
+    }
+    for (const [id, work] of this.documentRuns) {
+      if (this.retainedRuns.has(work.run_id)) continue;
+      this.documentRuns.delete(id);
+      this.documentRequests.delete(id);
+    }
   }
   write<T extends BatchIdentity>(stage: BatchStage, schema: z.ZodType<T>, raw: unknown): T {
     const value = schema.parse(raw);

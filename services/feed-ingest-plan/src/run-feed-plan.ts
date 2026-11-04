@@ -20,7 +20,7 @@ import {
 import { FetchResponseSchema, ParseResponseSchema } from "./api/document-response.schema";
 import { SelectionResponseSchema, PartitionResponseSchema, PersistenceResponseSchema } from "./api/stage-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "./api/feed-health-state.schema";
-import { prepareCollectionContext, discardCollectionContext } from "./api/collection-operation";
+import { prepareCollectionContext, discardCollectionContext, ownsPreparedCollection } from "./api/collection-operation";
 import { resolveRunContext } from "./resolve-run-context";
 import { capturePlannerFailure, combinePlannerFailures, readPlannerResponseError, withPlannerFailure } from "./api/plan-failure";
 import { plannerFailureOperation } from "./api/planner-failure-operation";
@@ -117,7 +117,7 @@ async function runPlanStages(
   let result: FeedPlanResult | undefined;
   let primary: PlanError | undefined;
   try {
-    prepareCollectionContext(inputs, traceId, context);
+    prepareCollectionContext(inputs, context);
     let begin: z.infer<typeof CollectionResponseSchema> | undefined;
     let startupFailure: PlanError | undefined;
     try {
@@ -127,6 +127,7 @@ async function runPlanStages(
         throw new PlanError("ARTIFACT_INVALID", "Collection startup differs from its captured execution");
       }
     } catch (error) {
+      if (error instanceof PlanError && error.code === "REQUEST_CONFLICT") throw error;
       let existing: z.infer<typeof CollectionExistsResponseSchema>;
       try {
         existing = await call("collections/exists", { traceId }, CollectionExistsResponseSchema, true);
@@ -135,6 +136,9 @@ async function runPlanStages(
       }
       if (existing.traceId !== traceId) throw new PlanError("ARTIFACT_INVALID", "Collection lookup identity differs");
       if (existing.exists) {
+        if (!ownsPreparedCollection(inputs, context)) {
+          throw new PlanError("REQUEST_CONFLICT", "Collection startup belongs to another invocation", "traceId", { cause: error });
+        }
         owned = true;
         startupFailure = withPlannerFailure(error, {
           operation: "collection-start", execution: context, limits: inputs.settings.diagnostics.failure,
@@ -159,6 +163,9 @@ async function runPlanStages(
         }
         return result = { context, row: recorded.row, files: { plan_runs: recorded.files }, selected: [], health: null, failure };
       }
+    }
+    if (!ownsPreparedCollection(inputs, context)) {
+      throw new PlanError("REQUEST_CONFLICT", "Collection startup belongs to another invocation", "traceId");
     }
     owned = true;
     const emit = createStageLogger(context, inputs.event_source, runtime.log);
@@ -371,8 +378,8 @@ async function runPlanStages(
     primary = withPlannerFailure(error, { operation: "plan", execution: context, limits: inputs.settings.diagnostics.failure });
     throw primary;
   } finally {
-    discardCollectionContext(inputs, traceId);
-    if (owned) {
+    discardCollectionContext(inputs, context);
+    if (owned && ownsPreparedCollection(inputs, context)) {
       try {
         const released = await call("collections/release", {
           run_id: context.run_id, attempt: context.writer.attempt,

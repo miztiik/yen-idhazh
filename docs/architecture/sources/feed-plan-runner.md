@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 
 How do the API and CLI execute one real feed plan?
 Both compose the same units. The production Python news pipeline, digest
@@ -99,8 +99,12 @@ assignment without bypassing article selection.
 The router dispatches to execution modules. `/plan` calls the stage APIs over
 the trusted local listener using validated JSON requests and outcomes. HTTP
 is transport, not process isolation or an external message broker. If the
-collection-start response is ambiguous, the planner checks collection ownership
-over HTTP instead of reading the collection state directly.
+collection-start response is ambiguous, the planner checks existence over HTTP.
+That reply does not grant ownership. Recovery also requires the private startup
+reservation that created the collection. A rejected invocation cannot cancel,
+finalize, release or write an outcome over another live run. Only the matching
+child operation consumes a pending reservation, and only its invocation can
+discard it.
 Orchestration takes selected metadata and the exact saved selection-start and
 evaluation UTC timestamps from the validated selection response. It takes
 assigned metadata, strategy and dispatch count from the partition response,
@@ -184,6 +188,8 @@ completed global parsed result if selection failed. It releases that collection
 in its final cleanup path, even after report, run-recording or cancellation
 failure. Direct stage callers retain explicit release. The configured
 capacity bound still applies; no saved response can reopen released input.
+Closing a request-local listener does not release another collection's pinned
+input. That collection's explicit release ends its live ownership.
 The feed pool bounds active feed chains by `harvest.concurrency`. The article
 pool allows that many fetches plus `listener.parser_concurrency` parses to be
 in flight; waiting for a parser does not occupy every fetch slot. The listener

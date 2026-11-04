@@ -1,6 +1,6 @@
 # Feed planning operator APIs
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
@@ -194,7 +194,7 @@ Table A
 | A7 | `collections/cancel` | Accepts `traceId`; cancels and drains owned work and prevents selection. Returns harvested-rejection receipts and the actual cancellation reference for explicit partial-health recording. |
 | A8 | `collections/finalize` | Accepts `traceId`, measured collection timing and safe orchestration failure context after stage writes settle. Drains owned work and both private diagnostics, then returns state-based status, retained failure context and timing snapshot. |
 | A9 | `collections/release` | Accepts `run_id` and `attempt`; releases a finalized collection after dependent live reads finish. This does not erase written files. |
-| A10 | `collections/exists` | Accepts the preallocated `traceId`; reports whether the owner still holds that collection after an ambiguous startup response. |
+| A10 | `collections/exists` | Accepts the preallocated `traceId`; reports whether that collection is held after an ambiguous startup response. Existence alone does not grant ownership. |
 
 Orchestration consumes the validated selection and partition response metadata,
 not their text-bearing batches. Selection returns its saved timestamps without

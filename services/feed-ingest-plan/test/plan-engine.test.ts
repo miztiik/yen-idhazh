@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import {
   DiscoveredArticleRowContract, FeedHealthStateRowContract, PlanRunRowContract, RejectedArticleRowContract,
   SelectedArticleRowContract, SelectedFeedBatchSchema, SelectedArticlesArtifactSchema, selectedArticleMetadata,
-  PlannerRunResponseSchema, createRootContext, readFeedIngestEvent, readTraceContext, PLANNER_API_PREFIX, writeTraceContext,
+  PlannerRunResponseSchema, createChildContext, createRootContext, readFeedIngestEvent, readTraceContext, PLANNER_API_PREFIX, writeTraceContext,
 } from "@idhazh/common-contracts";
 import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-state.schema";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
@@ -13,14 +13,15 @@ import { resolveRunContext } from "../src/resolve-run-context";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
 import type { FeedPlanResult } from "../src/run-feed-plan";
 import { createPlanApp } from "../src/api/server";
-import { SelectionResponseSchema, PartitionResponseSchema } from "../src/api/stage-response.schema";
+import { SelectionResponseSchema, PartitionResponseSchema, PersistenceResponseSchema } from "../src/api/stage-response.schema";
+import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-response.schema";
 import { stageStore } from "../src/api/stage-store";
 import { recordedPlan } from "./plan-recordings";
 import { summarizeSelectionMetrics } from "../src/summarize-selection-metrics";
-import { readPlannerParquet } from "@idhazh/ledger-file-writer";
-import { operationLink } from "../src/api/operation-context";
-import { collectionForRun, getCollection } from "../src/api/collection-operation";
-import { CollectionResponseSchema } from "../src/api/collection-contracts";
+import { readPlannerDayFiles, readPlannerParquet } from "@idhazh/ledger-file-writer";
+import { operationLink, operationMetadata } from "../src/api/operation-context";
+import { beginCollection, collectionForRun, getCollection, prepareCollectionContext } from "../src/api/collection-operation";
+import { CollectionResponseSchema, CompletedCollectionSchema, FinalizedCollectionSchema, ReleasedCollectionSchema } from "../src/api/collection-contracts";
 import { source } from "./harvest-recordings";
 
 const recordings = new URL("../../../tests/fixtures/feed-ingest-plan/entry-points/", import.meta.url);
@@ -138,6 +139,97 @@ test("uncertain collection startup uses its preallocated trace to recover owners
       expect(stageStore(fixture.inputs).isRunActive(result.context.run_id)).toBe(false);
     } finally { await server.stop(true); await app.close(); await fixture.close(); }
   }
+}, 120000);
+
+async function completeHeldCollection(fixture: Awaited<ReturnType<typeof recordedPlan>>, traceId: string) {
+  const collection = getCollection(fixture.inputs, traceId);
+  const app = createPlanApp(fixture.inputs, fixture.runtime);
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, idleTimeout: 0, fetch: app.fetch });
+  const started = performance.now();
+  async function post(path: string, body: unknown) {
+    const response = await fetch(`http://127.0.0.1:${server.port}${PLANNER_API_PREFIX}/${path}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    const value: unknown = await response.json();
+    if (!response.ok) throw new Error(`Held collection ${path} failed with HTTP ${response.status}: ${JSON.stringify(value)}`);
+    return value;
+  }
+  try {
+    for (const feedId of collection.feeds.keys()) {
+      const fetched = FetchResponseSchema.parse(await post("fetch", { traceId, feed_id: feedId, fetch_item_type: "feed" }));
+      const parsed = ParseResponseSchema.parse(await post("parse", { links: [operationLink(fetched)] }));
+      if (parsed.fetch_item_type !== "feed") throw new Error("The held collection must parse its recorded feed");
+      for (const offer of parsed.offers) {
+        const article = FetchResponseSchema.parse(await post("fetch", {
+          fetch_item_type: "article", links: [operationLink(parsed)], offer_id: offer.offer_id,
+        }));
+        if (article.body_sha256 !== null) await post("parse", { links: [operationLink(article)] });
+      }
+    }
+    const completed = CompletedCollectionSchema.parse(await post("collections/complete", { traceId }));
+    const selected = SelectionResponseSchema.parse(await post("select-articles", { links: [operationLink(completed)] }));
+    const persisted = PersistenceResponseSchema.parse(await post("persist-selected-articles", { links: [operationLink(selected)] }));
+    expect(selected.run_id).toBe(collection.context.run_id);
+    expect(persisted.selected_count).toBeGreaterThan(0);
+    expect(persisted.selected_count).toBe(selected.articles.length);
+    expect(FinalizedCollectionSchema.parse(await post("collections/finalize", {
+      traceId, failure_code: null,
+      collection_timing: { duration_ms: Math.round(performance.now() - started), status: "completed" },
+    })).status).toBe("completed");
+    expect(ReleasedCollectionSchema.parse(await post("collections/release", {
+      run_id: collection.context.run_id, attempt: collection.context.writer.attempt,
+    })).released).toBe(true);
+    expect(stageStore(fixture.inputs).isRunActive(collection.context.run_id)).toBe(false);
+  } finally { await server.stop(true); await app.close(); }
+}
+
+test("a rejected plan cannot take another operation's collection or write over its run", async () => {
+  for (const sameTrace of [true, false]) {
+    const fixture = await recordedPlan();
+    fixture.inputs.harvest.config.partition.enabled = false;
+    const caller = createRootContext();
+    try {
+      const first = await beginCollection({ request: {} }, fixture.inputs, { ...fixture.runtime, ...createChildContext(caller) });
+      const original = getCollection(fixture.inputs, first.traceId);
+      await expect(runFeedPlan({}, fixture.inputs, {
+        ...fixture.runtime, ...(sameTrace ? createChildContext(caller) : createRootContext()),
+      })).rejects.toMatchObject({ code: "REQUEST_CONFLICT" });
+      expect(getCollection(fixture.inputs, first.traceId)).toBe(original);
+      expect(original.status).toBe("collecting");
+      expect(original.signal.signal.aborted).toBe(false);
+      expect(original.closing).toBe(false);
+      expect(original.finalization).toBeUndefined();
+      expect(stageStore(fixture.inputs).isRunActive(first.context.run_id)).toBe(true);
+      expect(fixture.transport.requests).toHaveLength(0);
+      expect((await readPlannerDayFiles(fixture.inputs.root, fixture.inputs.registrations.plan_runs, first.context.date)).members).toEqual([]);
+      await completeHeldCollection(fixture, first.traceId);
+      expect(collectionForRun(fixture.inputs, first.context.run_id)).toBeUndefined();
+    } finally { await fixture.close(); }
+  }
+}, 120000);
+
+test("a rejected overlapping startup cannot discard or consume another operation's prepared context", async () => {
+  const fixture = await recordedPlan();
+  fixture.inputs.harvest.config.partition.enabled = false;
+  const caller = createRootContext();
+  const context = resolveRunContext(fixture.inputs.settings, fixture.runtime.git_sha, fixture.runtime.clock!(),
+    fixture.runtime.run_number, createChildContext(caller));
+  try {
+    prepareCollectionContext(fixture.inputs, context);
+    for (const operation of [createChildContext(caller), operationMetadata(context)]) {
+      await expect(runFeedPlan({}, fixture.inputs, { ...fixture.runtime, ...operation }))
+        .rejects.toMatchObject({ code: "REQUEST_CONFLICT" });
+    }
+    await expect(beginCollection({ request: {} }, fixture.inputs, { ...fixture.runtime, ...createChildContext(caller) }))
+      .rejects.toMatchObject({ code: "REQUEST_CONFLICT" });
+    const first = await beginCollection({ request: {} }, fixture.inputs, {
+      ...fixture.runtime, ...createChildContext(operationMetadata(context)), run_number: "701",
+    });
+    expect(first.context.run_id).toBe(context.run_id);
+    expect(first.parentSpanId).toBe(context.spanId);
+    expect((await readPlannerDayFiles(fixture.inputs.root, fixture.inputs.registrations.plan_runs, context.date)).members).toEqual([]);
+    await completeHeldCollection(fixture, first.traceId);
+  } finally { await fixture.close(); }
 }, 120000);
 
 test("real stage responses supply saved timestamps and metadata to orchestration", async () => {
