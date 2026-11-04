@@ -84,7 +84,7 @@ WORKFLOW_FILES: Final = (
     *EXPECTED_WORKFLOWS,
     "yen-ai-pipeline.yml",
     "ai-pipeline-tests.yml",
-    "hhem-evaluation-api-test.yml",
+    "summary-eval-tests.yml",
 )
 WORKFLOW_PATHS: Final = tuple(WORKFLOWS_DIR / name for name in WORKFLOW_FILES)
 

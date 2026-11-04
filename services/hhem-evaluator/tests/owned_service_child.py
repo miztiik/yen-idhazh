@@ -7,16 +7,15 @@ import threading
 from pathlib import Path
 
 from summary_eval_pipeline.channels import open_owned_channels
-from summary_eval_pipeline.contracts import Hardware
+from summary_eval_pipeline.contracts import WORKFLOW_VERSION, Hardware
 from summary_eval_pipeline.control import (
     ApiReady,
     HostReady,
     ServiceStopped,
     StartupPacket,
 )
-from summary_eval_pipeline.serve_hhem import emit_control, watch_parent_lifetime
+from summary_eval_pipeline.serve_api import emit_control, watch_parent_lifetime
 
-from hhem_evaluator.contracts.base import SCHEMA_VERSION
 from hhem_evaluator.contracts.evaluation_event import EventDetails
 from hhem_evaluator.emit_events import EventEmitter, EventWriter
 from hhem_evaluator.load_settings import load_settings
@@ -31,7 +30,7 @@ def private_output_case(packet: StartupPacket, mode: str) -> None:
         cause = emitter.emit("service", "started", EventDetails(status="disabled"))
         emit_control(
             ApiReady(
-                version=SCHEMA_VERSION,
+                version=WORKFLOW_VERSION,
                 kind="ready",
                 service="hhem",
                 startup_id=packet.startup_id,
@@ -59,7 +58,7 @@ def private_output_case(packet: StartupPacket, mode: str) -> None:
             emitter.emit("service", "completed", EventDetails(status="stopping"), cause=cause)
             emit_control(
                 ServiceStopped(
-                    version=SCHEMA_VERSION,
+                    version=WORKFLOW_VERSION,
                     kind="stopped",
                     service="hhem",
                     startup_id=packet.startup_id,
@@ -90,7 +89,7 @@ def main() -> None:
     ready: ApiReady | HostReady
     if mode == "invalid_event":
         ready = ApiReady(
-            version=SCHEMA_VERSION,
+            version=WORKFLOW_VERSION,
             kind="ready",
             service="hhem",
             startup_id=packet.startup_id,
@@ -101,7 +100,7 @@ def main() -> None:
         sys.stderr.flush()
     else:
         ready = HostReady(
-            version=SCHEMA_VERSION,
+            version=WORKFLOW_VERSION,
             kind="ready",
             service="host",
             startup_id=create_execution_id() if mode == "mismatch" else packet.startup_id,
@@ -136,7 +135,7 @@ def main() -> None:
     if mode == "blocked_close":
         threading.Event().wait()
     stopped = ServiceStopped(
-        version=SCHEMA_VERSION,
+        version=WORKFLOW_VERSION,
         kind="stopped",
         service=ready.service,
         startup_id=packet.startup_id,

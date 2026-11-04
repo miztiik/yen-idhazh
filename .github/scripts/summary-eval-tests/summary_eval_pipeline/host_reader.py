@@ -1,4 +1,4 @@
-"""Which native hardware and machine-profile fields does the report consume?"""
+"""Which native machine fields do the workflow tasks and report consume?"""
 
 from typing import Annotated, Literal
 
@@ -66,6 +66,18 @@ class HardwareRow(HostReader):
     cpu_logical_processors: Count | None
     cpu_physical_cores: Count | None
     machine_memory_total_mib: NonnegativeNumber | None
+
+
+class HonoServerReader(HostReader):
+    server_name: Literal["hono-server"]
+    startup: Literal["not_started", "ready", "failed"]
+    startup_ms: Milliseconds | None
+    shutdown: Literal["not_started", "stopped", "forced", "failed"]
+    exit_code: int | None
+    log_filename: str
+    log_available: bool
+    error_code: str | None
+    cleanup_error_code: str | None
 
 
 class MachineMemory(HostReader):

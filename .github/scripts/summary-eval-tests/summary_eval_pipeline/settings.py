@@ -1,10 +1,11 @@
-"""Which committed bounds and names govern one manual caller?"""
+"""Which committed bounds and instruction govern the summary workflow?"""
 
 from pathlib import Path
 
 from hhem_evaluator.contracts.base import (
     ContextIdentity,
     NativeContract,
+    NonblankText,
     PositiveCount,
     RelativePath,
 )
@@ -20,10 +21,16 @@ class PipelineSettings(NativeContract):
     pipeline_name: ContextIdentity
     task_name: ContextIdentity
     output_directory: RelativePath
+    generation_instruction: NonblankText
+    native_startup_timeout_ms: PositiveCount
+    native_shutdown_timeout_ms: PositiveCount
+    native_forced_stop_ms: PositiveCount
+    native_max_metadata_bytes: PositiveCount
+    native_quiet_flags: tuple[str, ...]
 
 
 def load_pipeline_settings(root: Path) -> PipelineSettings:
-    path = root / "config" / "summary-eval-hhem.json"
+    path = root / "config" / "summary-eval-tests.json"
     try:
         return PipelineSettings.model_validate_json(path.read_bytes())
     except (OSError, ValidationError):

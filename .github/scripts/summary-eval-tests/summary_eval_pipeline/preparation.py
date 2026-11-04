@@ -1,0 +1,82 @@
+"""How are the selected run and pinned native assets prepared before generation?"""
+
+import os
+import subprocess
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import UUID
+
+from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.resolve_ids import create_execution_id
+from utilities.model_runtime import download_model_files, install_runtime, verify_model_files
+
+from .contracts import WORKFLOW_VERSION, PreparedRun, RunIdentity, text_sha256
+from .failures import WorkflowError
+from .inputs import read_manual_inputs
+from .model_selection import SelectedModel, select_model, stage_configuration
+from .settings import load_pipeline_settings
+from .storage import read_result, write_result
+
+
+def prepare_run(root: Path) -> PreparedRun:
+    pipeline = load_pipeline_settings(root)
+    inputs = read_manual_inputs(
+        load_settings(root / "config" / "hhem-evaluator" / "settings.json"), pipeline
+    )
+    selected = select_model(root, inputs.models_file)
+    revision = (
+        os.environ.get("GITHUB_SHA")
+        or subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    )
+    prepared = PreparedRun(
+        version=WORKFLOW_VERSION,
+        run=RunIdentity(
+            run_id=os.environ.get("GITHUB_RUN_ID") or str(UUID(create_execution_id()).int),
+            attempt=int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")),
+            git_sha=revision,
+            started_at=datetime.now(UTC),
+        ),
+        selected=selected.identity,
+        source_sha256=text_sha256(inputs.source_text),
+    )
+    directory = root / pipeline.output_directory
+    stage_configuration(root, directory, selected)
+    write_result(directory / "run.json", prepared)
+    return prepared
+
+
+def read_prepared(root: Path) -> tuple[PreparedRun, SelectedModel]:
+    pipeline = load_pipeline_settings(root)
+    prepared = read_result(
+        root / pipeline.output_directory / "run.json", PreparedRun, pipeline.max_response_bytes
+    )
+    inputs = read_manual_inputs(
+        load_settings(root / "config" / "hhem-evaluator" / "settings.json"), pipeline
+    )
+    selected = select_model(root, inputs.models_file)
+    expected = (
+        os.environ.get("GITHUB_RUN_ID", prepared.run.run_id),
+        int(os.environ.get("GITHUB_RUN_ATTEMPT", str(prepared.run.attempt))),
+        os.environ.get("GITHUB_SHA", prepared.run.git_sha),
+    )
+    if (
+        expected != (prepared.run.run_id, prepared.run.attempt, prepared.run.git_sha)
+        or selected.identity != prepared.selected
+        or text_sha256(inputs.source_text) != prepared.source_sha256
+    ):
+        raise WorkflowError("RECEIPT_INVALID", "input")
+    return prepared, selected
+
+
+def prepare_assets(root: Path) -> None:
+    prepared = prepare_run(root)
+    directory = root / load_pipeline_settings(root).output_directory
+    try:
+        # Existing utilities derive all files, revisions, digests and native library assets.
+        install_runtime()
+        configuration = Path(load_pipeline_settings(root).output_directory) / "config"
+        download_model_files(configuration)
+        verify_model_files(configuration)
+    except (OSError, ValueError, SystemExit):
+        raise WorkflowError("ASSET_FAILED", "preparation") from None
+    write_result(directory / "run.json", prepared)

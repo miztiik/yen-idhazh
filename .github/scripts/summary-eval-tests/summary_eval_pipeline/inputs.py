@@ -1,19 +1,24 @@
-"""How do the two texts reach a bounded request without another text-bearing file?"""
+"""How do source data and one model path enter from the bounded platform event?"""
 
 import json
 import os
 from pathlib import Path
 
+from hhem_evaluator.contracts.base import NativeContract, NonblankText
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.service_settings import ServiceSettings
-from hhem_evaluator.resolve_ids import create_execution_id
 from pydantic import ValidationError
 
 from .failures import WorkflowError
 from .settings import PipelineSettings
 
 
-def read_manual_inputs(settings: ServiceSettings, manual: PipelineSettings) -> EvaluateRequest:
+class ManualInputs(NativeContract):
+    source_text: NonblankText
+    models_file: str = ""
+
+
+def read_manual_inputs(settings: ServiceSettings, manual: PipelineSettings) -> ManualInputs:
     event_path = os.environ.get("GITHUB_EVENT_PATH")
     if not event_path:
         raise WorkflowError("INPUT_INVALID", "input")
@@ -29,23 +34,9 @@ def read_manual_inputs(settings: ServiceSettings, manual: PipelineSettings) -> E
         event: object = json.loads(encoded)
         if not isinstance(event, dict) or not isinstance(event.get("inputs"), dict):
             raise WorkflowError("INPUT_INVALID", "input")
-        inputs = event["inputs"]
-        if set(inputs) != {"source_text", "summary_text"}:
-            raise WorkflowError("INPUT_INVALID", "input")
-        request = EvaluateRequest.model_validate(
-            {
-                "source_text": inputs["source_text"],
-                "summary_text": inputs["summary_text"],
-                "hhem_full": False,
-                "request_id": create_execution_id(),
-                "correlation_id": create_execution_id(),
-            }
-        )
+        return ManualInputs.model_validate(event["inputs"])
     except (ValueError, ValidationError, UnicodeError):
         raise WorkflowError("INPUT_INVALID", "input") from None
-    if len(encode_request(request)) > settings.listener.max_body_bytes:
-        raise WorkflowError("INPUT_TOO_LARGE", "input")
-    return request
 
 
 def encode_request(request: EvaluateRequest) -> bytes:

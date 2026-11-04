@@ -57,6 +57,11 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
+mypy_path = "../../backend"
+
+[[tool.mypy.overrides]]
+module = ["idhazh.*", "utilities.*"]
+follow_imports = "silent"
 
 [[tool.mypy.overrides]]
 module = [
@@ -72,6 +77,6 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", ".", "../../.github/scripts/summary-eval-hhem"]
+pythonpath = ["src", ".", "../../.github/scripts/summary-eval-tests", "../../backend"]
 # asyncio uses Unix-domain sockets for local wake-up IPC, not an HTTP listener.
 addopts = "-q --import-mode=importlib --disable-socket --allow-unix-socket"

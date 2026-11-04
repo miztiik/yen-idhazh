@@ -226,8 +226,8 @@ Set-Location .\services\hhem-evaluator
 uv sync --frozen --group dev
 uv run --frozen python .\scripts\prepare-unieval-resources.py --root '..\..'
 uv run --frozen ruff check src tests scripts
-uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-hhem
-uv run --frozen mypy src tests ../../.github/scripts/summary-eval-hhem/summary_eval_pipeline
+uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-tests
+uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
 uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test_event_ids.py tests/test_llama_contracts.py tests/test_server_events.py
 ```
 
@@ -292,14 +292,19 @@ repository root, then run the named modules from the service directory:
 ```powershell
 bun install --frozen-lockfile --cwd .\services\host-probes
 bun install --frozen-lockfile --cwd .\services\host-fingerprints
+bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
+bun install --frozen-lockfile --cwd .\services\typescript-api
 Set-Location .\services\hhem-evaluator
 uv run --frozen ruff check src tests scripts
-uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-hhem
-uv run --frozen mypy src tests ../../.github/scripts/summary-eval-hhem/summary_eval_pipeline
-uv run --frozen pytest tests/test_host_profile_reader_parity.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_pipeline_report.py tests/test_manual_workflow.py
+uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-tests
+uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
+uv run --frozen pytest tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_pipeline_report.py tests/test_manual_workflow.py
 ```
 
-The host compatibility test exports the actual native schemas through Bun.
+The host compatibility test exports the actual native schemas through Bun,
+including the consumed shared-server outcomes. The generation checks bind the
+source, answer, model and run before HHEM can start. Separate declaration
+invocations and the named form-default check keep model selection real.
 Missing preparation fails; it does not skip. Caller integration composes the
 real ASGI handler/controller and the native host handler/collector over test
 pipes with named proc fixtures. It opens no HTTP listener. The existing

@@ -20,7 +20,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `digest-recovery.yml` | `Digest assembly recovery` | none | Complete assembly from retained worker artifacts |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |
 | `feed-ingest-plan-test.yml` | `Feed ingest plan test` | none | Run the real planner HTTP API and publish its completed planner and host metadata |
-| `hhem-evaluation-api-test.yml` | `summary-eval-hhem` | none | Score two supplied texts through the independent CPU API; report machine CPU/RAM and expandable inputs without Git delivery |
+| `summary-eval-tests.yml` | `summary-eval-tests` | none | Generate with one declared model through FastAPI, stop it, score its saved answer with HHEM and report machine/server outcomes without Git delivery |
 | `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
 | `ai-pipeline-tests.yml` | `Yen-Summarizers` | none | Run independent TypeScript inference and its existing audit |
 

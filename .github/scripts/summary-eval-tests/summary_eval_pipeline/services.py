@@ -1,4 +1,4 @@
-"""How are only this caller's service children started, identified and joined?"""
+"""How are only this phase's shared service children identified and joined?"""
 
 import contextlib
 import json
@@ -52,7 +52,7 @@ class OwnedService:
                 cwd=root,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE if service == "hhem" else subprocess.DEVNULL,
+                stderr=subprocess.PIPE if service == "hhem" else None,
             )
         except OSError:
             raise WorkflowError("STARTUP_FAILED", "startup", service) from None
@@ -217,7 +217,11 @@ class OwnedService:
             or stopped.startup_id != self.packet.startup_id
             or stopped.pid != self.process.pid
             or stopped.service != self.service
-            or (self.service == "hhem" and stopped.worker_exit_confirmed is not True)
+            or (
+                self.service == "hhem"
+                and self.packet.phase == "evaluation"
+                and stopped.worker_exit_confirmed is not True
+            )
             or self.protocol_failed.is_set()
             or self.events_failed.is_set()
             or any(reader.is_alive() for reader in self.readers)

@@ -138,7 +138,7 @@ Table I - PR sequence
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | I1 | 1 | Serve TypeScript APIs together in the feed workflow | - | A | DONE | sturdy-waffle (shared-hono-server) | #1908 | Shared Hono server |
 | I2 | 2 | Serve HHEM and llama through one FastAPI application | - | B | DONE | fuzzy-giggle (shared-fastapi-server) | #1906 | Shared FastAPI server |
-| I3 | 3 | Deliver the live summary-eval-tests workflow | 1, 2 | C | PENDING | - | - | - |
+| I3 | 3 | Deliver the live summary-eval-tests workflow | 1, 2 | C | IN-FLIGHT | probable-couscous (summary-evaluation-workflow) | - | Summary evaluation workflow |
 
 ## 2. Row #1 - Serve TypeScript APIs together in the feed workflow
 
@@ -343,6 +343,7 @@ Table O - Alternatives not selected
 
 - **Scope:** Replace the HHEM-only workflow with config-selected summarization followed by HHEM evaluation of that generated summary, using the preceding servers.
 - **Correction level:** 3 for workflow/report integration; pause for an additional native contract or model change.
+- **Delivery state:** Implementation and focused checks belong to this PR. P11 remains PENDING until the registered workflow runs on the intended merged revision and its actual artifacts and process exits are inspected.
 - **Files touched:**
   - `.github/workflows/summary-eval-tests.yml` - new workflow.
   - `.github/workflows/hhem-evaluation-api-test.yml` - remove on cutover.
@@ -352,6 +353,15 @@ Table O - Alternatives not selected
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/llama.py` - native process handle owned inside the generation task, not another launcher process.
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/model_selection.py` - reuse the current declaration readers.
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/generation.py` - generation request and receipt.
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/preparation.py` - current run and declared native assets.
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/phases.py` - visible phase ownership.
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/phase_result.py` - actual phase status.
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/phase_services.py` - fixed owned-service cleanup and original-error retention.
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/report_task.py` - validate and publish saved results without model work.
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/storage.py` - bounded atomic same-run files.
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/native_log.py` - body-free native lifecycle logs.
+  - `.github/scripts/summary-eval-tests/machine-task.ts` - real shared machine HTTP operations and owned supervisor.
+  - `.github/scripts/summary-eval-tests/machine-results.ts` - consumed native field projection, not a collector.
   - `.github/scripts/summary-eval-hhem/run.py` - move to the new entry point.
   - `.github/scripts/summary-eval-hhem/report.py` - move to the new entry point.
   - `.github/scripts/summary-eval-hhem/serve.py` - replace with the new owned launcher.
@@ -373,7 +383,7 @@ Table O - Alternatives not selected
   - `.github/scripts/summary-eval-hhem/hardware.ts` - remove the replaced workflow-only bridge.
   - `.github/scripts/summary-eval-hhem/project-profile.ts` - remove the replaced workflow-only bridge.
   - `services/hhem-evaluator/pyproject.toml`
-  - `services/hhem-evaluator/src/hhem_evaluator/contracts/base.py`
+  - `services/hhem-evaluator/tests/generation_cases.py`
   - `services/hhem-evaluator/tests/pipeline_cases.py`
   - `services/hhem-evaluator/tests/owned_service_child.py`
   - `services/hhem-evaluator/tests/test_manual_workflow.py`

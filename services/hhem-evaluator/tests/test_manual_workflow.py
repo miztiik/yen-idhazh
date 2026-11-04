@@ -1,4 +1,4 @@
-"""Verify the named manual workflow, bounded platform input and body-free report boundary."""
+"""Verify the named form, visible phases and bounded platform-data boundary."""
 
 import json
 import re
@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-from summary_eval_pipeline.contracts import PipelineEvidence
+from summary_eval_pipeline.contracts import WORKFLOW_VERSION, PipelineEvidence
 from summary_eval_pipeline.control import StartupPacket
 from summary_eval_pipeline.failures import WorkflowError
-from summary_eval_pipeline.inputs import encode_request, read_manual_inputs
+from summary_eval_pipeline.inputs import read_manual_inputs
 from summary_eval_pipeline.settings import load_pipeline_settings
 
 from .contract_examples import REPOSITORY, read_contract
@@ -41,41 +41,43 @@ def strings(value: object) -> list[str]:
     return []
 
 
-def test_named_workflow_is_manual_read_only_and_has_exactly_two_text_inputs() -> None:
+def test_named_workflow_selects_one_declaration_with_the_current_pointer_default() -> None:
     workflow = named_workflow()
     triggers = mapping(workflow["on"])
     assert set(triggers) == {"workflow_dispatch"}
     inputs = mapping(mapping(triggers["workflow_dispatch"])["inputs"])
-    assert set(inputs) == {"source_text", "summary_text"}
-    for spec in inputs.values():
-        declaration = mapping(spec)
-        assert declaration["type"] == "string" and declaration["required"] is True
-        assert "default" not in declaration and "options" not in declaration
+    assert set(inputs) == {"source_text", "models_file"}
+    source, model = mapping(inputs["source_text"]), mapping(inputs["models_file"])
+    assert source["type"] == "string" and source["required"] is True
+    assert model["type"] == "string" and model["required"] is False and "options" not in model
+    pointer = json.loads((REPOSITORY / "config" / "idhazh.json").read_bytes())["models_file"]
+    assert model["default"] == pointer
     assert mapping(workflow["permissions"]) == {"contents": "read"}
     jobs = mapping(workflow["jobs"])
     assert set(jobs) == {"evaluate"}
     job = mapping(jobs["evaluate"])
-    assert job["runs-on"] == "ubuntu-latest"
+    assert job["runs-on"] == "ubuntu-latest" and "strategy" not in job
     assert 0 < int(str(job["timeout-minutes"])) < 360
-    assert "strategy" not in job
     steps = job["steps"]
     assert isinstance(steps, list)
     declared = [mapping(step) for step in steps]
-    assert sum(str(step.get("uses", "")).startswith("actions/checkout@") for step in declared) == 1
-    outside_form = {key: value for key, value in workflow.items() if key != "on"}
-    text = "\n".join(strings(outside_form))
+    text = "\n".join(strings({key: value for key, value in workflow.items() if key != "on"}))
     assert not re.search(r"\$\{\{[^}]*\binputs\b", text)
-    assert "source_text" not in text and "summary_text" not in text
-    assert "summary-eval-hhem/run.py --root ../.." in text
-    assert "summary-eval-hhem/report.py --root ../.." in text
-    assert "--extra model --no-dev" in text
+    phases = [
+        str(step["run"]).rsplit(" ", 1)[-1]
+        for step in declared
+        if "summary-eval-tests/run.py" in str(step.get("run", ""))
+    ]
+    assert phases == ["prepare", "generate", "evaluate"]
+    assert "--frozen --extra model --no-dev" in text
+    assert "summary-eval-tests/report.py --root ../.." in text
+    assert "bun install --frozen-lockfile --cwd services/typescript-api" in text
     for forbidden in (
         "git commit",
         "git push",
         "git add",
         "digest.yml",
         "idhazh pipeline",
-        "summarize",
         "article_url",
         "OMP_NUM_THREADS",
         "MKL_NUM_THREADS",
@@ -83,6 +85,7 @@ def test_named_workflow_is_manual_read_only_and_has_exactly_two_text_inputs() ->
         "taskset",
         "ulimit",
         "GITHUB_EVENT_PATH:",
+        "summary-eval-hhem/",
     ):
         assert forbidden not in text
     uploads = [
@@ -90,66 +93,50 @@ def test_named_workflow_is_manual_read_only_and_has_exactly_two_text_inputs() ->
         for step in declared
         if str(step.get("uses", "")).startswith("actions/upload-artifact@")
     ]
-    assert len(uploads) == 1 and uploads[0]["if"] == "always()"
-    paths = str(mapping(uploads[0]["with"])["path"]).splitlines()
-    output = load_pipeline_settings(REPOSITORY).output_directory
-    assert paths == [
-        output + "/evaluation.json",
-        output + "/report.md",
-    ]
+    assert len(uploads) == 2 and uploads[0]["if"] == "always()"
+    assert uploads[1]["if"] == "failure() || cancelled()"
+    assert all("retention-days" not in mapping(step["with"]) for step in uploads)
+    assert not (REPOSITORY / ".github" / "workflows" / "hhem-evaluation-api-test.yml").exists()
+    assert not (REPOSITORY / "config" / "summary-eval-hhem.json").exists()
 
 
-def test_ordinary_service_ci_prepares_the_real_host_package_without_model_weights() -> None:
-    # This is one named CI file, not discovery over the workflow directory.
+def test_native_ci_retains_resources_and_prepares_the_actual_shared_api() -> None:
     text = (REPOSITORY / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    start = text.index("  hhem-evaluator:\n")
-    end = text.index("\n  gates:\n", start)
-    selected = text[start:end]
-    assert "bun install --frozen-lockfile --cwd services/host-probes" in selected
-    assert "uv sync --frozen --group dev" in selected
-    assert "--extra model" not in selected
+    selected = text[text.index("  hhem-evaluator:\n") : text.index("\n  gates:\n")]
+    assert "bun install --frozen-lockfile --cwd services/typescript-api" in selected
+    assert "uv sync --frozen --group dev" in selected and "--extra model" not in selected
+    assert "scripts/prepare-unieval-resources.py --root ../.." in selected
     assert "uv run --frozen pytest" in selected
+    assert "summary-eval-hhem/" not in selected
 
 
 def write_event(path: Path, inputs: dict[str, object]) -> None:
     path.write_text(json.dumps({"inputs": inputs}), encoding="utf-8")
 
 
-def test_platform_input_preserves_text_and_enforces_the_exact_encoded_request_bound(
+def test_platform_input_preserves_exact_source_and_blank_model_selection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     event = tmp_path / "event.json"
     source = "  PrivateSourceCanary\n$(`never run this`)  "
-    summary = "PrivateSummaryCanary ${{ inputs.not_a_command }}"
-    write_event(event, {"source_text": source, "summary_text": summary})
+    write_event(event, {"source_text": source, "models_file": ""})
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
-    selected = service_settings()
-    manual = load_pipeline_settings(REPOSITORY)
-    request = read_manual_inputs(selected, manual)
-    assert request.source_text == source and request.summary_text == summary
-    assert request.hhem_full is False
-    size = len(encode_request(request))
-    data = selected.model_dump(mode="json")
-    data["listener"]["max_body_bytes"] = size
-    exact = type(selected).model_validate_json(json.dumps(data))
-    assert len(encode_request(read_manual_inputs(exact, manual))) == size
-    data["listener"]["max_body_bytes"] = size - 1
-    with pytest.raises(WorkflowError) as failure:
-        read_manual_inputs(type(selected).model_validate_json(json.dumps(data)), manual)
-    assert failure.value.error.code == "INPUT_TOO_LARGE"
-    # The caller read one platform-owned input and created no second text-bearing file.
+    inputs = read_manual_inputs(service_settings(), load_pipeline_settings(REPOSITORY))
+    assert inputs.source_text == source and inputs.models_file == ""
     assert list(tmp_path.iterdir()) == [event]
 
 
 @pytest.mark.parametrize(
     "inputs",
     [
-        {"source_text": "Source.", "summary_text": "Summary.", "model": "PrivateValueCanary"},
-        {"source_text": "Source."},
-        {"source_text": "Source.", "summary_text": None},
-        {"source_text": "Source.", "summary_text": True},
-        {"source_text": " \n", "summary_text": "Summary."},
+        {"source_text": "Source.", "summary_text": "Supplied answer."},
+        {"source_text": "Source.", "models_file": "", "model": "PrivateValueCanary"},
+        {"models_file": ""},
+        {"source_text": None},
+        {"source_text": True},
+        {"source_text": " \n"},
+        {"source_text": "Source.", "models_file": None},
     ],
 )
 def test_invalid_platform_inputs_fail_without_echoing_values(
@@ -172,35 +159,29 @@ def test_event_envelope_overflow_fails_instead_of_truncating(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     event = tmp_path / "event.json"
-    selected = service_settings()
-    manual = load_pipeline_settings(REPOSITORY)
-    allowance = selected.listener.max_body_bytes + manual.event_envelope_bytes
-    with event.open("wb") as stream:
-        stream.write(b" " * (allowance + 1))
+    selected, manual = service_settings(), load_pipeline_settings(REPOSITORY)
+    event.write_bytes(b" " * (selected.listener.max_body_bytes + manual.event_envelope_bytes + 1))
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
     with pytest.raises(WorkflowError) as failure:
         read_manual_inputs(selected, manual)
     assert failure.value.error.code == "INPUT_TOO_LARGE"
 
 
-def test_named_report_fixture_is_native_and_private_control_forbids_text() -> None:
+def test_current_report_fixture_and_private_control_have_one_native_shape() -> None:
     fixture = REPOSITORY / "tests" / "fixtures" / "hhem-evaluator" / "pipeline-evidence.json"
     report = PipelineEvidence.model_validate_json(fixture.read_bytes())
-    assert report.version == "2026-11-02" and report.evaluation is None
+    assert report.version == WORKFLOW_VERSION and report.generation is None
     packet: dict[str, object] = {
-        "version": "2026-11-02",
+        "version": WORKFLOW_VERSION,
         "startup_id": "12345678-1234-4234-8234-123456789abc",
         "context": {"run_id": "fixture-run", "pipeline_name": "fixture", "task_name": "score"},
     }
     read_contract(StartupPacket, packet)
     with pytest.raises(ValidationError):
         read_contract(StartupPacket, {**packet, "source_text": "PrivateSourceCanary"})
-    assert PipelineEvidence.model_json_schema()["version"] == "2026-11-02"
+    assert PipelineEvidence.model_json_schema()["version"] == WORKFLOW_VERSION
     with pytest.raises(ValidationError):
         read_contract(
             PipelineEvidence,
-            {
-                **report.model_dump(mode="json"),
-                "summary_text": "PrivateSummaryCanary",
-            },
+            {**report.model_dump(mode="json"), "summary_text": "PrivateSummaryCanary"},
         )

@@ -1,15 +1,10 @@
 {
-  "version": "2026-11-02",
+  "version": "2026-11-04",
   "status": "failed",
-  "evaluation": null,
-  "hardware": null,
-  "machine": null,
-  "shutdown": {
-    "hhem_stopped": null,
-    "host_stopped": null,
-    "worker_exit_confirmed": null
-  },
-  "unieval": "not_implemented",
+  "generation": null,
+  "generation_phase": null,
+  "evaluation_phase": null,
+  "unieval": "not_run",
   "errors": [
     {
       "code": "INPUT_INVALID",
