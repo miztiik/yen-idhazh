@@ -57,8 +57,9 @@ existing worker controller. Disconnect closes the outstanding HTTP operation.
 It does not claim to stop the separately owned native llama process; the
 phase still has to stop and join that process.
 
-Both component cleanups run even when another cleanup fails. An original
-failure and cleanup failures are retained separately in the raised group.
+Both component cleanups run even when another cleanup fails. A single failure
+keeps its native exception type; multiple original and cleanup failures are
+retained separately in the raised group.
 HHEM's existing parent-loss watcher, bounded worker replacement and confirmed
 exit rules are unchanged. The current workflow's private control and
 TypeScript machine-measurement channels are unchanged.

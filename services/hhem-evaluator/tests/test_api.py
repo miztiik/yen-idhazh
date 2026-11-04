@@ -1,10 +1,12 @@
 """Prove native HTTP contracts and responsive health through the real ASGI lifespan."""
 
 import asyncio
+import io
 import json
 
 import pytest
 
+from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.contracts.base import API_PREFIX, EVALUATE_PATH
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.evaluation_event import EventDetails
@@ -13,8 +15,9 @@ from hhem_evaluator.contracts.service_settings import StartupContext
 from hhem_evaluator.emit_events import EventEmitter, EventWriter
 from hhem_evaluator.fail_evaluation import EvaluationFailure
 from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.serve_api import create_app
 
-from .contract_examples import REPOSITORY, SETTINGS_FILE
+from .contract_examples import API_SETTINGS_FILE, REPOSITORY, SETTINGS_FILE
 from .replay_predictions import Scenario, read_recordings
 from .service_cases import DirectRequest, EventLog, running_service, service_settings
 
@@ -157,5 +160,24 @@ def test_excessive_full_plan_is_rejected_before_any_model_call() -> None:
             assert response.json()["windows"]["primary"]["scored"] == 0
             assert not any(event.operation == "primary" for event in service.log.events)
             assert "another word" not in json.dumps(response.json())
+
+    asyncio.run(check())
+
+
+def test_lifespan_preserves_the_original_error_when_cleanup_also_fails() -> None:
+    async def check() -> None:
+        api = load_api_settings(API_SETTINGS_FILE)
+        api = api.model_copy(update={"enabled_routes": ()})
+        stream = io.StringIO()
+        app = create_app(api, None, REPOSITORY, writer=EventWriter(api.logging, stream))
+        original = ValueError("The operation failed before cleanup.")
+        with pytest.raises(BaseExceptionGroup) as observed:
+            async with app.router.lifespan_context(app):
+                stream.close()
+                raise original
+        assert observed.value.exceptions[0] is original
+        cleanup = observed.value.exceptions[1]
+        assert isinstance(cleanup, EvaluationFailure)
+        assert cleanup.error.code == "LOGGING_FAILED"
 
     asyncio.run(check())

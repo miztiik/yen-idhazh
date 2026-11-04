@@ -261,6 +261,7 @@ Table L - Alternatives not selected
   - `services/hhem-evaluator/tests/test_llama_api.py` - route/client correctness, not a model substitute.
   - `services/hhem-evaluator/tests/test_llama_contracts.py`
   - `services/hhem-evaluator/tests/test_server_events.py`
+  - `services/hhem-evaluator/tests/test_pipeline_report.py` - copy the named shared configuration into the generated report root.
   - `.github/scripts/summary-eval-hhem/summary_eval_pipeline/serve_hhem.py` - keep the current caller working until PR 3 moves it.
   - `.github/scripts/summary-eval-hhem/summary_eval_pipeline/services.py`
   - `.github/scripts/summary-eval-hhem/summary_eval_pipeline/run.py` - read the shared listener address and remove terminal-log matching as scoring proof; preserve host startup/control/measurement behavior.

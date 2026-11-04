@@ -117,6 +117,8 @@ def create_app(
             except BaseException as error:
                 cleanup.append(error)
             if cleanup:
+                if failure is None and len(cleanup) == 1:
+                    raise cleanup[0]
                 raise BaseExceptionGroup(
                     "Shared API cleanup failed", [failure, *cleanup] if failure else cleanup
                 )

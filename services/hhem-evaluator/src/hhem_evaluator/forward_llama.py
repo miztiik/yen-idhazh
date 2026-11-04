@@ -96,6 +96,8 @@ class LlamaForwarder:
             except BaseException as error:
                 failures.append(error)
         if failures:
+            if len(failures) == 1:
+                raise failures[0]
             raise BaseExceptionGroup("Native client cleanup failed", failures)
 
     async def health(self) -> LlamaHealth:
