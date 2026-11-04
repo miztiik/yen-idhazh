@@ -1,7 +1,9 @@
 """Prove real tokenizer windows cover source ends without clipping native prompts."""
 
+from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.contracts.unieval_request import UnievalRequest
 from hhem_evaluator.load_unieval_resources import load_unieval_resources
+from hhem_evaluator.load_unieval_settings import load_unieval_settings
 from hhem_evaluator.score_unieval import prepare_unieval
 
 from .contract_examples import REPOSITORY
@@ -72,3 +74,42 @@ def test_comparison_limit_refuses_matrix_before_materializing_it() -> None:
     assert any(error.code == "COMPARISON_LIMIT_EXCEEDED" for error in plan.errors)
     assert plan.work.consistency.planned is None
     assert len(plan.comparisons) <= settings.scoring.max_comparisons
+
+
+def test_normalized_character_offsets_refuse_impossible_overlap_only_for_consistency() -> None:
+    api = load_api_settings(REPOSITORY / "config" / "fastapi-server.json")
+    settings = load_unieval_settings(REPOSITORY, api)
+    resources = load_unieval_resources(settings, REPOSITORY)
+    request = UnievalRequest(
+        source_text="\ufdfa" * 50,
+        summary_text="word " * 4003 + ".",
+        reference_summary_text="Words.",
+    )
+    plan = prepare_unieval(request, settings, resources)
+    assert any(
+        error.code == "CONSISTENCY_INPUT_TOO_LONG" and error.dimension == "consistency"
+        for error in plan.errors
+    )
+    assert plan.work.consistency.planned is None
+    assert plan.work.fluency.planned == plan.work.relevance.planned == 1
+    assert not plan.work.source_spans
+
+
+def test_normalized_character_boundaries_advance_and_cover_a_viable_source_plan() -> None:
+    _, settings = unieval_settings(source_window_tokens=70, source_overlap_tokens=8)
+    resources = load_unieval_resources(settings, REPOSITORY)
+    request = UnievalRequest(
+        source_text="\ufdfa" * 50,
+        summary_text="A short claim.",
+        reference_summary_text="A short reference.",
+    )
+    plan = prepare_unieval(request, settings, resources)
+    spans = plan.work.source_spans
+    assert len(spans) > 1 and not any(error.dimension == "consistency" for error in plan.errors)
+    assert spans[0].start == 0 and spans[-1].end == len(request.source_text)
+    for previous, current in zip(spans, spans[1:], strict=False):
+        assert previous.start < current.start <= previous.end < current.end
+    assert all(
+        resources.token_count(comparison.prompt) <= settings.scoring.max_input_tokens
+        for comparison in plan.comparisons
+    )

@@ -31,6 +31,12 @@ question, the longest summary sentence and special tokens, then verifies
 every complete prompt again with the actual tokenizer. It never uses the
 tokenizer's truncation option.
 
+When normalization maps several tokens to one original character, windows
+end and restart only at complete character boundaries. Overlap rounds
+outward, never below its configured target. If that prevents forward
+progress within the prompt allowance, consistency receives a declared
+planning error; other admissible dimensions still run.
+
 Every summary sentence is compared with every source window. A sentence's
 score is the highest completed window score; consistency is the mean of
 these sentence scores. Taking one best window against the whole summary
@@ -83,6 +89,10 @@ does not start an automatic restart loop.
 Shared health retains separate component states. An unavailable UniEval
 worker does not erase HHEM's readiness or completed result. Disabled UniEval
 does not read its configuration or load its optional model dependencies.
+Health and admission check the actual owned process, not only its cached
+loaded identity. An observed idle exit closes UniEval admission and joins
+that child before reporting `WORKER_EXITED`. Concurrent observers share the
+same owned stop operation.
 
 ## Assets and diagnostics
 

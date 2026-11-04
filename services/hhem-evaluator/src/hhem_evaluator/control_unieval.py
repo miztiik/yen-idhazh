@@ -41,9 +41,11 @@ class UnievalController:
         self.failure_code: UnievalErrorCode | None = None
         self.loading_task: asyncio.Task[None] | None = None
         self.active_task: asyncio.Task[None] | None = None
+        self.stop_task: asyncio.Task[None] | None = None
         self.stopping = False
 
-    def health(self) -> UnievalHealth:
+    async def health(self) -> UnievalHealth:
+        await self._observe_worker_exit()
         return UnievalHealth.model_validate(
             {
                 "version": UNIEVAL_VERSION,
@@ -87,7 +89,7 @@ class UnievalController:
             except EvaluationFailure:
                 self.failure_code = "LOGGING_FAILED"
             try:
-                await self.worker.stop()
+                await self._stop_worker()
             except UnievalFailure as cleanup:
                 self.failure_code = cleanup.error.code
                 try:
@@ -102,12 +104,40 @@ class UnievalController:
                 except EvaluationFailure:
                     self.failure_code = "LOGGING_FAILED"
 
-    def reserve(self, state: UnievalState) -> Reservation:
+    async def reserve(self, state: UnievalState) -> Reservation:
+        await self._observe_worker_exit()
         if self.stopping:
             raise UnievalFailure(UnievalError.from_code("SERVICE_STOPPED"))
         if self.status != "ready":
+            if self.failure_code == "WORKER_EXITED":
+                raise UnievalFailure(UnievalError.from_code("WORKER_EXITED"))
             raise UnievalFailure(UnievalError.from_code("WORKER_NOT_READY"))
         return self.queue.reserve(state.execution_id)
+
+    async def _observe_worker_exit(self) -> None:
+        if self.status != "ready" or self.worker.is_alive:
+            return
+        try:
+            await self.fail_worker("WORKER_EXITED")
+        except UnievalFailure as failure:
+            self.failure_code = failure.error.code
+        try:
+            self.writer.diagnostic(
+                ApiDiagnosticData(
+                    component="unieval", action="failed", level="ERROR", code=self.failure_code
+                )
+            )
+        except EvaluationFailure:
+            self.failure_code = "LOGGING_FAILED"
+
+    async def _stop_worker(self) -> None:
+        if (
+            self.stop_task is None
+            or self.stop_task.cancelled()
+            or (self.stop_task.done() and not self.worker.exit_confirmed)
+        ):
+            self.stop_task = asyncio.create_task(self.worker.stop())
+        await asyncio.shield(self.stop_task)
 
     async def process(self, state: UnievalState, reservation: Reservation) -> None:
         await self.queue.wait(reservation)
@@ -171,7 +201,7 @@ class UnievalController:
             if reservation.owner is not None:
                 reservation.owner.cancel()
         try:
-            await asyncio.shield(self.worker.stop())
+            await self._stop_worker()
         except UnievalFailure:
             self.failure_code = "WORKER_STOP_FAILED"
             raise
@@ -187,7 +217,7 @@ class UnievalController:
         async with asyncio.timeout(self.settings.worker.shutdown_timeout_ms / 1000):
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
-            await self.worker.stop()
+            await self._stop_worker()
         self.writer.diagnostic(
             ApiDiagnosticData(component="unieval", action="stopped", level="INFO")
         )
