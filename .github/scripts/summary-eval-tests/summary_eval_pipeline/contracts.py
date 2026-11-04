@@ -2,7 +2,7 @@
 
 import hashlib
 from datetime import timedelta
-from typing import Final, Literal, Self
+from typing import Annotated, Final, Literal, Self
 
 from hhem_evaluator.contracts.base import (
     CommitId,
@@ -14,9 +14,10 @@ from hhem_evaluator.contracts.base import (
     PositiveCount,
     RelativePath,
     Sha256,
+    validate_text,
 )
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
-from pydantic import AwareDatetime, ConfigDict, model_validator
+from pydantic import AfterValidator, AwareDatetime, ConfigDict, Field, model_validator
 
 from idhazh.contracts.app_config import ModelsFile
 
@@ -96,13 +97,24 @@ class WorkflowContract(NativeContract):
             "changelog": [
                 {
                     "version": WORKFLOW_VERSION,
+                    "change": "Use native string-length constraints for generation text.",
+                },
+                {
+                    "version": WORKFLOW_VERSION,
+                    "change": "Retain the selected run when generation has not started.",
+                },
+                {
+                    "version": WORKFLOW_VERSION,
                     "change": "Name shared API shutdown separately from HHEM worker exit.",
                 },
                 {
                     "version": WORKFLOW_VERSION,
                     "change": "Bind generated summaries and real service phases to one run.",
                 },
-                {"version": "2026-11-02", "change": "Declare evaluation and machine evidence."},
+                {
+                    "version": "2026-11-02",
+                    "change": "Earlier changes are in this file's git history.",
+                },
             ],
         }
     )
@@ -162,9 +174,13 @@ class LoadedModel(WorkflowContract):
     pid: PositiveCount
 
 
+# The native decoder refuses unanchored patterns; semantic text checks still run after decoding.
+AnswerText = Annotated[str, Field(min_length=1), AfterValidator(validate_text)]
+
+
 class GeneratedAnswer(WorkflowContract):
-    title: NonblankText
-    summary: NonblankText
+    title: AnswerText
+    summary: AnswerText
 
 
 class GenerationReceipt(WorkflowContract):
@@ -271,6 +287,7 @@ class PhaseEvidence(WorkflowContract):
 class PipelineEvidence(WorkflowContract):
     version: WorkflowVersion
     status: OutcomeStatus
+    prepared: PreparedRun | None
     generation: GenerationReceipt | None
     generation_phase: PhaseEvidence | None
     evaluation_phase: PhaseEvidence | None
@@ -284,6 +301,13 @@ class PipelineEvidence(WorkflowContract):
             self.generation_phase,
             self.evaluation_phase,
         )
+        if generation is not None and (
+            self.prepared is None
+            or generation.run != self.prepared.run
+            or generation.selected != self.prepared.selected
+            or generation.source_sha256 != self.prepared.source_sha256
+        ):
+            raise ValueError("Generation must describe the captured selected run")
         if generation is not None:
             for observed in (phase, evaluation):
                 if observed is not None and observed.run != generation.run:

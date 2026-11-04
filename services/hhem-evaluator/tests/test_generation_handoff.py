@@ -9,6 +9,7 @@ from idhazh.llm.server import request_payload, server_argv
 from pydantic import ValidationError
 from summary_eval_pipeline.contracts import (
     WORKFLOW_VERSION,
+    GeneratedAnswer,
     GenerationReceipt,
     LoadedModel,
     PhaseEvidence,
@@ -56,6 +57,20 @@ def generation_phase() -> tuple[ManualInputs, PreparedRun, GenerationReceipt, Ph
         generation_sha256=text_sha256(receipt.model_dump_json()),
     )
     return inputs, prepared, receipt, phase
+
+
+def test_generation_schema_uses_native_string_lengths_and_keeps_final_text_validation() -> None:
+    schema = GeneratedAnswer.model_json_schema()
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == {"title", "summary"}
+    for field in ("title", "summary"):
+        assert schema["properties"][field]["minLength"] == 1
+        assert "pattern" not in schema["properties"][field]
+    for text in ("", " \n\t", "\ud800"):
+        with pytest.raises(ValidationError):
+            GeneratedAnswer.model_validate_json(json.dumps({"title": "Title.", "summary": text}))
+    text = "  Exact answer.\n"
+    assert GeneratedAnswer(title="Title.", summary=text).summary == text
 
 
 def test_two_separate_declaration_selections_change_real_assets_flags_and_requests(

@@ -79,6 +79,9 @@ Table B - Named output under `backend/var/summary-eval-tests/`
 | B5 | `results.json`, `report.md` | Combined native outcome and its escaped human report. |
 | B6 | `logs/` | Append-only per-role CloudEvents JSONL files and current native Hono server evidence. Not Git or site output. |
 
+The combined result retains `run.json`'s selected declaration even when
+generation never started. It does not label a selected model as loaded.
+
 Generation saves the accepted answer before measurement or shutdown. Evaluation
 checks the exact run, attempt, revision, source and declaration, the receipt's
 answer hash and the generation phase's receipt hash. Failed, stale, absent or
@@ -134,6 +137,11 @@ adding another server configuration authority.
 The workflow adds no Python model binding, collector dependency or root
 workspace. The shared FastAPI/Hono applications, frozen dependencies, native
 asset tools and request/final-answer readers do the actual work.
+
+The pinned native decoder refuses unanchored regular-expression patterns.
+Generation therefore derives string-length constraints from its answer model;
+the same model's final-text validator still refuses whitespace-only or invalid
+UTF-8 answers without changing accepted text.
 
 ## See also
 

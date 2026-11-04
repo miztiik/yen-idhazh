@@ -46,7 +46,7 @@ def render_report(
 ) -> str:
     generation, evaluation = evidence.generation, evidence.evaluation_phase
     result = evaluation.evaluation if evaluation is not None else None
-    selected = generation.selected if generation is not None else None
+    selected = evidence.prepared.selected if evidence.prepared is not None else None
     loaded = generation.loaded if generation is not None else None
     evaluator = result.model if result is not None else None
     model_rows = [

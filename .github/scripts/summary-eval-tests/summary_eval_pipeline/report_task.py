@@ -13,6 +13,7 @@ from .contracts import (
     PhaseEvidence,
     PipelineError,
     PipelineEvidence,
+    text_sha256,
 )
 from .failures import WorkflowError
 from .inputs import read_manual_inputs
@@ -77,6 +78,7 @@ def collect_results(root: Path) -> PipelineEvidence:
     return PipelineEvidence(
         version=WORKFLOW_VERSION,
         status="complete" if complete else "partial" if score else "failed",
+        prepared=prepared,
         generation=generation,
         generation_phase=generated_phase,
         evaluation_phase=evaluation_phase,
@@ -96,6 +98,11 @@ def main() -> None:
         evidence = collect_results(root)
         write_result(directory / "results.json", evidence)
         inputs = read_manual_inputs(settings, pipeline)
+        if (
+            evidence.prepared is not None
+            and text_sha256(inputs.source_text) != evidence.prepared.source_sha256
+        ):
+            raise WorkflowError("RECEIPT_INVALID", "report")
         config_url = (
             f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
             f"/blob/{os.environ['GITHUB_SHA']}/config/hhem-evaluator/settings.json"

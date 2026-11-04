@@ -388,6 +388,7 @@ Table O - Alternatives not selected
   - `services/hhem-evaluator/tests/owned_service_child.py`
   - `services/hhem-evaluator/tests/test_manual_workflow.py`
   - `services/hhem-evaluator/tests/test_generation_handoff.py`
+  - `services/hhem-evaluator/tests/test_settings.py` - check API isolation in a clean interpreter, not the workflow test's source path.
   - `services/hhem-evaluator/tests/test_pipeline_evaluation.py`
   - `services/hhem-evaluator/tests/test_pipeline_lifetime.py`
   - `services/hhem-evaluator/tests/test_pipeline_measurement.py`

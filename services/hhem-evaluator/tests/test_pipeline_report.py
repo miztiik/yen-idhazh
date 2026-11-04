@@ -46,7 +46,7 @@ def test_durations_round_up_without_inventing_missing_work(
 
 
 def test_report_discloses_generated_answer_as_literal_text_and_identifies_models() -> None:
-    inputs, _, generation = handoff_case()
+    inputs, prepared, generation = handoff_case()
     answer = 'Summary </pre><img src=x onerror="alert(1)">'
     generation = generation.model_copy(
         update={
@@ -57,6 +57,7 @@ def test_report_discloses_generated_answer_as_literal_text_and_identifies_models
     evidence = PipelineEvidence(
         version=WORKFLOW_VERSION,
         status="failed",
+        prepared=prepared,
         generation=generation,
         generation_phase=None,
         evaluation_phase=None,
@@ -90,6 +91,23 @@ def test_report_discloses_generated_answer_as_literal_text_and_identifies_models
     )
     assert rendered.returncode == 0, rendered.stderr
     assert json.loads(rendered.stdout) == {"tables": 4, "unsafe": False}
+
+
+def test_report_keeps_the_selected_declaration_when_generation_did_not_start() -> None:
+    inputs, prepared, _ = handoff_case()
+    evidence = PipelineEvidence(
+        version=WORKFLOW_VERSION,
+        status="failed",
+        prepared=prepared,
+        generation=None,
+        generation_phase=None,
+        evaluation_phase=None,
+        unieval="not_run",
+        errors=(),
+    )
+    markdown = render_report(evidence, inputs, service_settings(), "https://example.test/config")
+    assert prepared.selected.models_file in markdown and prepared.selected.model_id in markdown
+    assert "Not loaded" in markdown and "Not generated" in markdown
 
 
 @pytest.mark.parametrize("oversized", [False, True])

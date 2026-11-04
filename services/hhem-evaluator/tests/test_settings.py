@@ -2,6 +2,8 @@
 
 import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -59,8 +61,22 @@ def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model
         "special_tokens_map.json",
         "spiece.model",
     )
-    assert importlib.util.find_spec("idhazh") is None
     assert importlib.util.find_spec("torch") is None
+    isolated = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            "import importlib.util; import hhem_evaluator.serve_api; "
+            "assert importlib.util.find_spec('idhazh') is None; "
+            "assert importlib.util.find_spec('torch') is None",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert isolated.returncode == 0, isolated.stderr
 
 
 def test_settings_freeze_the_effective_snapshot_not_the_file(tmp_path: Path) -> None:
