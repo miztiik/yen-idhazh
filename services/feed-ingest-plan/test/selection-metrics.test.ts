@@ -160,11 +160,9 @@ test("standalone partition failure retains the completed selected population", a
   const fixture = await recordedPlan();
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   try {
-    const batch = await recordedPersistenceBatch(fixture.inputs, fixture.runtime);
-    fixture.inputs.harvest.config.partition.enabled = true;
-    const { stageConfigFingerprint } = await import("../src/api/operation-context");
+    const batch = await recordedPersistenceBatch(fixture.inputs, fixture.runtime, { partition_enabled: true });
     stageStore(fixture.inputs).replace("selected", SelectedFeedBatchSchema, {
-      ...batch, config_sha256: stageConfigFingerprint(fixture.inputs, fixture.runtime),
+      ...batch,
       articles: batch.articles.map(article => ({ ...article, editorial_rank: 2 })),
     });
     const response = await app.request(`${PLANNER_API_PREFIX}/partition-articles`, json({ links: [operationLink(batch)] }));
