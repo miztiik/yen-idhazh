@@ -14,9 +14,8 @@ export async function recordHarvestFailures(
   for (const rejection of rejections) {
     if (rejection.subject !== "article" || rejection.stage !== "harvest-feeds"
       || !HarvestArticleFailureReasonSchema.safeParse(rejection.drop_reason).success) continue;
-    if (rejection.drop_reason === "MISSING_REQUIRED_FIELDS" && rejection.details.http_status === null) continue;
     if (rejection.candidate_id === null || rejection.url_key === null) {
-      throw new Error("Terminal article failure lacks its offered identity");
+      throw new Error("Terminal article failure lacks its captured candidate or article address");
     }
     const details = rejection.details;
     rows.set(rejection.candidate_id, RejectedArticleRowSchema.parse({

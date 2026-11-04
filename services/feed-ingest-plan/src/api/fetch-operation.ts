@@ -20,7 +20,6 @@ import { readFeedOffer, updateFeedOffer } from "./feed-offer-state";
 import { workPool } from "../harvest-feeds/harvest-pool";
 import { fetchRejection, recordRejection } from "../harvest-feeds/record-rejection";
 import { fetchDiagnostics } from "../harvest-feeds/fetch-diagnostics";
-import { deriveCandidateId } from "@idhazh/common-contracts";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { HarvestArticleResultSchema, utcTimestamp } from "../harvest-feeds/harvest-types";
 import { resolveArticleSourceOutcome } from "../article-source-outcome";
@@ -35,10 +34,10 @@ import { operationKey, operationMetadata } from "./operation-context";
 type FetchRequest = z.infer<typeof FetchRequestSchema>;
 const requestPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
 export function resolveFetchParent(request: FetchRequest, inputs: PlanInputs, runtime: PlanRuntime) {
-  if (!("offer_id" in request)) return null;
-  const { batch, offer } = readFeedOffer(inputs, request.links[0], request.offer_id);
+  if (!("candidate_id" in request)) return null;
+  const { batch, offer } = readFeedOffer(inputs, request.links[0], request.candidate_id);
   requireStageConfiguration(batch, inputs, runtime);
-  if (offer === undefined) throw new PlanError("INVALID_REQUEST", "Article offer is not a member of this feed parse", "offer_id");
+  if (offer === undefined) throw new PlanError("INVALID_REQUEST", "Article candidate is not a member of this feed parse", "candidate_id");
   const fetch = batch.links[0];
   if (fetch === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Feed parse has no captured input fetch", "links");
   return { batch, offer, fetch };
@@ -52,6 +51,10 @@ export async function fetchDocument(
   if (source === undefined || source.status !== "active") throw new PlanError("INVALID_REQUEST", "Fetch requires an active configured feed", "feed_id");
   const url = request.fetch_item_type === "feed" ? source.url : parent?.offer.entry.link ?? ("url" in request ? request.url : undefined);
   if (url == null) throw new PlanError("INVALID_REQUEST", "Article fetch requires its authorized address", "url");
+  const candidateId = record.candidate_id;
+  if (request.fetch_item_type === "article" && candidateId === null) {
+    throw new PlanError("ARTIFACT_INVALID", "Article admission lacks its captured candidate", "candidate_id");
+  }
   if (parent === null) {
     try { validateTargetName(url); }
     catch (error) {
@@ -83,20 +86,20 @@ export async function fetchDocument(
       emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls, evidence, context),
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
     on_attempt: observation => { attemptObservations.push(observation); },
-  }, { run_id: record.context.run_id, article_id: identity.url_key, feed_id: source.id },
+  }, { run_id: record.context.run_id, article_id: identity.url_key, feed_id: source.id, candidate_id: candidateId },
   operationMetadata(record.context), {
     document_kind: request.fetch_item_type, feed_id: source.id, publisher_id: source.publisher_id,
-    observed_run_id: record.context.run_id, observed_attempt: state.context.writer.attempt, candidate_id: parent?.offer.offer_id ?? null,
+    observed_run_id: record.context.run_id, observed_attempt: state.context.writer.attempt, candidate_id: candidateId,
   });
   if (request.fetch_item_type === "feed") {
     const status = resolveFeedEligibility(projectLifecycleFields(state.history.sources.get(source.id)), utcTimestamp(runtime.observation_clock));
     if (status === "retired") throw new PlanError("FEED_RETIRED", "Supported evidence retires this feed", "feed_id");
     if (status === "resting") throw new PlanError("FEED_RESTING", "Feed is resting until its supported UTC recovery deadline", "feed_id");
   }
-  if (request.fetch_item_type === "article") {
+  if (request.fetch_item_type === "article" && candidateId !== null) {
     const exclusions = documentExclusions(state);
-    const offered = parent?.offer ?? { source: sourceSnapshot(source), entry: {
-      entry_ordinal: 0, title: null, link: url, categories: [], author: null, published_at: null, media_types: [],
+    const offered = parent?.offer ?? { candidate_id: candidateId, source: sourceSnapshot(source), entry: {
+      entry_ordinal: null, title: null, link: url, categories: [], author: null, published_at: null, media_types: [],
     } };
     const prepared = prepareArticle(offered, inputs.harvest, {
       ...operationMetadata(record.context), writer: state.context.writer,
@@ -109,10 +112,10 @@ export async function fetchDocument(
       work.rejectFetch(url, "ARTICLE_EXCLUDED");
       state.work.article(prepared.result);
       if (prepared.result.rejection !== null) await recordDocumentRejections([prepared.result.rejection], state, inputs);
-      if (parent !== null) updateFeedOffer(inputs, state, parent.batch, parent.offer.offer_id, "rejected");
-      throw new PlanError("ARTICLE_EXCLUDED", prepared.result.rejection!.drop_reason, parent === null ? "url" : "offer_id");
+      if (parent !== null) updateFeedOffer(inputs, state, parent.batch, parent.offer.candidate_id, "rejected");
+      throw new PlanError("ARTICLE_EXCLUDED", prepared.result.rejection!.drop_reason, parent === null ? "url" : "candidate_id");
     }
-    if (parent !== null) updateFeedOffer(inputs, state, parent.batch, parent.offer.offer_id, "fetched", record.context);
+    if (parent !== null) updateFeedOffer(inputs, state, parent.batch, parent.offer.candidate_id, "fetched", record.context);
   }
   let permit = requestPools.get(inputs);
   if (permit === undefined) { permit = workPool(inputs.harvest.config.harvest.concurrency); requestPools.set(inputs, permit); }
@@ -136,6 +139,7 @@ export async function fetchDocument(
     error_code: fetched.error_code ?? null,
     body_sha256: fetched.body === null ? null : hashText(fetched.body), attempts: fetched.attempts ?? [],
     observation, attempt_observations: attemptObservations,
+    candidate_id: candidateId,
     entry_ordinal: parent?.offer.entry.entry_ordinal ?? null,
   });
   stageStore(inputs).rememberFetchedDocument(record.context, artifact);
@@ -144,14 +148,14 @@ export async function fetchDocument(
     state.work.pendingFeed(source.id, fetched, observation.occurred_at, record.context);
   }
   let sourceOutcome: SourceArticleOutcome | null = null;
-  if (request.fetch_item_type === "article" && fetched.body === null) {
+  if (request.fetch_item_type === "article" && candidateId !== null && fetched.body === null) {
     const refusal = fetchRejection(fetched, inputs.harvest.config.harvest.fetch_timeout_ms, fetchDiagnostics(fetched, null));
     const rejection = recordRejection({ feed_id: source.id, feed_url: source.url }, {
       ...operationMetadata(record.context), writer: state.context.writer,
       max_future_hours: inputs.clock_config.collect.max_future_hours,
       observation_clock: runtime.observation_clock ?? (() => new Date()),
     }, refusal.reason, refusal.details, {
-      candidate_id: parent?.offer.offer_id ?? deriveCandidateId(record.context.run_id, source.id, 0),
+      candidate_id: candidateId,
       canonical_url: identity.canonical_url, url_key: identity.url_key,
       title: parent?.offer.entry.title ?? null, categories: parent?.offer.entry.categories ?? [],
     });
@@ -164,18 +168,19 @@ export async function fetchDocument(
     });
     sourceOutcome = resolveArticleSourceOutcome(result, inputs.harvest.config.triage.min_words,
       inputs.harvest.config.triage.blocked_http_statuses, utcTimestamp(runtime.observation_clock));
-    state.work.article(result, key, sourceOutcome);
+    state.work.article(result, candidateId, sourceOutcome);
     await recordDocumentRejections([rejection], state, inputs);
   }
-  if (request.fetch_item_type === "article") {
-    state.work.captureArticle(key, source.id, observation.occurred_at, sourceOutcome);
+  if (request.fetch_item_type === "article" && candidateId !== null) {
+    state.work.captureArticle(candidateId, source.id, observation.occurred_at, sourceOutcome);
   }
-  if (parent !== null) updateFeedOffer(inputs, state, parent.batch, parent.offer.offer_id,
+  if (parent !== null) updateFeedOffer(inputs, state, parent.batch, parent.offer.candidate_id,
     fetched.failure === null && fetched.body !== null ? "fetched" : "rejected", record.context);
   return { artifact, response_json: JSON.stringify({
     ...operationMetadata(record.context),
     run_id: record.context.run_id, fetch_item_type: request.fetch_item_type, feed_id: source.id,
     article_id: identity.url_key, canonical_url: identity.canonical_url, http_status: fetched.http_status,
     failure: fetched.failure, body_sha256: artifact.body_sha256,
+    ...(request.fetch_item_type === "article" ? { candidate_id: candidateId } : {}),
   }) };
 }

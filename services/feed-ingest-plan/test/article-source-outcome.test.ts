@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import {
   createChildContext, createRootContext, FeedIngestCandidateSchema, PlannerStageContextSchema,
-  HarvestDiagnosticsSchema, SourceArticleOutcomeSchema, SourceSnapshotSchema, deriveCandidateId, deriveUrlKey,
+  HarvestDiagnosticsSchema, SourceArticleOutcomeSchema, SourceSnapshotSchema, createCandidateId, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { HarvestArticleResultSchema } from "../src/harvest-feeds/harvest-types";
 import { resolveArticleSourceOutcome } from "../src/article-source-outcome";
@@ -29,18 +29,21 @@ function recording() {
     writer: { run_id: run, attempt: 1, job: null, pipeline_name: "feed-ingest-plan",
       task_name: "plan", shard: 0, producer: "tests.source-outcome", git_sha: "a".repeat(40) },
   }) };
-  const article = (words: number) => HarvestArticleResultSchema.parse({
-    candidate: FeedIngestCandidateSchema.parse({
-      date: context.date, run_id: run, traceId: context.traceId,
-      feed_id: source.feed_id, source, candidate_id: deriveCandidateId(run, source.feed_id, 0), entry_ordinal: 0,
-      canonical_url: "https://example.org/article", url_key: deriveUrlKey("https://example.org/article"),
-      title: "Recorded article", article_text: Array(words).fill("evidence").join(" "), word_count: words,
-      author: null, categories: [], published_at: "2020-01-01T00:00:00Z", fetched_at: at,
-    }),
-    rejection: null,
-    observation: { candidate_id: deriveCandidateId(run, source.feed_id, 0), http_status: 200,
-      fetch_failure: null, paywall: false, paywall_evidence: "none", extraction: "success", observed_at: at, diagnostics: null },
-  });
+  const article = (words: number) => {
+    const candidate_id = createCandidateId();
+    return HarvestArticleResultSchema.parse({
+      candidate: FeedIngestCandidateSchema.parse({
+        date: context.date, run_id: run, traceId: context.traceId,
+        feed_id: source.feed_id, source, candidate_id, entry_ordinal: 0,
+        canonical_url: "https://example.org/article", url_key: deriveUrlKey("https://example.org/article"),
+        title: "Recorded article", article_text: Array(words).fill("evidence").join(" "), word_count: words,
+        author: null, categories: [], published_at: "2020-01-01T00:00:00Z", fetched_at: at,
+      }),
+      rejection: null,
+      observation: { candidate_id, http_status: 200,
+        fetch_failure: null, paywall: false, paywall_evidence: "none", extraction: "success", observed_at: at, diagnostics: null },
+    });
+  };
   return { at, source, context, article };
 }
 
@@ -62,14 +65,15 @@ test("retries and redirects count once on their dispatch UTC day, not the later 
   const health = createRunHealth(context, [source], new Map(), {
     min_words: 10, blocked_http_statuses: [],
   });
+  const candidate_id = createCandidateId();
   const work = documentWork({
     ...operationMetadata(context),
     observation_clock: clock, observations: createIngestObservations(health.observe),
   }, {
     run_id: context.run_id,
-    article_id: deriveUrlKey(target), feed_id: source.feed_id,
+    article_id: deriveUrlKey(target), feed_id: source.feed_id, candidate_id,
   }, createChildContext(operationMetadata(context)), {
-    document_kind: "article", publisher_id: null, candidate_id: null,
+    document_kind: "article", publisher_id: null, candidate_id,
     observed_run_id: context.run_id, observed_attempt: context.writer.attempt, feed_id: source.feed_id,
   });
   try {

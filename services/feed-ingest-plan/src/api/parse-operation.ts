@@ -1,7 +1,6 @@
 /** Consume one live fetched document without network access and complete its article batch. */
 import {
   FEED_OUTCOME_PAYLOAD_VERSION, FeedIngestCandidateSchema, ParsedFeedBatchSchema, PlannerHarvestObservationSchema,
-  deriveCandidateId,
   HarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
 import type { FeedIngestCandidate, PlannerHarvestObservation, PlannerFeedOffer, OperationLink, ParsedFeedBatch } from "@idhazh/common-contracts";
@@ -34,6 +33,7 @@ import { recordArticleEntities } from "../record-article-entities";
 import type { RunContext } from "../resolve-run-context";
 import { operationKey, operationMetadata, stageContext } from "./operation-context";
 import { retainCollectionParse } from "./collection-batch";
+import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
 
 export async function parseFetchedDocument(
   fetched: FetchedDocumentReference, context: RunContext,
@@ -54,11 +54,11 @@ export async function parseFetchedDocument(
   let feedParse: OperationLink | undefined;
   if (artifact.observation.links.length !== 0) {
     feedParse = artifact.observation.links[0];
-    if (artifact.observation.links.length !== 1 || feedParse === undefined || artifact.entry_ordinal === null) {
+    if (artifact.observation.links.length !== 1 || feedParse === undefined || artifact.entry_ordinal === null
+      || artifact.candidate_id === null) {
       throw new PlanError("ARTIFACT_INVALID", "Fetched offer has no single producing feed parse or original ordinal", "links");
     }
-    const reference = readFeedOffer(inputs, feedParse,
-      deriveCandidateId(fetched.context.run_id, artifact.feed_id, artifact.entry_ordinal));
+    const reference = readFeedOffer(inputs, feedParse, artifact.candidate_id);
     const batch = reference.batch;
     offer = reference.offer;
     const feedFetch = batch.links[0];
@@ -67,6 +67,10 @@ export async function parseFetchedDocument(
       || batch.context.run_id !== context.run_id || batch.context.writer.attempt !== context.writer.attempt
       || feedFetch === undefined || !state.fetches.has(operationKey(feedFetch))) {
       throw new PlanError("ARTIFACT_INVALID", "Fetched article does not match its current offer and captured feed", "links");
+    }
+    const identity = offer.entry.link === null ? null : deriveArticleIdentity(offer.entry.link);
+    if (identity?.canonical_url !== artifact.canonical_url || identity.url_key !== artifact.article_id) {
+      throw new PlanError("ARTIFACT_INVALID", "Fetched article differs from its captured offer address", "links");
     }
   }
   if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; parse in a new execution", "links");
@@ -84,10 +88,10 @@ export async function parseFetchedDocument(
     document_activity: (operation, phase, details, url, feedUrls, evidence, metadata) =>
       emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls, evidence, metadata),
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
-  }, { run_id: fetched.context.run_id, article_id: artifact.article_id, feed_id: source.id },
+  }, { run_id: fetched.context.run_id, article_id: artifact.article_id, feed_id: source.id, candidate_id: artifact.candidate_id },
   operationMetadata(fetched.context), {
     document_kind: artifact.fetch_item_type, feed_id: source.id, publisher_id: source.publisher_id,
-    observed_run_id: fetched.context.run_id, observed_attempt: state.context.writer.attempt, candidate_id: offer?.offer_id ?? null,
+    observed_run_id: fetched.context.run_id, observed_attempt: state.context.writer.attempt, candidate_id: artifact.candidate_id,
   }, artifact);
   if (artifact.fetch_item_type === "feed") {
     const parseSignal = signal ?? runtime.signal;
@@ -125,7 +129,8 @@ export async function parseFetchedDocument(
     }) };
   }
   const pool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
-  const candidateId = offer?.offer_id ?? deriveCandidateId(state.context.run_id, source.id, 0);
+  const candidateId = artifact.candidate_id;
+  if (candidateId === null) throw new PlanError("ARTIFACT_INVALID", "Article document lacks its captured candidate", "candidate_id");
   const recordEntities = (title: string | null, article_text: string | null) =>
     recordArticleEntities(inputs, context, {
       article_id: artifact.article_id, candidate_id: candidateId, feed_id: source.id,
@@ -178,7 +183,7 @@ export async function parseFetchedDocument(
   if (rejection === null && parsed.parsed !== null) candidate = FeedIngestCandidateSchema.parse({
     date: artifact.observation.occurred_at.slice(0, 10), fetched_at: artifact.observation.occurred_at,
     traceId: context.traceId, run_id: state.context.run_id,
-    candidate_id: candidateId, entry_ordinal: offer?.entry.entry_ordinal ?? 0, feed_id: source.id,
+    candidate_id: candidateId, entry_ordinal: artifact.entry_ordinal, feed_id: source.id,
     source: sourceSnapshot(source), canonical_url: artifact.canonical_url, url_key: artifact.article_id,
     title, categories: offer?.entry.categories ?? [], article_text: parsed.parsed.article_text, word_count: parsed.parsed.word_count,
     author: parsed.parsed.author ?? offer?.entry.author ?? null, published_at: offer?.entry.published_at ?? null,
@@ -186,14 +191,14 @@ export async function parseFetchedDocument(
   const result = HarvestArticleResultSchema.parse({ candidate, rejection, observation });
   const measuredOutcome = resolveArticleSourceOutcome(result, inputs.harvest.config.triage.min_words,
     inputs.harvest.config.triage.blocked_http_statuses, utcTimestamp(runtime.observation_clock));
-  state.work.article(result, operationKey(fetched.context), measuredOutcome);
+  state.work.article(result, candidateId, measuredOutcome);
   if (rejection !== null) {
     await recordDocumentRejections([rejection], state, inputs);
   }
   let pendingOffers = 0;
   let aggregate: Partial<ParsedFeedBatch> = {};
   if (offer !== undefined && feedParse !== undefined) {
-    pendingOffers = updateFeedOffer(inputs, state, feedParse, offer.offer_id,
+    pendingOffers = updateFeedOffer(inputs, state, feedParse, offer.candidate_id,
       candidate === null ? "rejected" : "parsed", fetched.context, result).pending_offers;
     if (collection === undefined) aggregate = stageStore(inputs).read("parsed", feedParse, ParsedFeedBatchSchema);
   } else {
@@ -228,6 +233,7 @@ export async function parseFetchedDocument(
   });
   return { response_json: JSON.stringify({
     ...operationMetadata(batch), fetch_item_type: "article", run_id: fetched.context.run_id,
+    candidate_id: candidateId,
     parsed_count: candidate === null ? 0 : 1, failure: rejected,
     warnings: diagnostics.warnings,
     pending_offers: pendingOffers,

@@ -1,5 +1,5 @@
 /** Retain the complete current feed offer batch without exporting or archiving article bodies. */
-import { DiscoveredArticleRowSchema, ParsedFeedBatchSchema, PlannerFeedOfferSchema } from "@idhazh/common-contracts";
+import { createCandidateId, DiscoveredArticleRowSchema, ParsedFeedBatchSchema, PlannerFeedOfferSchema } from "@idhazh/common-contracts";
 import type { ParsedFeedBatch, PlannerFeedOffer } from "@idhazh/common-contracts";
 import type { FeedEntry } from "../harvest-feeds/harvest-types";
 import type { PlanInputs } from "../load-plan-inputs";
@@ -35,7 +35,8 @@ export async function createParsedFeedBatch(input: {
   const rejections = [];
   const exclusions = collection === undefined ? undefined : documentExclusions(state);
   for (const entry of input.entries) {
-    const prepared = prepareArticle({ source, entry }, inputs.harvest, {
+    const captured = { candidate_id: createCandidateId(), source, entry };
+    const prepared = prepareArticle(captured, inputs.harvest, {
       ...operationMetadata(input.context), writer: state.context.writer, max_future_hours: inputs.clock_config.collect.max_future_hours,
       clock: () => new Date(state.context.now), observation_clock: runtime.observation_clock ?? (() => new Date()),
       ...(exclusions === undefined ? {} : {
@@ -47,7 +48,7 @@ export async function createParsedFeedBatch(input: {
       if (prepared.result.rejection !== null) rejections.push(prepared.result.rejection);
       if (prepared.identity === null) continue;
     }
-    offers.push(PlannerFeedOfferSchema.parse({ offer_id: prepared.candidate_id,
+    offers.push(PlannerFeedOfferSchema.parse({ candidate_id: captured.candidate_id,
       source, entry, state: collection !== undefined && prepared.status === "rejected" ? "rejected" : "pending",
       links: [] }));
   }
@@ -65,8 +66,8 @@ export async function createParsedFeedBatch(input: {
   plannerMemory(inputs).rememberDiscoveries(sightings, fromDay);
   if (collection !== undefined) {
     for (const offer of offers) {
-      if (collection.offers.has(offer.offer_id)) throw new PlanError("ARTIFACT_INVALID", "Collection offer identity already exists", "offer_id");
-      collection.offers.set(offer.offer_id, offer);
+      if (collection.offers.has(offer.candidate_id)) throw new PlanError("ARTIFACT_INVALID", "Collection candidate identity already exists", "candidate_id");
+      collection.offers.set(offer.candidate_id, offer);
       if (offer.state === "pending") collection.pending_offers++;
     }
     return retainCollectionParse(inputs, collection, input.context, { kind: "feed", feed_id: source.feed_id });
@@ -88,7 +89,7 @@ export async function createParsedFeedBatch(input: {
 export function publicFeedOffers(batch: Pick<ParsedFeedBatch, "offers">, feedId: string,
   pendingOnly = false) {
   return batch.offers.filter(offer => offer.source.feed_id === feedId && (!pendingOnly || offer.state === "pending")).map(offer => ({
-    offer_id: offer.offer_id, feed_id: offer.source.feed_id, canonical_url: deriveArticleIdentity(offer.entry.link!).canonical_url,
+    candidate_id: offer.candidate_id, feed_id: offer.source.feed_id, canonical_url: deriveArticleIdentity(offer.entry.link!).canonical_url,
     title: offer.entry.title, categories: offer.entry.categories, published_at: offer.entry.published_at,
   }));
 }

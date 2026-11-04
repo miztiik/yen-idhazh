@@ -1,7 +1,7 @@
 {
   "run_id": "2026-10-21-700",
   "started_at": "2026-10-21T23:59:59.999Z",
-  "duration_ms": 2311,
+  "duration_ms": 4732,
   "status": "completed",
   "failure_code": null,
   "selected_count": 1,
@@ -16,32 +16,32 @@
   "api_timings": [
     {
       "operation": "feed-health-before-fetch",
-      "duration_ms": 50,
+      "duration_ms": 135,
       "status": "completed"
     },
     {
       "operation": "fetch",
-      "duration_ms": 1937,
+      "duration_ms": 3984,
       "status": "completed"
     },
     {
       "operation": "feed-health-for-selection",
-      "duration_ms": 16,
+      "duration_ms": 30,
       "status": "completed"
     },
     {
       "operation": "select",
-      "duration_ms": 97,
+      "duration_ms": 194,
       "status": "completed"
     },
     {
       "operation": "partition",
-      "duration_ms": 6,
+      "duration_ms": 16,
       "status": "completed"
     },
     {
       "operation": "persist",
-      "duration_ms": 46,
+      "duration_ms": 80,
       "status": "completed"
     }
   ],
@@ -55,15 +55,15 @@
   "reliability_window_days": 30,
   "selection_started_at_utc": "2026-10-22T00:00:00Z",
   "planning_complete": true,
-  "traceId": "bd4321391df59e389d7dc44634c6c0bc",
+  "traceId": "d3da03c7c0eacb4fa0cf7c0b01896cd6",
   "health": {
-    "traceId": "bd4321391df59e389d7dc44634c6c0bc",
-    "spanId": "3d359cc7fd60b42a",
-    "parentSpanId": "cb542af700316f9a",
+    "traceId": "d3da03c7c0eacb4fa0cf7c0b01896cd6",
+    "spanId": "06e648f91a60e250",
+    "parentSpanId": "377d1cb3e48db580",
     "links": [
       {
-        "traceId": "bd4321391df59e389d7dc44634c6c0bc",
-        "spanId": "34c75085fa84d054"
+        "traceId": "d3da03c7c0eacb4fa0cf7c0b01896cd6",
+        "spanId": "1751848e21e7833c"
       }
     ],
     "status": "summarized",
@@ -76,8 +76,8 @@
         "strikes": 0,
         "links": [
           {
-            "traceId": "bd4321391df59e389d7dc44634c6c0bc",
-            "spanId": "851600ffe5ddd9a2"
+            "traceId": "d3da03c7c0eacb4fa0cf7c0b01896cd6",
+            "spanId": "a6926ff172600719"
           }
         ],
         "check_result": "valid-feed",
@@ -253,8 +253,8 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/discovered-articles/2026/10/21/01a1a87c-d8f7-8e6e-947d-eb2ebbcdadc6.parquet",
-          "file_id": "01a1a87c-d8f7-8e6e-947d-eb2ebbcdadc6",
+          "path": "raw/feed-ingest-plan/discovered-articles/2026/10/21/01a1a8b9-84e6-8a66-9976-738b9cd2961f.parquet",
+          "file_id": "01a1a8b9-84e6-8a66-9976-738b9cd2961f",
           "covers": "2026-10-21",
           "content_sha256": "98066b3f2a87d95a9946511497e238d3509722ac8659f622a0ff15a27dc935d7",
           "row_count": 2
@@ -265,8 +265,8 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/selected-articles/2026/10/21/01a1a87c-da92-84da-adab-3a1a4c550f11.parquet",
-          "file_id": "01a1a87c-da92-84da-adab-3a1a4c550f11",
+          "path": "raw/feed-ingest-plan/selected-articles/2026/10/21/01a1a8b9-87b5-898a-8673-e9334bb4957c.parquet",
+          "file_id": "01a1a8b9-87b5-898a-8673-e9334bb4957c",
           "covers": "2026-10-21",
           "content_sha256": "8bb632dd5e89124cfe1322cd682bf07c196926360aa4f1a6a63349a3005e4dc9",
           "row_count": 1
@@ -277,10 +277,10 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/rejected-articles/2026/10/21/8050a92a-729b-8329-8051-dec29dafc345.parquet",
-          "file_id": "8050a92a-729b-8329-8051-dec29dafc345",
+          "path": "raw/feed-ingest-plan/rejected-articles/2026/10/21/c17ea02b-b2bf-8218-a6a1-571b3448f325.parquet",
+          "file_id": "c17ea02b-b2bf-8218-a6a1-571b3448f325",
           "covers": "2026-10-21",
-          "content_sha256": "c53923c3ce915e4b8ab78facedc01458c834eed1e641d77239a437ac8a6653b2",
+          "content_sha256": "e541b9bc579954e3e9dabe52593efc7f80989fdc22654ffee3d654c63144908c",
           "row_count": 1
         }
       ]
@@ -289,15 +289,15 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/21/01a1a87c-da3c-888a-a968-b6bda634cd5c.parquet",
-          "file_id": "01a1a87c-da3c-888a-a968-b6bda634cd5c",
+          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/21/01a1a8b9-86f1-8858-8160-55ddf9236def.parquet",
+          "file_id": "01a1a8b9-86f1-8858-8160-55ddf9236def",
           "covers": "2026-10-21",
-          "content_sha256": "520fb355403731f18ae5fe318317f4b4d9e3aae86cf8fb4817b0119fa29bb9b9",
+          "content_sha256": "4b9e9aa3151bed5b0181ca7a509b5876adbd267f386cf89f393300ea8d34d565",
           "row_count": 1
         },
         {
-          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/22/01a1a87c-da6e-886f-926b-9d9075fb8770.parquet",
-          "file_id": "01a1a87c-da6e-886f-926b-9d9075fb8770",
+          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/22/01a1a8b9-875a-88de-8c65-ed5d453acc28.parquet",
+          "file_id": "01a1a8b9-875a-88de-8c65-ed5d453acc28",
           "covers": "2026-10-22",
           "content_sha256": "ee173260ef58eaa009988d8399b289c49aaf8d2b37d2f0540c29d6ca6c9b7f33",
           "row_count": 1
@@ -308,10 +308,10 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/plan-runs/2026/10/21/01a1a87c-daee-88a8-8122-53ea5f226d86.parquet",
-          "file_id": "01a1a87c-daee-88a8-8122-53ea5f226d86",
+          "path": "raw/feed-ingest-plan/plan-runs/2026/10/21/01a1a8b9-8820-8bdc-8c96-5bc7df2919c5.parquet",
+          "file_id": "01a1a8b9-8820-8bdc-8c96-5bc7df2919c5",
           "covers": "2026-10-21",
-          "content_sha256": "63d992a00049d7e8d01724d296c539597c14cd37dd4e73a51b137cd9d97252c4",
+          "content_sha256": "bb1c457ac8c97687da554df12c41ea34566e0dca1dcdc2320170d5e7399c12bf",
           "row_count": 1
         }
       ]

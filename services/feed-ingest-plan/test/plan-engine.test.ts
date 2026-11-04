@@ -243,7 +243,7 @@ async function completeHeldCollection(fixture: Awaited<ReturnType<typeof recorde
       if (parsed.fetch_item_type !== "feed") throw new Error("The held collection must parse its recorded feed");
       for (const offer of parsed.offers) {
         const article = FetchResponseSchema.parse(await post("fetch", {
-          fetch_item_type: "article", links: [operationLink(parsed)], offer_id: offer.offer_id,
+          fetch_item_type: "article", links: [operationLink(parsed)], candidate_id: offer.candidate_id,
         }));
         if (article.body_sha256 !== null) await post("parse", { links: [operationLink(article)] });
       }

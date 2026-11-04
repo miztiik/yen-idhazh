@@ -61,7 +61,7 @@ test("one active collection crosses the configured stage capacity without losing
     const feedSnapshot = stageStore(fixture.inputs).read("parsed", feed, ParsedFeedBatchSchema);
     for (const [index, offer] of feed.offers.entries()) {
       const article = FetchResponseSchema.parse(await post("fetch", {
-        fetch_item_type: "article", links: [operationLink(feed)], offer_id: offer.offer_id,
+        fetch_item_type: "article", links: [operationLink(feed)], candidate_id: offer.candidate_id,
       }));
       const parsed = ParseResponseSchema.parse(await post("parse", { links: [operationLink(article)] }));
       first ??= operationLink(parsed);
@@ -160,7 +160,7 @@ test("full-stage admission and expiry preserve another run's outstanding fetched
     const feed = ParseResponseSchema.parse(await (await post("parse", { links: [operationLink(feedFetch)] }, external)).json());
     if (feed.fetch_item_type !== "feed") throw new Error("Recorded source must produce its actual feed offers");
     const article = FetchResponseSchema.parse(await (await post("fetch", {
-      fetch_item_type: "article", links: [operationLink(feed)], offer_id: feed.offers[0]!.offer_id,
+      fetch_item_type: "article", links: [operationLink(feed)], candidate_id: feed.offers[0]!.candidate_id,
     }, external)).json());
     const held = stageStore(fixture.inputs).fetchedDocument(article);
     expect(held?.document.body).not.toBeNull();

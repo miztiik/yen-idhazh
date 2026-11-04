@@ -1,6 +1,6 @@
 # Feed planner ledgers
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 
 Which data does each feed planner ledger retain?
 
@@ -304,7 +304,7 @@ stage fails.
 | --- | --- | --- |
 | M1 | `schema_version` | File metadata declaring the current row format |
 | M2 | `run_id`, `attempt`, `date` | Execution identity and its UTC accounting day |
-| M3 | `candidate_id` | Original offered or parsed candidate identity; null only for a harvest failure without one |
+| M3 | `candidate_id` | Required non-null lowercase hyphenated UUIDv4 for the captured article input |
 | M4 | `url_key`, `feed_id` | Canonical URL hash and supplying feed |
 | M5 | `stage`, `reason_code` | Terminal harvest failure or final screening/curation refusal |
 | M6 | `freshness_cutoff_at` | Applied UTC age cutoff, or null when no cutoff was applied |
@@ -316,7 +316,10 @@ stage fails.
 
 Rows are identified by run, attempt and candidate. Retries produce one
 terminal row per candidate and run; a recovered fetch does not leave a stale
-failure row. Grouped health counters remain the source for health totals, so
+failure row. Distinct captured inputs for one URL remain distinct rows.
+There is no nullable-identity settlement fallback. Feed refusals and malformed
+article entries do not become terminal article rows.
+Grouped health counters remain the source for health totals, so
 rejection rows are not counted again.
 See [harvesting](../architecture/sources/feed-harvesting.md#work-facts-and-failures)
 for when completed failure rows are written.

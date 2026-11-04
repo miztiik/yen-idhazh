@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { z } from "zod";
 import {
   createRootContext, CandidateRejectionRecordSchema, DiscoveredArticleRowSchema, DropReasonSchema, FeedIngestCandidateSchema,
-  HarvestDiagnosticsSchema, deriveCandidateId,
+  HarvestDiagnosticsSchema, createCandidateId,
   ScreenedCandidateSchema,
 } from "@idhazh/common-contracts";
 import { loadPlanningConfig } from "../src/config/resolve-policy";
@@ -37,20 +37,7 @@ async function inputs() {
     Bun.file(fixtureUrl).json(), Bun.file(discoveredUrl).json(),
     Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json(),
   ]);
-  // Build current strict payloads from recorded content, URLs and clocks only.
-  const recorded = fixture.candidate;
-  const candidate = FeedIngestCandidateSchema.parse({
-    date: recorded.date, traceId: recorded.traceId, run_id: recorded.run_id,
-    candidate_id: recorded.candidate_id, entry_ordinal: recorded.entry_ordinal, feed_id: recorded.feed_id,
-    source: {
-      feed_id: recorded.source.feed_id, publisher_id: recorded.source.publisher_id ?? null,
-      feed_url: recorded.source.feed_url, title: recorded.source.title,
-      status: recorded.source.status, weight: recorded.source.weight,
-    },
-    canonical_url: recorded.canonical_url, url_key: recorded.url_key, title: recorded.title,
-    categories: recorded.categories, article_text: recorded.article_text, word_count: recorded.word_count,
-    author: recorded.author, published_at: recorded.published_at, fetched_at: recorded.fetched_at,
-  });
+  const candidate = FeedIngestCandidateSchema.parse(fixture.candidate);
   expect(candidate.word_count).toBe(candidate.article_text.trim().split(/\s+/u).length);
   const observation = HarvestObservationSchema.parse(fixture.observation);
   const input: ScreeningInput = {
@@ -223,7 +210,7 @@ test("global policies change only their declared gates for every feed", async ()
   ) => screenArticleCandidates({
     ...input, candidates: [FeedIngestCandidateSchema.parse({
       ...candidate, feed_id, source: { ...candidate.source, feed_id },
-      candidate_id: deriveCandidateId(candidate.run_id, feed_id, candidate.entry_ordinal),
+      candidate_id: createCandidateId(),
       word_count: words, article_text: candidate.article_text.split(/\s+/u).slice(0, words).join(" "), published_at,
     })], observations: {}, run: input.run,
   });
@@ -287,7 +274,7 @@ test("repeated undated and far-future fetches keep the settled first discovery",
   for (const published_at of [null, "2026-11-01T00:00:00Z"]) {
     for (const run_id of ["2026-10-21-123", "2026-10-21-124"]) {
       const traceId = createRootContext().traceId;
-      const candidate_id = deriveCandidateId(run_id, candidate.feed_id, candidate.entry_ordinal);
+      const candidate_id = createCandidateId();
       const result = await screenArticleCandidates({
         ...input, candidates: [{
           ...candidate, run_id, candidate_id, traceId, published_at,
@@ -385,11 +372,11 @@ test("invalid business inputs fail without mutation while independent execution 
     ...input, observations: { [candidate.candidate_id]: { ...observation, http_status: 600, paywall: false } },
   })).rejects.toThrow("http_status");
   await expect(screenArticleCandidates({
-    ...input, observations: { [deriveCandidateId(candidate.run_id, candidate.feed_id, 99)]: observation },
+    ...input, observations: { [createCandidateId()]: observation },
   })).rejects.toThrow("observations.");
   await expect(screenArticleCandidates({
     ...input, observations: { [candidate.candidate_id]: {
-      ...observation, candidate_id: deriveCandidateId(candidate.run_id, candidate.feed_id, 99),
+      ...observation, candidate_id: createCandidateId(),
     } },
   })).rejects.toThrow("candidate_id");
   await expect(screenArticleCandidates({ ...input, candidates: [candidate, candidate] })).rejects.toThrow("candidate_id");
@@ -433,12 +420,12 @@ test("transient rejections preserve exact details, candidate identity and the UT
     { ...candidate },
   ];
   input.candidates = offers.map((offer, entry_ordinal) => ({
-    ...offer, entry_ordinal, candidate_id: deriveCandidateId(candidate.run_id, candidate.feed_id, entry_ordinal),
+    ...offer, entry_ordinal, candidate_id: createCandidateId(),
   }));
   input.discovered = { availability: "available", rows: [discovered.old] };
   const blockedId = input.candidates[3]!.candidate_id;
   input.observations = {
-    ...input.observations, [blockedId]: { ...observation, candidate_id: blockedId, http_status: 403, paywall: null },
+    [blockedId]: { ...observation, candidate_id: blockedId, http_status: 403, paywall: null },
   };
   const before = structuredClone(input);
   const result = await screenArticleCandidates(input);

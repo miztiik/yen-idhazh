@@ -1,7 +1,7 @@
 /** Which bounded candidate, harvest, discovery and run inputs can screening trust? */
 import { z } from "zod";
 import {
-  FeedIngestCandidateSchema, TraceIdSchema,
+  CandidateIdSchema, FeedIngestCandidateSchema, TraceIdSchema,
   NonNegativeSchema, RunIdSchema, Sha256Schema,
   DateStampSchema, ItemHealthFailureCodeSchema, PlannerItemFailureCodeSchema, CountSchema,
 } from "@idhazh/common-contracts";
@@ -48,7 +48,7 @@ export type ScreeningInput = {
 
 export function validateScreeningInput(input: ScreeningInput) {
   const candidates = z.array(FeedIngestCandidateSchema).parse(input.candidates);
-  const observations = z.record(Sha256Schema, HarvestObservationSchema).parse(input.observations);
+  const observations = z.record(CandidateIdSchema, HarvestObservationSchema).parse(input.observations);
   const discovered = DiscoveredEvidenceSchema.parse(input.discovered);
   const run = ScreeningRunSchema.parse(input.run);
   const planning = loadPlanningConfig(input.planning.config);

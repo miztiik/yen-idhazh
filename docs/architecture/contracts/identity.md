@@ -17,11 +17,12 @@ Table A - distinct identities
 | --- | --- | --- | --- |
 | A1 | Ledger `unit_id` | UUIDv5 from the fixed namespace and work seed | Repeatable work, unchanged across retries. |
 | A2 | Ledger `file_id` | UUIDv8 under the writer's file contract | One physical file, not an event or operation. |
-| A3 | Article, URL and offer identities | Their declared SHA-256 encodings | Content or a domain item, not an execution. |
+| A3 | Article and URL keys | Their declared SHA-256 encodings | An address or foreign domain item, not a captured input. |
 | A4 | Native TypeScript event `source + id` | Configured producer URI reference and a fresh lowercase UUIDv4 | One event occurrence; replay retains the saved envelope. |
 | A5 | Native TypeScript `traceId` | Nonzero 16 random bytes, encoded as 32 lowercase hexadecimal characters | One execution. |
 | A6 | Native TypeScript `spanId` | Nonzero 8 random bytes, encoded as 16 lowercase hexadecimal characters | One operation within that execution. |
 | A7 | Python protocol identifiers | The owning Python contract's UUID rules | Foreign caller, execution and operation identities; see section 6. |
+| A8 | Native TypeScript `candidate_id` | A fresh lowercase hyphenated UUIDv4 | One captured article input, not its URL, event or operation. |
 
 ---
 
@@ -145,9 +146,9 @@ remains independent.
 
 ## 5. Content, resource and foreign-boundary identities
 
-Business run numbers, ledger work/file identities, article/offer digests, real
-resource handles, startup handshake values and temporary-file collision guards
-keep their existing meanings. None is an alias for an event, execution or
+Business run numbers, ledger work/file identities, article address keys,
+captured candidates, real resource handles, startup handshake values and
+temporary-file collision guards keep their existing meanings. None is an alias for an event, execution or
 operation. A proposed news cluster has a domain `cluster_id`, not an event
 occurrence ID; its ULID rules are unchanged.
 
@@ -185,6 +186,28 @@ public digest identifiers, configured feed slugs and health endpoint keys
 retain their separate rules. No cross-language normalization parity is claimed.
 The [native history contract](../sources/planner-feed-history.md#raw-and-compact-copies)
 defines current-format reads and independent historical health fields.
+
+### TypeScript captured article inputs
+
+`candidate_id` identifies one article input captured in a run, from a feed
+entry or a direct URL admission. `createCandidateId` uses the native
+cryptographic UUID facility once, before preflight. `CandidateIdSchema`
+requires lowercase hyphenated UUIDv4. Preparation, retries, parsing, screening,
+selection accounting, entity evidence and failure recording carry that value;
+none recreates it.
+
+Feed inputs retain their original nonnegative `entry_ordinal`, including gaps.
+Direct inputs use null because they have no feed position. A fresh capture of
+the same URL receives another candidate ID but keeps the same address key.
+Current saved payloads retain their stored candidate when validated.
+
+Article refusals require the captured candidate even when their address is
+malformed; the URL and address hash then remain null. Feed documents and feed
+refusals have no article candidate. A UUID alone grants no permission: the
+existing producing-operation links, captured membership, source, address,
+configuration, run, attempt and one-shot claim still have to agree.
+The [operator API](../sources/feed-operator-api.md#live-document-lifetime)
+defines live ownership and the absence of restart recovery.
 
 ---
 
@@ -248,6 +271,11 @@ A query can select the resource itself. Keeping an extra address record is
 safer than merging two required parameter values. URL identity does not decide
 whether different addresses contain the same story, or whether reporting at
 one address has changed.
+
+An address can be captured more than once, while a direct input has no feed
+position. Allocating one independent candidate ID at admission preserves those
+distinct inputs without inventing a position or coupling them to later
+operations.
 
 ## See also
 

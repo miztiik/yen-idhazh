@@ -2,10 +2,10 @@
 import { z } from "zod";
 import { NonEmptySchema } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
-import { FetchedDocumentSchema } from "./planner-operation.schema";
+import { checkDocumentCandidate, FetchedDocumentSchema } from "./planner-operation.schema";
 import { OperationMetadataSchema } from "./operation-metadata.schema";
 
-export const RAW_DOCUMENT_FAILURE_VERSION = "2026-11-03" as const;
+export const RAW_DOCUMENT_FAILURE_VERSION = "2026-11-04" as const;
 const FailedObservationSchema = OperationMetadataSchema.safeExtend(
   z.strictObject(FetchedDocumentSchema.shape.observation.shape).omit({ run_id: true }).shape,
 );
@@ -15,13 +15,14 @@ export const FailedDocumentMetadataSchema = z.strictObject(FetchedDocumentSchema
   canonical_url: FetchedDocumentSchema.shape.canonical_url.nullable(),
   observation: FailedObservationSchema,
   attempt_observations: z.array(FailedObservationSchema),
-}).meta({
+}).superRefine(checkDocumentCandidate).meta({
   version: RAW_DOCUMENT_FAILURE_VERSION,
   changelog: [
-    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Keep native operation context in failed-document observations." },
+    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Require matching captured article candidates in failed-document metadata." },
+    { version: "2026-11-03", change: "Keep native operation context in failed-document observations." },
     { version: "2026-11-02", change: "Remove robots fields from failed-document metadata." },
     { version: "2026-11-01", change: "Retain request pacing measurements and effective settings." },
-    { version: "2026-11-01", change: "Project failed input to body-free diagnostic metadata." },
+    { version: "2026-11-01", change: "Earlier changes are in Git history." },
   ],
 });
 export const RawDocumentFailureSchema = OperationMetadataSchema.safeExtend({
@@ -37,10 +38,11 @@ export const RawDocumentFailureSchema = OperationMetadataSchema.safeExtend({
 }).meta({
   version: RAW_DOCUMENT_FAILURE_VERSION,
   changelog: [
-    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Identify the failed operation with native context and input links." },
+    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Retain the captured article candidate in private failure records." },
+    { version: "2026-11-03", change: "Identify the failed operation with native context and input links." },
     { version: "2026-11-02", change: "Retain target-only fetched metadata in failure artifacts." },
     { version: "2026-11-01", change: "Preserve request pacing evidence in body-free failures." },
-    { version: "2026-11-01", change: "Remove bodies and repeated run identity from failure diagnostics." },
+    { version: "2026-11-01", change: "Earlier changes are in Git history." },
   ],
 });
 export type RawDocumentFailure = z.infer<typeof RawDocumentFailureSchema>;

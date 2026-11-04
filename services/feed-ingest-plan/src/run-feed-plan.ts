@@ -233,7 +233,7 @@ async function runPlanStages(
           let article;
           try {
             article = await call("fetch", {
-              fetch_item_type: "article", links: [operationLink(parsed)], offer_id: offer.offer_id,
+              fetch_item_type: "article", links: [operationLink(parsed)], candidate_id: offer.candidate_id,
             }, FetchResponseSchema);
           } catch (error) {
             if (error instanceof PlanError && error.code === "ARTICLE_EXCLUDED") {

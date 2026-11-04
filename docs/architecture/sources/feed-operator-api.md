@@ -11,22 +11,24 @@ the delivery task restarts that application with its private delivery group.
 
 ## Independent fetch and parse endpoints
 
-`POST /api/2026-11-02/fetch` accepts an active configured `feed_id` and
+`POST /api/2026-11-04/fetch` accepts an active configured `feed_id` and
 `fetch_item_type` (`feed` or `article`). A feed request uses its configured
 URL. A direct article request also supplies its permitted operator URL.
 These requests may name their owning collection with `traceId`.
-An offered article instead supplies `offer_id` and exactly one producing
-feed-parse reference in `links`; it supplies neither a URL nor a copied feed
-identity. There is no public `source_id` alias or caller-supplied file path.
+An offered article instead supplies its captured `candidate_id` and exactly one
+producing feed-parse reference in `links`; it supplies neither a URL nor a copied feed
+identity. A direct request cannot choose a candidate ID. There is no
+`offer_id` or `source_id` alias or caller-supplied file path.
 
 The source fetcher uses native Impit with URL/name/literal-address checks,
 redirect, retry, deadline, pacing and decoded-byte controls. It fetches only
 feed and article targets, with no automatic robots retrieval or enforcement.
 Its strict response
 contains a reference and body-free outcome, not fetched bytes. A failed
-fetch remains a typed failure.
+fetch remains a typed failure. Article fetch responses include the captured
+`candidate_id`; feed responses omit it.
 
-`POST /api/2026-11-02/parse` accepts
+`POST /api/2026-11-04/parse` accepts
 `links: [{ traceId, spanId }]`, naming exactly one completed fetch operation.
 It claims that live input and checks its expected kind, configuration,
 URL hash, byte limit and business ownership, then parses without any network call.
@@ -34,9 +36,11 @@ Missing or consumed references return HTTP 404. A reference already owned by
 another parser returns HTTP 409. Malformed controls and invalid documents fail
 explicitly. Parsing releases the original downloaded body on success or failure.
 
-Feed parsing returns sanitized, body-free offers and its actual operation
-reference. Article parsing returns its own operation reference and does not
-depend on feed classification labels.
+Feed parsing returns sanitized, body-free entries in the existing `offers`
+array, each with its captured `candidate_id`, and its actual operation
+reference. Article parsing returns its own operation reference and that same
+candidate, including on an extraction refusal. It does not depend on feed
+classification labels.
 Article parse responses include a body-free `warnings` array. The saved
 observation retains actual extraction warnings, quality measurements, fetch
 evidence and typed parse failures; successful parsing does not erase them.
@@ -48,9 +52,10 @@ one global parsed result; a separate operator article URL can produce its
 own parsed result. Unrelated documents are not silently combined.
 
 Collection-owned feed parses return only pending admitted offers to the
-planner. Preflight rejections remain in the completed collection and its
-rejection ledger; no article HTTP call is needed to settle them. Standalone
-feed parses retain their existing public offer flow.
+planner. Preflight refusals remain in the completed collection's grouped
+health counts; no article HTTP call is needed to settle them. Only terminal
+download or extraction failures enter the article rejection ledger at this
+stage. Standalone feed parses retain their existing public offer flow.
 
 Combined planning and standalone document work prepare the same required
 health fields before fetching. They do not read extra request-report days or
@@ -82,9 +87,12 @@ expected result kind, active or consumed state, configuration, offer membership
 and claim, run and writer attempt are checked separately.
 
 `article_id` is the canonical URL hash called `url_key` in the retained
-ledgers. Internal candidate identity uses the supplying run, feed and
-original entry ordinal. It is not another committed article identity.
-Publisher IDs remain curated or null.
+ledgers. `candidate_id` names a
+[captured article input](../contracts/identity.md#typescript-captured-article-inputs),
+not that address. Feed inputs retain their original ordinal; direct inputs
+use null. Held article documents, their observations and private diagnostics
+carry the same captured candidate; feed documents carry null. Publisher IDs
+remain curated or null.
 
 Article and feed-document hashes use the
 [native resource address rule](../contracts/identity.md#typescript-resource-addresses).
@@ -150,6 +158,8 @@ UTC day.
 
 There is no request journal, completed fetch/parse/plan response cache, reopening
 loader or automatic re-execution. A new process cannot recover old references.
+Submitting a URL again creates new work with another candidate, even when its
+address hash is unchanged. The UUID does not reopen a consumed reference.
 Reusing an owned live operation returns HTTP 409. `Idempotency-Key` on plan,
 fetch or parse is unsupported and returns HTTP 400 before work.
 Selection still creates a fresh result that can continue through partitioning
@@ -174,7 +184,8 @@ text samples and repeated run identity are absent, not null placeholders.
 The filename carries UTC day, numeric run and attempt; observations keep hashes,
 operation relationships and complete ordered attempts without nested `run_id`.
 The outer metadata identifies the actual failed fetch or parse, not a copied
-input operation.
+input operation. Article document metadata and its observations retain the
+captured candidate; the corresponding feed fields are null.
 Response evidence and addresses follow the
 [diagnostic contract](feed-failure-diagnostics.md). An unresolved request has only its existing body-free
 error handling.
@@ -235,7 +246,7 @@ endpoint has no alias and returns ordinary HTTP 404.
 
 ## Safe-persist HTTP delivery
 
-`POST /api/2026-11-02/safe-persist-data` calls the existing verified metadata
+`POST /api/2026-11-04/safe-persist-data` calls the existing verified metadata
 adapter and `safe_persist_data`, not another Git implementation. Its strict
 request contains `runNumber`, `attempt` and `paths`, the exact completed paths
 relative to the run's state directory. The response retains the existing
@@ -299,7 +310,7 @@ recorded fixtures. The exception does not permit live source fetching in tests.
 ## Request flow
 
 The diagram shows every stage HTTP call made by
-`POST /api/2026-11-02/plan` on its trusted local listener. Every stage call
+`POST /api/2026-11-04/plan` on its trusted local listener. Every stage call
 uses actual loopback HTTP; no in-process transport substitutes for it. Selection
 uses the run's captured calculations and actual completed work but does not
 write health. The

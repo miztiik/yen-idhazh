@@ -17,7 +17,7 @@ export function readFeedOffer(inputs: PlanInputs, reference: OperationLink, offe
     || stageStore(inputs).documentRun(fetch) !== batch.context.run_id) {
     throw new PlanError("ARTIFACT_INVALID", "Article offers require their live producing feed parse", "links");
   }
-  const member = batch.offers.find(offer => offer.offer_id === offerId);
+  const member = batch.offers.find(offer => offer.candidate_id === offerId);
   const collection = collectionForRun(inputs, batch.context.run_id);
   if (collection !== undefined) {
     const offer = member === undefined ? undefined : collection.offers.get(offerId);
@@ -38,17 +38,17 @@ export function updateFeedOffer(
   if (original.context.run_id !== state.context.run_id || original.context.writer.attempt !== state.context.writer.attempt) {
     throw new PlanError("ARTIFACT_INVALID", "Article offer belongs to another run attempt", "links");
   }
-  if (currentOffer === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Article offer is not a member of this feed parse", "offer_id");
+  if (currentOffer === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Article candidate is not a member of this feed parse", "candidate_id");
   if (status === "fetched" && currentOffer.state === "fetched"
     && (fetch === undefined || currentOffer.links.length !== 1
       || operationKey(currentOffer.links[0]!) !== operationKey(fetch))) {
-    throw new PlanError("REQUEST_CONFLICT", "Article offer already has a claimed fetch", "offer_id");
+    throw new PlanError("REQUEST_CONFLICT", "Article candidate already has a claimed fetch", "candidate_id");
   }
   const links = fetch === undefined ? currentOffer.links : [operationLink(fetch)];
   const collection = collectionForRun(inputs, original.context.run_id);
   if (collection !== undefined) {
     const offer = collection.offers.get(offerId);
-    if (offer === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Article offer does not belong to this collection", "offer_id");
+    if (offer === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Article candidate does not belong to this collection", "candidate_id");
     const updated = PlannerFeedOfferSchema.parse({ ...offer, state: status, links });
     const terminal = (value: PlannerFeedOffer["state"]) => value === "parsed" || value === "rejected";
     collection.pending_offers += Number(terminal(offer.state)) - Number(terminal(status));
@@ -58,7 +58,7 @@ export function updateFeedOffer(
     return { pending_offers: collection.pending_offers };
   }
   const batch = stageStore(inputs).update("parsed", reference, ParsedFeedBatchSchema, current => {
-    const offers = current.offers.map(offer => offer.offer_id === offerId ? {
+    const offers = current.offers.map(offer => offer.candidate_id === offerId ? {
       ...offer, state: status, links,
     } : offer);
     const retained = current.candidates.filter(candidate => candidate.candidate_id !== offerId);
@@ -73,7 +73,8 @@ export function updateFeedOffer(
       observations[offerId] = result.observation;
     } else if (status === "fetched" || status === "rejected") delete evidence[offerId];
     return {
-      ...current, offers, candidates: candidates.sort((a, b) => a.entry_ordinal - b.entry_ordinal), observations, evidence,
+      ...current, offers, candidates: candidates.sort((a, b) => a.entry_ordinal === null || b.entry_ordinal === null
+        ? Number(a.entry_ordinal === null) - Number(b.entry_ordinal === null) : a.entry_ordinal - b.entry_ordinal), observations, evidence,
       input_complete: collectionForRun(inputs, state.context.run_id) === undefined
         && offers.every(offer => offer.state === "parsed" || offer.state === "rejected"),
       work_rows: state.work.rows(), exclusions: state.work.exclusions(),

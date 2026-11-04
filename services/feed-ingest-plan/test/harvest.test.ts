@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { parseHTML } from "linkedom";
 import {
   CandidateRejectionRecordSchema, DocumentWorkFactSchema, ExtractionQualitySchema,
-  FeedIngestCandidateSchema, FeedOutcomePayloadSchema, deriveCandidateId, deriveUrlKey,
+  CandidateIdSchema, FeedIngestCandidateSchema, FeedOutcomePayloadSchema, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import type { DocumentWorkFact } from "@idhazh/common-contracts";
 import { harvestFeeds, loadHarvestInputs } from "@idhazh/feed-ingest-plan/harvest-feeds";
@@ -133,7 +133,7 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
     const result = await harvestFeeds(await inputs(), context(), { transport });
     expect(result.articles[0]?.rejection).toMatchObject({
       drop_reason: "MEDIA_CONTENT", title: media[0]!.title,
-      candidate_id: deriveCandidateId(context().writer.run_id, "recorded-news", 0),
+      candidate_id: result.articles[0]!.observation.candidate_id,
       details: { media_match: "enclosure", matched_media_type_prefix: "video/" },
     });
     expect(result.articles[0]?.observation).toMatchObject({
@@ -208,8 +208,12 @@ test("public harvest returns strict full text and streamed work facts without pe
   expect(FeedIngestCandidateSchema.safeParse({ ...first, version: "2026-10-24" }).success).toBe(false);
   expect(first.date).toBe("2026-10-21");
   expect(first.fetched_at).toBe("2026-10-21T23:59:59Z");
-  expect(result.candidates[1]?.candidate_id).toBe(deriveCandidateId(runContext.writer.run_id, "recorded-news", 2));
-  expect(result.rejections[1]?.candidate_id).toBe(deriveCandidateId(runContext.writer.run_id, "recorded-news", 1));
+  expect(result.candidates[1]?.entry_ordinal).toBe(2);
+  expect(new Set(result.articles.map(row => row.observation.candidate_id)).size).toBe(5);
+  for (const article of result.articles) {
+    expect(CandidateIdSchema.safeParse(article.observation.candidate_id).success).toBe(true);
+    expect(article.observation.candidate_id).toBe(CandidateIdSchema.parse((article.candidate ?? article.rejection)!.candidate_id));
+  }
   expect(result.feed_outcomes.map(outcome => ({
     fetch: outcome.fetch_status, parse: outcome.parse_status, parsed: outcome.parsed_count,
     harvested: outcome.harvested_count, reason: outcome.rejection_reason,

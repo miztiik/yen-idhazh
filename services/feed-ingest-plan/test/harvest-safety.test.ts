@@ -1,6 +1,6 @@
 /** Exercise recorded address, sanitization and target-request failure boundaries. */
 import { expect, test } from "bun:test";
-import { FeedUrlExclusionSchema } from "@idhazh/common-contracts";
+import { createCandidateId, FeedUrlExclusionSchema } from "@idhazh/common-contracts";
 import { sanitizeText, SANITIZER_VERSION } from "../src/harvest-feeds/sanitize-text";
 import { isPublicAddress, validateTargetName } from "../src/harvest-feeds/safe-target";
 import { createSourceFetcher } from "../src/harvest-feeds/fetch-source";
@@ -63,6 +63,7 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
     const fetcher = createSourceFetcher(loaded.config.harvest, loaded.extraction, { transport });
     try {
       const result = await harvestArticle({
+        candidate_id: createCandidateId(),
         source: sourceSnapshot(loaded.sources[0]!),
         entry: { entry_ordinal: 0, title: "Refused target", link: vector.offered, categories: [], author: null, published_at: null },
       }, loaded, fetcher, context());
@@ -80,6 +81,7 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
     const matched = matchMediaArticle(vector.offered, identity.canonical_url, [], loaded.config);
     expect(matched !== null).toBe(vector.excluded);
     const article = await harvestArticle({
+      candidate_id: createCandidateId(),
       source: sourceSnapshot(loaded.sources[0]!),
       entry: { entry_ordinal: 0, title: null, link: vector.offered, categories: [], author: null, published_at: null },
     }, loaded, createSourceFetcher(loaded.config.harvest, loaded.extraction, { transport }), context());
@@ -101,13 +103,16 @@ test("malformed article inputs have no invented address or hash and make no requ
   const fetcher = createSourceFetcher(loaded.config.harvest, loaded.extraction, { transport });
   try {
     for (const link of ["not-a-url", "https://[invalid-host/"]) {
+      const candidate_id = createCandidateId();
       const result = await harvestArticle({
+        candidate_id,
         source: sourceSnapshot(loaded.sources[0]!),
         entry: { entry_ordinal: 0, title: "Malformed address", link, categories: [], author: null, published_at: null },
       }, loaded, fetcher, context());
       expect(result.rejection).toMatchObject({
-        drop_reason: "MISSING_REQUIRED_FIELDS", canonical_url: null, url_key: null,
+        drop_reason: "MISSING_REQUIRED_FIELDS", candidate_id, canonical_url: null, url_key: null,
       });
+      expect(result.observation.candidate_id).toBe(candidate_id);
     }
     expect(transport.requests).toEqual([]);
   } finally { await fetcher.close(); }

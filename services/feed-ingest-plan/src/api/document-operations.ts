@@ -1,5 +1,6 @@
 /** Claim a live document, execute its HTTP stage and release the raw body after use. */
 import { FetchRequestSchema, ParseRequestSchema } from "./operation-contracts";
+import { createCandidateId } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import {
@@ -68,8 +69,9 @@ async function executeOwnedDocumentOperation(
     }
     const business = collection?.context ?? parent?.batch.context;
     const operation = commandContext(runtime, collection?.context, parent === null ? [] : [parent.batch]);
+    const candidateId = request.fetch_item_type === "article" ? parent?.offer.candidate_id ?? createCandidateId() : null;
     const record = captureDocumentContext(inputs, { ...runtime, ...operation },
-      business === undefined ? undefined : { ...business, ...operation });
+      business === undefined ? undefined : { ...business, ...operation }, candidateId);
     store.beginFetch(record);
     const begin = performance.now();
     let retain = false;

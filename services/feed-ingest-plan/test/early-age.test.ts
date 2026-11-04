@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import {
   FeedHealthStateRowContract, FeedIngestCandidateSchema, SelectedArticlesArtifactSchema,
-  deriveCandidateId, deriveUrlKey,
+  CandidateIdSchema, createCandidateId, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import { harvestFeeds } from "../src/harvest-feeds/harvest-pool";
@@ -117,7 +117,9 @@ test("preflight uses the global age ceiling, inclusive boundary and future toler
       preflight_freshness: { timing_source: "published_at", timing_at: items[0]!.date },
     });
     expect(result.candidates.map(row => row.entry_ordinal)).toEqual([1, 2, 3, 4, 5, 9, 10]);
-    expect(result.candidates.every(row => row.candidate_id === deriveCandidateId(run.writer.run_id, row.feed_id, row.entry_ordinal))).toBe(true);
+    expect(result.candidates.every(row => CandidateIdSchema.safeParse(row.candidate_id).success)).toBe(true);
+    expect(new Set(result.articles.map(row => row.observation.candidate_id)).size).toBe(11);
+    expect(result.articles.every(row => row.observation.candidate_id === (row.candidate ?? row.rejection)?.candidate_id)).toBe(true);
     expect(result.discovered_candidates.map(row => row.url_key)).toContain(deriveUrlKey(publishedUrl));
     expect(result.discovered_candidates.map(row => row.url_key)).toContain(deriveUrlKey(settledUrl));
     expect(result.discovered_candidates.map(row => row.url_key)).not.toContain(deriveUrlKey(blockedUrl));
@@ -167,7 +169,7 @@ test("empty RSS and Atom category labels stay valid through candidate and select
     const entries = [...await parseFeed(rss), ...await parseFeed(atom)];
     const candidates = entries.map((entry, ordinal) => FeedIngestCandidateSchema.parse({
       date: recorded.date, run_id: recorded.run_id, traceId: response.traceId,
-      candidate_id: deriveCandidateId(recorded.run_id, article.feed_id, ordinal), entry_ordinal: ordinal,
+      candidate_id: createCandidateId(), entry_ordinal: ordinal,
       feed_id: article.feed_id, source: sourceSnapshot(configured.sources[0]!),
       canonical_url: article.canonical_url, url_key: article.url_key, title: entry.title ?? article.title,
       article_text: article.article_text, word_count: article.article_text.split(/\s+/).length,

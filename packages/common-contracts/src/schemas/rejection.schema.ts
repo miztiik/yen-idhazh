@@ -1,7 +1,7 @@
 /** Validate one transient terminal exclusion before reducing it to body-free grouped counts. */
 import { z } from "zod";
 import {
-  CountSchema, DateStampSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema,
+  CandidateIdSchema, CountSchema, DateStampSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema,
   RejectionStageSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, checkUrlIdentity, reject,
 } from "./primitives";
 import { ArticleFetchEvidenceSchema, HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
@@ -69,19 +69,17 @@ export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (key
   PRESS_RELEASE: ["content_evidence", "sample_chars_limit"],
   LINK_HEAVY: ["content_evidence", "max_link_density", "max_list_items", "words_found", "list_word_limit"],
 };
-export const CANDIDATE_REJECTION_VERSION = "2026-11-03";
+export const CANDIDATE_REJECTION_VERSION = "2026-11-04";
 export const CandidateRejectionRecordSchema = z.strictObject({
   version: z.literal(CANDIDATE_REJECTION_VERSION).default(CANDIDATE_REJECTION_VERSION), date: DateStampSchema, traceId: TraceIdSchema,
   feed_id: SlugSchema, feed_url: UrlSchema, subject: z.enum(["feed", "article"]),
-  candidate_id: Sha256Schema.nullable(), url_key: Sha256Schema.nullable(), canonical_url: UrlSchema.nullable(),
+  candidate_id: CandidateIdSchema.nullable(), url_key: Sha256Schema.nullable(), canonical_url: UrlSchema.nullable(),
   title: z.string().nullable(), categories: z.array(z.string()), stage: RejectionStageSchema,
   drop_reason: DropReasonSchema, details: RejectionDetailsSchema, rejected_at: TimestampSchema,
 }).superRefine((value, ctx) => {
   const article = value.subject === "article";
-  const harvestFailure = article && value.stage === "harvest-feeds"
-    && HarvestArticleFailureReasonSchema.safeParse(value.drop_reason).success;
-  if ((!article && value.candidate_id !== null) || (article && value.candidate_id === null && !harvestFailure)) {
-    reject(ctx, "Only a harvest article failure can omit its candidate identity");
+  if (article === (value.candidate_id === null)) {
+    reject(ctx, "Article rejections require a captured candidate; feed rejections have none", ["candidate_id"]);
   }
   for (const field of ["url_key", "canonical_url", "title"] as const) {
     if (!article && value[field] !== null) reject(ctx, `Feed exclusions have no ${field}`, [field]);
@@ -115,10 +113,10 @@ export const CandidateRejectionRecordSchema = z.strictObject({
 }).meta({
   version: CANDIDATE_REJECTION_VERSION,
   changelog: [
-    { version: CANDIDATE_REJECTION_VERSION, change: "Associate rejections with their producing execution." },
+    { version: CANDIDATE_REJECTION_VERSION, change: "Require the captured UUIDv4 identity for every article refusal." },
+    { version: "2026-11-03", change: "Associate rejections with their producing execution." },
     { version: "2026-11-02", change: "Remove robots evidence and inapplicable settled-failure reasons." },
     { version: "2026-11-02", change: "Replace tier and allocation refusals with the global known-age ceiling." },
-    { version: "2026-11-01", change: "Retain request pacing evidence in fetch rejections." },
     { version: "2026-10-28", change: "Earlier changes are in git." },
   ],
 });

@@ -4,13 +4,14 @@ import { SCREENED_ARTICLE_VERSION } from "../version";
 import { FeedIngestCandidateSchema } from "./candidate.schema";
 import { EffectiveFeedPolicySchema } from "./policy.schema";
 import { PlannerHarvestObservationSchema, PlannerDiscoveredEvidenceSchema } from "./planner-stage.schema";
-import { CountSchema, FiniteSchema, NonEmptySchema, NonNegativeSchema, Sha256Schema, SlugSchema, reject } from "./primitives";
+import { CandidateIdSchema, CountSchema, FiniteSchema, NonEmptySchema, NonNegativeSchema, Sha256Schema, SlugSchema, reject } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 
 const screeningMetadata = {
   version: SCREENED_ARTICLE_VERSION,
   changelog: [
-    { version: SCREENED_ARTICLE_VERSION, change: "Require measured substance and source-weight policy without tier allocation." },
+    { version: SCREENED_ARTICLE_VERSION, change: "Carry captured UUIDv4 input identities through screening and selection." },
+    { version: "2026-11-02", change: "Require measured substance and source-weight policy without tier allocation." },
   ],
 };
 
@@ -59,7 +60,7 @@ export const ScreenedCandidateSchema = z.strictObject({
 export type ScreenedCandidate = z.infer<typeof ScreenedCandidateSchema>;
 
 export const NumericalSelectionInputSchema = z.strictObject({
-  candidate_id: Sha256Schema,
+  candidate_id: CandidateIdSchema,
   url_key: Sha256Schema,
   feed_id: SlugSchema,
   website_group: NonEmptySchema.regex(/\S/u),
@@ -68,7 +69,7 @@ export const NumericalSelectionInputSchema = z.strictObject({
 export type NumericalSelectionInput = z.infer<typeof NumericalSelectionInputSchema>;
 
 export const NumericalSelectionOutputSchema = z.strictObject({
-  candidate_id: Sha256Schema,
+  candidate_id: CandidateIdSchema,
   marginal_score: FiniteSchema,
   domain_diversity_penalty: FiniteSchema.nonpositive(),
   feed_diversity_penalty: FiniteSchema.nonpositive(),

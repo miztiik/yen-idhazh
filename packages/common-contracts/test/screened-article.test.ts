@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import {
   AdmittedArticleFreshnessSchema, FeedIngestCandidateSchema, NumericalSelectionInputSchema,
   NumericalSelectionOutputSchema, RawArticleFreshnessSchema, ScreenedCandidateSchema,
-  createRootContext, deriveCandidateId, deriveUrlKey,
+  createRootContext, createCandidateId, deriveUrlKey,
 } from "../src/index";
 
 const unknownTiming = { timing_at: null, timing_source: "unknown", age_hours: null, recency_bonus: 0 } as const;
@@ -42,7 +42,7 @@ test("screened candidates bind retained counts to the original parsed count with
   const canonical_url = "https://article.example/story";
   const candidate = FeedIngestCandidateSchema.parse({
     date: "2026-11-02", traceId: createRootContext().traceId, run_id: "2026-11-02-1",
-    candidate_id: deriveCandidateId("2026-11-02-1", "recorded-feed", 0), entry_ordinal: 0,
+    candidate_id: createCandidateId(), entry_ordinal: 0,
     feed_id: "recorded-feed", source: {
       feed_id: "recorded-feed", feed_url: "https://feed.example/rss", publisher_id: null,
       title: "Recorded feed", status: "active", weight: 1,
@@ -70,7 +70,7 @@ test("screened candidates bind retained counts to the original parsed count with
 
 test("numerical records contain identity and finite cached scores, never article text", () => {
   const input = {
-    candidate_id: "a".repeat(64), url_key: "b".repeat(64), feed_id: "recorded-feed",
+    candidate_id: createCandidateId(), url_key: "b".repeat(64), feed_id: "recorded-feed",
     website_group: "article.example", base_score: -2,
   };
   expect(NumericalSelectionInputSchema.parse(input)).toEqual(input);

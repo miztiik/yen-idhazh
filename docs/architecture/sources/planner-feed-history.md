@@ -106,6 +106,11 @@ format, which retains queries under the
 Older discovery and selected formats are refused under the existing current-only
 full-row rule. They are not rehashed, aliased or rewritten. This identity change
 does not restrict independently usable historical health fields.
+Current rejected-article rows use `2026-11-04` and require a non-null
+[captured candidate UUID](../contracts/identity.md#typescript-captured-article-inputs).
+Their logical key remains run, attempt and candidate. Full-row reads and
+compaction refuse the former nullable digest format; they do not fill missing
+identity or reinterpret it as an address.
 Retired outcome or check-result values are gaps for those fields only.
 Valid request counters and supported saved calculations remain independently
 usable; removed robots counters are not required for request completeness.

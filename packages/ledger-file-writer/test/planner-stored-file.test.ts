@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { RejectedArticleRowContract, RejectedArticleRowSchema, REJECTED_ARTICLE_VERSION, deriveCandidateId, deriveUrlKey } from "@idhazh/common-contracts";
+import { RejectedArticleRowContract, RejectedArticleRowSchema, REJECTED_ARTICLE_VERSION, deriveUrlKey } from "@idhazh/common-contracts";
 import {
   describeObjectSchema, digestRows, persistLedger, readPlannerParquet, readStoredPlannerParquet,
   PlannerUnsupportedFormatError,
@@ -27,7 +27,7 @@ const storedSchema = z.object(RejectedArticleRowSchema.shape).omit({
 function row() {
   return RejectedArticleRowSchema.parse({
     run_id: `${day}-1`, attempt: 1, date: day,
-    candidate_id: deriveCandidateId(`${day}-1`, "fixture-feed", 0),
+    candidate_id: "00000000-0000-4000-8000-000000000001",
     url_key: deriveUrlKey("https://example.org/article"), feed_id: "fixture-feed",
     stage: "curate-article-portfolio", reason_code: "REJECTED_GLOBAL_CAPACITY_REACHED",
     freshness_cutoff_at: null,

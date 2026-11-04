@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { parseHTML } from "linkedom";
-import { PLANNER_API_PREFIX, deriveCandidateId, readArticleEntities } from "@idhazh/common-contracts";
+import { PLANNER_API_PREFIX, readArticleEntities } from "@idhazh/common-contracts";
 import { createPlanApp } from "../src/api/server";
 import { articleEntitiesFilename, articleEntitiesPath } from "../src/selected-artifact-path";
 import { requestPlannerHttp } from "../scripts/feed-ingest-plan-http-client";
@@ -69,9 +69,12 @@ test("full sanitized body names survive later failure, artifact preparation and 
     expect(records).toHaveLength(1);
     const entity = records[0];
     if (entity === undefined) throw new Error("Expected the article's entity record");
+    const articleFetch = fixture.events.find(event => event.data.operation === "fetch"
+      && event.data.details.document_kind === "article" && event.data.phase === "completed");
+    expect(articleFetch).toBeDefined();
     expect(entity).toMatchObject({
       run_id: result.summary.run_id, attempt: 3, status: "complete",
-      candidate_id: deriveCandidateId(result.summary.run_id, "recorded-news", 0),
+      candidate_id: articleFetch!.data.details.candidate_id,
       title_status: "complete", body_status: "complete",
     });
     for (const name of [

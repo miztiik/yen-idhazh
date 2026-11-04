@@ -8,7 +8,7 @@ import {
   FeedIngestEventSchema, FeedIngestEventDataSchema, FileEnvelopeSchema, PlannerFileEnvelopeSchema, PlannerStoredFileEnvelopeSchema,
   PlannerLedgerNameSchema, PLANNER_ROW_SCHEMA_VERSIONS,
   REASON_STAGES, REQUIRED_DETAILS, RejectionDetailsSchema,
-  SourceSnapshotSchema, WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
+  SourceSnapshotSchema, WriterIdentitySchema, CandidateIdSchema, createCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, FetchAttemptSchema, OPERATION_VERSION,
   RecordedInstantSchema, TimestampSchema,
   FEED_INGEST_CANDIDATE_VERSION, PARSED_FEED_BATCH_VERSION,
@@ -39,7 +39,7 @@ const source = SourceSnapshotSchema.parse({
 function candidate() {
   return FeedIngestCandidateSchema.parse({
     date: day, traceId: createRootContext().traceId, run_id: run,
-    candidate_id: deriveCandidateId(run, source.feed_id, 0), entry_ordinal: 0,
+    candidate_id: createCandidateId(), entry_ordinal: 0,
     feed_id: source.feed_id, source,
     canonical_url: url, url_key: deriveUrlKey(url), title: "An article", categories: [],
     article_text: "A recorded article.", word_count: 3, author: null,
@@ -126,13 +126,14 @@ describe("rejection evidence", () => {
       http_status: 200, fetch_failure: null, error_code: null,
       pacing_time_ms: 0, pacing_settings: null,
     };
+    const candidate_id = createCandidateId();
     const transient = CandidateRejectionRecordSchema.parse({
-      ...rejection(), version: CANDIDATE_REJECTION_VERSION, candidate_id: null, title: null,
+      ...rejection(), version: CANDIDATE_REJECTION_VERSION, candidate_id, title: null,
       stage: "harvest-feeds", drop_reason: "EXTRACT_EMPTY", details: evidence,
     });
     expect(transient.details).toMatchObject(evidence);
     const row = {
-      run_id: run, attempt: 1, date: day, candidate_id: null, url_key: deriveUrlKey(url),
+      run_id: run, attempt: 1, date: day, candidate_id, url_key: deriveUrlKey(url),
       feed_id: source.feed_id, stage: "harvest-feeds" as const, reason_code: "EXTRACT_EMPTY",
       freshness_cutoff_at: null, ...evidence,
     };
@@ -146,6 +147,9 @@ describe("rejection evidence", () => {
     }).error_code).toBe("ECONNRESET");
     expect(RejectedArticleRowSchema.meta()?.version).toBe(REJECTED_ARTICLE_VERSION);
     expect(CandidateRejectionRecordSchema.meta()?.version).toBe(CANDIDATE_REJECTION_VERSION);
+    expect(CandidateRejectionRecordSchema.safeParse({ ...transient, candidate_id: null }).success).toBe(false);
+    expect(RejectedArticleRowSchema.safeParse({ ...row, candidate_id: null }).success).toBe(false);
+    expect(RejectedArticleRowSchema.safeParse({ ...row, candidate_id: digest }).success).toBe(false);
   });
 
   test("records the configured body limit and only the observed lower bound", () => {
@@ -174,7 +178,7 @@ describe("rejection evidence", () => {
   test("refuses malformed fetch evidence and missing non-harvest candidate identities", () => {
     const base = rejection();
     const row = {
-      run_id: run, attempt: 1, date: day, candidate_id: digest, url_key: digest,
+      run_id: run, attempt: 1, date: day, candidate_id: base.candidate_id, url_key: digest,
       feed_id: "example", stage: "curate-article-portfolio",
       reason_code: "REJECTED_GLOBAL_CAPACITY_REACHED", freshness_cutoff_at: null,
     };
@@ -256,7 +260,7 @@ describe("rejection evidence", () => {
       "../../../tests/fixtures/contracts/rejected-article/retained-reasons.json", import.meta.url,
     )).json();
     const row = {
-      run_id: run, attempt: 1, date: day, candidate_id: digest, url_key: digest,
+      run_id: run, attempt: 1, date: day, candidate_id: createCandidateId(), url_key: digest,
       feed_id: "example", stage: "curate-article-portfolio", freshness_cutoff_at: null,
     };
 
@@ -297,12 +301,16 @@ describe("rejection evidence", () => {
     ]) expect(ArticleContentEvidenceSchema.safeParse({ ...measured, ...invalid }).success).toBe(false);
   });
 
-  test("hashes exact canonical URL bytes and newline-separated candidate identity", () => {
+  test("hashes exact canonical URL bytes separately from each captured UUIDv4", () => {
     expect(deriveUrlKey(url)).toBe(createHash("sha256").update(url).digest("hex"));
-    expect(deriveCandidateId(run, "example", 0)).toBe(createHash("sha256").update(`${run}\nexample\n0`).digest("hex"));
-    expect(deriveCandidateId(run, "example", 0)).not.toBe(deriveCandidateId(run, "example", 1));
-    expect(() => deriveCandidateId(run, "example", -1)).toThrow();
-    expect(() => deriveCandidateId(run, "example", 0.5)).toThrow();
+    const first = candidate();
+    const next = candidate();
+    expect(CandidateIdSchema.parse(first.candidate_id)).toBe(first.candidate_id);
+    expect(first.candidate_id).not.toBe(next.candidate_id);
+    expect(first.url_key).toBe(next.url_key);
+    expect(FeedIngestCandidateSchema.parse(first)).toEqual(first);
+    expect(FeedIngestCandidateSchema.safeParse({ ...first, entry_ordinal: -1 }).success).toBe(false);
+    expect(FeedIngestCandidateSchema.safeParse({ ...first, entry_ordinal: 0.5 }).success).toBe(false);
     expect(FeedIngestCandidateSchema.safeParse({ ...candidate(), candidate_id: digest }).success).toBe(false);
     expect(FeedIngestCandidateSchema.safeParse({ ...candidate(), vertical: "other" }).success).toBe(false);
   });
@@ -524,11 +532,11 @@ describe("current planner contracts", () => {
     const request = {
       links: [createRootContext()].map(({ traceId, spanId }) => ({ traceId, spanId })),
       fetch_item_type: "article",
-      offer_id: digest,
+      candidate_id: createCandidateId(),
     };
     expect(FetchRequestSchema.safeParse(request).success).toBe(true);
     expect(FetchRequestSchema.safeParse({ ...request, source_id: source.feed_id }).success).toBe(false);
-    expect(FetchRequestSchema.safeParse({ ...request, offer_id: undefined }).success).toBe(false);
+    expect(FetchRequestSchema.safeParse({ ...request, candidate_id: undefined }).success).toBe(false);
     expect(FetchRequestSchema.safeParse({ ...request, url }).success).toBe(false);
   });
 
@@ -576,7 +584,7 @@ describe("current planner contracts", () => {
     const offered = ParsedFeedBatchSchema.parse({
       ...parsed, input_complete: false,
       offers: [{
-        offer_id: digest, source,
+        candidate_id: createCandidateId(), source,
         entry: { entry_ordinal: 0, title: null, link: url, categories: [], author: null, published_at: null },
         state: "pending", links: [],
       }],
@@ -630,7 +638,7 @@ describe("current planner contracts", () => {
     expect(SelectedFeedBatchSchema.safeParse({ ...selected, version: "2026-10-27" }).success).toBe(false);
     expect(PartitionedFeedBatchSchema.parse({ ...selected, strategy: "none", dispatch_count: 1, work: [0] }).version).toBe(selected.version);
     const observation = PlannerHarvestObservationSchema.parse({
-      candidate_id: digest, http_status: null, fetch_failure: null, paywall: null,
+      candidate_id: createCandidateId(), http_status: null, fetch_failure: null, paywall: null,
       paywall_evidence: "not-observed", extraction: "not-attempted", observed_at: context.now,
     });
     expect(observation.diagnostics).toBeNull();

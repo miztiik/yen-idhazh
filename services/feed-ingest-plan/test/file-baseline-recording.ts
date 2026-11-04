@@ -152,7 +152,7 @@ async function runRecordingAt(root: string) {
       const parsed = await post("parse", { links: [operationLink(fetched)] }, ParseResponseSchema);
       assert(parsed.fetch_item_type === "feed");
       for (const offer of parsed.offers) {
-        const article = await post("fetch", { links: [operationLink(parsed)], offer_id: offer.offer_id,
+        const article = await post("fetch", { links: [operationLink(parsed)], candidate_id: offer.candidate_id,
           fetch_item_type: "article" }, FetchResponseSchema);
         await post("parse", { links: [operationLink(article)] }, ParseResponseSchema);
       }

@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseHTML } from "linkedom";
 import {
-  createRootContext, FeedHealthStateRowContract, FeedHealthStateRowSchema, RejectedArticleRowContract, RejectedArticleRowSchema,
+  createCandidateId, createRootContext, FeedHealthStateRowContract, FeedHealthStateRowSchema, RejectedArticleRowContract, RejectedArticleRowSchema,
 } from "@idhazh/common-contracts";
 import { readExecutionEvidence, renderWorkflowPlanMarkdown, writeWorkflowReport } from "../scripts/feed-ingest-plan-report";
 import { readReportFailureEvidence } from "../scripts/feed-ingest-plan-report-evidence";
@@ -29,7 +29,7 @@ async function terminalRows(f: Awaited<ReturnType<typeof plannerOutputRecording>
   )).json())[0]!;
   return ["forbidden", "dns"].map((name, index) => RejectedArticleRowSchema.parse({
     ...base, run_id: f.response.run_id, attempt: f.response.attempt,
-    candidate_id: index === 0 ? "a".repeat(64) : null, url_key: String(index + 1).repeat(64),
+    candidate_id: createCandidateId(), url_key: String(index + 1).repeat(64),
     stage: "harvest-feeds", reason_code: index === 0 ? "FETCH_FAILED_HTTP" : "FETCH_FAILED",
     freshness_cutoff_at: null,
     ...recorded.cases.find((entry: { name: string }) => entry.name === name).expected,
