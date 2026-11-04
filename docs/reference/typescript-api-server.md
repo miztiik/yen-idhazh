@@ -65,6 +65,9 @@ its own invocation. Cancellation, stop signals and parent-pipe loss close the
 owned application. Shutdown aborts admitted requests, awaits module cleanup,
 closes profile workers and parser work, and reaps only the owned child.
 Original work failure and cleanup failure remain separate.
+The supervisor also drains the child diagnostic stream before closing its
+mirror. A nonzero shutdown of a live ready child remains a cleanup failure
+even when the caller already failed.
 
 ## Diagnostics and current-task evidence
 

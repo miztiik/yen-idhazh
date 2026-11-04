@@ -39,3 +39,6 @@ await runApiServer({ restorePlanner: async startup => {
     },
   };
 } });
+if (await Bun.file(join(process.cwd(), "recorded-cleanup-failure")).exists()) {
+  await Bun.file(join(process.cwd(), "missing-cleanup-input.json")).json();
+}

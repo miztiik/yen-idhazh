@@ -10,7 +10,7 @@ import { collectWorkflowFiles } from "../scripts/feed-ingest-plan-current-files"
 import { metadataRegistrations } from "./host-recordings";
 import { source } from "./harvest-recordings";
 import { writePlannerOutputRecording } from "./planner-output-recordings";
-import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { PLANNER_API_PREFIX, PlannerFailureSchema } from "@idhazh/common-contracts";
 import { readServerEvidence } from "../../typescript-api/src/read-server-evidence";
 import { writeWorkflowReport } from "../scripts/feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
@@ -187,6 +187,30 @@ test("a short real child failure preserves existing native diagnostics and its o
     expect(collected.paths.length).toBeGreaterThan(0);
     expect(await Bun.file(join(fixture.directory, "recorded-request.json")).exists()).toBe(false);
     await assertReleased(fixture.inputs.settings.listener.port);
+  } finally { await fixture.close(); }
+});
+
+test("a real caller failure retains a separate nonzero child cleanup failure", async () => {
+  const fixture = await recordedPlannerProcess();
+  try {
+    await writeFile(join(fixture.directory, "recorded-cleanup-failure"), "Fail a real post-stop input read");
+    let failure: unknown;
+    try {
+      await invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
+        serverEntry: fixture.serverEntry,
+        beforePlan: async () => {
+          await Bun.file(join(fixture.evidence, "missing-caller-input.json")).json();
+        },
+      });
+    } catch (error) { failure = error; }
+    if (!(failure instanceof Error) || !("failure" in failure)) throw new Error("The real caller failure must be retained");
+    const captured = PlannerFailureSchema.parse(failure.failure);
+    expect(captured).toMatchObject({ operation: "workflow", system_code: "ENOENT" });
+    expect(captured.causes).toContainEqual(expect.objectContaining({ operation: "listener-close" }));
+    const [server] = await readServerEvidence(fixture.evidence);
+    expect(server).toMatchObject({ startup: "ready", shutdown: "failed", exit_code: 1,
+      cleanup_error_code: "PLANNER_CLEANUP_FAILED" });
+    await assertReleased(fixture.startup.settings.listener.port);
   } finally { await fixture.close(); }
 });
 

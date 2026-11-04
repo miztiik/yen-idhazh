@@ -119,6 +119,7 @@ export async function superviseHttpChild<T>(input: {
   } finally {
     const close = async () => {
       input.observe?.({ phase: "stopping", pid: child.pid });
+      const wasRunning = child.exitCode === null;
       cancellation.abort(new Error("HTTP child supervisor stopped"));
       let pipeFailure: unknown;
       // EOF also closes the child if its supervisor disappears.
@@ -130,7 +131,9 @@ export async function superviseHttpChild<T>(input: {
         const [code] = await beforeDeadline(Promise.all([child.exited, closingPipe]),
           controls.shutdown_timeout_ms, `${input.kind}_SHUTDOWN_TIMEOUT`);
         input.observe?.({ phase: "stopped", pid: child.pid, exit_code: code });
-        if (completed && code !== 0) throw new PlanError(`${input.kind}_CHILD_EXIT`, `HTTP child shutdown failed with status ${code}`);
+        if (code !== 0 && (completed || (ready && wasRunning))) {
+          throw new PlanError(`${input.kind}_CHILD_EXIT`, `HTTP child shutdown failed with status ${code}`);
+        }
       } catch (error) {
         cleanupFailure = error;
         if (error instanceof PlanError && error.code === `${input.kind}_SHUTDOWN_TIMEOUT`) {
@@ -143,18 +146,18 @@ export async function superviseHttpChild<T>(input: {
           }
           catch (reapError) { cleanupFailure = new AggregateError([error, reapError], "HTTP child could not be reaped"); }
         }
-        try { await beforeDeadline(diagnostics, controls.forced_exit_timeout_ms, `${input.kind}_DIAGNOSTICS_TIMEOUT`); }
-        catch (error) {
-          cleanupFailure = cleanupFailure === undefined ? error
-            : new AggregateError([cleanupFailure, error], "HTTP child diagnostics and cleanup failed");
-        }
-        if (cleanupFailure !== undefined || pipeFailure !== undefined) input.observe?.({ phase: "cleanup_failed", pid: child.pid });
+      }
+      try { await beforeDeadline(diagnostics, controls.forced_exit_timeout_ms, `${input.kind}_DIAGNOSTICS_TIMEOUT`); }
+      catch (error) {
+        cleanupFailure = cleanupFailure === undefined ? error
+          : new AggregateError([cleanupFailure, error], "HTTP child diagnostics and cleanup failed");
       }
       try { await child.stdout.cancel(); }
       catch (error) {
         cleanupFailure = cleanupFailure === undefined ? error
           : new AggregateError([cleanupFailure, error], "HTTP child drain and stream cleanup failed");
       }
+      if (cleanupFailure !== undefined || pipeFailure !== undefined) input.observe?.({ phase: "cleanup_failed", pid: child.pid });
       if (cleanupFailure !== undefined && pipeFailure !== undefined) {
         throw new AggregateError([cleanupFailure, pipeFailure], "HTTP child cleanup failed");
       }
