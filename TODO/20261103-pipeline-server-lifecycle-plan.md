@@ -396,6 +396,9 @@ Table O - Alternatives not selected
   - `services/hhem-evaluator/tests/test_native_launch.py`
   - `services/hhem-evaluator/tests/native_launch_child.py`
   - `services/hhem-evaluator/tests/test_pipeline_measurement.py`
+  - `services/hhem-evaluator/tests/test_machine_task.py` - actual serialized Python-to-Bun-to-Hono startup, HTTP results and safe failure controls.
+  - `services/hhem-evaluator/tests/machine_task_cases.py` - bounded staged configuration and owned loopback reservations.
+  - `services/hhem-evaluator/tests/test_pipeline_control.py` - real failed-child reader/exit scheduling and late cause recovery.
   - `services/hhem-evaluator/tests/test_pipeline_report.py`
   - `services/hhem-evaluator/tests/test_host_profile_reader_parity.py`
   - `services/hhem-evaluator/tests/host-profile-bridge.ts`

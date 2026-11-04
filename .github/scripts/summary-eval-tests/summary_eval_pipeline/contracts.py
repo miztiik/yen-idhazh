@@ -28,6 +28,8 @@ WORKFLOW_VERSION: Final = "2026-11-04"
 WorkflowVersion = Literal["2026-11-04"]
 PhaseName = Literal["generation", "evaluation"]
 ServiceName = Literal["api", "hhem", "host", "llama", "caller"]
+# Cause codes are protocol identifiers with the same wire bound as context identities.
+SourceCode = Annotated[str, Field(pattern=r"^[A-Z][A-Z0-9_]{0,127}$")]
 FailureCode = Literal[
     "INPUT_INVALID",
     "INPUT_TOO_LARGE",
@@ -99,6 +101,10 @@ class WorkflowContract(NativeContract):
             "changelog": [
                 {
                     "version": WORKFLOW_VERSION,
+                    "change": "Retain safe machine-helper failure cause codes.",
+                },
+                {
+                    "version": WORKFLOW_VERSION,
                     "change": "Record preparation outcomes and safe asset failures.",
                 },
                 {
@@ -108,10 +114,6 @@ class WorkflowContract(NativeContract):
                 {
                     "version": WORKFLOW_VERSION,
                     "change": "Retain the selected run when generation has not started.",
-                },
-                {
-                    "version": WORKFLOW_VERSION,
-                    "change": "Name shared API shutdown separately from HHEM worker exit.",
                 },
                 {
                     "version": "2026-11-02",
@@ -128,6 +130,7 @@ class PipelineError(WorkflowContract):
     service: ServiceName
     http_status: int | None = None
     message: str
+    source_code: SourceCode | None = None
 
     @model_validator(mode="after")
     def require_safe_message(self) -> Self:

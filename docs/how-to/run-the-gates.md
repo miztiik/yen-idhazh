@@ -304,13 +304,27 @@ Push-Location ..\..
 uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
 Pop-Location
 uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
-uv run --frozen pytest tests/test_pipeline_preparation.py tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
+uv run --frozen pytest tests/test_pipeline_preparation.py tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_machine_task.py tests/test_pipeline_control.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
 ```
 
 The host compatibility test exports the actual native schemas through Bun,
 including the consumed shared-server outcomes. The generation checks bind the
 source, answer, model and run before HHEM can start. Separate declaration
 invocations and the named form-default check keep model selection real.
+The machine-task regression launches the actual Python owner, Bun helper and
+machine-only Hono child over private pipes and a generated loopback listener
+configuration. It sends the serialized Python run including its source revision,
+then verifies real readiness, native fingerprint/profile output and confirmed
+stop against the native server evidence. External metadata is disabled only
+in its generated test configuration; no article text, model weights or
+external network access is used. Invalid settings, an occupied listener and
+invalid close data must retain
+safe failure codes without adopting an unrelated process or losing cancelled
+measurements. These actual collector cases run on Linux, not as Windows passes.
+Control scheduling cases use the actual coded failed-child subprocess and its
+real parser. Barriers expose queue timeout just before validated controls arrive
+and delayed recovery during cleanup; both original and cleanup causes must
+survive without another process implementation or a longer timeout.
 Preparation cases call the existing runtime utility's missing-token refusal
 before network access, verify step-only secret wiring, and retain real missing
 input/authentication failures with both model phases not run. They download no
@@ -318,7 +332,7 @@ assets and create no replacement model files.
 Run workflow Ruff from the repository root so its backend source discovery
 matches the repository-wide gate; an explicit config path from the service
 directory changes how Ruff resolves relative source roots.
-Missing preparation fails; it does not skip. Caller integration composes the
+Missing preparation fails; it does not skip. Recorded-boundary integration composes the
 real ASGI handler/controller and the native host handler/collector over test
 pipes with named proc fixtures. It opens no HTTP listener. The existing
 Windows asyncio socket-pair limitation above also applies to these cases.

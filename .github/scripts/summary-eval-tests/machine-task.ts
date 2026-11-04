@@ -33,6 +33,22 @@ const StartupSchema = z.strictObject({
   }),
 });
 const StopSchema = z.strictObject({ kind: z.literal("stop"), outcome: z.enum(["success", "error"]) });
+const CauseCodeSchema = z.string().regex(/^[A-Z][A-Z0-9_]{0,127}$/)
+  .refine(value => value === value.trim());
+
+function projectFailureCode(error: unknown, fallback: string): string {
+  if (error instanceof Error && "code" in error) {
+    const code = CauseCodeSchema.safeParse(error.code);
+    if (code.success) return code.data;
+  }
+  return fallback;
+}
+
+function reportFailure(code: string, stage: string, httpStatus: number | null): void {
+  process.stderr.write(JSON.stringify({
+    event: "summary_machine_failed", code, stage, http_status: httpStatus,
+  }) + "\n");
+}
 
 export async function* readPackets(stream: Readable, limit: number): AsyncGenerator<unknown> {
   let pending = Buffer.alloc(0);
@@ -61,8 +77,6 @@ async function main() {
   const runtime = join(root, pipeline.output_directory);
   const packets = readPackets(process.stdin, pipeline.control_max_bytes);
   const startup = StartupSchema.parse((await packets.next()).value);
-  const probes = await loadConfig(join(runtime, "config", "host-probes.json"));
-  const service = ServiceSettingsSchema.parse(await Bun.file(join(runtime, "config", "feed-ingest-plan-service.json")).json());
   const cancellation = new AbortController();
   const abort = () => cancellation.abort(new Error("Machine task parent stopped"));
   process.once("SIGINT", abort);
@@ -77,18 +91,33 @@ async function main() {
   let server: z.infer<typeof ServerEvidenceSchema> | null = null;
   const context = createRootContext();
   let currentEvidence = false;
+  let announced = false;
+  let stage = "MACHINE_SETTINGS_INVALID";
+  let httpStatus: number | null = null;
+  let errorCode: string | null = null;
+  let cleanupErrorCode: string | null = null;
   try {
+    const probes = await loadConfig(join(runtime, "config", "host-probes.json"));
+    const service = ServiceSettingsSchema.parse(await Bun.file(join(
+      runtime, "config", "feed-ingest-plan-service.json",
+    )).json());
     // The native evidence filename is reused; a failed restart must not read the previous phase.
+    stage = "MACHINE_EVIDENCE_INVALID";
     await unlink(join(runtime, "logs", "hono-server-machine.json")).catch(error => {
       if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
     });
     currentEvidence = true;
+    stage = "MACHINE_API_STARTUP_INVALID";
     await superviseApiTask({
       root: runtime, kind: "TYPESCRIPT_API", signal: cancellation.signal,
       startup: {
         group: "machine", nonce: randomUUID(), state_root: "host", directory: "logs",
         server: HonoServerSettingsSchema.parse(await Bun.file(join(runtime, "config", "hono-server.json")).json()),
-        supervision: service.supervision, run: { ...startup.run, context },
+        supervision: service.supervision,
+        run: {
+          run_id: startup.run.run_id, attempt: startup.run.attempt,
+          started_at: startup.run.started_at, context,
+        },
       },
       request: async (origin, signal) => {
         async function call<T>(path: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
@@ -100,6 +129,7 @@ async function main() {
             headers: { "Content-Type": "application/json", ...writeTraceContext(context) },
             body: JSON.stringify(body),
           });
+          httpStatus = response.status;
           if (response.status !== 200 || response.body === null) throw new Error("Machine API failed");
           const reader = response.body.getReader();
           let size = 0;
@@ -118,6 +148,8 @@ async function main() {
           } finally { reader.releaseLock(); }
           return schema.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
         }
+        stage = "MACHINE_FINGERPRINT_FAILED";
+        httpStatus = null;
         const hardware = await call(FINGERPRINT_PATH, {
           date: startup.run.started_at.slice(0, 10),
           writer: {
@@ -125,8 +157,11 @@ async function main() {
             job: null, shard: 0, producer: "telemetry.silicon",
           },
         }, FingerprintResponseSchema);
+        stage = "MACHINE_PROCESS_IDENTITY_INVALID";
+        httpStatus = null;
         const target = readProcessIdentity(process.pid, probes.max_proc_bytes, {});
         if (target.reason !== null) throw new Error("Owned machine-task identity is unavailable");
+        stage = "MACHINE_PROFILE_START_FAILED";
         const started = await call(START_TASK_PROFILE_PATH, {
           identity: startup.context,
           target: { pid: target.value.pid, start_ticks: target.value.start_ticks },
@@ -145,8 +180,12 @@ async function main() {
             reason: hardware.status === "written" ? null : "configured_off",
           }),
         });
+        announced = true;
+        stage = "MACHINE_CONTROL_CLOSED";
+        httpStatus = null;
         const command = await closing;
         if (command === null) throw new Error("Explicit profile close was not received");
+        stage = "MACHINE_PROFILE_STOP_FAILED";
         const result = await call(STOP_TASK_PROFILE_PATH, {
           handle: started.handle, outcome: command.outcome,
         }, StopTaskProfileResponseSchema);
@@ -156,9 +195,21 @@ async function main() {
           throw new Error("Closed profile does not match the admitted operation");
         }
         profile = result.profile;
+        stage = "MACHINE_API_CLEANUP_FAILED";
+        httpStatus = null;
       },
     });
-  } catch { clean = false; }
+  } catch (error) {
+    clean = false;
+    const code = projectFailureCode(error, stage);
+    if (announced && stage === "MACHINE_API_CLEANUP_FAILED") cleanupErrorCode = code;
+    else errorCode = code;
+    reportFailure(code, stage, httpStatus);
+    if (!announced) emit({
+      version: VERSION, kind: "failed", service: "host", startup_id: startup.startup_id,
+      pid: process.pid, error_code: code, http_status: httpStatus,
+    });
+  }
   finally {
     try {
       if (!currentEvidence) throw new Error("No current machine server evidence was started");
@@ -168,10 +219,20 @@ async function main() {
       if (server.run_id !== startup.run.run_id || server.attempt !== startup.run.attempt
         || server.started_at !== startup.run.started_at) throw new Error("Stale machine evidence");
       profile ??= server.reported_profiles.at(-1) ?? null;
-    } catch { clean = false; server = null; }
+      cleanupErrorCode ??= server.cleanup_error_code;
+    } catch {
+      clean = false;
+      server = null;
+      if (errorCode === null || announced) cleanupErrorCode ??= "MACHINE_EVIDENCE_INVALID";
+    }
+    if (cleanupErrorCode !== null) {
+      clean = false;
+      reportFailure(cleanupErrorCode, "MACHINE_CLEANUP_FAILED", null);
+    }
     emit({
       version: VERSION, kind: "stopped", service: "host", startup_id: startup.startup_id,
       pid: process.pid, clean, worker_exit_confirmed: null,
+      error_code: errorCode, cleanup_error_code: cleanupErrorCode, http_status: httpStatus,
       machine: profile === null ? null : projectMachineProfile(profile),
       server: server === null ? null : {
         server_name: server.server_name, startup: server.startup, startup_ms: server.startup_ms,
@@ -189,5 +250,8 @@ async function main() {
 
 if (import.meta.main) {
   try { await main(); }
-  catch { process.exitCode = 1; }
+  catch (error) {
+    reportFailure(projectFailureCode(error, "MACHINE_SETUP_FAILED"), "MACHINE_SETUP_FAILED", null);
+    process.exitCode = 1;
+  }
 }

@@ -53,6 +53,11 @@ Python owns only HTTP orchestration and the small native result projection.
 Named schema checks bind the consumed field types, requiredness, nullability
 and vocabularies to the actual TypeScript models.
 
+The caller projects only the server's declared `run_id`, `attempt`,
+`started_at` and operation `context`. Python's captured source revision stays
+in the fingerprint writer's domain context, not in the strict listener-run
+metadata. The shared server schema is not relaxed to accept extra fields.
+
 Run-local configuration copies enable the existing whole-machine CPU/RAM
 instruments without changing committed defaults. Reads name only their required
 files; there is no configuration-tree scan or second collector.
@@ -136,6 +141,19 @@ An unopenable or unwritable mirror warns and records that the log is unavailable
 It does not cancel useful model work. Actual worker, API or cleanup failures
 still fail the task. There is no log-volume quota, rotation framework or custom
 retention period. Hard runner termination cannot promise a final upload.
+
+Machine-helper failures emit brief body-free caller diagnostics to stderr and,
+once startup identity is validated, a private failure packet with a safe cause
+code and any observed HTTP status. Python validates the owned identity before
+retaining that code in phase errors and reports. Fast child exit does not erase
+an already received failure packet. Original work and cleanup causes remain
+separate; raw exception text and invalid configuration values are not emitted.
+After observing child exit, the owner drains its control reader within the
+existing forced-stop bound before falling back to a generic exit error. Cleanup
+also retains a startup cause recovered later, even when readiness was never
+reached, alongside the actual cleanup cause.
+No Hono log or server outcome is invented when validation stops the helper
+before its supervisor starts.
 
 Only the declared generation result and escaped report contain the generated
 summary. The report re-reads the bounded event for its source disclosure.

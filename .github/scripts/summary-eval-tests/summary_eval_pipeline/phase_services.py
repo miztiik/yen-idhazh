@@ -50,6 +50,7 @@ class PhaseServices:
         work_complete: bool,
     ) -> None:
         if self.host is not None:
+            host_cleanup: PipelineError | None = None
             try:
                 if self.host.ready is not None:
                     self.host.finish_measurement("success" if work_complete else "error")
@@ -65,11 +66,32 @@ class PhaseServices:
                 self.host_stopped = True
             except WorkflowError as error:
                 self.host_stopped = False
-                errors.append(error.error)
+                host_cleanup = error.error
             except OSError:
                 self.host_stopped = False
-                errors.append(WorkflowError("SERVICE_STOP_FAILED", "cleanup", "host").error)
+                host_cleanup = WorkflowError("SERVICE_STOP_FAILED", "cleanup", "host").error
+            if self.host.startup_failure is not None:
+                failure = self.host.startup_failure
+                original = WorkflowError(
+                    "STARTUP_FAILED",
+                    "startup",
+                    "host",
+                    failure.http_status,
+                    source_code=failure.error_code,
+                ).error
+                if original not in errors:
+                    errors.append(original)
             if self.host.stopped is not None:
+                if self.host.ready is not None and self.host.stopped.error_code is not None:
+                    errors.append(
+                        WorkflowError(
+                            "HOST_FAILED",
+                            "host",
+                            "host",
+                            self.host.stopped.http_status,
+                            source_code=self.host.stopped.error_code,
+                        ).error
+                    )
                 self.machine = self.host.stopped.machine
                 if self.host.stopped.server is not None:
                     self.servers.append(
@@ -77,6 +99,8 @@ class PhaseServices:
                             self.host.stopped.server.model_dump_json()
                         )
                     )
+            if host_cleanup is not None:
+                errors.append(host_cleanup)
         if self.api is not None:
             try:
                 self.api.close(shared.shutdown_timeout_ms + settings.worker.forced_stop_ms)

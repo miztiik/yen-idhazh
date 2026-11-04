@@ -4,18 +4,24 @@ from typing import Annotated, Literal
 
 from hhem_evaluator.contracts.base import (
     CommitId,
-    NativeContract,
     PositiveCount,
     Uuid4,
 )
 from hhem_evaluator.contracts.service_settings import StartupContext
 from pydantic import Field, RootModel
 
-from .contracts import Hardware, PhaseName, RunIdentity, WorkflowVersion
+from .contracts import (
+    Hardware,
+    PhaseName,
+    RunIdentity,
+    SourceCode,
+    WorkflowContract,
+    WorkflowVersion,
+)
 from .host_reader import HonoServerReader, MachineUsage
 
 
-class StartupPacket(NativeContract):
+class StartupPacket(WorkflowContract):
     version: WorkflowVersion
     startup_id: Uuid4
     context: StartupContext
@@ -27,7 +33,7 @@ class StartupPacket(NativeContract):
     run: RunIdentity | None = None
 
 
-class ControlPacket(NativeContract):
+class ControlPacket(WorkflowContract):
     version: WorkflowVersion
 
 
@@ -59,6 +65,9 @@ class ServiceStopped(ControlPacket):
     machine: MachineUsage | None = None
     server: HonoServerReader | None = None
     log_available: bool | None = None
+    error_code: SourceCode | None = None
+    cleanup_error_code: SourceCode | None = None
+    http_status: int | None = Field(default=None, ge=100, le=599)
 
 
 class ServiceStartFailed(ControlPacket):
@@ -66,6 +75,8 @@ class ServiceStartFailed(ControlPacket):
     service: Literal["api", "host"]
     startup_id: Uuid4
     pid: PositiveCount
+    error_code: SourceCode | None = None
+    http_status: int | None = Field(default=None, ge=100, le=599)
 
 
 class ServiceControl(
