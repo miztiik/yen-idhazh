@@ -180,6 +180,7 @@ jobs:
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
+          bun install --frozen-lockfile --cwd packages/data-delivery
 
       - name: Prepare the existing host profile implementation
         working-directory: .
@@ -205,9 +206,11 @@ jobs:
         run: uv run --frozen python scripts/prepare-unieval-resources.py --root ../..
 
       - name: Lint native service contracts
-        run: |
-          uv run --frozen ruff check src tests scripts
-          uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-tests
+        run: uv run --frozen ruff check src tests scripts
+
+      - name: Lint workflow tasks from the repository root
+        working-directory: .
+        run: uv run --project services/hhem-evaluator --frozen ruff check .github/scripts/summary-eval-tests
 
       - name: Check strict service types
         run: uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline

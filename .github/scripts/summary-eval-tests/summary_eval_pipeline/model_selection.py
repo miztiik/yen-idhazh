@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from hhem_evaluator.contracts.llama_settings import LlamaSettings
+from pydantic import TypeAdapter
+
 from idhazh.config import refuse_a_model_nothing_could_run
 from idhazh.contracts.app_config import AppConfig, ModelsFile
 from idhazh.contracts.knobs.models import ModelEntry, ModelsConfig
-from pydantic import TypeAdapter
 from utilities.model_refs import list_model_files, resolve_under_config
 
 from .contracts import ModelSelection

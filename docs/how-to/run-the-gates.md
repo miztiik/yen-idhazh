@@ -222,11 +222,14 @@ directory:
 npm --prefix .\frontend run test:changed -- --list
 bun install --frozen-lockfile --cwd .\packages\common-contracts
 bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
+bun install --frozen-lockfile --cwd .\packages\data-delivery
 Set-Location .\services\hhem-evaluator
 uv sync --frozen --group dev
 uv run --frozen python .\scripts\prepare-unieval-resources.py --root '..\..'
 uv run --frozen ruff check src tests scripts
-uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-tests
+Push-Location ..\..
+uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
+Pop-Location
 uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
 uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test_event_ids.py tests/test_llama_contracts.py tests/test_server_events.py
 ```
@@ -286,8 +289,9 @@ the captured model identity. Existing full-suite merge-candidate gates remain un
 The [service reference](../reference/hhem-evaluation-api.md) owns the fields
 and dependency boundary.
 
-For the manual caller, prepare the existing locked host APIs from the
-repository root, then run the named modules from the service directory:
+For the manual caller, complete the native preparation above, then prepare the
+existing locked host APIs and shared application from the repository root.
+Run the named modules from the service directory:
 
 ```powershell
 bun install --frozen-lockfile --cwd .\services\host-probes
@@ -296,7 +300,9 @@ bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
 bun install --frozen-lockfile --cwd .\services\typescript-api
 Set-Location .\services\hhem-evaluator
 uv run --frozen ruff check src tests scripts
-uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-tests
+Push-Location ..\..
+uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
+Pop-Location
 uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
 uv run --frozen pytest tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_pipeline_report.py tests/test_manual_workflow.py
 ```
@@ -305,6 +311,9 @@ The host compatibility test exports the actual native schemas through Bun,
 including the consumed shared-server outcomes. The generation checks bind the
 source, answer, model and run before HHEM can start. Separate declaration
 invocations and the named form-default check keep model selection real.
+Run workflow Ruff from the repository root so its backend source discovery
+matches the repository-wide gate; an explicit config path from the service
+directory changes how Ruff resolves relative source roots.
 Missing preparation fails; it does not skip. Caller integration composes the
 real ASGI handler/controller and the native host handler/collector over test
 pipes with named proc fixtures. It opens no HTTP listener. The existing

@@ -16,8 +16,9 @@ from hhem_evaluator.contracts.base import (
     Sha256,
 )
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
-from idhazh.contracts.app_config import ModelsFile
 from pydantic import AwareDatetime, ConfigDict, model_validator
+
+from idhazh.contracts.app_config import ModelsFile
 
 from .host_reader import HardwareRow, MachineUsage, measurement_complete
 

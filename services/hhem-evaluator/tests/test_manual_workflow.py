@@ -104,6 +104,7 @@ def test_native_ci_retains_resources_and_prepares_the_actual_shared_api() -> Non
     text = (REPOSITORY / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     selected = text[text.index("  hhem-evaluator:\n") : text.index("\n  gates:\n")]
     assert "bun install --frozen-lockfile --cwd services/typescript-api" in selected
+    assert "bun install --frozen-lockfile --cwd packages/data-delivery" in selected
     assert "uv sync --frozen --group dev" in selected and "--extra model" not in selected
     assert "scripts/prepare-unieval-resources.py --root ../.." in selected
     assert "uv run --frozen pytest" in selected

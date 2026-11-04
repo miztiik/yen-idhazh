@@ -13,8 +13,9 @@ import httpx
 from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.contracts.base import NonblankText
 from hhem_evaluator.contracts.server_event import ApiDiagnosticData
-from idhazh.llm.server import server_argv
 from pydantic import BaseModel, ConfigDict
+
+from idhazh.llm.server import server_argv
 from utilities.model_runtime import BIN_DIR, SERVER_BINARY, verify_model_files
 
 from .contracts import LoadedModel, PreparedRun, ServerOutcome

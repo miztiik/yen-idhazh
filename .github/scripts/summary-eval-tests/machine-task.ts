@@ -76,11 +76,13 @@ async function main() {
   let clean = true;
   let server: z.infer<typeof ServerEvidenceSchema> | null = null;
   const context = createRootContext();
+  let currentEvidence = false;
   try {
     // The native evidence filename is reused; a failed restart must not read the previous phase.
     await unlink(join(runtime, "logs", "hono-server-machine.json")).catch(error => {
       if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
     });
+    currentEvidence = true;
     await superviseApiTask({
       root: runtime, kind: "TYPESCRIPT_API", signal: cancellation.signal,
       startup: {
@@ -159,6 +161,7 @@ async function main() {
   } catch { clean = false; }
   finally {
     try {
+      if (!currentEvidence) throw new Error("No current machine server evidence was started");
       const file = Bun.file(join(runtime, "logs", "hono-server-machine.json"));
       if (file.size > pipeline.max_response_bytes) throw new Error("Oversized server evidence");
       server = ServerEvidenceSchema.parse(await file.json());

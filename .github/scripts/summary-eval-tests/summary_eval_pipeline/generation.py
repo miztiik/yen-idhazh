@@ -4,6 +4,8 @@ import json
 
 import httpx
 from hhem_evaluator.contracts.llama_result import LlamaErrorResult, LlamaResult
+from pydantic import BaseModel, ConfigDict, RootModel
+
 from idhazh.llm.server import (
     PROBE_FOLLOW_UP,
     PROBE_REPLY,
@@ -16,7 +18,6 @@ from idhazh.llm.server import (
     template_kwargs,
     turn_markers_from_renderings,
 )
-from pydantic import BaseModel, ConfigDict, RootModel
 
 from .contracts import (
     WORKFLOW_VERSION,
