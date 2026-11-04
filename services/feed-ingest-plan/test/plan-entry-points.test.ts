@@ -59,7 +59,7 @@ test("one recorded API request writes a valid selected artifact", async () => {
     })));
     const events = FeedIngestEventSchema.array().parse((await readFile(
       join(fixture.directory, "recorded-events.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line)));
-    expect(events.filter(event => event.operation === "plan" && event.phase === "started")).toHaveLength(1);
+    expect(events.filter(event => event.data.operation === "plan" && event.data.phase === "started")).toHaveLength(1);
     expect(await Bun.file(join(fixture.directory, "recorded-progress.json")).json()).toMatchObject({
       eventType: "FEED_FETCH_COMPLETED", before_completion: true,
     });
@@ -118,6 +118,7 @@ test("one awaited CLI invocation writes one valid result", async () => {
     "--cli", "--article-limit=1"], {
     cwd: fixture.directory, stdin: new Blob([JSON.stringify(fixture.startup)]), stdout: "pipe", stderr: "pipe",
   });
+
   try {
     const [stdout, stderr, exit] = await Promise.all([
       new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
@@ -130,7 +131,6 @@ test("one awaited CLI invocation writes one valid result", async () => {
     expect(summary.selected_count).toBe(1);
     expect(summary.dispatch_count).toBe(0);
     expect(summary.strategy).toBe("none");
-    expect(summary.batches.partition_batch_id).toBeUndefined();
     expect(summary.selection_started_at_utc).toBe("2026-10-22T00:00:00Z");
     expect(summary.evaluated_at).toBe(fixture.startup.runtime.captured_at.replace(/\.\d{3}Z$/, "Z"));
     expect(JSON.stringify(summary)).not.toContain("article_text");
@@ -145,7 +145,45 @@ test("one awaited CLI invocation writes one valid result", async () => {
     expect(summary.selection_metrics).toEqual(summarizeSelectionMetrics(artifact.articles, true));
     const events = FeedIngestEventSchema.array().parse((await readFile(
       join(fixture.directory, "recorded-events.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line)));
-    expect(events.filter(event => event.operation === "plan" && event.phase === "started")).toHaveLength(1);
+    expect(events.filter(event => event.data.operation === "plan" && event.data.phase === "started")).toHaveLength(1);
+  } finally {
+    if (child.exitCode === null) { child.kill(); await child.exited; }
+    await fixture.close();
+  }
+});
+
+test("the actual awaited CLI fails for a report failure without rewriting completed planning", async () => {
+  const fixture = await recordedPlannerProcess(undefined, { reserveListener: false });
+  fixture.startup.planning.partition.enabled = false;
+  const child = Bun.spawn([process.execPath, fileURLToPath(new URL("./planner-cli-recording.ts", import.meta.url)),
+    "--cli", "--article-limit=1"], {
+    cwd: fixture.directory, stdin: new Blob([JSON.stringify(fixture.startup)]), stdout: "pipe", stderr: "pipe",
+    env: { ...process.env, IDHAZH_TEST_REPORT_CLOCK_FAILURE: "1" },
+  });
+  try {
+    const [stdout, stderr, exit] = await Promise.all([
+      new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+    ]);
+    expect(exit, stderr).toBe(2);
+    const summary = PlanResponseSchema.parse(JSON.parse(stdout.trim()));
+    expect(summary).toMatchObject({
+      planning_complete: true, status: "completed", failure_code: null, selected_count: 1,
+      health: { status: "failed", failure: { error_type: "RangeError" } },
+      failure: { error_type: "RangeError" },
+    });
+    const runs = await Promise.all(summary.files.plan_runs!.files.map(file =>
+      readPlannerParquet(join(fixture.inputs.outputRoot, file.path), "plan-runs", PlanRunRowContract)));
+    expect(runs.flatMap(file => file.rows)).toMatchObject([{
+      status: "completed", failure_code: null, selected_count: 1,
+      api_timings: summary.api_timings, duration_ms: summary.duration_ms,
+    }]);
+    const artifact = SelectedArticlesArtifactSchema.parse(await Bun.file(
+      join(fixture.directory, summary.selected_articles_artifact!)).json());
+    expect(artifact.articles).toHaveLength(1);
+    const events = FeedIngestEventSchema.array().parse((await readFile(
+      join(fixture.directory, "recorded-events.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line)));
+    expect(events.filter(event => event.data.operation === "plan" && event.data.phase === "failed")).toHaveLength(1);
+    expect(events.some(event => event.data.operation === "plan" && event.data.phase === "completed")).toBe(false);
   } finally {
     if (child.exitCode === null) { child.kill(); await child.exited; }
     await fixture.close();

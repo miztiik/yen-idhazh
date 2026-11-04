@@ -1,6 +1,5 @@
 /** Read terminal fetch, extraction and persistence refusals from their real native boundaries. */
 import { expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
@@ -15,6 +14,8 @@ import { recordedPersistenceBatch } from "./persistence-recordings";
 import { executePersistence } from "../src/api/persistence-operation";
 import { writeRows } from "./partition-fixtures";
 import { executeSelection } from "../src/api/selection-operation";
+import { operationLink } from "../src/api/operation-context";
+import type { OperationLink } from "@idhazh/common-contracts";
 
 async function failureCases() {
   const response = z.object({ status: z.int().optional(), body: z.string().optional(), error: z.string().optional() });
@@ -42,10 +43,10 @@ async function rejectedRows(recorded: Awaited<ReturnType<typeof recordedPlan>>) 
 }
 async function capture(recorded: Awaited<ReturnType<typeof recordedPlan>>, urls: string[]) {
   const app = createPlanTestServer(recorded.inputs, recorded.runtime);
-  const batches: string[] = [];
+  const references: OperationLink[] = [];
   try {
     for (const url of urls) {
-      const request = { request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news",
+      const request = { feed_id: "recorded-news",
         fetch_item_type: "article", url };
       const response = await app.request(`${PLANNER_API_PREFIX}/fetch`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request),
@@ -55,15 +56,14 @@ async function capture(recorded: Awaited<ReturnType<typeof recordedPlan>>, urls:
       if (fetched.body_sha256 !== null) {
         const parsed = await app.request(`${PLANNER_API_PREFIX}/parse`, {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
-            request_id: randomUUID(), fetch_request_id: fetched.fetch_request_id,
-            article_id: fetched.article_id, correlation_id: fetched.correlation_id,
+            links: [operationLink(fetched)],
           }),
         });
         expect(parsed.status).toBe(200);
-        batches.push(ParseResponseSchema.parse(await parsed.json()).batch_id);
+        references.push(operationLink(ParseResponseSchema.parse(await parsed.json())));
       }
     }
-    return batches;
+    return references;
   } finally { await app.close(); }
 }
 
@@ -72,7 +72,6 @@ test("terminal HTTP, DNS, TLS, timeout and extraction failures retain their nati
   const recorded = await recordedPlan();
   try {
     delete recorded.runtime.run_number;
-    delete recorded.runtime.correlation_id;
     recorded.inputs.harvest.extraction.max_retries = 0;
     recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
     for (const entry of cases) if (entry.responses) recorded.transport.recordings.responses[entry.url] = entry.responses;
@@ -99,9 +98,9 @@ test("persistence retains both refusal stages with an actual empty selected arti
   try {
     recorded.inputs.harvest.config.triage.min_words = 10_000;
     recorded.inputs.harvest.config.partition.enabled = false;
-    const [parsedId] = await capture(recorded, ["https://news.example/not-found", "https://news.example/second"]);
-    const { batch } = await executeSelection({ batch_id: parsedId }, recorded.inputs, recorded.runtime);
-    const result = await executePersistence({ batch_id: batch.batch_id }, recorded.inputs, recorded.runtime);
+    const [parsed] = await capture(recorded, ["https://news.example/not-found", "https://news.example/second"]);
+    const { batch } = await executeSelection({ links: [parsed] }, recorded.inputs, recorded.runtime);
+    const result = await executePersistence({ links: [operationLink(batch)] }, recorded.inputs, recorded.runtime);
     const actual = await rejectedRows(recorded);
     expect(actual).toHaveLength(2);
     expect(new Set(actual.map(row => row.candidate_id)).size).toBe(2);
@@ -137,8 +136,8 @@ test("completed rejection bytes survive a real selected-ledger write failure", a
     await mkdir(parent, { recursive: true });
     await writeFile(join(parent, "selected-articles"), "not a directory");
     const batch = await recordedPersistenceBatch(recorded.inputs, recorded.runtime);
-    await expect(executePersistence({ batch_id: batch.batch_id }, recorded.inputs, recorded.runtime)).rejects.toThrow();
+    await expect(executePersistence({ links: [operationLink(batch)] }, recorded.inputs, recorded.runtime)).rejects.toThrow();
     expect(await readFile(path)).toEqual(before);
-    expect(recorded.events.at(-1)).toMatchObject({ operation: "persist", phase: "failed" });
+    expect(recorded.events.at(-1)?.data).toMatchObject({ operation: "persist", phase: "failed" });
   } finally { await recorded.close(); }
 });

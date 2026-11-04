@@ -10,10 +10,10 @@ Table A - scope and execution
 | ID | Field | Value |
 | --- | --- | --- |
 | A1 | Intent | Give TypeScript event, execution and operation identifiers one meaning, using CloudEvents, OpenTelemetry names and W3C Trace Context without building a tracing system. |
-| A2 | Hard scope - in | Shared metadata schemas and creation/propagation helpers; planner APIs, stages, workers, ledgers and callers; host profiling; summarizer; phased workflow; functional coverage; removal of retired implementations and documentation. |
+| A2 | Hard scope - in | Shared metadata schemas and creation/propagation helpers; planner APIs, stages, workers, ledgers and callers; one complete `/plan` response containing the feed report, with collection cleanup owned by the request; host profiling; summarizer; phased workflow; functional coverage; removal of retired implementations and documentation. |
 | A3 | Chosen strategy | CloudEvents `id` identifies an event occurrence. `traceId` identifies an execution. `spanId` identifies an operation. `parentSpanId` identifies its enclosing operation. `links` identify input dependencies. These meanings follow the standards in Table S. |
 | A4 | Read rule | Changed TypeScript APIs and ledger families are current-only. No migration, backfill, old-field aliases, dual readers or retrospective ID conversion. Cut over each producer with its consumers. Existing route paths stay. |
-| A5 | Runtime boundary | Metadata creation, validation and propagation only. No tracing SDK, provider, recorder, exporter, collector, automatic instrumentation, trace output files, telemetry flag or export-buffer settings. Do not modify CLAUDE.md or AGENTS.md. |
+| A5 | Runtime boundary | Metadata creation, validation and propagation, plus the complete planner-result and cleanup contract in F9-F12. Keep existing feed/article scheduling. No tracing SDK, provider, recorder, exporter, collector, automatic instrumentation, trace output files, telemetry flag or export-buffer settings. Do not modify CLAUDE.md or AGENTS.md. |
 | A6 | ESCALATE triggers | 1. A Python-owned protocol must change. 2. Identifiers become authorization or a new idempotency promise. 3. Runtime tracing or export is needed. 4. A changed field has a consumer outside the named file scopes. 5. A functional flow needs another persisted metadata field not declared here. |
 | A7 | Parallelism | At most three independent rows after the foundation: planner, summarizer and phased workflow. Host follows planner because they edit the same proof scripts. Serialize overlapping source paths. |
 | A8 | Delivery | One nested project session per PR. The coordinator verifies each candidate and merges serially after its required checks pass. This document replaces the earlier UUID-consolidation and tracing-runtime proposals. |
@@ -33,6 +33,7 @@ Table B - explicit exclusions and costs
 | B5 | Building topic clustering | The proposal's domain names become clear, but no clustering capability ships. | The clustering implementation plan. |
 | B6 | Changing protected instruction files | Existing rules remain unchanged. This design needs no telemetry-SDK exception. | A separate explicit instruction for the named file. |
 | B7 | Converting retained old TypeScript records | Old artifacts using removed fields are not converted. Existing unsupported-input/partial-history rules apply; known history can be incomplete until current records accumulate. Do not silently manufacture replacement references or delete history. | A separate historical-data requirement. |
+| B8 | Replacing the feed/article scheduler or claiming a speed increase | Feed and article work already overlap. A feed worker still waits for its articles before taking another feed; changing that could retain more pending work without increasing throughput. | Paired runs on the target runner, with hardware recorded, the same source bytes and fixed request/parser limits, showing that earlier feed admission reduces total completion time. |
 
 ## 1. Status reckoner
 
@@ -41,7 +42,7 @@ Table C - PR sequence
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Define shared event and operation metadata | - | A | DONE | stunning-lamp | - | Shared metadata |
-| C2 | 2 | Convert the planner and every planner caller | 1 | B | IN-FLIGHT | - | - | - |
+| C2 | 2 | Convert the planner and every planner caller | 1 | B | IN-FLIGHT | effective-pancake | - | Planner metadata |
 | C3 | 3 | Convert host profiling without breaking Python control | 1, 2 | C | PENDING | - | - | - |
 | C4 | 4 | Convert summarizer event metadata | 1 | B | IN-FLIGHT | - | - | - |
 | C5 | 5 | Convert phased workflow events and continuation | 1 | B | DONE | jubilant-telegram | - | Workflow metadata |
@@ -83,7 +84,7 @@ Table D - exact names, paths and meanings
 | D29 | Python startup UUID fields and evaluator `correlationId` | Keep at the foreign boundary only | Existing foreign field names unchanged | Do not reinterpret UUIDs as trace IDs. Strip unneeded foreign metadata when constructing native host identity. No old TypeScript API reader is added. |
 | D30 | Progress `version`, `run_id`, `operation`, `phase`, `details` | Move | Event `data.version`, `data.run_id`, `data.operation`, `data.phase`, `data.details` | Keep progress behavior, bounded safe details and measurements. Add an envelope, not new timing features. |
 | D31 | Health row/read projection `check_request_id` | Replace | Row/projection `links[0].traceId`, `links[0].spanId` | Reference the logical feed-check fetch operation, not a network retry. Use `links: []` when no check is known; otherwise exactly one link. Carry it unchanged with the same historical check so rest/reliability logic does not count it twice. Historical links do not require a live store entry. |
-| D32 | Saved response / `FeedPlanResult.batches` with parsed/selection/partition batch IDs | Delete | No replacement receipt object | These expired live references are not needed after execution. Keep the actual output file receipts, selected identities and assignments. Live stage calls use F5/F6's links. |
+| D32 | Saved response / `FeedPlanResult.batches` with parsed/selection/partition batch IDs | Delete | No replacement receipt object or public continuation handle | Finish the report and collection cleanup inside the combined request under F9-F12. Keep actual file receipts, selected identities, assignments and the completed report. Only running stage calls use F5/F6's input links. |
 | D33 | `DocumentOperationContext.request_id` and standalone run-number derivation from that UUID | Replace | Captured operation E6; existing `run_id` | Keep the current run-ID format. If no operator run number exists, use the execution's `traceId` bytes as the existing decimal random component. Do not use event IDs or allocate another UUID. |
 | D34 | Private startup `runtime.correlation_id`; runtime/run-context metadata | Replace | `runtime.traceId`, `runtime.spanId`, optional `runtime.parentSpanId`, `runtime.links`, optional `runtime.traceState` | Pass the allocated root context through the existing startup packet. Keep its independent nonce and business settings. Use a business-only projection for stage `context` under D21. |
 
@@ -114,6 +115,10 @@ Table F - exact command/result changes
 | F6 | Select/partition/persist/feed-health-state | Replace each input `batch_id` with exactly one `links` entry. Select requires parsed output; partition requires selected output; persistence requires selected/partitioned output under the existing config rule; health accepts its existing supported document/stage kinds. Retain tuning/action fields. | Each operation returns E6 plus its existing business output. Its own `spanId` is not an echo of the input. Register addressable stage output under the producing pair, without a new batch UUID. Preserve selection claims, new-run rules, immutable-result checks and finalization behavior. |
 | F7 | Collection aggregation | Hold ongoing mutable offers/work in the existing collection state, not under a separately generated parsed-batch UUID. Feed/article parse results retain their own operation references. | Completion snapshots the aggregate under F5's producing operation. Its `links` are the actual contributing parse references in execution order, without duplicates. Selection still refuses incomplete/cancelled or per-feed-only input. |
 | F8 | Worker, host and event boundaries | Worker executes D23's supplied parse context. Host start accepts business identity and optional W3C headers; stop retains its live `handle`. Event readers take a named current-format JSONL file. | Worker returns the same context; host profile carries its own operation metadata; event readers preserve event IDs/data/carriers. Disabled host profiling retains its existing unavailable result, not a fabricated operation/profile. |
+| F9 | Combined `POST /plan` and its saved result | Keep the current request controls and route prefix. Decode this request's carrier before allocating its plan operation and collection. | Use the same `PlannerRunResponseSchema` for the HTTP body, direct CLI output and saved `response.json`. Add the required `health` value in F10 without a missing-field default; retain D20's execution identity and the existing business facts, receipts and failure evidence. No live-only response schema, saved-only field projection, replacement batch object or top-level input link for a later report request. Keep `src/api/plan-response.schema.ts` as a re-export of the shared model. |
+| F10 | Combined response `health` | Keep the actual producing pair private to this invocation: selected result first, otherwise the completed global parsed aggregate, otherwise no eligible input. After finalization and run recording, call F6's `summarize` action while that input is still held. A persistence failure does not erase an otherwise valid report input. | Required `PlannerHealthOutcomeSchema`: the actual `FeedHealthStateUpdateResponseSchema` narrowed to `status: "summarized"`; or `{ status: "failed", failure: PlannerFailureSchema }`; or `null` only when no eligible completed input exists. Declare the health-result and availability schemas once in `packages/common-contracts/src/schemas/planner-response.schema.ts`; the service facade re-exports them rather than keeping copies. Preserve actual rows, request report, reliability, availability and E6 provenance. Summary does not write another health ledger receipt. Merge a report failure into the top-level request failure; the model rejects a failed report with null request failure. A failed report is not an empty or null successful report. |
+| F11 | Combined request cleanup | Once collection ownership is known, `runFeedPlan` owns release using the existing run/attempt control. Summary capture precedes release. Release is attempted in `finally`, including after planning, report, outcome-recording or cancellation failure, without reusing an aborted caller signal. | Release completes or its failure is captured before a complete response is returned. Keep successful plan facts and report data when cleanup fails. Use the existing top-level `failure` and bounded related causes for request failure; preserve the first primary cause and the cleanup cause, with explicit omission counts for excess secondary causes. If no business outcome can be produced, keep the existing safe error response and aggregate its cleanup failure. Direct stage callers retain F5's explicit lifecycle controls. |
+| F12 | Combined HTTP and CLI completion | Determine request success from the complete result, not only the planning work flag. Readiness checks remain separate from planning. | HTTP 200 requires `planning_complete` and no request `failure`; an available business outcome with planning, report or cleanup failure returns HTTP 500 in the same complete schema. Validation/unproduced errors retain their existing safe error responses. Both CLI entry points exit unsuccessfully for request failure even when planning completed. The HTTP client saves and verifies returned data; it makes no follow-up health-summary or collection-release call. Write `health.json` only from F10's actual successful summary, including when another part of the request failed. |
 
 ## 4. Binding implementation and behavior rules
 
@@ -146,6 +151,11 @@ Table H - behavior that implementation must not guess
 | H11 | Testing and removal | Use real production helpers/stores/readers with recorded inputs. Adapt useful safety/lifecycle cases. Delete old-format-only assertions rather than changing them into new spelling assertions. Manual retired-name review is allowed; do not add a source/doc grep test. |
 | H12 | News proposal | D26/D27 rename proposed columns only. Update its active schemas, mappings and examples and remove the old proposed aliases. Do not introduce a new ULID algorithm or claim a deployed news API was migrated. |
 | H13 | Existing work/file identities | Retain B1's deterministic work identity, physical-file IDs and their functional parity/retry cases. The new random operation identity does not replace content identity or ledger de-duplication. |
+| H14 | Explicit request and producer context | Load the configured planner source through `loadEventSources` in `loadPlanInputs`, not at import. Pass it with captured context to both history loggers. The plan and health routes decode their own incoming carriers through the shared codec; the supervisor injects its allocated startup context. Each invocation allocates its own plan operation and preallocates collection startup in that trace. No listener-wide mutable current context or hardcoded producer source. |
+| H15 | Result independence | `planning_complete`, run status, failure code, selected counts, assignments, file receipts and existing planning measurements remain facts about planning work. A later report or cleanup failure does not rewrite those facts or their saved run row. Top-level `failure` retains the first request/workflow failure and related causes, as in the existing workflow-failure retention path. F10 also retains its own report failure so report availability is unambiguous. Never assign a caller's span to an unknown remote operation; its `failure.execution.spanId` remains null. |
+| H16 | Report and release order | Settle required work, finalize/drain, record the run, capture F10, and then release in the request's `finally` path. Pin the real input until report capture settles. Emit the plan request's terminal progress only after report and release settle; planning measurements retain H15's separate meaning. Finalization alone remains a drain, not a release. Preserve current cancelled-work accounting and partial health writes; a cancelled-only partial input does not become a completed aggregate. After release and bounded eviction, old references cannot reopen saved files. |
+| H17 | Caller output and late failures | Validate and save the complete response, save an available successful report, and verify actual output files even for a structured HTTP 500. Keep successful receipts and report data when another write fails. A local save, verification, report-rendering or owned-child shutdown error uses existing safe failure retention without replacing a valid outcome with an unproduced-error record. It cannot leak a held collection: the server already owns release. A saved result is readable with the listener closed; its operation metadata is provenance, not a reopening instruction. |
+| H18 | Existing concurrency and Python workflow | Keep concurrent feed workers and the shared bounded article/parser work. Start a feed's offered articles without waiting for all other feeds; carry the real completed feed-parse pair into each offered fetch. Final selection still waits for required collection work. Do not change queue limits, feed admission, retries, parser scheduling or planning-duration meaning, and do not claim a throughput gain. The Python `digest.yml` path, its model requests and its host collector remain unchanged. |
 
 ## 5. Row #1 - Define shared event and operation metadata
 
@@ -200,17 +210,21 @@ Table J - row 1 rejected alternatives
 
 ## 6. Row #2 - Convert the planner and every planner caller
 
-- **Scope:** Replace planner metadata and redundant live operation IDs end-to-end while preserving work facts, lifecycle checks and actual output.
+- **Scope:** Replace planner metadata and redundant live operation IDs end-to-end, returning the plan and feed report together and releasing request-owned work without changing feed/article scheduling.
 - **Tasks:**
-  - Apply D8-D23/D30-D34 and Table F to contracts before logic. Keep `observation`/`attempt_observations`, ordered counts, HTTP failures, pacing and measured work. Replace only metadata and redundant references.
+  - Apply D8-D23/D30-D34 and Table F to contracts before logic. Declare F9-F12 in the shared response model, move its reused health-result schemas out of the service facade, and stamp the current-only contract. Keep `observation`/`attempt_observations`, ordered counts, pacing and measured work.
   - Allocate fetch/parse context before work and retain it through failure/completion; do not regenerate an ID at each observation. Replace the UUID seed helper with composition of held E6 and domain facts.
   - Re-key documents, offers and stages using E4's typed reference pair. Remove request/fetch/batch UUID generation and redundant ancestor copies. Preserve body consumption, config, stage-kind, busy/capacity, offer and run/attempt checks.
-  - Implement F1's known execution identity before collection startup, including uncertain-start lookup. Keep completion draining, pending-offer accounting, cancellation, finalization and release behavior. Snapshot the aggregate under F5/F7, not a second batch identity.
+  - Implement F1's known execution identity before collection startup, including uncertain-start lookup. Keep completion draining, pending-offer accounting, cancellation and direct-stage lifecycle controls. Snapshot the aggregate under F5/F7, not a second batch identity.
   - Wire explicit parse context through the real worker pool. Adapt deadline/cancellation cases instead of adding a tracing lifecycle.
   - Replace correlation metadata in current candidates, rejections, entities, responses, failures and startup packets. Update refinements to compare real business ownership, not trace equality.
   - Apply D31 to feed-health writers and projections; carry the same check link across history and preserve rest/reliability de-duplication. Do not introduce an old-row conversion path.
-  - Convert progress writer/reader, report, supervisor, safe-persist client/server and upload inventory together. Remove expired batch references from saved responses under D32. Upload the same application outputs as before, not new trace files.
-  - Update each named fixture through the real recording path. Remove old-format-only test assertions/helpers; keep functional coverage. Do not rewrite committed state history.
+  - Complete F9-F12 in the real planner orchestration, HTTP route and both CLI entry points. Keep routes dispatch-only. Resolve the real report input locally, preserve independent phase failures and release before returning; do not move a live reference through the client or invent another saved lookup handle. Update the named API, runner and test-guide pages for this request boundary.
+  - Apply H14 to route callbacks, startup propagation, explicit source loading and history loggers. Apply H18 to offered-article dependencies without replacing the worker schedule.
+  - Convert progress writer/reader, report, supervisor, safe-persist client/server and upload inventory together. Remove D32 and the HTTP client's old summary/release continuation. The report renderer distinguishes completed planning from a failed report or cleanup. Upload the same application outputs as before, not new trace files.
+  - Read the successful saved `response.health` for report rendering, exclusion diagnostics and earlier paused-feed evidence, not optional `health.json`. Keep null or failed health distinct from a successful report. Apply F12's request-failure exit condition to the real recorded `main()` CLI wrapper as well.
+  - Keep the current host proof truthful until row 3: derive its UUID validation from the existing host identity contract, not the deleted planner request schema. Row 3 converts the actual host producer, contract and proof together; do not fake new host metadata in row 2.
+  - Update each named fixture through the real recording path. Capture the response, actual health, all five native ledger transcripts and selected artifact from the same invocation so measured timings and receipts agree. Commit only changed outputs. Remove old-format-only test assertions/helpers; keep functional coverage. Do not rewrite committed state history.
 - **Files touched:**
   - `packages/common-contracts/src/schemas/planner-operation.schema.ts`
   - `packages/common-contracts/src/schemas/planner-stage.schema.ts`
@@ -232,9 +246,12 @@ Table J - row 1 rejected alternatives
   - `services/feed-ingest-plan/package.json`
   - `services/feed-ingest-plan/bun.lock`
   - `services/feed-ingest-plan/src/index.ts`
+  - `services/feed-ingest-plan/src/load-plan-inputs.ts`
   - `services/feed-ingest-plan/src/api/server.ts`
   - `services/feed-ingest-plan/src/api/routes/document.route.ts`
   - `services/feed-ingest-plan/src/api/routes/collection.route.ts`
+  - `services/feed-ingest-plan/src/api/routes/feed-health-state.route.ts`
+  - `services/feed-ingest-plan/src/api/routes/plan.route.ts`
   - `services/feed-ingest-plan/src/api/routes/stages.route.ts`
   - `services/feed-ingest-plan/src/api/collection-batch.ts`
   - `services/feed-ingest-plan/src/api/collection-contracts.ts`
@@ -253,6 +270,7 @@ Table J - row 1 rejected alternatives
   - `services/feed-ingest-plan/src/api/partition-operation.ts`
   - `services/feed-ingest-plan/src/api/persistence-operation.ts`
   - `services/feed-ingest-plan/src/api/plan-failure.ts`
+  - `services/feed-ingest-plan/src/api/plan-response.schema.ts`
   - `services/feed-ingest-plan/src/api/prepare-planning-health.ts`
   - `services/feed-ingest-plan/src/api/record-standalone-run.ts`
   - `services/feed-ingest-plan/src/api/selection-operation.ts`
@@ -265,6 +283,7 @@ Table J - row 1 rejected alternatives
   - `services/feed-ingest-plan/src/harvest-feeds/fetch-source.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/feed-client.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/harvest-article.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/harvest-types.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/record-rejection.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/article-parser-pool.ts`
@@ -276,6 +295,7 @@ Table J - row 1 rejected alternatives
   - `services/feed-ingest-plan/src/read-ledger-history/feed-reliability-history.ts`
   - `services/feed-ingest-plan/src/read-ledger-history/health-summary.ts`
   - `services/feed-ingest-plan/src/read-ledger-history/read-feed-health-fields.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-run-history.ts`
   - `services/feed-ingest-plan/src/recognize-article-entities.ts`
   - `services/feed-ingest-plan/src/record-article-entities.ts`
   - `services/feed-ingest-plan/src/reporting/failure-evidence-markdown.ts`
@@ -288,6 +308,9 @@ Table J - row 1 rejected alternatives
   - `services/feed-ingest-plan/src/select-articles.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-http-client.ts`
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-report-evidence.ts`
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts`
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-supervisor.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-upload-inventory.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-workflow-inputs.ts`
   - `services/feed-ingest-plan/scripts/retain-workflow-failure.ts`
@@ -296,6 +319,7 @@ Table J - row 1 rejected alternatives
   - `services/feed-ingest-plan/scripts/safe-persist-http-server.ts`
   - `services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts`
   - `services/feed-ingest-plan/test/article-failure-retention.test.ts`
+  - `services/feed-ingest-plan/test/article-entities-workflow.test.ts`
   - `services/feed-ingest-plan/test/article-source-outcome.test.ts`
   - `services/feed-ingest-plan/test/article-url-cleanup.test.ts`
   - `services/feed-ingest-plan/test/collection-http.test.ts`
@@ -305,8 +329,11 @@ Table J - row 1 rejected alternatives
   - `services/feed-ingest-plan/test/early-age.test.ts`
   - `services/feed-ingest-plan/test/failure-evidence.test.ts`
   - `services/feed-ingest-plan/test/feed-first-use.test.ts`
+  - `services/feed-ingest-plan/test/feed-ingest-plan-finalization.test.ts`
+  - `services/feed-ingest-plan/test/feed-ingest-plan-http-client.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts`
+  - `services/feed-ingest-plan/test/feed-ingest-plan-supervisor.test.ts`
   - `services/feed-ingest-plan/test/feed-lifecycle-history.test.ts`
   - `services/feed-ingest-plan/test/feed-lifecycle-http.test.ts`
   - `services/feed-ingest-plan/test/feed-lifecycle.test.ts`
@@ -321,15 +348,19 @@ Table J - row 1 rejected alternatives
   - `services/feed-ingest-plan/test/partition-recordings.ts`
   - `services/feed-ingest-plan/test/persistence-recordings.ts`
   - `services/feed-ingest-plan/test/plan-api.test.ts`
+  - `services/feed-ingest-plan/test/plan-cli.test.ts`
   - `services/feed-ingest-plan/test/plan-engine.test.ts`
   - `services/feed-ingest-plan/test/plan-entry-points.test.ts`
   - `services/feed-ingest-plan/test/plan-recordings.ts`
   - `services/feed-ingest-plan/test/planner-diagnostics.test.ts`
+  - `services/feed-ingest-plan/test/planner-cli-recording.ts`
   - `services/feed-ingest-plan/test/planner-process-recordings.ts`
+  - `services/feed-ingest-plan/test/planner-server-recording.ts`
   - `services/feed-ingest-plan/test/planning-health.test.ts`
   - `services/feed-ingest-plan/test/report-native-evidence.test.ts`
   - `services/feed-ingest-plan/test/request-report.test.ts`
   - `services/feed-ingest-plan/test/selection-metrics.test.ts`
+  - `services/feed-ingest-plan/test/streamlined-report.test.ts`
   - `services/feed-ingest-plan/test/triage.test.ts`
   - `services/host-probes/scripts/feed-ingest-plan-profile-proof.ts`
   - `services/host-probes/scripts/feed-ingest-plan-profile-schema.ts`
@@ -346,17 +377,24 @@ Table J - row 1 rejected alternatives
   - `tests/fixtures/feed-ingest-plan/entry-points/response.json`
   - `tests/fixtures/feed-ingest-plan/entry-points/health.json`
   - `tests/fixtures/feed-ingest-plan/entry-points/feed-health-state.rows.json`
+  - `tests/fixtures/feed-ingest-plan/entry-points/plan-runs.rows.json`
+  - `tests/fixtures/feed-ingest-plan/entry-points/discovered-articles.rows.json`
+  - `tests/fixtures/feed-ingest-plan/entry-points/selected-articles.rows.json`
+  - `tests/fixtures/feed-ingest-plan/entry-points/rejected-articles.rows.json`
+  - `tests/fixtures/feed-ingest-plan/entry-points/selected-articles.json`
   - `tests/fixtures/feed-ingest-plan/health-field-history.json`
   - `tests/fixtures/feed-ingest-plan/ledger-history.json`
   - `tests/fixtures/feed-ingest-plan/portfolio-cases.json`
   - `tests/fixtures/feed-ingest-plan/report-events.json`
   - `tests/fixtures/feed-ingest-plan/screening-cases.json`
   - `.github/workflows/feed-ingest-plan-test.yml`
+  - `docs/architecture/sources/feed-plan-runner.md`
   - `docs/architecture/sources/feed-operator-api.md`
   - `docs/architecture/sources/planner-run-diagnostics.md`
+  - `docs/how-to/run-feed-ingest-plan-test.md`
   - `docs/reference/feed-planner-ledgers.md`
-- **Acceptance gates:** Local: inspect the shared selector; run common-contract/writer/planner checks and the gate guide's combined entry-point/file-input selection with the changed collection, worker-deadline, lifecycle, logging and diagnostic cases in one native service invocation. Use existing recorded transport and planner loopback coverage. CI: full planner/common/writer suites and existing resource proof; no live publishing dispatch.
-- **Oracle:** A recorded collection completes feed fetch/retries, consumes each stored body through parse, harvests a real offered article, selects/partitions/persists output and retains correct work facts while another collection stays isolated; wrong/consumed inputs still fail and carried health checks are not counted twice. This does not measure throughput or validate old historical formats.
+- **Acceptance gates:** Local: inspect the shared selector; run common-contract/writer/planner checks and the gate guide's combined entry-point/file-input selection with the changed collection, worker-deadline, lifecycle, logging and diagnostic cases in one native service invocation. Extend the existing real collection/engine/entry-point cases for F9-F12 with partitioning on/off, completed-parsed fallback, no eligible report input, independent filesystem/report/release failures and saved readback after listener shutdown. Verify report content, exclusion diagnostics and earlier paused-feed evidence from the saved successful summary without `health.json`; the real recorded CLI must exit unsuccessfully for request failure even when planning completed. Exercise F10's cross-field refusal in the response-contract cases. Use existing recorded transport and planner loopback coverage; do not add a parallel mock implementation or a spelling-compliance suite. CI: full planner/common/writer suites and existing resource proof; no live publishing dispatch.
+- **Oracle:** The real HTTP client and direct CLI execute the recorded feed-to-article collection, obtain the plan and actual feed report in the same result, and retain correct receipts, relationships and failures after request-owned release; saved output remains usable with the listener closed. The same flow proves article work can start while another feed is unfinished, another collection remains isolated, wrong/consumed inputs still fail and carried health checks are not counted twice. Real failure cases retain independently completed output and both primary and cleanup causes. A failed separate health-file write cannot erase the embedded report, its exclusion diagnostics or earlier paused-feed evidence, or give the real recorded CLI a successful exit. This does not measure throughput, prove a faster scheduler or validate old historical formats.
 
 Table K - row 2 decisions
 
@@ -366,6 +404,10 @@ Table K - row 2 decisions
 | K2 | Separate parentage from completed-input links; keep business validation independent. | OpenTelemetry parent/link semantics; current store/config/run rules. |
 | K3 | Keep observation slots, useful work evidence and collection lifecycle; do not create a tracing subsystem. | A1/A5; actual fetch/parse and completion paths. |
 | K4 | Preserve check provenance with a native link and preserve startup outcome lookup with the preallocated trace. | Feed lifecycle history and runner recovery call sites. |
+| K5 | Return the actual report in the complete planner result and release temporary work inside the request. | F9-F12; the report needs no caller-side continuation once its data is returned. |
+| K6 | Keep planning facts independent of later report and cleanup failures, with one current result schema on HTTP, CLI and disk. | H15-H17; actual file verification projects the saved run row from the complete response. |
+| K7 | Keep the existing overlap of feed and article work; do not present removal of a report call as a scheduler speed improvement. | H18; B8 names the measurement needed for a scheduling change. |
+| K8 | Keep host proof fields bound to the current host contract until the producer and consumer change together in row 3. | C3's dependency; H7; resource proof must describe the actual host response. |
 
 Table L - row 2 rejected alternatives
 
@@ -374,6 +416,8 @@ Table L - row 2 rejected alternatives
 | L1 | Retain request/batch UUIDs as aliases of operations | Leaves the duplication this plan removes. | Extra generation, lookup and synchronization paths without a distinct resource. | D13-D19. |
 | L2 | Use caller trace equality as an access check | Diagnostic context is not authority and valid linked inputs can cross traces. | A new ownership protocol and unrelated client failures. | H3/H5. |
 | L3 | Wrap every HTTP command/response in CloudEvents | Native commands/results are not independently delivered events. | Rewriting every caller without event-delivery semantics. | CloudEvents scope; Table F. |
+| L4 | Preserve the client's extra report call by adding a live-only plan response and a temporary result link | Retains a continuation that the complete result no longer needs, plus a second response schema and caller-owned release ordering. | Separate live/saved models, input pinning across client calls and cleanup after client-side failures. | F9-F12; D32. |
+| L5 | Replace the worker schedule during the metadata cutover | The proposed overlap already exists; changing feed admission has an unmeasured runtime and memory effect. | The bounded target-runner comparison in B8, followed by a separately declared scheduling change if it changes the decision. | H18; B8. |
 
 ## 7. Row #3 - Convert host profiling without breaking Python control
 

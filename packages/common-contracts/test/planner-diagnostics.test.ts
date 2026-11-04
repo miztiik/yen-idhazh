@@ -1,22 +1,44 @@
-/** Validate diagnostic bounds and read earlier saved responses without invented evidence. */
+/** Which diagnostic bounds and unavailable evidence must current planner readers preserve? */
 import { expect, test } from "bun:test";
 import {
   ARTICLE_ENTITIES_VERSION, ArticleEntitiesSchema, PlannerErrorResponseSchema,
-  PlannerFailureSchema, PlannerSavedResponseSchema, deriveCandidateId, readArticleEntities,
+  PlannerFailureSchema, PlannerRunResponseSchema, PlannerSavedResponseSchema, deriveCandidateId, readArticleEntities,
 } from "../src/index";
 
 async function responseRecording() {
   return Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/entry-points/response.json", import.meta.url)).json();
 }
 
-test("earlier outcome and refusal responses retain explicitly unavailable failure evidence", async () => {
+test("outcome and refusal responses without captured failures retain unavailable evidence", async () => {
   const original = await responseRecording();
-  const legacy = Object.fromEntries(Object.entries(original).filter(([field]) => field !== "failure"));
-  const read = PlannerSavedResponseSchema.parse(legacy);
+  const withoutFailure = Object.fromEntries(Object.entries(original).filter(([field]) => field !== "failure"));
+  const read = PlannerSavedResponseSchema.parse(withoutFailure);
   expect(read.failure).toBeNull();
   expect(PlannerErrorResponseSchema.parse({
     code: "PLAN_FAILED", issues: [{ field: null, message: "Planner operation did not complete" }],
   }).failure).toBeNull();
+});
+
+test("the complete result requires its actual report outcome and keeps report failure separate from planning facts", async () => {
+  const recorded = PlannerRunResponseSchema.parse(await responseRecording());
+  const failure = PlannerFailureSchema.parse({
+    operation: "feed-health-summary", error_type: "RangeError", safe_cause: "out-of-range",
+    system_code: null, source: null,
+    execution: { run_id: recorded.run_id, attempt: recorded.attempt, traceId: recorded.traceId, spanId: null, git_sha: null },
+    causes: [], omitted_causes: 0,
+  });
+  const health = { status: "failed" as const, failure };
+  expect(PlannerRunResponseSchema.safeParse({ ...recorded, health, failure: null }).success).toBe(false);
+  expect(PlannerRunResponseSchema.safeParse({ ...recorded, health: undefined }).success).toBe(false);
+  expect(PlannerRunResponseSchema.safeParse({ ...recorded, health: null }).success).toBe(false);
+  const result = PlannerRunResponseSchema.parse({ ...recorded, health, failure });
+  expect(result.health).toEqual(health);
+  expect(result.planning_complete).toBe(recorded.planning_complete);
+  expect(result.status).toBe(recorded.status);
+  expect(result.failure_code).toBe(recorded.failure_code);
+  expect(result.files).toEqual(recorded.files);
+  expect(result.assignments).toEqual(recorded.assignments);
+  expect(result.duration_ms).toBe(recorded.duration_ms);
 });
 
 test("entity records require scoped bounds, explicit omissions and current version on read", async () => {
@@ -24,7 +46,7 @@ test("entity records require scoped bounds, explicit omissions and current versi
   if (!("planning_complete" in recorded)) throw new Error("Expected the recorded planner outcome");
   const record = ArticleEntitiesSchema.parse({
     schema_version: ARTICLE_ENTITIES_VERSION,
-    run_id: recorded.run_id, attempt: recorded.attempt, correlation_id: recorded.correlation_id,
+    run_id: recorded.run_id, attempt: recorded.attempt, traceId: recorded.traceId,
     git_sha: "a".repeat(40), article_id: recorded.selected_url_keys[0],
     candidate_id: deriveCandidateId(recorded.run_id, "recorded-news", 0), feed_id: "recorded-news",
     observed_at: recorded.started_at, recognizer: "compromise",
@@ -53,7 +75,7 @@ test("safe failures reject raw stacks, absolute sources and unbounded causes", (
   const failure = PlannerFailureSchema.parse({
     operation: "select", error_type: "TypeError", safe_cause: "undefined-value",
     system_code: null, source: null,
-    execution: { run_id: "2026-11-02-700", attempt: 1, correlation_id: null, git_sha: "a".repeat(40) },
+    execution: { run_id: "2026-11-02-700", attempt: 1, traceId: null, spanId: null, git_sha: "a".repeat(40) },
     causes: [], omitted_causes: 0,
   });
   expect(() => PlannerFailureSchema.parse({ ...failure, stack: "Private raw stack" })).toThrow();

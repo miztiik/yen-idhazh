@@ -5,36 +5,41 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { deriveCandidateId, deriveUrlKey, PlannerSavedResponseSchema } from "@idhazh/common-contracts";
+import { createCloudEvent, createRootContext, deriveCandidateId, deriveUrlKey, FEED_INGEST_EVENT_VERSION, FeedIngestEventDataSchema, FetchRequestSchema, loadEventSources, PlannerSavedResponseSchema } from "@idhazh/common-contracts";
 import { recognizeArticleEntities } from "../src/recognize-article-entities";
-import { capturePlannerFailure, combinePlannerFailures, describePlanError } from "../src/api/plan-failure";
+import { capturePlannerFailure, combinePlannerFailures, describePlanError, readPlannerResponseError } from "../src/api/plan-failure";
 import { retainFailureThroughCleanup } from "../src/api/retain-failure-through-cleanup";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
 import { retainWorkflowFailure } from "../scripts/retain-workflow-failure";
 import { renderExecutionFailure } from "../src/reporting/execution-failure-markdown";
 import { createPrivateJsonlWriter } from "../src/write-private-jsonl";
 
-const execution = {
-  run_id: "2026-11-02-700", attempt: 3, git_sha: "a".repeat(40),
-  correlation_id: "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
-};
-const capture = { operation: "recognize-entities" as const, execution, limits: { max_stack_chars: 16384, max_causes: 3 } };
+function captureOptions() {
+  const context = createRootContext();
+  return {
+    operation: "recognize-entities" as const,
+    execution: { run_id: "2026-11-02-700", attempt: 3, git_sha: "a".repeat(40), traceId: context.traceId, spanId: context.spanId },
+    limits: { max_stack_chars: 16384, max_causes: 3 },
+  };
+}
 async function entityRecording() {
   return z.strictObject({
     title: z.string(), article_text: z.string(), article_tail: z.string(),
     excluded_script: z.string(), empty_title: z.string(), empty_body: z.string(),
   }).parse(await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/article-entities.json", import.meta.url)).json());
 }
-function identity() {
-  return { ...execution, article_id: deriveUrlKey("https://news.example/second"),
+function identity(execution: ReturnType<typeof captureOptions>["execution"]) {
+  return { run_id: execution.run_id, attempt: execution.attempt, traceId: execution.traceId, git_sha: execution.git_sha,
+    article_id: deriveUrlKey("https://news.example/second"),
     candidate_id: deriveCandidateId(execution.run_id, "recorded-news", 0),
     feed_id: "recorded-news", observed_at: "2026-11-02T23:00:00Z" };
 }
 
 test("real public people, places and organizations APIs retain original names and full body scope", async () => {
+  const capture = captureOptions();
   const recorded = await entityRecording();
   const record = recognizeArticleEntities({
-    ...identity(), title: recorded.title, article_text: recorded.article_text,
+    ...identity(capture.execution), title: recorded.title, article_text: recorded.article_text,
     limits: { max_entities: 256, max_entity_chars: 160 },
   }, capture);
   expect(record.status).toBe("complete");
@@ -53,20 +58,21 @@ test("real public people, places and organizations APIs retain original names an
 });
 
 test("empty, unavailable and truncated entity evidence have distinct truthful records", async () => {
+  const capture = captureOptions();
   const recorded = await entityRecording();
   const empty = recognizeArticleEntities({
-    ...identity(), title: recorded.empty_title, article_text: recorded.empty_body,
+    ...identity(capture.execution), title: recorded.empty_title, article_text: recorded.empty_body,
     limits: { max_entities: 256, max_entity_chars: 160 },
   }, capture);
   expect(empty).toMatchObject({ status: "complete", entities: [], failure: null });
   const unavailable = recognizeArticleEntities({
-    ...identity(), title: recorded.title, article_text: null,
+    ...identity(capture.execution), title: recorded.title, article_text: null,
     limits: { max_entities: 256, max_entity_chars: 160 },
   }, capture);
   expect(unavailable).toMatchObject({ status: "incomplete", title_status: "complete", body_status: "unavailable" });
   expect(unavailable.entities.every(entity => entity.scope === "title")).toBe(true);
   const bounded = recognizeArticleEntities({
-    ...identity(), title: recorded.title, article_text: recorded.article_text,
+    ...identity(capture.execution), title: recorded.title, article_text: recorded.article_text,
     limits: { max_entities: 1, max_entity_chars: 5 },
   }, capture);
   expect(bounded.status).toBe("truncated");
@@ -77,6 +83,8 @@ test("empty, unavailable and truncated entity evidence have distinct truthful re
 });
 
 test("native error frames survive real cleanup refusal without body text or guessed consumer frames", async () => {
+  const capture = captureOptions();
+  const { execution } = capture;
   const directory = await mkdtemp(join(tmpdir(), "planner-safe-failure-"));
   try {
     const obstruction = join(directory, "obstruction");
@@ -103,13 +111,15 @@ test("native error frames survive real cleanup refusal without body text or gues
     expect(serialized).not.toContain("Private article text");
     expect(serialized).not.toContain("token=private");
     expect(serialized).not.toContain("injected");
-    const event = prepareProgressEvent({
-      run_id: execution.run_id, correlation_id: execution.correlation_id,
-      occurred_at: "2026-11-02T23:00:00Z", operation: "plan", phase: "failed",
-      details: { failure },
-    });
-    expect(event.details).not.toHaveProperty("_compliance");
-    expect(event.details.failure).toEqual(failure);
+    const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
+    const event = prepareProgressEvent(createCloudEvent({
+      source: sources.planner, type: "planner.progress",
+      context: { traceId: execution.traceId, spanId: execution.spanId, links: [] },
+      data: { version: FEED_INGEST_EVENT_VERSION, run_id: execution.run_id, operation: "plan", phase: "failed", details: { failure } },
+      parseData: value => FeedIngestEventDataSchema.parse(value),
+    }));
+    expect(event.data.details).not.toHaveProperty("_compliance");
+    expect(event.data.details.failure).toEqual(failure);
     const report = renderExecutionFailure(failure);
     expect(report).toContain("Code accessed a missing value");
     expect(report).toContain(systemCode);
@@ -147,7 +157,33 @@ test("private JSONL drains a valid prefix and never publishes an invalid or unfi
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
+test("unknown receiver operations stay unknown through HTTP decoding and workflow retention", async () => {
+  const capture = captureOptions();
+  const invalid = FetchRequestSchema.safeParse({ fetch_item_type: "feed", feed_id: null });
+  if (invalid.success) throw new Error("Expected the real fetch boundary to reject invalid controls");
+  const directory = await mkdtemp(join(tmpdir(), "planner-unknown-receiver-"));
+  try {
+    for (const [index, execution] of [
+      { ...capture.execution, spanId: null },
+      { ...capture.execution, traceId: null, spanId: null },
+    ].entries()) {
+      const response = describePlanError(invalid.error, undefined, { ...capture, operation: "fetch", execution });
+      const received = readPlannerResponseError(JSON.parse(JSON.stringify(response)), { ...capture, operation: "plan" });
+      expect(received.failure?.execution).toEqual(execution);
+      const output = join(directory, String(index));
+      await retainWorkflowFailure({
+        directory: output, error: received,
+        capture: { ...capture, operation: "commit-ledgers" },
+      });
+      const saved = PlannerSavedResponseSchema.parse(await Bun.file(join(output, "response.json")).json());
+      expect(saved.failure?.execution).toEqual(execution);
+      expect(saved.failure?.operation).toBe("fetch");
+      expect(saved.failure?.source).toEqual(response.failure?.source);
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test("native cancellation remains cancellation rather than an unknown planner exception", () => {
-  expect(capturePlannerFailure(new DOMException("Private cancellation reason", "AbortError"), capture))
+  expect(capturePlannerFailure(new DOMException("Private cancellation reason", "AbortError"), captureOptions()))
     .toMatchObject({ error_type: "AbortError", safe_cause: "cancelled" });
 });

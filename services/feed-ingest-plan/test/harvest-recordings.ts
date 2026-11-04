@@ -1,5 +1,6 @@
 /** Replay only the named offline feed, article and protocol recordings. */
 import { z } from "zod";
+import { createRootContext } from "@idhazh/common-contracts";
 import { loadHarvestInputs } from "../src/harvest-feeds/load-harvest-inputs";
 import type { ConfiguredSource } from "../src/harvest-feeds/load-harvest-inputs";
 import type { HarvestContext } from "../src/harvest-feeds/harvest-types";
@@ -165,7 +166,7 @@ export function context(log: HarvestContext["log"] = () => {}): HarvestContext {
       run_id: "2026-10-21-700", attempt: 2, job: null, pipeline_name: "feed-ingest-plan",
       task_name: "harvest-feeds", shard: 0, producer: "tests.harvest", git_sha: "a".repeat(40),
     },
-    correlation_id: "recorded-harvest-700",
+    ...createRootContext(),
     clock: () => new Date("2026-10-21T23:59:59.000Z"), log,
     observation_clock: () => new Date("2026-10-21T23:59:59.000Z"),
   };

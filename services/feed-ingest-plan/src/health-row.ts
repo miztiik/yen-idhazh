@@ -18,7 +18,7 @@ export function createFeedHealthRow(
   return FeedHealthStateRowSchema.parse({
     date: at.slice(0, 10), run_id: context.run_id, attempt: context.writer.attempt,
     feed_id: source.feed_id, endpoint_key: inputEndpointKey(source.feed_url),
-    checked_at: null, check_request_id: null, check_result: null,
+    checked_at: null, links: [], check_result: null,
     ...projectLifecycleFields(prior), last_failure_code: null, status: null, reliability: prior?.reliability ?? null,
     feed_reads: 0, productive_reads: 0, failed_reads: 0, article_candidates: 0, articles_selected: 0,
     feed_requests: 0, article_requests: 0, counts_complete: true,

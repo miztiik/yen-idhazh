@@ -1,10 +1,9 @@
 /** Exercise HTTP refusals, live parser admission and discovery preservation without planning. */
 import { expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
-import { SelectedFeedBatchSchema, SelectedArticleRowContract, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { createRootContext, SelectedFeedBatchSchema, SelectedArticleRowContract, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { createPlanTestServer } from "./plan-test-server";
 import { recordedPlan } from "./plan-recordings";
 import { ArticleParserPool } from "../src/harvest-feeds/article-parser-pool";
@@ -15,6 +14,7 @@ import { stageStore } from "../src/api/stage-store";
 import { collectRecordedFeeds } from "./collection-recordings";
 import { CompletedCollectionSchema } from "../src/api/collection-contracts";
 import { writeRows } from "./partition-fixtures";
+import { operationKey, operationLink } from "../src/api/operation-context";
 
 const prefix = PLANNER_API_PREFIX;
 const json = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -32,7 +32,7 @@ test("HTTP health and refusals cannot start source work", async () => {
     expect((await app.request(`${prefix}/feeds`)).status).toBe(404);
     expect((await app.request("/api/2026-10-20/health")).status).toBe(404);
     expect((await app.request("/api/2026-10-31/health")).status).toBe(404);
-    expect((await app.request(`${prefix}/feed-health-state`, json({ batch_id: randomUUID(), action: "record" }))).status).toBe(503);
+    expect((await app.request(`${prefix}/feed-health-state`, json({ links: [operationLink(createRootContext())], action: "record" }))).status).toBe(503);
     recorded.inputs.settings.enabled = true;
     recorded.runtime.run_number = "9".repeat(512);
     expect((await app.request(`${prefix}/plan`, json({}))).status).toBe(400);
@@ -56,7 +56,7 @@ test("a real source-health write refusal returns an API error and leaves native 
     const sibling = join(recorded.inputs.outputRoot, written.files[0]!.path);
     const before = await readFile(sibling);
     await writeFile(join(parent, "feed-health-state"), "obstruction");
-    const response = await app.request(`${prefix}/feed-health-state`, json({ batch_id: batch.batch_id, action: "record" }));
+    const response = await app.request(`${prefix}/feed-health-state`, json({ links: [operationLink(batch)], action: "record" }));
     expect(response.status).toBe(500);
     const error = await response.json();
     expect(error).toMatchObject({ code: "PLAN_FAILED" });
@@ -69,7 +69,6 @@ test("a real source-health write refusal returns an API error and leaves native 
 test("overlapping standalone documents keep independent identities and bounded live parser admission", async () => {
   const recorded = await recordedPlan();
   delete recorded.runtime.run_number;
-  delete recorded.runtime.correlation_id;
   recorded.inputs.settings.listener.parser_concurrency = 2;
   let active = 0;
   let peak = 0;
@@ -84,15 +83,14 @@ test("overlapping standalone documents keep independent identities and bounded l
   try {
     const fetched = await Promise.all(["https://news.example/second", "https://news.example/story/"].map(async url => {
       const response = await app.request(`${prefix}/fetch`, json({
-        request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", fetch_item_type: "article", url,
+        feed_id: "recorded-news", fetch_item_type: "article", url,
       }));
       expect(response.status).toBe(200);
       return FetchResponseSchema.parse(await response.json());
     }));
     const pending = fetched.map(async document => {
       const response = await app.request(`${prefix}/parse`, json({
-        request_id: randomUUID(), fetch_request_id: document.fetch_request_id,
-        article_id: document.article_id, correlation_id: document.correlation_id,
+        links: [operationLink(document)],
       }));
       expect(response.status).toBe(200);
       return ParseResponseSchema.parse(await response.json());
@@ -106,13 +104,13 @@ test("overlapping standalone documents keep independent identities and bounded l
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(recorded.inputs.settings.listener.parser_concurrency);
     expect(new Set(fetched.map(document => document.run_id)).size).toBe(2);
-    expect(new Set(parsed.map(document => document.batch_id)).size).toBe(2);
+    expect(new Set(parsed.map(operationKey)).size).toBe(2);
     for (const result of parsed) {
-      const health = await app.request(`${prefix}/feed-health-state`, json({ batch_id: result.batch_id, action: "summarize" }));
+      const health = await app.request(`${prefix}/feed-health-state`, json({ links: [operationLink(result)], action: "summarize" }));
       expect(health.status).toBe(200);
       expect((await health.json()).rows.some((row: { article_requests: number }) => row.article_requests > 0)).toBe(true);
     }
-    expect(recorded.events.some(event => event.operation === "plan")).toBe(false);
+    expect(recorded.events.some(event => event.data.operation === "plan")).toBe(false);
   } finally { await app.close(); pool.close(); await recorded.close(); }
 });
 
@@ -132,8 +130,8 @@ test("collection discovery bytes survive a later persistence refusal without reo
     await writeFile(join(target, "selected-articles"), "obstruction");
     const app = createPlanTestServer(recorded.inputs, recorded.runtime);
     try {
-      expect((await app.request(`${prefix}/persist-selected-articles`, json({ batch_id: batch.batch_id }))).status).toBe(500);
-      expect(recorded.events.at(-1)).toMatchObject({
+      expect((await app.request(`${prefix}/persist-selected-articles`, json({ links: [operationLink(batch)] }))).status).toBe(500);
+      expect(recorded.events.at(-1)?.data).toMatchObject({
         operation: "persist", phase: "failed", details: { failure_code: "PERSIST_FAILED" },
       });
     } finally { await app.close(); }

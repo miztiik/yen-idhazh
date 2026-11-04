@@ -16,7 +16,7 @@ test("groups current failure counts without counting policy decisions as failure
     { ...cause, reason_code: "FETCH_FAILED_HTTP", count: 2 },
   ] }];
   const before = structuredClone(rows);
-  const report = renderPlanMarkdown({ response, health: { ...health, rows } });
+  const report = renderPlanMarkdown({ response: { ...response, health: { ...health, rows } } });
   const { document } = parseHTML(Bun.markdown.html(report.markdown));
   const attention = document.querySelectorAll("table")[1]!.textContent!;
   expect(attention).toContain("5 recorded article failures");
@@ -34,7 +34,7 @@ test("paused feeds do not establish new requests or historical causes", async ()
   const { health } = await readPlannerOutputRecording();
   const base = health.rows[0]!;
   const markdown = renderFailureEvidence([{ ...base, rejection_counts: [], feed_reads: 0,
-    checked_at: null, check_request_id: null, check_result: null }], {
+    checked_at: null, links: [], check_result: null }], {
     eligible_feed_ids: [], feeds: [{
       feed_id: base.feed_id, endpoint_key: base.endpoint_key, availability: "resting",
       strikes: 5, failed_recovery_checks: 2, availability_complete: true,

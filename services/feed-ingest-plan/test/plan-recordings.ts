@@ -29,7 +29,7 @@ export async function recordedPlan(sources: ConfiguredSource[] = [source()], pub
       }, harvest,
     };
     const runtime: PlanRuntime = {
-      git_sha: "a".repeat(40), run_number: "700", correlation_id: "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
+      git_sha: "a".repeat(40), run_number: "700",
       clock: () => new Date("2026-10-21T23:59:59.999Z"),
       observation_clock: () => new Date("2026-10-21T23:59:59.000Z"),
       boundary: { transport }, log: event => { events.push(event); },

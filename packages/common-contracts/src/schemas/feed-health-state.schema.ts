@@ -3,6 +3,7 @@ import { z } from "zod";
 import { FEED_HEALTH_STATE_VERSION } from "../version";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, reject } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
+import { OperationLinkSchema } from "./operation-metadata.schema";
 
 const Ratio = FiniteSchema.min(0).max(1);
 export const FeedCheckResultSchema = z.enum([
@@ -30,7 +31,7 @@ export const FeedHealthStateRowSchema = z.strictObject({
   feed_id: SlugSchema, endpoint_key: Sha256Schema, checked_at: RecordedInstantSchema.nullable(),
   availability: z.enum(["eligible", "resting", "retired", "unknown"]),
   strikes: CountSchema.nullable().describe("Observed consecutive logical failures; partial history keeps this a supported lower bound, not an exact historical total."),
-  check_request_id: z.uuid({ version: "v4" }).nullable(),
+  links: z.array(OperationLinkSchema).max(1),
   check_result: FeedCheckResultSchema.nullable(),
   rest_until: RecordedInstantSchema.nullable().describe("Supported UTC recovery deadline; a carried value is not a new check."),
   first_confirmed_failure_at: RecordedInstantSchema.nullable().describe("UTC first confirmed failure in the known episode; partial history does not claim an earlier unseen start."),
@@ -50,7 +51,7 @@ export const FeedHealthStateRowSchema = z.strictObject({
   outcome: z.enum(["ok", "blocked", "permanent", "transient", "skipped"]).nullable(),
 }).superRefine((value, ctx) => {
   if (value.checked_at !== null && value.date !== value.checked_at.slice(0, 10)) reject(ctx, "health date must name the actual UTC work day");
-  if (value.check_result !== null && (value.check_request_id === null || value.checked_at === null)) {
+  if (value.check_result !== null && (value.links.length === 0 || value.checked_at === null)) {
     reject(ctx, "a check result requires its actual request identity and UTC check instant");
   }
   if (value.check_result === "confirmed-http-failure"
@@ -66,10 +67,10 @@ export const FeedHealthStateRowSchema = z.strictObject({
 }).meta({
   version: FEED_HEALTH_STATE_VERSION,
   changelog: [
-    { version: FEED_HEALTH_STATE_VERSION, change: "Remove permission and robots requests from native health accounting." },
+    { version: FEED_HEALTH_STATE_VERSION, change: "Link each logical feed check unchanged across health projections." },
+    { version: "2026-11-02", change: "Remove permission and robots requests from native health accounting." },
     { version: "2026-10-31", change: "Keep observed failure and recovery counts usable when earlier history is partial." },
     { version: "2026-10-31", change: "Save logical checks and supported timed lifecycle calculations without availability sidecars." },
-    { version: "2026-10-30", change: "Save feed-read fractions and floor-applied factors downward to three decimal places." },
     { version: "2026-10-27", change: "Earlier changes are in git." },
   ],
 });

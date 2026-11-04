@@ -1,15 +1,16 @@
 {
   "now": "2026-10-21T12:00:00Z",
   "candidate": {
-    "version": "2026-10-28",
+    "version": "2026-11-03",
     "date": "2026-10-21",
-    "correlation_id": "2026-10-21-123",
+    "traceId": "c0ca63c74ce1abbb67f7fdf772fd2d9e",
     "run_id": "2026-10-21-123",
     "candidate_id": "d60a9dad872cff31431c23b6ba34d1ce2a80c95a0a8bd5bbd003fa37f70af13c",
     "entry_ordinal": 0,
     "feed_id": "fixture-source",
     "source": {
       "feed_id": "fixture-source",
+      "publisher_id": null,
       "feed_url": "https://example.org/feed.xml",
       "title": "River research",
       "status": "active",
@@ -18,7 +19,9 @@
     "canonical_url": "https://example.org/screening",
     "url_key": "f07385212d41204642eb81969dba8b11d935a70aae97b2d9817e40ac63aa4bb8",
     "title": "River researchers publish their seasonal findings",
-    "categories": ["Science"],
+    "categories": [
+      "Science"
+    ],
     "article_text": "Researchers measured water levels along the river during the summer and compared their findings with records from the previous decade. The team installed sensors near bridges and collected samples after heavy rainfall to understand how quickly conditions changed across the catchment. Their report describes the equipment used at each location and explains why some measurements were excluded after damage to a sensor. Local volunteers helped record observations from smaller streams where automatic equipment could not be installed safely during the wet season. These observations allowed the researchers to compare changes upstream with conditions near the town and identify where additional sampling would help. The published dataset includes the collection time and location for every sample so other teams can inspect the results and repeat the analysis. Officials said the findings would inform maintenance plans for drainage channels but would not replace existing flood warnings issued by the regional weather service. The researchers cautioned that a single season cannot establish a lasting trend and recommended continued monitoring through both dry and wet years. They also described gaps in the historical records and explained how those gaps limit comparisons between individual locations along the river. A follow up study will examine changes in soil conditions beside the water and test whether planting along stream banks affects runoff after storms. Residents can read the methods and download the measurements without an account.",
     "word_count": 229,
     "author": "Research desk",
@@ -28,35 +31,236 @@
   "observation": {
     "candidate_id": "d60a9dad872cff31431c23b6ba34d1ce2a80c95a0a8bd5bbd003fa37f70af13c",
     "http_status": 200,
+    "fetch_failure": null,
     "paywall": false,
     "paywall_evidence": "none",
-    "fetch_failure": null,
     "extraction": "success",
-    "observed_at": "2026-10-21T12:00:00Z"
+    "observed_at": "2026-10-21T12:00:00Z",
+    "diagnostics": {
+      "http_status": 200,
+      "fetch_failure": null,
+      "body_limit": null,
+      "error_code": null,
+      "response_evidence": {
+        "content_type": null,
+        "decoded_bytes": 1678,
+        "declared_content_length": null,
+        "selected_headers": {},
+        "headers_truncated": [],
+        "request_profile": "firefox"
+      },
+      "extraction_failure": null,
+      "failure_code": null,
+      "stopped_stage": null,
+      "detail": null,
+      "fetch_ms": 100,
+      "pacing_time_ms": 0,
+      "pacing_settings": {
+        "enabled": false,
+        "domain_delay_ms": 1000,
+        "publisher_delay_ms": 1000,
+        "jitter_ms": 500
+      },
+      "extract_ms": 4391,
+      "warnings": [],
+      "quality": {
+        "source_word_count": 229,
+        "word_count": 229,
+        "corroborated_word_count": null,
+        "token_count": null,
+        "truncated": null,
+        "truncated_at_tokens": null,
+        "truncation_cap_tokens": 26000,
+        "too_short": false,
+        "not_prose": false,
+        "boilerplate": null,
+        "contaminated": null,
+        "failure_code": null,
+        "rejected": false,
+        "extractor_version": "defuddle-0.19.5-linkedom-0.18.13-turndown-7.2.4-bun-1.3.13-idhazh-467d8152bb134a13fa8223f4ad1681660cb1a2f7d30a28a38732cd6b087c5e5b",
+        "sanitizer_version": "idhazh-typescript-sanitizer-3-c63de32021c412c645f7e806ef662673a3c157396f1b210b826e0595a88505ca"
+      }
+    },
+    "content_evidence": {
+      "markdown_chars": 1549,
+      "linked_label_chars": 0,
+      "link_density": 0,
+      "list_items": 0,
+      "opening_sample_chars": 600,
+      "press_release_marker_index": null
+    }
   },
   "cases": [
-    { "name": "one word below configured floor", "words": 179, "reason": "REJECTED_SCREENING_MIN_WORDS", "details": { "words_found": 179, "words_required": 180 } },
-    { "name": "exact configured floor", "words": 180, "reason": null },
-    { "name": "blocked HTTP", "status": 403, "reason": "PAYWALL_OR_BLOCKED", "details": { "http_status": 403 } },
-    { "name": "rate limited HTTP", "status": 429, "reason": "PAYWALL_OR_BLOCKED", "details": { "http_status": 429 } },
-    { "name": "paywall without HTTP result", "status": null, "paywall": true, "reason": "PAYWALL_OR_BLOCKED", "details": { "http_status": null } },
-    { "name": "category case and space", "categories": ["Science", "  VIDEO  "], "reason": "CATEGORY_EXCLUDED" },
-    { "name": "category is not substring", "categories": ["video analysis"], "reason": null },
-    { "name": "blocking precedes category and words and age", "status": 401, "categories": ["video"], "words": 1, "published_at": "2026-10-19T12:00:00Z", "reason": "PAYWALL_OR_BLOCKED" },
-    { "name": "category precedes words and age", "categories": ["links"], "words": 1, "published_at": "2026-10-19T12:00:00Z", "reason": "CATEGORY_EXCLUDED" },
-    { "name": "words precede age", "words": 1, "published_at": "2026-10-19T12:00:00Z", "reason": "REJECTED_SCREENING_MIN_WORDS" },
-    { "name": "exact age cutoff", "published_at": "2026-10-20T00:00:00Z", "reason": null, "age": 36 },
-    { "name": "one second past cutoff", "published_at": "2026-10-19T23:59:59Z", "reason": "REJECTED_SCREENING_AGE_CEILING", "details": { "max_age_hours": 36 } },
-    { "name": "future tolerance inclusive", "published_at": "2026-10-21T18:00:00Z", "reason": null, "age": -6, "clock": "published_at", "bonus": 0.6 },
-    { "name": "future beyond tolerance uses old discovery", "published_at": "2026-10-21T18:00:01Z", "discovered": "old", "reason": "REJECTED_SCREENING_AGE_CEILING", "details": { "age_hours": 50, "max_age_hours": 36 } },
-    { "name": "undated old discovery", "published_at": null, "discovered": "old", "reason": "REJECTED_SCREENING_AGE_CEILING", "details": { "age_hours": 50, "max_age_hours": 36 } },
-    { "name": "new undated discovery", "published_at": null, "discovered": "new", "reason": null, "age": 0, "clock": "first_seen", "bonus": 0.6 },
-    { "name": "unknown undated history", "published_at": null, "reason": null, "age": null, "clock": "unknown", "bonus": 0 },
-    { "name": "untrustworthy date without history", "published_at": "2026-10-22T12:00:00Z", "reason": null, "age": null, "clock": "unknown", "bonus": 0 },
-    { "name": "half life score", "published_at": "2026-10-20T18:00:00Z", "reason": null, "age": 18, "bonus": 0.3 }
+    {
+      "name": "one word below configured floor",
+      "words": 179,
+      "reason": "REJECTED_SCREENING_MIN_WORDS",
+      "details": {
+        "words_found": 179,
+        "words_required": 180
+      }
+    },
+    {
+      "name": "exact configured floor",
+      "words": 180,
+      "reason": null
+    },
+    {
+      "name": "blocked HTTP",
+      "status": 403,
+      "reason": "PAYWALL_OR_BLOCKED",
+      "details": {
+        "http_status": 403
+      }
+    },
+    {
+      "name": "rate limited HTTP",
+      "status": 429,
+      "reason": "PAYWALL_OR_BLOCKED",
+      "details": {
+        "http_status": 429
+      }
+    },
+    {
+      "name": "paywall without HTTP result",
+      "status": null,
+      "paywall": true,
+      "reason": "PAYWALL_OR_BLOCKED",
+      "details": {
+        "http_status": null
+      }
+    },
+    {
+      "name": "category case and space",
+      "categories": [
+        "Science",
+        "  VIDEO  "
+      ],
+      "reason": "CATEGORY_EXCLUDED"
+    },
+    {
+      "name": "category is not substring",
+      "categories": [
+        "video analysis"
+      ],
+      "reason": null
+    },
+    {
+      "name": "blocking precedes category and words and age",
+      "status": 401,
+      "categories": [
+        "video"
+      ],
+      "words": 1,
+      "published_at": "2026-10-19T12:00:00Z",
+      "reason": "PAYWALL_OR_BLOCKED"
+    },
+    {
+      "name": "category precedes words and age",
+      "categories": [
+        "links"
+      ],
+      "words": 1,
+      "published_at": "2026-10-19T12:00:00Z",
+      "reason": "CATEGORY_EXCLUDED"
+    },
+    {
+      "name": "words precede age",
+      "words": 1,
+      "published_at": "2026-10-19T12:00:00Z",
+      "reason": "REJECTED_SCREENING_MIN_WORDS"
+    },
+    {
+      "name": "exact age cutoff",
+      "published_at": "2026-10-20T00:00:00Z",
+      "reason": null,
+      "age": 36
+    },
+    {
+      "name": "one second past cutoff",
+      "published_at": "2026-10-19T23:59:59Z",
+      "reason": "REJECTED_SCREENING_AGE_CEILING",
+      "details": {
+        "max_age_hours": 36
+      }
+    },
+    {
+      "name": "future tolerance inclusive",
+      "published_at": "2026-10-21T18:00:00Z",
+      "reason": null,
+      "age": -6,
+      "clock": "published_at",
+      "bonus": 0.6
+    },
+    {
+      "name": "future beyond tolerance uses old discovery",
+      "published_at": "2026-10-21T18:00:01Z",
+      "discovered": "old",
+      "reason": "REJECTED_SCREENING_AGE_CEILING",
+      "details": {
+        "age_hours": 50,
+        "max_age_hours": 36
+      }
+    },
+    {
+      "name": "undated old discovery",
+      "published_at": null,
+      "discovered": "old",
+      "reason": "REJECTED_SCREENING_AGE_CEILING",
+      "details": {
+        "age_hours": 50,
+        "max_age_hours": 36
+      }
+    },
+    {
+      "name": "new undated discovery",
+      "published_at": null,
+      "discovered": "new",
+      "reason": null,
+      "age": 0,
+      "clock": "first_seen",
+      "bonus": 0.6
+    },
+    {
+      "name": "unknown undated history",
+      "published_at": null,
+      "reason": null,
+      "age": null,
+      "clock": "unknown",
+      "bonus": 0
+    },
+    {
+      "name": "untrustworthy date without history",
+      "published_at": "2026-10-22T12:00:00Z",
+      "reason": null,
+      "age": null,
+      "clock": "unknown",
+      "bonus": 0
+    },
+    {
+      "name": "half life score",
+      "published_at": "2026-10-20T18:00:00Z",
+      "reason": null,
+      "age": 18,
+      "bonus": 0.3
+    }
   ],
   "substance_cases": [
-    { "name": "technically admitted empty retained view", "block": "Alice reviewed 12 samples.", "repetitions": 50, "title": "BIG NEWS!!", "retained_words": 0, "score": -0.2 },
-    { "name": "two-sentence fragments remain admitted", "block": "Subscribe now. Terms apply.", "repetitions": 50, "title": "Subscribe terms", "retained_words": 200, "score": 0.26666666666666666 }
+    {
+      "name": "technically admitted empty retained view",
+      "block": "Alice reviewed 12 samples.",
+      "repetitions": 50,
+      "title": "BIG NEWS!!",
+      "retained_words": 0,
+      "score": -0.2
+    },
+    {
+      "name": "two-sentence fragments remain admitted",
+      "block": "Subscribe now. Terms apply.",
+      "repetitions": 50,
+      "title": "Subscribe terms",
+      "retained_words": 200,
+      "score": 0.26666666666666666
+    }
   ]
 }

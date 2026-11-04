@@ -30,7 +30,7 @@ export function healthHistoryInput(inputs: PlanInputs, now: string, current?: Cu
     own_rows: structuredClone(plannerMemory(inputs).health()),
     ...(current === undefined ? {} : {
       current_rows: current.rows, exclude_execution: { run_id: current.context.run_id, attempt: current.context.writer.attempt },
-      log: createStageLogger(current.context),
+      log: createStageLogger(current.context, inputs.event_source),
     }),
   };
 }
@@ -108,7 +108,7 @@ export async function readRunHistory(inputs: PlanInputs, context: RunContext) {
       discovered_files: inputs.settings.inputs.discovered_files, discovered_days: inputs.settings.inputs.discovered_days,
       lookback_days: inputs.harvest.config.discovered_articles.lookback_days,
       concurrency: inputs.harvest.config.harvest.concurrency,
-      own_rows: structuredClone(plannerMemory(inputs).discoveries()), log: createStageLogger(context),
+      own_rows: structuredClone(plannerMemory(inputs).discoveries()), log: createStageLogger(context, inputs.event_source),
     }),
     Promise.all(dates.map(day => readExclusionEvidence({
       root: inputs.root, now: `${day}T00:00:00Z`,

@@ -174,7 +174,7 @@ test("public harvest returns strict full text and streamed work facts without pe
   expect(facts.filter(row => row.operation === "attempt")
     .reduce((count, row) => count + row.dispatched_request_count!, 0)).toBe(transport.requests.length);
   expect(facts.every(row => DocumentWorkFactSchema.safeParse(row).success)).toBe(true);
-  expect(facts.every(row => !("event_id" in row) && !("candidate_id" in row) && !("article_text" in row))).toBe(true);
+  expect(facts.every(row => !("candidate_id" in row) && !("article_text" in row))).toBe(true);
   expect(facts.some(row => row.feed_id === "retired-source" && row.outcome === "not_attempted")).toBe(true);
   expectFeedParseObservations(facts, ["recorded-news", "recorded-atom"]);
   expect(result.candidates).toHaveLength(4);
@@ -620,10 +620,11 @@ test("configured quality rejection keeps parsing complete and reports measured r
   expect(successfulArticleParseFacts.length).toBeGreaterThan(0);
   expect(successfulArticleParseFacts.every(fact => fact.failure_code === null && fact.attribution === null)).toBe(true);
   const parseActivity = activities.find(item => item.operation === "parse" && item.phase === "completed"
-    && item.details.request_id === rejected?.rejection?.candidate_id);
+    && item.details.article_id === rejected?.rejection?.url_key);
+  expect(parseActivity).toBeDefined();
   expect(parseActivity?.details.quality_rejection).toBeUndefined();
   const qualityActivities = activities.filter(item => item.operation === "quality" && item.phase === "failed"
-    && item.details.request_id === rejected?.rejection?.candidate_id && item.details.quality_rejection !== undefined);
+    && item.details.article_id === rejected?.rejection?.url_key && item.details.quality_rejection !== undefined);
   expect(qualityActivities).toHaveLength(1);
   expect(qualityActivities[0]).toMatchObject({
     details: { quality_rejection: {

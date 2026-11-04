@@ -1,10 +1,11 @@
 /** Select from one complete current server batch without writing feed health as a side effect. */
-import { randomUUID } from "node:crypto";
-import { ParsedFeedBatchSchema, SelectedFeedBatchSchema, StageReferenceRequestSchema } from "@idhazh/common-contracts";
+import { createRootContext, ParsedFeedBatchSchema, SelectedFeedBatchSchema, StageReferenceRequestSchema } from "@idhazh/common-contracts";
 import type { PlanApiTiming } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
-import { stageConfigFingerprint } from "./operation-context";
+import {
+  commandContext, operationKey, operationLink, operationMetadata, operationRunContext, stageConfigFingerprint, stageContext,
+} from "./operation-context";
 import { PlanError } from "./plan-request";
 import { stageStore } from "./stage-store";
 import { selectArticles } from "../select-articles";
@@ -14,7 +15,6 @@ import { appendDocumentTiming, currentExecutionState, executionHasArtifact, regi
 import { resolveRunContext } from "../resolve-run-context";
 import { recordFinalizedDocumentWork, recordSelectionFailure, rememberCompletedSelection } from "./record-standalone-run";
 import { collectionForRun } from "./collection-operation";
-import { snapshotCollectionBatch } from "./collection-batch";
 import { retainFailureThroughCleanup } from "./retain-failure-through-cleanup";
 
 export function requireStageConfiguration(
@@ -23,11 +23,11 @@ export function requireStageConfiguration(
 ) {
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
   if (batch.config_sha256 !== stageConfigFingerprint(inputs, runtime)) {
-    throw new PlanError("REQUEST_CONFLICT", "Batch configuration differs from the current planner", "batch_id");
+    throw new PlanError("REQUEST_CONFLICT", "Result configuration differs from the current planner", "links");
   }
   const collection = batch.context === undefined ? undefined : collectionForRun(inputs, batch.context.run_id);
   if (collection?.finalizing || (collection?.finalization !== undefined && !allowFinalizedSummary)) {
-    throw new PlanError("REQUEST_CONFLICT", "Collection outcome is already finalized", "batch_id");
+    throw new PlanError("REQUEST_CONFLICT", "Collection outcome is already finalized", "links");
   }
 }
 export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime,
@@ -35,28 +35,28 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   const started = performance.now();
   const request = StageReferenceRequestSchema.parse(raw);
   const store = stageStore(inputs);
-  let parsed = store.read("parsed", request.batch_id, ParsedFeedBatchSchema);
+  let parsed = store.read("parsed", request.links[0], ParsedFeedBatchSchema);
   requireStageConfiguration(parsed, inputs, runtime);
   const collection = collectionForRun(inputs, parsed.context.run_id);
   if (collection !== undefined && (collection.status !== "complete" || collection.finalizing
-    || collection.finalization !== undefined || collection.completed_batch_id !== parsed.batch_id)) {
-    throw new PlanError("BATCH_INCOMPLETE", "Selection requires the completed global collection, not one feed's batch", "batch_id");
+    || collection.finalization !== undefined || collection.completed === undefined
+    || operationKey(collection.completed) !== operationKey(parsed))) {
+    throw new PlanError("BATCH_INCOMPLETE", "Selection requires the completed global collection, not one feed's result", "links");
   }
-  if (collection !== undefined) parsed = snapshotCollectionBatch(inputs, collection, collection.pending_offers === 0);
   const original = await currentExecutionState(inputs, parsed.context.run_id);
   if (original?.kind !== "document") {
-    throw new PlanError("ARTIFACT_NOT_FOUND", "Selection requires its live captured input", "batch_id");
+    throw new PlanError("ARTIFACT_NOT_FOUND", "Selection requires its live captured input", "links");
   }
-  if (original?.kind === "document" && store.ownership(parsed.batch_id).health_fingerprint === null) {
+  if (original.kind === "document" && store.ownership(parsed).health_fingerprint === null) {
     parsed = store.replace("parsed", ParsedFeedBatchSchema, {
       ...parsed, work_rows: original.work.rows(), exclusions: original.work.exclusions(),
     });
   }
-  if (!parsed.input_complete) throw new PlanError("BATCH_INCOMPLETE", "Every offered article needs a terminal fetch/parse result before selection", "batch_id");
-  const originalClaim = store.claimSelection(parsed.batch_id);
+  if (!parsed.input_complete) throw new PlanError("BATCH_INCOMPLETE", "Every offered article needs a terminal fetch/parse result before selection", "links");
+  const originalClaim = store.claimSelection(parsed);
   const captured = (runtime.selection_clock ?? runtime.clock)?.() ?? new Date();
   const selectionStartedAt = utcTimestamp(() => captured);
-  const claim = store.ownership(parsed.batch_id);
+  const claim = store.ownership(parsed);
   claim.scope = original.plan_owned ? "plan" : claim.scope;
   if (original?.health_fingerprint !== null && original?.health_fingerprint !== undefined) {
     claim.health_fingerprint = original.health_fingerprint;
@@ -64,8 +64,10 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   const hasArtifact = executionHasArtifact(inputs, parsed.context);
   const keepOriginal = originalClaim && !hasArtifact && !original?.owns_choice
     && !original?.health_written && claim.health_fingerprint === null;
-  const context = keepOriginal ? parsed.context : resolveRunContext(inputs.settings, runtime.git_sha, captured,
-    undefined, undefined, undefined, runtime.attempt, runtime.producer);
+  const operation = keepOriginal ? commandContext(runtime, collection?.context, [parsed])
+    : createRootContext({ links: [operationLink(parsed)] });
+  const context = keepOriginal ? { ...parsed.context, ...operation } : resolveRunContext(inputs.settings, runtime.git_sha, captured,
+    undefined, operation, undefined, runtime.attempt, runtime.producer);
   if (keepOriginal) {
     if (original !== undefined) original.owns_choice = true;
   } else {
@@ -79,7 +81,7 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
     let healthStatus: PlanApiTiming["status"] = "failed";
     try {
       health = await prepareExecutionHealth(inputs, selectionStartedAt,
-        { context: parsed.context, rows: parsed.work_rows }, original.baseline);
+        { context: operationRunContext(parsed), rows: parsed.work_rows }, original.baseline);
       healthStatus = "completed";
     } finally {
       healthDuration = Math.round(performance.now() - healthStarted);
@@ -89,10 +91,10 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
     }
     const result = await selectArticles(parsed, inputs, selectionStartedAt, health, context, original.baseline);
     const batch = store.write("selected", SelectedFeedBatchSchema, {
-      batch_id: randomUUID(), parsed_batch_id: parsed.batch_id, config_sha256: parsed.config_sha256,
-      context, selection_started_at_utc: selectionStartedAt, evaluated_at: parsed.context.now, ...result,
+      ...operationMetadata(context), config_sha256: parsed.config_sha256,
+      context: stageContext(context), selection_started_at_utc: selectionStartedAt, evaluated_at: parsed.context.now, ...result,
     });
-    store.ownership(batch.batch_id).scope = keepOriginal ? claim.scope : "standalone";
+    store.ownership(batch).scope = keepOriginal ? claim.scope : "standalone";
     await rememberCompletedSelection(inputs, batch);
     await appendDocumentTiming(inputs, batch.context.run_id, { operation: "select", duration_ms: Math.round(performance.now() - started), status: "completed" });
     return { batch, health_summary_duration_ms: healthDuration };

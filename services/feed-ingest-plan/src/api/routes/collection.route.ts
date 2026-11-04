@@ -11,22 +11,23 @@ import {
   FinalizeCollectionRequestSchema, FinalizedCollectionSchema, ReleaseCollectionRequestSchema, ReleasedCollectionSchema,
 } from "../collection-contracts";
 import { readRequestBody } from "./stages.route";
+import { captureRequestRuntime } from "../operation-context";
 
 export function collectionRoute(inputs: PlanInputs, runtime: () => PlanRuntime) {
   const app = new Hono();
   app.post("/collections", async c => c.json(CollectionResponseSchema.parse(
-    await beginCollection(await readRequestBody(c.req.raw), inputs, runtime()),
+    await beginCollection(await readRequestBody(c.req.raw), inputs, captureRequestRuntime(runtime(), c.req.raw.headers)),
   )));
   app.post("/collections/exists", async c => c.json(CollectionExistsResponseSchema.parse(
     collectionExists(await readRequestBody(c.req.raw), inputs),
   )));
   app.post("/collections/complete", async c => {
     const request = CollectionReferenceSchema.parse(await readRequestBody(c.req.raw));
-    return c.json(CompletedCollectionSchema.parse(await completeCollection(inputs, request.collection_id)));
+    return c.json(CompletedCollectionSchema.parse(await completeCollection(inputs, request.traceId)));
   });
   app.post("/collections/cancel", async c => {
     const request = CollectionReferenceSchema.parse(await readRequestBody(c.req.raw));
-    return c.json(CancelledCollectionSchema.parse(await cancelCollection(inputs, request.collection_id)));
+    return c.json(CancelledCollectionSchema.parse(await cancelCollection(inputs, request.traceId)));
   });
   app.post("/collections/finalize", async c => {
     const request = FinalizeCollectionRequestSchema.parse(await readRequestBody(c.req.raw));

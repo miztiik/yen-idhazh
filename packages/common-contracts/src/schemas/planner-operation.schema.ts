@@ -1,13 +1,14 @@
 /** Which native request, document and attempt shapes can live operator APIs use? */
 import { z } from "zod";
-import { CountSchema, NonEmptySchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema } from "./primitives";
+import { CountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema } from "./primitives";
 import { BodyLimitEvidenceSchema, FetchFailureSchema } from "./harvest-diagnostics.schema";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
 import { HttpResponseEvidenceSchema, RequestProfileSchema } from "./http-response-evidence.schema";
 import { RequestPacingSettingsSchema } from "./config.schema";
+import { OperationLinkSchema, OperationMetadataSchema, TraceIdSchema } from "./operation-metadata.schema";
 
-export const OPERATION_VERSION = "2026-11-02" as const;
+export const OPERATION_VERSION = "2026-11-03" as const;
 const OperationVersionSchema = z.literal(OPERATION_VERSION).default(OPERATION_VERSION);
 export const SourceArticleOutcomeSchema = z.strictObject({
   disposition: z.enum(["admitted", "source_refused"]),
@@ -18,7 +19,6 @@ export const SourceArticleOutcomeSchema = z.strictObject({
   }
 });
 export type SourceArticleOutcome = z.infer<typeof SourceArticleOutcomeSchema>;
-export const RequestIdSchema = z.uuid({ version: "v4" });
 export const FetchAttemptSchema = z.strictObject({
   phase: z.enum(["validation", "target"]), sequence: CountSchema, retry: CountSchema,
   duration_ms: CountSchema, backoff_ms: CountSchema.nullable().default(null),
@@ -49,9 +49,8 @@ export const NetworkFailureDetailsSchema = z.strictObject({
   ],
 });
 export type NetworkFailureDetails = z.infer<typeof NetworkFailureDetailsSchema>;
-export const PlannerObservationSchema = z.strictObject({
-  event_id: z.uuid({ version: "v5" }), caused_by_event_id: z.uuid({ version: "v5" }).nullable(),
-  correlation_id: NonEmptySchema, run_id: RunIdSchema, article_id: Sha256Schema,
+export const PlannerObservationSchema = OperationMetadataSchema.safeExtend({
+  run_id: RunIdSchema, article_id: Sha256Schema,
   feed_id: SlugSchema, occurred_at: TimestampSchema,
   operation: z.enum(["fetch", "parse", "attempt"]),
 });
@@ -74,8 +73,6 @@ export const FetchedDocumentSchema = z.strictObject({
   pacing_settings: RequestPacingSettingsSchema,
   attempts: z.array(FetchAttemptSchema), observation: PlannerObservationSchema,
   attempt_observations: z.array(PlannerObservationSchema), body_sha256: Sha256Schema.nullable(),
-  parent_fetch_request_id: RequestIdSchema.nullable().default(null),
-  parent_batch_id: RequestIdSchema.nullable().default(null),
   entry_ordinal: CountSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
   if (value.fetch_item_type === "article" && /[?#]/.test(value.canonical_url)) {
@@ -97,35 +94,27 @@ export const FetchedDocumentSchema = z.strictObject({
     || value.attempts.some((attempt, index) => attempt.sequence !== index)
     || value.attempt_observations.some(observation => observation.operation !== "attempt"
       || observation.feed_id !== value.feed_id || observation.article_id !== value.article_id
-      || observation.run_id !== value.observation.run_id || observation.correlation_id !== value.observation.correlation_id
-      || observation.caused_by_event_id !== value.observation.event_id)) {
+      || observation.run_id !== value.observation.run_id || observation.traceId !== value.observation.traceId
+      || observation.parentSpanId !== value.observation.spanId)) {
     ctx.addIssue({ code: "custom", message: "attempt observations must match the ordered attempts" });
   }
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
-    { version: OPERATION_VERSION, change: "Remove robots fields and attempts from current fetched documents." },
+    { version: OPERATION_VERSION, change: "Identify fetch and attempt operations with native context and input links." },
+    { version: "2026-11-02", change: "Remove robots fields and attempts from current fetched documents." },
     { version: "2026-11-01", change: "Preserve request pacing waits and effective settings." },
     { version: "2026-11-01", change: "Add native response, profile and safe request-address evidence." },
-    { version: "2026-11-01", change: "Require current fetched documents without older-format readers." },
     { version: "2026-10-28", change: "Earlier changes are in this file's Git history." },
   ],
 });
 export type FetchedDocument = z.infer<typeof FetchedDocumentSchema>;
 
-export const FetchRequestSchema = z.strictObject({
-  request_id: RequestIdSchema, correlation_id: RequestIdSchema,
-  feed_id: SlugSchema, fetch_item_type: z.enum(["feed", "article"]), url: UrlSchema.optional(),
-  batch_id: RequestIdSchema.optional(), offer_id: Sha256Schema.optional(),
-  collection_id: RequestIdSchema.optional(),
-  caused_by_event_id: z.uuid({ version: "v5" }).optional(),
-}).refine(value => value.fetch_item_type === "article" || (value.url === undefined && value.batch_id === undefined && value.offer_id === undefined), {
-  message: "feed URLs come only from the configured source", path: ["url"],
-}).refine(value => value.fetch_item_type === "feed" || (value.url !== undefined
-  ? value.batch_id === undefined && value.offer_id === undefined : value.batch_id !== undefined && value.offer_id !== undefined), {
-  message: "article fetch requires an operator URL or a complete server-owned offer reference", path: ["url"],
-});
+export const FetchRequestSchema = z.union([
+  z.strictObject({ feed_id: SlugSchema, fetch_item_type: z.literal("feed"), traceId: TraceIdSchema.optional() }),
+  z.strictObject({ feed_id: SlugSchema, fetch_item_type: z.literal("article"), url: UrlSchema, traceId: TraceIdSchema.optional() }),
+  z.strictObject({ fetch_item_type: z.literal("article"), offer_id: Sha256Schema, links: z.tuple([OperationLinkSchema]) }),
+]);
 export const ParseRequestSchema = z.strictObject({
-  request_id: RequestIdSchema, fetch_request_id: RequestIdSchema,
-  article_id: Sha256Schema, correlation_id: RequestIdSchema,
+  links: z.tuple([OperationLinkSchema]),
 });

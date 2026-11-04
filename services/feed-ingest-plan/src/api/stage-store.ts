@@ -1,13 +1,14 @@
 /** Hold bounded live server references without evicting documents needed by active work. */
 import { z } from "zod";
-import { FetchedDocumentSchema, RequestIdSchema } from "@idhazh/common-contracts";
-import type { FetchedDocument, PlannerStageContext } from "@idhazh/common-contracts";
+import { FetchedDocumentSchema } from "@idhazh/common-contracts";
+import type { FetchedDocument, OperationLink, OperationMetadata, PlannerStageContext } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import { PlanError } from "./plan-request";
 import type { DocumentOperationContext } from "./operation-context";
+import { operationKey, operationMetadata } from "./operation-context";
 
 export type BatchStage = "parsed" | "selected" | "partitioned";
-type BatchIdentity = { batch_id: string; context: PlannerStageContext };
+type BatchIdentity = OperationMetadata & { context: PlannerStageContext; config_sha256: string };
 export type ExecutionOwnership = {
   selection_claimed: boolean; partition_claimed: boolean;
   scope: "plan" | "standalone"; health_fingerprint: string | null;
@@ -16,20 +17,20 @@ type HeldBatch = {
   stage: BatchStage; value: unknown; execution: string; run_id: string; ownership: ExecutionOwnership;
 };
 export type FetchedDocumentReference = DocumentOperationContext & { document: FetchedDocument };
-type HeldDocument = DocumentOperationContext & { document?: FetchedDocument; claimed: boolean };
+type HeldDocument = DocumentOperationContext & { document?: FetchedDocument; claimant?: string };
 function executionKey(context: PlannerStageContext) { return `${context.run_id}:${context.writer.attempt}`; }
 export class StageStore {
   private readonly batches = new Map<string, HeldBatch>();
   private readonly documents = new Map<string, HeldDocument>();
   private readonly documentRequests = new Set<string>();
-  private readonly documentRuns = new Map<string, string>();
+  private readonly documentRuns = new Map<string, { run_id: string; fetch_item_type: "feed" | "article" }>();
   private readonly retainedRuns = new Set<string>();
   constructor(private readonly capacity: number) { z.int().positive().parse(capacity); }
   retainRun(runId: string) { this.retainedRuns.add(runId); }
   releaseRun(runId: string) {
     this.retainedRuns.delete(runId);
     for (const [id, document] of this.documents) {
-      if (document.context.run_id === runId && !document.claimed && !this.documentRequests.has(id)) {
+      if (document.context.run_id === runId && document.claimant === undefined && !this.documentRequests.has(id)) {
         this.documents.delete(id);
       }
     }
@@ -40,65 +41,78 @@ export class StageStore {
       || [...this.documents.values()].some(document => document.context.run_id === runId);
   }
   forgetRun(runId: string) {
-    if (this.isRunActive(runId)) throw new PlanError("REQUEST_BUSY", "Cannot expire an execution with active work", "batch_id");
+    if (this.isRunActive(runId)) throw new PlanError("REQUEST_BUSY", "Cannot expire an execution with active work", "links");
     for (const [id, batch] of this.batches) if (batch.run_id === runId) this.batches.delete(id);
     this.forgetDocumentWork(runId);
   }
   beginFetch(context: DocumentOperationContext) {
-    const id = RequestIdSchema.parse(context.request_id);
-    if (this.documents.has(id) || this.documentRequests.has(id)) {
-      throw new PlanError("REQUEST_CONFLICT", "Document request is already owned by live work", "request_id");
+    const id = operationKey(context.context);
+    if (this.documents.has(id) || this.documentRequests.has(id) || this.batches.has(id)) {
+      throw new PlanError("REQUEST_CONFLICT", "Document operation is already owned by live work", "spanId");
     }
     if (this.documents.size >= this.capacity) {
-      throw new PlanError("REQUEST_BUSY", "Live document capacity is occupied; consume current fetch references first", "request_id");
+      throw new PlanError("REQUEST_BUSY", "Live document capacity is occupied; consume current fetch references first", "spanId");
     }
     this.documentRequests.add(id);
-    this.documents.set(id, { ...context, claimed: false });
+    this.documents.set(id, structuredClone(context));
   }
-  rememberFetchedDocument(id: string, document: FetchedDocument) {
+  rememberFetchedDocument(reference: OperationLink, document: FetchedDocument) {
+    const id = operationKey(reference);
     const held = this.documents.get(id);
-    if (held === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Fetch reference is no longer live", "fetch_request_id");
-    this.documents.set(id, { ...held, document: FetchedDocumentSchema.parse(document) });
+    if (held === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Fetch reference is no longer live", "links");
+    const value = FetchedDocumentSchema.parse(document);
+    if (operationKey(value.observation) !== id || value.observation.run_id !== held.context.run_id) {
+      throw new PlanError("ARTIFACT_INVALID", "Fetched result differs from its producing operation", "links");
+    }
+    this.documents.set(id, { ...held, document: value });
   }
-  fetchedDocument(id: string): FetchedDocumentReference | undefined {
-    const held = this.documents.get(id);
+  fetchedDocument(reference: OperationLink): FetchedDocumentReference | undefined {
+    const held = this.documents.get(operationKey(reference));
     return held?.document === undefined ? undefined : {
-      request_id: held.request_id, context: held.context, config_sha256: held.config_sha256, document: held.document,
+      context: structuredClone(held.context), config_sha256: held.config_sha256, document: structuredClone(held.document),
     };
   }
-  finishFetch(id: string, retain: boolean) {
+  finishFetch(reference: OperationLink, retain: boolean) {
+    const id = operationKey(reference);
     this.documentRequests.delete(id);
     const document = this.documents.get(id)?.document;
     if (!retain || document?.body == null || document.failure !== null) this.documents.delete(id);
   }
-  claimDocument(fetchId: string, requestId: string, articleId: string, correlationId: string, fingerprint: string): FetchedDocumentReference {
-    const id = RequestIdSchema.parse(requestId);
-    const held = this.documents.get(RequestIdSchema.parse(fetchId));
+  claimDocument(fetch: OperationLink, parse: OperationLink, fingerprint: string): FetchedDocumentReference {
+    const fetchId = operationKey(fetch);
+    const id = operationKey(parse);
+    const held = this.documents.get(fetchId);
     if (held?.document === undefined) {
-      throw new PlanError("ARTIFACT_NOT_FOUND", "No current completed fetched document exists", "fetch_request_id");
-    }
-    if (held.document.article_id !== articleId || held.context.correlation_id !== correlationId) {
-      throw new PlanError("INVALID_REQUEST", "Parse identity differs from its fetched document", "article_id");
+      throw new PlanError("ARTIFACT_NOT_FOUND", "No current completed fetched document exists", "links");
     }
     if (held.config_sha256 !== fingerprint) {
-      throw new PlanError("REQUEST_CONFLICT", "Fetched configuration differs", "fetch_request_id");
+      throw new PlanError("REQUEST_CONFLICT", "Fetched configuration differs", "links");
     }
-    if (held.claimed || this.documentRequests.has(fetchId) || this.documentRequests.has(id) || this.documents.has(id)) {
-      throw new PlanError("REQUEST_CONFLICT", "Document request is already owned by live work", "request_id");
+    if (held.claimant !== undefined || this.documentRequests.has(fetchId) || this.documentRequests.has(id)
+      || this.documents.has(id) || this.batches.has(id)) {
+      throw new PlanError("REQUEST_CONFLICT", "Document operation is already owned by live work", "spanId");
     }
-    held.claimed = true;
+    held.claimant = id;
     this.documentRequests.add(id);
-    return { request_id: held.request_id, context: held.context, config_sha256: held.config_sha256, document: held.document };
+    return { context: structuredClone(held.context), config_sha256: held.config_sha256, document: structuredClone(held.document) };
   }
-  consumeDocument(fetchId: string, requestId: string) {
+  consumeDocument(fetch: OperationLink, parse: OperationLink) {
+    const fetchId = operationKey(fetch);
+    const parseId = operationKey(parse);
+    if (this.documents.get(fetchId)?.claimant !== parseId) {
+      throw new PlanError("REQUEST_CONFLICT", "Parse does not own this document claim", "links");
+    }
     this.documents.delete(fetchId);
-    this.documentRequests.delete(requestId);
+    this.documentRequests.delete(parseId);
   }
-  rememberDocumentWork(fetchId: string, runId: string) { this.documentRuns.set(fetchId, runId); }
-  documentRun(fetchId: string) { return this.documentRuns.get(RequestIdSchema.parse(fetchId)); }
+  rememberDocumentWork(reference: OperationLink, runId: string, fetchItemType: "feed" | "article") {
+    this.documentRuns.set(operationKey(reference), { run_id: runId, fetch_item_type: fetchItemType });
+  }
+  documentRun(reference: OperationLink) { return this.documentRuns.get(operationKey(reference))?.run_id; }
+  documentKind(reference: OperationLink) { return this.documentRuns.get(operationKey(reference))?.fetch_item_type; }
   forgetDocumentWork(runId: string) {
     for (const [id, run] of this.documentRuns) {
-      if (run === runId) this.documentRuns.delete(id);
+      if (run.run_id === runId) this.documentRuns.delete(id);
     }
   }
   releaseDocuments() {
@@ -109,7 +123,8 @@ export class StageStore {
   }
   write<T extends BatchIdentity>(stage: BatchStage, schema: z.ZodType<T>, raw: unknown): T {
     const value = schema.parse(raw);
-    if (this.batches.has(value.batch_id)) throw new PlanError("REQUEST_CONFLICT", "Batch identity already exists", "batch_id");
+    const id = operationKey(value);
+    if (this.batches.has(id)) throw new PlanError("REQUEST_CONFLICT", "Stage operation already exists", "spanId");
     const execution = executionKey(value.context);
     const ownership: ExecutionOwnership = [...this.batches.values()].find(batch => batch.execution === execution)?.ownership ?? {
       selection_claimed: false, partition_claimed: false, scope: "standalone", health_fingerprint: null,
@@ -118,38 +133,38 @@ export class StageStore {
     if (stage === "partitioned") ownership.partition_claimed = true;
     while (this.batches.size >= this.capacity) {
       const expired = [...this.batches].find(([, batch]) => !this.isRunActive(batch.run_id));
-      if (expired === undefined) throw new PlanError("REQUEST_BUSY", "Stage capacity is occupied by active work", "batch_id");
+      if (expired === undefined) throw new PlanError("REQUEST_BUSY", "Stage capacity is occupied by active work", "spanId");
       this.batches.delete(expired[0]);
     }
-    this.batches.set(value.batch_id, { stage, value: structuredClone(value), execution, run_id: value.context.run_id, ownership });
+    this.batches.set(id, { stage, value: structuredClone(value), execution, run_id: value.context.run_id, ownership });
     return value;
   }
-  read<T extends { batch_id: string }>(stage: BatchStage, id: string, schema: z.ZodType<T>): T {
-    const batch = this.batches.get(RequestIdSchema.parse(id));
+  read<T extends OperationLink>(stage: BatchStage, reference: OperationLink, schema: z.ZodType<T>): T {
+    const batch = this.batches.get(operationKey(reference));
     if (batch === undefined || batch.stage !== stage) {
-      throw new PlanError("ARTIFACT_NOT_FOUND", "No current server-owned batch exists for this stage", "batch_id");
+      throw new PlanError("ARTIFACT_NOT_FOUND", "No current server-owned result exists for this stage", "links");
     }
     return schema.parse(structuredClone(batch.value));
   }
-  inspect(id: string) {
-    const batch = this.batches.get(RequestIdSchema.parse(id));
-    if (batch === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "No current server-owned batch exists", "batch_id");
+  inspect(reference: OperationLink) {
+    const batch = this.batches.get(operationKey(reference));
+    if (batch === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "No current server-owned result exists", "links");
     return { stage: batch.stage, value: structuredClone(batch.value) };
   }
-  has(id: string) { return this.batches.has(RequestIdSchema.parse(id)); }
-  ownership(id: string): ExecutionOwnership {
-    const held = this.batches.get(RequestIdSchema.parse(id));
-    if (held === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Current batch has expired", "batch_id");
+  has(reference: OperationLink) { return this.batches.has(operationKey(reference)); }
+  ownership(reference: OperationLink): ExecutionOwnership {
+    const held = this.batches.get(operationKey(reference));
+    if (held === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Current result has expired", "links");
     return held.ownership;
   }
-  claimSelection(id: string) {
-    const claim = this.ownership(id);
+  claimSelection(reference: OperationLink) {
+    const claim = this.ownership(reference);
     if (claim.selection_claimed) return false;
     claim.selection_claimed = true;
     return true;
   }
-  claimPartition(id: string) {
-    const claim = this.ownership(id);
+  claimPartition(reference: OperationLink) {
+    const claim = this.ownership(reference);
     if (claim.partition_claimed) return false;
     claim.partition_claimed = true;
     return true;
@@ -161,15 +176,22 @@ export class StageStore {
   }
   replace<T extends BatchIdentity>(stage: BatchStage, schema: z.ZodType<T>, raw: unknown): T {
     const value = schema.parse(raw);
-    const held = this.batches.get(value.batch_id);
-    if (held === undefined || held.stage !== stage) throw new PlanError("ARTIFACT_NOT_FOUND", "Current batch has expired", "batch_id");
-    if (held.execution !== executionKey(value.context)) throw new PlanError("ARTIFACT_INVALID", "Stage update changed its execution ownership", "batch_id");
-    this.batches.set(value.batch_id, { ...held, value: structuredClone(value) });
+    const id = operationKey(value);
+    const held = this.batches.get(id);
+    if (held === undefined || held.stage !== stage) throw new PlanError("ARTIFACT_NOT_FOUND", "Current result has expired", "links");
+    const original = schema.parse(held.value);
+    if (held.execution !== executionKey(value.context) || original.config_sha256 !== value.config_sha256
+      || JSON.stringify(operationMetadata(original)) !== JSON.stringify(operationMetadata(value))) {
+      throw new PlanError("ARTIFACT_INVALID", "Stage update changed its operation or execution ownership", "links");
+    }
+    this.batches.set(id, { ...held, value: structuredClone(value) });
     return value;
   }
-  update<T extends BatchIdentity>(stage: BatchStage, id: string, schema: z.ZodType<T>, update: (current: T) => T) {
-    const value = schema.parse(update(this.read(stage, id, schema)));
-    if (value.batch_id !== id) throw new PlanError("ARTIFACT_INVALID", "Stage update changed its server-owned batch identity", "batch_id");
+  update<T extends BatchIdentity>(stage: BatchStage, reference: OperationLink, schema: z.ZodType<T>, update: (current: T) => T) {
+    const value = schema.parse(update(this.read(stage, reference, schema)));
+    if (operationKey(value) !== operationKey(reference)) {
+      throw new PlanError("ARTIFACT_INVALID", "Stage update changed its server-owned operation identity", "links");
+    }
     return this.replace(stage, schema, value);
   }
 }

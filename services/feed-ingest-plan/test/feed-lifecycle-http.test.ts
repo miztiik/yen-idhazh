@@ -3,13 +3,13 @@ import { expect, test } from "bun:test";
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  FeedHealthStateRowContract, FeedHealthStateRowSchema,
+  createRootContext, FeedHealthStateRowContract, FeedHealthStateRowSchema,
 } from "@idhazh/common-contracts";
 import { readPlannerParquet } from "@idhazh/ledger-file-writer";
 import { publicationGitRecording } from "./publication-recordings";
 import { fixtureGit } from "./fixture-git";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
-import { randomUUID } from "node:crypto";
+import { operationLink } from "../src/api/operation-context";
 import { applyFeedCheck } from "../src/availability/feed-lifecycle";
 import { deliverPlannerFiles } from "../scripts/feed-ingest-plan-deliver";
 import { writeRows } from "./partition-fixtures";
@@ -32,7 +32,7 @@ test("independent baselines each apply one check and reverse delivery preserves 
     const head = await fixtureGit(fixture.repository, ["rev-parse", "HEAD"]);
     const check = { check_result: "confirmed-http-failure" as const, checked_at: "2026-10-21T23:59:59.123Z", status: 503 };
     const rows = [701, 702].map(run => {
-      const observed = { ...check, check_request_id: randomUUID() };
+      const observed = { ...check, links: [operationLink(createRootContext())] };
       return FeedHealthStateRowSchema.parse({ ...baseline,
         ...applyFeedCheck(baseline, observed, fixture.inputs.harvest.config.availability),
         ...observed, date: "2026-10-21", run_id: `2026-10-21-${run}`,
@@ -51,7 +51,7 @@ test("independent baselines each apply one check and reverse delivery preserves 
       availability: "resting", strikes: 5, check_result: "confirmed-http-failure",
       status: 503, failed_recovery_checks: 0, retired_at: null,
     });
-    expect(health[0]!.rows[0]!.check_request_id).not.toBe(health[1]!.rows[0]!.check_request_id);
+    expect(health[0]!.rows[0]!.links).not.toEqual(health[1]!.rows[0]!.links);
     const paths = results.map(result => result.files.map(file => file.path));
     for (const index of [1, 0]) {
       const result = await deliverPlannerFiles({

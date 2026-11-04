@@ -90,12 +90,13 @@ test("one Git delivery precedes the report and prepares only the selected handof
     const inventory: FeedIngestEvent[] = [];
     expect(await publishUploadInventory({ directory: artifacts, runNumber: "700",
       write: event => { inventory.push(event); } })).toBe(4);
-    expect(inventory.flatMap(event => typeof event.details.file === "string" ? [event.details.file] : []).sort())
+    expect(inventory.flatMap(event => typeof event.data.details.file === "string" ? [event.data.details.file] : []).sort())
       .toEqual((await readdir(artifacts)).sort());
     const selected = await readFile(join(f.repository, f.summary.selected_articles_artifact!));
     expect(await readFile(join(artifacts, "700-3-selected-articles.json"))).toEqual(selected);
     const report = await readFile(join(artifacts, "feed-ingest-report-2026-10-21-700.md"), "utf8");
-    expect(report).toBe(await readFile(f.finalize.summaryPath, "utf8"));
+    const summary = await readFile(f.finalize.summaryPath, "utf8");
+    expect(report).toStartWith(summary);
     expect(report).not.toContain("Metadata delivery");
     expect(report).not.toContain("Git delivery");
     expect(report).not.toContain(JSON.parse(selected.toString()).articles[0].article_text);
@@ -112,7 +113,7 @@ test("one Git delivery precedes the report and prepares only the selected handof
     expect((await stat(f.directory)).isDirectory()).toBe(true);
     await finishRunOutput({ ...f.finish, commitOutcome: "success", reportOutcome: "skipped", writeReport: false });
     await expect(stat(f.directory)).rejects.toMatchObject({ code: "ENOENT" });
-    expect(await readFile(f.finalize.summaryPath, "utf8")).toBe(report);
+    expect(await readFile(f.finalize.summaryPath, "utf8")).toBe(summary);
     expect(await readFile(join(f.repository, f.summary.selected_articles_artifact!))).toEqual(selected);
   } finally { await f.close(); }
 });

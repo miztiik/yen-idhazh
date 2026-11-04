@@ -1,9 +1,9 @@
 /** Prove configured timed lifecycle decisions without remote state or invented evidence. */
 import { expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
-import { FeedLifecyclePolicySchema } from "@idhazh/common-contracts";
+import { createRootContext, FeedLifecyclePolicySchema } from "@idhazh/common-contracts";
 import type { FeedLifecycleFields } from "@idhazh/common-contracts";
 import { applyFeedCheck, resolveFeedEligibility, createUnknownFeedLifecycle } from "../src/availability/feed-lifecycle";
+import { operationLink } from "../src/api/operation-context";
 
 async function policy() {
   const config = await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
@@ -11,7 +11,7 @@ async function policy() {
 }
 const at = (hours: number) => new Date(Date.parse("2026-10-01T00:00:00.000Z") + hours * 3_600_000).toISOString();
 const check = (hours: number, result: "valid-feed" | "confirmed-http-failure" | "timeout" | "interrupted" = "confirmed-http-failure") => ({
-  check_request_id: randomUUID(), check_result: result, checked_at: at(hours),
+  links: [operationLink(createRootContext())], check_result: result, checked_at: at(hours),
   status: result === "confirmed-http-failure" ? 503 : null,
 });
 

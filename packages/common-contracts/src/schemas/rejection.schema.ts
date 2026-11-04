@@ -7,6 +7,7 @@ import {
 import { ArticleFetchEvidenceSchema, HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import { PlannerItemFailureCodeSchema } from "./planner-item-failure.schema";
 import { ArticleContentEvidenceSchema } from "./content-filter-evidence.schema";
+import { TraceIdSchema } from "./operation-metadata.schema";
 
 export const DropReasonSchema = z.enum([
   "SOURCE_INACTIVE", "FETCH_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT", "EXTRACT_FAILED", "EXTRACT_EMPTY",
@@ -68,9 +69,9 @@ export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (key
   PRESS_RELEASE: ["content_evidence", "sample_chars_limit"],
   LINK_HEAVY: ["content_evidence", "max_link_density", "max_list_items", "words_found", "list_word_limit"],
 };
-export const CANDIDATE_REJECTION_VERSION = "2026-11-02";
+export const CANDIDATE_REJECTION_VERSION = "2026-11-03";
 export const CandidateRejectionRecordSchema = z.strictObject({
-  version: z.literal(CANDIDATE_REJECTION_VERSION).default(CANDIDATE_REJECTION_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.literal(CANDIDATE_REJECTION_VERSION).default(CANDIDATE_REJECTION_VERSION), date: DateStampSchema, traceId: TraceIdSchema,
   feed_id: SlugSchema, feed_url: UrlSchema, subject: z.enum(["feed", "article"]),
   candidate_id: Sha256Schema.nullable(), url_key: Sha256Schema.nullable(), canonical_url: UrlSchema.nullable(),
   title: z.string().nullable(), categories: z.array(z.string()), stage: RejectionStageSchema,
@@ -114,10 +115,10 @@ export const CandidateRejectionRecordSchema = z.strictObject({
 }).meta({
   version: CANDIDATE_REJECTION_VERSION,
   changelog: [
-    { version: CANDIDATE_REJECTION_VERSION, change: "Remove robots evidence and inapplicable settled-failure reasons." },
-    { version: CANDIDATE_REJECTION_VERSION, change: "Replace tier and allocation refusals with the global known-age ceiling." },
+    { version: CANDIDATE_REJECTION_VERSION, change: "Associate rejections with their producing execution." },
+    { version: "2026-11-02", change: "Remove robots evidence and inapplicable settled-failure reasons." },
+    { version: "2026-11-02", change: "Replace tier and allocation refusals with the global known-age ceiling." },
     { version: "2026-11-01", change: "Retain request pacing evidence in fetch rejections." },
-    { version: "2026-10-30", change: "Retain response byte-limit evidence in fetch diagnostics." },
     { version: "2026-10-28", change: "Earlier changes are in git." },
   ],
 });

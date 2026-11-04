@@ -6,12 +6,12 @@ import type { FeedPlanResult } from "../../run-feed-plan";
 import type { PlanRequest } from "../plan-request";
 import type { PlanRuntime } from "../../run-feed-plan";
 import { PlanResponseSchema } from "../plan-response.schema";
+import { captureRequestRuntime } from "../operation-context";
 
 export type PlanningBindings = { beginPlanning?: () => void; stage_origin?: string };
-type PlanningRuntime = Pick<PlanRuntime, "signal" | "stage_origin">;
-
 export function planRoute(
-  execute: (request: PlanRequest, runtime?: PlanningRuntime) => Promise<FeedPlanResult>,
+  execute: (request: PlanRequest, runtime: PlanRuntime) => Promise<FeedPlanResult>,
+  runtime: () => PlanRuntime,
 ) {
   return new Hono<{ Bindings: PlanningBindings }>().post("/plan", async c => {
     if (c.req.header("Idempotency-Key") !== undefined) {
@@ -25,9 +25,9 @@ export function planRoute(
     }
     const request = PlanRequestSchema.parse(raw);
     c.env?.beginPlanning?.();
-    const result = await execute(request, { signal: c.req.raw.signal,
-      ...(c.env?.stage_origin === undefined ? {} : { stage_origin: c.env.stage_origin }) });
+    const result = await execute(request, captureRequestRuntime({ ...runtime(), signal: c.req.raw.signal,
+      ...(c.env?.stage_origin === undefined ? {} : { stage_origin: c.env.stage_origin }) }, c.req.raw.headers));
     const summary = PlanResponseSchema.parse(summarizePlan(result));
-    return c.json(summary, summary.planning_complete ? 200 : 500);
+    return c.json(summary, summary.planning_complete && summary.failure === null ? 200 : 500);
   });
 }

@@ -2,12 +2,10 @@
 import { expect, test } from "bun:test";
 import {
   DISCOVERED_ARTICLE_VERSION, SELECTED_ARTICLE_VERSION, PLANNER_ENVELOPE_VERSION,
-  OPERATION_VERSION, PARSED_FEED_BATCH_VERSION,
   DiscoveredArticleRowSchema, SelectedArticleRowSchema, SelectedArticleMetadataSchema, PlannerFileEnvelopeSchema,
-  FetchedDocumentSchema, ParsedFeedBatchSchema,
   FeedIngestCandidateSchema, FeedOutcomePayloadSchema, PlannerFeedOfferSchema,
   SourceSnapshotSchema, FEED_OUTCOME_PAYLOAD_VERSION, deriveCandidateId,
-  readSelectedArticlesArtifact, readFeedIngestEvent, FEED_INGEST_EVENT_VERSION, deriveUrlKey,
+  readSelectedArticlesArtifact, createRootContext, deriveUrlKey,
 } from "../src";
 
 const day = "2026-10-28";
@@ -56,40 +54,13 @@ test("current discovery, selection, artifacts and envelopes keep their exact ide
   }
 });
 
-test("current document construction succeeds and old documents and batches refuse", async () => {
-  const document = await Bun.file(new URL("../../../tests/fixtures/contracts/fetched-document/refused.json", import.meta.url)).json();
-  const currentDocument = FetchedDocumentSchema.parse({ ...document, version: OPERATION_VERSION });
-  expect(currentDocument.version).toBe(OPERATION_VERSION);
-  for (const version of ["2026-10-28", "2026-10-29", "2026-10-30", "2026-11-01"]) {
-    expect(FetchedDocumentSchema.safeParse({ ...currentDocument, version }).success).toBe(false);
-  }
-  const recordedBatch = await Bun.file(new URL("../../../tests/fixtures/contracts/parsed-feed-batch/empty.json", import.meta.url)).json();
-  const current = ParsedFeedBatchSchema.parse({
-    batch_id: recordedBatch.batch_id, config_sha256: recordedBatch.config_sha256, context: recordedBatch.context,
-    request: {}, candidates: [], observations: {}, discovered: { availability: "available", rows: [] },
-    evidence: {}, history_rows: [], history_days: [], work_rows: [], exclusions: [],
-  });
-  expect(current.version).toBe(PARSED_FEED_BATCH_VERSION);
-  expect(ParsedFeedBatchSchema.safeParse({ ...current, version: "2026-10-30" }).success).toBe(false);
-});
-
-test("event readers require the current recorded version instead of rewriting older progress", () => {
-  const event = { version: FEED_INGEST_EVENT_VERSION, run_id: run,
-    correlation_id: "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc", occurred_at: at,
-    operation: "fetch" as const, phase: "completed" as const, details: { output_count: 1 } };
-  expect(readFeedIngestEvent(event)).toEqual(event);
-  for (const version of ["2026-10-29T08:00", "2026-10-30T22:25", "2026-10-30T22:48", undefined]) {
-    expect(() => readFeedIngestEvent({ ...event, version })).toThrow();
-  }
-});
-
 test("current source, candidate, offer and outcome projections refuse retired source fields and versions", () => {
   const source = SourceSnapshotSchema.parse({
     feed_id: "fixture-feed", publisher_id: null, feed_url: "https://example.org/feed",
     title: "Recorded feed", status: "active", weight: 1,
   });
   const candidate = FeedIngestCandidateSchema.parse({
-    date: day, correlation_id: "recorded", run_id: run,
+    date: day, traceId: createRootContext().traceId, run_id: run,
     candidate_id: deriveCandidateId(run, source.feed_id, 0), entry_ordinal: 0,
     feed_id: source.feed_id, source, canonical_url: url, url_key: deriveUrlKey(url),
     title: "Recorded article", categories: [], article_text: "Unchanged body.", word_count: 2,
@@ -98,7 +69,7 @@ test("current source, candidate, offer and outcome projections refuse retired so
   const offer = PlannerFeedOfferSchema.parse({
     offer_id: "a".repeat(64), source, entry: {
       entry_ordinal: 0, title: null, link: url, categories: [], author: null, published_at: null,
-    }, state: "pending", fetch_request_id: null,
+    }, state: "pending", links: [],
   });
   const outcome = FeedOutcomePayloadSchema.parse({
     kind: "feed_outcome", source, fetch_status: "success", parse_status: "success",

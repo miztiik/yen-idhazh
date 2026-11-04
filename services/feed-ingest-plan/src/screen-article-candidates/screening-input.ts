@@ -1,7 +1,7 @@
 /** Which bounded candidate, harvest, discovery and run inputs can screening trust? */
 import { z } from "zod";
 import {
-  FeedIngestCandidateSchema, NonEmptySchema,
+  FeedIngestCandidateSchema, TraceIdSchema,
   NonNegativeSchema, RunIdSchema, Sha256Schema,
   DateStampSchema, ItemHealthFailureCodeSchema, PlannerItemFailureCodeSchema, CountSchema,
 } from "@idhazh/common-contracts";
@@ -19,7 +19,7 @@ export type { HarvestObservation } from "@idhazh/feed-ingest-plan/harvest-feeds"
 const ScreeningRunSchema = z.strictObject({
   now: UtcInstantSchema,
   run_id: RunIdSchema,
-  correlation_id: NonEmptySchema,
+  traceId: TraceIdSchema,
 });
 // Only the existing authored setting used by this reader is declared.
 const ClockConfigSchema = z.object({ collect: z.object({ max_future_hours: NonNegativeSchema }) });
@@ -42,7 +42,7 @@ export type ScreeningInput = {
   discovered: DiscoveredEvidence;
   planning: PlanningConfig;
   clock_config: { collect: { max_future_hours: number } };
-  run: { now: string; run_id: string; correlation_id: string };
+  run: { now: string; run_id: string; traceId: string };
   exclusions?: z.input<typeof ExclusionsSchema>;
 };
 
@@ -58,8 +58,8 @@ export function validateScreeningInput(input: ScreeningInput) {
   for (const candidate of candidates) {
     UtcInstantSchema.parse(candidate.fetched_at);
     if (candidate.published_at !== null) UtcInstantSchema.parse(candidate.published_at);
-    if (candidate.run_id !== run.run_id || candidate.correlation_id !== run.correlation_id) {
-      throw new Error(`candidates.${candidate.candidate_id}: run_id/correlation_id must match run`);
+    if (candidate.run_id !== run.run_id) {
+      throw new Error(`candidates.${candidate.candidate_id}: run_id must match run`);
     }
     if (ids.has(candidate.candidate_id)) throw new Error(`candidates.${candidate.candidate_id}: duplicate candidate_id`);
     ids.add(candidate.candidate_id);

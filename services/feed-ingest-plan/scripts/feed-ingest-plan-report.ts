@@ -3,8 +3,6 @@ import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { FeedIngestConfigSchema, WriterIdentitySchema, PlannerSavedResponseSchema } from "../../../packages/common-contracts/src/index";
 import { z } from "zod";
-import { PlanResponseSchema } from "../src/api/plan-response.schema";
-import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-state.schema";
 import { renderExclusionDiagnostics } from "../src/reporting/selection-exclusions-markdown";
 import {
   renderPlanMarkdown, renderPlannerProgressMarkdown, renderUnavailablePlanMarkdown,
@@ -20,7 +18,7 @@ import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { articleEntitiesFilename, articleEntitiesPath } from "../src/selected-artifact-path";
 
 export type WorkflowReportEvidence = {
-  response: unknown; health?: unknown; selected?: unknown; policy?: unknown; host?: unknown;
+  response: unknown; selected?: unknown; policy?: unknown; host?: unknown;
   failures?: ReportFailureEvidence;
 };
 
@@ -35,7 +33,7 @@ export function renderWorkflowPlanMarkdown(
   const policy = formatPolicyTable(input.policy, response.selection_started_at_utc !== null, documentationUrl);
   const host = formatHostFingerprintSummary(input.host);
   return renderPlanMarkdown({
-    response, health: input.health, selected: input.selected, policy: { markdown: policy.summary, notice: policy.notice },
+    response, selected: input.selected, policy: { markdown: policy.summary, notice: policy.notice },
     ...(policy.score_decimal_places === undefined ? {} : { score_decimal_places: policy.score_decimal_places }),
     host: { markdown: host.cells, notice: host.notice },
     maximum: policy.maximum,
@@ -72,7 +70,7 @@ export async function readExecutionEvidence(directory: string, root?: string): P
   const response: unknown = JSON.parse(await readFile(join(directory, "response.json"), "utf8"));
   const evidence: WorkflowReportEvidence = { response };
   for (const [key, name] of [
-    ["health", "health.json"], ["policy", "workflow-policy.json"],
+    ["policy", "workflow-policy.json"],
     ["host", "host-fingerprint.json"],
   ] as const) {
     const file = Bun.file(join(directory, name));
@@ -81,9 +79,9 @@ export async function readExecutionEvidence(directory: string, root?: string): P
   const saved = PlannerSavedResponseSchema.parse(response);
   if (!("planning_complete" in saved)) return evidence;
   evidence.failures = await readReportFailureEvidence({
-    directory, ...(root === undefined ? {} : { root }), response, health: evidence.health,
+    directory, ...(root === undefined ? {} : { root }), response: saved,
   });
-  const selected = PlanResponseSchema.parse(response).files.selected_articles;
+  const selected = saved.files.selected_articles;
   if (selected !== undefined) {
     try {
       const saved = await verifyParquetFiles(join(directory, "state"), "selected-articles", selected, {
@@ -118,8 +116,9 @@ export async function writeWorkflowReport(input: {
   if (await Bun.file(join(input.directory, "response.json")).exists()) {
     const evidence = await readExecutionEvidence(input.directory, input.root);
     report = renderWorkflowPlanMarkdown(evidence);
-    if (evidence.health !== undefined) {
-      diagnostics = renderExclusionDiagnostics(FeedHealthStateUpdateResponseSchema.parse(evidence.health).rows);
+    const saved = PlannerSavedResponseSchema.parse(evidence.response);
+    if ("planning_complete" in saved && saved.health?.status === "summarized") {
+      diagnostics = renderExclusionDiagnostics(saved.health.rows);
     }
   } else {
     const hostFile = Bun.file(join(input.directory, "host-fingerprint.json"));

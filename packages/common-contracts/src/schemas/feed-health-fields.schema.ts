@@ -24,14 +24,14 @@ const readFields = {
   ...identity, checked_at: health.checked_at, outcome: health.outcome, items: health.items,
 };
 export const FeedHealthReadFieldsSchema = z.object({
-  ...readFields, check_request_id: health.check_request_id,
+  ...readFields, links: health.links,
 }).superRefine(checkWorkDay);
 export const FeedHealthRestFieldsSchema = z.object({
   ...readFields, ...FeedLifecycleFieldsSchema.shape,
-  check_request_id: health.check_request_id, check_result: health.check_result, status: health.status,
+  links: health.links, check_result: health.check_result, status: health.status,
 }).superRefine(checkWorkDay);
 export const FeedHealthReliabilityFieldsSchema = z.object({
-  ...readFields, check_request_id: health.check_request_id,
+  ...readFields, links: health.links,
   availability_updated_at: health.availability_updated_at, reliability: health.reliability,
 }).superRefine(checkWorkDay);
 export const FeedHealthAdmissionFieldsSchema = z.object({

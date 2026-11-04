@@ -1,11 +1,13 @@
 /** Publish bounded planner progress events without work batches or article bodies. */
-import { ExtractionQualitySchema, ExtractionSignalSchema, FeedIngestEventSchema, NetworkFailureDetailsSchema } from "@idhazh/common-contracts";
+import {
+  createCloudEvent, ExtractionQualitySchema, ExtractionSignalSchema, FEED_INGEST_EVENT_VERSION,
+  FeedIngestEventDataSchema, FeedIngestEventSchema, NetworkFailureDetailsSchema,
+} from "@idhazh/common-contracts";
 import { z } from "zod";
-import type { FeedIngestEvent, NetworkFailureDetails } from "@idhazh/common-contracts";
+import type { FeedIngestEvent, FeedIngestEventData, NetworkFailureDetails, OperationMetadata } from "@idhazh/common-contracts";
 import { diagnosticUrl } from "./diagnostic-url";
 import type { RunContext } from "../resolve-run-context";
-// RFC 4122 DNS namespace identifies deterministic local work events.
-export const EVENT_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+import { operationMetadata } from "../api/operation-context";
 
 export function writeJsonLine(record: unknown): void { console.error(JSON.stringify(record)); }
 const DETAIL_LIMITS = { depth: 6, entries: 128, stringLength: 512, bytes: 4096 } as const;
@@ -34,8 +36,11 @@ export function prepareProgressEvent(
   failureEvidence?: NetworkFailureDetails,
 ): FeedIngestEvent {
   if (!isRecord(raw)) throw new TypeError("Progress event must be an object");
-  const { details: rawDetails, ...envelope } = raw;
-  const base = FeedIngestEventSchema.omit({ details: true }).parse(envelope);
+  const { data: rawData, ...envelope } = raw;
+  if (!isRecord(rawData)) throw new TypeError("Progress data must be an object");
+  const { details: rawDetails, ...payload } = rawData;
+  const base = FeedIngestEventDataSchema.omit({ details: true }).parse(payload);
+  const carrier = FeedIngestEventSchema.parse({ ...envelope, data: { ...base, details: {} } });
   const violations = new Map<string, ComplianceViolation>();
   const addViolation = (code: string, path: string) => violations.set(`${code}:${path}`, { code, path });
   const ancestors = new WeakSet<object>();
@@ -173,20 +178,25 @@ export function prepareProgressEvent(
       attempt: evidence.attempt === null ? null : { ...evidence.attempt, request_url: safe(evidence.attempt.request_url) },
     };
   }
-  return FeedIngestEventSchema.parse({ ...base, details });
+  return FeedIngestEventSchema.parse({ ...carrier, data: { ...base, details } });
 }
 
 export function createStageLogger(
-  context: Pick<RunContext, "run_id" | "correlation_id">,
+  context: Pick<RunContext, "run_id"> & OperationMetadata,
+  source: string,
   write: (event: FeedIngestEvent) => void = writeJsonLine,
 ) {
-  return (operation: FeedIngestEvent["operation"], phase: FeedIngestEvent["phase"],
+  return (operation: FeedIngestEventData["operation"], phase: FeedIngestEventData["phase"],
     details: Record<string, unknown> = {}, requiredDetails: readonly string[] = [], failureArticleUrl?: string,
-    failureFeedUrls?: Readonly<{ requested: string; final_attempted: string | null }>, failureEvidence?: NetworkFailureDetails) => {
-    write(prepareProgressEvent({
-      run_id: context.run_id, correlation_id: context.correlation_id, occurred_at: new Date().toISOString(),
-      operation, phase, details,
-    }, requiredDetails, failureArticleUrl, failureFeedUrls, failureEvidence));
+    failureFeedUrls?: Readonly<{ requested: string; final_attempted: string | null }>, failureEvidence?: NetworkFailureDetails,
+    operationContext?: OperationMetadata) => {
+    const event = createCloudEvent({
+      source, type: "planner.progress", context: operationMetadata(operationContext ?? context),
+      data: { version: FEED_INGEST_EVENT_VERSION, run_id: context.run_id, operation, phase, details: {} },
+      parseData: value => FeedIngestEventDataSchema.parse(value),
+    });
+    write(prepareProgressEvent({ ...event, data: { ...event.data, details } },
+      requiredDetails, failureArticleUrl, failureFeedUrls, failureEvidence));
   };
 }
 export type StageLogger = ReturnType<typeof createStageLogger>;

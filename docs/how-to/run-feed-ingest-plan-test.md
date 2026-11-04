@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-03
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -21,11 +21,19 @@ real loopback server in a separate child process within one workflow step.
 Validated private startup data preserves local input settings, invocation-only
 enablement, temporary output, run/attempt/revision identity and UTC clocks.
 Readiness must match that exact child and invocation, not merely an available
-port. The client posts to `/plan` and reads the batch health summary while the
-same child remains alive. The supervisor closes and reaps it in `finally`.
+port. The client posts to `/plan` once. The request captures its actual health
+report and releases its live collection before replying. The client does not
+continue with another summary or release request. The supervisor closes and
+reaps the child in `finally`.
 It verifies the returned
 five-format native output and selected artifact before exposing commit paths.
 Completed planning is not proof of summarization or publication.
+The HTTP body, direct CLI output and saved `response.json` share one model.
+Required `health` records the successful summary, an explicit report failure,
+or null only when no completed report input exists. Report or cleanup failure
+fails the request without changing completed planning facts or their saved row.
+The client saves and verifies a structured HTTP 500 result as well as a
+successful result. Both CLIs exit unsuccessfully for any request failure.
 
 ## Manual controls
 
@@ -246,8 +254,13 @@ client, then closes the child pipe. Pipe closure also triggers child cleanup
 when the supervisor disappears. Only the exact spawned child can be forcibly
 killed. The server is never detached or kept alive across workflow steps.
 
-The Markdown report reads the body-free response, verified selected metadata,
-health result, captured effective settings and host fingerprint. Only Run
+The Markdown report reads the body-free response, its embedded successful
+`health` report, verified selected metadata, captured effective settings and
+host fingerprint. A missing or failed separate `health.json` write cannot
+remove that report, exclusion diagnostics or earlier paused-feed evidence.
+Null and failed report outcomes stay explicit rather than becoming empty
+successful reports. A report or release failure is shown separately from
+completed planning. Only Run
 outcome and Needs attention are visible. Per-feed article results, Request
 counts and coverage, Why articles were not selected, Selected article evidence,
 Effective settings and Execution measurements use closed-by-default folds.

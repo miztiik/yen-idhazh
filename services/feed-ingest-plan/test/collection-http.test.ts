@@ -1,6 +1,5 @@
 /** Do unfinished collections refuse selection and prevent duplicate feed claims over real HTTP? */
 import { expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createPlanTestServer } from "./plan-test-server";
@@ -12,28 +11,32 @@ import {
 } from "../src/api/collection-contracts";
 import { rawDocumentContentsPath } from "../src/selected-artifact-path";
 import { FetchResponseSchema } from "../src/api/document-response.schema";
-import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { createRootContext, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
+import { operationLink } from "../src/api/operation-context";
 
 test("unfinished or cancelled collection cannot be selected and a feed cannot be claimed twice", async () => {
   const fixture = await recordedPlan();
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
-  const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const caller = createRootContext();
+  const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) }, body: JSON.stringify(body) });
   const prefix = PLANNER_API_PREFIX;
-  const id = randomUUID();
+  const id = caller.traceId;
   try {
-    const begun = await app.request(`${prefix}/collections`, post({ collection_id: id, request: {} }));
+    const begun = await app.request(`${prefix}/collections`, post({ request: {} }));
     expect(begun.status).toBe(200);
     const collection = getCollection(fixture.inputs, id);
-    expect((await app.request(`${prefix}/collections/complete`, post({ collection_id: id }))).status).toBe(409);
-    expect((await app.request(`${prefix}/select-articles`, post({ batch_id: collection.parsed_batch_id }))).status).toBe(409);
-    const body = { request_id: randomUUID(), collection_id: id, feed_id: "recorded-news",
-      correlation_id: collection.context.correlation_id, fetch_item_type: "feed" };
+    expect((await app.request(`${prefix}/collections/complete`, post({ traceId: id }))).status).toBe(409);
+    expect((await app.request(`${prefix}/select-articles`, post({ links: [operationLink(collection.context)] }))).status).toBe(404);
+    const body = { traceId: id, feed_id: "recorded-news", fetch_item_type: "feed" };
     const fetched = await app.request(`${prefix}/fetch`, post(body));
     expect(fetched.status, await fetched.clone().text()).toBe(200);
-    expect((await app.request(`${prefix}/fetch`, post({ ...body, request_id: randomUUID() }))).status).toBe(409);
-    expect((await app.request(`${prefix}/collections/cancel`, post({ collection_id: id }))).status).toBe(200);
+    expect((await app.request(`${prefix}/fetch`, post(body))).status).toBe(409);
+    const cancellation = await app.request(`${prefix}/collections/cancel`, post({ traceId: id }));
+    expect(cancellation.status).toBe(200);
+    const cancelled = CancelledCollectionSchema.parse(await cancellation.json());
+    expect((await app.request(`${prefix}/select-articles`, post({ links: [operationLink(cancelled)] }))).status).toBe(409);
     expect(collection.signal.signal.aborted).toBe(true);
-    expect((await app.request(`${prefix}/collections/complete`, post({ collection_id: id }))).status).toBe(409);
+    expect((await app.request(`${prefix}/collections/complete`, post({ traceId: id }))).status).toBe(409);
   } finally { await app.close(); await fixture.close(); }
 }, 120000);
 
@@ -49,12 +52,12 @@ test("standalone and collection fetches share their domain queue", async () => {
     status: 200, fixture: "rss",
   }];
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
-  const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const caller = createRootContext();
+  const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) }, body: JSON.stringify(body) });
   const prefix = PLANNER_API_PREFIX;
-  const collectionId = randomUUID();
-  const collection = await app.request(`${prefix}/collections`, post({ collection_id: collectionId, request: {} }));
+  const collectionId = caller.traceId;
+  const collection = await app.request(`${prefix}/collections`, post({ request: {} }));
   expect(collection.status).toBe(200);
-  const collectionContext = getCollection(fixture.inputs, collectionId).context;
   const starts: number[] = [];
   let resolveFirstDispatch!: () => void;
   const firstDispatch = new Promise<void>(resolve => { resolveFirstDispatch = resolve; });
@@ -65,13 +68,12 @@ test("standalone and collection fetches share their domain queue", async () => {
   const pending: Promise<Response>[] = [];
   try {
     const standalone = app.request(`${prefix}/fetch`, post({
-      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", fetch_item_type: "feed",
+      feed_id: "recorded-news", fetch_item_type: "feed",
     }));
     pending.push(standalone);
     await Promise.race([firstDispatch, standalone.then(() => { throw new Error("Standalone fetch ended before dispatch"); })]);
     pending.push(app.request(`${prefix}/fetch`, post({
-      request_id: randomUUID(), collection_id: collectionId, correlation_id: collectionContext.correlation_id,
-      feed_id: "recorded-second", fetch_item_type: "feed",
+      traceId: collectionId, feed_id: "recorded-second", fetch_item_type: "feed",
     })));
     const responses = await Promise.all(pending);
     expect(responses.map(response => response.status)).toEqual([200, 200]);
@@ -85,35 +87,40 @@ test("standalone and collection fetches share their domain queue", async () => {
     }
   } finally {
     await Promise.allSettled(pending);
-    await app.request(`${prefix}/collections/cancel`, post({ collection_id: collectionId }));
+    await app.request(`${prefix}/collections/cancel`, post({ traceId: collectionId }));
     await app.close();
     await fixture.close();
   }
 }, 120000);
 
-test("active execution input remains pinned and an expired batch cannot reopen historical files", async () => {
+test("active execution input remains pinned and an expired result cannot reopen historical files", async () => {
   const fixture = await recordedPlan();
   fixture.inputs.settings.listener.max_stage_batches = 1;
   const { run_number: _run, ...runtime } = fixture.runtime;
   const app = createPlanTestServer(fixture.inputs, runtime);
-  const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const caller = createRootContext();
+  const nextCaller = createRootContext();
+  const post = (body: unknown, context = caller) => ({ method: "POST",
+    headers: { "content-type": "application/json", ...writeTraceContext(context) }, body: JSON.stringify(body) });
   const prefix = PLANNER_API_PREFIX;
-  const first = randomUUID();
-  const second = randomUUID();
+  const first = caller.traceId;
+  const second = nextCaller.traceId;
   try {
-    expect((await app.request(`${prefix}/collections`, post({ collection_id: first, request: {} }))).status).toBe(200);
+    expect((await app.request(`${prefix}/collections`, post({ request: {} }))).status).toBe(200);
     expect(CollectionExistsResponseSchema.parse(await (await app.request(
-      `${prefix}/collections/exists`, post({ collection_id: first }),
-    )).json())).toMatchObject({ collection_id: first, exists: true });
+      `${prefix}/collections/exists`, post({ traceId: first }),
+    )).json())).toMatchObject({ traceId: first, exists: true });
     const original = getCollection(fixture.inputs, first);
     const baseline = original.state.baseline;
-    const blocked = await app.request(`${prefix}/collections`, post({ collection_id: second, request: {} }));
+    const blocked = await app.request(`${prefix}/collections`, post({ request: {} }, nextCaller));
     expect(blocked.ok).toBe(false);
     expect(await blocked.json()).toMatchObject({ code: "REQUEST_BUSY" });
     expect(original.state.baseline).toBe(baseline);
-    expect((await app.request(`${prefix}/collections/cancel`, post({ collection_id: first }))).status).toBe(200);
+    const cancellation = await app.request(`${prefix}/collections/cancel`, post({ traceId: first }));
+    expect(cancellation.status).toBe(200);
+    const cancelled = CancelledCollectionSchema.parse(await cancellation.json());
     const outcome = await app.request(`${prefix}/collections/finalize`, post({
-      collection_id: first, failure_code: "PLANNER_EXECUTION_FAILED",
+      traceId: first, failure_code: "PLANNER_EXECUTION_FAILED",
       collection_timing: { duration_ms: 0, status: "failed" },
     }));
     expect(FinalizedCollectionSchema.parse(await outcome.json()).status).toBe("failed");
@@ -122,10 +129,11 @@ test("active execution input remains pinned and an expired batch cannot reopen h
     }));
     expect(await released.json()).toMatchObject({ released: true });
     expect(CollectionExistsResponseSchema.parse(await (await app.request(
-      `${prefix}/collections/exists`, post({ collection_id: first }),
-    )).json())).toMatchObject({ collection_id: first, exists: false });
-    expect((await app.request(`${prefix}/collections`, post({ collection_id: second, request: {} }))).status).toBe(200);
-    const expired = await app.request(`${prefix}/select-articles`, post({ batch_id: original.parsed_batch_id }));
+      `${prefix}/collections/exists`, post({ traceId: first }),
+    )).json())).toMatchObject({ traceId: first, exists: false });
+    expect((await app.request(`${prefix}/collections`, post({ request: {} }, nextCaller))).status).toBe(200);
+    expect((await app.request(`${prefix}/collections/cancel`, post({ traceId: second }))).status).toBe(200);
+    const expired = await app.request(`${prefix}/select-articles`, post({ links: [operationLink(cancelled)] }));
     expect(expired.status).toBe(404);
     expect(await expired.json()).toMatchObject({ code: "ARTIFACT_NOT_FOUND" });
     expect(fixture.transport.requests).toEqual([]);
@@ -135,24 +143,26 @@ test("active execution input remains pinned and an expired batch cannot reopen h
 test("final status uses checked work, not carry rows, and raw finish errors keep the earlier cause", async () => {
   const fixture = await recordedPlan();
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
-  const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const caller = createRootContext();
+  const post = (body: unknown, context = caller) => ({ method: "POST",
+    headers: { "content-type": "application/json", ...writeTraceContext(context) }, body: JSON.stringify(body) });
   const prefix = PLANNER_API_PREFIX;
-  const id = randomUUID();
+  const id = caller.traceId;
   try {
-    expect((await app.request(`${prefix}/collections`, post({ collection_id: id, request: {} }))).status).toBe(200);
+    expect((await app.request(`${prefix}/collections`, post({ request: {} }))).status).toBe(200);
     const collection = getCollection(fixture.inputs, id);
     const cancelled = CancelledCollectionSchema.parse(await (await app.request(
-      `${prefix}/collections/cancel`, post({ collection_id: id }),
+      `${prefix}/collections/cancel`, post({ traceId: id }),
     )).json());
     expect(cancelled.has_work).toBe(true);
     expect(collection.state.work.rows().every(row => row.checked_at === null)).toBe(true);
     const invalid = await app.request(`${prefix}/collections/finalize`, post({
-      collection_id: id, failure_code: "PLANNER_EXECUTION_FAILED",
+      traceId: id, failure_code: "PLANNER_EXECUTION_FAILED",
       collection_timing: { duration_ms: "0", status: "failed" },
     }));
     expect(invalid.status).toBe(400);
     const outcome = FinalizedCollectionSchema.parse(await (await app.request(`${prefix}/collections/finalize`, post({
-      collection_id: id, failure_code: "PLANNER_EXECUTION_FAILED",
+      traceId: id, failure_code: "PLANNER_EXECUTION_FAILED",
       collection_timing: { duration_ms: 0, status: "failed" },
     }))).json());
     expect(outcome).toMatchObject({ status: "failed", failure_code: "PLANNER_EXECUTION_FAILED" });
@@ -164,21 +174,23 @@ test("final status uses checked work, not carry rows, and raw finish errors keep
     }));
 
     fixture.inputs.settings.dump_raw_document_contents = true;
+    fixture.runtime.run_number = "701";
     const feed = fixture.inputs.harvest.sources[0]!;
     fixture.transport.recordings.responses[feed.url] = [{ status: 503, body: "recorded failure" }];
-    const secondId = randomUUID();
-    expect((await app.request(`${prefix}/collections`, post({ collection_id: secondId, request: {} }))).status).toBe(200);
+    const nextCaller = createRootContext();
+    const secondId = nextCaller.traceId;
+    expect((await app.request(`${prefix}/collections`, post({ request: {} }, nextCaller))).status).toBe(200);
     const second = getCollection(fixture.inputs, secondId);
+    expect(second.context.run_id).not.toBe(collection.context.run_id);
     const rawPath = rawDocumentContentsPath(fixture.inputs.settings.inputs.artifact_root, second.state.context);
     await mkdir(join(fixture.inputs.root, ...rawPath.split("/")), { recursive: true });
     const fetched = FetchResponseSchema.parse(await (await app.request(`${prefix}/fetch`, post({
-      request_id: randomUUID(), collection_id: secondId, feed_id: feed.id,
-      correlation_id: second.context.correlation_id, fetch_item_type: "feed",
+      traceId: secondId, feed_id: feed.id, fetch_item_type: "feed",
     }))).json());
     expect(fetched.failure).not.toBeNull();
-    await app.request(`${prefix}/collections/cancel`, post({ collection_id: secondId }));
+    await app.request(`${prefix}/collections/cancel`, post({ traceId: secondId }));
     const priorCause = FinalizedCollectionSchema.parse(await (await app.request(`${prefix}/collections/finalize`, post({
-      collection_id: secondId, failure_code: "EARLIER_FETCH_FAILURE",
+      traceId: secondId, failure_code: "EARLIER_FETCH_FAILURE",
       collection_timing: { duration_ms: 1, status: "failed" },
     }))).json());
     expect(priorCause.failure_code).toBe("EARLIER_FETCH_FAILURE");

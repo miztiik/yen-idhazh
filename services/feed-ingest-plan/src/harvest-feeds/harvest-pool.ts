@@ -90,7 +90,8 @@ export async function harvestFeeds(
       context.on_feed?.(feed.outcome, feed.entries, utcTimestamp(context.observation_clock));
       context.progress?.("FEED_FETCH_COMPLETED", { feed_id: source.feed_id, output_count: feed.entries.length });
       const articles = await mapPool(feed.entries, inputs.config.harvest.concurrency, async entry => {
-        const offered: OfferedArticle = { source, entry };
+        if (feed.parse === null) throw new Error("Offered article requires its completed feed parse");
+        const offered: OfferedArticle = { source, entry, input: feed.parse };
         context.progress?.("ARTICLE_HARVEST_STARTED", { feed_id: source.feed_id });
         const result = await harvestArticle(offered, inputs, boundedFetcher, runContext);
         context.on_article?.(result);

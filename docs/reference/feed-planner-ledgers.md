@@ -174,7 +174,7 @@ totals or add together saved rolling reliability results.
 | C38 | `attempt` | Feed/run/day | Retain the run attempt when compacted rows from different executions coexist |
 | C39 | `items` | Feed/run/day | Existing distinct-offered-URL count used to decide whether the feed read was productive |
 | C40 | `outcome` | Feed/run/day | Native target-download result, not parsed validity; combined with C39 for read productivity |
-| C41 | `check_request_id` | Feed/run/day | Actual logical check identity; null for carried-only rows |
+| C41 | `links` | Feed/run/day | Zero or one `{ traceId, spanId }` reference to the logical feed-check fetch operation; empty when no check is known |
 | C42 | `check_result` | Feed/run/day | Parsed validity or typed HTTP, timeout, transport, local or interrupted result |
 | C43 | `rest_until` | Saved calculation | Supported UTC recovery deadline |
 | C44 | `first_confirmed_failure_at` | Saved calculation | UTC first observed confirmed failure in the known episode; partial history does not claim an earlier unseen start |
@@ -196,6 +196,12 @@ Saved reliability values describe the lookback evaluated for that run; they
 are not additive counters. Readers aggregate run counters separately and
 deduplicate repeated storage representations without discarding distinct work.
 Missing evidence remains unknown.
+
+The same historical check keeps its original C41 reference across run, attempt
+and day projections. Rest and reliability count that logical check once, not
+once per stored copy or network retry. A contradictory copy remains incomplete
+evidence. These historical references do not require a live listener entry and
+cannot reopen a fetched body or stage result.
 
 ## D. plan-runs
 

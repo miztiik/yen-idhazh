@@ -1,7 +1,6 @@
 {
   "date": "2026-10-21",
   "run_id": "2026-10-21-66",
-  "correlation_id": "partition-fixture",
   "observed_at": "2026-10-21T12:00:00Z",
   "word_work": [8, 7, 6, 5, 4],
   "bin_pack_workers": [0, 1, 1, 0, 0],

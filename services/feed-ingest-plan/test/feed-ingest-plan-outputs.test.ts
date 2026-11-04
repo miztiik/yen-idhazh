@@ -73,11 +73,11 @@ test("both report modes leave the recorded result and every native file unchange
     const before = structuredClone({ response, health, selected: selected.rows });
     const paths: string[] = JSON.parse(fixture.outputs.current_run_files!);
     const bytes = await Promise.all(paths.map(path => readFile(join(fixture.inputs.outputRoot, path))));
-    const evidence = { response, health, selected: selected.rows, policy: {
+    const evidence = { response, selected: selected.rows, policy: {
       config: fixture.inputs.harvest.config, request: {}, history: fixture.inputs.clock_config.collect,
       parser_concurrency: fixture.inputs.settings.listener.parser_concurrency,
     } };
-    expect(renderPlanMarkdown({ response, health }).markdown).toContain("# Feed planner run");
+    expect(renderPlanMarkdown({ response }).markdown).toContain("# Feed planner run");
     const summary = join(fixture.directory, "summary.md");
     const annotations: string[] = [];
     await writePlannerReport({ config: { ...fixture.inputs.harvest.config, workflow_reporting: {
@@ -91,7 +91,6 @@ test("both report modes leave the recorded result and every native file unchange
     expect(annotations).toEqual(report.notices.map(formatWorkflowAnnotation));
     const directory = fixture.directory;
     await writeFile(join(directory, "response.json"), JSON.stringify(response));
-    await writeFile(join(directory, "health.json"), JSON.stringify(health));
     await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(evidence.policy));
     expect(await readExecutionReport(directory)).toBe(report.markdown);
     expect({ response, health, selected: selected.rows }).toEqual(before);
@@ -144,7 +143,7 @@ test("empty persistence produces an explicit empty ledger and an actual empty ar
   const fixture = await recordedPlan();
   try {
     const batch = await recordedPersistenceBatch(fixture.inputs, fixture.runtime, { empty: true });
-    const result = await executePersistence({ batch_id: batch.batch_id }, fixture.inputs, fixture.runtime);
+    const result = await executePersistence({ links: [{ traceId: batch.traceId, spanId: batch.spanId }] }, fixture.inputs, fixture.runtime);
     expect(result.selected_count).toBe(0);
     expect(result.files).toEqual({ status: "empty", files: [] });
     const artifact = SelectedArticlesArtifactSchema.parse(await Bun.file(join(fixture.directory, result.artifact)).json());

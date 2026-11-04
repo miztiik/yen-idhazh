@@ -10,6 +10,7 @@ import { SafePersistHttpRequestSchema } from "./feed-ingest-plan-delivery-result
 import type { SafePersistHttpReadySchema } from "./feed-ingest-plan-delivery-result";
 import { withPlannerFailure } from "../src/api/plan-failure";
 import type { FailureCaptureLimits } from "../src/config/service-settings";
+import { captureRequestRuntime, commandContext } from "../src/api/operation-context";
 
 export function createSafePersistApp(input: {
   root: string; directory: string; maxBodyBytes: number; gitSha: string;
@@ -32,6 +33,7 @@ export function createSafePersistApp(input: {
       throw error;
     }
     const request = SafePersistHttpRequestSchema.parse(raw);
+    const context = commandContext(captureRequestRuntime({ git_sha: input.gitSha }, c.req.raw.headers));
     input.signal.throwIfAborted();
     c.req.raw.signal.throwIfAborted();
     c.env?.beginDelivery?.();
@@ -39,11 +41,11 @@ export function createSafePersistApp(input: {
     try { result = await deliverWorkflowMetadata({
       root: input.root, directory: input.directory, runNumber: request.runNumber,
       attempt: request.attempt, currentRunFiles: JSON.stringify(request.paths),
-      gitSha: input.gitSha,
+      gitSha: input.gitSha, context,
     }); } catch (error) {
       throw withPlannerFailure(error, {
         operation: "commit-ledgers", execution: {
-          run_id: null, attempt: request.attempt, correlation_id: null, git_sha: input.gitSha,
+          run_id: null, attempt: request.attempt, traceId: context.traceId, spanId: context.spanId, git_sha: input.gitSha,
         }, ...(input.failureLimits === undefined ? {} : { limits: input.failureLimits }),
       });
     }

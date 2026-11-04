@@ -8,7 +8,7 @@ import { z } from "zod";
 import {
   DiscoveredArticleRowContract, FeedHealthStateRowContract, ItemHealthFailureCodeSchema,
   ParsedFeedBatchSchema, SelectedFeedBatchSchema, SelectedArticleRowContract, SelectedArticlesArtifactSchema,
-  selectedArticleMetadata, PLANNER_API_PREFIX,
+  createRootContext, selectedArticleMetadata, PLANNER_API_PREFIX, writeTraceContext,
 } from "@idhazh/common-contracts";
 import { persistLedger, readPlannerParquet } from "@idhazh/ledger-file-writer";
 import { loadPlanInputs } from "../src/load-plan-inputs";
@@ -29,7 +29,7 @@ import { settings, registration, writer, writeRows } from "./partition-fixtures"
 import { createPlanTestServer } from "./plan-test-server";
 import { inputs as harvestInputs, readRecordings, RecordedTransport, source } from "./harvest-recordings";
 import { rewriteHealthFields } from "./health-field-fixtures";
-import { randomUUID } from "node:crypto";
+import { operationLink } from "../src/api/operation-context";
 
 async function runRecording() {
   const root = await mkdtemp(join(tmpdir(), "planner-file-baseline-"));
@@ -112,17 +112,18 @@ async function runRecordingAt(root: string) {
   inputs.clock_config.collect.reliability_window_days = 1;
   inputs.harvest.config.feedback.lifecycle_window_days = 1;
   const app = createPlanTestServer(inputs, runtime);
+  const caller = createRootContext();
   const post = async <T>(path: string, body: unknown, schema: z.ZodType<T>) => {
     const response = await app.request(`${PLANNER_API_PREFIX}/${path}`, {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+      method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) }, body: JSON.stringify(body),
     });
     const result: unknown = await response.json();
     assert.equal(response.status, 200, JSON.stringify(result));
     return schema.parse(result);
   };
   try {
-    const collectionId = randomUUID();
-    const begun = await post("collections", { collection_id: collectionId, request: {} }, CollectionResponseSchema);
+    const collectionId = caller.traceId;
+    const begun = await post("collections", { request: {} }, CollectionResponseSchema);
     assert.deepEqual(begun.feeds.sort(), ["recorded-atom", "recorded-news"]);
     assert.equal(transport.requests.length, 0, "All history must load before the first source request");
     const collection = getCollection(inputs, collectionId);
@@ -145,37 +146,35 @@ async function runRecordingAt(root: string) {
     for (const file of publications.files) await rm(join(stateRoot, file.path));
     for (const file of itemHealth.files) await rm(join(stateRoot, file.path));
     for (const feedId of begun.feeds) {
-      const fetched = await post("fetch", { request_id: randomUUID(), collection_id: collectionId,
-        feed_id: feedId, correlation_id: begun.context.correlation_id, fetch_item_type: "feed" }, FetchResponseSchema);
-      const parsed = await post("parse", { request_id: randomUUID(), fetch_request_id: fetched.fetch_request_id,
-        article_id: fetched.article_id, correlation_id: begun.context.correlation_id }, ParseResponseSchema);
+      const fetched = await post("fetch", { traceId: collectionId,
+        feed_id: feedId, fetch_item_type: "feed" }, FetchResponseSchema);
+      const parsed = await post("parse", { links: [operationLink(fetched)] }, ParseResponseSchema);
       assert(parsed.fetch_item_type === "feed");
       for (const offer of parsed.offers) {
-        const article = await post("fetch", { request_id: randomUUID(), batch_id: parsed.batch_id, offer_id: offer.offer_id,
-          feed_id: feedId, correlation_id: begun.context.correlation_id, fetch_item_type: "article" }, FetchResponseSchema);
-        await post("parse", { request_id: randomUUID(), fetch_request_id: article.fetch_request_id,
-          article_id: article.article_id, correlation_id: begun.context.correlation_id }, ParseResponseSchema);
+        const article = await post("fetch", { links: [operationLink(parsed)], offer_id: offer.offer_id,
+          fetch_item_type: "article" }, FetchResponseSchema);
+        await post("parse", { links: [operationLink(article)] }, ParseResponseSchema);
       }
     }
-    const completed = await post("collections/complete", { collection_id: collectionId }, CompletedCollectionSchema);
-    const parsed = stageStore(inputs).read("parsed", completed.batch_id, ParsedFeedBatchSchema);
+    const completed = await post("collections/complete", { traceId: collectionId }, CompletedCollectionSchema);
+    const parsed = stageStore(inputs).read("parsed", completed, ParsedFeedBatchSchema);
     assert.equal(parsed.discovered.availability, "available");
     if (parsed.discovered.availability === "available") {
       assert.equal(parsed.discovered.rows.find(row => row.url_key === discovery.url_key)!.first_seen_at, discovery.first_seen_at);
     }
-    const selected = await post("select-articles", { batch_id: completed.batch_id }, SelectionResponseSchema);
+    const selected = await post("select-articles", { links: [operationLink(completed)] }, SelectionResponseSchema);
     assert.equal(selected.articles.length, 2);
     assert.equal(selected.request_report.feeds.find(feed => feed.feed_id === "recorded-news")!.feed_requests, seed.feed_requests);
     assert.equal(selected.request_report.feeds.find(feed => feed.feed_id === "recorded-news")!.article_requests, seed.article_requests);
     assert.deepEqual(collection.state.baseline, baseline, "Current work and disk changes must not mutate baseline records");
-    const recordedHealth = await post("feed-health-state", { batch_id: selected.batch_id, action: "record" },
+    const recordedHealth = await post("feed-health-state", { links: [operationLink(selected)], action: "record" },
       FeedHealthStateUpdateResponseSchema);
     assert.equal(recordedHealth.status, "recorded");
     assert(recordedHealth.files?.status === "written");
     const nativeHealth = await readPlannerParquet(join(inputs.outputRoot, recordedHealth.files.files[0]!.path),
       "feed-health-state", FeedHealthStateRowContract);
     assert(nativeHealth.rows.some(row => row.feed_id === "recorded-news" && (row.feed_requests ?? 0) > 0));
-    const persisted = await post("persist-selected-articles", { batch_id: selected.batch_id }, PersistenceResponseSchema);
+    const persisted = await post("persist-selected-articles", { links: [operationLink(selected)] }, PersistenceResponseSchema);
     assert(persisted.files.status === "written");
     const metadata = await readPlannerParquet(join(inputs.outputRoot, persisted.files.files[0]!.path),
       "selected-articles", SelectedArticleRowContract);
@@ -183,14 +182,14 @@ async function runRecordingAt(root: string) {
       ["https://atom.example/entry", "https://news.example/second"]);
     assert.equal(metadata.rows.find(row => row.url_key === discovery.url_key)!.timing_at, discovery.first_seen_at);
     assert(metadata.rows.every(row => row.ratings.adjustments.every(term => Number.isFinite(term.value))));
-    const summary = await post("feed-health-state", { batch_id: selected.batch_id, action: "summarize" },
+    const summary = await post("feed-health-state", { links: [operationLink(selected)], action: "summarize" },
       FeedHealthStateUpdateResponseSchema);
     assert(summary.rows.some(row => row.feed_id === "recorded-news" && (row.feed_requests ?? 0) > 0));
     assert.deepEqual(collection.state.baseline, baseline);
     assert.equal(transport.requests.filter(request => request.url.pathname === "/story/").length, 0);
     assert.equal(transport.requests.filter(request => request.url.pathname === "/undated").length, 0);
     runtime.selection_clock = () => new Date("2026-10-22T00:01:00Z");
-    const nextDaySelection = await post("select-articles", { batch_id: completed.batch_id }, SelectionResponseSchema);
+    const nextDaySelection = await post("select-articles", { links: [operationLink(completed)] }, SelectionResponseSchema);
     assert.equal(nextDaySelection.articles.length, 2);
     assert.equal(nextDaySelection.request_report.through_day, day);
     const currentRequests = collection.state.work.rows().filter(row => row.feed_id === "recorded-news" && row.date === day)
@@ -206,22 +205,22 @@ async function runRecordingAt(root: string) {
     } } };
     const freshApp = createPlanTestServer(freshInputs, { ...runtime, run_number: "7301" });
     try {
-      const id = randomUUID();
+      const nextCaller = createRootContext();
+      const id = nextCaller.traceId;
       const response = await freshApp.request(`${PLANNER_API_PREFIX}/collections`, {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ collection_id: id, request: {} }),
+        method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(nextCaller) },
+        body: JSON.stringify({ request: {} }),
       });
       assert.equal(response.status, 200, await response.clone().text());
       const newRun = CollectionResponseSchema.parse(await response.json());
       assert(newRun.feeds.includes("recorded-resting"), "An independent execution must load current local evidence");
       assert.notDeepEqual(getCollection(freshInputs, id).state.baseline, baseline);
       await freshApp.request(`${PLANNER_API_PREFIX}/collections/cancel`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ collection_id: id }),
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ traceId: id }),
       });
-      const correlation = randomUUID();
       const standalone = await freshApp.request(`${PLANNER_API_PREFIX}/fetch`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ request_id: randomUUID(), feed_id: "recorded-news", correlation_id: correlation,
+        body: JSON.stringify({ feed_id: "recorded-news",
           fetch_item_type: "article", url: "https://news.example/second" }),
       });
       assert.equal(standalone.status, 200, await standalone.clone().text());
@@ -234,14 +233,13 @@ async function runRecordingAt(root: string) {
         [{ ...discovery, first_seen_at: `${prior}T11:00:00Z` }], prior, "daily");
       const parsedResponse = await freshApp.request(`${PLANNER_API_PREFIX}/parse`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ request_id: randomUUID(), fetch_request_id: document.fetch_request_id,
-          article_id: document.article_id, correlation_id: correlation }),
+        body: JSON.stringify({ links: [operationLink(document)] }),
       });
       assert.equal(parsedResponse.status, 200, await parsedResponse.clone().text());
       const standaloneParsed = ParseResponseSchema.parse(await parsedResponse.json());
       const choice = await freshApp.request(`${PLANNER_API_PREFIX}/select-articles`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ batch_id: standaloneParsed.batch_id }),
+        body: JSON.stringify({ links: [operationLink(standaloneParsed)] }),
       });
       assert.equal(choice.status, 200, await choice.clone().text());
       const choiceResult = SelectionResponseSchema.parse(await choice.json());
@@ -250,7 +248,7 @@ async function runRecordingAt(root: string) {
     } finally { await freshApp.close(); }
     assert.equal(Bun.which("git"), null);
     const artifact = SelectedArticlesArtifactSchema.parse(JSON.parse(await readFile(join(root, persisted.artifact), "utf8")));
-    const heldSelection = stageStore(inputs).read("selected", selected.batch_id, SelectedFeedBatchSchema);
+    const heldSelection = stageStore(inputs).read("selected", selected, SelectedFeedBatchSchema);
     assert.deepEqual(artifact.articles.map(article => article.article_text),
       heldSelection.articles.map(article => article.article_text));
     assert(artifact.articles.every(article => article.article_text.trim().length > 0));
@@ -261,7 +259,7 @@ async function runRecordingAt(root: string) {
     return { git_unavailable: true, source_matches_requested: true, loaded_before_fetch: true,
       raw_and_compact: true, baseline_unchanged: true, historical_edits_and_additions: true,
       independent_capture_changed: true, selected_count: metadata.rows.length, native_output_readback: true,
-      selection_retained: stageStore(inputs).has(selected.batch_id), standalone_baseline_unchanged: true,
+      selection_retained: stageStore(inputs).has(selected), standalone_baseline_unchanged: true,
       utc_boundary_reused: true, selected_metadata_readback: true, selected_text_readback: true, health_readback: true };
   } finally { await app.close(); }
 }

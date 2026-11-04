@@ -5,10 +5,12 @@ import type { PlanRuntime } from "../../run-feed-plan";
 import { executeFeedHealthState } from "../feed-health-state-operation";
 import { FeedHealthStateUpdateRequestSchema, FeedHealthStateUpdateResponseSchema } from "../feed-health-state.schema";
 import { readRequestBody } from "./stages.route";
+import { captureRequestRuntime } from "../operation-context";
 
 export function feedHealthStateRoute(inputs: PlanInputs, runtime: () => PlanRuntime) {
   return new Hono().post("/feed-health-state", async c => {
     const request = FeedHealthStateUpdateRequestSchema.parse(await readRequestBody(c.req.raw));
-    return c.json(FeedHealthStateUpdateResponseSchema.parse(await executeFeedHealthState(request, inputs, runtime())));
+    return c.json(FeedHealthStateUpdateResponseSchema.parse(await executeFeedHealthState(request, inputs,
+      captureRequestRuntime({ ...runtime(), signal: c.req.raw.signal }, c.req.raw.headers))));
   });
 }

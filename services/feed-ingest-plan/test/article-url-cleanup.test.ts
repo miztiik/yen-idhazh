@@ -5,6 +5,7 @@ import { createSourceFetcher } from "../src/harvest-feeds/fetch-source";
 import { recordedPlan } from "./plan-recordings";
 import { collectRecordedFeeds } from "./collection-recordings";
 import { executeSelection } from "../src/api/selection-operation";
+import { operationLink } from "../src/api/operation-context";
 
 test("query variants retain their offer ordinals and downloads but produce only one selected key", async () => {
   const held = await recordedPlan();
@@ -17,7 +18,7 @@ test("query variants retain their offer ordinals and downloads but produce only 
     expect(batch.candidates.map(candidate => candidate.entry_ordinal)).toEqual([0, 2]);
     expect(batch.offers.map(offer => offer.entry.entry_ordinal)).toEqual([0, 2]);
     expect(new Set(batch.candidates.map(candidate => candidate.url_key)).size).toBe(1);
-    expect((await executeSelection({ batch_id: batch.batch_id }, held.inputs, held.runtime)).batch.articles).toHaveLength(1);
+    expect((await executeSelection({ links: [operationLink(batch)] }, held.inputs, held.runtime)).batch.articles).toHaveLength(1);
     expect(held.transport.requests.filter(request => request.url.pathname === "/story/")).toHaveLength(2);
   } finally { await held.close(); }
 });

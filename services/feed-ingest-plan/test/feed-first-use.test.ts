@@ -1,8 +1,8 @@
 /** Native lifecycle reloads retain observed failures without inventing confirmed history. */
 import { expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { FeedHealthStateRowContract, FeedHealthStateRowSchema } from "@idhazh/common-contracts";
+import { createRootContext, FeedHealthStateRowContract, FeedHealthStateRowSchema } from "@idhazh/common-contracts";
+import { operationLink } from "../src/api/operation-context";
 import { readPlannerParquet } from "@idhazh/ledger-file-writer";
 import { recordedPlan } from "./plan-recordings";
 import { readPlannerOutputRecording } from "./planner-output-recordings";
@@ -22,7 +22,7 @@ test("native reloads preserve first-use rest and confirmed recovery retirement",
     const at = (hours: number) => new Date(initial + hours * 3_600_000).toISOString();
     async function check(hours: number) {
       const now = at(hours);
-      const observed = { check_request_id: randomUUID(), check_result: "confirmed-http-failure" as const,
+      const observed = { links: [operationLink(createRootContext())], check_result: "confirmed-http-failure" as const,
         checked_at: now, status: 503 };
       lifecycle = applyFeedCheck(lifecycle, observed, settings);
       const row = FeedHealthStateRowSchema.parse({ ...base, ...lifecycle, ...observed,
@@ -62,7 +62,7 @@ test("recorded transport failure counts for first-use rest but not confirmed ret
     const fetched = await fetcher.fetch(source.url);
     expect(fetched.failure).toBe("network");
     const lifecycle = applyFeedCheck(createUnknownFeedLifecycle(), {
-      check_request_id: randomUUID(), check_result: classifyFeedFetchFailure(fetched),
+      links: [operationLink(createRootContext())], check_result: classifyFeedFetchFailure(fetched),
       checked_at: "2026-10-21T00:00:00Z", status: fetched.http_status,
     }, fixture.inputs.harvest.config.availability);
     expect(lifecycle).toMatchObject({ strikes: 1, availability_complete: false,

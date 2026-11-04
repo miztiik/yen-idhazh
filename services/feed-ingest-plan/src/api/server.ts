@@ -15,7 +15,7 @@ import { feedHealthStateRoute } from "./routes/feed-health-state.route";
 import { ArticleParserPool } from "../harvest-feeds/article-parser-pool";
 import type { PlannerReady } from "../config/planner-startup";
 import { collectionRoute } from "./routes/collection.route";
-import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { PLANNER_API_PREFIX, readTraceContext } from "@idhazh/common-contracts";
 import { finishRawDocumentFailures } from "../dump-raw-document-failure";
 import { stageStore } from "./stage-store";
 import { createRequestPacing } from "../harvest-feeds/request-pacing";
@@ -80,7 +80,7 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity
   app.route(apiPrefix, planRoute((request, captured) => runFeedPlan(request, inputs, {
     ...requestRuntime(), ...captured,
     signal: AbortSignal.any([runtime.signal, captured?.signal].filter((signal): signal is AbortSignal => signal !== undefined)),
-  })));
+  }), requestRuntime));
   app.route(apiPrefix, documentRoute(inputs, requestRuntime));
   app.route(apiPrefix, collectionRoute(inputs, requestRuntime));
   app.route(apiPrefix, stagesRoute(inputs, requestRuntime));
@@ -89,7 +89,9 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity
   app.onError((error, c) => {
     const failure = describePlanError(error, inputs.root, {
       operation: plannerFailureOperation(c.req.path.replace(`${apiPrefix}/`, "")),
-      execution: failureExecution(), limits: inputs.settings.diagnostics.failure,
+      execution: { ...failureExecution(), spanId: null, traceId: readTraceContext({
+        traceparent: c.req.header("traceparent"), tracestate: c.req.header("tracestate"),
+      })?.traceId ?? null }, limits: inputs.settings.diagnostics.failure,
     });
     writeJsonLine({ event: "planner_error", code: failure.code, failure: failure.failure });
     const status = failure.code === "PLANNER_DISABLED" ? 503

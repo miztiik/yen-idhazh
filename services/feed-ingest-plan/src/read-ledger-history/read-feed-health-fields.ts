@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   FeedHealthAdmissionFieldsSchema, FeedHealthIdentitySchema, FeedHealthReliabilityFieldsSchema,
   FeedHealthRequestFieldsSchema, FeedHealthRestFieldsSchema, FeedHealthFieldUseSchema,
+  OperationLinkSchema,
 } from "@idhazh/common-contracts";
 import type { FeedHealthFieldUse, FeedHealthIdentity } from "@idhazh/common-contracts";
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
@@ -12,6 +13,7 @@ import { LedgerHistoryReadError } from "./ledger-history-error";
 import { createPlannerHistoryCache, readStoredPlannerDay } from "./read-planner-history";
 import type { PlannerHistoryCache } from "./read-planner-history";
 import type { StageLogger } from "../logging/structured-logger";
+import { operationKey } from "../api/operation-context";
 
 export type FeedHealthFieldGap = {
   use: FeedHealthFieldUse; field: string; day: string;
@@ -65,13 +67,16 @@ export function projectFeedHealthFields(day: string, records: readonly Record<st
     if (previous !== undefined && !isDeepStrictEqual(previous, record)) {
       conflicts.set(key, identity.data);
     }
-    if (typeof record.check_request_id === "string" && record.check_result != null) {
-      const fact = [identity.data, record.checked_at, record.check_result, record.status, record.outcome, record.items];
-      const check = checks.get(record.check_request_id);
+    const link = OperationLinkSchema.array().max(1).safeParse(record.links);
+    if (link.success && link.data.length === 1 && record.check_result != null) {
+      const reference = operationKey(link.data[0]!);
+      const fact = [identity.data.feed_id, identity.data.endpoint_key,
+        record.checked_at, record.check_result, record.status, record.outcome, record.items];
+      const check = checks.get(reference);
       if (check !== undefined && !isDeepStrictEqual(check.fact, fact)) {
         conflicts.set(key, identity.data);
         conflicts.set(check.key, check.identity);
-      } else checks.set(record.check_request_id, { key, fact, identity: identity.data });
+      } else checks.set(reference, { key, fact, identity: identity.data });
     }
     distinct.set(key, record);
   }

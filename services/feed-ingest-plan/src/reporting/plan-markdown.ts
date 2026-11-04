@@ -3,7 +3,6 @@ import {
   PlanRunRowSchema, RejectedArticleRowSchema, FeedHealthRestFieldsSchema, readFeedIngestEvent,
 } from "../../../../packages/common-contracts/src/index";
 import { PlanResponseSchema } from "../api/plan-response.schema";
-import { FeedHealthStateUpdateResponseSchema } from "../api/feed-health-state.schema";
 import { escapeMarkdown } from "./markdown-format";
 import { renderRequestReport } from "./request-report-markdown";
 import { renderRunFacts } from "./run-facts-markdown";
@@ -23,7 +22,7 @@ export type PlannerMarkdown = Readonly<{
   markdown: string; notices: readonly PlannerMarkdownNotice[];
 }>;
 export type PlanMarkdownEvidence = Readonly<{
-  response: unknown; health?: unknown; selected?: unknown; policy?: MarkdownSection; host?: MarkdownSection;
+  response: unknown; selected?: unknown; policy?: MarkdownSection; host?: MarkdownSection;
   maximum?: string;
   score_decimal_places?: number;
   failures?: ReportFailureEvidence;
@@ -31,9 +30,9 @@ export type PlanMarkdownEvidence = Readonly<{
 
 export function renderPlannerProgressMarkdown(input: unknown): PlannerMarkdown {
   if (!Array.isArray(input)) throw new Error("Progress must be an explicit array");
-  const events = input.map(readFeedIngestEvent);
+  const events = input.map(readFeedIngestEvent).map(event => event.data);
   const first = events[0];
-  if (events.some(event => event.run_id !== first!.run_id || event.correlation_id !== first!.correlation_id)) {
+  if (events.some(event => event.run_id !== first!.run_id)) {
     throw new Error("Progress belongs to more than one run");
   }
   const notices = events.flatMap(event => [
@@ -68,7 +67,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
   const response = PlanResponseSchema.parse(input.response);
   const row = PlanRunRowSchema.parse(Object.fromEntries(Object.keys(PlanRunRowSchema.shape).map(key =>
     [key, response[key as keyof typeof response]])));
-  const health = input.health == null ? null : FeedHealthStateUpdateResponseSchema.parse(input.health);
+  const health = response.health?.status === "summarized" ? response.health : null;
   if (health !== null && health.rows.some(feed => feed.run_id !== row.run_id || feed.attempt !== row.attempt)) {
     throw new Error("Health report belongs to another execution");
   }
@@ -107,7 +106,13 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
     partition: "Worker assignment", persist: "Selected output",
   })[operation];
   const summary = [
-    "# Feed planner run", "", facts.markdown, "", failureEvidence.markdown,
+    "# Feed planner run", "",
+    ...(response.planning_complete && response.failure !== null
+      ? ["Planning completed, but the request failed. The saved planning result is unchanged.", ""] : []),
+    ...(response.health?.status === "failed"
+      ? ["The feed health report failed. Its feed counts and exclusions are unavailable.", ""]
+      : response.health === null ? ["No completed input was available for a feed health report.", ""] : []),
+    facts.markdown, "", failureEvidence.markdown,
     ...(row.failure_code !== null || response.failure !== null ? ["", renderExecutionFailure(response.failure)] : []),
     "", "<details>", "<summary>Per-feed article results</summary>", "",
     "## Table C - Per-feed article results", "",
@@ -139,6 +144,10 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
   if (row.failure_code !== null) notices.push({
     level: "warning", title: "Feed planner outcome",
     message: `Planning ${row.status}: ${row.failure_code}. Saved evidence does not certify completion.`,
+  });
+  if (response.planning_complete && response.failure !== null) notices.push({
+    level: "warning", title: "Feed planner request failed",
+    message: "Planning completed, but the request failed. The saved planning result is unchanged.",
   });
   return { markdown: summary, notices };
 }

@@ -1,6 +1,6 @@
 # Planner run diagnostics
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-03
 
 What evidence remains when a planner run fails?
 The existing response and report retain safe execution context. A separate
@@ -12,8 +12,12 @@ names. Neither output is a committed ledger or a new error history.
 [`PlannerFailureSchema`](../../../packages/common-contracts/src/schemas/planner-failure.schema.ts)
 declares the shared failure projection. It records the operation, runtime
 error category, an allowlisted cause, an optional operating system code,
-the original project-relative source file and line, and run, attempt,
-correlation and code-revision identity.
+the original project-relative source file and line, and run, attempt and
+code-revision identity. Known execution and operation identifiers are
+`execution.traceId` and `execution.spanId`. An unavailable identifier is null;
+a known execution does not imply a known receiving operation.
+A later reader or cleanup wrapper preserves those identifiers, including
+unknown values. Its own operation is not the failed operation.
 
 The boundary captures the first available project frame from the original
 exception. Library-only or unavailable locations remain null. Consumers do
@@ -53,7 +57,7 @@ failure. These files do not prove summarization or publication.
 ## Recognized article names
 
 [`ArticleEntitiesSchema`](../../../packages/common-contracts/src/schemas/article-entities.schema.ts)
-owns each JSONL record. Records carry `run_id`, `attempt`, `correlation_id`,
+owns each JSONL record. Records carry `run_id`, `attempt`, `traceId`,
 `git_sha`, `article_id`, `candidate_id`, `feed_id` and actual UTC
 `observed_at`. Article identity uses the existing URL hash and run/feed/entry
 identity; source text never selects a filename.
@@ -114,14 +118,21 @@ output. The run/attempt directory stays under the authored artifact root;
 the workflow uses the existing artifact-directory persistence helper and
 does not add a retention policy.
 
-The new entity family uses `2026-11-02`. Its reader requires that explicit
-version and rejects missing or unknown versions. There is no older entity
-format to convert. TypeScript owns this private format; Python does not read it.
+The entity family uses `2026-11-03`. Its reader requires that explicit version
+and rejects missing or unknown versions without conversion. TypeScript owns
+this private format; Python does not read it.
 
 The saved response contract now lives in
 [`PlannerRunResponseSchema`](../../../packages/common-contracts/src/schemas/planner-response.schema.ts).
-Earlier responses and refusals without `failure` read with null failure
-evidence. Existing run rows and all five ledger shapes remain unchanged.
+The saved result retains its execution `traceId`, actual output receipts,
+selected identities, assignments, its required health outcome and optional
+failure evidence. Health is the actual successful report, an explicit report
+failure, or null without eligible completed input. A later report, release,
+local save or child-shutdown failure changes the request failure, not completed
+planning facts or the saved run row. Independently completed files and report
+data remain available.
+The response does not retain live stage references. Reports can read completed
+files after the listener stops; saved identifiers do not reopen work.
 The existing `response.json` also carries an execution error when no complete
 HTTP outcome was produced; no second failure file or parser is introduced.
 
@@ -130,6 +141,10 @@ HTTP outcome was produced; no second failure file or parser is introduced.
 Attach safe context to the existing response so a failed request, log and
 downloaded report retain the same cause. Use approved categories and source
 locations rather than copying free-form exception text.
+
+Use the shared [operation identifiers](../contracts/identity.md#4-native-typescript-event-and-operation-metadata)
+to name the actual failed work. Do not copy a prior input's operation identity
+onto a later delivery or cleanup failure.
 
 Keep recognized names in a separate private artifact because they carry
 article content. Recognize before selection so later failure cannot erase

@@ -13,7 +13,7 @@ export function runSafePersistServer(root = process.cwd()) {
     return {
       shutdownTimeoutMs: startup.settings.supervision.shutdown_timeout_ms,
       capture: { operation: "listener-start", limits: startup.settings.diagnostics.failure,
-        execution: { run_id: null, attempt: null, correlation_id: null, git_sha: startup.git_sha } },
+        execution: { run_id: null, attempt: null, traceId: null, spanId: null, git_sha: startup.git_sha } },
       start: async signal => {
         signal.throwIfAborted();
         const identity = SafePersistHttpReadySchema.parse({
@@ -39,7 +39,7 @@ export function runSafePersistServer(root = process.cwd()) {
           throw new PlanError("SAFE_PERSIST_BIND_FAILED", "Safe-persist loopback listener could not bind", null, {
             cause: error, failure: capturePlannerFailure(error, {
               operation: "listener-start", limits: startup.settings.diagnostics.failure,
-              execution: { run_id: null, attempt: null, correlation_id: null, git_sha: startup.git_sha },
+              execution: { run_id: null, attempt: null, traceId: null, spanId: null, git_sha: startup.git_sha },
             }),
           });
         }

@@ -5,13 +5,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseHTML } from "linkedom";
 import {
-  FeedHealthStateRowContract, FeedHealthStateRowSchema, RejectedArticleRowContract, RejectedArticleRowSchema,
+  createRootContext, FeedHealthStateRowContract, FeedHealthStateRowSchema, RejectedArticleRowContract, RejectedArticleRowSchema,
 } from "@idhazh/common-contracts";
 import { readExecutionEvidence, renderWorkflowPlanMarkdown, writeWorkflowReport } from "../scripts/feed-ingest-plan-report";
 import { readReportFailureEvidence } from "../scripts/feed-ingest-plan-report-evidence";
 import { renderPlanMarkdown } from "../src/reporting";
 import { plannerOutputRecording } from "./planner-output-recordings";
 import { writeRows } from "./partition-fixtures";
+import { operationLink } from "../src/api/operation-context";
 
 function attention(markdown: string) {
   const { document } = parseHTML(Bun.markdown.html(markdown));
@@ -41,14 +42,13 @@ test("workflow report reads terminal article 403 once and keeps DNS failure sepa
     const articles = await terminalRows(f);
     const receipt = await writeRows(f.inputs.outputRoot, "rejected-articles", f.response.date,
       RejectedArticleRowContract, [articles[0]!, articles[0]!, articles[1]!]);
-    const response = { ...f.response, files: { ...f.response.files, rejected_articles: receipt } };
     const cause = { subject: "article", stage: "harvest-feeds", attribution: "feed" };
     const health = { ...f.health, rows: [{ ...f.health.rows[0]!, rejection_counts: [
       { ...cause, reason_code: "FETCH_FAILED_HTTP", count: 2 },
       { ...cause, reason_code: "FETCH_FAILED", count: 1 },
     ] }] };
+    const response = { ...f.response, health, files: { ...f.response.files, rejected_articles: receipt } };
     await writeFile(join(f.directory, "response.json"), JSON.stringify(response));
-    await writeFile(join(f.directory, "health.json"), JSON.stringify(health));
     const file = join(f.inputs.outputRoot, receipt.files[0]!.path);
     const before = await readFile(file);
     const evidence = await readExecutionEvidence(f.directory);
@@ -65,10 +65,10 @@ test("workflow report reads terminal article 403 once and keeps DNS failure sepa
     expect(rows.find(row => row[3]!.includes("recorded article failure"))![3]).toContain("1 recorded article failure;");
     expect(report.markdown).not.toContain("paywall");
     expect(await readFile(file)).toEqual(before);
-    const fullyCovered = renderWorkflowPlanMarkdown({ ...evidence, health: {
+    const fullyCovered = renderWorkflowPlanMarkdown({ ...evidence, response: { ...response, health: {
       ...health, rows: [{ ...health.rows[0]!, rejection_counts: health.rows[0]!.rejection_counts
         .map(failure => ({ ...failure, count: 1 })) }],
-    } });
+    } } });
     expect(attention(fullyCovered.markdown).some(row => row[3]!.includes("recorded article failure"))).toBe(false);
     const missing = await readReportFailureEvidence({ directory: f.directory,
       response: { ...response, files: { ...response.files, rejected_articles: undefined } } });
@@ -88,7 +88,7 @@ test("report uses a staged earlier check at the saved pause instant, never a new
     const root = join(f.directory, "staged");
     const sourceRoot = fileURLToPath(new URL("../../../", import.meta.url));
     const paths = f.inputs.settings.inputs;
-    for (const path of ["config/feed-ingest-plan-service.json",
+    for (const path of ["config/feed-ingest-plan-service.json", "config/typescript-event-sources.json",
       paths.planning, paths.sources, paths.extraction, paths.registrations]) {
       const destination = join(root, path);
       await mkdir(dirname(destination), { recursive: true });
@@ -98,7 +98,7 @@ test("report uses a staged earlier check at the saved pause instant, never a new
     const checkedAt = "2026-10-20T12:00:00Z";
     const saved = FeedHealthStateRowSchema.parse({
       ...base, date: "2026-10-20", run_id: "2026-10-20-699", attempt: 1,
-      checked_at: checkedAt, check_request_id: "9e759c80-2f1d-4e2e-8cb5-516fc6ae8e11",
+      checked_at: checkedAt, links: [operationLink(createRootContext())],
       check_result: "other-http-failure", status: 403, last_failure_code: "FETCH_FAILED_HTTP",
       availability: "resting", availability_updated_at: checkedAt, rest_until: "2026-10-23T12:00:00Z",
     });
@@ -109,7 +109,7 @@ test("report uses a staged earlier check at the saved pause instant, never a new
         { day: saved.date, raw_files: written.files.map(file => `state/${file.path}`) },
       ] },
     }));
-    const carried = { ...base, feed_reads: 0, checked_at: null, check_request_id: null, check_result: null,
+    const carried = { ...base, feed_reads: 0, checked_at: null, links: [], check_result: null,
       rejection_counts: [], status: null, last_failure_code: null };
     const { availability, strikes, failed_recovery_checks, availability_complete, availability_updated_at,
       first_confirmed_failure_at, rest_until, retired_at, retirement_reason, feed_id, endpoint_key } = saved;
@@ -117,8 +117,9 @@ test("report uses a staged earlier check at the saved pause instant, never a new
       feed_id, endpoint_key, availability, strikes, failed_recovery_checks, availability_complete,
       availability_updated_at, first_confirmed_failure_at, rest_until, retired_at, retirement_reason,
     }] } };
-    await writeFile(join(f.directory, "response.json"), JSON.stringify(f.response));
-    await writeFile(join(f.directory, "health.json"), JSON.stringify(health));
+    const response = { ...f.response, health };
+    await writeFile(join(f.directory, "response.json"), JSON.stringify(response));
+    await rm(join(f.directory, "health.json"), { force: true });
     const file = join(root, "state", written.files[0]!.path);
     const before = await readFile(file);
     const summaryPath = join(f.directory, "summary.md");
@@ -138,21 +139,22 @@ test("report uses a staged earlier check at the saved pause instant, never a new
       { ...saved, checked_at: "2026-10-20T11:00:00Z" },
       { ...saved, run_id: f.response.run_id, attempt: f.response.attempt },
     ]) {
-      const report = renderPlanMarkdown({ response: f.response, health,
+      const report = renderPlanMarkdown({ response,
         failures: { ...evidence.failures, earlier_checks: [check] } });
       const unknown = attention(report.markdown).find(row => row[2]!.includes("Coverage paused"))!;
       expect(unknown[2]).toContain("historical cause unavailable");
       expect(unknown[2]).not.toContain("403");
     }
-    const current = renderPlanMarkdown({ response: f.response, failures: evidence.failures!,
-      health: { ...health, rows: [base] } });
+    const current = renderPlanMarkdown({ response: { ...response, health: { ...health, rows: [base] } },
+      failures: evidence.failures! });
     expect(attention(current.markdown).find(row => row[2]!.includes("Coverage paused"))![3])
       .toContain("Paused after this run's feed work; not an additional failure");
-    const unknownWork = renderPlanMarkdown({ response: f.response, failures: evidence.failures!,
-      health: { ...health, rows: [{ ...carried, feed_reads: null, counts_complete: false }] } });
+    const unknownWork = renderPlanMarkdown({ response: { ...response,
+      health: { ...health, rows: [{ ...carried, feed_reads: null, counts_complete: false }] } },
+      failures: evidence.failures! });
     expect(attention(unknownWork.markdown).find(row => row[2]!.includes("Coverage paused"))![3])
       .toContain("Current feed-check count unavailable");
-    const timeoutCheck = renderPlanMarkdown({ response: f.response, health,
+    const timeoutCheck = renderPlanMarkdown({ response,
       failures: { earlier_checks: [{ ...saved, check_result: "timeout" }] } });
     const timeoutPause = attention(timeoutCheck.markdown).find(row => row[2]!.includes("Coverage paused"))!;
     expect(timeoutPause[2]).toContain("Feed request timed out");
@@ -164,9 +166,9 @@ test("foreign execution and conflicting terminal copies are refused rather than 
   const f = await plannerOutputRecording();
   try {
     const [article] = await terminalRows(f);
-    expect(() => renderPlanMarkdown({ response: f.response, health: f.health,
+    expect(() => renderPlanMarkdown({ response: f.response,
       failures: { articles: [{ ...article!, attempt: f.response.attempt + 1 }] } })).toThrow("another execution");
-    expect(() => renderPlanMarkdown({ response: f.response, health: f.health,
+    expect(() => renderPlanMarkdown({ response: f.response,
       failures: { articles: [article!, { ...article!, http_status: 429 }] } })).toThrow("Conflicting terminal");
     const written = await writeRows(f.inputs.outputRoot, "rejected-articles", f.response.date,
       RejectedArticleRowContract, [article!]);

@@ -1,5 +1,5 @@
 /** Save a standalone selection outcome without inventing missing completion or timing evidence. */
-import type { SelectedFeedBatch } from "@idhazh/common-contracts";
+import type { SelectedFeedBatch, OperationLink } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import { currentExecutionState, executionHasArtifact, registerStageExecution } from "./document-state";
 import type { DocumentState, ExecutionState } from "./document-state";
@@ -10,6 +10,7 @@ import type { RunContext } from "../resolve-run-context";
 import { finishArticleEntities } from "../record-article-entities";
 import { finishRawDocumentFailures } from "../dump-raw-document-failure";
 import { withPlannerFailure } from "./plan-failure";
+import { operationRunContext } from "./operation-context";
 
 async function saveOutcome(inputs: PlanInputs, state: ExecutionState, values: Parameters<typeof recordPlanRun>[2]) {
   if (state.run_result !== undefined) return state.run_result;
@@ -42,12 +43,12 @@ export async function recordFinalizedDocumentWork(inputs: PlanInputs, state: Doc
 
 export async function recordStandaloneRun(inputs: PlanInputs,
   batch: SelectedFeedBatch & { strategy: "bin-pack" | "round-robin" | "none"; dispatch_count: number },
-  artifact: string | null, failureCode: string | null = null) {
-  const claim = stageStore(inputs).ownership(batch.batch_id);
+  artifact: string | null, failureCode: string | null = null, reference: OperationLink = batch) {
+  const claim = stageStore(inputs).ownership(reference);
   if (claim.scope === "plan") return undefined;
   const pending = currentExecutionState(inputs, batch.context.run_id);
   const state = pending === undefined
-    ? registerStageExecution(inputs, batch.context, "partition", null) : await pending;
+    ? registerStageExecution(inputs, operationRunContext(batch), "partition", null) : await pending;
   const selection = await rememberCompletedSelection(inputs, batch);
   const healthRecorded = batch.health_rows.length === 0 || state.health_written || claim.health_fingerprint !== null;
   return saveOutcome(inputs, state, {
@@ -62,7 +63,7 @@ export async function recordStandaloneRun(inputs: PlanInputs,
 
 export async function rememberCompletedSelection(inputs: PlanInputs, batch: SelectedFeedBatch) {
   const state = await currentExecutionState(inputs, batch.context.run_id)
-    ?? registerStageExecution(inputs, batch.context, "selection", null);
+    ?? registerStageExecution(inputs, operationRunContext(batch), "selection", null);
   state.completed_selection ??= {
     selected_count: batch.articles.length,
     selection_metrics: summarizeSelectionMetrics(batch.articles,

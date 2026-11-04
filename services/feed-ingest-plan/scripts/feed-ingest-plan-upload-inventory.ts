@@ -1,8 +1,8 @@
 /** Name each visible file in the prepared current-run upload directory, relative to the ZIP root. */
-import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { stat } from "node:fs/promises";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
+import { createRootContext, loadEventSources } from "@idhazh/common-contracts";
 import { createStageLogger, writeJsonLine } from "../src/logging/structured-logger";
 import { ARTICLE_ENTITY_ARTIFACT_DIRECTORY, RAW_DOCUMENT_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-artifacts";
 
@@ -25,11 +25,12 @@ export async function publishUploadInventory(input: {
   directory: string; runNumber: string; now?: Date; write?: (event: FeedIngestEvent) => void;
 }) {
   const now = input.now ?? new Date();
+  const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
   const emit = createStageLogger({
-    run_id: `${now.toISOString().slice(0, 10)}-${input.runNumber}`, correlation_id: randomUUID(),
-  }, event => {
+    run_id: `${now.toISOString().slice(0, 10)}-${input.runNumber}`, ...createRootContext(),
+  }, sources.planner, event => {
     (input.write ?? writeJsonLine)(event);
-    if (event.details._compliance !== undefined) throw new Error("Upload inventory event was refused by the publisher");
+    if (event.data.details._compliance !== undefined) throw new Error("Upload inventory event was refused by the publisher");
   });
   emit("artifact-upload", "started");
   let count = 0;

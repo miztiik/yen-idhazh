@@ -1,11 +1,11 @@
 /** Do diagnostic writes and logs preserve real responses without bodies or repeated run identity? */
 import { expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { RawDocumentFailureSchema, NetworkFailureDetailsSchema, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { createRootContext, loadEventSources, RawDocumentFailureSchema, NetworkFailureDetailsSchema, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
+import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import { rawDocumentContentsFilename, rawDocumentContentsPath, ArtifactRootSchema } from "../src/selected-artifact-path";
-import { prepareProgressEvent } from "../src/logging/structured-logger";
+import { createStageLogger, prepareProgressEvent } from "../src/logging/structured-logger";
 import { finishRawDocumentFailures, failureMetadata } from "../src/dump-raw-document-failure";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
 import { finishRunOutput } from "../scripts/finish-run-output";
@@ -14,6 +14,7 @@ import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
 import { stageStore } from "../src/api/stage-store";
 import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-response.schema";
+import { operationLink, operationMetadata } from "../src/api/operation-context";
 
 function assertBodyFree(value: unknown) {
   if (value === null || typeof value !== "object") return;
@@ -31,23 +32,24 @@ test("actual parse failures write and package metadata under one validated gener
   fixture.runtime.attempt = 3;
   fixture.inputs.settings.dump_raw_document_contents = true;
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
-  const requestId = randomUUID();
-  const correlationId = randomUUID();
+  const caller = createRootContext();
   async function post(operation: string, body: unknown) {
     const response = await app.request(`${PLANNER_API_PREFIX}/${operation}`, {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+      method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) }, body: JSON.stringify(body),
     });
     expect(response.status).toBe(200);
     return response.json();
   }
   try {
     const fetched = FetchResponseSchema.parse(await post("fetch", {
-      request_id: requestId, correlation_id: correlationId, feed_id: "recorded-news", fetch_item_type: "feed",
+      feed_id: "recorded-news", fetch_item_type: "feed",
     }));
-    const captured = stageStore(fixture.inputs).fetchedDocument(requestId)!;
+    const captured = stageStore(fixture.inputs).fetchedDocument(fetched)!;
     const artifact = captured.document;
+    const parsed = ParseResponseSchema.parse(await post("parse", { links: [operationLink(fetched)] }));
+    expect(parsed.failure).toBe("malformed-feed");
     const projection = failureMetadata({
-      document_kind: "feed", request_id: requestId, operation: "parse",
+      ...operationMetadata(parsed), document_kind: "feed", operation: "parse",
       failed_at: "2026-10-21T23:59:59Z", failure_reason: "malformed-feed",
       document: {
         ...artifact, canonical_url: `${artifact.canonical_url}?page=2#section`,
@@ -66,11 +68,6 @@ test("actual parse failures write and package metadata under one validated gener
       request_url: "https://news.example/input", destination_url: null,
     });
     expect(JSON.stringify(projection)).not.toContain("private");
-    const parsed = ParseResponseSchema.parse(await post("parse", {
-      request_id: randomUUID(), fetch_request_id: requestId,
-      article_id: fetched.article_id, correlation_id: correlationId,
-    }));
-    expect(parsed.failure).toBe("malformed-feed");
     await finishRawDocumentFailures(fixture.inputs);
     const filename = rawDocumentContentsFilename(captured.context);
     expect(filename).toBe(`raw-document-contents-2026-10-21-${fetched.run_id.slice(11)}-3.jsonl`);
@@ -82,8 +79,8 @@ test("actual parse failures write and package metadata under one validated gener
     expect(record.document.attempts).toEqual(artifact.attempts);
     expect(record.document.attempt_observations).toHaveLength(artifact.attempts.length);
     expect(text).not.toContain(artifact.body!);
-    const event = fixture.events.find(event => event.operation === "parse" && event.phase === "failed")!;
-    expect(event.details.network_failure).toMatchObject({
+    const event = fixture.events.find(event => event.data.operation === "parse" && event.data.phase === "failed")!;
+    expect(event.data.details.network_failure).toMatchObject({
       http_status: 200, final_attempted_url: "https://news.example/malformed.xml", failed_url: null,
       response_evidence: { decoded_bytes: Buffer.byteLength(artifact.body!), request_profile: "firefox" },
     });
@@ -119,24 +116,25 @@ test("actual parse failures write and package metadata under one validated gener
   } finally { await app.close(); await fixture.close(); }
 });
 
-test("required network evidence survives clean and rejected flexible details without admitting caller secrets", () => {
+test("required network evidence survives clean and rejected flexible details without admitting caller secrets", async () => {
   const evidence = NetworkFailureDetailsSchema.parse({
     requested_url: "https://news.example/input?page=2", final_attempted_url: null,
     failed_url: "https://news.example/article?token=private", http_status: 503, request_profile: "firefox",
     response_evidence: null, attempt: null,
   });
-  const base = {
-    run_id: "2026-10-21-700", correlation_id: randomUUID(), occurred_at: "2026-10-21T23:59:59Z",
-    operation: "request-attempt", phase: "failed",
-  };
+  const events: FeedIngestEvent[] = [];
+  const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
+  createStageLogger({ run_id: "2026-10-21-700", ...createRootContext() },
+    sources.planner, event => events.push(event))("request-attempt", "failed");
+  const base = events[0]!;
   for (const details of [{}, { body: "private", token: "private" }]) {
-    const event = prepareProgressEvent({ ...base, details }, [], undefined, undefined, evidence);
-    expect(event.details.network_failure).toMatchObject({
+    const event = prepareProgressEvent({ ...base, data: { ...base.data, details } }, [], undefined, undefined, evidence);
+    expect(event.data.details.network_failure).toMatchObject({
       requested_url: "https://news.example/input", final_attempted_url: null, failed_url: null,
       http_status: 503, request_profile: "firefox",
     });
     expect(JSON.stringify(event)).not.toContain("private");
   }
-  expect(() => prepareProgressEvent({ ...base, phase: "completed", details: {} }, [],
+  expect(() => prepareProgressEvent({ ...base, data: { ...base.data, phase: "completed", details: {} } }, [],
     undefined, undefined, evidence)).toThrow("Network failure evidence requires");
 });

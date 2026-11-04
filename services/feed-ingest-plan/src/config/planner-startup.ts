@@ -1,6 +1,6 @@
 /** Which private, transient controls can cross into a workflow's planner child? */
 import { z } from "zod";
-import { CommitShaSchema, PositiveCountSchema, FeedIngestConfigSchema, PlannerFailureSchema } from "@idhazh/common-contracts";
+import { CommitShaSchema, PositiveCountSchema, FeedIngestConfigSchema, PlannerFailureSchema, OperationMetadataSchema } from "@idhazh/common-contracts";
 import { ServiceSettingsSchema } from "./service-settings";
 
 // This pipe protocol is not a saved artifact or an HTTP input.
@@ -12,9 +12,9 @@ export const PlannerStartupSchema = z.strictObject({
   output_root: z.string().min(1).refine(value =>
     !value.startsWith("/") && !value.includes("\\") && !value.includes(":"),
   "Output root must be relative to the child checkout with POSIX separators"),
-  runtime: z.strictObject({
+  runtime: OperationMetadataSchema.safeExtend({
     git_sha: CommitShaSchema, run_number: z.string().regex(/^[0-9]+$/),
-    correlation_id: z.uuid(), attempt: PositiveCountSchema,
+    attempt: PositiveCountSchema,
     captured_at: z.iso.datetime(),
   }),
 });
