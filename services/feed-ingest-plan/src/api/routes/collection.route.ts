@@ -15,9 +15,13 @@ import { captureRequestRuntime } from "../operation-context";
 
 export function collectionRoute(inputs: PlanInputs, runtime: () => PlanRuntime) {
   const app = new Hono();
-  app.post("/collections", async c => c.json(CollectionResponseSchema.parse(
-    await beginCollection(await readRequestBody(c.req.raw), inputs, captureRequestRuntime(runtime(), c.req.raw.headers)),
-  )));
+  app.post("/collections", async c => {
+    const captured = captureRequestRuntime(runtime(), c.req.raw.headers);
+    return c.json(CollectionResponseSchema.parse(await beginCollection(await readRequestBody(c.req.raw), inputs, {
+      ...captured, signal: captured.signal === undefined ? c.req.raw.signal
+        : AbortSignal.any([captured.signal, c.req.raw.signal]),
+    })));
+  });
   app.post("/collections/exists", async c => c.json(CollectionExistsResponseSchema.parse(
     collectionExists(await readRequestBody(c.req.raw), inputs),
   )));

@@ -100,7 +100,8 @@ test("one recorded saved run agrees with its public summary and selected identit
 
 test("uncertain collection startup uses its preallocated trace to recover ownership and release", async () => {
   for (const corruption of [
-    "truncated", "foreign-execution", "unreadable-lookup", "unreadable-lookup-and-release", "cancelled-preparation",
+    "truncated", "foreign-execution", "unreadable-lookup", "unreadable-lookup-and-release",
+    "cancelled-before-admission", "cancelled-preparation",
   ] as const) {
     const fixture = await recordedPlan();
     const app = createPlanApp(fixture.inputs, fixture.runtime);
@@ -110,6 +111,11 @@ test("uncertain collection startup uses its preallocated trace to recover owners
     let started: ReturnType<typeof CollectionResponseSchema.parse> | undefined;
     let startupRequest: Promise<Response> | undefined;
     let lookupTrace: string | undefined;
+    let receiveStartup!: () => void;
+    let releaseStartup!: () => void;
+    const receivedStartup = new Promise<void>(resolve => { receiveStartup = resolve; });
+    const startupGate = new Promise<void>(resolve => { releaseStartup = resolve; });
+    let receivedCancellation = false;
     const paths: string[] = [];
     const terminal: { held: boolean; active: boolean }[] = [];
     const unreadableLookup = corruption.startsWith("unreadable-lookup");
@@ -119,7 +125,14 @@ test("uncertain collection startup uses its preallocated trace to recover owners
         const path = new URL(request.url).pathname.slice(PLANNER_API_PREFIX.length + 1);
         paths.push(path);
         if (path === "collections/exists") lookupTrace = (await request.clone().json()).traceId;
-        const pending = Promise.resolve(app.fetch(request));
+        const pending = (async () => {
+          if (path === "collections" && corruption === "cancelled-before-admission") {
+            receiveStartup();
+            await startupGate;
+            receivedCancellation = request.signal.aborted;
+          }
+          return app.fetch(request);
+        })();
         let responsePromise = pending;
         if (path === "collections") {
           responsePromise = pending.then(async response => {
@@ -153,7 +166,7 @@ test("uncertain collection startup uses its preallocated trace to recover owners
       },
     });
     try {
-      const result = await runFeedPlan({}, fixture.inputs, { ...fixture.runtime,
+      const running = runFeedPlan({}, fixture.inputs, { ...fixture.runtime,
         stage_origin: `http://127.0.0.1:${server.port}`, signal: cancellation.signal, log(event) {
           fixture.runtime.log?.(event);
           if (event.data.operation === "plan" && event.data.phase !== "started") {
@@ -164,14 +177,20 @@ test("uncertain collection startup uses its preallocated trace to recover owners
             });
           }
         } });
-      await startupRequest;
-      expect(started?.traceId).toBe(result.context.traceId);
+      if (corruption === "cancelled-before-admission") {
+        await receivedStartup;
+        cancellation.abort();
+      }
+      const result = await running;
+      releaseStartup();
+      const startupReply = await startupRequest;
       expect(lookupTrace).toBe(result.context.traceId);
-      expect(started?.spanId).not.toBe(result.context.spanId);
       expect(result.row.status).toBe("failed");
+      expect(result.row.selected_count).toBe(0);
+      expect(result.selected).toEqual([]);
       expect(result.health).toBeNull();
       expect(result.failure?.error_type).toBe(corruption === "foreign-execution" ? "PlanError"
-        : corruption === "cancelled-preparation" ? "AbortError" : "SyntaxError");
+        : corruption.startsWith("cancelled-") ? "AbortError" : "SyntaxError");
       expect(result.failure?.operation).toBe("collection-start");
       if (unreadableLookup) {
         expect(result.failure?.causes.some(cause => cause.operation === "collection-start")).toBe(true);
@@ -183,14 +202,24 @@ test("uncertain collection startup uses its preallocated trace to recover owners
           operation: "collection-release", error_type: "SyntaxError",
         }));
       }
-      expect(paths).toEqual(["collections", "collections/exists", "collections/cancel",
-        "feed-health-state", "collections/finalize", "collections/release", "terminal"]);
+      if (corruption === "cancelled-before-admission") {
+        expect(receivedCancellation).toBe(true);
+        expect(startupReply?.ok).toBe(false);
+        expect(started).toBeUndefined();
+        expect(paths).toEqual(["collections", "collections/exists", "terminal"]);
+        expect(result.files.feed_health_state).toBeUndefined();
+      } else {
+        expect(started?.traceId).toBe(result.context.traceId);
+        expect(started?.spanId).not.toBe(result.context.spanId);
+        expect(paths).toEqual(["collections", "collections/exists", "collections/cancel",
+          "feed-health-state", "collections/finalize", "collections/release", "terminal"]);
+        expect(result.files.feed_health_state?.status).toBe("written");
+      }
       expect(terminal).toEqual([{ held: false, active: false }]);
       expect(fixture.transport.requests).toHaveLength(0);
-      expect(result.files.feed_health_state?.status).toBe("written");
       expect(collectionForRun(fixture.inputs, result.context.run_id)).toBeUndefined();
       expect(stageStore(fixture.inputs).isRunActive(result.context.run_id)).toBe(false);
-    } finally { await server.stop(true); await app.close(); await fixture.close(); }
+    } finally { releaseStartup(); await server.stop(true); await app.close(); await fixture.close(); }
   }
 }, 120000);
 

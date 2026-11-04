@@ -90,6 +90,10 @@ export function collectionExists(raw: unknown, inputs: PlanInputs) {
   return { traceId: request.traceId, exists: collections.get(inputs)?.has(request.traceId) ?? false };
 }
 export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
+  if (runtime.signal?.aborted) {
+    throw runtime.signal.reason instanceof Error ? runtime.signal.reason
+      : new DOMException("Collection startup was cancelled", "AbortError");
+  }
   const request = BeginCollectionSchema.parse(raw);
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
   const controls = resolvePlanRequest(request.request, inputs.harvest.config);

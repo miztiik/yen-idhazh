@@ -109,6 +109,10 @@ The reservation retains the actual admitted startup promise while preparation
 is in flight. If the caller cancels, that invocation awaits its preparation
 before deciding whether to cancel, account for and release the created work.
 It never waits on another invocation's preparation.
+A received request carries its own cancellation signal into admission. A
+cancelled queued start is refused, rather than becoming an independent direct
+start after its reservation was withdrawn. Non-cancelled direct stage calls
+keep their existing lifecycle.
 An unreadable existence reply still permits cancellation, final accounting and
 release when that private reservation proves ownership. The failed result keeps
 the original startup failure, lookup failure and bounded cleanup evidence.
