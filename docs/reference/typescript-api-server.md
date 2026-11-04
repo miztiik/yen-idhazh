@@ -87,7 +87,9 @@ The existing common-contracts helpers allocate and validate event and operation
 metadata without a tracing provider, exporter or global active context.
 
 Server diagnostics contain startup, readiness, stop, safe error codes and
-observed lifecycle facts. Native module diagnostics are projected to this
+observed lifecycle facts, but no process IDs. Private readiness, supervision,
+profiling and current-task evidence retain their existing process identities.
+Native module diagnostics are projected to this
 body-free form before live output or mirroring. Private startup/control
 packets remain on stdout. Article bodies, prompts, model output, secrets,
 raw headers and raw exception text are not server-log fields.
@@ -133,6 +135,9 @@ the native machine handlers. Explicit groups keep task resources visible
 without another service framework or per-API process. Hono and Zod are existing
 tool dependencies; the new package adds a composition lock and no published-site
 bytes. Existing standalone tools and older workflows are not migrated.
+
+Process ownership is established by private control data, not a copied ID in
+a diagnostic line.
 
 ## See also
 
