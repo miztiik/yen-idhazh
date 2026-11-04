@@ -129,8 +129,8 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
   if (prepared !== undefined) pending?.delete(operation.traceId);
   starting.add(operation.traceId);
   const startup = (async () => {
-    stages.retainRun(context.run_id);
     try {
+      stages.retainRun(context);
       const state = await documentState(record, inputs, runtime);
       state.plan_owned = true;
       const preflightAt = utcTimestamp(runtime.observation_clock);

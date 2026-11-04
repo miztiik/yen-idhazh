@@ -21,6 +21,7 @@ import { collectionForRun } from "./collection-operation";
 import { recordDocumentRejections } from "./record-document-rejections";
 import { documentExclusions } from "./document-state";
 import { PlanError } from "./plan-request";
+import { retainCollectionParse } from "./collection-batch";
 
 export async function createParsedFeedBatch(input: {
   state: DocumentState; inputs: PlanInputs; runtime: PlanRuntime;
@@ -69,13 +70,7 @@ export async function createParsedFeedBatch(input: {
       collection.offers.set(offer.offer_id, offer);
       if (offer.state === "pending") collection.pending_offers++;
     }
-    return stageStore(inputs).write("parsed", ParsedFeedBatchSchema, {
-      ...operationMetadata(input.context), context: stageContext(input.context),
-      config_sha256: stageConfigFingerprint(inputs, runtime), request: collection.request,
-      candidates: [], observations: {}, evidence: {}, discovered: { availability: "available", rows: [] },
-      history_rows: [], history_days: state.history.days, work_rows: state.work.rows(), exclusions: state.work.exclusions(),
-      offers, input_complete: false,
-    });
+    return retainCollectionParse(inputs, collection, input.context, { kind: "feed", feed_id: source.feed_id });
   }
   const saved = await rememberDiscoveries(discoveredRows, state.discovered_rows, state.context, {
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,

@@ -47,10 +47,12 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   if (original?.kind !== "document") {
     throw new PlanError("ARTIFACT_NOT_FOUND", "Selection requires its live captured input", "links");
   }
-  if (original.kind === "document" && store.ownership(parsed).health_fingerprint === null) {
-    parsed = store.replace("parsed", ParsedFeedBatchSchema, {
+  if (original.kind === "document" && (store.ownership(parsed).health_fingerprint === null || store.isCollectionResult(parsed))) {
+    const updated = {
       ...parsed, work_rows: original.work.rows(), exclusions: original.work.exclusions(),
-    });
+    };
+    parsed = store.isCollectionResult(parsed) ? ParsedFeedBatchSchema.parse(updated)
+      : store.replace("parsed", ParsedFeedBatchSchema, updated);
   }
   if (!parsed.input_complete) throw new PlanError("BATCH_INCOMPLETE", "Every offered article needs a terminal fetch/parse result before selection", "links");
   const originalClaim = store.claimSelection(parsed);
