@@ -27,7 +27,8 @@ def bind_evaluation(
     max_body_bytes: int,
 ) -> EvaluateRequest:
     if (
-        receipt.status != "complete"
+        prepared.status != "complete"
+        or receipt.status != "complete"
         or receipt.summary_text is None
         or receipt.loaded is None
         or receipt.run != prepared.run

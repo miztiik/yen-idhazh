@@ -30,6 +30,17 @@ def collect_results(root: Path) -> PipelineEvidence:
     pipeline = load_pipeline_settings(root)
     directory = root / pipeline.output_directory
     prepared, _ = read_prepared(root)
+    if prepared.status != "complete":
+        return PipelineEvidence(
+            version=WORKFLOW_VERSION,
+            status="failed",
+            prepared=prepared,
+            generation=None,
+            generation_phase=None,
+            evaluation_phase=None,
+            unieval="not_run",
+            errors=(),
+        )
     errors: list[PipelineError] = []
     generation = None
     generated_phase = None

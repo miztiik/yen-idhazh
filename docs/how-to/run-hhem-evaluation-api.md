@@ -83,6 +83,12 @@ cleanup errors remain separate, and completed generation/evaluation is not
 erased by later reporting or measurement failures. A hard runner termination
 cannot guarantee final upload.
 
+If preparation fails, inspect `run.json` and the report's Preparation row before
+looking for a generation receipt. The original safe preparation error is kept;
+generation and HHEM remain not run. Missing server logs are expected before
+server startup. `ASSET_AUTH_MISSING` means the preparation step did not receive
+the platform token needed by the existing pinned-release lookup.
+
 Do not treat a terminal log line as model proof. Inspect the validated
 generation/evaluator results and actual owned-process exits. No task adopts an
 occupied listener, detaches a model or kills a process by name.

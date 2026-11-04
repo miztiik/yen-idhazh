@@ -304,13 +304,17 @@ Push-Location ..\..
 uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
 Pop-Location
 uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
-uv run --frozen pytest tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
+uv run --frozen pytest tests/test_pipeline_preparation.py tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
 ```
 
 The host compatibility test exports the actual native schemas through Bun,
 including the consumed shared-server outcomes. The generation checks bind the
 source, answer, model and run before HHEM can start. Separate declaration
 invocations and the named form-default check keep model selection real.
+Preparation cases call the existing runtime utility's missing-token refusal
+before network access, verify step-only secret wiring, and retain real missing
+input/authentication failures with both model phases not run. They download no
+assets and create no replacement model files.
 Run workflow Ruff from the repository root so its backend source discovery
 matches the repository-wide gate; an explicit config path from the service
 directory changes how Ruff resolves relative source roots.

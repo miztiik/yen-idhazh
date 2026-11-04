@@ -111,6 +111,22 @@ def test_native_ci_retains_resources_and_prepares_the_actual_shared_api() -> Non
     assert "summary-eval-hhem/" not in selected
 
 
+def test_workflow_scopes_the_standard_token_to_native_preparation_only() -> None:
+    workflow = named_workflow()
+    job = mapping(mapping(workflow["jobs"])["evaluate"])
+    assert "GITHUB_TOKEN" not in mapping(workflow.get("env", {}))
+    assert "GITHUB_TOKEN" not in mapping(job.get("env", {}))
+    steps = job["steps"]
+    assert isinstance(steps, list)
+    declared = [mapping(step) for step in steps]
+    prepare = next(step for step in declared if step.get("id") == "prepare")
+    assert mapping(prepare["env"]) == {"GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}
+    assert "run.py --root ../.. prepare" in str(prepare["run"])
+    for step in declared:
+        if step is not prepare:
+            assert "GITHUB_TOKEN" not in mapping(step.get("env", {}))
+
+
 def write_event(path: Path, inputs: dict[str, object]) -> None:
     path.write_text(json.dumps({"inputs": inputs}), encoding="utf-8")
 

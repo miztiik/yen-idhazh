@@ -113,7 +113,8 @@ async def generate_summary(
     max_body_bytes: int,
 ) -> GenerationReceipt:
     if (
-        selected.identity != prepared.selected
+        prepared.status != "complete"
+        or selected.identity != prepared.selected
         or text_sha256(inputs.source_text) != prepared.source_sha256
         or loaded.sha256 != selected.identity.sha256
         or loaded.model_id != selected.identity.model_id

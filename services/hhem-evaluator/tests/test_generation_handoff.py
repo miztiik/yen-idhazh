@@ -207,6 +207,7 @@ def test_same_run_handoff_is_atomic_and_retains_exact_text(tmp_path: Path) -> No
         "summary",
         "failed",
         "unclosed",
+        "preparation",
     ],
 )
 def test_stale_changed_failed_or_unclosed_generation_cannot_reach_hhem(change: str) -> None:
@@ -234,6 +235,8 @@ def test_stale_changed_failed_or_unclosed_generation_cannot_reach_hhem(change: s
         receipt = receipt.model_copy(update={"summary_text": receipt.summary_text + "\n"})
     elif change == "failed":
         receipt = receipt.model_copy(update={"status": "failed"})
+    elif change == "preparation":
+        prepared = prepared.model_copy(update={"status": "pending"})
     else:
         phase = phase.model_copy(
             update={"shutdown": phase.shutdown.model_copy(update={"llama_stopped": False})}
@@ -305,6 +308,8 @@ def test_real_fastapi_generation_uses_selected_request_and_excludes_reasoning(
             run=example_run(),
             selected=selected.identity,
             source_sha256=text_sha256(inputs.source_text),
+            status="complete",
+            errors=(),
         )
         loaded = LoadedModel(
             model_id=selected.identity.model_id,
