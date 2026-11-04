@@ -128,24 +128,27 @@ async function runPlanStages(
       }
     } catch (error) {
       if (error instanceof PlanError && error.code === "REQUEST_CONFLICT") throw error;
-      let existing: z.infer<typeof CollectionExistsResponseSchema>;
+      let existing: z.infer<typeof CollectionExistsResponseSchema> | undefined;
+      let startupError = error;
       try {
         existing = await call("collections/exists", { traceId }, CollectionExistsResponseSchema, true);
+        if (existing.traceId !== traceId) throw new PlanError("ARTIFACT_INVALID", "Collection lookup identity differs");
       } catch (lookupError) {
-        throw new AggregateError([error, lookupError], "Collection startup outcome could not be checked");
+        startupError = new AggregateError([
+          error, new PlanError("PLAN_FAILED", "Collection startup outcome could not be checked", null, { cause: lookupError }),
+        ], "Collection startup and outcome lookup failed");
+        if (!ownsPreparedCollection(inputs, context)) throw startupError;
       }
-      if (existing.traceId !== traceId) throw new PlanError("ARTIFACT_INVALID", "Collection lookup identity differs");
-      if (existing.exists) {
-        if (!ownsPreparedCollection(inputs, context)) {
-          throw new PlanError("REQUEST_CONFLICT", "Collection startup belongs to another invocation", "traceId", { cause: error });
-        }
+      if (ownsPreparedCollection(inputs, context)) {
         owned = true;
-        startupFailure = withPlannerFailure(error, {
+        startupFailure = withPlannerFailure(startupError, {
           operation: "collection-start", execution: context, limits: inputs.settings.diagnostics.failure,
         });
+      } else if (existing?.exists) {
+        throw new PlanError("REQUEST_CONFLICT", "Collection startup belongs to another invocation", "traceId", { cause: error });
       } else {
-        const failureCode = error instanceof PlanError ? error.code : "PLANNER_EXECUTION_FAILED";
-        const failure = capturePlannerFailure(error, {
+        const failureCode = startupError instanceof PlanError ? startupError.code : "PLANNER_EXECUTION_FAILED";
+        const failure = capturePlannerFailure(startupError, {
           operation: "collection-start", execution: context, limits: inputs.settings.diagnostics.failure,
         });
         let recorded: Awaited<ReturnType<typeof recordPlanRun>>;

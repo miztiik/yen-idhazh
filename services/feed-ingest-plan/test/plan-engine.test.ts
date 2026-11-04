@@ -99,12 +99,14 @@ test("one recorded saved run agrees with its public summary and selected identit
 });
 
 test("uncertain collection startup uses its preallocated trace to recover ownership and release", async () => {
-  for (const corruption of ["truncated", "foreign-execution"] as const) {
+  for (const corruption of ["truncated", "foreign-execution", "unreadable-lookup", "unreadable-lookup-and-release"] as const) {
     const fixture = await recordedPlan();
     const app = createPlanApp(fixture.inputs, fixture.runtime);
     let started: ReturnType<typeof CollectionResponseSchema.parse> | undefined;
     let lookupTrace: string | undefined;
     const paths: string[] = [];
+    const terminal: { held: boolean; active: boolean }[] = [];
+    const unreadableLookup = corruption.startsWith("unreadable-lookup");
     const server = Bun.serve({
       hostname: "127.0.0.1", port: 0, idleTimeout: 0,
       async fetch(request) {
@@ -114,25 +116,50 @@ test("uncertain collection startup uses its preallocated trace to recover owners
         const response = await app.fetch(request);
         if (path === "collections" && response.ok) {
           started = CollectionResponseSchema.parse(await response.clone().json());
-          return new Response(corruption === "truncated"
-            ? (await response.text()).slice(0, -1)
-            : JSON.stringify({ ...started, traceId: createRootContext().traceId }),
+          return new Response(corruption === "foreign-execution"
+            ? JSON.stringify({ ...started, traceId: createRootContext().traceId })
+            : (await response.text()).slice(0, -1),
           { status: response.status, headers: response.headers });
+        }
+        if (response.ok && ((path === "collections/exists" && unreadableLookup)
+          || (path === "collections/release" && corruption === "unreadable-lookup-and-release"))) {
+          return new Response((await response.text()).slice(0, -1), { status: response.status, headers: response.headers });
         }
         return response;
       },
     });
     try {
       const result = await runFeedPlan({}, fixture.inputs, { ...fixture.runtime,
-        stage_origin: `http://127.0.0.1:${server.port}` });
+        stage_origin: `http://127.0.0.1:${server.port}`, log(event) {
+          fixture.runtime.log?.(event);
+          if (event.data.operation === "plan" && event.data.phase !== "started") {
+            paths.push("terminal");
+            terminal.push({
+              held: collectionForRun(fixture.inputs, event.data.run_id) !== undefined,
+              active: stageStore(fixture.inputs).isRunActive(event.data.run_id),
+            });
+          }
+        } });
       expect(started?.traceId).toBe(result.context.traceId);
       expect(lookupTrace).toBe(result.context.traceId);
       expect(started?.spanId).not.toBe(result.context.spanId);
       expect(result.row.status).toBe("failed");
       expect(result.health).toBeNull();
-      expect(result.failure?.error_type).toBe(corruption === "truncated" ? "SyntaxError" : "PlanError");
+      expect(result.failure?.error_type).toBe(corruption === "foreign-execution" ? "PlanError" : "SyntaxError");
+      expect(result.failure?.operation).toBe("collection-start");
+      if (unreadableLookup) {
+        expect(result.failure?.causes.some(cause => cause.operation === "collection-start")).toBe(true);
+        expect(result.failure!.causes.length).toBeLessThanOrEqual(fixture.inputs.settings.diagnostics.failure.max_causes);
+        expect(result.failure?.omitted_causes).toBe(0);
+      }
+      if (corruption === "unreadable-lookup-and-release") {
+        expect(result.failure?.causes).toContainEqual(expect.objectContaining({
+          operation: "collection-release", error_type: "SyntaxError",
+        }));
+      }
       expect(paths).toEqual(["collections", "collections/exists", "collections/cancel",
-        "feed-health-state", "collections/finalize", "collections/release"]);
+        "feed-health-state", "collections/finalize", "collections/release", "terminal"]);
+      expect(terminal).toEqual([{ held: false, active: false }]);
       expect(fixture.transport.requests).toHaveLength(0);
       expect(result.files.feed_health_state?.status).toBe("written");
       expect(collectionForRun(fixture.inputs, result.context.run_id)).toBeUndefined();
