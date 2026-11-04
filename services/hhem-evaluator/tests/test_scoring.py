@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from hhem_evaluator.contracts.base import API_PREFIX
+from hhem_evaluator.contracts.base import EVALUATE_PATH
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 
 from .contract_examples import REPOSITORY
@@ -30,7 +30,7 @@ def test_maximum_full_delta_details_reuse_and_source_direction() -> None:
                 "chunk_words": 21,
                 "chunk_overlap_words": 0,
             }
-            response = await service.client.post(f"{API_PREFIX}/evaluate", json=body)
+            response = await service.client.post(EVALUATE_PATH, json=body)
             assert response.status_code == 200, response.text
             result = EvaluationResult.model_validate_json(response.content)
             assert result.hhem == max(scores["supported"], scores["other-source"])
@@ -45,7 +45,7 @@ def test_maximum_full_delta_details_reuse_and_source_direction() -> None:
             assert result.windows.full is not None and result.windows.full.scored == 1
             # The opposite primary/full direction must preserve subtraction order.
             reverse = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={
                     "source_text": other.source_text,
                     "summary_text": supported.summary_text,
@@ -59,7 +59,7 @@ def test_maximum_full_delta_details_reuse_and_source_direction() -> None:
             assert result.hhem_delta >= 0
             assert reversed_result.hhem_delta < 0
             reuse = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={
                     "source_text": primary,
                     "summary_text": supported.summary_text,
@@ -78,7 +78,7 @@ def test_maximum_full_delta_details_reuse_and_source_direction() -> None:
             assert reused.window_details is not None
             assert reused.window_details.full == reused.window_details.primary
             distinct = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={
                     "source_text": supported.source_text,
                     "summary_text": supported.summary_text,
@@ -90,7 +90,7 @@ def test_maximum_full_delta_details_reuse_and_source_direction() -> None:
             assert distinct.json()["windows"]["full_reused_primary"] is False
             assert distinct.json()["hhem_full"] == scores["whitespace-distinct"]
             optional = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={
                     "source_text": contradicted.source_text,
                     "summary_text": contradicted.summary_text,
@@ -116,7 +116,7 @@ def test_failed_full_comparison_preserves_completed_primary(action: Action) -> N
         ) as service:
             old_pid = service.worker.worker.pid if service.worker.worker is not None else None
             response = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={
                     "source_text": primary.source_text,
                     "summary_text": primary.summary_text,

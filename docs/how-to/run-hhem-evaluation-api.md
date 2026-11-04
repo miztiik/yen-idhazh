@@ -1,6 +1,6 @@
 # Run one manual HHEM evaluation
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-03
 
 How to send supplied source and summary text to the independent CPU evaluator
 and inspect its score and whole-machine measurements. This procedure is
@@ -83,7 +83,11 @@ configuration, actual-work and hardware tables show the loaded revision,
 score, seconds rounded upward to three decimal places, machine readings and
 worker details. Expand each text disclosure to check the supplied pair.
 `summary-eval-unieval` must say it was not run and have no numeric score or time.
-The JSON retains the actual terminal request event ID for comparison with logs.
+The JSON retains the actual terminal request event ID for diagnosis. A
+validated HTTP result and confirmed owned-process exit establish the outcome;
+the caller does not require a matching terminal log line. The launcher's
+shared listener and diagnostic files follow the
+[server reference](../reference/fastapi-server.md).
 
 Normal enabled evidence requires a complete evaluation, an explicit
 uninterrupted profile stop, actual machine CPU and sampled RAM, and

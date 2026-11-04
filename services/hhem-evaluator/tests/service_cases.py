@@ -8,14 +8,19 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from multiprocessing.process import BaseProcess
+from pathlib import Path
 from typing import cast
 
 import httpx
 from fastapi import FastAPI
 from starlette.types import Message, Scope
 
-from hhem_evaluator.contracts.base import API_PREFIX
+from hhem_evaluator.api_settings import load_api_settings
+from hhem_evaluator.contracts.api_settings import ApiComponent, ApiSettings
+from hhem_evaluator.contracts.base import EVALUATE_PATH
 from hhem_evaluator.contracts.evaluation_event import EvaluationEvent
+from hhem_evaluator.contracts.llama_settings import LlamaSettings
+from hhem_evaluator.contracts.server_event import ServerEvent
 from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
 from hhem_evaluator.emit_events import EventWriter
 from hhem_evaluator.exchange_packets import ByteChannel
@@ -50,13 +55,18 @@ class EventLog(io.StringIO):
     def __init__(self) -> None:
         super().__init__()
         self.events: list[EvaluationEvent] = []
+        self.envelopes: list[ServerEvent] = []
         self.waiters: list[tuple[str, str, str | None, asyncio.Future[EvaluationEvent]]] = []
         self.fail_terminal = False
 
     def write(self, text: str) -> int:
         if text == "\n":
             return super().write(text)
-        event = EvaluationEvent.model_validate_json(text)
+        envelope = ServerEvent.model_validate_json(text)
+        self.envelopes.append(envelope)
+        if not isinstance(envelope.data, EvaluationEvent):
+            return super().write(text)
+        event = envelope.data
         if (
             self.fail_terminal
             and event.operation == "request"
@@ -162,12 +172,38 @@ async def running_service(
     scenarios: tuple[Scenario, ...] = (Scenario(),),
     *,
     wait_ready: bool = True,
+    routes: tuple[ApiComponent, ...] | None = None,
+    llama_settings: LlamaSettings | None = None,
+    llama_transport: httpx.AsyncBaseTransport | None = None,
+    log_directory: Path | None = None,
 ) -> AsyncIterator[ServiceCase]:
     selected = settings or service_settings()
+    if routes is not None:
+        selected = ServiceSettings.model_validate_json(
+            selected.model_copy(update={"enabled": "hhem" in routes}).model_dump_json()
+        )
     worker = RecordedSupervisor(selected, scenarios)
     log = EventLog()
+    shared = load_api_settings(REPOSITORY / "config" / "fastapi-server.json")
+    api = ApiSettings.model_validate_json(
+        shared.model_copy(
+            update={
+                "enabled_routes": routes
+                if routes is not None
+                else (("hhem",) if selected.enabled else ()),
+                "listener": selected.listener,
+                "logging": selected.logging,
+            }
+        ).model_dump_json()
+    )
     app = create_app(
-        selected, REPOSITORY, supervisor=worker, writer=EventWriter(selected.logging, log)
+        api,
+        selected,
+        REPOSITORY,
+        supervisor=worker,
+        writer=EventWriter(selected.logging, log, directory=log_directory),
+        llama_settings=llama_settings,
+        llama_transport=llama_transport,
     )
     try:
         async with app.router.lifespan_context(app):
@@ -188,6 +224,7 @@ async def running_service(
 @dataclass
 class DirectRequest:
     body: bytes
+    path: str = EVALUATE_PATH
     headers: tuple[tuple[bytes, bytes], ...] = ()
     disconnected: asyncio.Event = field(default_factory=asyncio.Event)
     messages: list[Message] = field(default_factory=list)
@@ -204,15 +241,15 @@ class DirectRequest:
         self.messages.append(message)
 
     async def run(self, app: FastAPI) -> None:
-        listener = app.state.controller.settings.listener
+        listener = app.state.api_settings.listener
         scope: Scope = {
             "type": "http",
             "asgi": {"version": "3.0"},
             "http_version": "1.1",
             "method": "POST",
             "scheme": "http",
-            "path": f"{API_PREFIX}/evaluate",
-            "raw_path": f"{API_PREFIX}/evaluate".encode(),
+            "path": self.path,
+            "raw_path": self.path.encode(),
             "query_string": b"",
             "root_path": "",
             "client": ("127.0.0.1", 1),

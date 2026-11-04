@@ -1,19 +1,23 @@
 """Prove native HTTP contracts and responsive health through the real ASGI lifespan."""
 
 import asyncio
+import io
 import json
 
 import pytest
 
+from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.contracts.base import API_PREFIX, EVALUATE_PATH
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.evaluation_event import EventDetails
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
-from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
+from hhem_evaluator.contracts.service_settings import StartupContext
 from hhem_evaluator.emit_events import EventEmitter, EventWriter
 from hhem_evaluator.fail_evaluation import EvaluationFailure
+from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.serve_api import create_app
 
-from .contract_examples import REPOSITORY, SETTINGS_FILE
+from .contract_examples import API_SETTINGS_FILE, REPOSITORY, SETTINGS_FILE
 from .replay_predictions import Scenario, read_recordings
 from .service_cases import DirectRequest, EventLog, running_service, service_settings
 
@@ -31,24 +35,20 @@ def test_event_overflow_is_refused_before_any_truncated_record_is_written() -> N
 
 def test_disabled_service_and_native_openapi_do_not_start_or_read_input() -> None:
     async def check() -> None:
-        settings = ServiceSettings.model_validate_json(SETTINGS_FILE.read_bytes())
+        settings = load_settings(SETTINGS_FILE)
         async with running_service(settings, wait_ready=False) as service:
-            response = await service.client.get(f"{API_PREFIX}/health")
+            response = await service.client.get("/health")
             assert response.status_code == 503
             assert response.json()["status"] == "disabled"
-            assert response.json()["worker"] is None
+            assert response.json()["hhem"]["worker"] is None
             request = DirectRequest(b"PrivateUnreadBodyCanary")
             await request.run(service.app)
             assert request.body_reads == 0
-            assert request.messages[0]["status"] == 503
+            assert request.messages[0]["status"] == 404
             assert not service.worker.controls
             schema = (await service.client.get(f"{API_PREFIX}/openapi.json")).json()
-            body = schema["paths"][EVALUATE_PATH]["post"]["requestBody"]
-            declared = body["content"]["application/json"]["schema"]
-            native = EvaluateRequest.model_json_schema()
-            assert declared == native
-            result_schema = schema["components"]["schemas"]["EvaluationResult"]
-            assert result_schema["version"] == settings.version
+            assert EVALUATE_PATH not in schema["paths"]
+            assert "/v1/chat/completions" not in schema["paths"]
             assert (await service.client.get(f"{API_PREFIX}/health/")).status_code == 404
             assert (await service.client.get("/docs")).status_code == 404
 
@@ -86,6 +86,14 @@ def test_resolved_controls_are_native_and_invalid_requests_never_get_a_422() -> 
             "summary_text": case.summary_text,
         }
         async with running_service() as service:
+            schema = (await service.client.get(f"{API_PREFIX}/openapi.json")).json()
+            body = schema["paths"][EVALUATE_PATH]["post"]["requestBody"]
+            assert (
+                body["content"]["application/json"]["schema"] == EvaluateRequest.model_json_schema()
+            )
+            assert (
+                await service.client.post(f"{API_PREFIX}/evaluate", json=base)
+            ).status_code == 404
             for changes in (
                 {"chunk_words": 100},
                 {"chunk_overlap_words": 5000},
@@ -95,14 +103,12 @@ def test_resolved_controls_are_native_and_invalid_requests_never_get_a_422() -> 
                 {"source_text": " \t\n"},
                 {"UnexpectedPropertyCanary": "PrivateValueCanary"},
             ):
-                response = await service.client.post(
-                    f"{API_PREFIX}/evaluate", json={**base, **changes}
-                )
+                response = await service.client.post(EVALUATE_PATH, json={**base, **changes})
                 assert response.status_code == 400, response.text
                 assert response.json()["errors"][0]["code"] == "INVALID_REQUEST"
                 assert response.json()["hhem"] is None
             accepted = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={
                     **base,
                     "chunk_words": 1500,
@@ -118,11 +124,11 @@ def test_resolved_controls_are_native_and_invalid_requests_never_get_a_422() -> 
             assert not result.effective_settings.include_window_details
         settings = service_settings(response={"hhem_full": True, "include_window_details": True})
         async with running_service(settings) as service:
-            refused = await service.client.post(f"{API_PREFIX}/evaluate", json=base)
+            refused = await service.client.post(EVALUATE_PATH, json=base)
             assert refused.status_code == 400
             assert refused.json()["errors"][0]["field"] == "full_source_text"
             enabled = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={**base, "full_source_text": case.source_text},
             )
             assert enabled.status_code == 200, enabled.text
@@ -139,7 +145,7 @@ def test_excessive_full_plan_is_rejected_before_any_model_call() -> None:
         settings = service_settings(scoring={"max_windows_per_comparison": 1})
         async with running_service(settings) as service:
             response = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={
                     "source_text": case.source_text,
                     "summary_text": case.summary_text,
@@ -154,5 +160,24 @@ def test_excessive_full_plan_is_rejected_before_any_model_call() -> None:
             assert response.json()["windows"]["primary"]["scored"] == 0
             assert not any(event.operation == "primary" for event in service.log.events)
             assert "another word" not in json.dumps(response.json())
+
+    asyncio.run(check())
+
+
+def test_lifespan_preserves_the_original_error_when_cleanup_also_fails() -> None:
+    async def check() -> None:
+        api = load_api_settings(API_SETTINGS_FILE)
+        api = api.model_copy(update={"enabled_routes": ()})
+        stream = io.StringIO()
+        app = create_app(api, None, REPOSITORY, writer=EventWriter(api.logging, stream))
+        original = ValueError("The operation failed before cleanup.")
+        with pytest.raises(BaseExceptionGroup) as observed:
+            async with app.router.lifespan_context(app):
+                stream.close()
+                raise original
+        assert observed.value.exceptions[0] is original
+        cleanup = observed.value.exceptions[1]
+        assert isinstance(cleanup, EvaluationFailure)
+        assert cleanup.error.code == "LOGGING_FAILED"
 
     asyncio.run(check())

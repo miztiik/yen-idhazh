@@ -1,0 +1,22 @@
+{
+  "version": "2026-11-03",
+  "listener": {
+    "host": "127.0.0.1",
+    "port": 3010,
+    "max_body_bytes": 1048576,
+    "body_read_timeout_ms": 5000
+  },
+  "enabled_routes": [],
+  "logging": {
+    "level": "INFO",
+    "max_event_bytes": 4096
+  },
+  "log_directory": "services/hhem-evaluator/var/server-logs",
+  "shutdown_timeout_ms": 15000,
+  "llama": {
+    "connect_timeout_ms": 5000,
+    "health_timeout_ms": 5000,
+    "max_response_bytes": 1048576,
+    "max_inflight_requests": 1
+  }
+}

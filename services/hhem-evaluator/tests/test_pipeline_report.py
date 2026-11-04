@@ -65,7 +65,11 @@ def test_report_creator_publishes_the_same_file_or_fails_without_truncating(
 ) -> None:
     config = tmp_path / "config"
     (config / "hhem-evaluator").mkdir(parents=True)
-    for name in ("summary-eval-hhem.json", "hhem-evaluator/settings.json"):
+    for name in (
+        "summary-eval-hhem.json",
+        "fastapi-server.json",
+        "hhem-evaluator/settings.json",
+    ):
         (config / name).write_bytes((REPOSITORY / "config" / name).read_bytes())
     directory = tmp_path / load_pipeline_settings(REPOSITORY).output_directory
     directory.mkdir(parents=True)

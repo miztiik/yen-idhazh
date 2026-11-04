@@ -3,8 +3,6 @@
 import argparse
 import asyncio
 import contextlib
-import logging
-import math
 import os
 import sys
 import threading
@@ -13,11 +11,15 @@ from pathlib import Path
 from typing import BinaryIO, TextIO
 
 import uvicorn
+from hhem_evaluator.api_settings import load_api_settings
+from hhem_evaluator.configure_server import create_server_config, report_startup_failure
+from hhem_evaluator.contracts.api_settings import ApiSettings
 from hhem_evaluator.contracts.base import SCHEMA_VERSION
+from hhem_evaluator.contracts.server_event import ApiDiagnosticData
 from hhem_evaluator.emit_events import EventWriter
 from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.run_server import has_clean_lifespan
 from hhem_evaluator.serve_api import create_app
-from uvicorn.lifespan.on import LifespanOn
 
 from .channels import OwnedChannels, open_owned_channels
 from .control import ApiReady, ServiceStartFailed, ServiceStopped, StartupPacket
@@ -58,31 +60,32 @@ async def serve_owned_api(
     finished: threading.Event,
     channels: OwnedChannels,
 ) -> None:
-    selected = load_settings(root / "config" / "hhem-evaluator" / "settings.json")
-    settings = type(selected).model_validate_json(
-        selected.model_copy(update={"enabled": True}).model_dump_json()
+    shared = load_api_settings(root / "config" / "fastapi-server.json")
+    api = ApiSettings.model_validate_json(
+        shared.model_copy(update={"enabled_routes": ("hhem",)}).model_dump_json()
     )
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
-        logging.getLogger(name).disabled = True
-    app = create_app(
-        settings, root, packet.context, writer=EventWriter(settings.logging, channels.events)
+    settings = load_settings(root / "config" / "hhem-evaluator" / "settings.json", api)
+    events = EventWriter(
+        api.logging,
+        channels.events,
+        directory=root / load_pipeline_settings(root).output_directory,
+        run_id=os.environ.get("GITHUB_RUN_ID") or packet.context.run_id or packet.startup_id,
+        attempt=packet.attempt,
     )
+    app = create_app(api, settings, root, packet.context, writer=events)
     controller = app.state.controller
-    config = uvicorn.Config(
-        app,
-        host=settings.listener.host,
-        port=settings.listener.port,
-        workers=1,
-        reload=False,
-        access_log=False,
-        log_config=None,
-        proxy_headers=False,
-        server_header=False,
-        lifespan="on",
-        timeout_graceful_shutdown=math.ceil(settings.worker.shutdown_timeout_ms / 1000),
-    )
+    config = create_server_config(app, api)
     # Bind before lifespan starts a model; an occupied listener owns no part of this run.
-    listener = config.bind_socket()
+    try:
+        listener = config.bind_socket()
+    except (OSError, SystemExit):
+        events.diagnostic(
+            ApiDiagnosticData(
+                component="api", action="failed", level="ERROR", code="LISTENER_BIND_FAILED"
+            )
+        )
+        events.close()
+        raise
     server = uvicorn.Server(config)
     loop = asyncio.get_running_loop()
 
@@ -118,12 +121,7 @@ async def serve_owned_api(
             )
         await serving
         confirmed = controller.worker.exit_confirmed
-        clean = (
-            confirmed
-            and isinstance(server.lifespan, LifespanOn)
-            and not server.lifespan.error_occurred
-            and not server.lifespan.shutdown_failed
-        )
+        clean = confirmed and has_clean_lifespan(server)
         emit_control(
             ServiceStopped(
                 version=SCHEMA_VERSION,
@@ -144,6 +142,7 @@ async def serve_owned_api(
                 await controller.shutdown()
         finally:
             listener.close()
+            events.close()
 
 
 def main() -> None:
@@ -164,6 +163,7 @@ def main() -> None:
             # Executor shutdown also belongs inside the parent-loss deadline.
             finished.set()
         except (Exception, SystemExit):
+            report_startup_failure("STARTUP_FAILED", channels.events)
             if packet is not None:
                 with contextlib.suppress(OSError):
                     emit_control(

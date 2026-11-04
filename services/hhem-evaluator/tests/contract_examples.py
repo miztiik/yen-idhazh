@@ -22,6 +22,7 @@ from hhem_evaluator.resolve_request import resolve_request
 
 REPOSITORY = Path(__file__).resolve().parents[3]
 SETTINGS_FILE = REPOSITORY / "config" / "hhem-evaluator" / "settings.json"
+API_SETTINGS_FILE = REPOSITORY / "config" / "fastapi-server.json"
 EXECUTION_ID = "11111111-2222-4333-8444-555555555555"
 REQUEST_ID = "12345678-1234-4234-8234-123456789abc"
 CORRELATION_ID = "87654321-4321-4321-8321-cba987654321"

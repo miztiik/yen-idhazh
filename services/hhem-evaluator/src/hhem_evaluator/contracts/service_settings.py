@@ -110,14 +110,11 @@ class LoggingSettings(NativeContract):
 
 
 class ServiceSettings(NativeContract):
-    """Freeze every authored operational setting before a service starts."""
+    """Freeze scoring settings and the shared listener snapshot sent to a worker."""
 
     version: SchemaVersion
     enabled: StrictBool = Field(
-        description=(
-            "Development flag; remove when the standalone API is released after "
-            "real-model workflow verification."
-        )
+        description="Whether the shared application's explicit route selection enables HHEM."
     )
     hhem: HhemSettings
     scoring: ScoringSettings

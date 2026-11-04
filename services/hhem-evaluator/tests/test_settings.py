@@ -7,13 +7,15 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from hhem_evaluator.api_settings import ApiSettingsLoadError, load_api_settings
+from hhem_evaluator.contracts.api_settings import ApiSettings
 from hhem_evaluator.contracts.error_detail import project_request_error
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
 from hhem_evaluator.load_settings import SettingsLoadError, load_settings
 from hhem_evaluator.resolve_request import RequestResolutionError, resolve_request
 
-from .contract_examples import SETTINGS_FILE, read_contract
+from .contract_examples import API_SETTINGS_FILE, SETTINGS_FILE, read_contract
 
 
 def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model() -> None:
@@ -65,8 +67,9 @@ def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model
 def test_settings_freeze_the_effective_snapshot_not_the_file(tmp_path: Path) -> None:
     path = tmp_path / "settings.json"
     path.write_bytes(SETTINGS_FILE.read_bytes())
-    settings = load_settings(path)
-    changed = settings.model_dump(mode="json")
+    api = load_api_settings(API_SETTINGS_FILE)
+    settings = load_settings(path, api)
+    changed = settings.model_dump(mode="json", exclude={"enabled", "listener", "logging"})
     changed["scoring"]["chunk_words"] = 1500
     changed["response"]["include_window_details"] = True
     changed["response"]["hhem_full"] = True
@@ -75,7 +78,7 @@ def test_settings_freeze_the_effective_snapshot_not_the_file(tmp_path: Path) -> 
         source_text=" Source. ", summary_text="Summary.", full_source_text=" Full source. "
     )
     original = resolve_request(request, settings)
-    current = resolve_request(request, load_settings(path))
+    current = resolve_request(request, load_settings(path, api))
     assert original.chunk_words == 5000
     assert not original.hhem_full
     assert not original.include_window_details
@@ -206,31 +209,72 @@ def test_full_comparison_never_substitutes_primary_source() -> None:
 def test_invalid_settings_fail_with_the_setting_named(
     path: tuple[str, ...], value: object, tmp_path: Path
 ) -> None:
-    payload = load_settings(SETTINGS_FILE).model_dump(mode="json")
+    shared = load_api_settings(API_SETTINGS_FILE)
+    is_shared = path[0] in ("listener", "logging")
+    payload = (
+        shared.model_dump(mode="json")
+        if is_shared
+        else load_settings(SETTINGS_FILE).model_dump(
+            mode="json", exclude={"enabled", "listener", "logging"}
+        )
+    )
     current = payload
     for part in path[:-1]:
         current = current[part]
     current[path[-1]] = value
     file = tmp_path / "settings.json"
     file.write_text(json.dumps(payload), encoding="utf-8")
-    with pytest.raises(SettingsLoadError) as failure:
-        load_settings(file)
+    with pytest.raises((SettingsLoadError, ApiSettingsLoadError)) as failure:
+        if is_shared:
+            load_api_settings(file)
+        else:
+            load_settings(file, shared)
     assert path[0] in str(failure.value)
     assert str(tmp_path) not in str(failure.value)
 
 
 def test_missing_settings_have_no_source_or_environment_fallback(tmp_path: Path) -> None:
-    payload = load_settings(SETTINGS_FILE).model_dump(mode="json")
+    shared = load_api_settings(API_SETTINGS_FILE)
+    payload = load_settings(SETTINGS_FILE).model_dump(
+        mode="json", exclude={"enabled", "listener", "logging"}
+    )
     del payload["hhem"]["model"]["reference"]
     file = tmp_path / "settings.json"
     file.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(SettingsLoadError, match="hhem.model.reference"):
-        load_settings(file)
+        load_settings(file, shared)
     with pytest.raises(SettingsLoadError, match="Could not read"):
-        load_settings(tmp_path / "absent.json")
+        load_settings(tmp_path / "absent.json", shared)
     file.write_text("{", encoding="utf-8")
     with pytest.raises(SettingsLoadError, match="settings"):
-        load_settings(file)
+        load_settings(file, shared)
+
+
+def test_shared_listener_is_the_only_authority_and_disabled_routes_are_explicit() -> None:
+    shared = load_api_settings(API_SETTINGS_FILE)
+    assert shared.listener.host == "127.0.0.1" and shared.listener.port == 3010
+    assert shared.enabled_routes == ()
+    selected = ApiSettings.model_validate_json(
+        shared.model_copy(
+            update={
+                "enabled_routes": ("hhem",),
+                "listener": shared.listener.model_copy(update={"port": 3011}),
+            }
+        ).model_dump_json()
+    )
+    frozen = load_settings(SETTINGS_FILE, selected)
+    assert frozen.enabled and frozen.listener.port == 3011
+    assert load_settings(SETTINGS_FILE).listener.port == 3010
+
+
+@pytest.mark.parametrize("field", ["enabled", "listener", "logging"])
+def test_old_authored_listener_and_flag_fields_are_refused(field: str, tmp_path: Path) -> None:
+    payload = json.loads(SETTINGS_FILE.read_bytes())
+    payload[field] = load_settings(SETTINGS_FILE).model_dump(mode="json")[field]
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(SettingsLoadError, match=field):
+        load_settings(path, load_api_settings(API_SETTINGS_FILE))
 
 
 @pytest.mark.parametrize("value", ["", "two words", "../run", "run\nid", "r" * 129, "\u00e9"])

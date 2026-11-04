@@ -1,8 +1,8 @@
 # How the local HHEM API owns scoring
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-03
 
-How the standalone service scores supplied source and summary text without
+How the HHEM component scores supplied source and summary text without
 blocking health checks or leaving a second model process behind.
 The [API reference](../../reference/hhem-evaluation-api.md) owns its fields,
 limits and error codes. This service does not change pipeline evaluation,
@@ -13,7 +13,8 @@ publish data, collect resources or retain completed results.
 One HTTP process owns one scoring process. FastAPI's lifespan starts loading
 in the background and owns shutdown. Health reports the observed loading,
 ready, replacing, stopping or failed state without waiting for prediction.
-The listener accepts its configured loopback host only. Browser origins,
+The [shared application](local-model-api.md) owns the listener and explicit
+component selection. It accepts its configured loopback host only. Browser origins,
 duplicate or unexpected Host headers, redirects and raw access logs are not
 accepted.
 
@@ -114,11 +115,14 @@ events use native closed contracts. Validation projection removes raw input,
 unknown property names and exception messages. Child diagnostics and model
 progress are discarded rather than forwarded.
 
-The parent writes bounded JSONL events through standard-library logging to
-stderr. Event sequence and causal links are parent-owned. Essential events
-use the configured severity; failures use at least ERROR. A write, flush or
-event-size failure is explicit: an affected response has `LOGGING_FAILED`,
-an error status and no claimed terminal-event link.
+The parent writes bounded CloudEvents JSONL through standard-library logging
+to stderr and the shared server's named diagnostic file. Event sequence and causal links are parent-owned. Essential events
+use the configured severity; failures use at least ERROR. A required stderr
+write, flush or record-size failure is explicit: an affected response has
+`LOGGING_FAILED`, an error status and no claimed terminal-event link.
+A failed optional file mirror instead emits a safe warning and marks the log
+unavailable. It does not change the score or stop the worker. The caller does
+not require a terminal log match to accept a validated native result.
 
 The capture script runs the production loader and predictor on the named
 project-authored inputs. Captured predictions bind exact source/summary hashes
@@ -148,5 +152,6 @@ caller does not need report or hardware code to use the evaluator.
 ## See also
 
 - [../../reference/hhem-evaluation-api.md](../../reference/hhem-evaluation-api.md) - native fields, settings and response policy.
+- [../../reference/fastapi-server.md](../../reference/fastapi-server.md) - shared listener, enabled components and diagnostic files.
 - [../../how-to/run-the-gates.md#independent-python-service-contracts](../../how-to/run-the-gates.md#independent-python-service-contracts) - offline and real-model checks.
 - [../contracts/identity.md#6-hhem-execution-and-event-identity](../contracts/identity.md#6-hhem-execution-and-event-identity) - execution and event identities.

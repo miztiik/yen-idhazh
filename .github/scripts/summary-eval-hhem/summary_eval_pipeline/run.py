@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.contracts.base import SCHEMA_VERSION, OutcomeStatus
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.service_settings import StartupContext
@@ -73,7 +74,8 @@ def build_evidence(
 
 
 async def collect(root: Path) -> PipelineEvidence:
-    settings = load_settings(root / "config" / "hhem-evaluator" / "settings.json")
+    api_settings = load_api_settings(root / "config" / "fastapi-server.json")
+    settings = load_settings(root / "config" / "hhem-evaluator" / "settings.json", api_settings)
     pipeline = load_pipeline_settings(root)
     api: OwnedService | None = None
     host: OwnedService | None = None
@@ -114,7 +116,7 @@ async def collect(root: Path) -> PipelineEvidence:
                 ready = await asyncio.to_thread(api.wait_ready, settings.worker.startup_timeout_ms)
                 if not isinstance(ready, ApiReady):
                     raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", "hhem")
-            base_url = loopback_url(settings.listener.host, settings.listener.port)
+            base_url = loopback_url(api_settings.listener.host, api_settings.listener.port)
             with progress("Checking HHEM API health"):
                 await read_owned_health(
                     client, base_url, ready.service_instance_id, settings, pipeline
@@ -153,7 +155,6 @@ async def collect(root: Path) -> PipelineEvidence:
                             status,
                         ).error
                     )
-                api.confirm_terminal(evaluation.terminal_event_id, evaluation.execution_id)
                 api.check_alive()
             with progress("Doing UniEval summary evaluation"):
                 print("Not run - future task.", flush=True)

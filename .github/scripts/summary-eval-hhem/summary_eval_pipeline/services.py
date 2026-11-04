@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Literal
 
-from hhem_evaluator.contracts.evaluation_event import EvaluationEvent
+from hhem_evaluator.contracts.server_event import ServerEvent
 from hhem_evaluator.contracts.service_settings import ServiceSettings
 from pydantic import ValidationError
 
@@ -42,8 +42,6 @@ class OwnedService:
         self.messages: queue.Queue[ServiceControl | None] = queue.Queue(CONTROL_PACKET_CAPACITY)
         self.protocol_failed = threading.Event()
         self.events_failed = threading.Event()
-        self.terminal_seen = threading.Event()
-        self.terminal_event: EvaluationEvent | None = None
         self.ready: ApiReady | HostReady | None = None
         self.stopped: ServiceStopped | None = None
         self.closed = False
@@ -106,14 +104,7 @@ class OwnedService:
                 ):
                     self.events_failed.set()
                     return
-                event = EvaluationEvent.model_validate_json(line)
-                if event.operation == "request" and event.phase in (
-                    "completed",
-                    "failed",
-                    "cancelled",
-                ):
-                    self.terminal_event = event
-                    self.terminal_seen.set()
+                event = ServerEvent.model_validate_json(line)
                 sys.stderr.write(event.model_dump_json() + "\n")
                 sys.stderr.flush()
         except (OSError, ValueError, ValidationError):
@@ -159,18 +150,6 @@ class OwnedService:
         if self.protocol_failed.is_set():
             raise WorkflowError("CHILD_PROTOCOL_FAILED", "evaluation", self.service)
         if self.events_failed.is_set():
-            raise WorkflowError("EVENT_STREAM_FAILED", "evaluation", self.service)
-
-    def confirm_terminal(self, event_id: str | None, execution_id: str) -> None:
-        if not self.terminal_seen.wait(self.manual.http_connect_timeout_ms / 1000):
-            raise WorkflowError("EVENT_STREAM_FAILED", "evaluation", self.service)
-        event = self.terminal_event
-        if (
-            self.events_failed.is_set()
-            or event is None
-            or event.event_id != event_id
-            or event.execution_id != execution_id
-        ):
             raise WorkflowError("EVENT_STREAM_FAILED", "evaluation", self.service)
 
     def finish_measurement(self, outcome: str) -> None:
