@@ -61,7 +61,6 @@ def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model
     )
     assert importlib.util.find_spec("idhazh") is None
     assert importlib.util.find_spec("torch") is None
-    assert importlib.util.find_spec("transformers") is None
 
 
 def test_settings_freeze_the_effective_snapshot_not_the_file(tmp_path: Path) -> None:

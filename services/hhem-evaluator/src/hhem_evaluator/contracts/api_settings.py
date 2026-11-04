@@ -8,7 +8,7 @@ from .base import PositiveCount, RelativePath
 from .server_contract import ServerContract, ServerSchemaVersion
 from .service_settings import ListenerSettings, LoggingSettings
 
-ApiComponent = Literal["hhem", "llama"]
+ApiComponent = Literal["hhem", "llama", "unieval"]
 
 
 class LlamaTransportSettings(ServerContract):

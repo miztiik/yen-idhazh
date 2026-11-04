@@ -196,6 +196,14 @@ native Python events, not manufactured TypeScript trace identifiers.
 Readers accept the current structured envelope only. Private startup and
 worker-control packets remain native JSON, not CloudEvents.
 
+UniEval also creates its execution UUIDv4 before body reading, independently
+of caller request/correlation UUIDs and the other model worker. Its private
+comparison replies must match that execution, worker generation, dimension,
+sentence and source-window identity. Its diagnostic occurrences use fresh
+CloudEvents UUIDv4 IDs and retain the request execution ID in safe data.
+The reference-summary digest identifies the exact UTF-8 reference bytes,
+not the source, generated answer or an event occurrence.
+
 ## Design rationale
 
 An event occurrence, an execution, an operation and a domain item answer

@@ -22,7 +22,7 @@ def test_native_event_has_one_current_cloudevents_occurrence_and_no_legacy_reade
     assert event.id == native.event_id and event.time == native.occurred_at
     assert event.source == "/fastapi-server" and event.specversion == "1.0"
     assert ServerEvent.model_validate_json(event.model_dump_json()) == event
-    assert ServerEvent.model_json_schema()["version"] == "2026-11-03"
+    assert ServerEvent.model_json_schema()["version"] == "2026-11-04"
     with pytest.raises(ValidationError):
         ServerEvent.model_validate_json(native.model_dump_json())
     with pytest.raises(ValidationError):

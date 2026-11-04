@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "hhem-evaluator"
 version = "2026.11.2"
-description = "Independent bounded local CPU HHEM evaluation API."
+description = "Local HHEM and UniEval scoring with native generation forwarding."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "pydantic>=2.12,<3",
@@ -20,10 +20,18 @@ model = [
     "torch==2.8.0",
     "huggingface-hub==0.36.0",
     "sentencepiece==0.2.1",
+    "nltk==3.9.2",
 ]
 
 [dependency-groups]
+resources = [
+    "transformers==4.57.6",
+    "huggingface-hub==0.36.0",
+    "sentencepiece==0.2.1",
+    "nltk==3.9.2",
+]
 dev = [
+    { include-group = "resources" },
     "mypy>=1.14,<2",
     "pytest>=8.3,<10",
     "pytest-socket>=0.7,<1",
@@ -51,7 +59,15 @@ strict = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["torch", "transformers", "huggingface_hub", "huggingface_hub.utils"]
+module = [
+    "torch",
+    "transformers",
+    "huggingface_hub",
+    "huggingface_hub.utils",
+    "nltk",
+    "nltk.*",
+    "tokenizers",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

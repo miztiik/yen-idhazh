@@ -9,9 +9,10 @@ from .base import RelativePath, Uuid4
 from .llama_result import LlamaHealth
 from .server_contract import ServerContract, ServerSchemaVersion
 from .service_health import ServiceHealth
+from .unieval_result import UnievalHealth
 
 
-class DisabledHhemHealth(ServerContract):
+class DisabledEvaluatorHealth(ServerContract):
     """Report a disabled scorer without loading or inventing its settings."""
 
     status: Literal["disabled"] = "disabled"
@@ -26,17 +27,16 @@ class ApiHealth(ServerContract):
     service_instance_id: Uuid4
     enabled_routes: tuple[ApiComponent, ...]
     status: Literal["disabled", "loading", "ready", "failed", "stopping"]
-    hhem: ServiceHealth | DisabledHhemHealth
+    hhem: ServiceHealth | DisabledEvaluatorHealth
     llama: LlamaHealth
+    unieval: UnievalHealth | DisabledEvaluatorHealth
     log_file: RelativePath | None
     log_available: StrictBool
 
     @model_validator(mode="after")
     def require_enabled_readiness(self) -> Self:
-        states = [
-            self.hhem.status if component == "hhem" else self.llama.status
-            for component in self.enabled_routes
-        ]
+        components = {"hhem": self.hhem, "llama": self.llama, "unieval": self.unieval}
+        states = [components[component].status for component in self.enabled_routes]
         if self.status == "ready" and (not states or any(state != "ready" for state in states)):
             raise ValueError("Ready requires every enabled component to be ready")
         if self.status == "disabled" and self.enabled_routes:
