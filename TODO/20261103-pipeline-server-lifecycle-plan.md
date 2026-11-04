@@ -137,7 +137,7 @@ Table I - PR sequence
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | I1 | 1 | Serve TypeScript APIs together in the feed workflow | - | A | PENDING | - | - | - |
-| I2 | 2 | Serve HHEM and llama through one FastAPI application | - | B | IN-REVIEW | fuzzy-giggle (shared-fastapi-server) | #1906 | Shared FastAPI server |
+| I2 | 2 | Serve HHEM and llama through one FastAPI application | - | B | DONE | fuzzy-giggle (shared-fastapi-server) | #1906 | Shared FastAPI server |
 | I3 | 3 | Deliver the live summary-eval-tests workflow | 1, 2 | C | PENDING | - | - | - |
 
 ## 2. Row #1 - Serve TypeScript APIs together in the feed workflow
