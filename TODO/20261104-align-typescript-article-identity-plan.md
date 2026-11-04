@@ -321,6 +321,7 @@ Table K - Row 1 alternatives
 - `docs/architecture/sources/feed-harvesting.md`
 - `docs/architecture/sources/feed-operator-api.md`
 - `docs/architecture/sources/feed-curation.md`
+- `docs/architecture/sources/feed-plan-runner.md`
 - `docs/architecture/sources/planner-run-diagnostics.md`
 - `docs/architecture/sources/planner-feed-history.md`
 - `docs/reference/diversity-metrics.md`
