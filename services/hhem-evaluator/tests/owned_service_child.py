@@ -11,6 +11,7 @@ from summary_eval_pipeline.contracts import WORKFLOW_VERSION, Hardware
 from summary_eval_pipeline.control import (
     ApiReady,
     HostReady,
+    ServiceStartFailed,
     ServiceStopped,
     StartupPacket,
 )
@@ -81,6 +82,34 @@ def private_output_case(packet: StartupPacket, mode: str) -> None:
 def main() -> None:
     packet = StartupPacket.model_validate_json(sys.stdin.buffer.readline(16384))
     mode = sys.argv[1]
+    if mode == "coded_startup_failure":
+        sys.stdout.write(
+            ServiceStartFailed(
+                version=WORKFLOW_VERSION,
+                kind="failed",
+                service="host",
+                startup_id=packet.startup_id,
+                pid=os.getpid(),
+                error_code="MACHINE_API_STARTUP_INVALID",
+            ).model_dump_json()
+            + "\n"
+        )
+        sys.stdout.write(
+            ServiceStopped(
+                version=WORKFLOW_VERSION,
+                kind="stopped",
+                service="host",
+                startup_id=packet.startup_id,
+                pid=os.getpid(),
+                clean=False,
+                worker_exit_confirmed=None,
+                error_code="MACHINE_API_STARTUP_INVALID",
+                cleanup_error_code="MACHINE_EVIDENCE_INVALID",
+            ).model_dump_json()
+            + "\n"
+        )
+        sys.stdout.flush()
+        raise SystemExit(1)
     if mode in ("raw_inherited_output", "unclean_stop", "unconfirmed_stop"):
         private_output_case(packet, mode)
         return

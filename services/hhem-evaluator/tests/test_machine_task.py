@@ -2,98 +2,20 @@
 
 import contextlib
 import json
-import subprocess
 import sys
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from summary_eval_pipeline.contracts import WORKFLOW_VERSION, RunIdentity
-from summary_eval_pipeline.control import HostReady, StartupPacket
+from summary_eval_pipeline.control import HostReady
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.host_reader import MachineUsage, measurement_complete
-from summary_eval_pipeline.model_selection import select_model, stage_configuration
 from summary_eval_pipeline.services import OwnedService
-from summary_eval_pipeline.settings import PipelineSettings, load_pipeline_settings
-
-from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
-from hhem_evaluator.load_settings import load_settings
-from hhem_evaluator.resolve_ids import create_execution_id
 
 from .contract_examples import REPOSITORY
+from .machine_task_cases import reserved_loopback_listener, stage_machine_run
 from .test_host_profile_reader_parity import required_bun
 from .test_pipeline_lifetime import CHILD_STARTUP_MS
-
-
-def available_loopback_port() -> int:
-    result = subprocess.run(
-        [
-            required_bun(),
-            "-e",
-            'import {createServer} from "node:net"; const server=createServer(); '
-            'await new Promise((resolve,reject)=>{server.once("error",reject);'
-            'server.listen(0,"127.0.0.1",resolve)}); const address=server.address(); '
-            'if(address===null||typeof address==="string") throw new Error("Missing port"); '
-            "console.log(address.port); "
-            "await new Promise((resolve,reject)=>server.close("
-            "error=>error?reject(error):resolve()));",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
-    assert result.returncode == 0, "The loopback-only port reservation failed."
-    port = int(result.stdout.strip())
-    assert 0 < port < 65536
-    return port
-
-
-def stage_machine_run(
-    root: Path,
-) -> tuple[StartupPacket, ServiceSettings, PipelineSettings]:
-    pipeline = load_pipeline_settings(REPOSITORY)
-    (root / "config").mkdir()
-    (root / "config" / "summary-eval-tests.json").write_bytes(
-        (REPOSITORY / "config" / "summary-eval-tests.json").read_bytes()
-    )
-    runtime = root / pipeline.output_directory
-    stage_configuration(REPOSITORY, runtime, select_model(REPOSITORY, ""))
-    listener = runtime / "config" / "hono-server.json"
-    settings = json.loads(listener.read_bytes())
-    settings["port"] = available_loopback_port()
-    listener.write_text(json.dumps(settings), encoding="utf-8")
-    fingerprint = runtime / "config" / "host-fingerprints.json"
-    controls = json.loads(fingerprint.read_bytes())
-    controls["metadata_url"] = None
-    fingerprint.write_text(json.dumps(controls), encoding="utf-8")
-    run = RunIdentity(
-        run_id="123456",
-        attempt=1,
-        git_sha="a" * 40,
-        started_at=datetime.now(UTC),
-    )
-    packet = StartupPacket(
-        version=WORKFLOW_VERSION,
-        startup_id=create_execution_id(),
-        context=StartupContext(
-            run_id=f"{run.started_at:%Y-%m-%d}-{run.run_id}",
-            pipeline_name=pipeline.pipeline_name,
-            task_name=f"{pipeline.task_name}-generation",
-        ),
-        git_sha=run.git_sha,
-        attempt=run.attempt,
-        request_id=create_execution_id(),
-        correlation_id=create_execution_id(),
-        phase="generation",
-        run=run,
-    )
-    return (
-        packet,
-        load_settings(REPOSITORY / "config" / "hhem-evaluator" / "settings.json"),
-        pipeline,
-    )
 
 
 @pytest.mark.skipif(
@@ -145,3 +67,91 @@ def test_serialized_python_packet_starts_stops_and_retains_native_http_machine_r
             with contextlib.suppress(WorkflowError):
                 child.close(settings.worker.shutdown_timeout_ms)
         assert child.process.poll() is not None
+
+
+@pytest.mark.skipif(
+    sys.platform != "linux", reason="The native machine collector requires Linux proc."
+)
+@pytest.mark.parametrize("failure", ["invalid_settings", "occupied_listener"])
+def test_real_helper_startup_failure_retains_safe_cause_without_adopting_another_listener(
+    tmp_path: Path,
+    capfd: pytest.CaptureFixture[str],
+    failure: str,
+) -> None:
+    packet, settings, pipeline = stage_machine_run(tmp_path)
+    path = tmp_path / pipeline.output_directory / "config" / "hono-server.json"
+    controls = json.loads(path.read_bytes())
+    with reserved_loopback_listener() as (port, unrelated):
+        controls["port"] = "PrivateMachineSettingsCanary" if failure == "invalid_settings" else port
+        path.write_text(json.dumps(controls), encoding="utf-8")
+        script = REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "machine-task.ts"
+        child = OwnedService(
+            "host",
+            [required_bun(), "run", "--no-install", str(script), str(tmp_path)],
+            tmp_path,
+            packet,
+            settings,
+            pipeline,
+        )
+        try:
+            with pytest.raises(WorkflowError) as original:
+                child.wait_ready(CHILD_STARTUP_MS)
+            assert original.value.error.code == "STARTUP_FAILED"
+            assert original.value.error.source_code == (
+                "MACHINE_API_STARTUP_INVALID"
+                if failure == "invalid_settings"
+                else "TYPESCRIPT_API_BIND_FAILED"
+            )
+        finally:
+            if not child.closed:
+                with pytest.raises(WorkflowError):
+                    child.close(settings.worker.shutdown_timeout_ms)
+        assert child.process.returncode == 1 and child.stopped is not None
+        assert child.stopped.error_code == original.value.error.source_code
+        assert unrelated.poll() is None
+    captured = capfd.readouterr()
+    assert captured.out == ""
+    assert "summary_machine_failed" in captured.err
+    assert "PrivateMachineSettingsCanary" not in captured.err
+    assert "ZodError" not in captured.err
+    assert child.stopped.machine is None
+
+
+@pytest.mark.skipif(
+    sys.platform != "linux", reason="The native machine collector requires Linux proc."
+)
+def test_invalid_private_close_retains_native_cancelled_measurement_and_safe_failure(
+    tmp_path: Path,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    packet, settings, pipeline = stage_machine_run(tmp_path)
+    script = REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "machine-task.ts"
+    child = OwnedService(
+        "host",
+        [required_bun(), "run", "--no-install", str(script), str(tmp_path)],
+        tmp_path,
+        packet,
+        settings,
+        pipeline,
+    )
+    try:
+        assert isinstance(child.wait_ready(CHILD_STARTUP_MS), HostReady)
+        assert child.process.stdin is not None
+        child.process.stdin.write(b'{"kind":"stop","outcome":"PrivateInvalidCloseCanary"}\n')
+        child.process.stdin.flush()
+        with pytest.raises(WorkflowError) as failure:
+            child.close(settings.worker.shutdown_timeout_ms + settings.worker.forced_stop_ms)
+        assert failure.value.error.source_code
+        assert child.stopped is not None and child.stopped.error_code
+        assert child.stopped.machine is not None
+        assert child.stopped.machine.outcome == "cancelled"
+        assert child.stopped.machine.end_reason == "service_stopped"
+        assert not measurement_complete(child.stopped.machine)
+    finally:
+        if not child.closed:
+            with contextlib.suppress(WorkflowError):
+                child.close(settings.worker.shutdown_timeout_ms)
+        assert child.process.poll() is not None
+    captured = capfd.readouterr()
+    assert captured.out == "" and "summary_machine_failed" in captured.err
+    assert "PrivateInvalidCloseCanary" not in captured.err

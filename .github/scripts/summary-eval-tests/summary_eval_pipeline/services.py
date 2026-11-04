@@ -18,13 +18,14 @@ from .control import (
     ApiReady,
     HostReady,
     ServiceControl,
+    ServiceStartFailed,
     ServiceStopped,
     StartupPacket,
 )
 from .failures import WorkflowError
 from .settings import PipelineSettings
 
-# The private protocol emits one ready packet and one stopped packet, then EOF.
+# The private protocol emits ready or failed, then stopped and EOF.
 CONTROL_PACKET_CAPACITY = 3
 
 
@@ -46,6 +47,7 @@ class OwnedService:
         self.stopped: ServiceStopped | None = None
         self.closed = False
         self.finish_sent = False
+        self.failure_code: str | None = None
         try:
             self.process = subprocess.Popen(
                 command,
@@ -131,16 +133,27 @@ class OwnedService:
         if self.protocol_failed.is_set():
             raise WorkflowError("CHILD_PROTOCOL_FAILED", "startup", self.service)
         packet = message.root if message is not None else None
-        if packet is None or self.process.poll() is not None:
+        if packet is None:
             raise WorkflowError("CHILD_EXITED", "startup", self.service)
-        if not isinstance(packet, ApiReady | HostReady):
-            raise WorkflowError("STARTUP_FAILED", "startup", self.service)
         if (
             packet.startup_id != self.packet.startup_id
             or packet.pid != self.process.pid
             or packet.service != self.service
         ):
             raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", self.service)
+        if isinstance(packet, ServiceStartFailed):
+            self.failure_code = packet.error_code
+            raise WorkflowError(
+                "STARTUP_FAILED",
+                "startup",
+                self.service,
+                packet.http_status,
+                source_code=packet.error_code,
+            )
+        if self.process.poll() is not None:
+            raise WorkflowError("CHILD_EXITED", "startup", self.service)
+        if not isinstance(packet, ApiReady | HostReady):
+            raise WorkflowError("STARTUP_FAILED", "startup", self.service)
         self.ready = packet
         return packet
 
@@ -194,6 +207,16 @@ class OwnedService:
             reader.join(timeout=self.settings.worker.forced_stop_ms / 1000)
         while not self.messages.empty():
             message = self.messages.get_nowait()
+            if message is not None and isinstance(message.root, ServiceStartFailed):
+                failed = message.root
+                if (
+                    failed.startup_id != self.packet.startup_id
+                    or failed.pid != self.process.pid
+                    or failed.service != self.service
+                ):
+                    self.protocol_failed.set()
+                else:
+                    self.failure_code = failed.error_code
             if message is not None and isinstance(message.root, ServiceStopped):
                 observed = message.root
                 if (
@@ -226,5 +249,18 @@ class OwnedService:
             or self.events_failed.is_set()
             or any(reader.is_alive() for reader in self.readers)
         ):
-            raise WorkflowError("SERVICE_STOP_FAILED", "cleanup", self.service)
+            source_code = (
+                stopped.cleanup_error_code or stopped.error_code or self.failure_code
+                if stopped is not None
+                else self.failure_code
+            )
+            raise WorkflowError(
+                "SERVICE_STOP_FAILED",
+                "cleanup",
+                self.service,
+                stopped.http_status
+                if stopped is not None and not stopped.cleanup_error_code
+                else None,
+                source_code=source_code,
+            )
         return stopped

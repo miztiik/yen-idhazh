@@ -70,6 +70,16 @@ class PhaseServices:
                 self.host_stopped = False
                 errors.append(WorkflowError("SERVICE_STOP_FAILED", "cleanup", "host").error)
             if self.host.stopped is not None:
+                if self.host.ready is not None and self.host.stopped.error_code is not None:
+                    errors.append(
+                        WorkflowError(
+                            "HOST_FAILED",
+                            "host",
+                            "host",
+                            self.host.stopped.http_status,
+                            source_code=self.host.stopped.error_code,
+                        ).error
+                    )
                 self.machine = self.host.stopped.machine
                 if self.host.stopped.server is not None:
                     self.servers.append(

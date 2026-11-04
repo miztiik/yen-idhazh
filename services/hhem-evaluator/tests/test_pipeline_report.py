@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from summary_eval_pipeline.contracts import (
     WORKFLOW_VERSION,
+    PipelineError,
     PipelineEvidence,
     ServerOutcome,
     ServiceShutdown,
@@ -195,6 +196,38 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
     row_ids = re.findall(r"^\| ([A-Z]\d+) \|", markdown, re.MULTILINE)
     assert len(row_ids) == len(set(row_ids))
     assert row_ids[0] == "A1" and "B1" in row_ids and "C1" in row_ids and "D1" in row_ids
+
+
+def test_safe_machine_cause_is_retained_in_native_evidence_and_visible_in_the_report() -> None:
+    fixture = REPOSITORY / "tests" / "fixtures" / "hhem-evaluator" / "pipeline-evidence.json"
+    evidence = PipelineEvidence.model_validate_json(fixture.read_bytes())
+    failure = WorkflowError(
+        "STARTUP_FAILED", "startup", "host", source_code="MACHINE_API_STARTUP_INVALID"
+    ).error
+    evidence = evidence.model_copy(update={"errors": (failure,)})
+    markdown = render_report(
+        evidence,
+        ManualInputs(source_text="Project-authored source."),
+        service_settings(),
+        "https://example.test/config",
+    )
+    assert "STARTUP_FAILED (cause MACHINE_API_STARTUP_INVALID)" in markdown
+    assert PipelineError.model_validate_json(failure.model_dump_json()) == failure
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "PrivateRawFailureCanary",
+        "UNSAFE\nCODE",
+        "CODE_" + "X" * 128,
+    ],
+)
+def test_machine_cause_codes_refuse_raw_text_and_unbounded_values(code: str) -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        WorkflowError("HOST_FAILED", "host", "host", source_code=code)
 
 
 @pytest.mark.parametrize("oversized", [False, True])

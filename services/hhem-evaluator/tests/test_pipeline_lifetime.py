@@ -210,3 +210,19 @@ def test_completed_work_survives_a_simultaneous_real_child_exit() -> None:
     finally:
         with pytest.raises(WorkflowError):
             child.close(1000)
+
+
+def test_exited_child_retains_validated_startup_and_separate_cleanup_cause_codes() -> None:
+    child = start_child("host", "coded_startup_failure")
+    child.process.wait(timeout=30)
+    with pytest.raises(WorkflowError) as original:
+        child.wait_ready(CHILD_STARTUP_MS)
+    assert original.value.error.code == "STARTUP_FAILED"
+    assert original.value.error.source_code == "MACHINE_API_STARTUP_INVALID"
+    with pytest.raises(WorkflowError) as cleanup:
+        child.close(1000)
+    assert cleanup.value.error.code == "SERVICE_STOP_FAILED"
+    assert cleanup.value.error.source_code == "MACHINE_EVIDENCE_INVALID"
+    assert child.process.returncode == 1
+    assert child.stopped is not None
+    assert child.stopped.error_code == original.value.error.source_code

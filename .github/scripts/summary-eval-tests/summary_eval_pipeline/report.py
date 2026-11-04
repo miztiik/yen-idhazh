@@ -45,7 +45,8 @@ def describe_error(error: PipelineError, task: PhaseName | None = None) -> str:
     location.append(error.service)
     if error.http_status is not None:
         location.append(f"HTTP {error.http_status}")
-    return f"- {' / '.join(location)}: {error.code} - {error.message}"
+    cause = f" (cause {error.source_code})" if error.source_code is not None else ""
+    return f"- {' / '.join(location)}: {error.code}{cause} - {error.message}"
 
 
 def render_report(
