@@ -6,7 +6,7 @@ from decimal import ROUND_CEILING, Decimal
 
 from hhem_evaluator.contracts.service_settings import ServiceSettings
 
-from .contracts import PipelineEvidence
+from .contracts import PhaseName, PipelineError, PipelineEvidence
 from .host_reader import measurement_complete
 from .inputs import ManualInputs
 
@@ -36,6 +36,16 @@ def table(letter: str, headings: Sequence[str], rows: Sequence[Sequence[object]]
         for index, row in enumerate(rows, 1)
     )
     return "\n".join(lines)
+
+
+def describe_error(error: PipelineError, task: PhaseName | None = None) -> str:
+    location: list[str] = [task] if task is not None else []
+    if error.phase != task:
+        location.append(error.phase)
+    location.append(error.service)
+    if error.http_status is not None:
+        location.append(f"HTTP {error.http_status}")
+    return f"- {' / '.join(location)}: {error.code} - {error.message}"
 
 
 def render_report(
@@ -99,14 +109,13 @@ def render_report(
     ]
     readings: list[tuple[object, ...]] = []
     servers: list[tuple[object, ...]] = []
-    errors = list(evidence.errors)
-    server_errors: list[str] = []
+    errors = [describe_error(error) for error in evidence.errors]
     if generation is not None:
-        errors.extend(generation.errors)
+        errors.extend(describe_error(error, "generation") for error in generation.errors)
     for phase in (evidence.generation_phase, evaluation):
         if phase is None:
             continue
-        errors.extend(phase.errors)
+        errors.extend(describe_error(error, phase.phase) for error in phase.errors)
         hardware, machine = phase.hardware, phase.machine
         readings.extend(
             [
@@ -192,12 +201,11 @@ def render_report(
         )
         for server in phase.servers:
             if server.error_code is not None:
-                server_errors.append(
-                    f"- {phase.phase}: {server.server_name} - {cell(server.error_code)}"
-                )
+                errors.append(f"- {phase.phase} / {server.server_name}: {cell(server.error_code)}")
             if server.cleanup_error_code is not None:
-                server_errors.append(
-                    f"- cleanup: {server.server_name} - {cell(server.cleanup_error_code)}"
+                errors.append(
+                    f"- {phase.phase} / cleanup / {server.server_name}: "
+                    f"{cell(server.cleanup_error_code)}"
                 )
             servers.append(
                 (
@@ -214,45 +222,53 @@ def render_report(
     sections = [
         "# summary-eval-tests",
         f"**Result:** {evidence.status}",
-        "## Model configuration",
-        table("A", ("Setting", "Value"), model_rows),
-        f"[Committed evaluator settings]({config_url})",
         "## Actual work",
-        table("B", ("Task", "Status", "Source support (0-1)", "Time (seconds)"), work_rows),
-        "## Hardware",
-        "CPU and RAM readings cover the whole machine, including background work.",
-        table("C", ("Phase", "Reading", "Value"), readings),
-        "## Owned servers",
-        table(
-            "D",
-            (
-                "Phase",
-                "Server",
-                "Startup",
-                "Startup (seconds)",
-                "Shutdown",
-                "Exit status",
-                "Log file",
-                "Log mirror",
-            ),
-            servers,
-        ),
-        "## Texts",
-        "<details>\n<summary>Source text</summary>\n\n<pre>"
-        + html.escape(inputs.source_text)
-        + "</pre>\n</details>",
-        "<details>\n<summary>Generated summary</summary>\n\n<pre>"
-        + (
-            html.escape(generation.summary_text)
-            if generation and generation.summary_text
-            else "Not generated"
-        )
-        + "</pre>\n</details>",
+        table("A", ("Task", "Status", "Source support (0-1)", "Time (seconds)"), work_rows),
     ]
-    if errors or server_errors or (result is not None and result.errors):
-        messages = [f"- {error.phase}: {error.code} - {error.message}" for error in errors]
-        messages.extend(server_errors)
-        if result is not None:
-            messages.extend(f"- HHEM: {error.code} - {error.message}" for error in result.errors)
-        sections.extend(["## Errors", "\n".join(dict.fromkeys(messages))])
+    if result is not None:
+        errors.extend(
+            f"- evaluation / hhem / {error.phase}: {error.code} - {error.message}"
+            for error in result.errors
+        )
+    if errors:
+        sections.extend(["## Errors", "\n".join(dict.fromkeys(errors))])
+    sections.extend(
+        [
+            "## Model configuration",
+            table("B", ("Setting", "Value"), model_rows),
+            f"[Committed evaluator settings]({config_url})",
+            "## Hardware",
+            "CPU and RAM readings cover the whole machine, including background work.",
+            table("C", ("Phase", "Reading", "Value"), readings),
+            "## Owned servers",
+            "For failed or cancelled runs, open this run's **Artifacts -> "
+            "summary-eval-tests-server-logs** and choose the matching filename "
+            "from **Log file** in Table D.",
+            table(
+                "D",
+                (
+                    "Phase",
+                    "Server",
+                    "Startup",
+                    "Startup (seconds)",
+                    "Shutdown",
+                    "Exit status",
+                    "Log file",
+                    "Log mirror",
+                ),
+                servers,
+            ),
+            "## Texts",
+            "<details>\n<summary>Source text</summary>\n\n<pre>"
+            + html.escape(inputs.source_text)
+            + "</pre>\n</details>",
+            "<details>\n<summary>Generated summary</summary>\n\n<pre>"
+            + (
+                html.escape(generation.summary_text)
+                if generation and generation.summary_text
+                else "Not generated"
+            )
+            + "</pre>\n</details>",
+        ]
+    )
     return "\n\n".join(sections) + "\n"

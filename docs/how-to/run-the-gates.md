@@ -304,7 +304,7 @@ Push-Location ..\..
 uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
 Pop-Location
 uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
-uv run --frozen pytest tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_pipeline_report.py tests/test_manual_workflow.py
+uv run --frozen pytest tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
 ```
 
 The host compatibility test exports the actual native schemas through Bun,
@@ -318,6 +318,12 @@ Missing preparation fails; it does not skip. Caller integration composes the
 real ASGI handler/controller and the native host handler/collector over test
 pipes with named proc fixtures. It opens no HTTP listener. The existing
 Windows asyncio socket-pair limitation above also applies to these cases.
+The native launch-boundary cases additionally require Linux `setpriv` and
+the kernel's parent-death and child-adoption operations. They use actual
+processes and a private pre-arm pipe, not model weights or network access.
+They prove refusal when the owner dies before protection is armed, confirmed
+kernel stop after exec, and normal same-PID startup/shutdown. Linux CI runs
+these cases; their Windows skips do not count as launch-boundary proof.
 Owned-process fixtures launch the actual CPython executable with the same
 environment's installed packages: a Windows virtual-environment redirector
 has a different PID. The runtime ownership check stays strict.

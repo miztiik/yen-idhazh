@@ -56,9 +56,12 @@ readiness checks the owned process's listening socket and its observed
 model path and alias against the verified selected files.
 
 Each phase keeps its service handles through request and cleanup. Early exits,
-signals and broken parent pipes stop owned work. The native executable inherits
-a parent-death signal through the platform's existing `setpriv` command, which
-executes it in the same process. No detached production launcher, PID database,
+signals and broken parent pipes stop owned work. The platform's existing
+`setpriv` command arms the native child's parent-death signal. A small same-PID
+bootstrap then verifies that its parent still matches the expected launching
+PID before it executes the native binary. A parent lost before protection was
+armed therefore cannot leave an adopted model running. No detached production
+launcher, PID database,
 process-name kill, separate per-API listener or cross-step ownership is used.
 The native model is stopped before HHEM loads.
 
@@ -125,6 +128,13 @@ Markdown exceeds the platform's one-MiB step-summary limit, report publication
 fails explicitly while retaining the complete report artifact.
 Validated HTTP results and actual exits establish success, not terminal-log
 matching.
+
+The report leads with actual work and failures before detailed model and
+hardware evidence. Each failure names its service and any observed HTTP status;
+cleanup errors also name the generation or evaluation phase that owned them.
+Beside server-log availability it directs failed or cancelled runs to
+`Artifacts -> summary-eval-tests-server-logs`, using the matching filename in
+the server table.
 
 ## Design rationale
 

@@ -351,6 +351,7 @@ Table O - Alternatives not selected
   - `.github/scripts/summary-eval-tests/report.py` - report entry point.
   - `.github/scripts/summary-eval-tests/serve.py` - shared app's owned launcher.
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/llama.py` - native process handle owned inside the generation task, not another launcher process.
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/launch_native.py` - verify the launching parent after arming parent-death protection, before same-PID native exec.
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/model_selection.py` - reuse the current declaration readers.
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/generation.py` - generation request and receipt.
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/preparation.py` - current run and declared native assets.
@@ -391,6 +392,8 @@ Table O - Alternatives not selected
   - `services/hhem-evaluator/tests/test_settings.py` - check API isolation in a clean interpreter, not the workflow test's source path.
   - `services/hhem-evaluator/tests/test_pipeline_evaluation.py`
   - `services/hhem-evaluator/tests/test_pipeline_lifetime.py`
+  - `services/hhem-evaluator/tests/test_native_launch.py`
+  - `services/hhem-evaluator/tests/native_launch_child.py`
   - `services/hhem-evaluator/tests/test_pipeline_measurement.py`
   - `services/hhem-evaluator/tests/test_pipeline_report.py`
   - `services/hhem-evaluator/tests/test_host_profile_reader_parity.py`

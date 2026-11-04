@@ -3,6 +3,7 @@
 import html
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +12,7 @@ import pytest
 from summary_eval_pipeline.contracts import (
     WORKFLOW_VERSION,
     PipelineEvidence,
+    ServerOutcome,
     ServiceShutdown,
     text_sha256,
 )
@@ -21,7 +23,7 @@ from summary_eval_pipeline.report import format_seconds, render_report
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_eval_pipeline.storage import write_result
 
-from .contract_examples import REPOSITORY
+from .contract_examples import REPOSITORY, example_result
 from .generation_cases import handoff_case, selected_root
 from .service_cases import service_settings
 from .test_host_profile_reader_parity import required_bun
@@ -108,6 +110,91 @@ def test_report_keeps_the_selected_declaration_when_generation_did_not_start() -
     markdown = render_report(evidence, inputs, service_settings(), "https://example.test/config")
     assert prepared.selected.models_file in markdown and prepared.selected.model_id in markdown
     assert "Not loaded" in markdown and "Not generated" in markdown
+
+
+def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_phase() -> None:
+    inputs, prepared, generation = handoff_case()
+    receipt_hash = text_sha256(generation.model_dump_json())
+    generation_cleanup = WorkflowError("SERVICE_STOP_FAILED", "cleanup", "host").error
+    evaluation_cleanup = WorkflowError("SERVICE_STOP_FAILED", "cleanup", "api").error
+    log_filename = "fastapi-server_2026_11_04_123456_1.log"
+    host_log_filename = "hono-server_2026_11_04_123456_1.log"
+    server = ServerOutcome(
+        server_name="fastapi-server",
+        startup="ready",
+        startup_ms=123.0,
+        shutdown="failed",
+        exit_code=1,
+        log_filename=log_filename,
+        log_available=True,
+        cleanup_error_code="SERVICE_STOP_FAILED",
+    )
+    generation_phase = build_evidence(
+        None,
+        None,
+        None,
+        ServiceShutdown(
+            api_stopped=True,
+            host_stopped=False,
+            worker_exit_confirmed=None,
+            llama_stopped=True,
+        ),
+        [generation_cleanup],
+        run=prepared.run,
+        phase="generation",
+        servers=(
+            server.model_copy(
+                update={
+                    "server_name": "hono-server",
+                    "log_filename": host_log_filename,
+                }
+            ),
+        ),
+        generation_sha256=receipt_hash,
+    )
+    evaluation_phase = build_evidence(
+        example_result(),
+        None,
+        None,
+        ServiceShutdown(api_stopped=False, host_stopped=True, worker_exit_confirmed=True),
+        [WorkflowError("EVALUATION_FAILED", "evaluation", "hhem", 502).error, evaluation_cleanup],
+        run=prepared.run,
+        phase="evaluation",
+        servers=(server,),
+        generation_sha256=receipt_hash,
+    )
+    evidence = PipelineEvidence(
+        version=WORKFLOW_VERSION,
+        status="partial",
+        prepared=prepared,
+        generation=generation,
+        generation_phase=generation_phase,
+        evaluation_phase=evaluation_phase,
+        unieval="not_run",
+        errors=(),
+    )
+    markdown = render_report(evidence, inputs, service_settings(), "https://example.test/config")
+    assert re.findall(r"^## (.+)$", markdown, re.MULTILINE) == [
+        "Actual work",
+        "Errors",
+        "Model configuration",
+        "Hardware",
+        "Owned servers",
+        "Texts",
+    ]
+    assert "evaluation / hhem / HTTP 502: EVALUATION_FAILED" in markdown
+    assert "generation / cleanup / host: SERVICE_STOP_FAILED" in markdown
+    assert "evaluation / cleanup / api: SERVICE_STOP_FAILED" in markdown
+    assert "generation / cleanup / hono-server: SERVICE_STOP_FAILED" in markdown
+    assert "evaluation / cleanup / fastapi-server: SERVICE_STOP_FAILED" in markdown
+    assert "HTTP None" not in markdown
+    assert "Artifacts -> summary-eval-tests-server-logs" in markdown
+    assert log_filename in markdown
+    assert host_log_filename in markdown
+    assert re.findall(r"\*\*Table ([A-Z])\*\*", markdown) == ["A", "B", "C", "D"]
+    row_ids = re.findall(r"^\| ([A-Z]\d+) \|", markdown, re.MULTILINE)
+    assert len(row_ids) == len(set(row_ids))
+    assert row_ids[0] == "A1" and "B1" in row_ids and "C1" in row_ids and "D1" in row_ids
 
 
 @pytest.mark.parametrize("oversized", [False, True])

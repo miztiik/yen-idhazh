@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-import shutil
 import socket
 import subprocess
 import time
@@ -21,6 +20,7 @@ from utilities.model_runtime import BIN_DIR, SERVER_BINARY, verify_model_files
 from .contracts import LoadedModel, PreparedRun, ServerOutcome
 from .failures import WorkflowError
 from .http import call_local_api
+from .launch_native import parent_bound_command
 from .model_selection import SelectedModel
 from .native_log import NativeLog
 from .settings import PipelineSettings
@@ -85,9 +85,6 @@ class OwnedLlama:
 
     def start(self) -> None:
         try:
-            wrapper = shutil.which("setpriv")
-            if os.name != "posix" or wrapper is None:
-                raise WorkflowError("STARTUP_FAILED", "startup", "llama")
             parts = urlsplit(self.selected.native.base_url)
             host, port = parts.hostname, parts.port
             if host is None or port is None:
@@ -107,7 +104,7 @@ class OwnedLlama:
             argv += ["--host", host, *self.pipeline.native_quiet_flags]
             self.log.event(ApiDiagnosticData(component="llama", action="started", level="INFO"))
             self.process = subprocess.Popen(
-                [wrapper, "--pdeathsig=KILL", "--", *argv],
+                parent_bound_command(argv),
                 cwd=self.root,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
