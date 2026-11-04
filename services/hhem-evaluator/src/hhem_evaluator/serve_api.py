@@ -173,7 +173,9 @@ def create_app(
             else LlamaHealth(status="disabled", http_status=None, failure_code=None)
         )
         hhem = controller.health() if controller is not None else DisabledEvaluatorHealth()
-        observed_unieval = unieval.health() if unieval is not None else DisabledEvaluatorHealth()
+        observed_unieval = (
+            await unieval.health() if unieval is not None else DisabledEvaluatorHealth()
+        )
         components = {"hhem": hhem, "llama": native, "unieval": observed_unieval}
         states = [components[component].status for component in api.enabled_routes]
         status = (

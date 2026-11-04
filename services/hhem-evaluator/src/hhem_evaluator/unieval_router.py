@@ -20,7 +20,7 @@ def create_unieval_router(controller: UnievalController) -> APIRouter:
 
     @router.get(UNIEVAL_HEALTH_PATH, response_model=UnievalHealth)
     async def health() -> JSONResponse:
-        observed = controller.health()
+        observed = await controller.health()
         return JSONResponse(
             observed.model_dump(mode="json"),
             status_code=200 if observed.status == "ready" else 503,

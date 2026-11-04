@@ -5,12 +5,14 @@ import asyncio
 import pytest
 
 from hhem_evaluator.contracts.unieval_result import UnievalResult
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
 from hhem_evaluator.unieval_router import UNIEVAL_PATH
 
 from .unieval_cases import (
     UnievalScenario,
     read_unieval_recordings,
     running_unieval,
+    unieval_settings,
 )
 
 
@@ -43,6 +45,39 @@ def test_four_scores_use_sentence_maxima_not_one_best_whole_summary_window() -> 
             assert case.request.summary_text not in log.getvalue()
             assert result.work.consistency.completed == len(values)
         assert worker.exit_confirmed and worker.last_exit is not None
+
+    asyncio.run(check())
+
+
+def test_normalization_planning_error_keeps_recorded_independent_dimensions() -> None:
+    async def check() -> None:
+        inputs, predictions, _ = read_unieval_recordings()
+        case = next(case for case in inputs.cases if case.id == "normalization-overlap")
+        recorded = next(
+            recorded_case for recorded_case in predictions.cases if recorded_case.id == case.id
+        )
+        _, selected = unieval_settings()
+        settings = UnievalSettings.model_validate_json(
+            selected.model_copy(update={"scoring": case.controls}).model_dump_json()
+        )
+        async with running_unieval(settings=settings) as (client, worker, _):
+            response = await client.post(UNIEVAL_PATH, json=case.request.model_dump())
+            result = UnievalResult.model_validate_json(response.content)
+            assert response.status_code == 400 and result.status == "partial"
+            assert result.scores.consistency is None
+            assert result.scores.coherence is None
+            for dimension in ("fluency", "relevance"):
+                expected = next(
+                    item.score for item in recorded.comparisons if item.dimension == dimension
+                )
+                assert getattr(result.scores, dimension) == expected
+            assert any(
+                error.code == "CONSISTENCY_INPUT_TOO_LONG" and error.dimension == "consistency"
+                for error in result.errors
+            )
+            assert all(error.code != "WORKER_EXITED" for error in result.errors)
+            assert (await client.get("/health")).status_code == 200
+            assert worker.is_alive
 
     asyncio.run(check())
 

@@ -33,7 +33,7 @@ async def dispatch_unieval(
         try:
             if error is not None:
                 raise UnievalFailure(error)
-            reservation = controller.reserve(state)
+            reservation = await controller.reserve(state)
             encoded = await read_request_body(request, controller.settings.listener)
             try:
                 state.set_request(UnievalRequest.model_validate_json(encoded))

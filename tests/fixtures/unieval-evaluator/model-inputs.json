@@ -32,6 +32,22 @@
         "max_source_windows": 256,
         "max_comparisons": 4096
       }
+    },
+    {
+      "id": "normalization-overlap",
+      "request": {
+        "source_text": "\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa\ufdfa",
+        "summary_text": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word .",
+        "reference_summary_text": "Words."
+      },
+      "controls": {
+        "consistency_source_mode": "all_source_windows",
+        "max_input_tokens": 256,
+        "source_window_tokens": 512,
+        "source_overlap_tokens": 64,
+        "max_source_windows": 256,
+        "max_comparisons": 4096
+      }
     }
   ]
 }
