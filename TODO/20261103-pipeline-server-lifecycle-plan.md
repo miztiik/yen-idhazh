@@ -1,6 +1,6 @@
 # Pipeline server lifecycle and reporting plan
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 **Level**: 5 - server/workflow integration; execute ready rows in dependency order.
 
 ## 0. Operating contract
@@ -136,7 +136,7 @@ Table I - PR sequence
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| I1 | 1 | Serve TypeScript APIs together in the feed workflow | - | A | IN-FLIGHT | sturdy-waffle (shared-hono-server) | - | Shared Hono server |
+| I1 | 1 | Serve TypeScript APIs together in the feed workflow | - | A | DONE | sturdy-waffle (shared-hono-server) | #1908 | Shared Hono server |
 | I2 | 2 | Serve HHEM and llama through one FastAPI application | - | B | DONE | fuzzy-giggle (shared-fastapi-server) | #1906 | Shared FastAPI server |
 | I3 | 3 | Deliver the live summary-eval-tests workflow | 1, 2 | C | PENDING | - | - | - |
 
