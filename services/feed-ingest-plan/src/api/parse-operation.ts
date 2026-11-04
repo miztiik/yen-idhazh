@@ -33,6 +33,7 @@ import { collectionForRun } from "./collection-operation";
 import { recordArticleEntities } from "../record-article-entities";
 import type { RunContext } from "../resolve-run-context";
 import { operationKey, operationMetadata, stageContext } from "./operation-context";
+import { retainCollectionParse } from "./collection-batch";
 
 export async function parseFetchedDocument(
   fetched: FetchedDocumentReference, context: RunContext,
@@ -211,7 +212,7 @@ export async function parseFetchedDocument(
     aggregate = { discovered: { availability: "available" as const, rows: saved.rows } };
   }
   const observations: Record<string, PlannerHarvestObservation> = candidate === null ? {} : { [candidate.candidate_id]: observation };
-  const batch = stageStore(inputs).write("parsed", ParsedFeedBatchSchema, {
+  const batch = collection === undefined ? stageStore(inputs).write("parsed", ParsedFeedBatchSchema, {
     candidates: candidate === null ? [] : [candidate], observations,
     evidence: candidate === null ? {} : { [candidate.candidate_id]: resolveArticleEvidence(
       candidate, undefined, inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes,
@@ -219,8 +220,11 @@ export async function parseFetchedDocument(
     discovered: { availability: "available", rows: [] },
     history_rows: [], history_days: state.history.days, work_rows: state.work.rows(), exclusions: state.work.exclusions(),
     ...aggregate, ...operationMetadata(context), context: stageContext(context),
-    config_sha256: fetched.config_sha256, request: collection?.request ?? {},
+    config_sha256: fetched.config_sha256, request: {},
     input_complete: collection === undefined && pendingOffers === 0,
+  }) : retainCollectionParse(inputs, collection, context, {
+    kind: "article", candidate: result.candidate, observation: result.observation,
+    ...(aggregate.discovered === undefined ? {} : { discovered: aggregate.discovered }),
   });
   return { response_json: JSON.stringify({
     ...operationMetadata(batch), fetch_item_type: "article", run_id: fetched.context.run_id,

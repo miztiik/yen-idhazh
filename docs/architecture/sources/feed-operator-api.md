@@ -121,6 +121,20 @@ Failed fetches release their raw input when fetch handling ends. Active
 references are never evicted; configured capacity bounds concurrent handoffs,
 not the offered article population.
 
+Collection admission reserves one retained-stage slot for its parsed input.
+Its parse references share immutable candidate and offer versions, while each
+reference keeps its captured membership, work counts and operation metadata.
+Reading a reference assembles the same native parsed payload; later collection
+work cannot change that captured result. Completion and cancellation use the
+same reservation, so neither needs a free slot for another copy of the input.
+Standalone parsed results and materialized selection or partition results
+still consume their own slots.
+
+Admission refuses a new collection before loading its input when all slots
+belong to active work. Release makes the collection's parsed references
+eligible to expire together, never as another run's results. An outstanding
+fetched document continues to protect its own run from expiry.
+
 Run state keeps body-free work facts, source outcomes and original UTC
 observations. Health and selection read this live state and retained ledgers.
 Releasing a body does not erase warnings, partial request counts, rejected rows
@@ -371,6 +385,10 @@ Shared bounded parsing capacity keeps the listener responsive while real
 HTML extraction runs. A live claim protects each fetched reference without
 serializing all runs. Removing that reference after parsing avoids retaining
 successful downloads as hidden execution state.
+Charging each collection parse as another retained full batch would turn the
+storage limit into an article ceiling. Shared immutable input with captured
+per-operation work preserves addressable results without making collection
+completion compete with its own articles for storage.
 The Plan API does not collect per-document CPU or RAM profiles. These samples
 do not change fetch, parse, selection or persistence results; host fingerprints
 remain separate ledger records.

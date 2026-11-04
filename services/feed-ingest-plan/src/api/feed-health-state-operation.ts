@@ -130,10 +130,13 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
     let parsed = ParsedFeedBatchSchema.parse(held.value);
     requireStageConfiguration(parsed, inputs, runtime, request.action === "summarize");
     const live = await currentExecutionState(inputs, parsed.context.run_id);
-    if (live?.kind === "document" && stageStore(inputs).ownership(parsed).health_fingerprint === null) {
-      parsed = stageStore(inputs).replace("parsed", ParsedFeedBatchSchema, {
+    if (live?.kind === "document" && (stageStore(inputs).ownership(parsed).health_fingerprint === null
+      || stageStore(inputs).isCollectionResult(parsed))) {
+      const updated = {
         ...parsed, work_rows: live.work.rows(), exclusions: live.work.exclusions(),
-      });
+      };
+      parsed = stageStore(inputs).isCollectionResult(parsed) ? ParsedFeedBatchSchema.parse(updated)
+        : stageStore(inputs).replace("parsed", ParsedFeedBatchSchema, updated);
     }
     const context = { ...parsed.context,
       ...commandContext(runtime, collectionForRun(inputs, parsed.context.run_id)?.context, [reference]) };

@@ -14,19 +14,25 @@ export type ExecutionOwnership = {
   scope: "plan" | "standalone"; health_fingerprint: string | null;
 };
 type HeldBatch = {
-  stage: BatchStage; value: unknown; execution: string; run_id: string; ownership: ExecutionOwnership;
+  stage: BatchStage; contents: { kind: "materialized"; value: unknown } | { kind: "collection"; read: () => unknown };
+  slot: string; execution: string; run_id: string; ownership: ExecutionOwnership;
 };
 export type FetchedDocumentReference = DocumentOperationContext & { document: FetchedDocument };
 type HeldDocument = DocumentOperationContext & { document?: FetchedDocument; claimant?: string };
 function executionKey(context: PlannerStageContext) { return `${context.run_id}:${context.writer.attempt}`; }
+function collectionSlot(context: PlannerStageContext) { return `collection:${executionKey(context)}`; }
 export class StageStore {
   private readonly batches = new Map<string, HeldBatch>();
   private readonly documents = new Map<string, HeldDocument>();
   private readonly documentRequests = new Set<string>();
   private readonly documentRuns = new Map<string, { run_id: string; fetch_item_type: "feed" | "article" }>();
-  private readonly retainedRuns = new Set<string>();
+  private readonly retainedRuns = new Map<string, string>();
   constructor(private readonly capacity: number) { z.int().positive().parse(capacity); }
-  retainRun(runId: string) { this.retainedRuns.add(runId); }
+  retainRun(context: PlannerStageContext) {
+    const slot = collectionSlot(context);
+    this.reserveSlot(slot);
+    this.retainedRuns.set(context.run_id, slot);
+  }
   releaseRun(runId: string) {
     this.retainedRuns.delete(runId);
     for (const [id, document] of this.documents) {
@@ -130,35 +136,56 @@ export class StageStore {
   }
   write<T extends BatchIdentity>(stage: BatchStage, schema: z.ZodType<T>, raw: unknown): T {
     const value = schema.parse(raw);
+    return this.retain(stage, value, { kind: "materialized", value: structuredClone(value) }, operationKey(value));
+  }
+  writeCollectionResult<T extends BatchIdentity>(schema: z.ZodType<T>, read: () => unknown): T {
+    const value = schema.parse(read());
+    const slot = this.retainedRuns.get(value.context.run_id);
+    if (slot !== collectionSlot(value.context)) {
+      throw new PlanError("REQUEST_CONFLICT", "Parsed result requires its active collection reservation", "links");
+    }
+    return this.retain("parsed", value, { kind: "collection", read: () => schema.parse(read()) }, slot);
+  }
+  private reserveSlot(slot: string) {
+    if ([...this.retainedRuns.values()].includes(slot)) return;
+    const slots = new Set([...this.retainedRuns.values(), ...[...this.batches.values()].map(batch => batch.slot)]);
+    while (!slots.has(slot) && slots.size >= this.capacity) {
+      const expired = [...this.batches.values()].find(batch => !this.isRunActive(batch.run_id));
+      if (expired === undefined) throw new PlanError("REQUEST_BUSY", "Stage capacity is occupied by active work", "spanId");
+      for (const [id, batch] of this.batches) if (batch.slot === expired.slot) this.batches.delete(id);
+      slots.delete(expired.slot);
+    }
+  }
+  private retain<T extends BatchIdentity>(stage: BatchStage, value: T, contents: HeldBatch["contents"], slot: string): T {
     const id = operationKey(value);
     if (this.batches.has(id)) throw new PlanError("REQUEST_CONFLICT", "Stage operation already exists", "spanId");
     const execution = executionKey(value.context);
     const ownership: ExecutionOwnership = [...this.batches.values()].find(batch => batch.execution === execution)?.ownership ?? {
       selection_claimed: false, partition_claimed: false, scope: "standalone", health_fingerprint: null,
     };
+    this.reserveSlot(slot);
     if (stage !== "parsed") ownership.selection_claimed = true;
     if (stage === "partitioned") ownership.partition_claimed = true;
-    while (this.batches.size >= this.capacity) {
-      const expired = [...this.batches].find(([, batch]) => !this.isRunActive(batch.run_id));
-      if (expired === undefined) throw new PlanError("REQUEST_BUSY", "Stage capacity is occupied by active work", "spanId");
-      this.batches.delete(expired[0]);
-    }
-    this.batches.set(id, { stage, value: structuredClone(value), execution, run_id: value.context.run_id, ownership });
+    this.batches.set(id, { stage, contents, slot, execution, run_id: value.context.run_id, ownership });
     return value;
+  }
+  private value(batch: HeldBatch) {
+    return batch.contents.kind === "collection" ? batch.contents.read() : structuredClone(batch.contents.value);
   }
   read<T extends OperationLink>(stage: BatchStage, reference: OperationLink, schema: z.ZodType<T>): T {
     const batch = this.batches.get(operationKey(reference));
     if (batch === undefined || batch.stage !== stage) {
       throw new PlanError("ARTIFACT_NOT_FOUND", "No current server-owned result exists for this stage", "links");
     }
-    return schema.parse(structuredClone(batch.value));
+    return schema.parse(this.value(batch));
   }
   inspect(reference: OperationLink) {
     const batch = this.batches.get(operationKey(reference));
     if (batch === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "No current server-owned result exists", "links");
-    return { stage: batch.stage, value: structuredClone(batch.value) };
+    return { stage: batch.stage, value: this.value(batch) };
   }
   has(reference: OperationLink) { return this.batches.has(operationKey(reference)); }
+  isCollectionResult(reference: OperationLink) { return this.batches.get(operationKey(reference))?.contents.kind === "collection"; }
   ownership(reference: OperationLink): ExecutionOwnership {
     const held = this.batches.get(operationKey(reference));
     if (held === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Current result has expired", "links");
@@ -186,12 +213,15 @@ export class StageStore {
     const id = operationKey(value);
     const held = this.batches.get(id);
     if (held === undefined || held.stage !== stage) throw new PlanError("ARTIFACT_NOT_FOUND", "Current result has expired", "links");
-    const original = schema.parse(held.value);
+    const original = schema.parse(this.value(held));
     if (held.execution !== executionKey(value.context) || original.config_sha256 !== value.config_sha256
       || JSON.stringify(operationMetadata(original)) !== JSON.stringify(operationMetadata(value))) {
       throw new PlanError("ARTIFACT_INVALID", "Stage update changed its operation or execution ownership", "links");
     }
-    this.batches.set(id, { ...held, value: structuredClone(value) });
+    if (held.contents.kind === "collection") {
+      throw new PlanError("REQUEST_CONFLICT", "Captured collection results cannot be replaced", "links");
+    }
+    this.batches.set(id, { ...held, contents: { kind: "materialized", value: structuredClone(value) } });
     return value;
   }
   update<T extends BatchIdentity>(stage: BatchStage, reference: OperationLink, schema: z.ZodType<T>, update: (current: T) => T) {
