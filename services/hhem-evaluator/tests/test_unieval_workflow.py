@@ -106,7 +106,7 @@ def test_same_pair_and_reference_requests_preserve_native_sibling_and_partial_re
 
         async with running_service(
             selected_hhem,
-            (hhem_scenario,),
+            (hhem_scenario,) if failure == "unieval" else (hhem_scenario, Scenario()),
             routes=("hhem", "unieval"),
             unieval_settings=selected_unieval,
             unieval_supervisor=unieval_worker,
@@ -119,6 +119,7 @@ def test_same_pair_and_reference_requests_preserve_native_sibling_and_partial_re
                 selected_hhem,
                 pipeline,
                 ("hhem", "unieval"),
+                errors=errors,
             )
             assert health.hhem.worker is not None and health.unieval.worker is not None
             assert health.hhem.worker.pid != health.unieval.worker.pid
@@ -215,6 +216,7 @@ def test_a_failed_component_health_does_not_discard_the_ready_sibling() -> None:
             assert worker.lifetime is not None and worker.process is not None
             worker.lifetime.close()
             await asyncio.to_thread(worker.process.join, 5)
+            errors: list[PipelineError] = []
             health = await read_owned_health(
                 service.client,
                 "http://127.0.0.1:3010",
@@ -222,10 +224,10 @@ def test_a_failed_component_health_does_not_discard_the_ready_sibling() -> None:
                 selected_hhem,
                 pipeline,
                 ("hhem", "unieval"),
+                errors=errors,
             )
             assert health.hhem.status == "ready" and health.unieval.status == "failed"
             outcomes = EvaluatorOutcomes()
-            errors: list[PipelineError] = []
             await evaluate_pair(
                 service.client,
                 "http://127.0.0.1:3010",
@@ -248,7 +250,7 @@ def test_a_failed_component_health_does_not_discard_the_ready_sibling() -> None:
     asyncio.run(check())
 
 
-def test_cancellation_keeps_the_saved_sibling_and_names_the_interrupted_engine() -> None:
+def test_cancellation_keeps_the_saved_sibling_and_native_interrupted_result() -> None:
     async def check() -> None:
         inputs, prepared, receipt, previous = generation_phase()
         requests = bind_evaluations(prepared, inputs, receipt, previous, 1 << 20)
@@ -272,6 +274,7 @@ def test_cancellation_keeps_the_saved_sibling_and_names_the_interrupted_engine()
                 selected_hhem,
                 pipeline,
                 ("hhem", "unieval"),
+                errors=errors,
             )
             work = asyncio.create_task(
                 evaluate_pair(
@@ -289,13 +292,20 @@ def test_cancellation_keeps_the_saved_sibling_and_names_the_interrupted_engine()
             )
             async with asyncio.timeout(20):
                 await saved.wait()
+                while service.app.state.unieval.active_task is None:
+                    await asyncio.sleep(0)
             work.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await work
             assert outcomes.hhem is not None and outcomes.hhem.status == "complete"
-            assert outcomes.unieval is None
+            assert outcomes.unieval is not None and outcomes.unieval.status == "failed"
+            assert all(value is None for value in outcomes.unieval.scores.model_dump().values())
+            assert any(error.code == "SERVICE_STOPPED" for error in outcomes.unieval.errors)
             assert any(
-                error.code == "TASK_CANCELLED" and error.service == "unieval" for error in errors
+                error.code == "EVALUATION_FAILED"
+                and error.service == "unieval"
+                and error.http_status == 503
+                for error in errors
             )
         assert worker.exit_confirmed and service.worker.exit_confirmed
 

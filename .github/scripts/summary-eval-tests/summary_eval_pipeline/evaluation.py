@@ -16,7 +16,7 @@ from hhem_evaluator.contracts.unieval_settings import UnievalSettings
 from hhem_evaluator.resolve_ids import create_execution_id
 from hhem_evaluator.unieval_router import UNIEVAL_PATH
 
-from .contracts import GenerationReceipt, PhaseEvidence, PreparedRun, text_sha256
+from .contracts import GenerationReceipt, PhaseEvidence, PipelineError, PreparedRun, text_sha256
 from .failures import WorkflowError
 from .http import call_local_api
 from .inputs import ManualInputs, encode_request
@@ -80,6 +80,8 @@ async def read_owned_health(
     pipeline: PipelineSettings,
     components: tuple[ApiComponent, ...] = ("hhem",),
     startup_timeout_ms: int | None = None,
+    *,
+    errors: list[PipelineError],
 ) -> ApiHealth:
     deadline = (
         time.monotonic()
@@ -92,16 +94,22 @@ async def read_owned_health(
     )
     last: ApiHealth | None = None
     while (remaining := deadline - time.monotonic()) > 0:
-        status, health = await call_local_api(
-            client,
-            "GET",
-            base_url + "/health",
-            ApiHealth,
-            pipeline,
-            min(remaining * 1000, pipeline.http_connect_timeout_ms),
-            service="api",
-            phase="health",
-        )
+        try:
+            status, health = await call_local_api(
+                client,
+                "GET",
+                base_url + "/health",
+                ApiHealth,
+                pipeline,
+                min(remaining * 1000, pipeline.http_connect_timeout_ms),
+                service="api",
+                phase="health",
+            )
+        except WorkflowError as error:
+            if error.error.code != "HTTP_FAILED" or last is None or len(components) < 2:
+                raise
+            errors.append(error.error)
+            return last
         if health.service_instance_id != service_instance_id or health.enabled_routes != components:
             raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "health", "api", status)
         last = health

@@ -304,7 +304,7 @@ Push-Location ..\..
 uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
 Pop-Location
 uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
-uv run --frozen pytest tests/test_pipeline_preparation.py tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_machine_task.py tests/test_pipeline_control.py tests/test_pipeline_evaluation.py tests/test_unieval_workflow.py tests/test_evaluator_response_binding.py tests/test_unieval_workflow_fixture.py tests/test_workflow_outcomes.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
+uv run --frozen pytest tests/test_pipeline_preparation.py tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_machine_task.py tests/test_pipeline_control.py tests/test_pipeline_evaluation.py tests/test_unieval_workflow.py tests/test_workflow_health_isolation.py tests/test_evaluator_response_binding.py tests/test_unieval_workflow_fixture.py tests/test_workflow_outcomes.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
 ```
 
 The host compatibility test exports the actual native schemas through Bun,
@@ -313,7 +313,11 @@ source, answer, independent reference, model and run before either evaluator
 can start. Native pair checks run the actual shared app and owned workers with
 recorded predictions only at the model boundary. They retain a completed
 sibling, incomplete dimensions, native error HTTP bodies and actual zeroes;
-response-boundary damage must not become a score. The named live fixture's
+response-boundary damage must not become a score. The health-isolation
+regression uses a real failed UniEval child and a join lasting
+longer than the unchanged health request deadline. The actual transport failure
+must remain in evidence while an already-ready HHEM worker scores.
+The named live fixture's
 long coherence input and source-tail spans use the actual pinned tokenizer,
 not word counts. Separate declaration
 invocations and the named form-default check keep model selection real.

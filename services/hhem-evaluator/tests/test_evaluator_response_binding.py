@@ -85,6 +85,7 @@ def test_invalid_response_has_no_score_and_preserves_the_actual_hhem_result(faul
                 selected_hhem,
                 pipeline,
                 ("hhem", "unieval"),
+                errors=errors,
             )
             transport = AlteredEvaluatorReply(
                 httpx.ASGITransport(service.app), fault, service.log.envelopes[0].model_dump_json()

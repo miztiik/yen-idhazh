@@ -171,6 +171,7 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                     pipeline,
                     ("llama",) if phase == "generation" else ("hhem", "unieval"),
                     startup_timeout_ms,
+                    errors=errors,
                 ),
                 api,
                 services.native,

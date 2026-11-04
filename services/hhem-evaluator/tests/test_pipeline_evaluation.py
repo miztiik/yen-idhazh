@@ -5,7 +5,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from summary_eval_pipeline.contracts import ServiceShutdown, text_sha256
+from summary_eval_pipeline.contracts import PipelineError, ServiceShutdown, text_sha256
 from summary_eval_pipeline.evaluation import evaluate, read_owned_health
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.host_reader import measurement_complete
@@ -41,7 +41,7 @@ def test_actual_handlers_preserve_scores_including_error_http_results(
         prepare_proc(tmp_path)
         host = NativeHostPipe(tmp_path)
         pipeline = load_pipeline_settings(REPOSITORY)
-        errors = []
+        errors: list[PipelineError] = []
         try:
             async with running_service() as service:
                 controller = service.app.state.controller
@@ -58,6 +58,7 @@ def test_actual_handlers_preserve_scores_including_error_http_results(
                     controller.instance_id,
                     controller.settings,
                     pipeline,
+                    errors=errors,
                 )
                 if partial:
                     service.log.fail_terminal = True
@@ -141,6 +142,7 @@ def test_bad_identity_is_rejected_against_real_health() -> None:
                     REQUEST_ID,
                     service.app.state.controller.settings,
                     load_pipeline_settings(REPOSITORY),
+                    errors=[],
                 )
             assert failure.value.error.code == "STARTUP_IDENTITY_MISMATCH"
             assert not any(event.operation == "primary" for event in service.log.events)
@@ -164,6 +166,7 @@ def test_health_waits_for_actual_model_readiness_without_sending_a_score_request
                     controller.instance_id,
                     controller.settings,
                     load_pipeline_settings(REPOSITORY),
+                    errors=[],
                 )
             )
             await asyncio.sleep(0)

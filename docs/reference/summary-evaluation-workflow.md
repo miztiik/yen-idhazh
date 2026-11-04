@@ -91,6 +91,12 @@ unfinished component does not prevent a ready sibling from returning its
 actual result. A failed request does not cancel its sibling, retry scoring or
 regenerate the answer.
 
+If a later shared-health transport request fails, the caller retains its last
+identity-validated component observations and records that actual failure.
+Only a component already observed ready may score. Identity or response
+validation failures remain hard refusals, and the health failure prevents
+overall completion even when a sibling returns a score.
+
 ## Same-run files and status
 
 `summary_eval_pipeline/contracts.py` owns version `2026-11-04` of these

@@ -215,6 +215,7 @@ Table I - API alternatives not selected
   - `services/hhem-evaluator/tests/test_unieval_workflow.py`
   - `services/hhem-evaluator/tests/test_unieval_workflow_fixture.py`
   - `services/hhem-evaluator/tests/test_workflow_outcomes.py`
+  - `services/hhem-evaluator/tests/test_workflow_health_isolation.py`
   - `tests/fixtures/hhem-evaluator/pipeline-evidence.json`
   - `tests/fixtures/unieval-evaluator/workflow-inputs.json`
   - `docs/reference/summary-evaluation-workflow.md`
