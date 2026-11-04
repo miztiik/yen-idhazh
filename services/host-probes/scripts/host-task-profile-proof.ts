@@ -1,5 +1,6 @@
 /** Prove that real HTTP commands profile an external PID throughout controlled CPU and RAM work. */
-import { randomUUID } from "node:crypto";
+import { writeTraceContext } from "@idhazh/common-contracts/propagate-trace-context";
+import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { loadConfig, ProbeConfigSchema } from "../src/config";
@@ -23,7 +24,7 @@ const ChildMessageSchema = z.union([
   z.strictObject({ type: z.literal("ready"), pid: z.int().positive() }), ControlledWorkResultSchema,
 ]);
 
-export async function verifyTaskProfileHttp(identity: { run_id: string; correlation_id: string }, settings?: ProbeConfig) {
+export async function verifyTaskProfileHttp(identity: { run_id: string; parent: OperationMetadata }, settings?: ProbeConfig) {
   if (process.platform !== "linux") throw new Error("Live PID CPU proof requires Linux");
   const controls = ControlsSchema.parse(await Bun.file(
     new URL("../../../tests/fixtures/host-probes/controlled-task.json", import.meta.url),
@@ -51,8 +52,8 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
     if (stat.reason !== null) throw new Error(`Actual controlled process identity is unavailable: ${stat.reason}`);
     return OwnedProcessSchema.parse({ pid: stat.value.pid, start_ticks: stat.value.start_ticks });
   };
-  const post = (path: string, body: unknown) => fetch(new URL(path, server.url), {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  const post = (path: string, body: unknown, carrier: Record<string, string> = {}) => fetch(new URL(path, server.url), {
+    method: "POST", headers: { "Content-Type": "application/json", ...carrier }, body: JSON.stringify(body),
     signal: AbortSignal.timeout(config.task_profile.lifecycle_timeout_ms),
   });
   try {
@@ -79,20 +80,23 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
     const target = pin(child.pid);
     const serverPin = pin(process.pid);
     const input = {
-      identity: { pipeline_name: "host-probes", task_name: CONTROLLED_TASK_NAME, run_id: identity.run_id,
-        correlation_id: identity.correlation_id, request_id: randomUUID() },
+      identity: { pipeline_name: "host-probes", task_name: CONTROLLED_TASK_NAME, run_id: identity.run_id },
       target, server: serverPin,
     };
     const refused = await post(START_TASK_PROFILE_PATH, { ...input, padding: "x".repeat(config.max_request_body_bytes) });
     if (refused.status !== 413) throw new Error("Actual task HTTP ingress did not enforce max_request_body_bytes");
     await refused.body?.cancel();
-    const response = await post(START_TASK_PROFILE_PATH, input);
+    const response = await post(START_TASK_PROFILE_PATH, input, writeTraceContext(identity.parent));
     if (response.status !== 200 || response.headers.get("cache-control") !== "no-store") {
       throw new Error("Actual task profile HTTP start failed");
     }
     const started = StartTaskProfileResponseSchema.parse(await response.json());
     if (started.status !== "started" || started.target.pid !== target.pid || started.target.start_ticks !== target.start_ticks) {
       throw new Error("HTTP start did not return the requested process identity");
+    }
+    if (started.traceId !== identity.parent.traceId || started.parentSpanId !== identity.parent.spanId
+      || started.spanId === identity.parent.spanId || started.traceState !== identity.parent.traceState || started.links.length !== 0) {
+      throw new Error("HTTP start did not allocate a child operation for the actual profile");
     }
     child.send({ command: "work" });
     const worked = await completed;
@@ -108,6 +112,10 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
       throw new Error("Enabled task CPU proof did not return its explicit stop");
     }
     const profile = stopped.profile;
+    if (profile.traceId !== started.traceId || profile.spanId !== started.spanId
+      || profile.parentSpanId !== started.parentSpanId || profile.traceState !== started.traceState || profile.links.length !== 0) {
+      throw new Error("HTTP stop changed the allocated profile operation");
+    }
     if (work.elapsed_ms < controls.minimum_elapsed_work_ms || work.allocated_bytes !== controls.buffer_bytes
       || profile.periodic_sample_count < controls.minimum_periodic_samples) {
       throw new Error("Controlled task did not meet its declared CPU/RAM work inputs");

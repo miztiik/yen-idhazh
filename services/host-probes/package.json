@@ -3,7 +3,7 @@
   "version": "2026.10.20",
   "private": true,
   "type": "module",
-  "description": "Independent transient Linux CPU and memory sampling. Zod validates local configuration and responses; Bun provides HTTP serving without a server dependency. TypeScript and Bun types are development-only.",
+  "description": "Independent transient Linux CPU and memory sampling. Shared contracts validate operation metadata and W3C carriers without runtime tracing; Zod validates local configuration and responses. Bun provides HTTP serving. TypeScript and Bun types are development-only.",
   "scripts": {
     "start": "bun run src/index.ts --serve",
     "sample": "bun run src/index.ts --sample",
@@ -11,6 +11,7 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
+    "@idhazh/common-contracts": "file:../../packages/common-contracts",
     "zod": "^4.1.12"
   },
   "devDependencies": {

@@ -43,7 +43,7 @@ Table C - PR sequence
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Define shared event and operation metadata | - | A | DONE | stunning-lamp | - | Shared metadata |
 | C2 | 2 | Convert the planner and every planner caller | 1 | B | DONE | effective-pancake | - | Planner metadata |
-| C3 | 3 | Convert host profiling without breaking Python control | 1, 2 | C | PENDING | - | - | - |
+| C3 | 3 | Convert host profiling without breaking Python control | 1, 2 | C | DONE | didactic-meme | - | Host profiling metadata |
 | C4 | 4 | Convert summarizer event metadata | 1 | B | DONE | expert-giggle | - | Summarizer metadata |
 | C5 | 5 | Convert phased workflow events and continuation | 1 | B | DONE | jubilant-telegram | - | Workflow metadata |
 
@@ -435,6 +435,7 @@ Table L - row 2 rejected alternatives
   - `services/host-probes/src/api/server.ts`
   - `services/host-probes/src/api/task-command-schema.ts`
   - `services/host-probes/src/api/task-profile-manager.ts`
+  - `services/host-probes/src/api/task-profile-route.ts`
   - `services/host-probes/src/task-profile/profile-schema.ts`
   - `services/host-probes/src/task-profile/task-collector.ts`
   - `services/host-probes/src/task-profile/task-profiler.ts`

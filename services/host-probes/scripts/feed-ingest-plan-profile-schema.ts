@@ -1,9 +1,9 @@
 /** Which independent host-probe measurements must a proof record? */
 import { z } from "zod";
 import {
-  HostFingerprintRowSchema, RunIdSchema, WriterIdentitySchema,
+  HostFingerprintRowSchema, RunIdSchema, TraceIdSchema, WriterIdentitySchema,
 } from "../../../packages/common-contracts/src/index";
-import { OwnedProcessSchema, TaskProfileSchema } from "../src/task-profile/profile-schema";
+import { OwnedProcessSchema, TASK_PROFILE_VERSION, TaskProfileSchema } from "../src/task-profile/profile-schema";
 import { HostSampleSchema } from "../src/probe/sample-host";
 import { CacheProofSchema } from "./feed-ingest-plan-cache-proof";
 import { CacheCountersSchema, CacheCountersStartSchema } from "../src/cache-probe/cache-schema";
@@ -18,7 +18,7 @@ export const WorkflowSettingsSchema = SelectedSettingsSchema.extend({
 export const ProfileProofIdentitySchema = z.strictObject({
   git_sha: WriterIdentitySchema.shape.git_sha,
   run_id: RunIdSchema, attempt: WriterIdentitySchema.shape.attempt,
-  correlation_id: TaskProfileSchema.shape.identity.shape.correlation_id,
+  traceId: TraceIdSchema,
 });
 const fields = HostFingerprintRowSchema.shape;
 export const CopyResultSchema = z.object({
@@ -84,6 +84,12 @@ export const ResourceProofSchema = z.strictObject({
   }).nullable(),
   cache: CacheProofSchema.nullable().default(null),
   error: z.string().nullable(),
+}).meta({
+  version: TASK_PROFILE_VERSION,
+  readCompatibility: "current_only",
+  changelog: [
+    { version: TASK_PROFILE_VERSION, change: "Associate resource proof inputs with the actual profiling execution." },
+  ],
 });
 export type ProfileProofIdentity = z.infer<typeof ProfileProofIdentitySchema>;
 export type ResourceProof = z.infer<typeof ResourceProofSchema>;

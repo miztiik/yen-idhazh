@@ -1,6 +1,6 @@
 # Start and stop a task resource profile
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-11-04
 
 Which local HTTP commands measure one process for an operator-owned task?
 The Bun host probe includes PID CPU and optional process and machine RAM.
@@ -41,9 +41,7 @@ enable switch. Its existing response and one-shot CLI remain unchanged.
   "identity": {
     "pipeline_name": "operator-task",
     "task_name": "parse-document",
-    "run_id": "operator-run",
-    "correlation_id": "cd8002f4-ea0d-435c-8a60-3cffb0ed45ec",
-    "request_id": "f72beb64-8ad9-4b6f-a932-cc26699dde66"
+    "run_id": "operator-run"
   },
   "target": { "pid": 4242, "start_ticks": "12345" },
   "server": { "pid": 4243, "start_ticks": "12346" }
@@ -56,12 +54,27 @@ The target owns the task profile. Its CPU and RAM appear under
 `processes.worker`; the optional server appears under `processes.server`.
 The probe's own PID is not substituted for the requested target.
 
-The identity requires nonempty pipeline, task and run strings and UUID
-correlation and request strings. It is metadata, not a durable replay key.
+The identity requires only nonempty pipeline, task and run strings.
+It is business metadata, not a durable replay key.
 Each successful start creates a new, unguessable UUID `handle`.
 Success returns HTTP 200 with `status: "started"`, that `handle`,
-the verified `target` and `expires_at`, a UTC instant.
+the verified `target`, `expires_at`, a UTC instant, and the allocated profile
+operation described below.
 The caller starts its actual work only after this response.
+
+An enabled start allocates one operation context, the identifiers and
+relationships for this measurement. Its top-level `traceId` is a nonzero
+32-character lowercase hexadecimal execution ID. Its `spanId` is a nonzero
+16-character lowercase hexadecimal operation ID. A valid incoming W3C
+`traceparent` header makes the profile a child of that operation: it retains
+the execution ID and stores the caller's operation ID as `parentSpanId`.
+The shared codec also preserves valid `tracestate` as `traceState`.
+A missing or invalid carrier starts a fresh execution and omits the parent.
+`links` is empty because a profile consumes no completed operation result.
+These fields describe the profile only; they do not enable runtime tracing.
+
+Native commands and profiles accept only the current shape. There are no
+old-field aliases, historical conversions or foreign UUIDs in this identity.
 
 The target PID and start ticks are checked before collector startup and again
 in the collector's opening observation. A stale or unverifiable pin returns 409.
@@ -85,6 +98,9 @@ still alive to obtain its closing CPU counters. The reply has HTTP 200,
 `status: "stopped"`, the `handle`, `end_reason` and validated `profile`.
 Concurrent and repeated stops return the same result while retained;
 the first closing event owns the result.
+The returned `profile` carries the exact top-level operation metadata allocated
+at start. Stop uses only the genuine resource `handle`; missing, invalid or
+different tracing headers do not replace the profile's operation.
 
 Normal HTTP stop uses `end_reason: "explicit_stop"`. A target exit or PID
 reuse closes the profile as `cancelled`, with `owner_exited` or `pid_reused`.
@@ -131,6 +147,7 @@ GitHub still kills a hosted job at six hours.
 Both task commands return `status: "disabled", reason: "configured_off"`
 with HTTP 200 when the instrument is off. No host read, clock-rate command,
 worker or handle is created. Body validation still applies.
+No profile or operation context is fabricated.
 
 Invalid JSON or controls return 400; oversized bodies return 413.
 Stale process pins return 409, occupied active capacity returns 429,
@@ -147,7 +164,12 @@ All responses are uncached.
 The existing `profileTask` wrapper still pins the actual calling PID by
 default. `startTaskProfile` also accepts an explicitly pinned `target` and
 optional `server`. Its session exposes `target`, `expires_at`, `settled`
-and an idempotent `close(outcome, end_reason)` method. `settled` returns
+and an idempotent `close(outcome, end_reason)` method. `operation` holds the
+context allocated at enabled start. An optional `parent` in the profiling
+options supplies an enclosing operation through the shared contract;
+without one, start creates a root. The collector receives that allocated
+context and returns it unchanged rather than allocating another operation.
+`settled` returns
 either the validated profile or an explicit error, including automatic
 closure. The ordinary wrapper has no HTTP safety expiry and closes only
 when its work settles.
@@ -166,6 +188,11 @@ oversubscribing capacity, retains idempotent stops and owns cleanup.
 Explicit pins prevent process-name discovery and PID reuse from changing
 what a profile measures. Expiry bounds abandoned handles without presenting
 an incomplete task as a successful full-task observation.
+The resource handle and the profile operation remain separate: the handle
+addresses retained control state, while the operation identifies the measurement.
+The existing common-contracts package supplies validation and the W3C codec.
+Its pinned OpenTelemetry API and core libraries affect tool installation only;
+they add no tracing provider, exporter or published-site bytes.
 
 ## See also
 

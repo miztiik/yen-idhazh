@@ -1,5 +1,7 @@
 /** How is one actual task wrapped without sampling a disabled or replayed call? */
 import { Worker } from "node:worker_threads";
+import { createChildContext, createRootContext } from "@idhazh/common-contracts/create-operation-context";
+import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
 import type { ProbeConfig } from "../config";
 import type { ProbeContext } from "../probe/proc-reader";
 import { CollectorInputSchema, CollectorMessageSchema } from "./profile-schema";
@@ -12,11 +14,13 @@ export type TaskProfiling = {
   report: (profile: TaskProfile) => void | Promise<void>;
   target?: OwnedProcess;
   server?: OwnedProcess;
+  parent?: OperationMetadata;
   context?: ProbeContext;
 };
 
 export type TaskProfileResult = { profile: TaskProfile } | { error: Error };
 export type TaskProfileSession = {
+  operation: OperationMetadata;
   target: OwnedProcess | null;
   expires_at: string | null;
   settled: Promise<TaskProfileResult>;
@@ -41,11 +45,12 @@ export async function startTaskProfile(
 ): Promise<TaskProfileSession | null> {
   if (!options.config.task_profile.enabled) return null;
   controls.signal?.throwIfAborted();
+  const operation = options.parent === undefined ? createRootContext() : createChildContext(options.parent);
   if (options.target !== undefined) verifyProcessPin(options.target, options.config.max_proc_bytes, options.context ?? {});
   const clock_ticks_per_second = await resolveClockTicks(options.config);
   controls.signal?.throwIfAborted();
   const input = CollectorInputSchema.parse({
-    identity, config: options.config.task_profile, max_proc_bytes: options.config.max_proc_bytes,
+    operation, identity, config: options.config.task_profile, max_proc_bytes: options.config.max_proc_bytes,
     worker_pid: options.target?.pid ?? process.pid, target: options.target ?? null,
     clock_ticks_per_second, expires_after_ms: controls.expiresAfterMs ?? null,
     server: options.server ?? null, context: options.context ?? {},
@@ -116,7 +121,7 @@ export async function startTaskProfile(
   })();
   let closing: Promise<TaskProfile> | undefined;
   return {
-    ...details, settled,
+    operation, ...details, settled,
     close(outcome, end_reason = "task_settled") {
       closing ??= (async () => {
         completionDeadline ??= performance.now() + input.config.lifecycle_timeout_ms;

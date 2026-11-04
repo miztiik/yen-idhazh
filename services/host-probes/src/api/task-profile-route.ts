@@ -1,5 +1,6 @@
 /** Which validated operator command may own or close a task collector? */
 import { z } from "zod";
+import { readTraceContext } from "@idhazh/common-contracts/propagate-trace-context";
 import { CommandBodyError, readCommandBody } from "./command-body";
 import { StartTaskProfileSchema, StopTaskProfileSchema } from "./task-command-schema";
 import { TaskProfileCommandError } from "./task-profile-manager";
@@ -10,7 +11,10 @@ export async function postTaskProfile(
 ): Promise<Response> {
   const raw = await readCommandBody(request, maxBytes, bodyTimeoutMs);
   const result = command === "start"
-    ? await manager.start(StartTaskProfileSchema.parse(raw), request.signal)
+    ? await manager.start(StartTaskProfileSchema.parse(raw), request.signal, readTraceContext({
+      traceparent: request.headers.get("traceparent") ?? undefined,
+      tracestate: request.headers.get("tracestate") ?? undefined,
+    }))
     : await manager.stop(StopTaskProfileSchema.parse(raw));
   return Response.json(result, { headers: { "Cache-Control": "no-store" } });
 }

@@ -3,6 +3,8 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { copyFileSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
+import { createRootContext } from "@idhazh/common-contracts/create-operation-context";
+import { writeTraceContext } from "@idhazh/common-contracts/propagate-trace-context";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,16 +40,15 @@ async function fixture(path: string): Promise<string> {
   return Bun.file(new URL(path, fixtureRoot)).text();
 }
 
-function command(path: string, body: unknown, signal?: AbortSignal): Request {
+function command(path: string, body: unknown, signal?: AbortSignal, carrier: Record<string, string> = {}): Request {
   return new Request(`http://localhost${path}`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    method: "POST", headers: { "Content-Type": "application/json", ...carrier }, body: JSON.stringify(body),
     ...(signal === undefined ? {} : { signal }),
   });
 }
 
 function taskIdentity() {
-  return { pipeline_name: "recorded-work", task_name: "pinned-task", run_id: "recorded-run",
-    correlation_id: randomUUID(), request_id: randomUUID() };
+  return { pipeline_name: "recorded-work", task_name: "pinned-task", run_id: "recorded-run" };
 }
 
 async function procDirectory(): Promise<string> {
@@ -246,10 +247,11 @@ test("periodic file sampling uses closing minus opening counters and closes with
   const options = {
     config, context: { platform: "linux", procRoot: directory },
     server: { pid: 4242, start_ticks: "12345" },
+    parent: createRootContext({ traceState: "profile=recorded" }),
     report: (profile: TaskProfile) => { reports.push(profile); },
   };
   const identity = { pipeline_name: "recorded-work", task_name: "cpu-bound-work",
-    run_id: "recorded-run", correlation_id: randomUUID(), request_id: randomUUID() };
+    run_id: "recorded-run" };
   await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
   const watcher = await startTaskProfile(options, identity);
   if (watcher === null) throw new Error("Enabled task sampler did not start");
@@ -262,6 +264,12 @@ test("periodic file sampling uses closing minus opening counters and closes with
   const closing = watcher.close("success");
   expect(watcher.close("error")).toBe(closing);
   const profile = TaskProfileSchema.parse(await closing);
+  expect(profile).toMatchObject(watcher.operation);
+  expect(profile.traceId).toBe(options.parent.traceId);
+  expect(profile.parentSpanId).toBe(options.parent.spanId);
+  expect(profile.spanId).not.toBe(options.parent.spanId);
+  expect(profile.traceState).toBe(options.parent.traceState);
+  expect(profile.links).toEqual([]);
   expect(reports).toEqual([profile]);
   expect(profile.elapsed_ms).toBeGreaterThanOrEqual(200);
   expect(profile.periodic_sample_count).toBeGreaterThan(1);
@@ -278,13 +286,14 @@ test("periodic file sampling uses closing minus opening counters and closes with
   expect(profile.samples.some(sample => sample.cpu_window.full_window)).toBe(true);
   expect(profile.samples.every(sample => sample.observed_at.endsWith("Z"))).toBe(true);
   const collectorInput = CollectorInputSchema.parse({
-    identity, config: config.task_profile, max_proc_bytes: config.max_proc_bytes,
+    operation: createRootContext(), identity, config: config.task_profile, max_proc_bytes: config.max_proc_bytes,
     worker_pid: process.pid, target: null, clock_ticks_per_second: parseClockTicks(processInput.clock_ticks),
     expires_after_ms: null, server: options.server, context: options.context,
   });
   const bounded = new TaskCollector(collectorInput);
   for (let index = 0; index < config.task_profile.max_retained_samples * 2; index++) bounded.poll();
   const retained = bounded.close("success");
+  expect(retained).toMatchObject(collectorInput.operation);
   expect(retained.sample_count).toBeGreaterThan(config.task_profile.max_retained_samples);
   expect(retained.samples).toHaveLength(config.task_profile.max_retained_samples);
   expect(bounded.close("error")).toBe(retained);
@@ -402,8 +411,9 @@ test("the real HTTP handler uses the sampler without external network", async ()
   const disabled = createSampleHandler({ ...config, task_profile: { ...config.task_profile, max_profile_handles: 1 } },
     { platform: "linux", procRoot: directory }, () => { throw new Error("Disabled profiles must not report"); });
   const input = { identity: taskIdentity(), target: { pid: 4242, start_ticks: "12345" } };
+  const carrier = writeTraceContext(createRootContext());
   for (let index = 0; index < 3; index++) {
-    const start = await disabled(command(START_TASK_PROFILE_PATH, input));
+    const start = await disabled(command(START_TASK_PROFILE_PATH, input, undefined, carrier));
     expect(start.status).toBe(200);
     expect(await start.json()).toEqual({ status: "disabled", reason: "configured_off" });
   }
@@ -457,30 +467,41 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
   const profiles: TaskProfile[] = [];
   const profilesHandler = createSampleHandler(config, { platform: "linux", procRoot: directory }, profile => { profiles.push(profile); });
   const input = { identity: taskIdentity(), target: { pid: 4242, start_ticks: "12345" } };
+  const parent = createRootContext({ traceState: "profile=http" });
+  const stopCarrier = writeTraceContext(createRootContext({ traceState: "stop=independent" }));
   try {
     expect((await profilesHandler(command(START_TASK_PROFILE_PATH, {
       ...input, target: { ...input.target, start_ticks: "12346" },
     }))).status).toBe(409);
     const competing = await Promise.all([
-      profilesHandler(command(START_TASK_PROFILE_PATH, input)),
-      profilesHandler(command(START_TASK_PROFILE_PATH, input)),
+      profilesHandler(command(START_TASK_PROFILE_PATH, input, undefined, writeTraceContext(parent))),
+      profilesHandler(command(START_TASK_PROFILE_PATH, input, undefined, writeTraceContext(parent))),
     ]);
     expect(competing.map(result => result.status).sort()).toEqual([200, 429]);
     const started = StartTaskProfileResponseSchema.parse(await competing.find(result => result.status === 200)!.json());
     if (started.status !== "started") throw new Error("Enabled HTTP task profile did not start");
+    expect(started.traceId).toBe(parent.traceId);
+    expect(started.parentSpanId).toBe(parent.spanId);
+    expect(started.spanId).not.toBe(parent.spanId);
+    expect(started.traceState).toBe(parent.traceState);
+    expect(started.links).toEqual([]);
     expect(started.target).toEqual(input.target);
     expect(started.cache_counters?.status).toBe("unavailable");
     if (started.cache_counters?.status === "unavailable") expect(started.cache_counters.reason).toBe("target_not_owned");
     expect(Date.parse(started.expires_at)).toBeGreaterThan(Date.now());
     const stopping = await Promise.all([
       profilesHandler(command(STOP_TASK_PROFILE_PATH, { handle: started.handle, outcome: "success" })),
-      profilesHandler(command(STOP_TASK_PROFILE_PATH, { handle: started.handle, outcome: "error" })),
+      profilesHandler(command(STOP_TASK_PROFILE_PATH, { handle: started.handle, outcome: "error" }, undefined, stopCarrier)),
     ]);
     expect(stopping.map(result => result.status)).toEqual([200, 200]);
     const bodies = await Promise.all(stopping.map(result => result.text()));
     expect(bodies[0]).toBe(bodies[1]);
     const stopped = StopTaskProfileResponseSchema.parse(JSON.parse(bodies[0]!));
     if (stopped.status !== "stopped") throw new Error("Enabled HTTP task profile did not stop");
+    expect(stopped.profile).toMatchObject({
+      traceId: started.traceId, spanId: started.spanId, parentSpanId: started.parentSpanId,
+      traceState: started.traceState, links: started.links,
+    });
     expect(stopped.end_reason).toBe("explicit_stop");
     expect(stopped.profile.outcome).toBe("success");
     expect(stopped.cache_counters?.reason).toBe("target_not_owned");
@@ -488,14 +509,33 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
     expect(stopped.profile.processes.worker.closing.start_ticks).toBe(input.target.start_ticks);
     expect(stopped.profile.processes.worker.closing.unavailable["memory_kb.rss"]).toBe("configured_off");
     expect(profiles).toEqual([stopped.profile]);
+    const repeated = await profilesHandler(command(STOP_TASK_PROFILE_PATH, {
+      handle: started.handle, outcome: "cancelled",
+    }, undefined, stopCarrier));
+    expect(await repeated.text()).toBe(bodies[0]!);
     const next = StartTaskProfileResponseSchema.parse(await (await profilesHandler(command(START_TASK_PROFILE_PATH, input))).json());
     if (next.status !== "started") throw new Error("Completed handles must not exhaust capacity");
+    expect(next.traceId).not.toBe(started.traceId);
+    expect(next.spanId).not.toBe(started.spanId);
+    expect(next.parentSpanId).toBeUndefined();
+    expect(next.traceState).toBeUndefined();
+    expect(next.links).toEqual([]);
     expect((await profilesHandler(command(STOP_TASK_PROFILE_PATH, { handle: started.handle, outcome: "success" }))).status).toBe(404);
     expect((await profilesHandler(command(STOP_TASK_PROFILE_PATH, { handle: next.handle, outcome: "cancelled" }))).status).toBe(200);
+    const invalidCarrier = StartTaskProfileResponseSchema.parse(await (await profilesHandler(command(
+      START_TASK_PROFILE_PATH, input, undefined, { traceparent: "invalid", tracestate: "caller=ignored" },
+    ))).json());
+    if (invalidCarrier.status !== "started") throw new Error("Invalid optional carriers must not prevent a real profile");
+    expect(invalidCarrier.traceId).not.toBe(parent.traceId);
+    expect(invalidCarrier.parentSpanId).toBeUndefined();
+    expect(invalidCarrier.traceState).toBeUndefined();
+    expect((await profilesHandler(command(STOP_TASK_PROFILE_PATH, {
+      handle: invalidCarrier.handle, outcome: "success",
+    }))).status).toBe(200);
     const aborted = new AbortController();
     aborted.abort();
     expect((await profilesHandler(command(START_TASK_PROFILE_PATH, input, aborted.signal))).status).toBe(400);
-    expect(profiles).toHaveLength(2);
+    expect(profiles).toHaveLength(3);
     const recorded = JSON.parse(await fixture("host-probes/process-inputs.json"));
     const openingRace = startTaskProfile({
       config, context: { platform: "linux", procRoot: directory }, target: input.target,
@@ -517,7 +557,7 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
     await rm(join(directory, "stat"), { recursive: true });
     await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
   } finally { await profilesHandler.close(); }
-  for (const end_reason of ["owner_exited", "expired", "service_stopped"] as const) {
+  for (const end_reason of ["owner_exited", "pid_reused", "expired", "service_stopped"] as const) {
     let completed: (profile: TaskProfile) => void;
     const reported = new Promise<TaskProfile>(resolve => { completed = resolve; });
     const scoped = createSampleHandler({
@@ -527,9 +567,15 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
       },
     }, { platform: "linux", procRoot: directory }, profile => { completed(profile); });
     try {
-      const start = StartTaskProfileResponseSchema.parse(await (await scoped(command(START_TASK_PROFILE_PATH, input))).json());
+      const start = StartTaskProfileResponseSchema.parse(await (await scoped(command(
+        START_TASK_PROFILE_PATH, input, undefined, writeTraceContext(parent),
+      ))).json());
       if (start.status !== "started") throw new Error("Lifecycle case requires an actual collector");
       if (end_reason === "owner_exited") await rm(join(directory, "4242", "stat"));
+      if (end_reason === "pid_reused") {
+        const recorded = JSON.parse(await fixture("host-probes/process-inputs.json"));
+        await Bun.write(join(directory, "4242", "stat"), recorded.stat.replace("12345", "12346"));
+      }
       if (end_reason === "service_stopped") {
         const closing = scoped.close();
         expect(scoped.close()).toBe(closing);
@@ -537,12 +583,16 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
         expect((await scoped(command(START_TASK_PROFILE_PATH, input))).status).toBe(503);
       }
       const profile = await reported;
+      expect(profile).toMatchObject({
+        traceId: start.traceId, spanId: start.spanId, parentSpanId: start.parentSpanId,
+        traceState: start.traceState, links: start.links,
+      });
       expect(profile.end_reason).toBe(end_reason);
       expect(profile.outcome).toBe("cancelled");
       if (end_reason !== "service_stopped") {
         const stop = StopTaskProfileResponseSchema.parse(await (await scoped(command(STOP_TASK_PROFILE_PATH, {
           handle: start.handle, outcome: "success",
-        }))).json());
+        }, undefined, stopCarrier))).json());
         if (stop.status !== "stopped") throw new Error("Automatically closed profile was not retained");
         expect(stop.profile).toEqual(profile);
       }
@@ -613,7 +663,7 @@ test("missing and oversized proc files are explicit while valid siblings survive
   const processInput = JSON.parse(await fixture("host-probes/process-inputs.json"));
   await Bun.write(join(directory, "4242", "stat"), processInput.stat.replace(") R ", ") Z "));
   expect(readProcessMemory(owned, config.max_proc_bytes, context).unavailable.major_faults).toBe("process_exited");
-  const identity = { pipeline_name: "off", task_name: "off", run_id: "off", request_id: randomUUID(), correlation_id: randomUUID() };
+  const identity = { pipeline_name: "off", task_name: "off", run_id: "off" };
   await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
   await mkdir(join(directory, "meminfo"));
   await rm(join(directory, "vmstat"));
@@ -636,7 +686,7 @@ test("missing and oversized proc files are explicit while valid siblings survive
   await rm(join(directory, String(process.pid), "status"));
   await mkdir(join(directory, String(process.pid), "status"));
   const cpuInput = CollectorInputSchema.parse({
-    identity, config: { ...config.task_profile, enabled: true, memory_enabled: false },
+    operation: createRootContext(), identity, config: { ...config.task_profile, enabled: true, memory_enabled: false },
     max_proc_bytes: config.max_proc_bytes, worker_pid: process.pid, target: null, server: null,
     clock_ticks_per_second: parseClockTicks(processInput.clock_ticks), expires_after_ms: null, context,
   });
@@ -669,6 +719,7 @@ test("missing and oversized proc files are explicit while valid siblings survive
   await rm(join(directory, "stat"));
   await mkdir(join(directory, "stat"));
   let reported = false;
+  expect(await startTaskProfile({ config, context, report: () => { reported = true; } }, identity)).toBeNull();
   expect(await profileTask({ config, context, report: () => { reported = true; } }, identity, () => "actual work")).toBe("actual work");
   expect(reported).toBe(false);
   const target = { pid: 4242, start_ticks: "12345" };
@@ -689,7 +740,7 @@ test("missing and oversized proc files are explicit while valid siblings survive
   expect((await controller.measureLatency()).reason).toBe("cancelled");
   const enabled = { ...config, task_profile: { ...config.task_profile, enabled: true } };
   await expect(startTaskProfile({ config: enabled, context, report: () => {} }, {
-    pipeline_name: "error", task_name: "error", run_id: "error", request_id: randomUUID(), correlation_id: randomUUID(),
+    pipeline_name: "error", task_name: "error", run_id: "error",
   })).rejects.toThrow("collector");
   if (process.platform === "linux") {
     // A real null run exercises pinned perf's controls and signal exit without opening a PMU counter.

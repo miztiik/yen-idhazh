@@ -2,7 +2,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { arch, release } from "node:os";
-import { randomUUID } from "node:crypto";
+import { createRootContext } from "@idhazh/common-contracts/create-operation-context";
 import { loadConfig as loadProbeConfig, ProbeConfigSchema } from "../src/config";
 import { SAMPLE_PATH, serveSamples } from "../src/api/server";
 import { HostSampleSchema } from "../src/probe/sample-host";
@@ -16,11 +16,12 @@ import { verifyLiveCacheProfiling } from "./feed-ingest-plan-cache-proof";
 import { WorkflowSettingsSchema } from "./feed-ingest-plan-profile-schema";
 
 export async function verifyLiveHostProfiling(
-  identity: { git_sha: string; run_id: string; correlation_id: string; attempt: number }, artifactRoot: string,
+  identity: { git_sha: string; run_id: string; attempt: number }, artifactRoot: string,
 ) {
   if (process.platform !== "linux") throw new Error("Live resource proof requires Linux; fixture results do not certify it");
+  const operation = createRootContext();
   const proof: ResourceProof = {
-    ...ProfileProofIdentitySchema.parse(identity),
+    ...ProfileProofIdentitySchema.parse({ ...identity, traceId: operation.traceId }),
     scope: "live_linux_ram_http_and_separate_copy", status: "running", stage: "start",
     host: { platform: "linux", arch: arch(), release: release(), bun: Bun.version },
     sample: null, task_profile: null, copy: null, cache: null, error: null,
@@ -56,7 +57,7 @@ export async function verifyLiveHostProfiling(
     proof.stage = "task_cpu_ram_http";
     await persist();
     const probeConfig = await loadProbeConfig();
-    proof.task_profile = await verifyTaskProfileHttp(identity, ProbeConfigSchema.parse({
+    proof.task_profile = await verifyTaskProfileHttp({ run_id: identity.run_id, parent: operation }, ProbeConfigSchema.parse({
       ...probeConfig, cache_probe: { ...probeConfig.cache_probe,
         counters: { ...probeConfig.cache_probe.counters, enabled: true } },
     }));
@@ -105,7 +106,7 @@ export async function verifyLiveHostProfiling(
     proof.stage = "cache";
     await persist();
     if (!process.env.RUNNER_TEMP) throw new Error("Cache proof requires the declared optional tool installation");
-    proof.cache = await verifyLiveCacheProfiling(identity, await loadProbeConfig(), proof.copy.on!,
+    proof.cache = await verifyLiveCacheProfiling(proof, await loadProbeConfig(), proof.copy.on!,
       await Bun.file(join(process.env.RUNNER_TEMP, "host-cache-tool-install.json")).json(),
       proof.task_profile,
       async cache => { proof.cache = cache; await persist(); });
@@ -137,7 +138,7 @@ if (import.meta.main) {
   await mkdir(root, { recursive: true });
   const proof = await verifyLiveHostProfiling({
     git_sha: GITHUB_SHA, run_id: `${new Date().toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`,
-    correlation_id: randomUUID(), attempt: Number(GITHUB_RUN_ATTEMPT),
+    attempt: Number(GITHUB_RUN_ATTEMPT),
   }, root);
   console.log(JSON.stringify({ event: "live_resource_proof", ...proof }));
 }

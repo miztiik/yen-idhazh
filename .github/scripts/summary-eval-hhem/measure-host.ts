@@ -62,9 +62,6 @@ async function main(): Promise<void> {
   const packets = readPackets(process.stdin, settings.control_max_bytes);
   const first = await packets.next();
   const startup = StartupSchema.parse(first.value);
-  const identity = {
-    ...startup.context, request_id: startup.request_id, correlation_id: startup.correlation_id,
-  };
   let finished = false;
   let deadline: ReturnType<typeof setTimeout> | undefined;
   const abort = new AbortController();
@@ -87,7 +84,7 @@ async function main(): Promise<void> {
       ...startup.context, git_sha: startup.git_sha, attempt: startup.attempt,
     });
     try {
-      session = await startTaskProfile({ config, report: () => {} }, identity, {
+      session = await startTaskProfile({ config, report: () => {} }, startup.context, {
         signal: abort.signal, expiresAfterMs: config.task_profile.profile_handle_ttl_ms,
       });
     } catch { clean = false; }

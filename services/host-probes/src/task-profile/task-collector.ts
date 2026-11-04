@@ -123,7 +123,7 @@ export class TaskCollector {
       unavailable.sampled_busy_max_percent = unavailable.sampled_busy_min_percent;
     }
     this.closed = TaskProfileSchema.parse({
-      identity: this.input.identity, collector: "worker_thread",
+      ...this.input.operation, identity: this.input.identity, collector: "worker_thread",
       outcome: this.ownerEndReason !== null
         || ["expired", "service_stopped", "start_aborted"].includes(end_reason) ? "cancelled" : outcome,
       end_reason: this.ownerEndReason ?? end_reason,

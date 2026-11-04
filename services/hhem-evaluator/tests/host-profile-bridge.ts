@@ -2,10 +2,15 @@
 import { z } from "../../host-probes/node_modules/zod";
 import { createInterface } from "node:readline";
 import { loadConfig, ProbeConfigSchema } from "../../host-probes/src/config";
+import { createSampleHandler, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../host-probes/src/api/server";
+import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../../host-probes/src/api/task-command-schema";
 import { startTaskProfile } from "../../host-probes/src/task-profile/task-profiler";
 import type { TaskProfileSession } from "../../host-probes/src/task-profile/task-profiler";
+import { parseProcessStat } from "../../host-probes/src/task-profile/process-stat";
 import { TaskProfileSchema } from "../../host-probes/src/task-profile/profile-schema";
 import type { TaskProfile } from "../../host-probes/src/task-profile/profile-schema";
+import { OperationMetadataSchema } from "../../../packages/common-contracts/src/schemas/operation-metadata.schema";
+import type { OperationMetadata } from "../../../packages/common-contracts/src/schemas/operation-metadata.schema";
 import { HostFingerprintRowSchema } from "../../../packages/common-contracts/src/schemas/host-fingerprint.schema";
 import { createFingerprintHandler, FINGERPRINT_PATH } from "../../host-fingerprints/src/api/server";
 import { fixture } from "../../host-fingerprints/test/fixture";
@@ -33,6 +38,9 @@ if (Bun.argv[2] === "schemas") {
   });
   const command = z.strictObject({ kind: z.literal("stop"), outcome: z.enum(["success", "error"]) });
   let session: TaskProfileSession | null = null;
+  let handler: ReturnType<typeof createSampleHandler> | undefined;
+  let handle: string | undefined;
+  let operation: OperationMetadata | undefined;
   let started = false;
   let profile: TaskProfile | undefined;
   let clean = true;
@@ -50,10 +58,10 @@ if (Bun.argv[2] === "schemas") {
             memory_enabled: false, ...input.task_profile,
           },
         });
-        const handler = createFingerprintHandler(f.config, f.settings, {
+        const fingerprintHandler = createFingerprintHandler(f.config, f.settings, {
           outputRoot: join(f.directory, "state"), inspection: f.inspection,
         });
-        const response = await handler(new Request(`http://127.0.0.1${FINGERPRINT_PATH}`, {
+        const response = await fingerprintHandler(new Request(`http://127.0.0.1${FINGERPRINT_PATH}`, {
           method: "POST", body: JSON.stringify(f.apiInput),
         }));
         const hardware = z.object({
@@ -70,20 +78,38 @@ if (Bun.argv[2] === "schemas") {
         await mkdir(processRoot, { recursive: true });
         await Bun.write(join(processRoot, "stat"),
           recorded.stat.replace(`${recorded.pid} `, `${process.pid} `));
-        session = await startTaskProfile({
+        const profiling = {
           config, context: { platform: input.platform, procRoot: input.proc_root },
-          report(value) {
+          report(value: TaskProfile) {
             profile = value;
             if (input.fail_report) throw new Error("Profile reporting failed after collection");
           },
-        }, {
+        };
+        const identity = {
           pipeline_name: "summary-eval-hhem", task_name: "summary-eval-hhem",
           run_id: f.capture.writer.run_id,
-          request_id: "12345678-1234-4234-8234-123456789abc",
-          correlation_id: "12345678-1234-4234-8234-123456789abd",
-        });
+        };
+        if (input.platform === "linux" || !config.task_profile.enabled) {
+          const processInput = parseProcessStat(recorded.pid, recorded.stat);
+          if (processInput.reason !== null) throw new Error("Recorded profile target has no valid process identity");
+          handler = createSampleHandler(config, profiling.context, profiling.report);
+          const response = await handler(new Request(`http://localhost${START_TASK_PROFILE_PATH}`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ identity, target: { pid: process.pid, start_ticks: processInput.value.start_ticks } }),
+          }));
+          if (response.status !== 200) throw new Error("Native host profile start failed");
+          const result = StartTaskProfileResponseSchema.parse(await response.json());
+          if (result.status === "started") {
+            handle = result.handle;
+            operation = OperationMetadataSchema.strip().parse(result);
+          }
+        } else {
+          // An unsupported host cannot verify the pin required by HTTP; its embedded collector can still report unavailable data.
+          session = await startTaskProfile(profiling, identity);
+          operation = session?.operation;
+        }
         emit({
-          kind: "ready", profile_started: session !== null,
+          kind: "ready", profile_started: handle !== undefined || session !== null,
           hardware: HardwareSchema.parse({
             ...hardware.row, status: "collected", unavailable: hardware.unavailable, reason: null,
           }),
@@ -91,14 +117,29 @@ if (Bun.argv[2] === "schemas") {
         continue;
       }
       const input = command.parse(JSON.parse(line));
-      await session?.close(input.outcome, "explicit_stop");
+      if (handler !== undefined && handle !== undefined) {
+        const response = await handler(new Request(`http://localhost${STOP_TASK_PROFILE_PATH}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ handle, outcome: input.outcome }),
+        }));
+        if (response.status !== 200) throw new Error("Native host profile stop failed");
+        const result = StopTaskProfileResponseSchema.parse(await response.json());
+        if (result.status !== "stopped" || result.handle !== handle) throw new Error("Native host profile did not retain its handle");
+        profile = result.profile;
+      } else {
+        await session?.close(input.outcome, "explicit_stop");
+      }
       break;
     }
   } catch {
     clean = false;
   } finally {
-    try { if (profile === undefined) await session?.close("cancelled", "service_stopped"); }
+    try {
+      await handler?.close();
+      if (profile === undefined) await session?.close("cancelled", "service_stopped");
+    }
     catch { clean = false; }
+    if (profile !== undefined && JSON.stringify(OperationMetadataSchema.strip().parse(profile)) !== JSON.stringify(operation)) clean = false;
     emit({
       kind: "closed", clean, profile: profile === undefined ? null : projectMachineProfile(profile),
     });
