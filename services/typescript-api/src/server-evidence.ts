@@ -57,10 +57,15 @@ export const ServerEventDataSchema = z.strictObject({
   attempt: PositiveCountSchema,
   severity: z.enum(["info", "warning", "error"]),
   phase: z.enum(["starting", "ready", "stopping", "stopped", "forced", "failed", "log_unavailable", "module_failed", "operation_completed"]),
-  pid: PositiveCountSchema.nullable(),
   duration_ms: z.number().finite().nonnegative().nullable(),
   exit_code: z.int().nullable(),
   code: z.string().regex(/^[A-Z][A-Z0-9_]*$/).nullable(),
+}).meta({
+  version: "2026-11-04",
+  readCompatibility: "current_only; diagnostic payloads omit process IDs",
+  changelog: [
+    { version: "2026-11-04", change: "Omit process IDs from server diagnostic payloads." },
+  ],
 });
 export function serverEvidenceFilename(group: ApiGroup): string {
   return `hono-server-${ApiGroupSchema.parse(group)}.json`;

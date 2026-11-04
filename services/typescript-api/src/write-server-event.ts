@@ -11,7 +11,7 @@ import { ServerEventDataSchema, serverLogFilename } from "./server-evidence";
 import type { ApiGroup, ServerRun } from "./server-evidence";
 
 type EventInput = Pick<z.infer<typeof ServerEventDataSchema>, "phase">
-  & Partial<Pick<z.infer<typeof ServerEventDataSchema>, "severity" | "pid" | "duration_ms" | "exit_code" | "code">>;
+  & Partial<Pick<z.infer<typeof ServerEventDataSchema>, "severity" | "duration_ms" | "exit_code" | "code">>;
 
 export function createServerEventWriter(input: { directory: string; source: string; group: ApiGroup; run: ServerRun }) {
   const context = createChildContext(input.run.context);
@@ -24,7 +24,7 @@ export function createServerEventWriter(input: { directory: string; source: stri
       source: input.source, type, context,
       data: {
         server_name: "hono-server", group: input.group, run_id: input.run.run_id, attempt: input.run.attempt,
-        severity: data.severity ?? "info", pid: data.pid ?? null,
+        severity: data.severity ?? "info",
         duration_ms: data.duration_ms ?? null, exit_code: data.exit_code ?? null, code: data.code ?? null,
         phase: data.phase,
       },
