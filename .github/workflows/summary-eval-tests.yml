@@ -52,6 +52,8 @@ jobs:
 
       - name: Prepare selected native assets and validate inputs
         id: prepare
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           uv run --frozen --extra model --no-dev python
           ../../.github/scripts/summary-eval-tests/run.py --root ../.. prepare

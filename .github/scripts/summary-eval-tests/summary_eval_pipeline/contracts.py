@@ -33,6 +33,7 @@ FailureCode = Literal[
     "INPUT_TOO_LARGE",
     "MODEL_INVALID",
     "ASSET_FAILED",
+    "ASSET_AUTH_MISSING",
     "RECEIPT_INVALID",
     "GENERATION_FAILED",
     "GENERATION_INCOMPLETE",
@@ -68,6 +69,7 @@ FAILURE_MESSAGES: dict[FailureCode, str] = {
     "INPUT_TOO_LARGE": "The dispatch input exceeds its byte allowance.",
     "MODEL_INVALID": "The selected model declaration is invalid.",
     "ASSET_FAILED": "The declared native assets could not be prepared.",
+    "ASSET_AUTH_MISSING": "Preparation requires GITHUB_TOKEN for the pinned runtime lookup.",
     "RECEIPT_INVALID": "The saved generation does not match this run, source and model.",
     "GENERATION_FAILED": "The summarizer did not return a valid final answer.",
     "GENERATION_INCOMPLETE": "The summarizer did not finish its final answer.",
@@ -97,6 +99,10 @@ class WorkflowContract(NativeContract):
             "changelog": [
                 {
                     "version": WORKFLOW_VERSION,
+                    "change": "Record preparation outcomes and safe asset failures.",
+                },
+                {
+                    "version": WORKFLOW_VERSION,
                     "change": "Use native string-length constraints for generation text.",
                 },
                 {
@@ -106,10 +112,6 @@ class WorkflowContract(NativeContract):
                 {
                     "version": WORKFLOW_VERSION,
                     "change": "Name shared API shutdown separately from HHEM worker exit.",
-                },
-                {
-                    "version": WORKFLOW_VERSION,
-                    "change": "Bind generated summaries and real service phases to one run.",
                 },
                 {
                     "version": "2026-11-02",
@@ -165,6 +167,16 @@ class PreparedRun(WorkflowContract):
     run: RunIdentity
     selected: ModelSelection
     source_sha256: Sha256
+    status: Literal["pending", "complete", "failed"]
+    errors: tuple[PipelineError, ...]
+
+    @model_validator(mode="after")
+    def require_preparation_outcome(self) -> Self:
+        if (self.status == "failed") != bool(self.errors):
+            raise ValueError("Failed preparation requires its original safe errors")
+        if any(error.phase != "preparation" for error in self.errors):
+            raise ValueError("Preparation errors must identify their own phase")
+        return self
 
 
 class LoadedModel(WorkflowContract):
@@ -303,11 +315,18 @@ class PipelineEvidence(WorkflowContract):
         )
         if generation is not None and (
             self.prepared is None
+            or self.prepared.status != "complete"
             or generation.run != self.prepared.run
             or generation.selected != self.prepared.selected
             or generation.source_sha256 != self.prepared.source_sha256
         ):
-            raise ValueError("Generation must describe the captured selected run")
+            raise ValueError("Generation requires the captured run's completed preparation")
+        if (
+            self.prepared is not None
+            and self.prepared.status != "complete"
+            and (generation is not None or phase is not None or evaluation is not None)
+        ):
+            raise ValueError("Incomplete preparation cannot claim model-phase results")
         if generation is not None:
             for observed in (phase, evaluation):
                 if observed is not None and observed.run != generation.run:

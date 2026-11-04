@@ -19,7 +19,7 @@ from .settings import load_pipeline_settings
 from .storage import read_result, write_result
 
 
-def prepare_run(root: Path) -> PreparedRun:
+def prepare_run(root: Path) -> tuple[PreparedRun, SelectedModel]:
     pipeline = load_pipeline_settings(root)
     inputs = read_manual_inputs(
         load_settings(root / "config" / "hhem-evaluator" / "settings.json"), pipeline
@@ -39,11 +39,12 @@ def prepare_run(root: Path) -> PreparedRun:
         ),
         selected=selected.identity,
         source_sha256=text_sha256(inputs.source_text),
+        status="pending",
+        errors=(),
     )
     directory = root / pipeline.output_directory
-    stage_configuration(root, directory, selected)
     write_result(directory / "run.json", prepared)
-    return prepared
+    return prepared, selected
 
 
 def read_prepared(root: Path) -> tuple[PreparedRun, SelectedModel]:
@@ -70,14 +71,30 @@ def read_prepared(root: Path) -> tuple[PreparedRun, SelectedModel]:
 
 
 def prepare_assets(root: Path) -> None:
-    prepared = prepare_run(root)
+    prepared, selected = prepare_run(root)
     directory = root / load_pipeline_settings(root).output_directory
+    failure: WorkflowError | None = None
     try:
+        if not os.environ.get("GITHUB_TOKEN"):
+            raise WorkflowError("ASSET_AUTH_MISSING", "preparation")
+        stage_configuration(root, directory, selected)
         # Existing utilities derive all files, revisions, digests and native library assets.
         install_runtime()
         configuration = Path(load_pipeline_settings(root).output_directory) / "config"
         download_model_files(configuration)
         verify_model_files(configuration)
+    except WorkflowError as error:
+        failure = error
     except (OSError, ValueError, SystemExit):
-        raise WorkflowError("ASSET_FAILED", "preparation") from None
-    write_result(directory / "run.json", prepared)
+        failure = WorkflowError("ASSET_FAILED", "preparation")
+    outcome = PreparedRun.model_validate_json(
+        prepared.model_copy(
+            update={
+                "status": "failed" if failure is not None else "complete",
+                "errors": (failure.error,) if failure is not None else (),
+            }
+        ).model_dump_json()
+    )
+    write_result(directory / "run.json", outcome)
+    if failure is not None:
+        raise failure

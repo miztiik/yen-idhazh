@@ -55,6 +55,8 @@ def handoff_case() -> tuple[ManualInputs, PreparedRun, GenerationReceipt]:
         run=example_run(),
         selected=selected.identity,
         source_sha256=text_sha256(inputs.source_text),
+        status="complete",
+        errors=(),
     )
     receipt = GenerationReceipt(
         version=WORKFLOW_VERSION,

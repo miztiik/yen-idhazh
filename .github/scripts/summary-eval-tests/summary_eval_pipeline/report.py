@@ -93,6 +93,7 @@ def render_report(
         ("HHEM overlap", f"{settings.scoring.chunk_overlap_words} words"),
     ]
     work_rows = [
+        ("Preparation", evidence.prepared.status if evidence.prepared else "Not run", "-", "-"),
         (
             "Generation",
             generation.status if generation else "Not run",
@@ -110,6 +111,8 @@ def render_report(
     readings: list[tuple[object, ...]] = []
     servers: list[tuple[object, ...]] = []
     errors = [describe_error(error) for error in evidence.errors]
+    if evidence.prepared is not None:
+        errors.extend(describe_error(error) for error in evidence.prepared.errors)
     if generation is not None:
         errors.extend(describe_error(error, "generation") for error in generation.errors)
     for phase in (evidence.generation_phase, evaluation):
@@ -241,9 +244,14 @@ def render_report(
             "CPU and RAM readings cover the whole machine, including background work.",
             table("C", ("Phase", "Reading", "Value"), readings),
             "## Owned servers",
-            "For failed or cancelled runs, open this run's **Artifacts -> "
-            "summary-eval-tests-server-logs** and choose the matching filename "
-            "from **Log file** in Table D.",
+            (
+                "For failed or cancelled runs, open this run's **Artifacts -> "
+                "summary-eval-tests-server-logs** and choose the matching filename "
+                "from **Log file** in Table D."
+                if servers
+                else "No server log files were recorded. The server-log artifact is absent "
+                "when no server starts."
+            ),
             table(
                 "D",
                 (

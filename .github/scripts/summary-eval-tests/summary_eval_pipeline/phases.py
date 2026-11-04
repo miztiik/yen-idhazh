@@ -71,6 +71,11 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
     shared = load_api_settings(root / "config" / "fastapi-server.json")
     settings = load_settings(root / "config" / "hhem-evaluator" / "settings.json", shared)
     prepared, selected = read_prepared(root)
+    if prepared.status != "complete":
+        if prepared.errors:
+            error = prepared.errors[0]
+            raise WorkflowError(error.code, error.phase, error.service, error.http_status)
+        raise WorkflowError("ASSET_FAILED", "preparation")
     inputs = read_manual_inputs(settings, pipeline)
     directory = root / pipeline.output_directory
     scripts = root / ".github" / "scripts" / "summary-eval-tests"

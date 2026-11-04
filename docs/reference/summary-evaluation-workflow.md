@@ -40,6 +40,13 @@ Table A - Task order
 | A4 | Report | Read saved results only. Write combined JSON and escaped Markdown; append that exact Markdown to the step summary. Do not start a server or repeat generation. |
 | A5 | Retain | Upload available results/report on success or failure. Upload server diagnostics after errors or cancellation, with platform-default retention. |
 
+Only the preparation step receives the standard `GITHUB_TOKEN` secret. The
+existing runtime utility requires it for the pinned release lookup; public
+archive and model-byte downloads keep their existing header-free path. The
+token is neither persisted nor sent to generation, evaluation or reporting.
+Missing authentication fails before network or asset work with
+`ASSET_AUTH_MISSING`.
+
 Both active phases use the shared Hono server's `machine` group for the actual
 fingerprint and task-profile HTTP operations. TypeScript owns collection;
 Python owns only HTTP orchestration and the small native result projection.
@@ -75,7 +82,7 @@ Table B - Named output under `backend/var/summary-eval-tests/`
 
 | Id | File | Meaning |
 | --- | --- | --- |
-| B1 | `run.json` | Platform run/attempt, UTC start, source revision, selected declaration identity and exact source hash captured before startup. |
+| B1 | `run.json` | Platform run/attempt, UTC start, source revision, selected declaration identity and exact source hash captured before startup; preparation status and safe errors are atomically updated in this same file. |
 | B2 | `generation.json` | The same identities, observed loaded model, exact source hash, validated final `summary_text`, its hash, generation status and safe errors. This is the one answer handoff. |
 | B3 | `generation-phase.json` | Generation measurements, server observations, cleanup and errors, bound to the exact saved receipt. |
 | B4 | `evaluation.json` | Body-free native HHEM result and evaluation-phase measurements, server observations and cleanup, bound to that same receipt. |
@@ -84,6 +91,15 @@ Table B - Named output under `backend/var/summary-eval-tests/`
 
 The combined result retains `run.json`'s selected declaration even when
 generation never started. It does not label a selected model as loaded.
+
+Preparation starts as `pending`, becomes `complete` only after declared asset
+verification, and retains its original typed errors when `failed`. Both model
+phases require completed preparation. Reporting can read failed or unfinished
+preparation without requiring generation or evaluation files that were never
+written; it shows those phases as not run, not as mismatched receipts. No server
+logs are expected when preparation stops the run before either model phase.
+Same-day snapshots without this preparation state are not assumed complete:
+the disposable-file readers are current-only.
 
 Generation saves the accepted answer before measurement or shutdown. Evaluation
 checks the exact run, attempt, revision, source and declaration, the receipt's
