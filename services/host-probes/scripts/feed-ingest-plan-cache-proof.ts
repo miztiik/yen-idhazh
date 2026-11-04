@@ -48,7 +48,7 @@ export const CacheProofSchema = z.strictObject({
   }),
 });
 export async function verifyLiveCacheProfiling(
-  identity: { run_id: string; correlation_id: string },
+  identity: { run_id: string; traceId: string },
   config: ProbeConfig, hardware: { l3_cache_bytes: number | null }, installation: unknown,
   task: TaskProfileProof,
   report: (proof: z.infer<typeof CacheProofSchema>) => Promise<void>,
@@ -84,7 +84,7 @@ export async function verifyLiveCacheProfiling(
   const counters = task.cache_counters;
   if (counters === null || task.cache_counters_start === null
     || counters.target.pid !== task.target.pid || counters.target.start_ticks !== task.target.start_ticks
-    || task.profile.identity.run_id !== identity.run_id || task.profile.identity.correlation_id !== identity.correlation_id
+    || task.profile.identity.run_id !== identity.run_id || task.profile.traceId !== identity.traceId
     || !task.repeat_stop_identical) {
     throw new Error("Task HTTP cache counters did not retain the actual controlled PID");
   }

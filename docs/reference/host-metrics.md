@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-11-04
 
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
@@ -393,14 +393,26 @@ names the supplied target, not the probe service. The ordinary TypeScript
 wrapper still defaults to the actual calling PID.
 
 Profiles are locally validated transient metadata, separate from hardware
-rows and request journals. They retain pipeline, task, run, correlation and
-request identity, but no article text or paths. The
+rows and request journals. Their business identity retains pipeline, task and
+run only. The profile's top-level operation context identifies its execution,
+operation and optional enclosing operation; the
+[task API](host-probe-api.md#start) defines these fields and their native formats.
+Start allocates it once and passes it into the measurement worker. Explicit
+stop, expiry, process exit or reuse and shutdown retain that same context.
+The genuine resource handle, process pins and all measurements remain separate.
+Profiles contain no article text or paths. The
 [operator API](../architecture/sources/feed-operator-api.md) defines the
 fetch/parse boundaries. The manual planner workflow records host fingerprints
 but does not collect a live planner CPU or RAM profile.
 Copying measures median read-plus-write throughput with two cache-sized
 buffers; it does not measure L3 hit or miss counts and runs outside fetch/parse
 CPU windows.
+
+The HHEM workflow helper keeps Python's startup UUIDs and `startup_id` handshake
+unchanged. It passes only pipeline, task and run into the native host identity,
+then starts a local profile operation. Its existing machine projection contains
+measurements, not a tracing link to uninstrumented Python work. The evaluator's
+separate UUID correlation field and server telemetry response remain unchanged.
 
 The separate default-off [cache probes](host-cache-probes.md) measure exact
 last-level-cache read events with Linux perf and a native random-pointer-chain

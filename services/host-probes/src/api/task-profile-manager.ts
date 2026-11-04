@@ -1,5 +1,6 @@
 /** Who owns each bounded, transient HTTP task profile until it closes? */
 import { randomUUID } from "node:crypto";
+import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
 import { ProbeConfigSchema } from "../config";
 import type { ProbeConfig } from "../config";
 import type { ProbeContext } from "../probe/proc-reader";
@@ -82,7 +83,7 @@ export class TaskProfileManager {
     return entry.closing;
   }
 
-  async start(input: StartTaskProfile, signal?: AbortSignal): Promise<StartTaskProfileResponse> {
+  async start(input: StartTaskProfile, signal?: AbortSignal, parent?: OperationMetadata): Promise<StartTaskProfileResponse> {
     if (this.stopping) throw new TaskProfileCommandError(503, "Host probe is stopping");
     if (!this.config.task_profile.enabled) return { status: "disabled", reason: "configured_off" };
     if (signal?.aborted) throw new TaskProfileCommandError(400, "Task profile start aborted");
@@ -98,6 +99,7 @@ export class TaskProfileManager {
       entry.starting = startTaskProfile({
         config: this.config, context: this.options.context ?? {}, report: this.options.report,
         target: input.target, ...(input.server === undefined ? {} : { server: input.server }),
+        ...(parent === undefined ? {} : { parent }),
       }, input.identity, {
         signal: signal === undefined ? entry.abort.signal : AbortSignal.any([signal, entry.abort.signal]),
         expiresAfterMs: this.config.task_profile.profile_handle_ttl_ms,
@@ -126,7 +128,7 @@ export class TaskProfileManager {
       });
       if (this.stopping || signal?.aborted) throw new TaskProfileCommandError(400, "Task profile start aborted");
       return StartTaskProfileResponseSchema.parse({
-        status: "started", handle, expires_at: session.expires_at, target: session.target,
+        ...session.operation, status: "started", handle, expires_at: session.expires_at, target: session.target,
         cache_counters: cache.initial ?? {
           version: CACHE_API_VERSION, kind: "last_level_cache_counters", status: "started",
           measurement_obtained: false, target: input.target, events: this.config.cache_probe.counters.events,

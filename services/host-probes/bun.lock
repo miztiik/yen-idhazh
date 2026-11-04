@@ -5,6 +5,7 @@
     "": {
       "name": "@idhazh/host-probes",
       "dependencies": {
+        "@idhazh/common-contracts": "file:../../packages/common-contracts",
         "zod": "^4.1.12",
       },
       "devDependencies": {
@@ -14,6 +15,14 @@
     },
   },
   "packages": {
+    "@idhazh/common-contracts": ["@idhazh/common-contracts@file:../../packages/common-contracts", { "dependencies": { "@opentelemetry/api": "1.9.0", "@opentelemetry/core": "2.12.0", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "typescript": "^5.9.3" } }],
+
+    "@opentelemetry/api": ["@opentelemetry/api@1.9.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@opentelemetry/api/-/api-1.9.0.tgz", {}, "sha1-0D66aCc9wPdQnio9XLoh6uEDef4="],
+
+    "@opentelemetry/core": ["@opentelemetry/core@2.12.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@opentelemetry/core/-/core-2.12.0.tgz", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.29.0" }, "peerDependencies": { "@opentelemetry/api": ">=1.0.0 <1.10.0" } }, "sha512-1HsSAuvT4/my0QrXWsyXFdWjKaPeCHsismKZgEEIb8NK13LP6DrMRlsUbvD/0F9mDWK3xDom9AMv3IscxgOnOQ=="],
+
+    "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.43.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@opentelemetry/semantic-conventions/-/semantic-conventions-1.43.0.tgz", {}, "sha1-8/Rn42wnMy8Oc17IbNzXjdbyeGU="],
+
     "@types/bun": ["@types/bun@1.4.3", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/bun/-/bun-1.4.3.tgz", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
 
     "@types/node": ["@types/node@26.6.5", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/node/-/node-26.6.5.tgz", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg=="],

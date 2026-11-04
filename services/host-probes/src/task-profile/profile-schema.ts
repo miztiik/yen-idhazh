@@ -1,8 +1,17 @@
 /** Which body-free transient measurements describe one actual task? */
 import { z } from "zod";
+import { OperationMetadataSchema } from "@idhazh/common-contracts/schemas/operation-metadata";
 import { MAX_TIMER_DELAY_MS, TaskProfileConfigSchema } from "../config";
 import { UNAVAILABLE_REASONS } from "../probe/proc-reader";
 
+export const TASK_PROFILE_VERSION = "2026-11-04" as const;
+const profileContract = {
+  version: TASK_PROFILE_VERSION,
+  readCompatibility: "current_only",
+  changelog: [
+    { version: TASK_PROFILE_VERSION, change: "Retain shared operation metadata instead of duplicate identity UUIDs." },
+  ],
+};
 const count = z.int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const milliseconds = z.number().finite().nonnegative();
 const percentage = z.number().finite().min(0).max(100);
@@ -20,8 +29,8 @@ export const CpuObservationSchema = z.discriminatedUnion("reason", [
 ]);
 export const TaskIdentitySchema = z.strictObject({
   pipeline_name: z.string().min(1), task_name: z.string().min(1),
-  run_id: z.string().min(1), correlation_id: z.uuid(), request_id: z.uuid(),
-});
+  run_id: z.string().min(1),
+}).meta(profileContract);
 export const OwnedProcessSchema = z.strictObject({
   pid: count.positive(), start_ticks: z.string().regex(/^\d+$/),
 });
@@ -69,7 +78,7 @@ export const TaskOutcomeSchema = z.enum(["success", "error", "cancelled"]);
 export const TaskEndReasonSchema = z.enum([
   "task_settled", "explicit_stop", "owner_exited", "pid_reused", "expired", "service_stopped", "start_aborted",
 ]);
-export const TaskProfileSchema = z.strictObject({
+export const TaskProfileSchema = OperationMetadataSchema.safeExtend({
   identity: TaskIdentitySchema,
   collector: z.literal("worker_thread"),
   outcome: TaskOutcomeSchema,
@@ -113,9 +122,9 @@ export const TaskProfileSchema = z.strictObject({
       Object.values(process.memory_kb).some(reading => reading !== null) || process.major_faults !== null)))) {
     context.addIssue({ code: "custom", path: ["processes"], message: "disabled PID RAM must have no measurements" });
   }
-});
+}).meta(profileContract);
 export const CollectorInputSchema = z.strictObject({
-  identity: TaskIdentitySchema, config: TaskProfileConfigSchema,
+  operation: OperationMetadataSchema, identity: TaskIdentitySchema, config: TaskProfileConfigSchema,
   max_proc_bytes: count.positive(), worker_pid: count.positive(),
   target: OwnedProcessSchema.nullable(), clock_ticks_per_second: ClockTicksSchema,
   expires_after_ms: z.int().positive().max(MAX_TIMER_DELAY_MS).nullable(),
@@ -123,7 +132,7 @@ export const CollectorInputSchema = z.strictObject({
   context: z.strictObject({ platform: z.string().optional(), procRoot: z.string().optional() }),
 }).refine(value => value.target === null || value.target.pid === value.worker_pid, {
   path: ["target", "pid"], message: "must name the task worker PID",
-});
+}).meta(profileContract);
 export const CollectorCommandSchema = z.strictObject({ outcome: TaskOutcomeSchema, end_reason: TaskEndReasonSchema });
 export const CollectorMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({
