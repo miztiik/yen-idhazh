@@ -114,8 +114,11 @@ def test_actual_handlers_preserve_scores_including_error_http_results(
                 run=example_run(),
                 phase="evaluation",
                 generation_sha256=text_sha256(handoff_case()[2].model_dump_json()),
+                reference_summary_sha256=handoff_case()[1].reference_summary_sha256,
+                evaluation_request_id=request.request_id,
+                evaluation_correlation_id=request.correlation_id,
             )
-            assert evidence.status == ("partial" if partial else "complete")
+            assert evidence.status == "partial" and evidence.unieval is None
             assert status == (500 if partial else 200)
             assert case.source_text not in evidence.model_dump_json()
             assert case.summary_text not in evidence.model_dump_json()

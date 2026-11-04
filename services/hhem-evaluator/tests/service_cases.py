@@ -22,9 +22,11 @@ from hhem_evaluator.contracts.evaluation_event import EvaluationEvent
 from hhem_evaluator.contracts.llama_settings import LlamaSettings
 from hhem_evaluator.contracts.server_event import ServerEvent
 from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
 from hhem_evaluator.emit_events import EventWriter
 from hhem_evaluator.exchange_packets import ByteChannel
 from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.maintain_unieval_worker import UnievalSupervisor
 from hhem_evaluator.maintain_worker import WorkerSupervisor
 from hhem_evaluator.serve_api import create_app
 
@@ -176,6 +178,8 @@ async def running_service(
     llama_settings: LlamaSettings | None = None,
     llama_transport: httpx.AsyncBaseTransport | None = None,
     log_directory: Path | None = None,
+    unieval_settings: UnievalSettings | None = None,
+    unieval_supervisor: UnievalSupervisor | None = None,
 ) -> AsyncIterator[ServiceCase]:
     selected = settings or service_settings()
     if routes is not None:
@@ -204,12 +208,17 @@ async def running_service(
         writer=EventWriter(selected.logging, log, directory=log_directory),
         llama_settings=llama_settings,
         llama_transport=llama_transport,
+        unieval_settings=unieval_settings,
+        unieval_supervisor=unieval_supervisor,
     )
     try:
         async with app.router.lifespan_context(app):
             if wait_ready and selected.enabled:
                 await app.state.controller.loading_task
                 assert app.state.controller.health().status == "ready"
+            if wait_ready and unieval_supervisor is not None:
+                await app.state.unieval.loading_task
+                assert (await app.state.unieval.health()).status == "ready"
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app),
                 base_url=f"http://{selected.listener.host}:{selected.listener.port}",

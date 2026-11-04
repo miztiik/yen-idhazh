@@ -18,6 +18,7 @@ from hhem_evaluator.contracts.server_event import ApiDiagnosticData
 from hhem_evaluator.emit_events import EventWriter
 from hhem_evaluator.load_llama_settings import load_llama_settings
 from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.load_unieval_settings import load_unieval_settings
 from hhem_evaluator.run_server import has_clean_lifespan
 from hhem_evaluator.serve_api import create_app
 
@@ -64,10 +65,15 @@ async def serve_owned_api(
     shared = load_api_settings(root / "config" / "fastapi-server.json")
     api = ApiSettings.model_validate_json(
         shared.model_copy(
-            update={"enabled_routes": ("llama",) if packet.phase == "generation" else ("hhem",)}
+            update={
+                "enabled_routes": (
+                    ("llama",) if packet.phase == "generation" else ("hhem", "unieval")
+                )
+            }
         ).model_dump_json()
     )
     settings = load_settings(root / "config" / "hhem-evaluator" / "settings.json", api)
+    unieval_settings = load_unieval_settings(root, api) if packet.phase == "evaluation" else None
     events = EventWriter(
         api.logging,
         channels.events,
@@ -89,8 +95,9 @@ async def serve_owned_api(
             if packet.phase == "generation"
             else None
         ),
+        unieval_settings=unieval_settings,
     )
-    controller = app.state.controller
+    controller, unieval = app.state.controller, app.state.unieval
     config = create_server_config(app, api)
     # Bind before lifespan starts a model; an occupied listener owns no part of this run.
     try:
@@ -116,7 +123,15 @@ async def serve_owned_api(
             sys.stdin.buffer,
             request_stop,
             finished,
-            settings.worker.shutdown_timeout_ms + settings.worker.forced_stop_ms,
+            max(
+                settings.worker.shutdown_timeout_ms + settings.worker.forced_stop_ms,
+                (
+                    unieval_settings.worker.shutdown_timeout_ms
+                    + unieval_settings.worker.forced_stop_ms
+                )
+                if unieval_settings is not None
+                else 0,
+            ),
         ),
         daemon=True,
     ).start()
@@ -138,7 +153,10 @@ async def serve_owned_api(
             )
         await serving
         confirmed = controller.worker.exit_confirmed if controller is not None else None
-        clean = (confirmed is not False) and has_clean_lifespan(server)
+        unieval_confirmed = unieval.worker.exit_confirmed if unieval is not None else None
+        clean = (
+            confirmed is not False and unieval_confirmed is not False and has_clean_lifespan(server)
+        )
         emit_control(
             ServiceStopped(
                 version=WORKFLOW_VERSION,
@@ -148,6 +166,7 @@ async def serve_owned_api(
                 pid=os.getpid(),
                 clean=clean,
                 worker_exit_confirmed=confirmed,
+                unieval_worker_exit_confirmed=unieval_confirmed,
                 log_available=events.log_available,
             ),
             channels.control,
@@ -156,8 +175,15 @@ async def serve_owned_api(
             raise RuntimeError("Owned service shutdown was not clean")
     finally:
         try:
+            closing = []
             if controller is not None and not controller.stopping:
-                await controller.shutdown()
+                closing.append(controller.shutdown())
+            if unieval is not None and not unieval.stopping:
+                closing.append(unieval.shutdown())
+            outcomes = await asyncio.gather(*closing, return_exceptions=True)
+            failures = [outcome for outcome in outcomes if isinstance(outcome, BaseException)]
+            if failures:
+                raise BaseExceptionGroup("Owned evaluator cleanup failed", failures)
         finally:
             listener.close()
             events.close()

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from hhem_evaluator.contracts.api_health import ApiHealth
 from hhem_evaluator.contracts.api_settings import ApiSettings
 from hhem_evaluator.contracts.service_settings import ServiceSettings
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
 
 from .contracts import PipelineError, RunIdentity, ServerOutcome, ServiceShutdown
 from .control import HostReady
@@ -40,6 +41,11 @@ class PhaseServices:
                 if self.api is not None and self.api.stopped is not None
                 else None
             ),
+            unieval_worker_exit_confirmed=(
+                self.api.stopped.unieval_worker_exit_confirmed
+                if self.api is not None and self.api.stopped is not None
+                else None
+            ),
         )
 
     def close(
@@ -48,6 +54,7 @@ class PhaseServices:
         shared: ApiSettings,
         errors: list[PipelineError],
         work_complete: bool,
+        unieval_settings: UnievalSettings | None = None,
     ) -> None:
         if self.host is not None:
             host_cleanup: PipelineError | None = None
@@ -103,7 +110,15 @@ class PhaseServices:
                 errors.append(host_cleanup)
         if self.api is not None:
             try:
-                self.api.close(shared.shutdown_timeout_ms + settings.worker.forced_stop_ms)
+                self.api.close(
+                    shared.shutdown_timeout_ms
+                    + max(
+                        settings.worker.forced_stop_ms,
+                        unieval_settings.worker.forced_stop_ms
+                        if unieval_settings is not None
+                        else 0,
+                    )
+                )
                 self.api_stopped = True
             except WorkflowError as error:
                 self.api_stopped = False
@@ -111,12 +126,21 @@ class PhaseServices:
             except OSError:
                 self.api_stopped = False
                 errors.append(WorkflowError("SERVICE_STOP_FAILED", "cleanup", "api").error)
+            if self.api.stopped is not None:
+                if self.api.stopped.worker_exit_confirmed is False:
+                    errors.append(WorkflowError("SERVICE_STOP_FAILED", "cleanup", "hhem").error)
+                if self.api.stopped.unieval_worker_exit_confirmed is False:
+                    errors.append(WorkflowError("SERVICE_STOP_FAILED", "cleanup", "unieval").error)
         if self.api_started is not None:
             day = self.run.started_at.strftime("%Y_%m_%d")
             self.servers.append(
                 ServerOutcome(
                     server_name="fastapi-server",
-                    startup="ready" if self.health is not None else "failed",
+                    startup=(
+                        "ready"
+                        if self.health is not None and self.health.status == "ready"
+                        else "failed"
+                    ),
                     startup_ms=self.startup_ms
                     if self.startup_ms is not None
                     else ((time.monotonic() - self.api_started) * 1000),

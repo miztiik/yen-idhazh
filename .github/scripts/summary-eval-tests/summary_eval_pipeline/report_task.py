@@ -13,6 +13,7 @@ from .contracts import (
     PhaseEvidence,
     PipelineError,
     PipelineEvidence,
+    has_completed_score,
     text_sha256,
 )
 from .failures import WorkflowError
@@ -38,7 +39,6 @@ def collect_results(root: Path) -> PipelineEvidence:
             generation=None,
             generation_phase=None,
             evaluation_phase=None,
-            unieval="not_run",
             errors=(),
         )
     errors: list[PipelineError] = []
@@ -53,6 +53,7 @@ def collect_results(root: Path) -> PipelineEvidence:
             generation.run != prepared.run
             or generation.selected != prepared.selected
             or generation.source_sha256 != prepared.source_sha256
+            or generation.reference_summary_sha256 != prepared.reference_summary_sha256
         ):
             generation = None
             raise WorkflowError("RECEIPT_INVALID", "report")
@@ -64,7 +65,27 @@ def collect_results(root: Path) -> PipelineEvidence:
     ):
         try:
             result = read_result(directory / filename, PhaseEvidence, pipeline.max_response_bytes)
-            if result.run != prepared.run or result.phase != phase:
+            if (
+                result.run != prepared.run
+                or result.phase != phase
+                or result.reference_summary_sha256 != prepared.reference_summary_sha256
+                or (
+                    generation is not None
+                    and result.generation_sha256 != text_sha256(generation.model_dump_json())
+                )
+            ):
+                raise WorkflowError("RECEIPT_INVALID", "report")
+            if (
+                phase == "evaluation"
+                and (result.evaluation is not None or result.unieval is not None)
+                and (
+                    generation is None
+                    or generation.status != "complete"
+                    or generated_phase is None
+                    or generated_phase.shutdown.llama_stopped is not True
+                    or generated_phase.shutdown.api_stopped is not True
+                )
+            ):
                 raise WorkflowError("RECEIPT_INVALID", "report")
             if phase == "generation":
                 generated_phase = result
@@ -81,10 +102,8 @@ def collect_results(root: Path) -> PipelineEvidence:
         and evaluation_phase.status == "complete"
         and not errors
     )
-    score = (
-        evaluation_phase is not None
-        and evaluation_phase.evaluation is not None
-        and evaluation_phase.evaluation.hhem is not None
+    score = evaluation_phase is not None and has_completed_score(
+        evaluation_phase.evaluation, evaluation_phase.unieval
     )
     return PipelineEvidence(
         version=WORKFLOW_VERSION,
@@ -93,7 +112,6 @@ def collect_results(root: Path) -> PipelineEvidence:
         generation=generation,
         generation_phase=generated_phase,
         evaluation_phase=evaluation_phase,
-        unieval="not_run",
         errors=tuple(errors),
     )
 
@@ -109,9 +127,10 @@ def main() -> None:
         evidence = collect_results(root)
         write_result(directory / "results.json", evidence)
         inputs = read_manual_inputs(settings, pipeline)
-        if (
-            evidence.prepared is not None
-            and text_sha256(inputs.source_text) != evidence.prepared.source_sha256
+        if evidence.prepared is not None and (
+            text_sha256(inputs.source_text) != evidence.prepared.source_sha256
+            or text_sha256(inputs.reference_summary_text)
+            != evidence.prepared.reference_summary_sha256
         ):
             raise WorkflowError("RECEIPT_INVALID", "report")
         config_url = (

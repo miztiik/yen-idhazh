@@ -7,6 +7,7 @@ from pathlib import Path
 from hhem_evaluator.contracts.base import NativeContract, NonblankText
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.service_settings import ServiceSettings
+from hhem_evaluator.contracts.unieval_request import UnievalRequest
 from pydantic import ValidationError
 
 from .failures import WorkflowError
@@ -15,6 +16,7 @@ from .settings import PipelineSettings
 
 class ManualInputs(NativeContract):
     source_text: NonblankText
+    reference_summary_text: NonblankText
     models_file: str = ""
 
 
@@ -34,10 +36,13 @@ def read_manual_inputs(settings: ServiceSettings, manual: PipelineSettings) -> M
         event: object = json.loads(encoded)
         if not isinstance(event, dict) or not isinstance(event.get("inputs"), dict):
             raise WorkflowError("INPUT_INVALID", "input")
-        return ManualInputs.model_validate(event["inputs"])
+        inputs = ManualInputs.model_validate(event["inputs"])
+        if len(inputs.model_dump_json().encode("utf-8")) > settings.listener.max_body_bytes:
+            raise WorkflowError("INPUT_TOO_LARGE", "input")
+        return inputs
     except (ValueError, ValidationError, UnicodeError):
         raise WorkflowError("INPUT_INVALID", "input") from None
 
 
-def encode_request(request: EvaluateRequest) -> bytes:
+def encode_request(request: EvaluateRequest | UnievalRequest) -> bytes:
     return request.model_dump_json().encode("utf-8")

@@ -62,6 +62,7 @@ class ServiceStopped(ControlPacket):
     pid: PositiveCount
     clean: bool
     worker_exit_confirmed: bool | None
+    unieval_worker_exit_confirmed: bool | None = None
     machine: MachineUsage | None = None
     server: HonoServerReader | None = None
     log_available: bool | None = None

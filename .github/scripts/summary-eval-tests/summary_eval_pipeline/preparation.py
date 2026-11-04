@@ -6,7 +6,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
+import httpx
+from hhem_evaluator.api_settings import load_api_settings
+from hhem_evaluator.load_model import quiet_model_output
 from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.load_unieval_settings import load_unieval_settings
+from hhem_evaluator.prepare_unieval_resources import prepare_unieval_resources
 from hhem_evaluator.resolve_ids import create_execution_id
 
 from utilities.model_runtime import download_model_files, install_runtime, verify_model_files
@@ -39,6 +44,7 @@ def prepare_run(root: Path) -> tuple[PreparedRun, SelectedModel]:
         ),
         selected=selected.identity,
         source_sha256=text_sha256(inputs.source_text),
+        reference_summary_sha256=text_sha256(inputs.reference_summary_text),
         status="pending",
         errors=(),
     )
@@ -65,6 +71,7 @@ def read_prepared(root: Path) -> tuple[PreparedRun, SelectedModel]:
         expected != (prepared.run.run_id, prepared.run.attempt, prepared.run.git_sha)
         or selected.identity != prepared.selected
         or text_sha256(inputs.source_text) != prepared.source_sha256
+        or text_sha256(inputs.reference_summary_text) != prepared.reference_summary_sha256
     ):
         raise WorkflowError("RECEIPT_INVALID", "input")
     return prepared, selected
@@ -83,9 +90,14 @@ def prepare_assets(root: Path) -> None:
         configuration = Path(load_pipeline_settings(root).output_directory) / "config"
         download_model_files(configuration)
         verify_model_files(configuration)
+        shared = load_api_settings(root / "config" / "fastapi-server.json")
+        with quiet_model_output():
+            prepare_unieval_resources(
+                root, load_unieval_settings(root, shared), include_weights=True
+            )
     except WorkflowError as error:
         failure = error
-    except (OSError, ValueError, SystemExit):
+    except (OSError, ValueError, SystemExit, httpx.HTTPError):
         failure = WorkflowError("ASSET_FAILED", "preparation")
     outcome = PreparedRun.model_validate_json(
         prepared.model_copy(

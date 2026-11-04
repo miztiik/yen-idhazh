@@ -251,7 +251,10 @@ class OwnedService:
             or (
                 self.service == "api"
                 and self.packet.phase == "evaluation"
-                and stopped.worker_exit_confirmed is not True
+                and (
+                    stopped.worker_exit_confirmed is not True
+                    or stopped.unieval_worker_exit_confirmed is not True
+                )
             )
             or self.protocol_failed.is_set()
             or self.events_failed.is_set()

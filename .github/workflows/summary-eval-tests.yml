@@ -7,6 +7,10 @@ on:
         description: Full source text; published in the expandable run report
         required: true
         type: string
+      reference_summary_text:
+        description: Independent reference for this source; not sent to generation; shown in report
+        required: true
+        type: string
       models_file:
         description: Model JSON path relative to config/; blank uses the committed pointer
         required: false
@@ -63,7 +67,7 @@ jobs:
           uv run --frozen --extra model --no-dev python
           ../../.github/scripts/summary-eval-tests/run.py --root ../.. generate
 
-      - name: Evaluate the saved generated answer with HHEM
+      - name: Evaluate the saved generated answer with HHEM and UniEval
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: >-
           uv run --frozen --extra model --no-dev python

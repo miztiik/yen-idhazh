@@ -20,7 +20,7 @@ from summary_eval_pipeline.contracts import (
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.inputs import ManualInputs
 from summary_eval_pipeline.phase_result import build_evidence
-from summary_eval_pipeline.report import format_seconds, render_report
+from summary_eval_pipeline.report import describe_hhem, format_seconds, render_report
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_eval_pipeline.storage import write_result
 
@@ -64,20 +64,23 @@ def test_report_discloses_generated_answer_as_literal_text_and_identifies_models
         generation=generation,
         generation_phase=None,
         evaluation_phase=None,
-        unieval="not_run",
         errors=(),
     )
-    inputs = ManualInputs(source_text='Source <script>alert("source")</script>\n</pre></details>')
+    inputs = ManualInputs(
+        source_text='Source <script>alert("source")</script>\n</pre></details>',
+        reference_summary_text='Reference </pre><img src=x onerror="alert(2)">',
+    )
     link = "https://example.test/repository/blob/selected/config/hhem-evaluator/settings.json"
     markdown = render_report(evidence, inputs, service_settings(), link)
     assert "<pre>" + html.escape(inputs.source_text) + "</pre>" in markdown
     assert "<pre>" + html.escape(answer) + "</pre>" in markdown
     assert inputs.source_text not in markdown and answer not in markdown
     assert "<script>" not in markdown and "<img" not in markdown
-    assert markdown.count("<details>") == markdown.count("</details>") == 2
+    assert "<pre>" + html.escape(inputs.reference_summary_text) + "</pre>" in markdown
+    assert markdown.count("<details>") == markdown.count("</details>") == 3
     assert link in markdown and generation.selected.models_file in markdown
     assert generation.loaded is not None and generation.loaded.model_id in markdown
-    assert "Not run - separate workflow integration | - | -" in markdown
+    assert "| UniEval | Not run | - | Not available |" in markdown
     rendered = subprocess.run(
         [
             required_bun(),
@@ -93,7 +96,7 @@ def test_report_discloses_generated_answer_as_literal_text_and_identifies_models
         check=False,
     )
     assert rendered.returncode == 0, rendered.stderr
-    assert json.loads(rendered.stdout) == {"tables": 4, "unsafe": False}
+    assert json.loads(rendered.stdout) == {"tables": 5, "unsafe": False}
 
 
 def test_report_keeps_the_selected_declaration_when_generation_did_not_start() -> None:
@@ -105,12 +108,71 @@ def test_report_keeps_the_selected_declaration_when_generation_did_not_start() -
         generation=None,
         generation_phase=None,
         evaluation_phase=None,
-        unieval="not_run",
         errors=(),
     )
     markdown = render_report(evidence, inputs, service_settings(), "https://example.test/config")
     assert prepared.selected.models_file in markdown and prepared.selected.model_id in markdown
     assert "Not loaded" in markdown and "Not generated" in markdown
+
+
+def test_missing_invalid_response_is_failed_not_reported_as_work_never_started() -> None:
+    from .test_generation_handoff import generation_phase
+
+    inputs, prepared, generation, generated = generation_phase()
+    result = example_result()
+    evaluated = build_evidence(
+        result,
+        None,
+        None,
+        ServiceShutdown(
+            api_stopped=True,
+            host_stopped=True,
+            worker_exit_confirmed=True,
+            unieval_worker_exit_confirmed=True,
+        ),
+        [WorkflowError("RESPONSE_INVALID", "evaluation", "unieval", 500).error],
+        run=prepared.run,
+        phase="evaluation",
+        reference_summary_sha256=prepared.reference_summary_sha256,
+        generation_sha256=text_sha256(generation.model_dump_json()),
+        evaluation_request_id=result.request_id,
+        evaluation_correlation_id=result.correlation_id,
+    )
+    evidence = PipelineEvidence(
+        version=WORKFLOW_VERSION,
+        status="partial",
+        prepared=prepared,
+        generation=generation,
+        generation_phase=generated,
+        evaluation_phase=evaluated,
+        errors=(),
+    )
+    report = render_report(evidence, inputs, service_settings(), "https://example.test/config")
+    assert "| UniEval | Failed - no valid result | - | Not available |" in report
+    assert "0.75 source support (0-1); 1 / 1 source windows complete" in report
+    assert "evaluation / unieval / HTTP 500: RESPONSE_INVALID" in report
+
+
+def test_hhem_work_counts_do_not_invent_a_score_for_an_uncompleted_window() -> None:
+    from hhem_evaluator.contracts.error_detail import ErrorDetail
+    from hhem_evaluator.contracts.evaluation_result import EvaluationResult
+
+    completed = example_result()
+    assert completed.windows.primary is not None
+    failed = EvaluationResult.model_validate_json(
+        completed.model_copy(
+            update={
+                "status": "failed",
+                "hhem": None,
+                "windows": completed.windows.model_copy(
+                    update={"primary": completed.windows.primary.model_copy(update={"scored": 0})}
+                ),
+                "errors": (ErrorDetail.from_code("MODEL_SCORING_FAILED", "worker"),),
+            }
+        ).model_dump_json()
+    )
+    assert describe_hhem(failed) == "Score unavailable; 0 / 1 source windows complete"
+    assert describe_hhem(None) == "-"
 
 
 def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_phase() -> None:
@@ -152,6 +214,7 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
             ),
         ),
         generation_sha256=receipt_hash,
+        reference_summary_sha256=prepared.reference_summary_sha256,
     )
     evaluation_phase = build_evidence(
         example_result(),
@@ -163,6 +226,9 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
         phase="evaluation",
         servers=(server,),
         generation_sha256=receipt_hash,
+        reference_summary_sha256=prepared.reference_summary_sha256,
+        evaluation_request_id=example_result().request_id,
+        evaluation_correlation_id=example_result().correlation_id,
     )
     evidence = PipelineEvidence(
         version=WORKFLOW_VERSION,
@@ -171,13 +237,13 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
         generation=generation,
         generation_phase=generation_phase,
         evaluation_phase=evaluation_phase,
-        unieval="not_run",
         errors=(),
     )
     markdown = render_report(evidence, inputs, service_settings(), "https://example.test/config")
     assert re.findall(r"^## (.+)$", markdown, re.MULTILINE) == [
         "Actual work",
         "Errors",
+        "UniEval scores",
         "Model configuration",
         "Hardware",
         "Owned servers",
@@ -192,7 +258,7 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
     assert "Artifacts -> summary-eval-tests-server-logs" in markdown
     assert log_filename in markdown
     assert host_log_filename in markdown
-    assert re.findall(r"\*\*Table ([A-Z])\*\*", markdown) == ["A", "B", "C", "D"]
+    assert re.findall(r"\*\*Table ([A-Z])\*\*", markdown) == ["A", "B", "C", "D", "E"]
     row_ids = re.findall(r"^\| ([A-Z]\d+) \|", markdown, re.MULTILINE)
     assert len(row_ids) == len(set(row_ids))
     assert row_ids[0] == "A1" and "B1" in row_ids and "C1" in row_ids and "D1" in row_ids
@@ -207,7 +273,10 @@ def test_safe_machine_cause_is_retained_in_native_evidence_and_visible_in_the_re
     evidence = evidence.model_copy(update={"errors": (failure,)})
     markdown = render_report(
         evidence,
-        ManualInputs(source_text="Project-authored source."),
+        ManualInputs(
+            source_text="Project-authored source.",
+            reference_summary_text="Independent reference.",
+        ),
         service_settings(),
         "https://example.test/config",
     )
@@ -265,11 +334,21 @@ def test_report_creator_retains_full_artifact_and_never_promotes_failed_work(
             run=prepared.run,
             phase="generation" if phase == "generation" else "evaluation",
             generation_sha256=text_sha256(generation.model_dump_json()),
+            reference_summary_sha256=prepared.reference_summary_sha256,
         )
         write_result(directory / name, phase_evidence)
     event = tmp_path / "event.json"
     event.write_text(
-        json.dumps({"inputs": {"source_text": source, "models_file": ""}}), encoding="utf-8"
+        json.dumps(
+            {
+                "inputs": {
+                    "source_text": source,
+                    "models_file": "",
+                    "reference_summary_text": inputs.reference_summary_text,
+                }
+            }
+        ),
+        encoding="utf-8",
     )
     summary = tmp_path / "summary.md"
     result = subprocess.run(

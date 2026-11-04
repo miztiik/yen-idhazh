@@ -17,7 +17,7 @@ from summary_eval_pipeline.contracts import (
     ServiceShutdown,
     text_sha256,
 )
-from summary_eval_pipeline.evaluation import bind_evaluation
+from summary_eval_pipeline.evaluation import bind_evaluations
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.generation import generate_summary
 from summary_eval_pipeline.inputs import ManualInputs
@@ -55,6 +55,7 @@ def generation_phase() -> tuple[ManualInputs, PreparedRun, GenerationReceipt, Ph
         run=prepared.run,
         phase="generation",
         generation_sha256=text_sha256(receipt.model_dump_json()),
+        reference_summary_sha256=prepared.reference_summary_sha256,
     )
     return inputs, prepared, receipt, phase
 
@@ -187,9 +188,15 @@ def test_same_run_handoff_is_atomic_and_retains_exact_text(tmp_path: Path) -> No
     path = tmp_path / "generation.json"
     write_result(path, receipt)
     saved = read_result(path, GenerationReceipt, 2 << 20)
-    request = bind_evaluation(prepared, inputs, saved, phase, 1 << 20)
+    request, unieval = bind_evaluations(prepared, inputs, saved, phase, 1 << 20)
     assert request.source_text == inputs.source_text
     assert request.summary_text == receipt.summary_text
+    assert unieval.source_text == request.source_text
+    assert unieval.summary_text == request.summary_text
+    assert unieval.reference_summary_text == inputs.reference_summary_text
+    assert "reference_summary_text" not in request.model_dump()
+    assert request.request_id == unieval.request_id
+    assert request.correlation_id == unieval.correlation_id
     assert saved.model_dump_json() == receipt.model_dump_json()
     assert not path.with_suffix(".json.tmp").exists()
     assert receipt.summary_text is not None
@@ -204,13 +211,16 @@ def test_same_run_handoff_is_atomic_and_retains_exact_text(tmp_path: Path) -> No
         "revision",
         "model",
         "source",
+        "reference",
         "summary",
         "failed",
         "unclosed",
         "preparation",
     ],
 )
-def test_stale_changed_failed_or_unclosed_generation_cannot_reach_hhem(change: str) -> None:
+def test_stale_changed_failed_or_unclosed_generation_cannot_reach_either_evaluator(
+    change: str,
+) -> None:
     inputs, prepared, receipt, phase = generation_phase()
     if change == "run":
         receipt = receipt.model_copy(
@@ -230,6 +240,10 @@ def test_stale_changed_failed_or_unclosed_generation_cannot_reach_hhem(change: s
         )
     elif change == "source":
         inputs = inputs.model_copy(update={"source_text": inputs.source_text + "\n"})
+    elif change == "reference":
+        inputs = inputs.model_copy(
+            update={"reference_summary_text": inputs.reference_summary_text + "\n"}
+        )
     elif change == "summary":
         assert receipt.summary_text is not None
         receipt = receipt.model_copy(update={"summary_text": receipt.summary_text + "\n"})
@@ -242,7 +256,7 @@ def test_stale_changed_failed_or_unclosed_generation_cannot_reach_hhem(change: s
             update={"shutdown": phase.shutdown.model_copy(update={"llama_stopped": False})}
         )
     with pytest.raises(WorkflowError) as failure:
-        bind_evaluation(prepared, inputs, receipt, phase, 1 << 20)
+        bind_evaluations(prepared, inputs, receipt, phase, 1 << 20)
     assert failure.value.error.code == "RECEIPT_INVALID"
 
 
@@ -256,27 +270,44 @@ def test_missing_generation_has_no_manual_answer_fallback(tmp_path: Path) -> Non
         GenerationReceipt.model_validate_json(json.dumps(data))
 
 
-def test_failed_generation_never_starts_an_evaluator(
+@pytest.mark.parametrize(
+    "failure_kind", ["failed", "missing", "empty", "unfinished", "stale", "changed_reference"]
+)
+def test_invalid_generation_never_starts_either_evaluator(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    failure_kind: str,
 ) -> None:
     selected_root(tmp_path)
     inputs, prepared, receipt, phase = generation_phase()
     directory = tmp_path / load_pipeline_settings(REPOSITORY).output_directory
     failure = WorkflowError("GENERATION_FAILED", "generation", "llama").error
-    receipt = GenerationReceipt(
-        version=WORKFLOW_VERSION,
-        run=receipt.run,
-        selected=receipt.selected,
-        loaded=receipt.loaded,
-        source_sha256=receipt.source_sha256,
-        summary_sha256=None,
-        summary_text=None,
-        status="failed",
-        errors=(failure,),
-    )
+    if failure_kind == "failed":
+        receipt = GenerationReceipt(
+            version=WORKFLOW_VERSION,
+            run=receipt.run,
+            selected=receipt.selected,
+            loaded=receipt.loaded,
+            source_sha256=receipt.source_sha256,
+            reference_summary_sha256=receipt.reference_summary_sha256,
+            summary_sha256=None,
+            summary_text=None,
+            status="failed",
+            errors=(failure,),
+        )
+    elif failure_kind == "stale":
+        receipt = receipt.model_copy(update={"run": receipt.run.model_copy(update={"attempt": 2})})
+    elif failure_kind == "changed_reference":
+        receipt = receipt.model_copy(update={"reference_summary_sha256": "b" * 64})
     write_result(directory / "run.json", prepared)
-    write_result(directory / "generation.json", receipt)
+    if failure_kind != "missing":
+        write_result(directory / "generation.json", receipt)
+    if failure_kind == "empty":
+        data = receipt.model_dump(mode="json")
+        data["summary_text"] = " \n"
+        (directory / "generation.json").write_text(json.dumps(data), encoding="utf-8")
+    elif failure_kind == "unfinished":
+        (directory / "generation.json").write_text('{"status":"complete"', encoding="utf-8")
     write_result(directory / "generation-phase.json", phase)
     event = tmp_path / "event.json"
     event.write_text(json.dumps({"inputs": inputs.model_dump()}), encoding="utf-8")
@@ -289,8 +320,27 @@ def test_failed_generation_never_starts_an_evaluator(
         monkeypatch.setenv(key, value)
     result = asyncio.run(collect_phase(tmp_path, "evaluation"))
     assert result.status == "failed" and result.evaluation is None and not result.servers
+    assert result.unieval is None
     assert not (directory / "logs").exists()
     assert result.shutdown.worker_exit_confirmed is None
+    assert result.shutdown.unieval_worker_exit_confirmed is None
+
+
+def test_independent_reference_can_coincidentally_equal_the_generated_answer() -> None:
+    inputs, prepared, receipt, phase = generation_phase()
+    assert receipt.summary_text is not None
+    reference_hash = text_sha256(receipt.summary_text)
+    inputs = inputs.model_copy(update={"reference_summary_text": receipt.summary_text})
+    prepared = prepared.model_copy(update={"reference_summary_sha256": reference_hash})
+    receipt = receipt.model_copy(update={"reference_summary_sha256": reference_hash})
+    phase = phase.model_copy(
+        update={
+            "reference_summary_sha256": reference_hash,
+            "generation_sha256": text_sha256(receipt.model_dump_json()),
+        }
+    )
+    hhem, unieval = bind_evaluations(prepared, inputs, receipt, phase, 1 << 20)
+    assert hhem.summary_text == unieval.reference_summary_text == unieval.summary_text
 
 
 @pytest.mark.parametrize(
@@ -302,12 +352,16 @@ def test_real_fastapi_generation_uses_selected_request_and_excludes_reasoning(
 ) -> None:
     async def check() -> None:
         selected = recorded_selection(tmp_path)
-        inputs = ManualInputs(source_text="  PrivateSourceCanary\nexact source.  ")
+        inputs = ManualInputs(
+            source_text="  PrivateSourceCanary\nexact source.  ",
+            reference_summary_text="PrivateReferenceCanary: an independent expected summary.",
+        )
         prepared = PreparedRun(
             version=WORKFLOW_VERSION,
             run=example_run(),
             selected=selected.identity,
             source_sha256=text_sha256(inputs.source_text),
+            reference_summary_sha256=text_sha256(inputs.reference_summary_text),
             status="complete",
             errors=(),
         )
@@ -352,6 +406,9 @@ def test_real_fastapi_generation_uses_selected_request_and_excludes_reasoning(
                 assert receipt.status == "complete" and receipt.summary_text
                 assert "Let me reason" not in receipt.summary_text
                 assert receipt.source_sha256 == text_sha256(inputs.source_text)
+                assert receipt.reference_summary_sha256 == text_sha256(
+                    inputs.reference_summary_text
+                )
             assert len(recorded.requests) == 1
             native_url, encoded, _ = recorded.requests[0]
             body = json.loads(encoded)
@@ -365,6 +422,8 @@ def test_real_fastapi_generation_uses_selected_request_and_excludes_reasoning(
             for key, value in selected.entry.sampling.items():
                 assert body[key] == value
             assert inputs.source_text not in service.log.getvalue()
+            assert inputs.reference_summary_text not in encoded.decode()
+            assert inputs.reference_summary_text not in service.log.getvalue()
             assert not service.worker.controls
 
     asyncio.run(check())

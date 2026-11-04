@@ -148,6 +148,50 @@ def test_unfinished_preparation_is_not_assumed_complete_or_reported_as_a_missing
     assert evidence.generation_phase is None and evidence.evaluation_phase is None
 
 
+def test_reference_identity_is_saved_before_generation_and_changed_reference_is_refused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inputs = prepare_dispatch(tmp_path, monkeypatch)
+    prepared, _ = prepare_run(tmp_path)
+    from summary_eval_pipeline.contracts import text_sha256
+
+    assert prepared.status == "pending"
+    assert prepared.reference_summary_sha256 == text_sha256(inputs.reference_summary_text)
+    directory = tmp_path / load_pipeline_settings(REPOSITORY).output_directory
+    assert not (directory / "generation.json").exists()
+    assert inputs.reference_summary_text not in (directory / "run.json").read_text(encoding="utf-8")
+    event = tmp_path / "event.json"
+    event.write_text(
+        json.dumps(
+            {"inputs": {**inputs.model_dump(), "reference_summary_text": "Changed reference."}}
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(WorkflowError) as failure:
+        read_prepared(tmp_path)
+    assert failure.value.error.code == "RECEIPT_INVALID"
+
+
+@pytest.mark.parametrize("reference", [None, "", " \n", True, "\ud800"])
+def test_invalid_reference_blocks_preparation_before_a_model_or_asset_can_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reference: object,
+) -> None:
+    inputs = prepare_dispatch(tmp_path, monkeypatch)
+    payload = inputs.model_dump()
+    if reference is None:
+        del payload["reference_summary_text"]
+    else:
+        payload["reference_summary_text"] = reference
+    (tmp_path / "event.json").write_text(json.dumps({"inputs": payload}), encoding="utf-8")
+    with pytest.raises(WorkflowError) as failure:
+        prepare_assets(tmp_path)
+    assert failure.value.error.code == "INPUT_INVALID"
+    assert not (tmp_path / load_pipeline_settings(REPOSITORY).output_directory).exists()
+
+
 @pytest.mark.parametrize("phase", ["generation", "evaluation"])
 def test_failed_preparation_refuses_each_model_phase_before_starting_any_children(
     tmp_path: Path,
