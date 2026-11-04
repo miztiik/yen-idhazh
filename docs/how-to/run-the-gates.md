@@ -304,7 +304,7 @@ Push-Location ..\..
 uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
 Pop-Location
 uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
-uv run --frozen pytest tests/test_pipeline_preparation.py tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_machine_task.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
+uv run --frozen pytest tests/test_pipeline_preparation.py tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_machine_task.py tests/test_pipeline_control.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
 ```
 
 The host compatibility test exports the actual native schemas through Bun,
@@ -321,6 +321,10 @@ external network access is used. Invalid settings, an occupied listener and
 invalid close data must retain
 safe failure codes without adopting an unrelated process or losing cancelled
 measurements. These actual collector cases run on Linux, not as Windows passes.
+Control scheduling cases use the actual coded failed-child subprocess and its
+real parser. Barriers expose queue timeout just before validated controls arrive
+and delayed recovery during cleanup; both original and cleanup causes must
+survive without another process implementation or a longer timeout.
 Preparation cases call the existing runtime utility's missing-token refusal
 before network access, verify step-only secret wiring, and retain real missing
 input/authentication failures with both model phases not run. They download no

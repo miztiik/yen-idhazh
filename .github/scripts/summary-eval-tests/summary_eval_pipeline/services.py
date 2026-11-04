@@ -47,7 +47,7 @@ class OwnedService:
         self.stopped: ServiceStopped | None = None
         self.closed = False
         self.finish_sent = False
-        self.failure_code: str | None = None
+        self.startup_failure: ServiceStartFailed | None = None
         try:
             self.process = subprocess.Popen(
                 command,
@@ -129,9 +129,16 @@ class OwnedService:
                 break
             except queue.Empty:
                 if self.process.poll() is not None:
-                    raise WorkflowError("CHILD_EXITED", "startup", self.service) from None
+                    self.readers[0].join(timeout=self.settings.worker.forced_stop_ms / 1000)
+                    try:
+                        message = self.messages.get_nowait()
+                    except queue.Empty:
+                        raise WorkflowError("CHILD_EXITED", "startup", self.service) from None
+                    break
         if self.protocol_failed.is_set():
             raise WorkflowError("CHILD_PROTOCOL_FAILED", "startup", self.service)
+        if self.events_failed.is_set():
+            raise WorkflowError("EVENT_STREAM_FAILED", "startup", self.service)
         packet = message.root if message is not None else None
         if packet is None:
             raise WorkflowError("CHILD_EXITED", "startup", self.service)
@@ -142,7 +149,7 @@ class OwnedService:
         ):
             raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", self.service)
         if isinstance(packet, ServiceStartFailed):
-            self.failure_code = packet.error_code
+            self.startup_failure = packet
             raise WorkflowError(
                 "STARTUP_FAILED",
                 "startup",
@@ -216,7 +223,7 @@ class OwnedService:
                 ):
                     self.protocol_failed.set()
                 else:
-                    self.failure_code = failed.error_code
+                    self.startup_failure = failed
             if message is not None and isinstance(message.root, ServiceStopped):
                 observed = message.root
                 if (
@@ -232,6 +239,7 @@ class OwnedService:
             if stream is not None:
                 stream.close()
         stopped = self.stopped
+        startup_code = self.startup_failure.error_code if self.startup_failure is not None else None
         if (
             escalated
             or self.process.returncode != 0
@@ -250,9 +258,9 @@ class OwnedService:
             or any(reader.is_alive() for reader in self.readers)
         ):
             source_code = (
-                stopped.cleanup_error_code or stopped.error_code or self.failure_code
+                stopped.cleanup_error_code or stopped.error_code or startup_code
                 if stopped is not None
-                else self.failure_code
+                else startup_code
             )
             raise WorkflowError(
                 "SERVICE_STOP_FAILED",

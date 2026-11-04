@@ -148,6 +148,10 @@ code and any observed HTTP status. Python validates the owned identity before
 retaining that code in phase errors and reports. Fast child exit does not erase
 an already received failure packet. Original work and cleanup causes remain
 separate; raw exception text and invalid configuration values are not emitted.
+After observing child exit, the owner drains its control reader within the
+existing forced-stop bound before falling back to a generic exit error. Cleanup
+also retains a startup cause recovered later, even when readiness was never
+reached, alongside the actual cleanup cause.
 No Hono log or server outcome is invented when validation stops the helper
 before its supervisor starts.
 
