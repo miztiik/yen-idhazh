@@ -91,10 +91,12 @@ observed lifecycle facts. Native module diagnostics are projected to this
 body-free form before live output or mirroring. Private startup/control
 packets remain on stdout. Article bodies, prompts, model output, secrets,
 raw headers and raw exception text are not server-log fields.
-Routine task-profile reports are validated with the native measurement model
-and omitted from server diagnostics. Their measurements and task outcomes
-remain in the native API result; a successful measurement is not a server
-error.
+Routine task-profile reports are validated with the native measurement model,
+retained in task evidence and omitted from normal server logs. Explicit stop
+also returns the native API result. Server shutdown interrupts an active
+profile without that HTTP reply, so its real cancelled outcome, closure reason,
+operation identity and measurements remain in the evidence and report after
+the manager clears its entries. A successful measurement is not a server error.
 
 An open, write or close failure marks the file mirror unavailable and emits
 one explicit safe stderr warning. It does not fail useful API work. There is
@@ -105,7 +107,8 @@ Each task writes its current observation atomically to the named
 `hono-server-planning.json`, `hono-server-machine.json` or
 `hono-server-delivery.json` in the disposable run directory.
 `src/server-evidence.ts` owns this versioned native shape. Readers accept the
-current shape only; these files are same-run evidence, not committed ledgers,
+current shape only; earlier same-day evidence without profile reports reads as
+no captured reports, not a successful empty measurement. These files are same-run evidence, not committed ledgers,
 request journals or restart stores.
 
 Table C - Evidence meanings
@@ -116,6 +119,7 @@ Table C - Evidence meanings
 | C2 | `shutdown`, `exit_code` | Observed stop, forced exit or cleanup failure, with the actual child exit status when known. |
 | C3 | `log_filename`, `log_available` | The identity-checked role filename and mirror availability at the last saved observation; an existing partial file can still be retained. |
 | C4 | `error_code`, `cleanup_error_code` | The original work/start failure and a separate cleanup failure, when present. |
+| C5 | `reported_profiles` | Native profile results observed before exit, once per execution/operation pair. No reports means none captured, not proof no profiles ran. Full samples and unavailable reasons retain their native meaning. |
 
 The feed report reads these outcomes, including failed startup. Artifact
 preparation retains available evidence and logs without requiring a successful

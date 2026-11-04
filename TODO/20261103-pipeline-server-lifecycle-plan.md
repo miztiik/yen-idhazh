@@ -162,6 +162,9 @@ Table I - PR sequence
   - `services/typescript-api/test/server-events.test.ts`
   - `services/typescript-api/test/write-server-events.ts`
   - `services/typescript-api/test/profile-report-recording.ts`
+  - `services/typescript-api/test/profile-api-server-recording.ts`
+  - `services/typescript-api/test/recorded-machine-api.ts`
+  - `services/typescript-api/test/profile-retention.test.ts`
   - `services/feed-ingest-plan/package.json`
   - `services/feed-ingest-plan/src/config/service-settings.ts`
   - `services/feed-ingest-plan/src/config/planner-startup.ts`
@@ -202,6 +205,7 @@ Table I - PR sequence
   - `.github/workflows/ci.yml`
   - `frontend/scripts/test-scope.ts`
   - `frontend/scripts/tests/test-scope.test.mjs`
+  - `backend/tests/workflows/test_ci_selection.py`
   - `docs/how-to/run-feed-ingest-plan-test.md`
   - `docs/reference/host-probe-api.md`
   - `docs/reference/host-metrics.md`

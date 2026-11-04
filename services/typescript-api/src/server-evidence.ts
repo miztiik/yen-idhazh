@@ -1,6 +1,7 @@
 /** Which server outcomes were observed during this task, separately from its API result? */
 import { z } from "zod";
 import { DateStampSchema, OperationMetadataSchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import { TaskProfileSchema } from "@idhazh/host-probes/profile";
 
 export const ApiGroupSchema = z.enum(["planning", "machine", "delivery"]);
 export type ApiGroup = z.infer<typeof ApiGroupSchema>;
@@ -35,12 +36,18 @@ export const ServerEvidenceSchema = z.strictObject({
   log_available: z.boolean(),
   error_code: z.string().regex(/^[A-Z][A-Z0-9_]*$/).nullable(),
   cleanup_error_code: z.string().regex(/^[A-Z][A-Z0-9_]*$/).nullable(),
+  reported_profiles: z.array(TaskProfileSchema).default([]).describe(
+    "Native task-profile reports captured before task exit; no reports does not prove no profiles ran.",
+  ),
 }).refine(value => value.log_filename === serverLogFilename(value), {
   path: ["log_filename"], message: "Log filename must match the UTC run-start day, run and attempt",
 }).meta({
   version: "2026-11-04",
-  readCompatibility: "current_only",
-  changelog: [{ version: "2026-11-04", change: "Record actual task-owned TypeScript server outcomes without changing committed ledgers." }],
+  readCompatibility: "current_only; earlier same-day evidence has no captured profile reports",
+  changelog: [
+    { version: "2026-11-04", change: "Retain native task-profile reports when their owning server stops." },
+    { version: "2026-11-04", change: "Record actual task-owned TypeScript server outcomes without changing committed ledgers." },
+  ],
 });
 export type ServerEvidence = z.infer<typeof ServerEvidenceSchema>;
 export const ServerEventDataSchema = z.strictObject({

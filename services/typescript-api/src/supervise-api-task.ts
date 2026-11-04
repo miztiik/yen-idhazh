@@ -34,7 +34,7 @@ export async function superviseApiTask<T>(input: {
     run_id: startup.run.run_id, attempt: startup.run.attempt, started_at: startup.run.started_at,
     pid: null, startup: "not_started", startup_ms: null, shutdown: "not_started", exit_code: null,
     log_filename: serverLogFilename(startup.run), log_available: logger.available,
-    error_code: null, cleanup_error_code: null,
+    error_code: null, cleanup_error_code: null, reported_profiles: [],
   };
   let original: unknown;
   let failed = false;
@@ -96,6 +96,7 @@ export async function superviseApiTask<T>(input: {
   } finally {
     logger.close();
     evidence.log_available = logger.available;
+    evidence.reported_profiles = logger.reportedProfiles;
     try {
       await saveEvidence();
     } catch (error) {

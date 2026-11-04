@@ -6,6 +6,7 @@ import {
   createChildContext, createCloudEvent, FeedIngestEventDataSchema, readCloudEvent,
 } from "@idhazh/common-contracts";
 import { TaskProfileSchema } from "@idhazh/host-probes/profile";
+import type { TaskProfile } from "@idhazh/host-probes/profile";
 import { ServerEventDataSchema, serverLogFilename } from "./server-evidence";
 import type { ApiGroup, ServerRun } from "./server-evidence";
 
@@ -17,6 +18,7 @@ export function createServerEventWriter(input: { directory: string; source: stri
   const filename = serverLogFilename(input.run);
   let descriptor: number | undefined;
   let available = true;
+  const profiles = new Map<string, TaskProfile>();
   function record(data: EventInput, mirror = true, type = "hono.server") {
     const event = createCloudEvent({
       source: input.source, type, context,
@@ -45,6 +47,7 @@ export function createServerEventWriter(input: { directory: string; source: stri
   return {
     filename,
     get available() { return available; },
+    get reportedProfiles(): TaskProfile[] { return [...profiles.values()]; },
     write: record,
     acceptModuleLine(line: string) {
       if (line.trim() === "") return;
@@ -74,6 +77,7 @@ export function createServerEventWriter(input: { directory: string; source: stri
       if ("event" in raw && raw.event === "task_profile") {
         const profile = TaskProfileSchema.safeParse("profile" in raw ? raw.profile : undefined);
         if (!profile.success) record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
+        else profiles.set(`${profile.data.traceId}:${profile.data.spanId}`, profile.data);
         return;
       }
       const code = "code" in raw && typeof raw.code === "string" && /^[A-Z][A-Z0-9_]*$/.test(raw.code)
