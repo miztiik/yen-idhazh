@@ -11,6 +11,7 @@ from .contracts.api_settings import ApiSettings
 from .contracts.server_event import ApiDiagnosticData
 from .load_llama_settings import load_llama_settings
 from .load_settings import load_settings
+from .run_server import run_server
 from .serve_api import create_app
 
 
@@ -54,8 +55,9 @@ def main() -> None:
         )
         app.state.events.close()
         parser.exit(2)
+    server = uvicorn.Server(config)
     try:
-        uvicorn.Server(config).run(sockets=[listener])
+        run_server(server, [listener])
     finally:
         listener.close()
         app.state.events.close()

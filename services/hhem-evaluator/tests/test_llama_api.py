@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import math
 
 import pytest
 
@@ -114,6 +115,40 @@ def test_native_statuses_are_preserved_and_invalid_or_redirected_results_are_exp
             assert len(recorded.requests) == 1
             assert "location" not in response.headers
             assert "Private" not in service.log.getvalue()
+
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize("invalid_request", [False, True])
+def test_nonfinite_native_json_is_refused_without_coercing_or_forwarding_it(
+    invalid_request: bool,
+) -> None:
+    async def check() -> None:
+        recorded = RecordedLlama()
+        body = generation_body()
+        if invalid_request:
+            request_payload = json.loads(body)
+            request_payload["temperature"] = math.nan
+            body = json.dumps(request_payload).encode("utf-8")
+        else:
+            response_payload = json.loads(recorded.body)
+            response_payload["usage"]["total_tokens"] = math.nan
+            recorded.body = json.dumps(response_payload).encode("utf-8")
+        async with running_service(
+            routes=("llama",), llama_settings=llama_settings(), llama_transport=recorded.transport
+        ) as service:
+            response = await service.client.post(
+                LLAMA_COMPLETIONS_PATH,
+                content=body,
+                headers={"Content-Type": "application/json"},
+            )
+            assert response.status_code == (400 if invalid_request else 502)
+            assert response.json()["error"]["code"] == (
+                "INVALID_REQUEST" if invalid_request else "INVALID_UPSTREAM_RESPONSE"
+            )
+            assert len(recorded.requests) == (0 if invalid_request else 1)
+            assert "NaN" not in response.text + service.log.getvalue()
+            assert "PrivateSourceCanary" not in response.text + service.log.getvalue()
 
     asyncio.run(check())
 

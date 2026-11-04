@@ -236,6 +236,7 @@ Table L - Alternatives not selected
   - `services/hhem-evaluator/src/hhem_evaluator/dispatch_llama.py` - input admission and request cancellation.
   - `services/hhem-evaluator/src/hhem_evaluator/guard_local_requests.py` - shared loopback request guard.
   - `services/hhem-evaluator/src/hhem_evaluator/configure_server.py` - one quiet Uvicorn configuration.
+  - `services/hhem-evaluator/src/hhem_evaluator/run_server.py` - retain the actual lifespan outcome when the server returns.
   - `services/hhem-evaluator/src/hhem_evaluator/load_llama_settings.py` - project the committed native address and declared request deadline.
   - `services/hhem-evaluator/src/hhem_evaluator/api_settings.py` - new shared listener settings.
   - `services/hhem-evaluator/src/hhem_evaluator/__main__.py`
@@ -261,6 +262,7 @@ Table L - Alternatives not selected
   - `services/hhem-evaluator/tests/test_llama_api.py` - route/client correctness, not a model substitute.
   - `services/hhem-evaluator/tests/test_llama_contracts.py`
   - `services/hhem-evaluator/tests/test_server_events.py`
+  - `services/hhem-evaluator/tests/test_server_lifecycle.py`
   - `services/hhem-evaluator/tests/test_pipeline_report.py` - copy the named shared configuration into the generated report root.
   - `.github/scripts/summary-eval-hhem/summary_eval_pipeline/serve_hhem.py` - keep the current caller working until PR 3 moves it.
   - `.github/scripts/summary-eval-hhem/summary_eval_pipeline/services.py`

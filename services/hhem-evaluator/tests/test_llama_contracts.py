@@ -2,6 +2,7 @@
 
 import io
 import json
+import math
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -60,6 +61,24 @@ def test_native_parameters_are_validated_as_json_and_not_rewritten() -> None:
         payload["stream"] = stream
         with pytest.raises(ValidationError):
             LlamaRequest.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize("number", [math.nan, math.inf, -math.inf])
+def test_nonfinite_request_extensions_are_rejected_at_every_json_depth(number: float) -> None:
+    for extension in (number, {"values": [{"sampling": number}]}):
+        payload = json.loads(generation_body())
+        payload["native_controls"] = extension
+        with pytest.raises(ValidationError, match="finite"):
+            LlamaRequest.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize("number", [math.nan, math.inf, -math.inf])
+def test_nonfinite_native_usage_is_not_a_valid_result(number: float) -> None:
+    path = REPOSITORY / "tests" / "fixtures" / "completions" / "reasoning-channel.json"
+    payload = json.loads(path.read_bytes())
+    payload["usage"]["total_tokens"] = number
+    with pytest.raises(ValidationError, match="finite"):
+        LlamaResult.model_validate_json(json.dumps(payload))
 
 
 def test_selected_configuration_is_the_only_native_address_and_deadline_source(

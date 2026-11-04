@@ -240,7 +240,7 @@ These checks certify contracts and configuration, not model loading, scoring
 by the real model. For a runtime change, use one combined selected invocation:
 
 ```powershell
-uv run --frozen pytest tests/test_windows.py tests/test_scoring.py tests/test_api.py tests/test_llama_api.py tests/test_worker_lifecycle.py tests/test_text_boundaries.py
+uv run --frozen pytest tests/test_windows.py tests/test_scoring.py tests/test_api.py tests/test_llama_api.py tests/test_server_lifecycle.py tests/test_worker_lifecycle.py tests/test_text_boundaries.py
 ```
 
 The runtime cases compose the actual ASGI lifespan, owned multiprocessing byte
@@ -254,6 +254,9 @@ cleanup. They prove fixed-origin forwarding, response/status retention and
 independent health, not live model execution. File-mirror cases use real
 unopenable or unwritable files; they must not turn a completed score into a
 failed evaluation.
+The standalone exit case runs real Uvicorn with an empty socket list and the
+real llama client lifespan. It must exit nonzero on observed shutdown failure,
+without opening an HTTP listener or weakening the socket guard.
 The socket guard allows only Unix-domain sockets for local event-loop IPC.
 Windows asyncio needs an internal TCP socket pair and cannot run these ASGI
 cases under that guard. Record this platform limitation rather than weakening

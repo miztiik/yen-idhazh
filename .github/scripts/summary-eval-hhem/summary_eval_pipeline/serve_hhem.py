@@ -18,8 +18,8 @@ from hhem_evaluator.contracts.base import SCHEMA_VERSION
 from hhem_evaluator.contracts.server_event import ApiDiagnosticData
 from hhem_evaluator.emit_events import EventWriter
 from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.run_server import has_clean_lifespan
 from hhem_evaluator.serve_api import create_app
-from uvicorn.lifespan.on import LifespanOn
 
 from .channels import OwnedChannels, open_owned_channels
 from .control import ApiReady, ServiceStartFailed, ServiceStopped, StartupPacket
@@ -121,12 +121,7 @@ async def serve_owned_api(
             )
         await serving
         confirmed = controller.worker.exit_confirmed
-        clean = (
-            confirmed
-            and isinstance(server.lifespan, LifespanOn)
-            and not server.lifespan.error_occurred
-            and not server.lifespan.shutdown_failed
-        )
+        clean = confirmed and has_clean_lifespan(server)
         emit_control(
             ServiceStopped(
                 version=SCHEMA_VERSION,

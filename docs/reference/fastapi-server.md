@@ -61,6 +61,9 @@ value other than the boolean false is refused. Native JSON sampling, template
 and response-format fields pass through without a per-parameter translation.
 They cannot change the destination, route, HTTP method or forwarded headers.
 The original validated request bytes are sent unchanged.
+Native extension values reject NaN and infinities recursively, including
+nested usage and sampling data. Invalid numeric bytes are refused, not
+replaced with null or forwarded as a successful response.
 
 Valid native result and error JSON retain their exact response bytes and HTTP
 status. Answer, reasoning, usage, timing and other native JSON fields are not
@@ -106,6 +109,10 @@ An unopenable or unwritable file emits `LOG_FILE_UNAVAILABLE` to stderr and
 sets shared health's `log_available` to false. It does not change a score or
 stop the API. Confirmed process exit and validated HTTP results establish
 outcomes; a terminal log line is not scoring proof.
+
+The standalone launcher also checks the actual Uvicorn lifespan outcome.
+A failed startup or shutdown exits nonzero even when Uvicorn's `run()`
+returns normally. Its bound socket and diagnostic file still close.
 
 ## See also
 
