@@ -369,8 +369,6 @@ Table M - Row 2 alternatives
 
 **Files touched:**
 - `TODO/20261104-align-typescript-article-identity-plan.md`
-- `.github/workflows/ci.yml` (retain the recorder's current failed-document fixture in its upload)
-- `backend/tests/workflows/test_ci_selection.py` (keep the existing upload-manifest assertion in step with recording capture)
 - `config/feed-ingest-plan.json`
 - `packages/common-contracts/src/version.ts`
 - `packages/common-contracts/src/schemas/config.schema.ts`

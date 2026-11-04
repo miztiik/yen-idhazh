@@ -170,10 +170,12 @@ succeeds. It contains eight files for
 It also contains `report-events.json`, the same request's validated progress
 events. This current fixture is captured, not rebuilt by changing an earlier
 event's version or inventing its timings.
-The artifact also contains
+Local capture also refreshes
 `tests/fixtures/contracts/fetched-document/refused.json` from an actual failed
 fetch made by the same offline recorder over recorded transport. It records
 current generic document identities, not copied article fields.
+This additional fixture is not included in the CI recording artifact; capture
+it locally with the same recorder when its contract changes.
 The capture switch is unset when the recorder step exits, including on failure.
 Review and commit only these generated current recordings, then run ordinary
 candidate CI without capture. Existing replay, CLI and full-suite gates remain
