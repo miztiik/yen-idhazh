@@ -46,8 +46,9 @@ export const ServiceSettingsSchema = z.strictObject({
     named_entities: ArticleEntityLimitsSchema.default({ max_entities: 256, max_entity_chars: 160 }),
   }).prefault({}).describe("Per-run diagnostics run only inside the existing development service gate."),
   listener: z.strictObject({
-    hostname: NonEmptySchema, port: PositiveCountSchema.max(65535),
-    idle_timeout_seconds: PositiveCountSchema.max(255),
+    hostname: NonEmptySchema.describe("Standalone planner address; composed tasks use config/hono-server.json."),
+    port: PositiveCountSchema.max(65535).describe("Standalone planner port; composed tasks use config/hono-server.json."),
+    idle_timeout_seconds: PositiveCountSchema.max(255).describe("Standalone idle timer; composed tasks use config/hono-server.json."),
     max_body_bytes: PositiveCountSchema,
     max_stage_batches: PositiveCountSchema.default(128),
     parser_concurrency: PositiveCountSchema.default(4),

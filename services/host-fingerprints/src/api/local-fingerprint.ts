@@ -38,18 +38,29 @@ export async function captureLocalFingerprint(
   }
   const server = serveFingerprints(config, settings, options);
   try {
-    const health = FingerprintHealthSchema.parse(await readResponse(
-      await fetch(new URL(HEALTH_PATH, server.url), { redirect: "error" }), config.max_input_bytes,
-    ));
-    const enabled = settings.observability.host_telemetry_enabled && settings.observability.host_fingerprint;
-    if (health.enabled !== enabled) throw new Error("Fingerprint health differs from the selected instrument controls");
-    const response = FingerprintResponseSchema.parse(await readResponse(
-      await fetch(new URL(FINGERPRINT_PATH, server.url), {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request),
-        redirect: "error", timeout: false,
-      }), config.max_input_bytes,
-    ));
-    if ((response.status === "written") !== enabled) throw new Error("Fingerprint response differs from the selected instrument controls");
-    return response;
+    return await requestFingerprint(server.url, request, config, settings);
   } finally { await server.stop(true); }
+}
+
+export async function requestFingerprint(
+  origin: string | URL, input: unknown, config: ServiceConfig, settings: SelectedSettings, signal?: AbortSignal,
+) {
+  const request = FingerprintRequestSchema.parse(input);
+  const base = new URL(origin);
+  if (!["127.0.0.1", "[::1]"].includes(base.hostname) || base.protocol !== "http:") {
+    throw new Error("Fingerprint collection requires a loopback listener on this runner");
+  }
+  const health = FingerprintHealthSchema.parse(await readResponse(
+    await fetch(new URL(HEALTH_PATH, base), { redirect: "error", ...(signal === undefined ? {} : { signal }) }), config.max_input_bytes,
+  ));
+  const enabled = settings.observability.host_telemetry_enabled && settings.observability.host_fingerprint;
+  if (health.enabled !== enabled) throw new Error("Fingerprint health differs from the selected instrument controls");
+  const response = FingerprintResponseSchema.parse(await readResponse(
+    await fetch(new URL(FINGERPRINT_PATH, base), {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request),
+      redirect: "error", timeout: false, ...(signal === undefined ? {} : { signal }),
+    }), config.max_input_bytes,
+  ));
+  if ((response.status === "written") !== enabled) throw new Error("Fingerprint response differs from the selected instrument controls");
+  return response;
 }

@@ -10,6 +10,7 @@ import { parseRawDocumentDumpControl } from "../src/config/service-settings";
 import { articleEntitiesFilename, rawDocumentContentsFilename } from "../src/selected-artifact-path";
 import { ARTICLE_ENTITY_ARTIFACT_DIRECTORY, RAW_DOCUMENT_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-artifacts";
 import { capturePlannerFailure, runtimeFailureExecution } from "../src/api/plan-failure";
+import { SERVER_LOG_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-server-artifacts";
 
 const OutcomeSchema = z.enum(["success", "failure", "cancelled", "skipped"]);
 
@@ -38,6 +39,7 @@ export async function finishRunOutput(input: {
   rawUploadOutcome?: unknown; rawArtifactId?: string;
   articleEntities?: string; entityUploadOutcome?: unknown; entityArtifactId?: string;
   commitOutcome?: unknown; reportOutcome?: unknown; writeReport?: boolean;
+  serverLogs?: string; serverUploadOutcome?: unknown; serverArtifactId?: string;
 }) {
   const gitSha = CommitShaSchema.parse(input.gitSha);
   const collection = OutcomeSchema.parse(input.collectionOutcome);
@@ -82,9 +84,15 @@ export async function finishRunOutput(input: {
   const entitiesUploaded = entityPath === undefined || (OutcomeSchema.parse(input.entityUploadOutcome) === "success"
     && z.string().regex(/^\d+$/).safeParse(input.entityArtifactId).success);
   if (!entitiesUploaded) failures.push(new Error("The article entity artifact upload was not confirmed"));
+  const serverLogs = input.serverLogs === undefined || input.serverLogs === "" ? undefined
+    : z.literal(SERVER_LOG_ARTIFACT_DIRECTORY).parse(input.serverLogs);
+  const serverLogsRequired = serverLogs !== undefined && failures.length > 0;
+  const serverLogsUploaded = !serverLogsRequired || (OutcomeSchema.parse(input.serverUploadOutcome) === "success"
+    && z.string().regex(/^\d+$/).safeParse(input.serverArtifactId).success);
+  if (!serverLogsUploaded) failures.push(new Error("The server failure log upload was not confirmed"));
   let cleaned = false;
   if (commit === "success" && reportComplete && finalization === "success"
-    && uploaded && rawUploaded && entitiesUploaded && collection !== "cancelled") {
+    && uploaded && rawUploaded && entitiesUploaded && serverLogsUploaded && collection !== "cancelled") {
     let operation = "check-directory";
     try {
       const directory = await ownedRunDirectory(input.root, input.temporaryRoot);
@@ -126,7 +134,8 @@ if (import.meta.main) {
       FINALIZATION_OUTCOME, UPLOAD_OUTCOME, UPLOAD_ARTIFACT_ID,
       DUMP_RAW_DOCUMENT_CONTENTS, RAW_DOCUMENT_CONTENTS, RAW_UPLOAD_OUTCOME, RAW_UPLOAD_ARTIFACT_ID, GITHUB_SHA,
       ARTICLE_ENTITIES, ENTITY_UPLOAD_OUTCOME, ENTITY_UPLOAD_ARTIFACT_ID,
-      COMMIT_OUTCOME, REPORT_OUTCOME, WRITE_REPORT, RUN_ID } = process.env;
+      COMMIT_OUTCOME, REPORT_OUTCOME, WRITE_REPORT, RUN_ID,
+      SERVER_LOGS, SERVER_UPLOAD_OUTCOME, SERVER_UPLOAD_ARTIFACT_ID } = process.env;
     if (!RUNNER_TEMP || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_SHA) throw new Error("Workflow completion controls are missing");
     await finishRunOutput({
       root: process.cwd(), temporaryRoot: RUNNER_TEMP, runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT),
@@ -145,6 +154,9 @@ if (import.meta.main) {
       ...(ARTICLE_ENTITIES === undefined ? {} : { articleEntities: ARTICLE_ENTITIES }),
       ...(ENTITY_UPLOAD_OUTCOME === undefined ? {} : { entityUploadOutcome: ENTITY_UPLOAD_OUTCOME }),
       ...(ENTITY_UPLOAD_ARTIFACT_ID === undefined ? {} : { entityArtifactId: ENTITY_UPLOAD_ARTIFACT_ID }),
+      ...(SERVER_LOGS === undefined ? {} : { serverLogs: SERVER_LOGS }),
+      ...(SERVER_UPLOAD_OUTCOME === undefined ? {} : { serverUploadOutcome: SERVER_UPLOAD_OUTCOME }),
+      ...(SERVER_UPLOAD_ARTIFACT_ID === undefined ? {} : { serverArtifactId: SERVER_UPLOAD_ARTIFACT_ID }),
     });
   } catch (error) {
     console.error(JSON.stringify({ event: "workflow_output_incomplete", ...describePlanError(error, process.cwd(), { operation: "workflow" }) }));

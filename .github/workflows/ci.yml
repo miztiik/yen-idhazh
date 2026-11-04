@@ -55,6 +55,8 @@ jobs:
         run: |
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
+          bun install --frozen-lockfile --cwd services/host-probes
+          bun install --frozen-lockfile --cwd services/typescript-api
 
       - name: Capture current planner recordings from the real offline API
         run: |
@@ -273,11 +275,18 @@ jobs:
           bun run check
           bun run test
 
+      - name: Prepare composed TypeScript API dependencies
+        if: needs.scope.outputs.code == 'true'
+        run: |
+          bun install --frozen-lockfile --cwd services/feed-ingest-plan
+          bun install --frozen-lockfile --cwd services/host-fingerprints
+          bun install --frozen-lockfile --cwd services/host-probes
+          bun install --frozen-lockfile --cwd services/typescript-api
+
       - name: TypeScript host fingerprints
         if: needs.scope.outputs.code == 'true'
         working-directory: services/host-fingerprints
         run: |
-          bun install --frozen-lockfile
           bun run check
           bun run test
 
@@ -289,7 +298,6 @@ jobs:
         if: needs.scope.outputs.code == 'true'
         working-directory: services/host-probes
         run: |
-          bun install --frozen-lockfile
           bun run check
           bun run test
 
@@ -305,7 +313,13 @@ jobs:
         if: needs.scope.outputs.code == 'true'
         working-directory: services/feed-ingest-plan
         run: |
-          bun install --frozen-lockfile
+          bun run check
+          bun run test
+
+      - name: Composed TypeScript APIs and owned server lifetime
+        if: needs.scope.outputs.code == 'true'
+        working-directory: services/typescript-api
+        run: |
           bun run check
           bun run test
 

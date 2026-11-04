@@ -3,6 +3,12 @@
   "version": "2026.10.20",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./api": "./src/api/server.ts",
+    "./config": "./src/config.ts",
+    "./profile": "./src/task-profile/profile-schema.ts"
+  },
   "description": "Independent transient Linux CPU and memory sampling. Shared contracts validate operation metadata and W3C carriers without runtime tracing; Zod validates local configuration and responses. Bun provides HTTP serving. TypeScript and Bun types are development-only.",
   "scripts": {
     "start": "bun run src/index.ts --serve",

@@ -6,7 +6,7 @@ import {
   FingerprintRequestSchema, SelectedSettingsSchema, loadConfig as loadFingerprintConfig,
 } from "../../host-fingerprints/src/config";
 import { FingerprintWrittenSchema } from "../../host-fingerprints/src/api/fingerprint-response";
-import { captureLocalFingerprint } from "../../host-fingerprints/src/api/local-fingerprint";
+import { requestFingerprint } from "../../host-fingerprints/src/api/local-fingerprint";
 import { writeJsonLine } from "../src/logging/structured-logger";
 import { describePlanError } from "../src/api/plan-request";
 import { ExecutionIdentitySchema, hostWriter } from "./feed-ingest-plan-metadata";
@@ -26,8 +26,9 @@ export const WorkflowHostFingerprintSchema = z.strictObject({
 export type WorkflowHostFingerprint = z.infer<typeof WorkflowHostFingerprintSchema>;
 
 export async function captureWorkflowHostFingerprint(input: {
-  root: string; directory: string; stateRoot: string; registryPath: string;
+  root: string; directory: string; stateRoot: string;
   identity: ExecutionIdentity; registrations: MetadataRegistrations;
+  origin: string; signal?: AbortSignal;
 }) {
   const identity = ExecutionIdentitySchema.parse(input.identity);
   const settings = SelectedSettingsSchema.parse(await Bun.file(join(input.root, "config", "idhazh.json")).json());
@@ -56,9 +57,7 @@ export async function captureWorkflowHostFingerprint(input: {
   } else {
     try {
       const config = await loadFingerprintConfig(join(input.root, "config", "host-fingerprints.json"));
-      const result = await captureLocalFingerprint(request, config, settings, {
-        outputRoot: input.stateRoot, registryPath: input.registryPath,
-      });
+      const result = await requestFingerprint(input.origin, request, config, settings, input.signal);
       if (result.status !== "written") throw new Error("Enabled host instrument did not persist a fingerprint");
       await verifyHostFingerprint(input.stateRoot, result, input.registrations, identity);
       evidence.host = { ...result, status: "recorded" };

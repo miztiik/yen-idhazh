@@ -4,6 +4,9 @@ import { deliverPlannerFiles, metadataWritePermissions } from "../scripts/feed-i
 import type { MetadataLedger, MetadataRegistrations } from "../scripts/feed-ingest-plan-metadata";
 import { MetadataDeliveryResultSchema, SafePersistHttpRequestSchema, SafePersistHttpStartupSchema } from "../scripts/feed-ingest-plan-delivery-result";
 import { readPlannerStartupRecording } from "./planner-process-recordings";
+import { ApiStartupSchema } from "../../typescript-api/src/api-startup";
+import { loadHonoSettings } from "../../typescript-api/src/load-settings";
+import { operationMetadata } from "../src/api/operation-context";
 
 function registration(name: MetadataLedger, prefix: string[]) {
   return {
@@ -53,16 +56,18 @@ test("the safe-persist HTTP contract reuses run, attempt, exact paths and the un
 });
 
 test("safe-persist startup keeps only the existing private loopback controls", async () => {
-  const { startup } = await readPlannerStartupRecording();
+  const { startup, inputs } = await readPlannerStartupRecording();
   const controls = { nonce: startup.nonce, settings: startup.settings, output_root: startup.output_root,
     git_sha: startup.runtime.git_sha };
   expect(SafePersistHttpStartupSchema.parse(controls)).toEqual(controls);
   expect(SafePersistHttpStartupSchema.safeParse({ ...controls, git_sha: "" }).success).toBe(false);
   expect(SafePersistHttpStartupSchema.safeParse({ ...controls, git_sha: undefined }).success).toBe(false);
   expect(SafePersistHttpStartupSchema.safeParse({ ...controls, permittedPaths: ["state"] }).success).toBe(false);
-  expect(SafePersistHttpStartupSchema.safeParse({
-    ...controls, settings: { ...controls.settings,
-      listener: { ...controls.settings.listener, hostname: "0.0.0.0" } },
+  expect(ApiStartupSchema.safeParse({
+    group: "delivery", delivery: controls, directory: "evidence",
+    server: { ...await loadHonoSettings(inputs.root), hostname: "0.0.0.0" },
+    run: { run_id: startup.runtime.run_number, attempt: startup.runtime.attempt,
+      started_at: startup.runtime.captured_at, context: operationMetadata(startup.runtime) },
   }).success).toBe(false);
 });
 

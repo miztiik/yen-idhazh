@@ -5,11 +5,12 @@ import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import { createRootContext, loadEventSources } from "@idhazh/common-contracts";
 import { createStageLogger, writeJsonLine } from "../src/logging/structured-logger";
 import { ARTICLE_ENTITY_ARTIFACT_DIRECTORY, RAW_DOCUMENT_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-artifacts";
+import { SERVER_LOG_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-server-artifacts";
 
 export async function publishWorkflowUploadInventories(input: {
   directory: string; runNumber: string; write?: (event: FeedIngestEvent) => void;
 }) {
-  for (const name of ["artifacts", RAW_DOCUMENT_ARTIFACT_DIRECTORY, ARTICLE_ENTITY_ARTIFACT_DIRECTORY]) {
+  for (const name of ["artifacts", RAW_DOCUMENT_ARTIFACT_DIRECTORY, ARTICLE_ENTITY_ARTIFACT_DIRECTORY, SERVER_LOG_ARTIFACT_DIRECTORY]) {
     const directory = join(input.directory, name);
     try { await stat(directory); }
     catch (error) {

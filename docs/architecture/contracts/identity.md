@@ -1,6 +1,6 @@
 # Identity contracts
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 
 How files, work units, content, event occurrences and operations retain distinct identities.
 
@@ -135,7 +135,7 @@ explicitly; these identifiers grant no authorization or request replay promise.
 
 `loadEventSources(path)` explicitly reads
 `config/typescript-event-sources.json`, written by this repository. It validates
-the named planner, summarizer and workflow producer URI references. These
+the named TypeScript API server, planner, summarizer and workflow producer URI references. These
 identify producers, not fetch destinations. Importing the package reads no
 configuration. Schema, creation, reading, source-loading and codec entry points
 are exported separately; the browser's framework-free observation-order path

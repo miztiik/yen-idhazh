@@ -9,7 +9,6 @@ import type { PlanRequest } from "../src/api/plan-request";
 import type { RunPolicyOverrides } from "../src/config/resolve-run-policy";
 import { parseRawDocumentDumpControl, ServiceSettingsSchema } from "../src/config/service-settings";
 import { WorkflowPolicySchema } from "./feed-ingest-plan-policy-report";
-import { captureWorkflowHostFingerprint } from "./feed-ingest-plan-host-fingerprint";
 import { readMetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { createPlannerStartup } from "./feed-ingest-plan-supervisor";
 
@@ -58,13 +57,10 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
     attempt, git_sha: gitSha };
   const registryPath = join(root, inputs.settings.inputs.registrations);
   const registrations = await readMetadataRegistrations(registryPath);
-  const host = await captureWorkflowHostFingerprint({
-    root, directory, stateRoot: inputs.outputRoot, registryPath, identity, registrations,
-  });
   const startup = createPlannerStartup(inputs, {
     ...context, git_sha: identity.git_sha, run_number: GITHUB_RUN_ID,
     attempt, captured_at: captured.toISOString(),
   });
-  return { root, directory, inputs, startup, request, identity, registrations, host,
+  return { root, directory, inputs, startup, request, identity, registrations,
     outputPath: GITHUB_OUTPUT, date: captured.toISOString().slice(0, 10) };
 }

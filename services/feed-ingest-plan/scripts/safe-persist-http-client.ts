@@ -2,17 +2,17 @@
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
 import { CommitShaSchema, createRootContext, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
-import { z } from "zod";
 import { PlanError } from "../src/api/plan-request";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { writeJsonLine } from "../src/logging/structured-logger";
 import {
-  isMetadataDeliveryConfirmed, MetadataDeliveryResultSchema, SafePersistHttpReadySchema,
-  SafePersistHttpRequestSchema, SafePersistHttpStartupFailureSchema, SafePersistHttpStartupSchema,
+  isMetadataDeliveryConfirmed, MetadataDeliveryResultSchema,
+  SafePersistHttpRequestSchema, SafePersistHttpStartupSchema,
 } from "./feed-ingest-plan-delivery-result";
-import { superviseHttpChild } from "./http-child-lifetime";
+import { superviseApiTask } from "../../typescript-api/src/supervise-api-task";
+import { loadHonoSettings } from "../../typescript-api/src/load-settings";
+import { readServerEvidence } from "../../typescript-api/src/read-server-evidence";
 import { readPlannerResponseError, withPlannerFailure } from "../src/api/plan-failure";
 import { retainFailureThroughCleanup } from "../src/api/retain-failure-through-cleanup";
 
@@ -32,28 +32,20 @@ export async function deliverWorkflowMetadataHttp(input: {
       nonce: randomUUID(), settings, git_sha: gitSha,
       output_root: relative(input.root, input.directory).replaceAll("\\", "/"),
     });
-    return await superviseHttpChild({
-      root: input.root, kind: "SAFE_PERSIST", settings, startup,
-      capture: { ...capture, limits: settings.diagnostics.failure },
-      serverEntry: options.serverEntry ?? fileURLToPath(new URL("./safe-persist-http-server.ts", import.meta.url)),
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-      ready: async (message, pid, signal) => {
-        const ready = z.union([SafePersistHttpReadySchema, SafePersistHttpStartupFailureSchema]).parse(message);
-        if (ready.event === "safe_persist_startup_failed") throw new PlanError(ready.code, ready.message, null, { failure: ready.failure });
-        if (ready.pid !== pid || ready.nonce !== startup.nonce || ready.port !== settings.listener.port) {
-          throw new PlanError("SAFE_PERSIST_READY_IDENTITY", "Readiness does not match the owned safe-persist child");
-        }
-        const hostname = settings.listener.hostname;
-        const base = `http://${hostname === "::1" ? "[::1]" : hostname}:${ready.port}${PLANNER_API_PREFIX}`;
-        const response = await fetch(`${base}/health`, { signal });
-        const health = z.strictObject({ identity: SafePersistHttpReadySchema }).parse(await response.json());
-        if (response.status !== 200 || JSON.stringify(health.identity) !== JSON.stringify(ready)) {
-          throw new PlanError("SAFE_PERSIST_READY_IDENTITY", "HTTP readiness does not match the owned safe-persist child");
-        }
-        return base;
+    const earlier = await readServerEvidence(input.directory, { run_id: input.runNumber, attempt: input.attempt });
+    return await superviseApiTask({
+      root: input.root, kind: "SAFE_PERSIST",
+      startup: {
+        group: "delivery", delivery: startup, server: await loadHonoSettings(input.root),
+        directory: relative(input.root, input.directory).replaceAll("\\", "/"),
+        run: { run_id: input.runNumber, attempt: input.attempt, context,
+          started_at: earlier[0]?.started_at ?? new Date().toISOString() },
       },
-      request: async (base, signal) => {
-        const response = await fetch(`${base}/safe-persist-data`, {
+      capture: { ...capture, limits: settings.diagnostics.failure },
+      ...(options.serverEntry === undefined ? {} : { serverEntry: options.serverEntry }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      request: async (origin, signal) => {
+        const response = await fetch(`${origin}${PLANNER_API_PREFIX}/safe-persist-data`, {
           method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(context) },
           body: JSON.stringify(request), signal, timeout: false,
         });

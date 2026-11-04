@@ -19,6 +19,12 @@ The listener accepts only configured loopback addresses, `127.0.0.1` or
 `::1`. This is operator tooling with no authentication, not a published-site
 backend. Requests with a browser `Origin` header are refused.
 
+The feed workflow uses the same native handlers through the
+[shared TypeScript application](typescript-api-server.md), alongside
+fingerprint and planning routes. Its single loopback address comes from
+`config/hono-server.json`. The standalone command above retains its own
+listener controls.
+
 Task commands require UTF-8 JSON and `Content-Type: application/json`.
 Unknown fields fail. No command accepts a path, executable, URL, proc root,
 configuration override or process name to search. Task names, identity and
@@ -198,4 +204,5 @@ they add no tracing provider, exporter or published-site bytes.
 
 - [Host measurements](host-metrics.md)
 - [Fetch and parse operator API](../architecture/sources/feed-operator-api.md)
-- [Isolated resource proof](../how-to/run-feed-ingest-plan-test.md#resource-proof)
+- [Native instrument checks](../how-to/run-the-gates.md#independent-typescript-packages-and-services)
+- [Shared TypeScript API server](typescript-api-server.md)

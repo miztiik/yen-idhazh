@@ -14,6 +14,7 @@ import {
 } from "../src/selected-artifact-path";
 import { workflowReportFilename } from "./feed-ingest-plan-report";
 import { describePlanError } from "../src/api/plan-request";
+import { prepareServerArtifacts } from "./feed-ingest-plan-server-artifacts";
 
 // This separate upload directory is an artifact packaging protocol, not a content or retention setting.
 export const RAW_DOCUMENT_ARTIFACT_DIRECTORY = "raw-document-artifacts";
@@ -43,7 +44,7 @@ export async function prepareWorkflowArtifacts(input: {
   const run = z.string().regex(/^\d+$/).parse(input.runNumber);
   const attempt = WriterIdentitySchema.shape.attempt.parse(input.attempt);
   const gitSha = CommitShaSchema.parse(input.identity?.git_sha ?? input.gitSha);
-  const outputs: Record<string, string> = {};
+  const outputs: Record<string, string> = await prepareServerArtifacts(input);
   const failures: unknown[] = [];
   const responsePath = join(input.directory, "response.json");
   let savedResponse: ReturnType<typeof PlannerSavedResponseSchema.parse> | undefined;
