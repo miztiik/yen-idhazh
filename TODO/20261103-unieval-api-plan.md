@@ -1,7 +1,7 @@
 # UniEval API integration plan
 
 **Last Updated**: 2026-11-04
-**Level**: 5 - API delivery in progress; workflow integration waits for its named prerequisites.
+**Level**: 5 - API implementation complete; workflow integration waits for its named prerequisites.
 
 ## 0. Operating contract
 
@@ -77,7 +77,7 @@ Table F - PR sequence
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| F1 | 1 | Add a real UniEval route to the Python API | - | A | IN-FLIGHT | didactic-memory | - | - |
+| F1 | 1 | Add a real UniEval route to the Python API | - | A | DONE #1909 | didactic-memory | #1909 | - |
 | F2 | 2 | Run UniEval in the existing summary workflow | 1 | B | PENDING | - | - | - |
 
 ## 2. Row #1 - Add a real UniEval route to the Python API
