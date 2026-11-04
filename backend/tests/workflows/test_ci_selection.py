@@ -139,10 +139,23 @@ def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs(
     ] + ["tests/fixtures/feed-ingest-plan/report-events.json"]
     gates = _job(workflow, "gates")
     assert gates["if"] == "needs.scope.outputs.code == 'true'"
+    prepare = _step(workflow, "gates", "name", "Prepare composed TypeScript API dependencies")
+    assert prepare["if"] == "needs.scope.outputs.code == 'true'"
+    assert not prepare.get("continue-on-error")
+    assert _script(prepare, "native API dependency preparation").splitlines() == [
+        f"bun install --frozen-lockfile --cwd services/{name}"
+        for name in ("feed-ingest-plan", "host-fingerprints", "host-probes", "typescript-api")
+    ]
     planner = _step(workflow, "gates", "name", "TypeScript feed planner and native audit evidence")
     assert _script(planner, "ordinary planner gates").splitlines() == [
-        "bun install --frozen-lockfile", "bun run check", "bun run test",
+        "bun run check", "bun run test",
     ]
+    composition = _step(workflow, "gates", "name", "Composed TypeScript APIs and owned server lifetime")
+    assert _script(composition, "ordinary composed API gates").splitlines() == [
+        "bun run check", "bun run test",
+    ]
+    steps = _steps(workflow, "gates")
+    assert steps.index(prepare) < steps.index(planner) < steps.index(composition)
     probe = _step(workflow, "gates", "name", "TypeScript feed probe")
     assert _script(probe, "ordinary probe gates").splitlines() == [
         "bun install --frozen-lockfile", "bun run check", "bun run test",
