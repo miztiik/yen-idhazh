@@ -129,7 +129,7 @@ async def serve_owned_api(
                 ApiReady(
                     version=WORKFLOW_VERSION,
                     kind="ready",
-                    service="hhem",
+                    service="api",
                     startup_id=packet.startup_id,
                     pid=os.getpid(),
                     service_instance_id=app.state.service_instance_id,
@@ -143,7 +143,7 @@ async def serve_owned_api(
             ServiceStopped(
                 version=WORKFLOW_VERSION,
                 kind="stopped",
-                service="hhem",
+                service="api",
                 startup_id=packet.startup_id,
                 pid=os.getpid(),
                 clean=clean,
@@ -188,7 +188,7 @@ def main() -> None:
                         ServiceStartFailed(
                             version=WORKFLOW_VERSION,
                             kind="failed",
-                            service="hhem",
+                            service="api",
                             startup_id=packet.startup_id,
                             pid=os.getpid(),
                         ),

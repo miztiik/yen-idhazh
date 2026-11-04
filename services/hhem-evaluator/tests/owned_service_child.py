@@ -32,7 +32,7 @@ def private_output_case(packet: StartupPacket, mode: str) -> None:
             ApiReady(
                 version=WORKFLOW_VERSION,
                 kind="ready",
-                service="hhem",
+                service="api",
                 startup_id=packet.startup_id,
                 pid=os.getpid(),
                 service_instance_id=create_execution_id(),
@@ -60,7 +60,7 @@ def private_output_case(packet: StartupPacket, mode: str) -> None:
                 ServiceStopped(
                     version=WORKFLOW_VERSION,
                     kind="stopped",
-                    service="hhem",
+                    service="api",
                     startup_id=packet.startup_id,
                     pid=os.getpid(),
                     clean=mode != "unclean_stop",
@@ -91,7 +91,7 @@ def main() -> None:
         ready = ApiReady(
             version=WORKFLOW_VERSION,
             kind="ready",
-            service="hhem",
+            service="api",
             startup_id=packet.startup_id,
             pid=os.getpid(),
             service_instance_id=create_execution_id(),

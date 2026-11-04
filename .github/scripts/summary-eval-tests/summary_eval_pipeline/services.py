@@ -31,7 +31,7 @@ CONTROL_PACKET_CAPACITY = 3
 class OwnedService:
     def __init__(
         self,
-        service: Literal["hhem", "host"],
+        service: Literal["api", "host"],
         command: list[str],
         root: Path,
         packet: StartupPacket,
@@ -52,12 +52,12 @@ class OwnedService:
                 cwd=root,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE if service == "hhem" else None,
+                stderr=subprocess.PIPE if service == "api" else None,
             )
         except OSError:
             raise WorkflowError("STARTUP_FAILED", "startup", service) from None
         self.readers = [threading.Thread(target=self._read_control, daemon=True)]
-        if service == "hhem":
+        if service == "api":
             self.readers.append(threading.Thread(target=self._read_events, daemon=True))
         for reader in self.readers:
             reader.start()
@@ -98,7 +98,7 @@ class OwnedService:
         try:
             while line := stream.readline(self.settings.logging.max_event_bytes + 1):
                 if (
-                    self.service != "hhem"
+                    self.service != "api"
                     or len(line) > self.settings.logging.max_event_bytes
                     or not line.endswith(b"\n")
                 ):
@@ -146,11 +146,11 @@ class OwnedService:
 
     def check_alive(self) -> None:
         if self.process.poll() is not None:
-            raise WorkflowError("CHILD_EXITED", "evaluation", self.service)
+            raise WorkflowError("CHILD_EXITED", self.packet.phase, self.service)
         if self.protocol_failed.is_set():
-            raise WorkflowError("CHILD_PROTOCOL_FAILED", "evaluation", self.service)
+            raise WorkflowError("CHILD_PROTOCOL_FAILED", self.packet.phase, self.service)
         if self.events_failed.is_set():
-            raise WorkflowError("EVENT_STREAM_FAILED", "evaluation", self.service)
+            raise WorkflowError("EVENT_STREAM_FAILED", self.packet.phase, self.service)
 
     def finish_measurement(self, outcome: str) -> None:
         """Send an explicit closing outcome; EOF alone is cancellation."""
@@ -218,7 +218,7 @@ class OwnedService:
             or stopped.pid != self.process.pid
             or stopped.service != self.service
             or (
-                self.service == "hhem"
+                self.service == "api"
                 and self.packet.phase == "evaluation"
                 and stopped.worker_exit_confirmed is not True
             )

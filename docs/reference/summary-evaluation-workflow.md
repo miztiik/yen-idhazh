@@ -93,6 +93,10 @@ confirmed shutdown. A retained primary score with any required failure is
 partial; no completed primary score is failed. UniEval is explicitly not run:
 its later integration adds no score or duration here.
 
+Phase shutdown distinguishes `api_stopped`, the shared FastAPI application's
+exit, from HHEM's `worker_exit_confirmed`. Generation starts no evaluator worker
+and does not claim that one stopped.
+
 Machine CPU is zero to 100 percent for the whole machine, including background
 work. Stored RAM uses KiB; the report displays closing use in MiB, not peak use.
 Measurements exclude acquisition/model loading and stop before API teardown.

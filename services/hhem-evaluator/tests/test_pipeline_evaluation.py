@@ -106,7 +106,7 @@ def test_actual_handlers_preserve_scores_including_error_http_results(
                 host.hardware,
                 machine,
                 ServiceShutdown(
-                    hhem_stopped=True,
+                    api_stopped=True,
                     host_stopped=clean,
                     worker_exit_confirmed=service.worker.exit_confirmed,
                 ),

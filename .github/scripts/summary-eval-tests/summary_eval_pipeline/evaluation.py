@@ -38,7 +38,7 @@ def bind_evaluation(
         or generation.run != prepared.run
         or generation.phase != "generation"
         or generation.shutdown.llama_stopped is not True
-        or generation.shutdown.hhem_stopped is not True
+        or generation.shutdown.api_stopped is not True
         or generation.generation_sha256 != text_sha256(receipt.model_dump_json())
     ):
         raise WorkflowError("RECEIPT_INVALID", "input")
@@ -71,24 +71,24 @@ async def read_owned_health(
             ApiHealth,
             pipeline,
             min(remaining * 1000, pipeline.http_connect_timeout_ms),
-            service="hhem",
+            service="api",
             phase="health",
         )
         if health.service_instance_id != service_instance_id or health.enabled_routes != (
             component,
         ):
-            raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "health", "hhem", status)
+            raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "health", "api", status)
         if status == 200 and health.status == "ready":
             return health
         if status != 503 or health.status != "loading":
-            raise WorkflowError("HEALTH_FAILED", "health", "hhem", status)
+            raise WorkflowError("HEALTH_FAILED", "health", "api", status)
         await asyncio.sleep(
             min(
                 pipeline.poll_interval_ms / 1000,
                 max(0, deadline - time.monotonic()),
             )
         )
-    raise WorkflowError("HEALTH_FAILED", "health", "hhem")
+    raise WorkflowError("HEALTH_FAILED", "health", "api")
 
 
 async def evaluate(

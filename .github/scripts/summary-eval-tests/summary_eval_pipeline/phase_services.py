@@ -32,7 +32,7 @@ class PhaseServices:
 
     def shutdown(self) -> ServiceShutdown:
         return ServiceShutdown(
-            hhem_stopped=self.api_stopped,
+            api_stopped=self.api_stopped,
             host_stopped=self.host_stopped,
             llama_stopped=self.llama_stopped,
             worker_exit_confirmed=(
@@ -86,7 +86,7 @@ class PhaseServices:
                 errors.append(error.error)
             except OSError:
                 self.api_stopped = False
-                errors.append(WorkflowError("SERVICE_STOP_FAILED", "cleanup", "hhem").error)
+                errors.append(WorkflowError("SERVICE_STOP_FAILED", "cleanup", "api").error)
         if self.api_started is not None:
             day = self.run.started_at.strftime("%Y_%m_%d")
             self.servers.append(

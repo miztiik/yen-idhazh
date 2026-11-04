@@ -25,7 +25,7 @@ from .host_reader import HardwareRow, MachineUsage, measurement_complete
 WORKFLOW_VERSION: Final = "2026-11-04"
 WorkflowVersion = Literal["2026-11-04"]
 PhaseName = Literal["generation", "evaluation"]
-ServiceName = Literal["hhem", "host", "llama", "caller"]
+ServiceName = Literal["api", "hhem", "host", "llama", "caller"]
 FailureCode = Literal[
     "INPUT_INVALID",
     "INPUT_TOO_LARGE",
@@ -93,6 +93,10 @@ class WorkflowContract(NativeContract):
             "version": WORKFLOW_VERSION,
             "readCompatibility": "current_only; disposable same-run artifacts",
             "changelog": [
+                {
+                    "version": WORKFLOW_VERSION,
+                    "change": "Name shared API shutdown separately from HHEM worker exit.",
+                },
                 {
                     "version": WORKFLOW_VERSION,
                     "change": "Bind generated summaries and real service phases to one run.",
@@ -201,7 +205,7 @@ class Hardware(HardwareRow):
 
 
 class ServiceShutdown(WorkflowContract):
-    hhem_stopped: bool | None
+    api_stopped: bool | None
     host_stopped: bool | None
     worker_exit_confirmed: bool | None
     llama_stopped: bool | None = None
@@ -241,7 +245,7 @@ class PhaseEvidence(WorkflowContract):
             else self.shutdown.llama_stopped is True
         )
         clean = (
-            self.shutdown.hhem_stopped is True
+            self.shutdown.api_stopped is True
             and self.shutdown.host_stopped is True
             and (self.phase != "evaluation" or self.shutdown.worker_exit_confirmed is True)
         )

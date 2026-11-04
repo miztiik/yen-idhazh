@@ -118,7 +118,7 @@ def test_report_creator_retains_full_artifact_and_never_promotes_failed_work(
             None,
             None,
             ServiceShutdown(
-                hhem_stopped=True,
+                api_stopped=True,
                 host_stopped=True,
                 worker_exit_confirmed=None,
                 llama_stopped=True if phase == "generation" else None,

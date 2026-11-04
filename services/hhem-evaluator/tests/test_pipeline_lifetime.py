@@ -30,7 +30,7 @@ from .service_cases import service_settings
 CHILD_STARTUP_MS = 60000
 
 
-def start_child(service: Literal["hhem", "host"], mode: str) -> OwnedService:
+def start_child(service: Literal["api", "host"], mode: str) -> OwnedService:
     return OwnedService(
         service,
         owned_child_command(mode),
@@ -88,7 +88,7 @@ def test_actual_api_parent_watcher_closes_or_exits_its_own_child(blocked: bool) 
 def test_invalid_child_diagnostics_fail_without_forwarding_raw_output(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    child = start_child("hhem", "invalid_event")
+    child = start_child("api", "invalid_event")
     try:
         with pytest.raises(WorkflowError) as failure:
             child.wait_ready(CHILD_STARTUP_MS)
@@ -105,7 +105,7 @@ def test_invalid_child_diagnostics_fail_without_forwarding_raw_output(
 def test_inherited_output_cannot_corrupt_a_private_shutdown_receipt(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    child = start_child("hhem", "raw_inherited_output")
+    child = start_child("api", "raw_inherited_output")
     child.wait_ready(CHILD_STARTUP_MS)
     stopped = child.close(6000)
     assert stopped.clean and stopped.worker_exit_confirmed is True
@@ -119,7 +119,7 @@ def test_inherited_output_cannot_corrupt_a_private_shutdown_receipt(
     ("mode", "confirmed"), [("unclean_stop", True), ("unconfirmed_stop", False)]
 )
 def test_unclean_shutdown_preserves_an_observed_worker_exit(mode: str, confirmed: bool) -> None:
-    child = start_child("hhem", mode)
+    child = start_child("api", mode)
     child.wait_ready(CHILD_STARTUP_MS)
     with pytest.raises(WorkflowError) as failure:
         child.close(6000)
@@ -130,7 +130,7 @@ def test_unclean_shutdown_preserves_an_observed_worker_exit(mode: str, confirmed
 
 
 def test_original_work_failure_and_both_real_cleanup_failures_remain_separate() -> None:
-    api = start_child("hhem", "unclean_stop")
+    api = start_child("api", "unclean_stop")
     host = start_child("host", "early_exit")
     api.wait_ready(CHILD_STARTUP_MS)
     with pytest.raises(WorkflowError):
@@ -147,11 +147,11 @@ def test_original_work_failure_and_both_real_cleanup_failures_remain_separate() 
     assert errors[0] == original
     assert [(error.code, error.service) for error in errors[1:]] == [
         ("SERVICE_STOP_FAILED", "host"),
-        ("SERVICE_STOP_FAILED", "hhem"),
+        ("SERVICE_STOP_FAILED", "api"),
     ]
     assert api.process.poll() is not None and host.process.poll() is not None
     assert services.shutdown().worker_exit_confirmed is True
-    assert services.shutdown().hhem_stopped is False
+    assert services.shutdown().api_stopped is False
 
 
 @pytest.mark.parametrize("failure", ["open", "write"])
@@ -196,7 +196,7 @@ def test_current_entrypoints_resolve_contracts_without_inherited_pythonpath(name
 
 
 def test_completed_work_survives_a_simultaneous_real_child_exit() -> None:
-    child = start_child("hhem", "early_exit")
+    child = start_child("api", "early_exit")
     child.process.wait(timeout=30)
     try:
 

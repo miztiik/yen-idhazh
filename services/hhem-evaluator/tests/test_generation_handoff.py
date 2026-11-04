@@ -45,7 +45,7 @@ def generation_phase() -> tuple[ManualInputs, PreparedRun, GenerationReceipt, Ph
         None,
         None,
         ServiceShutdown(
-            hhem_stopped=True,
+            api_stopped=True,
             host_stopped=True,
             worker_exit_confirmed=None,
             llama_stopped=True,

@@ -131,7 +131,7 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                 await services.native.wait_ready(client)
             services.api_started = time.monotonic()
             api = OwnedService(
-                "hhem",
+                "api",
                 [sys.executable, str(scripts / "serve.py"), "--root", str(root)],
                 root,
                 packet,
@@ -141,7 +141,7 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
             services.api = api
             ready = await asyncio.to_thread(api.wait_ready, settings.worker.startup_timeout_ms)
             if not isinstance(ready, ApiReady):
-                raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", "hhem")
+                raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", "api")
             origin = loopback_url(shared.listener.host, shared.listener.port)
             services.health = await guard_work(
                 read_owned_health(

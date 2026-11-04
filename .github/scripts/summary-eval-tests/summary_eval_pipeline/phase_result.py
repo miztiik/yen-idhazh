@@ -38,7 +38,7 @@ def build_evidence(
         and hardware.status == "collected"
         and measurement_complete(machine)
         and not errors
-        and shutdown.hhem_stopped is True
+        and shutdown.api_stopped is True
         and shutdown.host_stopped is True
         and (phase != "evaluation" or shutdown.worker_exit_confirmed is True)
     )

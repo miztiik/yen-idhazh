@@ -33,7 +33,7 @@ class ControlPacket(NativeContract):
 
 class ApiReady(ControlPacket):
     kind: Literal["ready"]
-    service: Literal["hhem"]
+    service: Literal["api"]
     startup_id: Uuid4
     pid: PositiveCount
     service_instance_id: Uuid4
@@ -51,7 +51,7 @@ class HostReady(ControlPacket):
 
 class ServiceStopped(ControlPacket):
     kind: Literal["stopped"]
-    service: Literal["hhem", "host"]
+    service: Literal["api", "host"]
     startup_id: Uuid4
     pid: PositiveCount
     clean: bool
@@ -63,7 +63,7 @@ class ServiceStopped(ControlPacket):
 
 class ServiceStartFailed(ControlPacket):
     kind: Literal["failed"]
-    service: Literal["hhem", "host"]
+    service: Literal["api", "host"]
     startup_id: Uuid4
     pid: PositiveCount
 
