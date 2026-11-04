@@ -1,6 +1,6 @@
 {
   "version": "2026-11-04",
-  "recorded_at": "2026-11-04T10:43:40.447772Z",
+  "recorded_at": "2026-11-04T16:40:54.045401Z",
   "model_identity_sha256": "46bee67edfd07a8f88b299f62912210dcf25b45a0b34284fe2cfb82ec415e746",
   "cases": [
     {
@@ -204,6 +204,72 @@
           "source_index": 0,
           "prompt_sha256": "9479463a12debefb660b5646d88a081a77f32f9c295dc66b28a8f9c84e36e109",
           "score": 0.7895782883132431
+        }
+      ]
+    },
+    {
+      "id": "normalization-overlap",
+      "input_sha256": "3722b1422da7bb90e055e9b2e70baf89f1973f3b4f9228fbdb6cf0e7391e0b54",
+      "effective_settings": {
+        "consistency_source_mode": "all_source_windows",
+        "max_input_tokens": 256,
+        "source_window_tokens": 512,
+        "source_overlap_tokens": 64,
+        "max_source_windows": 256,
+        "max_comparisons": 4096,
+        "source_budget_tokens": null
+      },
+      "work": {
+        "fluency": {
+          "planned": 1,
+          "completed": 0
+        },
+        "coherence": {
+          "planned": null,
+          "completed": 0
+        },
+        "consistency": {
+          "planned": null,
+          "completed": 0
+        },
+        "relevance": {
+          "planned": 1,
+          "completed": 0
+        },
+        "summary_sentences": 1,
+        "source_characters": 50,
+        "source_spans": []
+      },
+      "errors": [
+        {
+          "code": "CONSISTENCY_INPUT_TOO_LONG",
+          "dimension": "consistency",
+          "index": null,
+          "message": "The complete consistency prompt exceeds the configured allowance."
+        },
+        {
+          "code": "COHERENCE_INPUT_TOO_LONG",
+          "dimension": "coherence",
+          "index": null,
+          "message": "The complete source and summary exceed the coherence prompt allowance."
+        }
+      ],
+      "comparisons": [
+        {
+          "dimension": "fluency",
+          "index": 0,
+          "sentence_index": 0,
+          "source_index": null,
+          "prompt_sha256": "0b9ab93dd53eadc1ce5a4d3e935a009738f46f0f2c5cc90ec78367770e5561d6",
+          "score": 0.2698820407362123
+        },
+        {
+          "dimension": "relevance",
+          "index": 0,
+          "sentence_index": null,
+          "source_index": null,
+          "prompt_sha256": "d8aad3e48a77972dc708fa2a0ce646e0a9c8cfb8d2d14888d8522860eb5bee05",
+          "score": 0.03258450589268511
         }
       ]
     }

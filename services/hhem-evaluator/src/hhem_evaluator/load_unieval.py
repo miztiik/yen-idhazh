@@ -35,7 +35,9 @@ class CpuUnievalPredictor:
         import torch
         from transformers import PreTrainedModel
 
-        encoded = self.resources.tokenizer.encode(prompt, add_special_tokens=True)
+        encoded = self.resources.tokenizer.encode(
+            prompt, add_special_tokens=True, truncation=False, verbose=False
+        )
         if len(encoded) > self.max_input_tokens:
             raise UnievalFailure(UnievalError.from_code("CONSISTENCY_INPUT_TOO_LONG"))
         inputs = torch.tensor([encoded], dtype=torch.long, device="cpu")

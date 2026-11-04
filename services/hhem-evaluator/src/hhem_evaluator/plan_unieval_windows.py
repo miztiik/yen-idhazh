@@ -1,5 +1,7 @@
 """How do tokenizer-sized original source spans cover the entire supplied article?"""
 
+from bisect import bisect_right
+
 from .contracts.unieval_error import UnievalError
 from .contracts.unieval_result import SourceSpan
 from .contracts.unieval_settings import UnievalSettings
@@ -23,11 +25,18 @@ def plan_unieval_windows(
     if budget <= controls.source_overlap_tokens:
         raise UnievalFailure(UnievalError.from_code("SUMMARY_SENTENCE_TOO_LONG", "consistency"))
     offsets = resources.source_offsets(source)
+    boundaries = [
+        0,
+        *(index for index in range(1, len(offsets)) if offsets[index - 1][0] < offsets[index][0]),
+        len(offsets),
+    ]
     spans: list[SourceSpan] = []
     start = 0
     while start < len(offsets):
-        end = min(start + budget, len(offsets))
+        boundary = bisect_right(boundaries, min(start + budget, len(offsets))) - 1
+        end = boundaries[boundary]
         left = 0 if start == 0 else offsets[start][0]
+        right = left
         while end > start:
             right = len(source) if end == len(offsets) else offsets[end][0]
             prompts = (
@@ -38,15 +47,32 @@ def plan_unieval_windows(
                 resources.token_count(prompt) <= controls.max_input_tokens for prompt in prompts
             ):
                 break
-            end -= 1
-        if end <= start or (end != len(offsets) and end - start <= controls.source_overlap_tokens):
+            boundary -= 1
+            end = boundaries[boundary]
+        if (
+            end <= start
+            or right <= left
+            or (
+                spans
+                and (left <= spans[-1].start or left > spans[-1].end or right <= spans[-1].end)
+            )
+        ):
             raise UnievalFailure(
                 UnievalError.from_code("CONSISTENCY_INPUT_TOO_LONG", "consistency")
             )
         spans.append(SourceSpan(start=left, end=right))
         if len(spans) > controls.max_source_windows:
             raise UnievalFailure(UnievalError.from_code("WINDOW_LIMIT_EXCEEDED", "consistency"))
-        if end == len(offsets):
+        if right == len(source):
             break
-        start = end - controls.source_overlap_tokens
+        if end - start <= controls.source_overlap_tokens:
+            raise UnievalFailure(
+                UnievalError.from_code("CONSISTENCY_INPUT_TOO_LONG", "consistency")
+            )
+        next_start = boundaries[bisect_right(boundaries, end - controls.source_overlap_tokens) - 1]
+        if next_start <= start or next_start > end:
+            raise UnievalFailure(
+                UnievalError.from_code("CONSISTENCY_INPUT_TOO_LONG", "consistency")
+            )
+        start = next_start
     return tuple(spans), budget

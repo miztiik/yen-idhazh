@@ -16,7 +16,14 @@ from .load_model_assets import resolve_snapshot
 
 
 class PromptTokenizer(Protocol):
-    def encode(self, text: str, *, add_special_tokens: bool = True) -> list[int]: ...
+    def encode(
+        self,
+        text: str,
+        *,
+        add_special_tokens: bool = True,
+        truncation: bool = False,
+        verbose: bool = True,
+    ) -> list[int]: ...
     def __call__(
         self, text: str, *, add_special_tokens: bool, return_offsets_mapping: bool
     ) -> dict[str, object]: ...
@@ -39,7 +46,9 @@ class UnievalResources:
     snapshot: Path
 
     def token_count(self, prompt: str) -> int:
-        return len(self.tokenizer.encode(prompt, add_special_tokens=True))
+        return len(
+            self.tokenizer.encode(prompt, add_special_tokens=True, truncation=False, verbose=False)
+        )
 
     def source_offsets(self, source: str) -> list[tuple[int, int]]:
         encoded = self.tokenizer(source, add_special_tokens=False, return_offsets_mapping=True)

@@ -192,7 +192,7 @@ async def running_unieval(
     )
     async with app.router.lifespan_context(app):
         await app.state.unieval.loading_task
-        assert app.state.unieval.health().status == "ready", stream.getvalue()
+        assert (await app.state.unieval.health()).status == "ready", stream.getvalue()
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app),
             base_url="http://127.0.0.1:3010",

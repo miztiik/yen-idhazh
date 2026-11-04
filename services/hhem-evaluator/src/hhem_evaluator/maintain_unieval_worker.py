@@ -44,6 +44,10 @@ class UnievalSupervisor:
             + JSON_ESCAPE_MAX_BYTES * settings.listener.max_body_bytes
         )
 
+    @property
+    def is_alive(self) -> bool:
+        return self.process is not None and self.process.is_alive()
+
     def _create_process(
         self, channel: ByteChannel, lifetime: ByteChannel, generation: int
     ) -> BaseProcess:
