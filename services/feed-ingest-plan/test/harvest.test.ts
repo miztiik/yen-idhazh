@@ -624,11 +624,11 @@ test("configured quality rejection keeps parsing complete and reports measured r
   expect(successfulArticleParseFacts.length).toBeGreaterThan(0);
   expect(successfulArticleParseFacts.every(fact => fact.failure_code === null && fact.attribution === null)).toBe(true);
   const parseActivity = activities.find(item => item.operation === "parse" && item.phase === "completed"
-    && item.details.article_id === rejected?.rejection?.url_key);
+    && item.details.document_id === rejected?.rejection?.url_key);
   expect(parseActivity).toBeDefined();
   expect(parseActivity?.details.quality_rejection).toBeUndefined();
   const qualityActivities = activities.filter(item => item.operation === "quality" && item.phase === "failed"
-    && item.details.article_id === rejected?.rejection?.url_key && item.details.quality_rejection !== undefined);
+    && item.details.document_id === rejected?.rejection?.url_key && item.details.quality_rejection !== undefined);
   expect(qualityActivities).toHaveLength(1);
   expect(qualityActivities[0]).toMatchObject({
     details: { quality_rejection: {

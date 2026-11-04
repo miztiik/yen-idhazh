@@ -80,6 +80,7 @@ jobs:
             tests/fixtures/feed-ingest-plan/entry-points/feed-health-state.rows.json
             tests/fixtures/feed-ingest-plan/entry-points/plan-runs.rows.json
             tests/fixtures/feed-ingest-plan/report-events.json
+            tests/fixtures/contracts/fetched-document/refused.json
 
   # What a change has to pay for. Two questions, not one.
   #

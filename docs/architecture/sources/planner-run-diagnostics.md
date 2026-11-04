@@ -133,6 +133,11 @@ failure, or null without eligible completed input. A later report, release,
 local save or child-shutdown failure changes the request failure, not completed
 planning facts or the saved run row. Independently completed files and report
 data remain available.
+Selected identities use `selected_article_ids` and `assignments[].article_id`.
+The effective `include_selected_urls` controls readable assignment URLs under
+the [runner response contract](feed-plan-runner.md#entry-points-and-controls).
+It is a response setting, not a run-ledger column. The separate pre-run error
+shape is unchanged.
 The response does not retain live stage references. Reports can read completed
 files after the listener stops; saved identifiers do not reopen work.
 The existing `response.json` also carries an execution error when no complete

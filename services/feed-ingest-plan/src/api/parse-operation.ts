@@ -69,7 +69,7 @@ export async function parseFetchedDocument(
       throw new PlanError("ARTIFACT_INVALID", "Fetched article does not match its current offer and captured feed", "links");
     }
     const identity = offer.entry.link === null ? null : deriveArticleIdentity(offer.entry.link);
-    if (identity?.canonical_url !== artifact.canonical_url || identity.url_key !== artifact.article_id) {
+    if (identity?.canonical_url !== artifact.canonical_url || identity.url_key !== artifact.document_id) {
       throw new PlanError("ARTIFACT_INVALID", "Fetched article differs from its captured offer address", "links");
     }
   }
@@ -88,7 +88,7 @@ export async function parseFetchedDocument(
     document_activity: (operation, phase, details, url, feedUrls, evidence, metadata) =>
       emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls, evidence, metadata),
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
-  }, { run_id: fetched.context.run_id, article_id: artifact.article_id, feed_id: source.id, candidate_id: artifact.candidate_id },
+  }, { run_id: fetched.context.run_id, document_id: artifact.document_id, feed_id: source.id, candidate_id: artifact.candidate_id },
   operationMetadata(fetched.context), {
     document_kind: artifact.fetch_item_type, feed_id: source.id, publisher_id: source.publisher_id,
     observed_run_id: fetched.context.run_id, observed_attempt: state.context.writer.attempt, candidate_id: artifact.candidate_id,
@@ -124,6 +124,7 @@ export async function parseFetchedDocument(
     });
     return { response_json: JSON.stringify({
       ...operationMetadata(batch), run_id: fetched.context.run_id, fetch_item_type: "feed",
+      feed_id: source.id, document_id: artifact.document_id,
       parsed_count: entries.length, failure: parsed.failure,
       offers: publicFeedOffers(batch, source.id, state.plan_owned === true),
     }) };
@@ -133,7 +134,7 @@ export async function parseFetchedDocument(
   if (candidateId === null) throw new PlanError("ARTIFACT_INVALID", "Article document lacks its captured candidate", "candidate_id");
   const recordEntities = (title: string | null, article_text: string | null) =>
     recordArticleEntities(inputs, context, {
-      article_id: artifact.article_id, candidate_id: candidateId, feed_id: source.id,
+      article_id: artifact.document_id, candidate_id: candidateId, feed_id: source.id,
       title, article_text, observed_at: utcTimestamp(runtime.observation_clock),
     });
   let parsed;
@@ -177,14 +178,14 @@ export async function parseFetchedDocument(
     ...operationMetadata(context), writer: state.context.writer, max_future_hours: inputs.clock_config.collect.max_future_hours,
     observation_clock: runtime.observation_clock ?? (() => new Date()),
   }, rejected, { ...fetchEvidence(artifact), diagnostics }, {
-    candidate_id: candidateId, canonical_url: artifact.canonical_url, url_key: artifact.article_id,
+    candidate_id: candidateId, canonical_url: artifact.canonical_url, url_key: artifact.document_id,
     title, categories: offer?.entry.categories ?? [],
   });
   if (rejection === null && parsed.parsed !== null) candidate = FeedIngestCandidateSchema.parse({
     date: artifact.observation.occurred_at.slice(0, 10), fetched_at: artifact.observation.occurred_at,
     traceId: context.traceId, run_id: state.context.run_id,
     candidate_id: candidateId, entry_ordinal: artifact.entry_ordinal, feed_id: source.id,
-    source: sourceSnapshot(source), canonical_url: artifact.canonical_url, url_key: artifact.article_id,
+    source: sourceSnapshot(source), canonical_url: artifact.canonical_url, url_key: artifact.document_id,
     title, categories: offer?.entry.categories ?? [], article_text: parsed.parsed.article_text, word_count: parsed.parsed.word_count,
     author: parsed.parsed.author ?? offer?.entry.author ?? null, published_at: offer?.entry.published_at ?? null,
   });
@@ -233,7 +234,7 @@ export async function parseFetchedDocument(
   });
   return { response_json: JSON.stringify({
     ...operationMetadata(batch), fetch_item_type: "article", run_id: fetched.context.run_id,
-    candidate_id: candidateId,
+    article_id: artifact.document_id, candidate_id: candidateId,
     parsed_count: candidate === null ? 0 : 1, failure: rejected,
     warnings: diagnostics.warnings,
     pending_offers: pendingOffers,

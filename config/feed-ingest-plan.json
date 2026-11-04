@@ -1,5 +1,8 @@
 {
   "version": "2026-11-04",
+  "response": {
+    "include_selected_urls": false
+  },
   "availability": {
     "consecutive_failed_checks_before_rest": 5,
     "rest_hours": 24,

@@ -11,8 +11,13 @@ export const PlanRequestSchema = z.strictObject({
   article_limit: PositiveCountSchema.optional(),
   shards: PositiveCountSchema.optional(),
   partition_strategy: z.enum(["bin-pack", "round-robin", "none"]).optional(),
+  include_selected_urls: z.boolean().optional(),
 });
 export type PlanRequest = z.infer<typeof PlanRequestSchema>;
+
+export function resolveSelectedUrls(request: PlanRequest, config: FeedIngestConfig): boolean {
+  return request.include_selected_urls ?? config.response.include_selected_urls;
+}
 
 export function resolvePlanRequest(raw: unknown, config: FeedIngestConfig) {
   const request = PlanRequestSchema.parse(raw);
@@ -35,7 +40,7 @@ export function resolvePlanRequest(raw: unknown, config: FeedIngestConfig) {
 export function parseCliRequest(args: readonly string[]) {
   const raw: Record<string, unknown> = {};
   let mode: "cli" | "serve" | undefined;
-  const fields = new Set(["article_limit", "shards", "partition_strategy"]);
+  const fields = new Set(["article_limit", "shards", "partition_strategy", "include_selected_urls"]);
   for (let index = 0; index < args.length; index++) {
     const token = args[index]!;
     if (token === "--cli" || token === "--serve") {
@@ -51,6 +56,12 @@ export function parseCliRequest(args: readonly string[]) {
     if (Object.hasOwn(raw, field)) throw new PlanError("INVALID_REQUEST", "repeated CLI control", field);
     const next = args[index + 1];
     const value = inline ?? (next !== undefined && !next.startsWith("--") ? args[++index]! : "");
+    if (field === "include_selected_urls") {
+      if (inline === undefined && (next === undefined || next.startsWith("--"))) raw[field] = true;
+      else if (value === "true" || value === "false") raw[field] = value === "true";
+      else throw new PlanError("INVALID_REQUEST", "Selected URL display requires true or false", field);
+      continue;
+    }
     raw[field] = value.trim() === "" ? undefined
       : field === "partition_strategy" ? value : Number(value);
   }

@@ -25,8 +25,9 @@ redirect, retry, deadline, pacing and decoded-byte controls. It fetches only
 feed and article targets, with no automatic robots retrieval or enforcement.
 Its strict response
 contains a reference and body-free outcome, not fetched bytes. A failed
-fetch remains a typed failure. Article fetch responses include the captured
-`candidate_id`; feed responses omit it.
+fetch remains a typed failure. Article fetch responses include `article_id`
+and the captured `candidate_id`. Feed responses include configured `feed_id`
+and `document_id`, with no article or candidate field.
 
 `POST /api/2026-11-04/parse` accepts
 `links: [{ traceId, spanId }]`, naming exactly one completed fetch operation.
@@ -37,10 +38,12 @@ another parser returns HTTP 409. Malformed controls and invalid documents fail
 explicitly. Parsing releases the original downloaded body on success or failure.
 
 Feed parsing returns sanitized, body-free entries in the existing `offers`
-array, each with its captured `candidate_id`, and its actual operation
-reference. Article parsing returns its own operation reference and that same
-candidate, including on an extraction refusal. It does not depend on feed
-classification labels.
+array, each with `article_id` and its captured `candidate_id`, and its actual
+operation reference. The feed result also includes configured `feed_id` and
+`document_id`. Article parsing returns its own operation reference, `article_id`
+and that same candidate, including on an extraction refusal. It does not depend
+on feed classification labels. Returning these values does not let a caller
+parse by copied article ID, candidate ID or URL instead of its held-fetch link.
 Article parse responses include a body-free `warnings` array. The saved
 observation retains actual extraction warnings, quality measurements, fetch
 evidence and typed parse failures; successful parsing does not erase them.
@@ -86,8 +89,9 @@ second message identity. Shared trace context does not grant permission:
 expected result kind, active or consumed state, configuration, offer membership
 and claim, run and writer attempt are checked separately.
 
-`article_id` is the canonical URL hash called `url_key` in the retained
-ledgers. `candidate_id` names a
+The [resource identity contract](../contracts/identity.md#typescript-resource-addresses)
+defines `article_id`, generic `document_id` and the retained storage key.
+`candidate_id` names a
 [captured article input](../contracts/identity.md#typescript-captured-article-inputs),
 not that address. Feed inputs retain their original ordinal; direct inputs
 use null. Held article documents, their observations and private diagnostics
@@ -185,7 +189,10 @@ The filename carries UTC day, numeric run and attempt; observations keep hashes,
 operation relationships and complete ordered attempts without nested `run_id`.
 The outer metadata identifies the actual failed fetch or parse, not a copied
 input operation. Article document metadata and its observations retain the
-captured candidate; the corresponding feed fields are null.
+captured candidate; the corresponding feed fields are null. Both document kinds
+use `document_id`, with matching fetch and attempt observations. The original
+input is validated before diagnostic URL redaction; a redacted address is not
+a replacement hash input.
 Response evidence and addresses follow the
 [diagnostic contract](feed-failure-diagnostics.md). An unresolved request has only its existing body-free
 error handling.
@@ -210,7 +217,10 @@ they do not erase the document failure or completed normal output.
 Each stage input contains exactly one producing-operation reference in `links`.
 The listener resolves that pair against the required result kind. The configured article limit bounds
 output, never the number of input candidates.
-Selected metadata includes `published_at_source`. A trusted source time uses
+Selected HTTP metadata exposes `article_id`, not storage `url_key`, and never
+includes article text. Other metadata is unchanged, including `canonical_url`;
+the combined summary's optional URL setting does not remove existing stage
+metadata. Selected metadata includes `published_at_source`. A trusted source time uses
 `source`; otherwise the actual saved selection-start UTC instant uses
 `selection`. This fallback is output metadata, not a new age or admission
 input. The [ledger reference](../../reference/feed-planner-ledgers.md#b-selected-articles)
@@ -236,6 +246,9 @@ not their text-bearing batches. Selection returns its saved timestamps without
 creating new instants. Partition returns metadata with worker assignments,
 strategy, dispatch count and work estimates. The selected text stays private
 through these stages and reaches only its existing separate artifact writer.
+The [runner controls](feed-plan-runner.md#entry-points-and-controls) define the
+combined `/plan` request, selected identities and optional readable URLs in HTTP,
+CLI and saved summaries. They do not add another selection or persistence path.
 
 Each finalized execution is immutable. A fresh result must not overwrite a
 prior artifact or double-count its HTTP work. Repeating the same finalized

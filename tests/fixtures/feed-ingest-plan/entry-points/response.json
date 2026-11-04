@@ -1,7 +1,7 @@
 {
   "run_id": "2026-10-21-700",
   "started_at": "2026-10-21T23:59:59.999Z",
-  "duration_ms": 4732,
+  "duration_ms": 1268,
   "status": "completed",
   "failure_code": null,
   "selected_count": 1,
@@ -16,32 +16,32 @@
   "api_timings": [
     {
       "operation": "feed-health-before-fetch",
-      "duration_ms": 135,
+      "duration_ms": 29,
       "status": "completed"
     },
     {
       "operation": "fetch",
-      "duration_ms": 3984,
+      "duration_ms": 1070,
       "status": "completed"
     },
     {
       "operation": "feed-health-for-selection",
-      "duration_ms": 30,
+      "duration_ms": 8,
       "status": "completed"
     },
     {
       "operation": "select",
-      "duration_ms": 194,
+      "duration_ms": 46,
       "status": "completed"
     },
     {
       "operation": "partition",
-      "duration_ms": 16,
+      "duration_ms": 3,
       "status": "completed"
     },
     {
       "operation": "persist",
-      "duration_ms": 80,
+      "duration_ms": 29,
       "status": "completed"
     }
   ],
@@ -55,15 +55,15 @@
   "reliability_window_days": 30,
   "selection_started_at_utc": "2026-10-22T00:00:00Z",
   "planning_complete": true,
-  "traceId": "d3da03c7c0eacb4fa0cf7c0b01896cd6",
+  "traceId": "acd58a0b27c7973a722b41f0576daa20",
   "health": {
-    "traceId": "d3da03c7c0eacb4fa0cf7c0b01896cd6",
-    "spanId": "06e648f91a60e250",
-    "parentSpanId": "377d1cb3e48db580",
+    "traceId": "acd58a0b27c7973a722b41f0576daa20",
+    "spanId": "3723d82d6f600cce",
+    "parentSpanId": "7f08c3667061685b",
     "links": [
       {
-        "traceId": "d3da03c7c0eacb4fa0cf7c0b01896cd6",
-        "spanId": "1751848e21e7833c"
+        "traceId": "acd58a0b27c7973a722b41f0576daa20",
+        "spanId": "7b24d7b60283a8c4"
       }
     ],
     "status": "summarized",
@@ -76,8 +76,8 @@
         "strikes": 0,
         "links": [
           {
-            "traceId": "d3da03c7c0eacb4fa0cf7c0b01896cd6",
-            "spanId": "a6926ff172600719"
+            "traceId": "acd58a0b27c7973a722b41f0576daa20",
+            "spanId": "41471ec6bfdf90b8"
           }
         ],
         "check_result": "valid-feed",
@@ -253,8 +253,8 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/discovered-articles/2026/10/21/01a1a8b9-84e6-8a66-9976-738b9cd2961f.parquet",
-          "file_id": "01a1a8b9-84e6-8a66-9976-738b9cd2961f",
+          "path": "raw/feed-ingest-plan/discovered-articles/2026/10/21/01a1a8ee-9967-859d-9d0b-f44de7dbfb1c.parquet",
+          "file_id": "01a1a8ee-9967-859d-9d0b-f44de7dbfb1c",
           "covers": "2026-10-21",
           "content_sha256": "98066b3f2a87d95a9946511497e238d3509722ac8659f622a0ff15a27dc935d7",
           "row_count": 2
@@ -265,8 +265,8 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/selected-articles/2026/10/21/01a1a8b9-87b5-898a-8673-e9334bb4957c.parquet",
-          "file_id": "01a1a8b9-87b5-898a-8673-e9334bb4957c",
+          "path": "raw/feed-ingest-plan/selected-articles/2026/10/21/01a1a8ee-9a47-8d2d-97a4-bb02b3bdc807.parquet",
+          "file_id": "01a1a8ee-9a47-8d2d-97a4-bb02b3bdc807",
           "covers": "2026-10-21",
           "content_sha256": "8bb632dd5e89124cfe1322cd682bf07c196926360aa4f1a6a63349a3005e4dc9",
           "row_count": 1
@@ -277,10 +277,10 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/rejected-articles/2026/10/21/c17ea02b-b2bf-8218-a6a1-571b3448f325.parquet",
-          "file_id": "c17ea02b-b2bf-8218-a6a1-571b3448f325",
+          "path": "raw/feed-ingest-plan/rejected-articles/2026/10/21/501fa265-7b5e-800b-a8d7-4f7e33a8be84.parquet",
+          "file_id": "501fa265-7b5e-800b-a8d7-4f7e33a8be84",
           "covers": "2026-10-21",
-          "content_sha256": "e541b9bc579954e3e9dabe52593efc7f80989fdc22654ffee3d654c63144908c",
+          "content_sha256": "06cd4ed9acee952f112ed30e89554db344220ade65e6d5d9dad1330d902b3829",
           "row_count": 1
         }
       ]
@@ -289,15 +289,15 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/21/01a1a8b9-86f1-8858-8160-55ddf9236def.parquet",
-          "file_id": "01a1a8b9-86f1-8858-8160-55ddf9236def",
+          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/21/01a1a8ee-9a14-8b18-88c2-15437ce2cb58.parquet",
+          "file_id": "01a1a8ee-9a14-8b18-88c2-15437ce2cb58",
           "covers": "2026-10-21",
-          "content_sha256": "4b9e9aa3151bed5b0181ca7a509b5876adbd267f386cf89f393300ea8d34d565",
+          "content_sha256": "894cbe4dfbca3efbabc2cda5985a31e5d3f92be40c04835fedd5f3ed82d6776d",
           "row_count": 1
         },
         {
-          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/22/01a1a8b9-875a-88de-8c65-ed5d453acc28.parquet",
-          "file_id": "01a1a8b9-875a-88de-8c65-ed5d453acc28",
+          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/22/01a1a8ee-9a33-8e0a-8454-8e6ca4e21191.parquet",
+          "file_id": "01a1a8ee-9a33-8e0a-8454-8e6ca4e21191",
           "covers": "2026-10-22",
           "content_sha256": "ee173260ef58eaa009988d8399b289c49aaf8d2b37d2f0540c29d6ca6c9b7f33",
           "row_count": 1
@@ -308,23 +308,25 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/plan-runs/2026/10/21/01a1a8b9-8820-8bdc-8c96-5bc7df2919c5.parquet",
-          "file_id": "01a1a8b9-8820-8bdc-8c96-5bc7df2919c5",
+          "path": "raw/feed-ingest-plan/plan-runs/2026/10/21/01a1a8ee-9a6e-8a2f-a74f-5fb026372e6e.parquet",
+          "file_id": "01a1a8ee-9a6e-8a2f-a74f-5fb026372e6e",
           "covers": "2026-10-21",
-          "content_sha256": "bb1c457ac8c97687da554df12c41ea34566e0dca1dcdc2320170d5e7399c12bf",
+          "content_sha256": "4586603b867efc977a4c5bc9397e4ee9da701a759c84d4ee09981b0ebade8fda",
           "row_count": 1
         }
       ]
     }
   },
-  "selected_url_keys": [
+  "include_selected_urls": true,
+  "selected_article_ids": [
     "34e91ac0637aa19d63c0802b5d6ed9a038c2c3f068a40c393c8c7749badf0b76"
   ],
   "assignments": [
     {
-      "url_key": "34e91ac0637aa19d63c0802b5d6ed9a038c2c3f068a40c393c8c7749badf0b76",
+      "article_id": "34e91ac0637aa19d63c0802b5d6ed9a038c2c3f068a40c393c8c7749badf0b76",
       "editorial_rank": 1,
-      "worker_assignment": 0
+      "worker_assignment": 0,
+      "canonical_url": "https://news.example/second"
     }
   ],
   "failure": null

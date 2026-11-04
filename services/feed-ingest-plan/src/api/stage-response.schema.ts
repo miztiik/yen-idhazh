@@ -2,23 +2,24 @@
 import { z } from "zod";
 import {
   CountSchema, NonNegativeSchema, PositiveCountSchema, OperationMetadataSchema, RunIdSchema,
-  SelectedArticleRowSchema, PlannerRejectionCountSchema, PlannerRequestReportSchema, TimestampSchema,
+  PlannerRejectionCountSchema, PlannerRequestReportSchema, TimestampSchema,
   PlannerLedgerWriteResultSchema,
 } from "@idhazh/common-contracts";
 import { RelativePathSchema } from "../config/service-settings";
+import { SelectedArticleResponseSchema } from "./article-identity-projection";
 
 export { PlannerLedgerWriteResultSchema as StageWriteResultSchema, PlannerErrorResponseSchema as StageErrorResponseSchema } from "@idhazh/common-contracts";
 const StageWriteResultSchema = PlannerLedgerWriteResultSchema;
 export const SelectionResponseSchema = OperationMetadataSchema.safeExtend({
   run_id: RunIdSchema,
   selection_started_at_utc: TimestampSchema, evaluated_at: TimestampSchema,
-  articles: z.array(SelectedArticleRowSchema), exclusions: z.array(PlannerRejectionCountSchema),
+  articles: z.array(SelectedArticleResponseSchema), exclusions: z.array(PlannerRejectionCountSchema),
   request_report: PlannerRequestReportSchema,
 });
 export const PartitionResponseSchema = OperationMetadataSchema.safeExtend({
   run_id: RunIdSchema,
   strategy: z.enum(["bin-pack", "round-robin", "none"]), dispatch_count: PositiveCountSchema,
-  work: z.array(NonNegativeSchema), articles: z.array(SelectedArticleRowSchema),
+  work: z.array(NonNegativeSchema), articles: z.array(SelectedArticleResponseSchema),
 });
 export const PersistenceResponseSchema = OperationMetadataSchema.safeExtend({
   files: StageWriteResultSchema, artifact: RelativePathSchema, selected_count: CountSchema,

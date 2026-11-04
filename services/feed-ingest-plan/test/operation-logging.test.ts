@@ -46,6 +46,7 @@ test("standalone document work logs failure addresses only and persistence logs 
         fetch_item_type: "article", url,
       };
       const fetched = FetchResponseSchema.parse(await post("fetch", request));
+      if (fetched.fetch_item_type !== "article") throw new Error("Recorded article request returned a feed");
       const events = f.events.filter(event => readTraceContext({
         traceparent: event.traceparent, tracestate: event.tracestate,
       })?.traceId === fetched.traceId);
@@ -55,7 +56,8 @@ test("standalone document work logs failure addresses only and persistence logs 
         const { operation, phase, details } = event.data;
         expect(details._compliance).toBeUndefined();
         if (operation === "fetch" || operation === "parse") {
-          expect(details.article_id).toBe(fetched.article_id);
+          expect(details.document_id).toBe(fetched.article_id);
+          expect(details).not.toHaveProperty("article_id");
         }
         if (operation === failedOperation && phase === "failed") {
           expect(details.article_url).toBe(url);

@@ -1,5 +1,6 @@
 /** Do completed selections save exact metrics without treating missing evidence as zero? */
 import { expect, test } from "bun:test";
+import { restoreSelectedArticle } from "../src/api/article-identity-projection";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -214,7 +215,7 @@ test("real standalone selection saves completed-empty, nonempty and failed outco
       const native = await readPlannerParquet(join(fixture.inputs.outputRoot, persisted.run_files!.files[0]!.path),
         "plan-runs", PlanRunRowContract);
       expect(native.rows[0]!.selection_metrics).toEqual(metrics);
-      expect(metrics).toEqual(summarizeSelectionMetrics(selection.articles, true));
+      expect(metrics).toEqual(summarizeSelectionMetrics(selection.articles.map(restoreSelectedArticle), true));
     } finally { await app.close(); await fixture.close(); }
   }
 });

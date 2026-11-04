@@ -32,6 +32,11 @@ It verifies the returned
 five-format native output and selected artifact before exposing commit paths.
 Completed planning is not proof of summarization or publication.
 The HTTP body, direct CLI output and saved `response.json` share one model.
+Selected keys are `selected_article_ids` and `assignments[].article_id`.
+Use the [native response option](../architecture/sources/feed-plan-runner.md#entry-points-and-controls)
+to include readable assignment URLs; the default is false and no ledger
+column changes. This is a native config, HTTP or CLI control, not another
+workflow dispatch input.
 Required `health` records the successful summary, an explicit report failure,
 or null only when no completed report input exists. Report or cleanup failure
 fails the request without changing completed planning facts or their saved row.
@@ -165,6 +170,10 @@ succeeds. It contains eight files for
 It also contains `report-events.json`, the same request's validated progress
 events. This current fixture is captured, not rebuilt by changing an earlier
 event's version or inventing its timings.
+The artifact also contains
+`tests/fixtures/contracts/fetched-document/refused.json` from an actual failed
+fetch made by the same offline recorder over recorded transport. It records
+current generic document identities, not copied article fields.
 The capture switch is unset when the recorder step exits, including on failure.
 Review and commit only these generated current recordings, then run ordinary
 candidate CI without capture. Existing replay, CLI and full-suite gates remain

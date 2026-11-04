@@ -43,11 +43,16 @@ Table B - Route groups
 | B2 | `machine` | Fingerprint and sampling/profile routes only; planning and delivery are absent. |
 | B3 | `delivery` | The existing private safe-persist handler only; no collection inputs or planner batches are loaded. |
 
-Native request and result JSON is unchanged. The existing
+The composed application forwards each module's current native JSON; it adds
+no identity aliases or response wrapper. The existing
 [planner APIs](../architecture/sources/feed-operator-api.md) and
 [profile commands](host-probe-api.md) retain their own validation, operation
 metadata and resource handles. CloudEvents are diagnostic envelopes, not
 wrappers around each HTTP command.
+The current planner prefix is `/api/2026-11-04`. Its
+[document and article identities](../architecture/sources/feed-operator-api.md#independent-fetch-and-parse-endpoints)
+and [combined response controls](../architecture/sources/feed-plan-runner.md#entry-points-and-controls)
+also apply on this shared listener.
 
 `GET /health` returns the exact child's startup nonce, PID, configured port,
 group, enabled modules and enablement. The supervisor compares the private

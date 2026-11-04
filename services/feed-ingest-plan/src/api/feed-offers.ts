@@ -88,8 +88,12 @@ export async function createParsedFeedBatch(input: {
 }
 export function publicFeedOffers(batch: Pick<ParsedFeedBatch, "offers">, feedId: string,
   pendingOnly = false) {
-  return batch.offers.filter(offer => offer.source.feed_id === feedId && (!pendingOnly || offer.state === "pending")).map(offer => ({
-    candidate_id: offer.candidate_id, feed_id: offer.source.feed_id, canonical_url: deriveArticleIdentity(offer.entry.link!).canonical_url,
-    title: offer.entry.title, categories: offer.entry.categories, published_at: offer.entry.published_at,
-  }));
+  return batch.offers.filter(offer => offer.source.feed_id === feedId && (!pendingOnly || offer.state === "pending")).map(offer => {
+    const identity = deriveArticleIdentity(offer.entry.link!);
+    return {
+      article_id: identity.url_key, candidate_id: offer.candidate_id,
+      feed_id: offer.source.feed_id, canonical_url: identity.canonical_url,
+      title: offer.entry.title, categories: offer.entry.categories, published_at: offer.entry.published_at,
+    };
+  });
 }

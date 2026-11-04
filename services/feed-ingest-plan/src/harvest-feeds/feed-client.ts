@@ -15,7 +15,7 @@ export { parseFeed } from "./parse-feed";
 export function feedDocumentWork(source: SourceSnapshot, context: HarvestContext) {
   return documentWork(context, {
     run_id: context.writer.run_id, candidate_id: null,
-    article_id: deriveFeedIdentity(source.feed_url).url_key, feed_id: source.feed_id,
+    document_id: deriveFeedIdentity(source.feed_url).url_key, feed_id: source.feed_id,
   }, createChildContext(operationMetadata(context)), {
     document_kind: "feed", feed_id: source.feed_id, publisher_id: source.publisher_id,
     candidate_id: null, observed_run_id: context.writer.run_id, observed_attempt: context.writer.attempt,

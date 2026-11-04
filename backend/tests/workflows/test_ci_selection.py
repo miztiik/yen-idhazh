@@ -136,7 +136,10 @@ def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs(
             "discovered-articles.rows.json", "selected-articles.rows.json",
             "rejected-articles.rows.json", "feed-health-state.rows.json", "plan-runs.rows.json",
         )
-    ] + ["tests/fixtures/feed-ingest-plan/report-events.json"]
+    ] + [
+        "tests/fixtures/feed-ingest-plan/report-events.json",
+        "tests/fixtures/contracts/fetched-document/refused.json",
+    ]
     gates = _job(workflow, "gates")
     assert gates["if"] == "needs.scope.outputs.code == 'true'"
     prepare = _step(workflow, "gates", "name", "Prepare composed TypeScript API dependencies")

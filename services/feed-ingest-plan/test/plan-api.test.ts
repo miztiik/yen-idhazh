@@ -28,6 +28,9 @@ test("HTTP health and refusals cannot start source work", async () => {
     expect((await app.request(`${prefix}/plan`, json({}))).status).toBe(503);
     expect((await app.request(`${prefix}/plan`, { ...json({}), body: "{" })).status).toBe(400);
     expect((await app.request(`${prefix}/plan`, json({ extra: true }))).status).toBe(400);
+    for (const include_selected_urls of ["true", "false", null, 0, 1]) {
+      expect((await app.request(`${prefix}/plan`, json({ include_selected_urls }))).status).toBe(400);
+    }
     expect((await app.request(`${prefix}/plan`, json({ padding: "x".repeat(recorded.inputs.settings.listener.max_body_bytes) }))).status).toBe(413);
     expect((await app.request(`${prefix}/feeds`)).status).toBe(404);
     expect((await app.request("/api/2026-10-20/health")).status).toBe(404);

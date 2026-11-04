@@ -99,11 +99,14 @@ export async function verifyPlanningCompletion(
       ...selectedArticleMetadata(article), run_id: artifact.run_id, attempt: artifact.attempt, date: artifact.date,
     }));
     if (selected.length && !isDeepStrictEqual(selected, expected)) throw new Error("Artifact and committed allowlisted projection differ");
-    if (!isDeepStrictEqual(artifact.articles.map(article => article.url_key), summary.selected_url_keys)) {
+    if (!isDeepStrictEqual(artifact.articles.map(article => article.url_key), summary.selected_article_ids)) {
       throw new Error("Artifact order differs from the selected response");
     }
-    if (!isDeepStrictEqual(artifact.articles.map(({ url_key, editorial_rank, worker_assignment }) =>
-      ({ url_key, editorial_rank, worker_assignment })), summary.assignments)) throw new Error("Artifact worker assignments differ from the selected response");
+    if (!isDeepStrictEqual(artifact.articles.map(({ url_key, editorial_rank, worker_assignment, canonical_url }) =>
+      ({ article_id: url_key, editorial_rank, worker_assignment,
+        ...(summary.include_selected_urls ? { canonical_url } : {}) })), summary.assignments)) {
+      throw new Error("Artifact worker assignments or selected URLs differ from the selected response");
+    }
   } else if (summary.planning_complete) throw new Error("Completed planner run lacks its selected artifact");
   return verified;
 }

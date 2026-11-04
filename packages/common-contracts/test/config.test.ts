@@ -56,6 +56,26 @@ if (Bun.argv.includes("--emit-schemas")) {
     expect(configs.FeedWebsiteGroupingConfigSchema.parse({}).include_private_suffixes).toBe(true);
   });
 
+  test("selected URL display defaults off and accepts only native response booleans", async () => {
+    const config = await readConfig();
+    const { response: _response, ...withoutResponse } = config;
+    expect(configs.FeedIngestConfigSchema.parse(withoutResponse).response.include_selected_urls).toBe(false);
+    expect(configs.FeedIngestConfigSchema.parse({ ...config, response: {} }).response.include_selected_urls).toBe(false);
+    for (const include_selected_urls of [true, false]) {
+      expect(configs.FeedIngestConfigSchema.parse({
+        ...config, response: { include_selected_urls },
+      }).response.include_selected_urls).toBe(include_selected_urls);
+    }
+    for (const include_selected_urls of ["true", "false", "", null, 0, 1]) {
+      expect(configs.FeedIngestConfigSchema.safeParse({
+        ...config, response: { include_selected_urls },
+      }).success).toBe(false);
+    }
+    expect(configs.FeedIngestConfigSchema.safeParse({
+      ...config, workflow_reporting: { ...config.workflow_reporting, include_selected_urls: true },
+    }).success).toBe(false);
+  });
+
   test("request pacing accepts zero delays and rejects invalid settings", async () => {
     const config = await readConfig();
     const settings = { enabled: true, domain_delay_ms: 0, publisher_delay_ms: 0, jitter_ms: 0 };

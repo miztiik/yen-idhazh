@@ -1,6 +1,6 @@
 /** Which native request, document and attempt shapes can live operator APIs use? */
 import { z } from "zod";
-import { CandidateIdSchema, CountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, reject } from "./primitives";
+import { CandidateIdSchema, CountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, deriveUrlKey, reject } from "./primitives";
 import { BodyLimitEvidenceSchema, FetchFailureSchema } from "./harvest-diagnostics.schema";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
@@ -51,13 +51,13 @@ export const NetworkFailureDetailsSchema = z.strictObject({
 });
 export type NetworkFailureDetails = z.infer<typeof NetworkFailureDetailsSchema>;
 export const PlannerObservationSchema = OperationMetadataSchema.safeExtend({
-  run_id: RunIdSchema, article_id: Sha256Schema, candidate_id: CandidateIdSchema.nullable(),
+  run_id: RunIdSchema, document_id: Sha256Schema, candidate_id: CandidateIdSchema.nullable(),
   feed_id: SlugSchema, occurred_at: TimestampSchema,
   operation: z.enum(["fetch", "parse", "attempt"]),
 });
 export const FetchedDocumentSchema = z.strictObject({
   version: OperationVersionSchema,
-  fetch_item_type: z.enum(["feed", "article"]), canonical_url: UrlSchema, article_id: Sha256Schema, feed_id: SlugSchema,
+  fetch_item_type: z.enum(["feed", "article"]), canonical_url: UrlSchema, document_id: Sha256Schema, feed_id: SlugSchema,
   candidate_id: CandidateIdSchema.nullable(),
   body: z.string().nullable(), http_status: z.int().min(100).max(599).nullable(),
   failure: FetchFailureSchema.nullable(),
@@ -78,9 +78,7 @@ export const FetchedDocumentSchema = z.strictObject({
   entry_ordinal: CountSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
   checkDocumentCandidate(value, ctx);
-  if (value.canonical_url.includes("#")) {
-    ctx.addIssue({ code: "custom", message: "canonical resource address must not contain a fragment" });
-  }
+  checkDocumentIdentity(value, ctx);
   if (value.body === null ? value.body_sha256 !== null : value.body_sha256 === null) {
     ctx.addIssue({ code: "custom", message: "body and body digest must be available together" });
   }
@@ -89,14 +87,12 @@ export const FetchedDocumentSchema = z.strictObject({
     || (bodyLimitFailure && value.body_limit === null)) {
     ctx.addIssue({ code: "custom", message: "current body-limit failures require their measured cutoff evidence" });
   }
-  if (value.observation.operation !== "fetch" || value.observation.article_id !== value.article_id
-    || value.observation.feed_id !== value.feed_id) {
+  if (value.observation.operation !== "fetch") {
     ctx.addIssue({ code: "custom", message: "fetch observation must retain document identity" });
   }
   if (value.attempts.length !== value.attempt_observations.length
     || value.attempts.some((attempt, index) => attempt.sequence !== index)
     || value.attempt_observations.some(observation => observation.operation !== "attempt"
-      || observation.feed_id !== value.feed_id || observation.article_id !== value.article_id
       || observation.run_id !== value.observation.run_id || observation.traceId !== value.observation.traceId
       || observation.parentSpanId !== value.observation.spanId)) {
     ctx.addIssue({ code: "custom", message: "attempt observations must match the ordered attempts" });
@@ -104,14 +100,40 @@ export const FetchedDocumentSchema = z.strictObject({
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
+    { version: OPERATION_VERSION, change: "Use validated document identities for generic fetched inputs and observations." },
     { version: OPERATION_VERSION, change: "Retain the captured article candidate across the document and its observations." },
     { version: OPERATION_VERSION, change: "Preserve normalized feed and article queries while refusing canonical fragments." },
     { version: "2026-11-03", change: "Identify fetch and attempt operations with native context and input links." },
-    { version: "2026-11-02", change: "Remove robots fields and attempts from current fetched documents." },
     { version: "2026-10-28", change: "Earlier changes are in this file's Git history." },
   ],
 });
 export type FetchedDocument = z.infer<typeof FetchedDocumentSchema>;
+
+export function checkDocumentIdentity(value: {
+  canonical_url: string | null; document_id: string; feed_id: string;
+  observation: { document_id: string; feed_id: string };
+  attempt_observations: { document_id: string; feed_id: string }[];
+}, ctx: z.RefinementCtx): void {
+  if (value.canonical_url !== null) {
+    if (value.canonical_url.includes("#")) reject(ctx, "canonical resource address must not contain a fragment", ["canonical_url"]);
+    if (deriveUrlKey(value.canonical_url) !== value.document_id) {
+      reject(ctx, "document_id must match canonical_url", ["document_id"]);
+    }
+  }
+  checkDocumentObservations(value, ctx);
+}
+
+export function checkDocumentObservations(value: {
+  document_id: string; feed_id: string;
+  observation: { document_id: string; feed_id: string };
+  attempt_observations: { document_id: string; feed_id: string }[];
+}, ctx: z.RefinementCtx): void {
+  if (value.observation.document_id !== value.document_id || value.observation.feed_id !== value.feed_id
+    || value.attempt_observations.some(observation =>
+      observation.document_id !== value.document_id || observation.feed_id !== value.feed_id)) {
+    reject(ctx, "Document observations must retain the document identity and feed", ["observation"]);
+  }
+}
 
 export function checkDocumentCandidate(value: {
   fetch_item_type: "feed" | "article"; candidate_id: string | null;

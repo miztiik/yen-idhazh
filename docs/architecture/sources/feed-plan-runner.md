@@ -84,9 +84,31 @@ for drain and 5 seconds to confirm forced exit. The child also applies its own
 drain bound if its supervisor disappears. No process is detached, no process
 name is used for cleanup, and runner process tracking remains enabled.
 `POST /api/2026-11-04/plan` accepts optional numeric `article_limit` and `shards`,
-plus a configured `partition_strategy`. Unknown fields, strings in numeric API
-fields, invalid counts and null controls fail before work. CLI blanks mean
+a configured `partition_strategy`, and the boolean `include_selected_urls`.
+Unknown fields, strings in numeric or boolean API fields, invalid counts and
+null controls fail before work. Blank limit and partition CLI values mean
 omission. There is no date control.
+
+`response.include_selected_urls` in `config/feed-ingest-plan.json` defaults to
+false. An explicit request boolean overrides it, including false when config
+is true; omission uses config. CLI `--include-selected-urls` alone means true.
+Explicit `true` or `false` accepts either a space or `=`, such as
+`--include-selected-urls false` or `--include-selected-urls=false`. Empty,
+invalid and repeated display controls fail.
+
+Every combined run summary returns the effective `include_selected_urls`,
+ordered `selected_article_ids` and `assignments[].article_id`. When enabled,
+every existing assignment also requires `canonical_url` whose full digest
+matches its article identity. When disabled, the URL property is absent, not
+null. An empty selection keeps an empty assignments array. This also applies
+with partitioning disabled and null worker assignments. Pre-run errors retain
+their separate shape without an invented display setting.
+
+The runner resolves this choice once in `FeedPlanResult.include_selected_urls`,
+outside the persisted run row. HTTP, CLI and saved `response.json` use the same
+summary schema. URLs come from selected metadata already in memory; its
+selected-text artifact already contains them. No source fetch, Parquet lookup,
+parallel URL list or routine URL logging is added.
 
 An article limit bounds the chosen result, not the offered input. Age eligibility
 uses the run's effective global ceiling, resolved before article fetching and
@@ -125,6 +147,9 @@ Orchestration takes selected metadata and the exact saved selection-start and
 evaluation UTC timestamps from the validated selection response. It takes
 assigned metadata, strategy and dispatch count from the partition response,
 without reading either text-bearing batch back from the local stage store.
+The [identity projection](../contracts/identity.md#typescript-resource-addresses)
+validates public article keys and restores the native storage field only for
+orchestration's existing metadata calculations.
 The returned result contains metadata only; persistence still consumes the
 server-owned batch and writes the unchanged selected text artifact.
 One collection owns one parsed batch for every configured feed, its offers,
@@ -282,7 +307,7 @@ its budget remain intact; they do not remove this typed evidence.
 The [diagnostic contract](feed-failure-diagnostics.md) owns its bounds.
 The document execution unit emits one started and one completed
 or failed event for each fetch or parse, both in `/plan` and standalone calls.
-It names the actual operation and article identity, `feed_id` and
+It names the actual operation and generic `document_id`, `feed_id` and
 `publisher_id`. `scope: document` identifies this work; `scope: plan` identifies
 aggregate orchestration, not a second fetch of that document. Worker callbacks
 do not emit duplicate lifecycles. Started events have null duration; terminal
@@ -321,6 +346,12 @@ private entity file for original titles and full sanitized article text.
 Recognized names never enter these progress events or selection scores.
 
 ## Design rationale
+
+Readable URLs are optional to keep ordinary combined summaries small and avoid
+copying query strings unless requested. The option only projects existing
+assignments; it does not select again or change stored data. Remove the option
+and conditional projection together if readable URLs become mandatory or
+unsupported.
 
 Repeated whole-collection copies make each later article cost more as earlier
 articles and discovery evidence accumulate. Indexed offer updates keep that

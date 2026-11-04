@@ -56,6 +56,8 @@ async function capture(recorded: Awaited<ReturnType<typeof recordedPlan>>, urls:
       const fetched = FetchResponseSchema.parse(await response.json());
       if (fetched.fetch_item_type !== "article") throw new Error("Expected an article fetch");
       expect(CandidateIdSchema.parse(fetched.candidate_id)).toBe(fetched.candidate_id);
+      expect(fetched.article_id).toBe(deriveArticleIdentity(url).url_key);
+      expect(fetched).not.toHaveProperty("document_id");
       if (fetched.body_sha256 !== null) {
         const held = stageStore(recorded.inputs).fetchedDocument(fetched);
         expect(held?.candidate_id).toBe(fetched.candidate_id);
@@ -70,6 +72,8 @@ async function capture(recorded: Awaited<ReturnType<typeof recordedPlan>>, urls:
         const result = ParseResponseSchema.parse(await parsed.json());
         if (result.fetch_item_type !== "article") throw new Error("Expected an article parse");
         expect(result.candidate_id).toBe(fetched.candidate_id);
+        expect(result.article_id).toBe(fetched.article_id);
+        expect(result).not.toHaveProperty("document_id");
         references.push(operationLink(result));
       }
     }

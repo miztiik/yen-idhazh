@@ -21,7 +21,7 @@ export async function harvestArticle(
   const { candidate_id, identity, article, observation } = prepared;
   const eventIdentity = {
     run_id: context.writer.run_id, candidate_id,
-    article_id: identity?.url_key ?? null, feed_id: source.feed_id,
+    document_id: identity?.url_key ?? null, feed_id: source.feed_id,
   };
   const fetchContext = createChildContext(operationMetadata(context), {
     links: offered.input === undefined ? [] : [offered.input],

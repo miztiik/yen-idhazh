@@ -8,7 +8,7 @@ import { workPool } from "./harvest-feeds/harvest-pool";
 import type { ArticleParserPool } from "./harvest-feeds/article-parser-pool";
 import type { PlanInputs } from "./load-plan-inputs";
 import type { ProgressRecord } from "./logging/progress-logger";
-import { resolvePlanRequest, PlanError } from "./api/plan-request";
+import { resolvePlanRequest, resolveSelectedUrls, PlanError } from "./api/plan-request";
 import { createStageLogger } from "./logging/structured-logger";
 import { recordPlanRun } from "./record-plan-run";
 import { summarizeSelectionMetrics } from "./summarize-selection-metrics";
@@ -25,6 +25,7 @@ import { resolveRunContext } from "./resolve-run-context";
 import { capturePlannerFailure, combinePlannerFailures, readPlannerResponseError, withPlannerFailure } from "./api/plan-failure";
 import { plannerFailureOperation } from "./api/planner-failure-operation";
 import { operationLink, operationMetadata, runtimeOperation } from "./api/operation-context";
+import { restoreSelectedArticle } from "./api/article-identity-projection";
 
 const documentPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
 export type PlanRuntime = Partial<OperationMetadata> & {
@@ -42,11 +43,13 @@ export type FeedPlanResult = {
   row: import("@idhazh/common-contracts").PlanRunRow;
   files: Partial<Record<"discovered_articles" | "selected_articles" | "rejected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>>;
   selected: SelectedArticleRow[];
+  include_selected_urls: boolean;
   health: PlannerHealthOutcome;
   failure?: PlannerFailure | null;
 };
 export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime): Promise<FeedPlanResult> {
   const request = resolvePlanRequest(raw, inputs.harvest.config);
+  const includeSelectedUrls = resolveSelectedUrls(request, inputs.harvest.config);
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
   const context = resolveRunContext(inputs.settings, runtime.git_sha, runtime.clock?.() ?? new Date(),
     runtime.run_number, runtimeOperation(runtime) ?? createRootContext(), runtime.captured_at, runtime.attempt, runtime.producer);
@@ -66,7 +69,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       cleanup.unshift({ execute: () => server.stop(true) });
       stageOrigin = `http://${server.hostname}:${server.port}`;
     }
-    result = await runPlanStages(raw, request, inputs, { ...runtime, stage_origin: stageOrigin }, context);
+    result = await runPlanStages(raw, request, inputs, { ...runtime, stage_origin: stageOrigin }, context, includeSelectedUrls);
   } catch (error) { primary = withPlannerFailure(error, capture); }
   let failure = result?.failure ?? primary?.failure ?? null;
   for (const step of cleanup) {
@@ -92,7 +95,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
 }
 async function runPlanStages(
   raw: unknown, request: ReturnType<typeof resolvePlanRequest>, inputs: PlanInputs, runtime: PlanRuntime,
-  context: import("./resolve-run-context").RunContext,
+  context: import("./resolve-run-context").RunContext, includeSelectedUrls: boolean,
 ): Promise<FeedPlanResult> {
   const traceId = context.traceId;
   const started = performance.now();
@@ -168,7 +171,8 @@ async function runPlanStages(
             withPlannerFailure(recordingError, { operation: "record-run", execution: context, limits: inputs.settings.diagnostics.failure }),
           ], "Collection startup and outcome recording failed"), { operation: "collection-start", execution: context });
         }
-        return result = { context, row: recorded.row, files: { plan_runs: recorded.files }, selected: [], health: null, failure };
+        return result = { context, row: recorded.row, files: { plan_runs: recorded.files }, selected: [],
+          include_selected_urls: includeSelectedUrls, health: null, failure };
       }
     }
     if (!ownsPreparedCollection(inputs, context)) {
@@ -177,10 +181,10 @@ async function runPlanStages(
     owned = true;
     const emit = createStageLogger(context, inputs.event_source, runtime.log);
     const files: Partial<Record<"discovered_articles" | "selected_articles" | "rejected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>> = {};
-    let selected: z.infer<typeof SelectionResponseSchema> | undefined;
+    let selected: (Omit<z.infer<typeof SelectionResponseSchema>, "articles"> & { articles: SelectedArticleRow[] }) | undefined;
     let completedInput: OperationLink | undefined;
     let selectionMetrics: PlanRunRow["selection_metrics"] = null;
-    let partitioned: z.infer<typeof PartitionResponseSchema> | undefined;
+    let partitioned: (Omit<z.infer<typeof PartitionResponseSchema>, "articles"> & { articles: SelectedArticleRow[] }) | undefined;
     let artifact: string | null = null;
     let failureCode: string | null = null;
     let failure: PlannerFailure | null = null;
@@ -269,17 +273,18 @@ async function runPlanStages(
       emit("fetch", "completed", { scope: "plan", duration_ms: collectionDuration });
       files.discovered_articles = collected.discovered_articles;
       files.rejected_articles = collected.rejected_articles;
-      const selection = await call("select-articles", { links: [operationLink(collected)] }, SelectionResponseSchema);
+      const selectedResponse = await call("select-articles", { links: [operationLink(collected)] }, SelectionResponseSchema);
+      const selection = { ...selectedResponse, articles: selectedResponse.articles.map(restoreSelectedArticle) };
       selected = selection;
       selectionMetrics = summarizeSelectionMetrics(selection.articles,
         inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes);
       let output = operationLink(selected);
       if (inputs.harvest.config.partition.enabled) {
-        const partition = await call("partition-articles", {
+        const partitionResponse = await call("partition-articles", {
           links: [operationLink(selected)], strategy: request.partition_strategy, shards: request.shards,
         }, PartitionResponseSchema);
-        partitioned = partition;
-        output = operationLink(partition);
+        partitioned = { ...partitionResponse, articles: partitionResponse.articles.map(restoreSelectedArticle) };
+        output = operationLink(partitionResponse);
       }
       const outputs = await Promise.allSettled([
         call("feed-health-state", { links: [output], action: "record" }, FeedHealthStateUpdateResponseSchema),
@@ -380,7 +385,8 @@ async function runPlanStages(
         failure = failure === null ? current : combinePlannerFailures(failure, current, inputs.settings.diagnostics.failure);
       }
     }
-    return result = { context, row: recorded.row, files, selected: partitioned?.articles ?? selected?.articles ?? [], health, failure };
+    return result = { context, row: recorded.row, files, selected: partitioned?.articles ?? selected?.articles ?? [],
+      include_selected_urls: includeSelectedUrls, health, failure };
   } catch (error) {
     primary = withPlannerFailure(error, { operation: "plan", execution: context, limits: inputs.settings.diagnostics.failure });
     throw primary;
@@ -413,9 +419,11 @@ export function summarizePlan(result: FeedPlanResult) {
     failure: result.failure ?? null,
     health: result.health,
     traceId: result.context.traceId, files: result.files,
-    selected_url_keys: result.selected.map(article => article.url_key),
+    include_selected_urls: result.include_selected_urls,
+    selected_article_ids: result.selected.map(article => article.url_key),
     assignments: result.selected.map(article => ({
-      url_key: article.url_key, editorial_rank: article.editorial_rank, worker_assignment: article.worker_assignment,
+      article_id: article.url_key, editorial_rank: article.editorial_rank, worker_assignment: article.worker_assignment,
+      ...(result.include_selected_urls ? { canonical_url: article.canonical_url } : {}),
     })),
   });
 }

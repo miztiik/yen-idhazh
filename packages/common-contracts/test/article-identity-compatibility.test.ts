@@ -129,11 +129,11 @@ test("current feed and article documents preserve queries, refuse fragments and 
   for (const fetch_item_type of ["feed", "article"] as const) {
     const candidate_id = fetch_item_type === "article" ? createCandidateId() : null;
     const documentAt = (canonical_url: string) => {
-      const article_id = deriveUrlKey(canonical_url);
+      const document_id = deriveUrlKey(canonical_url);
       return {
-        ...recorded, fetch_item_type, canonical_url, article_id, candidate_id,
-        observation: { ...recorded.observation, article_id, candidate_id },
-        attempt_observations: recorded.attempt_observations.map(observation => ({ ...observation, article_id, candidate_id })),
+        ...recorded, fetch_item_type, canonical_url, document_id, candidate_id,
+        observation: { ...recorded.observation, document_id, candidate_id },
+        attempt_observations: recorded.attempt_observations.map(observation => ({ ...observation, document_id, candidate_id })),
       };
     };
     const queried = documentAt(`${url}?a=x%26b%3Dy&a=two&empty=&plus=a+b`);
@@ -146,5 +146,11 @@ test("current feed and article documents preserve queries, refuse fragments and 
     expect(FetchedDocumentSchema.safeParse({
       ...queried, observation: { ...queried.observation, candidate_id: createCandidateId() },
     }).success).toBe(false);
+    for (const invalid of [
+      { ...queried, document_id: "a".repeat(64) },
+      { ...queried, article_id: queried.document_id },
+      { ...queried, observation: { ...queried.observation, document_id: "a".repeat(64) } },
+      { ...queried, attempt_observations: queried.attempt_observations.map(value => ({ ...value, document_id: "a".repeat(64) })) },
+    ]) expect(FetchedDocumentSchema.safeParse(invalid).success).toBe(false);
   }
 });

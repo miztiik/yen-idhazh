@@ -1,6 +1,6 @@
 # Feed article partitioning
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-04
 
 How are chosen articles assigned to workers without changing the selection?
 Partitioning consumes one validated selected batch and returns the same
@@ -11,6 +11,10 @@ content and ranks with zero-based worker assignments.
 The selected batch is server-owned and complete. Duplicate URLs, missing
 content, invalid ranks, mismatched execution facts and invalid work values
 fail before packing. No file path or caller article list replaces it.
+Selection and partition HTTP rows use the strict
+[article identity projection](../contracts/identity.md#typescript-resource-addresses).
+Native batches and stored files keep `url_key`; public metadata uses
+`article_id` and retains every other selected field without article text.
 
 The work estimate is explicit evidence when supplied, otherwise extracted
 full-body `word_count`, never the retained-paragraph count. Words are a work
@@ -39,6 +43,10 @@ Assignments retain the original selected order and rank.
 metadata Parquet and the selected-text artifact. It does not reselect,
 reconstruct content from history or create a separate dispatch ledger.
 Empty selection has explicit empty metadata and an actual empty artifact.
+The combined summary's
+[optional readable URLs](feed-plan-runner.md#entry-points-and-controls) use
+these same assignments, including null worker assignments when partitioning is
+disabled. The option does not change packing or persistence.
 
 ## Named history and proof
 
