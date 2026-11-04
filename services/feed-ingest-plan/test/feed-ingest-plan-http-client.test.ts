@@ -56,7 +56,7 @@ test("the complete HTTP result contains its report and releases work before clie
     const result = await requestPlannerHttp(base, fixture.inputs, {}, directory);
     expect(result.health).toBeDefined();
     expect(fixture.transport.requests.map(request => request.url.href).sort()).toEqual([
-      "https://news.example/feed.xml", "https://news.example/story/", "https://news.example/second",
+      "https://news.example/feed.xml", "https://news.example/story/?utm_source=feed&b=2&a=1", "https://news.example/second",
     ].sort());
     const health = PlannerHealthOutcomeSchema.parse(result.health);
     if (health === null || health.status !== "summarized") throw new Error("The recorded plan must return its actual health summary");

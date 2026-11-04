@@ -62,7 +62,7 @@ async function runRecordingAt(root: string) {
   const transport = new RecordedTransport(recordings);
   const runtime: PlanRuntime = { git_sha: "a".repeat(40), run_number: "7300", clock: () => new Date(now),
     observation_clock: () => new Date(now), boundary: { transport } };
-  const key = (url: string) => deriveArticleIdentity(url, harvest.config.harvest).url_key;
+  const key = (url: string) => deriveArticleIdentity(url).url_key;
   const discovery = { url_key: key("https://news.example/second"), first_seen_at: `${prior}T10:00:00Z`, date: prior };
   const seed = FeedHealthStateRowContract.schema.parse(
     plannerRecordings(prior).find(record => record.name === "feed-health-state")!.row,
@@ -80,7 +80,8 @@ async function runRecordingAt(root: string) {
   const selectedSeed = plannerRecordings(day).find(record => record.name === "selected-articles")!.row;
   const snapshot = SelectedArticleRowContract.schema.parse({
     ...selectedSeed, feed_id: sources[0]!.id, publisher_id: publishers[0]!.id,
-    canonical_url: "https://news.example/story/", url_key: key("https://news.example/story/"),
+    canonical_url: "https://news.example/story/?utm_source=feed&b=2&a=1",
+    url_key: key("https://news.example/story/?utm_source=feed&b=2&a=1"),
   });
   const published = { version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: day,
     url_key: snapshot.url_key, item_id: "recorded-item-01" };

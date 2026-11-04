@@ -126,6 +126,14 @@ Recorded transports capture each invocation before fixture lookup. Their
 traces must contain only feed/article targets and actual retries or redirects.
 Missing fixture responses cannot conceal an automatic extra request.
 
+For resource-address changes, combine `article-url-cleanup.test.ts`,
+`harvest.test.ts` and `harvest-safety.test.ts` with the affected caller cases.
+The named URL vectors check both article and feed-document hashes, exact
+query-bearing dispatches, checked redirects, private-target refusals and
+serialized length bounds. The recorder matches the complete URL; it never
+falls back to a query-free response. Keep Python normalization outside this
+native check and do not claim cross-language parity.
+
 The generated bare-origin case executes the actual commit CLI, checks the
 new remote metadata without raw-day indexes, replays it safely and verifies that
 the checkout did not change. Helper-only coverage cannot certify this entry.
@@ -367,10 +375,10 @@ reasons remain in the artifact diagnostics.
 was missing or invalid, or extraction produced no usable title. A grouped
 count does not identify the exact missing field and does not mean a feed
 configuration field is absent. The protocol reason code is unchanged.
-An unsafe cleaned target is `FETCH_FAILED`, not a missing-field count.
-The [article cleanup policy](../architecture/sources/feed-harvesting.md#inputs-and-identity)
-removes all article query parameters even when `tidy_urls` is false. Feed
-parameters remain intact.
+An unsafe target is `FETCH_FAILED`, not a missing-field count; its valid
+address and hash remain in refusal evidence without a source request.
+The [resource address rule](../architecture/contracts/identity.md#typescript-resource-addresses)
+preserves article and feed-document queries and removes fragments.
 
 ## CI and hosted verification
 

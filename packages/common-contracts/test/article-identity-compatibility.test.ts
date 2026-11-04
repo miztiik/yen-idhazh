@@ -5,7 +5,7 @@ import {
   DiscoveredArticleRowSchema, SelectedArticleRowSchema, SelectedArticleMetadataSchema, PlannerFileEnvelopeSchema,
   FeedIngestCandidateSchema, FeedOutcomePayloadSchema, PlannerFeedOfferSchema,
   SourceSnapshotSchema, FEED_OUTCOME_PAYLOAD_VERSION, deriveCandidateId,
-  readSelectedArticlesArtifact, createRootContext, deriveUrlKey,
+  readSelectedArticlesArtifact, createRootContext, deriveUrlKey, FetchedDocumentSchema,
 } from "../src";
 
 const day = "2026-10-28";
@@ -36,7 +36,7 @@ test("current discovery, selection, artifacts and envelopes keep their exact ide
   const artifact = { schema_version: SELECTED_ARTICLE_VERSION, run_id: run, attempt: 1,
     date: day, evaluated_at: at, articles: [{ ...metadata(), article_text: "Recorded sanitized text." }] };
   expect(readSelectedArticlesArtifact(artifact)).toEqual(artifact);
-  for (const schema_version of ["2026-10-25", "2026-10-27", "2026-10-29"]) {
+  for (const schema_version of ["2026-10-25", "2026-10-27", "2026-10-29", "2026-11-02"]) {
     expect(() => readSelectedArticlesArtifact({ ...artifact, schema_version })).toThrow();
   }
   for (const [ledger, row_schema_version] of [
@@ -49,6 +49,8 @@ test("current discovery, selection, artifacts and envelopes keep their exact ide
     expect<unknown>(PlannerFileEnvelopeSchema.parse(envelope)).toEqual(envelope);
     for (const stamp of ["2026-10-25", "2026-10-27", "2026-10-29"]) {
       expect(PlannerFileEnvelopeSchema.safeParse({ ...envelope, version: stamp }).success).toBe(false);
+    }
+    for (const stamp of ["2026-10-25", "2026-10-27", "2026-10-29", "2026-10-31", "2026-11-02"]) {
       expect(PlannerFileEnvelopeSchema.safeParse({ ...envelope, row_schema_version: stamp }).success).toBe(false);
     }
   }
@@ -66,11 +68,23 @@ test("current source, candidate, offer and outcome projections refuse retired so
     title: "Recorded article", categories: [], article_text: "Unchanged body.", word_count: 2,
     author: null, published_at: null, fetched_at: `${day}T12:00:00Z`,
   });
+  const canonical_url = `${url}?a=x%26b%3Dy&a=two&empty=&plus=a+b`;
+  const queried = { ...candidate, canonical_url, url_key: deriveUrlKey(canonical_url) };
+  expect(FeedIngestCandidateSchema.parse(queried)).toEqual(queried);
+  for (const version of ["2026-11-02", "2026-11-03"]) {
+    expect(FeedIngestCandidateSchema.safeParse({ ...queried, version }).success).toBe(false);
+  }
+  expect(FeedIngestCandidateSchema.safeParse({ ...queried, url_key: candidate.url_key }).success).toBe(false);
+  const fragment = `${canonical_url}#section`;
+  expect(FeedIngestCandidateSchema.safeParse({
+    ...queried, canonical_url: fragment, url_key: deriveUrlKey(fragment),
+  }).success).toBe(false);
   const offer = PlannerFeedOfferSchema.parse({
     offer_id: "a".repeat(64), source, entry: {
       entry_ordinal: 0, title: null, link: url, categories: [], author: null, published_at: null,
     }, state: "pending", links: [],
   });
+
   const outcome = FeedOutcomePayloadSchema.parse({
     kind: "feed_outcome", source, fetch_status: "success", parse_status: "success",
     parsed_count: 1, harvested_count: 1, fetch_duration_ms: 0, parse_duration_ms: 0,
@@ -89,5 +103,25 @@ test("current source, candidate, offer and outcome projections refuse retired so
     expect(FeedIngestCandidateSchema.safeParse({ ...candidate, source: retired }).success).toBe(false);
     expect(PlannerFeedOfferSchema.safeParse({ ...offer, source: retired }).success).toBe(false);
     expect(FeedOutcomePayloadSchema.safeParse({ ...outcome, source: retired }).success).toBe(false);
+  }
+});
+
+test("current feed and article documents preserve queries, refuse fragments and reject the retired stamp", async () => {
+  const recorded = FetchedDocumentSchema.parse(await Bun.file(new URL(
+    "../../../tests/fixtures/contracts/fetched-document/refused.json", import.meta.url,
+  )).json());
+  for (const fetch_item_type of ["feed", "article"] as const) {
+    const documentAt = (canonical_url: string) => {
+      const article_id = deriveUrlKey(canonical_url);
+      return {
+        ...recorded, fetch_item_type, canonical_url, article_id,
+        observation: { ...recorded.observation, article_id },
+        attempt_observations: recorded.attempt_observations.map(observation => ({ ...observation, article_id })),
+      };
+    };
+    const queried = documentAt(`${url}?a=x%26b%3Dy&a=two&empty=&plus=a+b`);
+    expect(FetchedDocumentSchema.parse(queried)).toEqual(queried);
+    expect(FetchedDocumentSchema.safeParse(documentAt(`${queried.canonical_url}#section`)).success).toBe(false);
+    expect(FetchedDocumentSchema.safeParse({ ...queried, version: "2026-11-03" }).success).toBe(false);
   }
 });

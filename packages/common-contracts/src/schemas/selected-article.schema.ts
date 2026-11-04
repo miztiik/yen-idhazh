@@ -47,7 +47,7 @@ function validateMetadata(value: {
   word_count: number; substance_word_count: number; ratings: { recency_score: number };
 }, ctx: z.RefinementCtx): void {
   checkUrlIdentity(value, ctx);
-  if (/[?#]/.test(value.canonical_url)) reject(ctx, "current selected article address must not contain a query or fragment");
+  if (value.canonical_url.includes("#")) reject(ctx, "current selected article address must not contain a fragment");
   const unavailable = value.timing_basis === "unavailable";
   if (unavailable !== (value.timing_at === null && value.age_hours === null)
     || (!unavailable && (value.timing_at === null || value.age_hours === null))) {
@@ -69,10 +69,11 @@ function validatePublication(value: {
   }
 }
 const changelog = [
-  { version: SELECTED_ARTICLE_VERSION, change: "Require both word counts, complete diversity scores and global timing without retired selection fields." },
+  { version: SELECTED_ARTICLE_VERSION, change: "Preserve resource queries in selected addresses and their full hashes." },
+  { version: "2026-11-02", change: "Require both word counts, complete diversity scores and global timing without retired selection fields." },
   { version: "2026-10-29", change: "Identify query-free article selection." },
   { version: "2026-10-27", change: "Record the applied freshness cutoff and percentage-based feed limit." },
-  { version: "2026-10-26", change: "Require source or selection publication provenance and refuse obsolete selected rows." },
+  { version: "2026-10-26", change: "Earlier changes are in git." },
 ];
 export const SelectedArticleMetadataSchema = z.strictObject(MetadataFields)
   .superRefine(validateMetadata).superRefine(validatePublication);

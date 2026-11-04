@@ -8,7 +8,8 @@ import { HttpResponseEvidenceSchema, RequestProfileSchema } from "./http-respons
 import { RequestPacingSettingsSchema } from "./config.schema";
 import { OperationLinkSchema, OperationMetadataSchema, TraceIdSchema } from "./operation-metadata.schema";
 
-export const OPERATION_VERSION = "2026-11-03" as const;
+export const OPERATION_VERSION = "2026-11-04" as const;
+const NETWORK_FAILURE_VERSION = "2026-11-03" as const;
 const OperationVersionSchema = z.literal(OPERATION_VERSION).default(OPERATION_VERSION);
 export const SourceArticleOutcomeSchema = z.strictObject({
   disposition: z.enum(["admitted", "source_refused"]),
@@ -41,9 +42,9 @@ export const NetworkFailureDetailsSchema = z.strictObject({
   pacing_settings: RequestPacingSettingsSchema.nullable().default(null),
   attempt: FetchAttemptSchema.nullable(),
 }).meta({
-  version: OPERATION_VERSION,
+  version: NETWORK_FAILURE_VERSION,
   changelog: [
-    { version: OPERATION_VERSION, change: "Retain only target request failures and response evidence." },
+    { version: NETWORK_FAILURE_VERSION, change: "Retain only target request failures and response evidence." },
     { version: "2026-11-01", change: "Retain request pacing waits and effective settings in failure details." },
     { version: "2026-11-01", change: "Validate body-free failure details separately from flexible log fields." },
   ],
@@ -75,8 +76,8 @@ export const FetchedDocumentSchema = z.strictObject({
   attempt_observations: z.array(PlannerObservationSchema), body_sha256: Sha256Schema.nullable(),
   entry_ordinal: CountSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
-  if (value.fetch_item_type === "article" && /[?#]/.test(value.canonical_url)) {
-    ctx.addIssue({ code: "custom", message: "current article address must not contain a query or fragment" });
+  if (value.canonical_url.includes("#")) {
+    ctx.addIssue({ code: "custom", message: "canonical resource address must not contain a fragment" });
   }
   if (value.body === null ? value.body_sha256 !== null : value.body_sha256 === null) {
     ctx.addIssue({ code: "custom", message: "body and body digest must be available together" });
@@ -101,10 +102,10 @@ export const FetchedDocumentSchema = z.strictObject({
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
-    { version: OPERATION_VERSION, change: "Identify fetch and attempt operations with native context and input links." },
+    { version: OPERATION_VERSION, change: "Preserve normalized feed and article queries while refusing canonical fragments." },
+    { version: "2026-11-03", change: "Identify fetch and attempt operations with native context and input links." },
     { version: "2026-11-02", change: "Remove robots fields and attempts from current fetched documents." },
     { version: "2026-11-01", change: "Preserve request pacing waits and effective settings." },
-    { version: "2026-11-01", change: "Add native response, profile and safe request-address evidence." },
     { version: "2026-10-28", change: "Earlier changes are in this file's Git history." },
   ],
 });

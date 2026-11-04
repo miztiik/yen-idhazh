@@ -5,7 +5,7 @@ import type { HarvestContext, OfferedArticle, HarvestArticleResult } from "./har
 import { HarvestArticleResultSchema, utcTimestamp } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import { deriveArticleIdentity, InvalidArticleUrlError } from "./article-identity";
-import { UnsafeTargetError } from "./safe-target";
+import { UnsafeTargetError, validateTargetName } from "./safe-target";
 import { fetchDiagnostics } from "./fetch-diagnostics";
 import { matchUrlExclusion, urlExclusionMarker } from "./url-exclusions";
 import { recordRejection } from "./record-rejection";
@@ -27,7 +27,10 @@ export function prepareArticle(offered: OfferedArticle, inputs: HarvestInputs, c
   let identity: ReturnType<typeof deriveArticleIdentity> | null = null;
   let unsafe = false;
   if (entry.link) {
-    try { identity = deriveArticleIdentity(entry.link, inputs.config.harvest); }
+    try {
+      identity = deriveArticleIdentity(entry.link);
+      validateTargetName(identity.canonical_url);
+    }
     catch (error) {
       if (error instanceof UnsafeTargetError) unsafe = true;
       else if (!(error instanceof InvalidArticleUrlError)) throw error;

@@ -7,7 +7,6 @@ import type { PlanRuntime } from "../run-feed-plan";
 import type { DocumentState } from "./document-state";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
-import type { ArticleUrlPolicy } from "../harvest-feeds/article-url";
 import { matchUrlExclusion } from "../harvest-feeds/url-exclusions";
 import { prepareArticle } from "../harvest-feeds/prepare-article";
 import { foldDiscoveryHistory, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
@@ -56,7 +55,7 @@ export async function createParsedFeedBatch(input: {
   const fromDay = requiredUtcDays(state.context.now, inputs.harvest.config.discovered_articles.lookback_days)[0]!;
   const discoveredRows = state.baseline.discovered.rows;
   const sightings = offers.flatMap(offer => {
-    const identity = deriveArticleIdentity(offer.entry.link!, inputs.harvest.config.harvest);
+    const identity = deriveArticleIdentity(offer.entry.link!);
     if (matchUrlExclusion(identity.canonical_url, inputs.harvest.config.harvest.url_exclusions) !== undefined) return [];
     return [DiscoveredArticleRowSchema.parse({
       url_key: identity.url_key, first_seen_at: input.observed_at, date: input.observed_at.slice(0, 10),
@@ -86,10 +85,10 @@ export async function createParsedFeedBatch(input: {
     offers, input_complete: offers.length === 0,
   });
 }
-export function publicFeedOffers(batch: Pick<ParsedFeedBatch, "offers">, policy: ArticleUrlPolicy, feedId: string,
+export function publicFeedOffers(batch: Pick<ParsedFeedBatch, "offers">, feedId: string,
   pendingOnly = false) {
   return batch.offers.filter(offer => offer.source.feed_id === feedId && (!pendingOnly || offer.state === "pending")).map(offer => ({
-    offer_id: offer.offer_id, feed_id: offer.source.feed_id, canonical_url: deriveArticleIdentity(offer.entry.link!, policy).canonical_url,
+    offer_id: offer.offer_id, feed_id: offer.source.feed_id, canonical_url: deriveArticleIdentity(offer.entry.link!).canonical_url,
     title: offer.entry.title, categories: offer.entry.categories, published_at: offer.entry.published_at,
   }));
 }

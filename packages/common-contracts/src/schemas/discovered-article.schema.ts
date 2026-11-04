@@ -11,7 +11,8 @@ export const DiscoveredArticleRowSchema = z.strictObject({
 }).meta({
   version: DISCOVERED_ARTICLE_VERSION,
   changelog: [
-    { version: DISCOVERED_ARTICLE_VERSION, change: "Require the current query-free discovery format without older-format readers." },
+    { version: DISCOVERED_ARTICLE_VERSION, change: "Hash the conservatively normalized resource URL, including its query." },
+    { version: "2026-10-31", change: "Require the current query-free discovery format without older-format readers." },
     { version: "2026-10-29", change: "Identify query-free article discovery." },
     { version: "2026-10-25", change: "Record the first global discovery instant and its UTC day." },
   ],

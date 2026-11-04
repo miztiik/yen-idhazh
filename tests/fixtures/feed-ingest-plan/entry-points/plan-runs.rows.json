@@ -2,7 +2,7 @@
   {
     "run_id": "2026-10-21-700",
     "started_at": "2026-10-21T23:59:59.999Z",
-    "duration_ms": 8163,
+    "duration_ms": 2311,
     "status": "completed",
     "failure_code": null,
     "selected_count": 1,
@@ -17,32 +17,32 @@
     "api_timings": [
       {
         "operation": "feed-health-before-fetch",
-        "duration_ms": 163,
+        "duration_ms": 50,
         "status": "completed"
       },
       {
         "operation": "fetch",
-        "duration_ms": 6385,
+        "duration_ms": 1937,
         "status": "completed"
       },
       {
         "operation": "feed-health-for-selection",
-        "duration_ms": 65,
+        "duration_ms": 16,
         "status": "completed"
       },
       {
         "operation": "select",
-        "duration_ms": 340,
+        "duration_ms": 97,
         "status": "completed"
       },
       {
         "operation": "partition",
-        "duration_ms": 19,
+        "duration_ms": 6,
         "status": "completed"
       },
       {
         "operation": "persist",
-        "duration_ms": 552,
+        "duration_ms": 46,
         "status": "completed"
       }
     ],

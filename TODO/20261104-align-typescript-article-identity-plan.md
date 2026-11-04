@@ -140,7 +140,7 @@ Table I - Delivery rows
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| I1 | 1 | Preserve resource URLs before hashing and dispatch | - | A | PENDING | - | - | - |
+| I1 | 1 | Preserve resource URLs before hashing and dispatch | - | A | DONE | psychic-waffle | - | Preserve resource URLs |
 | I2 | 2 | Capture a distinct identity for every article input | 1 | B | PENDING | - | - | - |
 | I3 | 3 | Expose consistent article identities across APIs | 2 | C | PENDING | - | - | - |
 
@@ -178,6 +178,7 @@ Table I - Delivery rows
 - `services/feed-ingest-plan/src/harvest-feeds/prepare-article.ts`
 - `services/feed-ingest-plan/src/api/fetch-operation.ts`
 - `services/feed-ingest-plan/src/api/feed-offers.ts`
+- `services/feed-ingest-plan/src/api/parse-operation.ts` (remove the obsolete URL-policy argument without changing collection retention)
 - `services/feed-ingest-plan/src/api/document-state.ts`
 - `services/feed-ingest-plan/src/run-health.ts`
 - `services/feed-ingest-plan/test/article-url-cleanup.test.ts`
@@ -186,9 +187,12 @@ Table I - Delivery rows
 - `services/feed-ingest-plan/test/harvest-recordings.ts`
 - `services/feed-ingest-plan/test/article-source-outcome.test.ts`
 - `services/feed-ingest-plan/test/article-failure-retention.test.ts`
+- `services/feed-ingest-plan/test/network-failure-evidence.test.ts` (use a fragment-free canonical document in diagnostic projection coverage)
+- `services/feed-ingest-plan/test/feed-ingest-plan-http-client.test.ts` (expect the complete recorded article request)
 - `services/feed-ingest-plan/test/file-baseline-recording.ts`
 - `tests/fixtures/feed-ingest-plan/harvest-url-cleanup.json`
 - `tests/fixtures/feed-ingest-plan/harvest-responses.json`
+- `tests/fixtures/contracts/fetched-document/refused.json` (recapture the current native document stamp from recorded transport)
 - `tests/fixtures/feed-ingest-plan/report-events.json`
 - `tests/fixtures/feed-ingest-plan/entry-points/response.json`
 - `tests/fixtures/feed-ingest-plan/entry-points/health.json`

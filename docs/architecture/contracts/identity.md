@@ -156,6 +156,36 @@ UUID hyphens to manufacture a trace ID or add old-field aliases to a native
 TypeScript API. File envelopes continue to carry only their declared identity
 and provenance fields.
 
+### TypeScript resource addresses
+
+An article address key is the complete 64-character lowercase hexadecimal
+SHA-256 of the UTF-8 `canonical_url`. The native feed-document key uses the
+same resource URL rule. Feed, publisher, taxonomy, run, model and article text
+do not enter this hash.
+
+Trim the input, accept HTTP scheme spelling without regard to case, then use
+the runtime's standard `URL` parser and serializer. Check the existing URL
+format and length bounds before parsing and after serialization. Remove the
+fragment only. Preserve queries, parameter order, repeated keys, blank values,
+encoded delimiters and plus signs as the serializer emits them. Preserve
+`www`, non-root trailing slashes, path case and the HTTP/HTTPS distinction.
+Do not rebuild queries with `URLSearchParams`, classify tracking parameters,
+or unwrap a URL stored inside a query. Normalization is idempotent and is a
+fixed identity protocol, not a per-run option.
+
+Syntactic identity does not grant fetch permission. A valid but forbidden
+target retains its normalized address and key in preflight refusal evidence,
+without a source request. Malformed input has neither an address nor an
+invented hash. Initial dispatch uses the same normalized URL that was hashed.
+Every actual redirect hop passes the existing target checks and preserves its
+query; its destination is evidence, not a replacement for the initial key.
+
+This rule belongs to the native TypeScript planner. Python normalization,
+public digest identifiers, configured feed slugs and health endpoint keys
+retain their separate rules. No cross-language normalization parity is claimed.
+The [native history contract](../sources/planner-feed-history.md#raw-and-compact-copies)
+defines current-format reads and independent historical health fields.
+
 ---
 
 ## 6. HHEM execution and event identity
@@ -213,6 +243,11 @@ without changing repeatable work or foreign protocols. The pinned
 the W3C codec only. Core also installs semantic-convention definitions. Their
 cost is server/tool installation, not browser bytes; no tracing SDK, recorder,
 exporter, collector, automatic instrumentation or trace file is added.
+
+A query can select the resource itself. Keeping an extra address record is
+safer than merging two required parameter values. URL identity does not decide
+whether different addresses contain the same story, or whether reporting at
+one address has changed.
 
 ## See also
 

@@ -127,7 +127,7 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
     const replay = await readRecordings();
     replay.responses["https://news.example/feed.xml"] = [{ status: 200, body: body.replaceAll("image/jpeg", "video/mp4") }];
     for (const entry of media.slice(1)) if (entry.link !== null) {
-      replay.responses[deriveArticleIdentity(entry.link, (await inputs()).config.harvest).canonical_url] = [{ status: 200, fixture: "article" }];
+      replay.responses[deriveArticleIdentity(entry.link).canonical_url] = [{ status: 200, fixture: "article" }];
     }
     const transport = new RecordedTransport(replay);
     const result = await harvestFeeds(await inputs(), context(), { transport });
@@ -141,7 +141,7 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
     });
     expect(transport.requests.some(request => request.url.href === media[0]!.link)).toBe(false);
     expect(result.feed_outcomes[0]).toMatchObject({ fetch_status: "success", parse_status: "success", parsed_count: media.length });
-    expect(result.discovered_candidates.map(candidate => candidate.url_key)).toContain(deriveArticleIdentity(media[0]!.link!, result.config.harvest).url_key);
+    expect(result.discovered_candidates.map(candidate => candidate.url_key)).toContain(deriveArticleIdentity(media[0]!.link!).url_key);
     expect(result.candidates.map(candidate => candidate.entry_ordinal))
       .toEqual(media.slice(1).filter(entry => entry.link !== null).map(entry => entry.entry_ordinal));
   }
@@ -153,7 +153,7 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
 
 test("public harvest returns strict full text and streamed work facts without persisting an audit population", async () => {
   const recordings = await readRecordings();
-  for (const url of ["https://news.example/feed.xml", "https://news.example/story/"]) {
+  for (const url of ["https://news.example/feed.xml", "https://news.example/story/?utm_source=feed&b=2&a=1"]) {
     recordings.responses[url]!.unshift({ status: 403, body: "" });
   }
   const transport = new RecordedTransport(recordings);
@@ -168,7 +168,7 @@ test("public harvest returns strict full text and streamed work facts without pe
   const result = await harvestFeeds(loaded, runContext, { transport });
   expect(transport.requests.map(request => request.url.href).sort()).toEqual([
     "https://news.example/feed.xml", "https://news.example/feed.xml",
-    "https://news.example/story/", "https://news.example/story/", "https://news.example/second",
+    "https://news.example/story/?utm_source=feed&b=2&a=1", "https://news.example/story/?utm_source=feed&b=2&a=1", "https://news.example/second",
     "https://atom.example/feed.xml", "https://atom.example/entry", "https://atom.example/undated",
   ].sort());
   expect(facts.filter(row => row.operation === "attempt")
@@ -186,7 +186,7 @@ test("public harvest returns strict full text and streamed work facts without pe
   expect(first.source).toEqual(sourceSnapshot(loaded.sources[0]!));
   expect(result.candidates.find(candidate => candidate.feed_id === "recorded-atom")?.source.publisher_id)
     .toBe("recorded-publication");
-  expect(first.canonical_url).toBe("https://news.example/story/");
+  expect(first.canonical_url).toBe("https://news.example/story/?utm_source=feed&b=2&a=1");
   expect(first.url_key).toBe(deriveUrlKey(first.canonical_url));
   expect(transport.requests.find(request => request.url.pathname === "/story/")?.url.href)
     .toBe(first.canonical_url);
@@ -272,9 +272,10 @@ test("public harvest returns strict full text and streamed work facts without pe
   expect(trackedTransport.requests.some(request => request.url.href === "https://news.example/feed.xml")).toBe(false);
   expect(trackedTransport.requests.some(request => request.url.href === offeredFeed)).toBe(true);
   expect(trackedResult.candidates[0]?.source.feed_url).toBe(offeredFeed);
-  expect(trackedResult.candidates[0]?.canonical_url).toBe("https://news.example/story/");
-  expect(trackedResult.candidates[0]?.url_key).toBe(deriveUrlKey("https://news.example/story/"));
-  expect(trackedTransport.requests.find(request => request.url.pathname === "/story/")?.url.search).toBe("");
+  expect(trackedResult.candidates[0]?.canonical_url).toBe("https://news.example/story/?utm_source=feed&oly_enc_id=tracking&b=2&a=1");
+  expect(trackedResult.candidates[0]?.url_key).toBe(deriveUrlKey("https://news.example/story/?utm_source=feed&oly_enc_id=tracking&b=2&a=1"));
+  expect(trackedTransport.requests.find(request => request.url.pathname === "/story/")?.url.search)
+    .toBe("?utm_source=feed&oly_enc_id=tracking&b=2&a=1");
 });
 
 test("inactive, empty, malformed, HTTP, timeout and address failures are distinct terminal feed outcomes", async () => {
@@ -523,14 +524,13 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   }
 });
 
-test("URL identity hashes the actual query-free request address", () => {
-  const policy = { tidy_urls: false };
-  const result = deriveArticleIdentity(" HTTPS://www.News.Example:443/a///?b=2&utm_campaign=x&a=2&a=1&ref=feed#fragment ", policy);
-  expect(result.canonical_url).toBe("https://www.news.example/a///");
+test("URL identity hashes the actual normalized request address including its query", () => {
+  const result = deriveArticleIdentity(" HTTPS://www.News.Example:443/a///?b=2&utm_campaign=x&a=2&a=1&ref=feed#fragment ");
+  expect(result.canonical_url).toBe("https://www.news.example/a///?b=2&utm_campaign=x&a=2&a=1&ref=feed");
   expect(result.url_key).toBe(deriveUrlKey(result.canonical_url));
-  expect(deriveArticleIdentity("https://news.example/a/../caf\u00e9/", policy).canonical_url).toBe("https://news.example/caf%C3%A9/");
+  expect(deriveArticleIdentity("https://news.example/a/../caf\u00e9/").canonical_url).toBe("https://news.example/caf%C3%A9/");
   for (const address of ["not-a-url", "https://[invalid-host/"]) {
-    expect(() => deriveArticleIdentity(address, policy)).toThrow(InvalidArticleUrlError);
+    expect(() => deriveArticleIdentity(address)).toThrow(InvalidArticleUrlError);
   }
   expect(() => Reflect.apply(deriveArticleIdentity, undefined, [null])).toThrow(TypeError);
 });

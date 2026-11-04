@@ -86,6 +86,13 @@ ledgers. Internal candidate identity uses the supplying run, feed and
 original entry ordinal. It is not another committed article identity.
 Publisher IDs remain curated or null.
 
+Article and feed-document hashes use the
+[native resource address rule](../contracts/identity.md#typescript-resource-addresses).
+Canonical addresses keep their query bytes and omit fragments. The initial
+request uses the hashed address; checked redirect destinations do not replace
+that identity. Source-address safety and live-reference ownership remain
+separate checks.
+
 Transient work facts retain actual UTC operation times and request attempts.
 They feed grouped health counters, not a committed per-operation history.
 Public responses, progress and commit manifests contain no article bodies.

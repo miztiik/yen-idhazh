@@ -52,7 +52,7 @@ test("actual parse failures write and package metadata under one validated gener
       ...operationMetadata(parsed), document_kind: "feed", operation: "parse",
       failed_at: "2026-10-21T23:59:59Z", failure_reason: "malformed-feed",
       document: {
-        ...artifact, canonical_url: `${artifact.canonical_url}?page=2#section`,
+        ...artifact, canonical_url: `${artifact.canonical_url}?page=2`,
         requested_url: "https://news.example/feed.xml?token=private",
         attempts: artifact.attempts.map(attempt => ({ ...attempt,
           request_url: "https://news.example/request?tracking=private#fragment" })),
