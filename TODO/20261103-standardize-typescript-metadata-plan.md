@@ -44,7 +44,7 @@ Table C - PR sequence
 | C1 | 1 | Define shared event and operation metadata | - | A | DONE | stunning-lamp | - | Shared metadata |
 | C2 | 2 | Convert the planner and every planner caller | 1 | B | IN-FLIGHT | effective-pancake | - | Planner metadata |
 | C3 | 3 | Convert host profiling without breaking Python control | 1, 2 | C | PENDING | - | - | - |
-| C4 | 4 | Convert summarizer event metadata | 1 | B | IN-FLIGHT | - | - | - |
+| C4 | 4 | Convert summarizer event metadata | 1 | B | DONE | expert-giggle | - | Summarizer metadata |
 | C5 | 5 | Convert phased workflow events and continuation | 1 | B | DONE | jubilant-telegram | - | Workflow metadata |
 
 ## 2. Exact current-to-target replacements

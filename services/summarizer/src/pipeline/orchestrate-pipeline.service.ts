@@ -1,4 +1,7 @@
+/** How does one request produce its complete summary without sharing operation state? */
 import { performance } from "node:perf_hooks";
+import { createChildContext } from "@idhazh/common-contracts/create-operation-context";
+import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
 import {
   type SummarizeRequest,
   type SummaryStructuredOutput,
@@ -23,7 +26,8 @@ import type { ModelRuntime } from "../config/load-model-runtime.js";
 export async function orchestratePipeline(
   requestInput: SummarizeRequest,
   eventBus: PipelineEventBus,
-  runtime: ModelRuntime
+  runtime: ModelRuntime,
+  context: OperationMetadata,
 ): Promise<SummaryStructuredOutput> {
   const validatedInput = SummarizeRequestSchema.parse(requestInput);
 
@@ -41,16 +45,19 @@ export async function orchestratePipeline(
 
   let targetText = fallbackText;
   let sourceAudit: SourceAudit;
+  let inputContext: OperationMetadata | undefined;
 
   // 1. Ingestion Phase (URL direct scrape or fallback)
   if (cleanUrl.length > 0) {
-    eventBus.emitEvent("URL_HTTP_FETCH_STARTED", { url: cleanUrl });
+    const extractionContext = createChildContext(context);
 
     try {
-      const extracted = await extractContentFromUrl(cleanUrl, (phase, details) => {
-        if (phase === "FETCH_COMPLETED") eventBus.emitEvent("URL_HTTP_FETCH_COMPLETED", details);
-        if (phase === "PARSED") eventBus.emitEvent("URL_DEFUDDLE_EXTRACTED", details);
-      });
+      const extracted = await extractContentFromUrl(
+        cleanUrl,
+        extractionContext,
+        progress => eventBus.emitEvent(progress.type, progress.data, progress.context),
+      );
+      inputContext = extracted.context;
 
       sourceAudit = {
         sourceType: "URL",
@@ -61,17 +68,17 @@ export async function orchestratePipeline(
         extractedText: extracted.content,
       };
       targetText = extracted.content;
-    } catch (err: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Source extraction failed.";
       if (!fallbackText) {
-        throw new Error(`Scraping URL failed (${err.message}) and no input_text fallback was provided.`);
+        throw new Error(`Scraping URL failed (${message}) and no input_text fallback was provided.`);
       }
 
-      console.warn(`[PIPELINE] ⚠️ Direct fetch failed (${err.message}). Using fallback input_text.`);
       eventBus.emitEvent("URL_EXTRACTION_FAILED", {
         url: cleanUrl,
-        error: err.message,
+        error: message,
         resolution: "Fallback to direct input_text",
-      });
+      }, extractionContext);
 
       const fallbackWordCount = fallbackText.split(/\s+/).filter(Boolean).length;
       sourceAudit = {
@@ -81,7 +88,7 @@ export async function orchestratePipeline(
         extractedWordCount: fallbackWordCount,
         extractedCharCount: fallbackText.length,
         extractedText: fallbackText,
-        scrapeError: err.message,
+        scrapeError: message,
       };
       targetText = fallbackText;
     }
@@ -120,39 +127,55 @@ export async function orchestratePipeline(
     inputText: targetText,
     systemPrompt: fullSystemPrompt,
     userPrompt,
-  });
+  }, context);
 
   // 2. Telemetry Baseline
   const vmstatStart = getVmstatSwap();
   let peakProcessSwapMb = getMemorySnapshot().vmSwapMb;
 
-  eventBus.emitEvent("INFERENCE_DISPATCHED", {
-    serverUrl,
-    targetModel: modelName,
-    sourceType: sourceAudit.sourceType,
-    wordCount: words.length,
-    charCount: targetText.length,
+  const inferenceContext = createChildContext(context, {
+    links: inputContext ? [{ traceId: inputContext.traceId, spanId: inputContext.spanId }] : [],
   });
 
-  const startTime = performance.now();
-  const heartbeatTimer = setInterval(() => {
-    const elapsed = Math.round((performance.now() - startTime) / 1000);
-    const snap = getMemorySnapshot();
-    peakProcessSwapMb = Math.max(peakProcessSwapMb, snap.vmSwapMb);
-    console.log(
-      `[HEARTBEAT] ⏳ Processing... (${elapsed}s) | RAM RSS: ${snap.vmRssMb} MB | Server Swap: ${snap.vmSwapMb} MB`
-    );
-  }, 10000);
-
   // 3. Execution Phase
+  let timing: { startedAt: number; heartbeat: ReturnType<typeof setInterval> } | undefined;
   let inferenceResult;
   try {
-    inferenceResult = await queryLlamaServer(runtime, fullSystemPrompt, userPrompt);
+    inferenceResult = await queryLlamaServer(
+      runtime,
+      fullSystemPrompt,
+      userPrompt,
+      inferenceContext,
+      operation => {
+        eventBus.emitEvent("INFERENCE_DISPATCHED", {
+          serverUrl,
+          targetModel: modelName,
+          sourceType: sourceAudit.sourceType,
+          wordCount: words.length,
+          charCount: targetText.length,
+        }, operation);
+        const startedAt = performance.now();
+        const heartbeat = setInterval(() => {
+          const snap = getMemorySnapshot();
+          peakProcessSwapMb = Math.max(peakProcessSwapMb, snap.vmSwapMb);
+          console.error(JSON.stringify({
+            code: "INFERENCE_WAITING",
+            traceId: operation.traceId,
+            spanId: operation.spanId,
+            elapsedSeconds: Math.round((performance.now() - startedAt) / 1000),
+            rssMb: snap.vmRssMb,
+            swapMb: snap.vmSwapMb,
+          }));
+        }, 10000);
+        timing = { startedAt, heartbeat };
+      },
+    );
   } finally {
-    clearInterval(heartbeatTimer);
+    if (timing) clearInterval(timing.heartbeat);
   }
 
-  const totalDurationMs = Math.round(performance.now() - startTime);
+  if (!timing) throw new Error("Inference completed without dispatch.");
+  const totalDurationMs = Math.round(performance.now() - timing.startedAt);
   const swapMetrics = finalizeSwapMetrics(peakProcessSwapMb, vmstatStart);
 
   // Token Metrics calculation
@@ -198,7 +221,7 @@ export async function orchestratePipeline(
     tokenMetrics,
     swapMetrics,
     rawOutput: inferenceResult.rawContent,
-  });
+  }, inferenceResult.context);
 
   const structuredOutput: SummaryStructuredOutput = {
     ...inferenceResult.parsedAnalysis,
@@ -214,7 +237,7 @@ export async function orchestratePipeline(
 
   // Validate the final aggregate object with Zod contract
   const validatedFinalResult = SummaryStructuredOutputSchema.parse(structuredOutput);
-  eventBus.emitEvent("OUTPUT_STRUCTURED", validatedFinalResult);
+  eventBus.emitEvent("OUTPUT_STRUCTURED", validatedFinalResult, context);
 
   return validatedFinalResult;
 }

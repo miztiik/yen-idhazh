@@ -1,10 +1,5 @@
-// services/summarizer/src/index.ts
-import { createHttpServer } from "./api/serve-http-api.js";
-import { loadEnvConfig } from "./config/load-env-config.js";
-
-const env = loadEnvConfig();
-const app = createHttpServer(env.PORT);
-app.start();
+/** Which public entry point and application contracts does the summarizer expose? */
+import "./start-api-server.js";
 
 export * from "./schemas/export-all-schemas.js";
 export * from "./pipeline/orchestrate-pipeline.service.js";

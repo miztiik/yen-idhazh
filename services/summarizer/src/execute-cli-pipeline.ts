@@ -1,26 +1,18 @@
+/** How does one CLI invocation return a summary and retain its private events? */
+import { createRootContext } from "@idhazh/common-contracts/create-operation-context";
+import { loadEventSources } from "@idhazh/common-contracts/load-event-sources";
 import { loadEnvConfig } from "./config/load-env-config.js";
 import { PipelineEventBus } from "./services/dispatch-event.service.js";
 import { orchestratePipeline } from "./pipeline/orchestrate-pipeline.service.js";
 import { renderGithubStepSummary } from "./reporters/render-github-summary.reporter.js";
-import { detectL3Cache } from "./services/collect-telemetry.service.js";
 
 async function runCli(): Promise<void> {
-  const env = loadEnvConfig();
-
-  console.log("=== AI Inference Pipeline CLI Startup ===");
-  console.log({
-    runner: env.RUNNER_NAME,
-    shard: env.SHARD_ID,
-    model: env.modelRuntime.request.model,
-    serverUrl: env.modelRuntime.base_url,
-    hasUrl: Boolean(env.URL),
-    hasInputText: Boolean(env.INPUT_TEXT),
-    l3Cache: detectL3Cache(),
-  });
-
-  const eventBus = new PipelineEventBus(env.RUNNER_NAME, env.SHARD_ID);
+  const context = createRootContext();
 
   try {
+    const env = loadEnvConfig();
+    const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
+    const eventBus = new PipelineEventBus(sources.summarizer);
     const result = await orchestratePipeline(
       {
         url: env.URL,
@@ -28,21 +20,25 @@ async function runCli(): Promise<void> {
         system_prompt: env.PROMPT,
       },
       eventBus,
-      env.modelRuntime
+      env.modelRuntime,
+      context,
     );
 
-    console.log("\n============================================================");
-    console.log("🎯 PARSED & ZOD-VALIDATED RESULT:");
-    console.log("============================================================");
-    console.log(JSON.stringify(result, null, 2));
-    console.log("============================================================\n");
+    process.stdout.write(JSON.stringify(result) + "\n");
 
     renderGithubStepSummary(env.modelRuntime.request.model, result, eventBus.getEventHistory());
-    console.log("✅ CLI run completed successfully. Telemetry saved to pipeline-events.jsonl");
-  } catch (err: any) {
-    console.error("❌ Pipeline run terminated with error:", err.message);
-    process.exit(1);
+    console.error(JSON.stringify({
+      code: "SUMMARIZE_COMPLETED",
+      traceId: context.traceId,
+      spanId: context.spanId,
+      events: eventBus.getEventHistory().length,
+    }));
+  } catch {
+    console.error(JSON.stringify({
+      code: "SUMMARIZE_FAILED", traceId: context.traceId, spanId: context.spanId,
+    }));
+    process.exitCode = 1;
   }
 }
 
-runCli();
+await runCli();
