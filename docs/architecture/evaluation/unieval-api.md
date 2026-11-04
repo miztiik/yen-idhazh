@@ -92,7 +92,8 @@ does not read its configuration or load its optional model dependencies.
 Health and admission check the actual owned process, not only its cached
 loaded identity. An observed idle exit closes UniEval admission and joins
 that child before reporting `WORKER_EXITED`. Concurrent observers share the
-same owned stop operation.
+same owned stop operation and wait for its confirmed outcome, including
+cleanup errors, before returning failed health or refusing admission.
 
 ## Assets and diagnostics
 

@@ -109,13 +109,20 @@ class UnievalController:
         if self.stopping:
             raise UnievalFailure(UnievalError.from_code("SERVICE_STOPPED"))
         if self.status != "ready":
-            if self.failure_code == "WORKER_EXITED":
-                raise UnievalFailure(UnievalError.from_code("WORKER_EXITED"))
+            if self.failure_code in ("WORKER_EXITED", "WORKER_STOP_FAILED"):
+                raise UnievalFailure(UnievalError.from_code(self.failure_code))
             raise UnievalFailure(UnievalError.from_code("WORKER_NOT_READY"))
         return self.queue.reserve(state.execution_id)
 
     async def _observe_worker_exit(self) -> None:
-        if self.status != "ready" or self.worker.is_alive:
+        if self.status != "ready":
+            if self.stop_task is not None:
+                try:
+                    await asyncio.shield(self.stop_task)
+                except UnievalFailure as failure:
+                    self.failure_code = failure.error.code
+            return
+        if self.worker.is_alive:
             return
         try:
             await self.fail_worker("WORKER_EXITED")
