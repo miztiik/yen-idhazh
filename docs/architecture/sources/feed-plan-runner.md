@@ -105,6 +105,10 @@ reservation that created the collection. A rejected invocation cannot cancel,
 finalize, release or write an outcome over another live run. Only the matching
 child operation consumes a pending reservation, and only its invocation can
 discard it.
+The reservation retains the actual admitted startup promise while preparation
+is in flight. If the caller cancels, that invocation awaits its preparation
+before deciding whether to cancel, account for and release the created work.
+It never waits on another invocation's preparation.
 An unreadable existence reply still permits cancellation, final accounting and
 release when that private reservation proves ownership. The failed result keeps
 the original startup failure, lookup failure and bounded cleanup evidence.

@@ -99,10 +99,16 @@ test("one recorded saved run agrees with its public summary and selected identit
 });
 
 test("uncertain collection startup uses its preallocated trace to recover ownership and release", async () => {
-  for (const corruption of ["truncated", "foreign-execution", "unreadable-lookup", "unreadable-lookup-and-release"] as const) {
+  for (const corruption of [
+    "truncated", "foreign-execution", "unreadable-lookup", "unreadable-lookup-and-release", "cancelled-preparation",
+  ] as const) {
     const fixture = await recordedPlan();
     const app = createPlanApp(fixture.inputs, fixture.runtime);
+    const cancellation = new AbortController();
+    const expectedRun = resolveRunContext(fixture.inputs.settings, fixture.runtime.git_sha, fixture.runtime.clock!(),
+      fixture.runtime.run_number, createRootContext()).run_id;
     let started: ReturnType<typeof CollectionResponseSchema.parse> | undefined;
+    let startupRequest: Promise<Response> | undefined;
     let lookupTrace: string | undefined;
     const paths: string[] = [];
     const terminal: { held: boolean; active: boolean }[] = [];
@@ -113,9 +119,27 @@ test("uncertain collection startup uses its preallocated trace to recover owners
         const path = new URL(request.url).pathname.slice(PLANNER_API_PREFIX.length + 1);
         paths.push(path);
         if (path === "collections/exists") lookupTrace = (await request.clone().json()).traceId;
-        const response = await app.fetch(request);
+        const pending = Promise.resolve(app.fetch(request));
+        let responsePromise = pending;
+        if (path === "collections") {
+          responsePromise = pending.then(async response => {
+            if (response.ok) started = CollectionResponseSchema.parse(await response.clone().json());
+            return response;
+          });
+          startupRequest = responsePromise;
+        }
+        if (path === "collections" && corruption === "cancelled-preparation") {
+          let settled = false;
+          const admitted = pending.finally(() => { settled = true; });
+          while (!stageStore(fixture.inputs).isRunActive(expectedRun) && !settled) await Bun.sleep(0);
+          expect(stageStore(fixture.inputs).isRunActive(expectedRun)).toBe(true);
+          expect(collectionForRun(fixture.inputs, expectedRun)).toBeUndefined();
+          cancellation.abort();
+          await admitted;
+        }
+        const response = await responsePromise;
         if (path === "collections" && response.ok) {
-          started = CollectionResponseSchema.parse(await response.clone().json());
+          if (corruption === "cancelled-preparation") return response;
           return new Response(corruption === "foreign-execution"
             ? JSON.stringify({ ...started, traceId: createRootContext().traceId })
             : (await response.text()).slice(0, -1),
@@ -130,7 +154,7 @@ test("uncertain collection startup uses its preallocated trace to recover owners
     });
     try {
       const result = await runFeedPlan({}, fixture.inputs, { ...fixture.runtime,
-        stage_origin: `http://127.0.0.1:${server.port}`, log(event) {
+        stage_origin: `http://127.0.0.1:${server.port}`, signal: cancellation.signal, log(event) {
           fixture.runtime.log?.(event);
           if (event.data.operation === "plan" && event.data.phase !== "started") {
             paths.push("terminal");
@@ -140,12 +164,14 @@ test("uncertain collection startup uses its preallocated trace to recover owners
             });
           }
         } });
+      await startupRequest;
       expect(started?.traceId).toBe(result.context.traceId);
       expect(lookupTrace).toBe(result.context.traceId);
       expect(started?.spanId).not.toBe(result.context.spanId);
       expect(result.row.status).toBe("failed");
       expect(result.health).toBeNull();
-      expect(result.failure?.error_type).toBe(corruption === "foreign-execution" ? "PlanError" : "SyntaxError");
+      expect(result.failure?.error_type).toBe(corruption === "foreign-execution" ? "PlanError"
+        : corruption === "cancelled-preparation" ? "AbortError" : "SyntaxError");
       expect(result.failure?.operation).toBe("collection-start");
       if (unreadableLookup) {
         expect(result.failure?.causes.some(cause => cause.operation === "collection-start")).toBe(true);

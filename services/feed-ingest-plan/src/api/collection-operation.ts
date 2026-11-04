@@ -8,7 +8,7 @@ import { resolveRunContext } from "../resolve-run-context";
 import type { RunContext } from "../resolve-run-context";
 import { resolvePlanRequest, PlanError } from "./plan-request";
 import {
-  BeginCollectionSchema, CollectionReferenceSchema, FinalizeCollectionRequestSchema, FinalizedCollectionSchema,
+  BeginCollectionSchema, CollectionReferenceSchema, CollectionResponseSchema, FinalizeCollectionRequestSchema, FinalizedCollectionSchema,
   ReleaseCollectionRequestSchema,
 } from "./collection-contracts";
 import { captureDocumentContext, commandContext, operationLink, operationMetadata, stageContext } from "./operation-context";
@@ -46,6 +46,7 @@ export type Collection = {
 const collections = new WeakMap<PlanInputs, Map<string, Collection>>();
 const pendingContexts = new WeakMap<PlanInputs, Map<string, RunContext>>();
 const collectionOwners = new WeakMap<Collection, RunContext>();
+const preparedStarts = new WeakMap<PlanInputs, WeakMap<RunContext, Promise<z.infer<typeof CollectionResponseSchema>>>>();
 const startingCollections = new WeakMap<PlanInputs, Set<string>>();
 export function prepareCollectionContext(inputs: PlanInputs, context: RunContext) {
   let pending = pendingContexts.get(inputs);
@@ -62,6 +63,10 @@ export function prepareCollectionContext(inputs: PlanInputs, context: RunContext
 export function discardCollectionContext(inputs: PlanInputs, context: RunContext) {
   const pending = pendingContexts.get(inputs);
   if (pending?.get(context.traceId) === context) pending.delete(context.traceId);
+  preparedStarts.get(inputs)?.delete(context);
+}
+export async function awaitCollectionStartup(inputs: PlanInputs, context: RunContext) {
+  await preparedStarts.get(inputs)?.get(context);
 }
 export function ownsPreparedCollection(inputs: PlanInputs, context: RunContext) {
   const collection = collections.get(inputs)?.get(context.traceId);
@@ -116,33 +121,41 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
     if (finished === undefined) throw new PlanError("REQUEST_BUSY", "Collection capacity is occupied by active work", "traceId");
     owned.delete(finished[0]);
   }
+  const record = captureDocumentContext(inputs, runtime, context);
   if (prepared !== undefined) pending?.delete(operation.traceId);
   starting.add(operation.traceId);
-  const record = captureDocumentContext(inputs, runtime, context);
-  stages.retainRun(context.run_id);
-  try {
-    const state = await documentState(record, inputs, runtime);
-    state.plan_owned = true;
-    const preflightAt = utcTimestamp(runtime.observation_clock);
-    const availability = summarizeFeedAvailability(state.history.sources, preflightAt, inputs.harvest.sources);
-    for (const source of inputs.harvest.sources.filter(source => source.status === "active")) {
-      state.work.carryFeed(source.id, preflightAt);
-    }
-    const eligible = new Set(availability.eligible_feed_ids);
-    const feeds = new Map(inputs.harvest.sources.filter(source => source.status === "active" && eligible.has(source.id))
-      .map(source => [source.id, { state: "pending" as const, parse: null }]));
-    const collection: Collection = { context, request: controls, state, feeds, parses: new Map(),
-      offers: new Map(), results: new Map(), pending_offers: 0,
-      config_sha256: record.config_sha256, signal: new AbortController(), status: "collecting",
-      closing: false, finalizing: false, operations: new Set() };
-    owned.set(operation.traceId, collection);
-    if (prepared !== undefined) collectionOwners.set(collection, prepared);
-    return { ...operationMetadata(context), context: stageContext(context), feeds: [...feeds.keys()] };
-  } catch (error) {
-    throw await retainFailureThroughCleanup(error, {
-      operation: "feed-health-before-fetch", execution: context, limits: inputs.settings.diagnostics.failure,
-    }, [{ operation: "collection-cancel", execute: () => stages.releaseRun(context.run_id) }]);
-  } finally { starting.delete(operation.traceId); }
+  const startup = (async () => {
+    stages.retainRun(context.run_id);
+    try {
+      const state = await documentState(record, inputs, runtime);
+      state.plan_owned = true;
+      const preflightAt = utcTimestamp(runtime.observation_clock);
+      const availability = summarizeFeedAvailability(state.history.sources, preflightAt, inputs.harvest.sources);
+      for (const source of inputs.harvest.sources.filter(source => source.status === "active")) {
+        state.work.carryFeed(source.id, preflightAt);
+      }
+      const eligible = new Set(availability.eligible_feed_ids);
+      const feeds = new Map(inputs.harvest.sources.filter(source => source.status === "active" && eligible.has(source.id))
+        .map(source => [source.id, { state: "pending" as const, parse: null }]));
+      const collection: Collection = { context, request: controls, state, feeds, parses: new Map(),
+        offers: new Map(), results: new Map(), pending_offers: 0,
+        config_sha256: record.config_sha256, signal: new AbortController(), status: "collecting",
+        closing: false, finalizing: false, operations: new Set() };
+      owned.set(operation.traceId, collection);
+      if (prepared !== undefined) collectionOwners.set(collection, prepared);
+      return { ...operationMetadata(context), context: stageContext(context), feeds: [...feeds.keys()] };
+    } catch (error) {
+      throw await retainFailureThroughCleanup(error, {
+        operation: "feed-health-before-fetch", execution: context, limits: inputs.settings.diagnostics.failure,
+      }, [{ operation: "collection-cancel", execute: () => stages.releaseRun(context.run_id) }]);
+    } finally { starting.delete(operation.traceId); }
+  })();
+  if (prepared !== undefined) {
+    let starts = preparedStarts.get(inputs);
+    if (starts === undefined) { starts = new WeakMap(); preparedStarts.set(inputs, starts); }
+    starts.set(prepared, startup);
+  }
+  return startup;
 }
 export function claimCollectionFeed(inputs: PlanInputs, id: string, feedId: string) {
   const collection = getCollection(inputs, id);

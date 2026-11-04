@@ -20,7 +20,7 @@ import {
 import { FetchResponseSchema, ParseResponseSchema } from "./api/document-response.schema";
 import { SelectionResponseSchema, PartitionResponseSchema, PersistenceResponseSchema } from "./api/stage-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "./api/feed-health-state.schema";
-import { prepareCollectionContext, discardCollectionContext, ownsPreparedCollection } from "./api/collection-operation";
+import { prepareCollectionContext, discardCollectionContext, awaitCollectionStartup, ownsPreparedCollection } from "./api/collection-operation";
 import { resolveRunContext } from "./resolve-run-context";
 import { capturePlannerFailure, combinePlannerFailures, readPlannerResponseError, withPlannerFailure } from "./api/plan-failure";
 import { plannerFailureOperation } from "./api/planner-failure-operation";
@@ -130,12 +130,16 @@ async function runPlanStages(
       if (error instanceof PlanError && error.code === "REQUEST_CONFLICT") throw error;
       let existing: z.infer<typeof CollectionExistsResponseSchema> | undefined;
       let startupError = error;
+      try { await awaitCollectionStartup(inputs, context); }
+      catch (preparationError) {
+        startupError = new AggregateError([error, preparationError], "Collection startup request and preparation failed");
+      }
       try {
         existing = await call("collections/exists", { traceId }, CollectionExistsResponseSchema, true);
         if (existing.traceId !== traceId) throw new PlanError("ARTIFACT_INVALID", "Collection lookup identity differs");
       } catch (lookupError) {
         startupError = new AggregateError([
-          error, new PlanError("PLAN_FAILED", "Collection startup outcome could not be checked", null, { cause: lookupError }),
+          startupError, new PlanError("PLAN_FAILED", "Collection startup outcome could not be checked", null, { cause: lookupError }),
         ], "Collection startup and outcome lookup failed");
         if (!ownsPreparedCollection(inputs, context)) throw startupError;
       }
