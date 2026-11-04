@@ -12,6 +12,7 @@ import type { PlanRequest } from "../src/api/plan-request";
 import { requestPlannerHttp } from "./feed-ingest-plan-http-client";
 import { superviseHttpChild } from "./http-child-lifetime";
 import { runtimeFailureExecution } from "../src/api/plan-failure";
+import { operationMetadata } from "../src/api/operation-context";
 
 export function createPlannerStartup(inputs: PlanInputs, runtime: PlannerStartup["runtime"]) {
   return PlannerStartupSchema.parse({
@@ -50,6 +51,6 @@ export async function invokePlannerHttp(
       });
       return base;
     },
-    request: (base, signal) => requestPlannerHttp(base, inputs, request, directory, signal),
+    request: (base, signal) => requestPlannerHttp(base, inputs, request, directory, signal, operationMetadata(startup.runtime)),
   });
 }

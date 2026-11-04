@@ -4,7 +4,6 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FeedIngestConfigSchema, readFeedIngestEvent } from "../../../packages/common-contracts/src/index";
-import { FEED_INGEST_EVENT_VERSION } from "../../../packages/common-contracts/src/version";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
 import { resolveWorkflowGuideUrl, writePlannerReport } from "../scripts/feed-ingest-plan-report";
 import { formatHostFingerprintSummary } from "../scripts/feed-ingest-plan-host-summary";
@@ -62,14 +61,10 @@ test("reads current sparse progress and refuses hidden article or audit payloads
   const events = await fixture();
   const before = structuredClone(events);
   expect(renderPlannerProgressMarkdown(events)).toEqual(renderPlannerProgressMarkdown(before));
-  expect(events.every(event => event.version === FEED_INGEST_EVENT_VERSION)).toBe(true);
   for (const changed of [
     { ...events[0], headers: { authorization: "private" } },
     { ...events[0], article_text: "Private article body" },
     { ...events[0], payload: { kind: "candidate_decision" } },
-    { ...events[0], event_id: "a".repeat(64) },
-    { ...events[0], correlation_id: "old-run-label" },
-    { ...events[0], version: "2026-10-20" },
   ]) expect(() => renderPlannerProgressMarkdown([changed])).toThrow();
   expect(events).toEqual(before);
 });
@@ -84,7 +79,8 @@ test("absent progress stays unavailable and zero counts do not certify publicati
   const empty = renderPlannerProgressMarkdown([]);
   expect(empty.markdown).toContain("No progress was supplied. The result is unavailable.");
   expect(empty.notices).toEqual([]);
-  const zero = renderPlannerProgressMarkdown([{ ...events[0], phase: "completed", details: { output_count: 0, duration_ms: 0 } }]);
+  const zero = renderPlannerProgressMarkdown([{ ...events[0],
+    data: { ...events[0]!.data, phase: "completed", details: { output_count: 0, duration_ms: 0 } } }]);
   expect(zero.markdown).toContain("duration&#95;ms");
   expect(zero.markdown).toContain("output&#95;count");
   expect(zero.markdown).toContain("&#58;0");
@@ -135,16 +131,17 @@ test("absent progress stays unavailable and zero counts do not certify publicati
 
 test("escapes command data and refuses URLs or arbitrary progress fields", async () => {
   const events = await fixture();
-  const report = renderPlannerProgressMarkdown([{ ...events[0], phase: "failed",
-    details: { failure_code: "NETWORK\r\n::error title=pwn::run | <script>` %" } }]);
+  const report = renderPlannerProgressMarkdown([{ ...events[0], data: { ...events[0]!.data, phase: "failed",
+    details: { failure_code: "NETWORK\r\n::error title=pwn::run | <script>` %" } } }]);
   expect(report.notices).toHaveLength(1);
   const annotation = formatWorkflowAnnotation(report.notices[0]!);
   expect(annotation).not.toContain("\n");
   expect(annotation).not.toContain("\r");
   expect(annotation).toContain("%0A");
   expect(annotation).toContain("%25");
-  const unsafe = prepareProgressEvent({ ...events[0], details: { feed_url: "https://news.example/feed?token=private" } });
-  expect(unsafe.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
+  const unsafe = prepareProgressEvent({ ...events[0],
+    data: { ...events[0]!.data, details: { feed_url: "https://news.example/feed?token=private" } } });
+  expect(unsafe.data.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
   expect(JSON.stringify(unsafe)).not.toContain("news.example");
   expect(() => renderPlannerProgressMarkdown([{ ...events[0], url: "https://news.example/private" }])).toThrow();
 });
@@ -287,15 +284,16 @@ test("publisher keeps flexible details and records missing or unsafe details wit
   const events = await fixture();
   const compliant = prepareProgressEvent({
     ...events[0],
-    details: { feed_id: "recorded-news", publisher_id: null, extension: { enabled: true } },
+    data: { ...events[0]!.data, details: { feed_id: "recorded-news", publisher_id: null, extension: { enabled: true } } },
   }, ["feed_id", "publisher_id"]);
-  expect(compliant.details).toEqual({ feed_id: "recorded-news", publisher_id: null, extension: { enabled: true } });
+  expect(compliant.data.details).toEqual({ feed_id: "recorded-news", publisher_id: null, extension: { enabled: true } });
 
   const nonCompliant = prepareProgressEvent({
     ...events[0],
-    details: { feed_id: "recorded-news", article_text: "Private article body", _compliance: { status: "COMPLIANT" } },
+    data: { ...events[0]!.data,
+      details: { feed_id: "recorded-news", article_text: "Private article body", _compliance: { status: "COMPLIANT" } } },
   }, ["feed_id", "publisher_id"]);
-  expect(nonCompliant.details._compliance).toMatchObject({
+  expect(nonCompliant.data.details._compliance).toMatchObject({
     status: "NON_COMPLIANT",
     violations: [
       { code: "unsafe_detail_key", path: "details" },
@@ -306,8 +304,8 @@ test("publisher keeps flexible details and records missing or unsafe details wit
   expect(JSON.stringify(nonCompliant)).not.toContain("Private article body");
   expect(renderPlannerProgressMarkdown([nonCompliant]).markdown).toContain("NON_COMPLIANT");
 
-  const malformed = prepareProgressEvent({ ...events[0], details: "not-an-object" }, ["feed_id"]);
-  expect(malformed.details._compliance).toMatchObject({
+  const malformed = prepareProgressEvent({ ...events[0], data: { ...events[0]!.data, details: "not-an-object" } }, ["feed_id"]);
+  expect(malformed.data.details._compliance).toMatchObject({
     status: "NON_COMPLIANT",
     violations: [
       { code: "details_must_be_object", path: "details" },
@@ -316,11 +314,10 @@ test("publisher keeps flexible details and records missing or unsafe details wit
   });
 });
 
-test("refuses mixed executions but permits concurrent stage ordering without fabricated sequence fields", async () => {
+test("refuses mixed runs but permits concurrent stage ordering", async () => {
   const events = await fixture();
-  expect(() => renderPlannerProgressMarkdown([events[0], { ...events[1], run_id: "2026-10-21-999" }])).toThrow("more than one run");
-  expect(() => renderPlannerProgressMarkdown([events[0], { ...events[1], correlation_id: "040345df-230e-4bf9-8efc-d0d823fcde3b" }])).toThrow("more than one run");
-  expect(() => renderPlannerProgressMarkdown([{ ...events[0], sequence: 1 }])).toThrow();
+  expect(() => renderPlannerProgressMarkdown([events[0],
+    { ...events[1], data: { ...events[1]!.data, run_id: "2026-10-21-999" } }])).toThrow("more than one run");
   expect(() => renderPlannerProgressMarkdown([events[1], events[0]])).not.toThrow();
 });
 

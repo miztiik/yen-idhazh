@@ -1,7 +1,7 @@
 /** Which independent host-probe measurements must a proof record? */
 import { z } from "zod";
 import {
-  HostFingerprintRowSchema, RequestIdSchema, RunIdSchema, WriterIdentitySchema,
+  HostFingerprintRowSchema, RunIdSchema, WriterIdentitySchema,
 } from "../../../packages/common-contracts/src/index";
 import { OwnedProcessSchema, TaskProfileSchema } from "../src/task-profile/profile-schema";
 import { HostSampleSchema } from "../src/probe/sample-host";
@@ -17,7 +17,8 @@ export const WorkflowSettingsSchema = SelectedSettingsSchema.extend({
 
 export const ProfileProofIdentitySchema = z.strictObject({
   git_sha: WriterIdentitySchema.shape.git_sha,
-  run_id: RunIdSchema, attempt: WriterIdentitySchema.shape.attempt, correlation_id: RequestIdSchema,
+  run_id: RunIdSchema, attempt: WriterIdentitySchema.shape.attempt,
+  correlation_id: TaskProfileSchema.shape.identity.shape.correlation_id,
 });
 const fields = HostFingerprintRowSchema.shape;
 export const CopyResultSchema = z.object({

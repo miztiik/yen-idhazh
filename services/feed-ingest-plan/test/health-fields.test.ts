@@ -1,11 +1,11 @@
 /** Can each health use read only its fields without losing file or fact integrity? */
 import { expect, test } from "bun:test";
-import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { FeedHealthStateRowContract, FeedHealthStateRowSchema, FeedIngestEventSchema } from "@idhazh/common-contracts";
+import { createRootContext, FeedHealthStateRowContract, FeedHealthStateRowSchema, FeedIngestEventSchema, loadEventSources, writeTraceContext } from "@idhazh/common-contracts";
 import {
   persistLedger, readPlannerParquet, readStoredPlannerParquet, PlannerUnsupportedFormatError,
 } from "@idhazh/ledger-file-writer";
@@ -14,6 +14,7 @@ import { readFeedHealthFieldsDay } from "../src/read-ledger-history/read-feed-he
 import { createPlannerHistoryCache, readPlannerDay } from "../src/read-ledger-history/read-planner-history";
 import { healthFieldFixture, rewriteHealthFields } from "./health-field-fixtures";
 import { compactRows, registration, settings } from "./partition-fixtures";
+import { operationLink } from "../src/api/operation-context";
 
 const shape = FeedHealthStateRowSchema.shape;
 const schema = z.object(shape);
@@ -110,8 +111,9 @@ test("request field gaps retain independent checks and individual valid counters
     const stored = { ...variant.parse(row), feed_requests: -1 };
     await rewriteHealthFields(path, [stored], variant, { stamp: "2026-10-25" });
     const logged: unknown[] = [];
-    const correlation_id = randomUUID();
-    const log = createStageLogger({ run_id: row.run_id, correlation_id }, event => logged.push(event));
+    const operation = createRootContext();
+    const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
+    const log = createStageLogger({ run_id: row.run_id, ...operation }, sources.planner, event => logged.push(event));
     const read = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
       day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     }, createPlannerHistoryCache(), undefined, log);
@@ -126,21 +128,24 @@ test("request field gaps retain independent checks and individual valid counters
       expect.objectContaining({ use: "request_totals", field: "article_requests", day: row.date, code: "missing" }),
     ]);
     expect(logged).toHaveLength(2);
-    expect(logged.map(event => FeedIngestEventSchema.parse(event))).toEqual(expect.arrayContaining([
+    expect(logged.map(event => FeedIngestEventSchema.parse(event).data)).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        run_id: row.run_id, correlation_id, operation: "history", phase: "failed",
+        run_id: row.run_id, operation: "history", phase: "failed",
         details: expect.objectContaining({
           source: "feed-health-field", failed_check: "feed_requests", reason: "invalid",
         }),
       }),
       expect.objectContaining({
-        run_id: row.run_id, correlation_id, operation: "history", phase: "failed",
+        run_id: row.run_id, operation: "history", phase: "failed",
         details: expect.objectContaining({
           source: "feed-health-field", failed_check: "article_requests", reason: "missing",
         }),
       }),
     ]));
-    expect(logged.every(event => FeedIngestEventSchema.parse(event).occurred_at.endsWith("Z"))).toBe(true);
+    expect(logged.every(event => {
+      const saved = FeedIngestEventSchema.parse(event);
+      return saved.time.endsWith("Z") && saved.traceparent === writeTraceContext(operation).traceparent;
+    })).toBe(true);
     for (const use of [read.uses.feed_rest, read.uses.feed_reliability, read.uses.article_admission]) {
       expect(use.rows).toHaveLength(1);
       expect(use.gaps).toEqual([]);
@@ -265,8 +270,8 @@ test("duplicates compare actual stored fields before projection and retain endpo
     const read = () => readFeedHealthFieldsDay(root, registration("feed-health-state"), {
       day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     });
-    await rewriteHealthFields(path, [row, row, { ...row, attempt: 2, check_request_id: randomUUID() },
-      { ...row, endpoint_key: "2".repeat(64), check_request_id: randomUUID() }], schema);
+    await rewriteHealthFields(path, [row, row, { ...row, attempt: 2, links: [operationLink(createRootContext())] },
+      { ...row, endpoint_key: "2".repeat(64), links: [operationLink(createRootContext())] }], schema);
     expect((await read()).uses.request_totals.rows).toHaveLength(3);
     await rewriteHealthFields(path, [row, { ...row, status: 403 }], schema);
     expect((await read()).uses.feed_rest.gaps).toContainEqual(expect.objectContaining({ code: "conflict" }));

@@ -1,6 +1,6 @@
 /** Project the existing fetch and parse facts as each bounded operation completes. */
-import { DocumentWorkFactSchema, NetworkFailureDetailsSchema } from "@idhazh/common-contracts";
-import type { DocumentWorkFact, ExtractionQuality, NetworkFailureDetails, FetchAttempt } from "@idhazh/common-contracts";
+import { createChildContext, DocumentWorkFactSchema, NetworkFailureDetailsSchema, OperationMetadataSchema } from "@idhazh/common-contracts";
+import type { DocumentWorkFact, ExtractionQuality, NetworkFailureDetails, FetchAttempt, OperationMetadata } from "@idhazh/common-contracts";
 import { observeDocument } from "./document-observation";
 import type { DocumentIdentity } from "./document-observation";
 import type { HarvestContext } from "./harvest-types";
@@ -18,18 +18,24 @@ type Scope = {
   document_kind: "feed" | "article"; publisher_id: string | null; candidate_id: string | null;
   observed_run_id: string; observed_attempt: number; feed_id: string;
 };
-type Context = Pick<HarvestContext, "progress" | "observations" | "observation_clock" | "document_activity"> & {
+type Context = OperationMetadata & Pick<HarvestContext, "progress" | "observations" | "observation_clock" | "document_activity"> & {
   on_attempt?: (observation: ReturnType<typeof observeDocument>) => void;
 };
 
-export function documentWork(context: Context, identity: DocumentIdentity, key: string, scope: Scope, initialFetch?: FetchResult) {
+export function documentWork(context: Context, identity: DocumentIdentity, operationContext: OperationMetadata, scope: Scope, initialFetch?: FetchResult) {
+  const operation = OperationMetadataSchema.parse(operationContext);
+  const enclosing = OperationMetadataSchema.parse({
+    traceId: context.traceId, spanId: context.spanId, links: context.links,
+    ...(context.parentSpanId === undefined ? {} : { parentSpanId: context.parentSpanId }),
+    ...(context.traceState === undefined ? {} : { traceState: context.traceState }),
+  });
   const publish = (operation: "fetch" | "parse" | "quality", phase: "started" | "completed" | "failed",
-    duration_ms: number | null, url?: string, failure_code?: string | null,
+    metadata: OperationMetadata, duration_ms: number | null, url?: string, failure_code?: string | null,
     quality_rejection?: QualityRejection,
     fetched?: FetchResult) => context.document_activity?.(
     operation, phase, {
       scope: "document",
-      request_id: key, article_id: identity.article_id, document_kind: scope.document_kind,
+      article_id: identity.article_id, document_kind: scope.document_kind,
       feed_id: scope.feed_id, publisher_id: scope.publisher_id, duration_ms,
       ...(failure_code == null ? {} : { failure_code }),
       ...(quality_rejection === undefined ? {} : { quality_rejection }),
@@ -41,6 +47,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       ? { requested: url, final_attempted: fetched?.final_attempted_url ?? null } : undefined,
     phase === "failed" && fetched !== undefined && operation !== "quality"
       ? failureDetails(fetched, url, operation === "parse") : undefined,
+    metadata,
   );
   let fetchedUrl: string | undefined;
   let finalAttemptedUrl: string | null = initialFetch?.final_attempted_url ?? null;
@@ -59,8 +66,9 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
     });
   }
   const timestamp = () => utcTimestamp(context.observation_clock);
-  const event = (operation: "fetch" | "parse" | "attempt", cause: string | null, occurred_at = timestamp(), suffix = key) =>
-    observeDocument(identity, suffix, operation, cause, occurred_at);
+  const event = (operation: "fetch" | "parse" | "attempt", metadata: OperationMetadata, occurred_at = timestamp()) =>
+    observeDocument(identity, metadata, operation, occurred_at);
+  const skippedParse = () => createChildContext(enclosing, { links: [{ traceId: operation.traceId, spanId: operation.spanId }] });
   async function save(
     observation: ReturnType<typeof observeDocument>, result: Result, duration_ms: number, http_status: number | null,
     measurement?: FetchAttemptMeasurement,
@@ -81,23 +89,23 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
   }
   return {
     rejectFetch(url: string, failure_code: string) {
-      publish("fetch", "started", null);
-      publish("fetch", "failed", 0, url, failure_code);
+      publish("fetch", "started", operation, null);
+      publish("fetch", "failed", operation, 0, url, failure_code);
     },
-    async fetch(fetcher: Pick<SourceFetcher, "fetch">, url: string, cause: string | null = null, signal?: AbortSignal) {
+    async fetch(fetcher: Pick<SourceFetcher, "fetch">, url: string, signal?: AbortSignal) {
       const started = performance.now();
       fetchedUrl = url;
-      publish("fetch", "started", null);
-      const fetchId = event("fetch", cause).event_id;
+      publish("fetch", "started", operation, null);
       {
         let fetched: FetchResult;
         try {
           fetched = await fetcher.fetch(url, async measurement => {
-            const observation = event("attempt", fetchId, measurement.occurred_at, `${key}\n${measurement.attempt.sequence}`);
+            const attemptContext = createChildContext(operation);
+            const observation = event("attempt", attemptContext, measurement.occurred_at);
             context.on_attempt?.(observation);
             if (measurement.outcome === "failed" && measurement.dispatched_request_count > 0) {
               context.document_activity?.("request-attempt", "failed", {
-                scope: "request", request_id: key, article_id: identity.article_id,
+                scope: "request", article_id: identity.article_id,
                 document_kind: scope.document_kind, feed_id: scope.feed_id, publisher_id: scope.publisher_id,
                 duration_ms: measurement.attempt.duration_ms,
               }, undefined, undefined, failureDetails({
@@ -105,7 +113,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
                 final_attempted_url: measurement.final_attempted_url,
                 pacing_time_ms: measurement.attempt.pacing_wait_ms ?? 0,
                 pacing_settings: measurement.pacing_settings,
-              }, url, false, measurement.attempt));
+              }, url, false, measurement.attempt), attemptContext);
             }
             await save(observation, {
               outcome: measurement.outcome,
@@ -113,16 +121,16 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
             }, measurement.attempt.duration_ms, measurement.attempt.http_status, measurement);
           }, scope.document_kind, signal, scope.publisher_id);
         } catch (error) {
-          publish("fetch", "failed", Math.round(performance.now() - started), url, "FETCH_FAILED");
-          await save(event("fetch", cause), { outcome: "failed", failure_code: null },
+          publish("fetch", "failed", operation, Math.round(performance.now() - started), url, "FETCH_FAILED");
+          await save(event("fetch", operation), { outcome: "failed", failure_code: null },
             Math.round(performance.now() - started), null);
           throw error;
         }
         finalAttemptedUrl = fetched.final_attempted_url ?? null;
         capturedFetch = fetched;
-        const observation = event("fetch", cause);
+        const observation = event("fetch", operation);
         publish("fetch", fetched.failure !== null || fetched.body === null ? "failed" : "completed",
-          Math.round(performance.now() - started), url, fetched.failure, undefined, fetched);
+          operation, Math.round(performance.now() - started), url, fetched.failure, undefined, fetched);
         await save(observation, {
           outcome: fetched.failure !== null ? "failed" : fetched.body === null ? "unavailable" : "success",
           failure_code: fetched.failure,
@@ -130,20 +138,21 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
         return { fetched, observation };
       }
     },
-    async parse<T>(execute: () => Promise<T>, cause: string, describe: (parsed: T) => ParseResult, url = fetchedUrl) {
+    async parse<T>(execute: (context: OperationMetadata) => Promise<T>, parseContext: OperationMetadata, describe: (parsed: T) => ParseResult, url = fetchedUrl) {
+      const metadata = OperationMetadataSchema.parse(parseContext);
       const started = performance.now();
-      publish("parse", "started", null);
+      publish("parse", "started", metadata, null);
       let parsed: T | null = null;
       let failure: "malformed-feed" | ArticleExtractionError["reason"] | ParserError["reason"] | null = null;
       let result: ParseResult;
       try {
-        parsed = await execute();
+        parsed = await execute(metadata);
         result = describe(parsed);
       } catch (error) {
-        const observation = event("parse", cause);
+        const observation = event("parse", metadata);
         failure = error instanceof ArticleExtractionError || error instanceof ParserError ? error.reason
           : error instanceof FeedParseError ? "malformed-feed" : null;
-        publish("parse", "failed", Math.round(performance.now() - started), url, failure ?? "PARSE_FAILED", undefined, {
+        publish("parse", "failed", metadata, Math.round(performance.now() - started), url, failure ?? "PARSE_FAILED", undefined, {
           ...(capturedFetch ?? { body: null, http_status: null, failure: null }),
           final_attempted_url: finalAttemptedUrl,
         });
@@ -151,24 +160,24 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
         if (failure === null) throw error;
         return { parsed, failure, observation };
       }
-      const observation = event("parse", cause);
+      const observation = event("parse", metadata);
       const { quality_rejection, ...workResult } = result;
       publish("parse", workResult.outcome === "failed" ? "failed" : "completed",
-        Math.round(performance.now() - started), url, workResult.failure_code, undefined, {
+        metadata, Math.round(performance.now() - started), url, workResult.failure_code, undefined, {
           ...(capturedFetch ?? { body: null, http_status: null, failure: null }),
           final_attempted_url: finalAttemptedUrl,
         });
       await save(observation, workResult, Math.round(performance.now() - started), null);
-      if (quality_rejection !== undefined) publish("quality", "failed", null, url, null, quality_rejection);
+      if (quality_rejection !== undefined) publish("quality", "failed", metadata, null, url, null, quality_rejection);
       return { parsed, failure, observation };
     },
     async skip() {
-      const fetched = event("fetch", null);
+      const fetched = event("fetch", operation);
       await save(fetched, { outcome: "not_attempted", failure_code: null }, 0, null);
-      await save(event("parse", fetched.event_id), { outcome: "not_attempted", failure_code: null }, 0, null);
+      await save(event("parse", skippedParse()), { outcome: "not_attempted", failure_code: null }, 0, null);
     },
-    async skipParse(cause: string) {
-      await save(event("parse", cause), { outcome: "not_attempted", failure_code: null }, 0, null);
+    async skipParse(parseContext: OperationMetadata = skippedParse()) {
+      await save(event("parse", parseContext), { outcome: "not_attempted", failure_code: null }, 0, null);
     },
   };
 }

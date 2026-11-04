@@ -4,7 +4,7 @@ import type { FeedCheckResult, FeedHealthStateRow, FeedLifecycleFields, FeedLife
 import type { FetchResult } from "../harvest-feeds/fetch-source";
 
 const millisecondsPerHour = 3_600_000;
-export type FeedCheck = Pick<FeedHealthStateRow, "check_request_id" | "check_result" | "checked_at" | "status">;
+export type FeedCheck = Pick<FeedHealthStateRow, "links" | "check_result" | "checked_at" | "status">;
 
 export function createUnknownFeedLifecycle(): FeedLifecycleFields {
   return {
@@ -24,7 +24,7 @@ export function resolveFeedEligibility(lifecycle: FeedLifecycleFields, at: strin
 export function applyFeedCheck(
   prior: FeedLifecycleFields, check: FeedCheck, policy: FeedLifecyclePolicy,
 ): FeedLifecycleFields {
-  if (check.check_result === null || check.check_request_id === null || check.checked_at === null) return { ...prior };
+  if (check.check_result === null || check.links.length === 0 || check.checked_at === null) return { ...prior };
   const at = check.checked_at;
   if (prior.availability_updated_at !== null && !definitelyAfter(at, prior.availability_updated_at)) {
     return { ...prior, availability_complete: false };

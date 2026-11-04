@@ -1,6 +1,6 @@
 /** Does the workflow expose only decisions while preserving exact, partial and artifact evidence? */
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,11 +10,11 @@ import { renderPlanMarkdown } from "../src/reporting";
 import { readPlannerOutputRecording } from "./planner-output-recordings";
 
 async function evidence() {
-  const { response, health } = await readPlannerOutputRecording();
+  const { response } = await readPlannerOutputRecording();
   const config = await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
   const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
   const host = await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/host-report.json", import.meta.url)).json();
-  return { response, health, host, policy: {
+  return { response, host, policy: {
     config, request: { article_limit: 17 }, history: settings.collect, parser_concurrency: 2,
   } };
 }
@@ -52,7 +52,7 @@ test("UTC day rows aggregate once per feed while one missing constituent keeps i
     day("combined", 2, 3, "2026-10-21"), day("combined", 3, null, "2026-10-22"),
     day("known", 5, 6, "2026-10-21"), day("missing-selection", null, 100, "2026-10-21"),
   ];
-  const report = renderPlanMarkdown({ response, health: { ...health, rows } });
+  const report = renderPlanMarkdown({ response: { ...response, health: { ...health, rows } } });
   const { document } = parseHTML(Bun.markdown.html(report.markdown));
   const cells = [...document.querySelector("details")!.querySelectorAll("tbody tr")]
     .map(row => [...row.querySelectorAll("td")].map(cell => cell.textContent));
@@ -66,10 +66,12 @@ test("artifact retains per-feed diagnostics without restoring them in the job su
   const input = await evidence();
   const directory = await mkdtemp(join(tmpdir(), "planner-report-"));
   try {
-    for (const [name, value] of [["response", input.response], ["health", input.health],
+    for (const [name, value] of [["response", input.response],
       ["workflow-policy", input.policy], ["host-fingerprint", input.host]] as const) {
       await writeFile(join(directory, `${name}.json`), JSON.stringify(value));
     }
+    await mkdir(join(directory, "health.json"));
+    await expect(writeFile(join(directory, "health.json"), JSON.stringify(input.response.health))).rejects.toThrow();
     const summaryPath = join(directory, "summary.md");
     const result = await writeWorkflowReport({
       root: fileURLToPath(new URL("../../../", import.meta.url)),

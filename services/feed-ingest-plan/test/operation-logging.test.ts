@@ -1,28 +1,27 @@
 /** Do actual offline document, persistence and upload paths publish safe, complete JSONL events? */
 import { expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
-import { SelectedFeedBatchSchema, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { createRootContext, loadEventSources, readTraceContext, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { selectedArtifactPath, rawDocumentContentsFilename } from "../src/selected-artifact-path";
 import { createPlanTestServer } from "./plan-test-server";
-import { prepareProgressEvent } from "../src/logging/structured-logger";
+import { createStageLogger, prepareProgressEvent } from "../src/logging/structured-logger";
 import { publishUploadInventory, publishWorkflowUploadInventories } from "../scripts/feed-ingest-plan-upload-inventory";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
 import { recordedPersistenceBatch } from "./persistence-recordings";
 import { executePersistence } from "../src/api/persistence-operation";
 import { executePartition } from "../src/api/partition-operation";
-import { stageConfigFingerprint } from "../src/api/operation-context";
-import { stageStore } from "../src/api/stage-store";
+import { operationLink, operationMetadata } from "../src/api/operation-context";
+import { FetchResponseSchema } from "../src/api/document-response.schema";
 
 async function fetchFeed(f: Awaited<ReturnType<typeof recordedPlan>>) {
   const app = createPlanTestServer(f.inputs, f.runtime);
   try {
     const response = await app.request(`${PLANNER_API_PREFIX}/fetch`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
-        request_id: randomUUID(), correlation_id: randomUUID(), feed_id: f.inputs.harvest.sources[0]!.id,
+        feed_id: f.inputs.harvest.sources[0]!.id,
         fetch_item_type: "feed",
       }),
     });
@@ -43,49 +42,50 @@ test("standalone document work logs failure addresses only and persistence logs 
   try {
     for (const [url, failedOperation] of [["https://news.example/not-found", "fetch"]] as const) {
       const request = {
-        request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news",
+        feed_id: "recorded-news",
         fetch_item_type: "article", url,
       };
-      const fetched = await post("fetch", request);
-      const events = f.events.filter(event => event.correlation_id === request.correlation_id);
-      expect(events.filter(event => event.operation === "fetch").map(event => event.phase))
+      const fetched = FetchResponseSchema.parse(await post("fetch", request));
+      const events = f.events.filter(event => readTraceContext({
+        traceparent: event.traceparent, tracestate: event.tracestate,
+      })?.traceId === fetched.traceId);
+      expect(events.filter(event => event.data.operation === "fetch").map(event => event.data.phase))
         .toEqual(["started", "failed"]);
       for (const event of events) {
-        expect(event.details._compliance).toBeUndefined();
-        if (event.operation === "fetch" || event.operation === "parse") {
-          expect(event.details.article_id).toBe(fetched.article_id);
+        const { operation, phase, details } = event.data;
+        expect(details._compliance).toBeUndefined();
+        if (operation === "fetch" || operation === "parse") {
+          expect(details.article_id).toBe(fetched.article_id);
         }
-        if (event.operation === failedOperation && event.phase === "failed") {
-          expect(event.details.article_url).toBe(url);
-          expect(event.details.network_failure).toMatchObject({ requested_url: url,
+        if (operation === failedOperation && phase === "failed") {
+          expect(details.article_url).toBe(url);
+          expect(details.network_failure).toMatchObject({ requested_url: url,
             final_attempted_url: url, failed_url: url, http_status: 404, request_profile: "firefox" });
-        } else if (event.operation === "request-attempt" && event.phase === "failed") {
-          expect(event.details.network_failure).toMatchObject({ failed_url: url,
+        } else if (operation === "request-attempt" && phase === "failed") {
+          expect(details.network_failure).toMatchObject({ failed_url: url,
             http_status: 404, attempt: { phase: "target", request_profile: "firefox" } });
         } else expect(JSON.stringify(event)).not.toContain("https://");
       }
     }
-    const batch = await recordedPersistenceBatch(f.inputs, f.runtime);
-    f.inputs.harvest.config.partition.enabled = true;
-    stageStore(f.inputs).replace("selected", SelectedFeedBatchSchema, {
-      ...batch, config_sha256: stageConfigFingerprint(f.inputs, f.runtime),
-    });
-    const assigned = await executePartition({ batch_id: batch.batch_id }, f.inputs, f.runtime);
+    const batch = await recordedPersistenceBatch(f.inputs, f.runtime, { partition_enabled: true });
+    const assigned = await executePartition({ links: [operationLink(batch)] }, f.inputs, f.runtime);
     const blocked = join(f.directory, selectedArtifactPath(f.inputs.settings.inputs.artifact_root, batch.context));
     await mkdir(blocked, { recursive: true });
-    await expect(executePersistence({ batch_id: assigned.batch.batch_id }, f.inputs, f.runtime)).rejects.toThrow();
-    expect(f.events.at(-1)).toMatchObject({ operation: "persist", phase: "failed", details: { failure_code: "PERSIST_FAILED" } });
+    await expect(executePersistence({ links: [operationLink(assigned.batch)] }, f.inputs, f.runtime)).rejects.toThrow();
+    expect(f.events.at(-1)?.data).toMatchObject({ operation: "persist", phase: "failed", details: { failure_code: "PERSIST_FAILED" } });
     await rm(blocked, { recursive: true });
-    await expect(executePersistence({ batch_id: assigned.batch.batch_id }, f.inputs, f.runtime)).rejects.toThrow();
-    const recovery = await executePartition({ batch_id: batch.batch_id }, f.inputs, f.runtime);
+    await expect(executePersistence({ links: [operationLink(assigned.batch)] }, f.inputs, f.runtime)).rejects.toThrow();
+    const recovery = await executePartition({ links: [operationLink(batch)] }, f.inputs, f.runtime);
     expect(recovery.batch.context.run_id).not.toBe(assigned.batch.context.run_id);
-    const persisted = await executePersistence({ batch_id: recovery.batch.batch_id }, f.inputs, f.runtime);
+    const persisted = await executePersistence({ links: [operationLink(recovery.batch)] }, f.inputs, f.runtime);
     const count = f.events.length;
-    expect(await executePersistence({ batch_id: recovery.batch.batch_id }, f.inputs, f.runtime)).toEqual(persisted);
+    const repeated = await executePersistence({ links: [operationLink(recovery.batch)] }, f.inputs, f.runtime);
+    expect(repeated).toEqual({ ...persisted, ...operationMetadata(repeated) });
+    expect(operationLink(repeated)).not.toEqual(operationLink(persisted));
     expect(f.events).toHaveLength(count);
-    expect(f.events.filter(event => event.operation === "persist").map(event => event.phase))
+    expect(f.events.filter(event => event.data.operation === "persist").map(event => event.data.phase))
       .toEqual(["started", "failed", "started", "completed"]);
-    expect(f.events.at(-1)?.details.artifact).toBe(persisted.artifact);
+    expect(f.events.at(-1)?.data.details.artifact).toBe(persisted.artifact);
   } finally { await app.close(); await f.close(); }
 });
 
@@ -93,9 +93,9 @@ test("failed redirected feeds identify the requested URL and final dispatched ta
   const f = await recordedPlan([source({ url: "https://news.example/feed-redirect" })]);
   try {
     await fetchFeed(f);
-    const event = f.events.find(item => item.operation === "fetch" && item.phase === "failed"
-      && item.details.document_kind === "feed");
-    expect(event?.details).toMatchObject({
+    const event = f.events.find(item => item.data.operation === "fetch" && item.data.phase === "failed"
+      && item.data.details.document_kind === "feed");
+    expect(event?.data.details).toMatchObject({
       requested_feed_url: "https://news.example/feed-redirect",
       final_attempted_feed_url: "https://news.example/not-found",
     });
@@ -107,25 +107,27 @@ test("feed byte cutoffs include the limit and observed lower bound in failure ev
   try {
     f.inputs.harvest.extraction.max_body_bytes = 700;
     await fetchFeed(f);
-    const event = f.events.find(item => item.operation === "fetch" && item.phase === "failed"
-      && item.details.document_kind === "feed");
-    expect(event?.details.body_limit).toMatchObject({ configured_limit_bytes: 700 });
-    expect(event?.details).not.toHaveProperty("body_limit_source");
-    expect((event?.details.body_limit as { observed_at_least_bytes: number }).observed_at_least_bytes).toBeGreaterThan(700);
+    const event = f.events.find(item => item.data.operation === "fetch" && item.data.phase === "failed"
+      && item.data.details.document_kind === "feed");
+    expect(event?.data.details.body_limit).toMatchObject({ configured_limit_bytes: 700 });
+    expect(event?.data.details).not.toHaveProperty("body_limit_source");
+    expect((event?.data.details.body_limit as { observed_at_least_bytes: number }).observed_at_least_bytes).toBeGreaterThan(700);
   } finally { await f.close(); }
 });
 
-test("publisher alone authorizes failure URLs and rejects secrets and spoofed markers", () => {
-  const base = {
-    run_id: "2026-10-29-700", correlation_id: randomUUID(), occurred_at: "2026-10-29T08:00:00Z",
-    operation: "fetch", phase: "failed", details: {},
-  };
-  expect(prepareProgressEvent(base, [], "https://news.example/story?page=2#section").details)
+test("publisher alone authorizes failure URLs and rejects secrets and spoofed markers", async () => {
+  const events: FeedIngestEvent[] = [];
+  const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
+  createStageLogger({ run_id: "2026-10-29-700", ...createRootContext() },
+    sources.planner, event => events.push(event))("fetch", "failed");
+  const base = events[0]!;
+  const withData = (data: Record<string, unknown>) => ({ ...base, data: { ...base.data, ...data } });
+  expect(prepareProgressEvent(base, [], "https://news.example/story?page=2#section").data.details)
     .toEqual({ article_url: "https://news.example/story" });
-  expect(prepareProgressEvent({ ...base, details: { document_kind: "feed" } }, [], undefined, {
+  expect(prepareProgressEvent(withData({ details: { document_kind: "feed" } }), [], undefined, {
     requested: "https://news.example/feed.xml?page=2#section",
     final_attempted: "https://cdn.example/feed.xml?tracking=removed",
-  }).details).toEqual({
+  }).data.details).toEqual({
     document_kind: "feed",
     requested_feed_url: "https://news.example/feed.xml",
     final_attempted_feed_url: "https://cdn.example/feed.xml",
@@ -135,56 +137,56 @@ test("publisher alone authorizes failure URLs and rejects secrets and spoofed ma
     "https://news.example/story?X-Amz-Signature=private", "file:///private", "invalid",
   ]) {
     const event = prepareProgressEvent(base, [], url);
-    expect(event.details.article_url).toBeUndefined();
-    expect(event.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
+    expect(event.data.details.article_url).toBeUndefined();
+    expect(event.data.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
     expect(JSON.stringify(event)).not.toContain("private");
   }
   for (const requested of [
     "https://news.example/feed.xml?token=private",
     "https://user:password@news.example/feed.xml",
   ]) {
-    const event = prepareProgressEvent({ ...base, details: { document_kind: "feed" } }, [], undefined, {
+    const event = prepareProgressEvent(withData({ details: { document_kind: "feed" } }), [], undefined, {
       requested, final_attempted: null,
     });
-    expect(event.details.requested_feed_url).toBeUndefined();
+    expect(event.data.details.requested_feed_url).toBeUndefined();
     expect(JSON.stringify(event)).not.toContain("private");
-    expect(event.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
+    expect(event.data.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
   }
   for (const phase of ["started", "completed"]) {
-    expect(prepareProgressEvent({ ...base, phase }, [], "https://news.example/story").details.article_url).toBeUndefined();
+    expect(prepareProgressEvent(withData({ phase }), [], "https://news.example/story").data.details.article_url).toBeUndefined();
   }
-  const qualityRejection = {
-    ...base, operation: "quality", phase: "failed",
+  const qualityRejection = withData({
+    operation: "quality", phase: "failed",
     details: { quality_rejection: { failure_code: "too_short", source_word_count: 45, word_count: 45 } },
-  };
+  });
   expect(prepareProgressEvent(qualityRejection, [], "https://news.example/story?page=2#section"))
-    .toMatchObject({ operation: "quality", phase: "failed" });
-  expect(prepareProgressEvent(qualityRejection, [], "https://news.example/story?page=2#section").details)
+    .toMatchObject({ data: { operation: "quality", phase: "failed" } });
+  expect(prepareProgressEvent(qualityRejection, [], "https://news.example/story?page=2#section").data.details)
     .toMatchObject({
       article_url: "https://news.example/story",
       quality_rejection: { failure_code: "too_short", source_word_count: 45, word_count: 45 },
     });
-  const invalidQualityRejection = prepareProgressEvent({
-    ...qualityRejection, details: { quality_rejection: { failure_code: "too_short", source_word_count: 45, word_count: "45" } },
-  }, [], "https://news.example/story");
-  expect(invalidQualityRejection.details.quality_rejection).toBeUndefined();
-  expect(invalidQualityRejection.details.article_url).toBeUndefined();
-  expect(invalidQualityRejection.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
-  const misplacedQualityRejection = prepareProgressEvent({
-    ...qualityRejection, operation: "parse", phase: "completed",
-  }, [], "https://news.example/story");
-  expect(misplacedQualityRejection.details.quality_rejection).toBeUndefined();
-  expect(misplacedQualityRejection.details.article_url).toBeUndefined();
-  expect(misplacedQualityRejection.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
+  const invalidQualityRejection = prepareProgressEvent(withData({
+    ...qualityRejection.data, details: { quality_rejection: { failure_code: "too_short", source_word_count: 45, word_count: "45" } },
+  }), [], "https://news.example/story");
+  expect(invalidQualityRejection.data.details.quality_rejection).toBeUndefined();
+  expect(invalidQualityRejection.data.details.article_url).toBeUndefined();
+  expect(invalidQualityRejection.data.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
+  const misplacedQualityRejection = prepareProgressEvent(withData({
+    ...qualityRejection.data, operation: "parse", phase: "completed",
+  }), [], "https://news.example/story");
+  expect(misplacedQualityRejection.data.details.quality_rejection).toBeUndefined();
+  expect(misplacedQualityRejection.data.details.article_url).toBeUndefined();
+  expect(misplacedQualityRejection.data.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
   const signedQualityRejection = prepareProgressEvent(qualityRejection, [], "https://news.example/story?token=private");
-  expect(signedQualityRejection.details.article_url).toBeUndefined();
+  expect(signedQualityRejection.data.details.article_url).toBeUndefined();
   expect(JSON.stringify(signedQualityRejection)).not.toContain("private");
-  const spoofed = prepareProgressEvent({
-    ...base, details: { article_url: "https://news.example/private", _compliance: { status: "COMPLIANT" },
+  const spoofed = prepareProgressEvent(withData({
+    details: { article_url: "https://news.example/private", _compliance: { status: "COMPLIANT" },
       nested: { token: "private", link: "https://news.example/private" }, article_text: "private" },
-  });
-  expect(spoofed.details.article_url).toBeUndefined();
-  expect(spoofed.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
+  }));
+  expect(spoofed.data.details.article_url).toBeUndefined();
+  expect(spoofed.data.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
   expect(JSON.stringify(spoofed)).not.toContain("private");
 });
 
@@ -202,10 +204,10 @@ test("upload JSONL names real visible ZIP members, including recovery files, wit
       directory: join(f.directory, "artifacts"), runNumber: "700", now: new Date("2026-10-29T08:00:00Z"),
       write: event => { events.push(event); },
     })).toBe(files.length);
-    expect(events.flatMap(event => typeof event.details.file === "string" ? [event.details.file] : []).sort())
+    expect(events.flatMap(event => typeof event.data.details.file === "string" ? [event.data.details.file] : []).sort())
       .toEqual(files.sort());
-    expect(events.at(-1)).toMatchObject({ operation: "artifact-upload", phase: "completed", details: { file_count: files.length } });
-    expect(events.every(event => event.details._compliance === undefined)).toBe(true);
+    expect(events.at(-1)?.data).toMatchObject({ operation: "artifact-upload", phase: "completed", details: { file_count: files.length } });
+    expect(events.every(event => event.data.details._compliance === undefined)).toBe(true);
     expect(JSON.stringify(events)).not.toContain("private body");
     await mkdir(join(f.directory, "raw-document-artifacts"));
     const filename = rawDocumentContentsFilename({ run_id: "2026-10-29-700", writer: { attempt: 1 } });
@@ -214,11 +216,11 @@ test("upload JSONL names real visible ZIP members, including recovery files, wit
     await publishWorkflowUploadInventories({
       directory: f.directory, runNumber: "700", write: event => { events.push(event); },
     });
-    expect(events.flatMap(event => typeof event.details.file === "string" ? [event.details.file] : []).sort())
+    expect(events.flatMap(event => typeof event.data.details.file === "string" ? [event.data.details.file] : []).sort())
       .toEqual([...files, filename].sort());
     expect(JSON.stringify(events)).not.toContain("private diagnostic metadata");
     await expect(publishUploadInventory({ directory: join(f.directory, "missing"), runNumber: "700",
       write: event => { events.push(event); } })).rejects.toThrow();
-    expect(events.at(-1)).toMatchObject({ operation: "artifact-upload", phase: "failed" });
+    expect(events.at(-1)?.data).toMatchObject({ operation: "artifact-upload", phase: "failed" });
   } finally { await f.close(); }
 });

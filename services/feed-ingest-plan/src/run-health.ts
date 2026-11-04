@@ -2,7 +2,7 @@
 import { FeedHealthStateRowSchema } from "@idhazh/common-contracts";
 import type {
   CandidateRejectionRecord, DocumentWorkFact, FeedHealthStateRow,
-  FeedOutcomePayload, PlannerRejectionCount, SourceSnapshot, SourceArticleOutcome,
+  FeedOutcomePayload, OperationLink, PlannerRejectionCount, SourceSnapshot, SourceArticleOutcome,
 } from "@idhazh/common-contracts";
 import type { RunContext } from "./resolve-run-context";
 import type { SourceHistoryEvidence } from "./read-ledger-history/read-feed-history";
@@ -15,6 +15,7 @@ import { classifyFeedFetchFailure, classifyParserResult } from "./availability/f
 import { attributeIngestOutcome } from "./attribute-ingest-outcomes";
 import type { FetchResult } from "./harvest-feeds/fetch-source";
 import { hasArticleCapture, resolveArticleSourceOutcome } from "./article-source-outcome";
+import { operationLink } from "./api/operation-context";
 
 export function createRunHealth(context: RunContext, sources: readonly SourceSnapshot[],
   history: ReadonlyMap<string, SourceHistoryEvidence>,
@@ -106,7 +107,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       }
     }
     return [...result.values()].map(original => {
-      const value = original.check_request_id !== null && original.check_result === null ? {
+      const value = original.links.length !== 0 && original.check_result === null ? {
         ...original, check_result: "interrupted" as const,
         feed_reads: null, productive_reads: null, failed_reads: null,
       } : original;
@@ -120,9 +121,9 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
   }
   return {
     carryFeed(feedId: string, at: string) { row(feedId, at); },
-    interruptFeed(feedId: string, requestId: string, at: string) {
+    interruptFeed(feedId: string, check: OperationLink, at: string) {
       const target = row(feedId, at);
-      target.check_request_id = requestId;
+      target.links = [operationLink(check)];
       target.check_result = "interrupted";
       target.checked_at = at;
       target.items = null;
@@ -142,11 +143,11 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
         target[field] = null;
       } else if (target[field] !== null) target[field] += fact.dispatched_request_count;
     },
-    pendingFeed(feedId: string, fetched: FetchResult, checkedAt: string, requestId: string) {
+    pendingFeed(feedId: string, fetched: FetchResult, checkedAt: string, check: OperationLink) {
       const target = row(feedId, checkedAt);
       pendingReads.set(feedId, target);
       target.checked_at = checkedAt;
-      target.check_request_id = requestId;
+      target.links = [operationLink(check)];
       target.check_result = fetched.failure === null ? null : classifyFeedFetchFailure(fetched);
       target.last_failure_code = fetched.failure === null ? null
         : fetched.failure === "timeout" ? "FETCH_TIMEOUT"
@@ -167,12 +168,12 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       target.article_requests = null;
       target.counts_complete = false;
     },
-    feed(outcome: FeedOutcomePayload, entries: readonly FeedEntry[], checkedAt: string, fetched?: FetchResult, requestId?: string) {
+    feed(outcome: FeedOutcomePayload, entries: readonly FeedEntry[], checkedAt: string, fetched?: FetchResult, check?: OperationLink) {
       const target = row(outcome.source.feed_id, checkedAt);
       const pending = pendingReads.get(outcome.source.feed_id);
       if (pending !== undefined && pending !== target) {
         pending.checked_at = null;
-        pending.check_request_id = null;
+        pending.links = [];
         pending.check_result = null;
         pending.items = null;
         pending.outcome = null;
@@ -186,8 +187,8 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       const status = fetched?.http_status ?? outcome.diagnostics?.http_status ?? null;
       const skipped = outcome.fetch_status === "not_requested";
       target.checked_at = checkedAt;
-      target.check_request_id = requestId ?? target.check_request_id;
-      target.check_result = target.check_request_id === null ? null
+      target.links = check === undefined ? target.links : [operationLink(check)];
+      target.check_result = target.links.length === 0 ? null
         : outcome.parse_status === "success" || outcome.parse_status === "empty" ? "valid-feed"
           : classifyParserResult(outcome.diagnostics?.detail ?? "parser-failed");
       target.status = status;

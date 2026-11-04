@@ -1,8 +1,7 @@
 /** Do live source captures retain one technical outcome independently of selection? */
 import { expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
 import {
-  FeedIngestCandidateSchema, PlannerStageContextSchema,
+  createChildContext, createRootContext, FeedIngestCandidateSchema, PlannerStageContextSchema,
   HarvestDiagnosticsSchema, SourceArticleOutcomeSchema, SourceSnapshotSchema, deriveCandidateId, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { HarvestArticleResultSchema } from "../src/harvest-feeds/harvest-types";
@@ -16,6 +15,7 @@ import { createSourceFetcher } from "@idhazh/feed-ingest-plan/fetch-source";
 import { documentWork } from "../src/harvest-feeds/document-work";
 import { createIngestObservations } from "../src/ingest-observations";
 import { RecordedTransport, inputs, readRecordings } from "./harvest-recordings";
+import { operationKey, operationMetadata } from "../src/api/operation-context";
 
 function recording() {
   const at = "2026-10-27T12:00:00Z";
@@ -24,14 +24,14 @@ function recording() {
     feed_id: "recorded", publisher_id: null, feed_url: "https://example.org/feed",
     title: "Recorded source", status: "active", weight: 1,
   });
-  const context = PlannerStageContextSchema.parse({
-    now: at, captured_at: at, date: at.slice(0, 10), run_id: run, correlation_id: randomUUID(),
+  const context = { ...createRootContext(), ...PlannerStageContextSchema.parse({
+    now: at, captured_at: at, date: at.slice(0, 10), run_id: run,
     writer: { run_id: run, attempt: 1, job: null, pipeline_name: "feed-ingest-plan",
       task_name: "plan", shard: 0, producer: "tests.source-outcome", git_sha: "a".repeat(40) },
-  });
+  }) };
   const article = (words: number) => HarvestArticleResultSchema.parse({
     candidate: FeedIngestCandidateSchema.parse({
-      date: context.date, run_id: run, correlation_id: context.correlation_id,
+      date: context.date, run_id: run, traceId: context.traceId,
       feed_id: source.feed_id, source, candidate_id: deriveCandidateId(run, source.feed_id, 0), entry_ordinal: 0,
       canonical_url: "https://example.org/article", url_key: deriveUrlKey("https://example.org/article"),
       title: "Recorded article", article_text: Array(words).fill("evidence").join(" "), word_count: words,
@@ -63,11 +63,12 @@ test("retries and redirects count once on their dispatch UTC day, not the later 
     min_words: 10, blocked_http_statuses: [], tidy_urls: true,
   });
   const work = documentWork({
+    ...operationMetadata(context),
     observation_clock: clock, observations: createIngestObservations(health.observe),
   }, {
-    run_id: context.run_id, correlation_id: context.correlation_id,
+    run_id: context.run_id,
     article_id: deriveUrlKey(target), feed_id: source.feed_id,
-  }, randomUUID(), {
+  }, createChildContext(operationMetadata(context)), {
     document_kind: "article", publisher_id: null, candidate_id: null,
     observed_run_id: context.run_id, observed_attempt: context.writer.attempt, feed_id: source.feed_id,
   });
@@ -111,7 +112,7 @@ test("measured quality rejection stays unresolved and is counted once without a 
     },
   });
   const harvestContext = {
-    writer: plannerContext.writer, correlation_id: plannerContext.correlation_id, max_future_hours: 6,
+    ...operationMetadata(plannerContext), writer: plannerContext.writer, max_future_hours: 6,
     clock: () => new Date(at), observation_clock: () => new Date(at),
   };
   const rejection = recordRejection(source, harvestContext, "EXTRACT_FAILED", {
@@ -150,7 +151,7 @@ test("the source rate stays eight out of ten when only three articles are select
   const lifecycle_policy = await readLifecyclePolicy();
   const { context, source, at } = recording();
   const captures = Array.from({ length: 10 }, (_, index) => ({
-    id: randomUUID(), outcome: SourceArticleOutcomeSchema.parse(index < 8
+    id: operationKey(createChildContext(operationMetadata(context))), outcome: SourceArticleOutcomeSchema.parse(index < 8
       ? { disposition: "admitted", reason_code: null, settled_at: at }
       : { disposition: "source_refused", reason_code: "REJECTED_SCREENING_MIN_WORDS", settled_at: at }),
   }));

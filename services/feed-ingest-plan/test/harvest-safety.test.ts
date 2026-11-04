@@ -193,7 +193,7 @@ test("permanent statuses do not retry; transient statuses use existing retry con
       expect(facts.find(row => row.operation === "fetch")).toMatchObject({
         outcome: "success", attribution: null, failure_code: null,
       });
-      expect(facts.every(row => !("event_id" in row) && !("article_text" in row))).toBe(true);
+      expect(facts.every(row => !("article_text" in row))).toBe(true);
     } finally { await rm(directory, { recursive: true, force: true }); }
   }
   expect(fetchDiagnostics(await fetcher.fetch("https://missing.example/story"), 0)).toMatchObject({

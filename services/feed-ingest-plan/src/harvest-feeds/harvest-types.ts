@@ -5,7 +5,7 @@ import {
   SourceSnapshotSchema, TimestampSchema,
   FetchFailureSchema, PlannerHarvestObservationSchema,
 } from "@idhazh/common-contracts";
-import type { FeedIngestConfig, FeedOutcomePayload, PlannerItemFailureCode, WriterIdentity } from "@idhazh/common-contracts";
+import type { FeedIngestConfig, FeedOutcomePayload, OperationLink, OperationMetadata, PlannerItemFailureCode, WriterIdentity } from "@idhazh/common-contracts";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { ProgressDetails, ProgressEventType } from "../logging/progress-logger";
 import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-history";
@@ -42,10 +42,10 @@ export type FeedEntry = {
 export type OfferedArticle = {
   source: z.infer<typeof SourceSnapshotSchema>;
   entry: FeedEntry;
+  input?: OperationLink;
 };
-export type HarvestContext = {
+export type HarvestContext = OperationMetadata & {
   writer: WriterIdentity;
-  correlation_id: string;
   max_future_hours: number;
   feed_history?: ReadonlyMap<string, SourceHistoryEvidence>;
   exclusions?: {
@@ -61,6 +61,7 @@ export type HarvestContext = {
     details: Record<string, unknown>, failureArticleUrl?: string,
     failureFeedUrls?: Readonly<{ requested: string; final_attempted: string | null }>,
     failureEvidence?: import("@idhazh/common-contracts").NetworkFailureDetails,
+    context?: OperationMetadata,
   ) => void;
   parser_pool?: ArticleParserPool;
   parser_options?: Parameters<ArticleParserPool["parse"]>[3];

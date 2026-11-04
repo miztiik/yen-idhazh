@@ -6,7 +6,7 @@ import {
   PlannerFailureExecutionSchema, PlannerFailureSchema,
 } from "@idhazh/common-contracts";
 import type {
-  PlannerFailure, PlannerFailureDetail, PlannerFailureExecution, PlannerFailureOperation, PlannerStageContext,
+  PlannerFailure, PlannerFailureDetail, PlannerFailureExecution, PlannerFailureOperation, PlannerStageContext, OperationMetadata,
 } from "@idhazh/common-contracts";
 import { FailureCaptureLimitsSchema } from "../config/service-settings";
 import type { FailureCaptureLimits } from "../config/service-settings";
@@ -16,24 +16,26 @@ const sourceRoot = fileURLToPath(new URL("../../../../", import.meta.url)).repla
 export type FailureCaptureOptions = {
   operation: PlannerFailureOperation; limits?: FailureCaptureLimits;
   cancelled?: boolean;
-  execution?: PlannerFailureExecution | Pick<PlannerStageContext, "run_id" | "correlation_id" | "writer">;
+  execution?: PlannerFailureExecution | (Pick<PlannerStageContext, "run_id" | "writer"> & OperationMetadata);
 };
-const unavailableExecution: PlannerFailureExecution = { run_id: null, attempt: null, correlation_id: null, git_sha: null };
+const unavailableExecution: PlannerFailureExecution = { run_id: null, attempt: null, traceId: null, spanId: null, git_sha: null };
 const ownValue = (error: unknown, key: string): unknown =>
   error !== null && typeof error === "object" ? Object.getOwnPropertyDescriptor(error, key)?.value : undefined;
 
 export function runtimeFailureExecution(runtime: {
-  git_sha?: string; run_number?: string; correlation_id?: string; attempt?: number; captured_at?: string;
+  git_sha?: string; run_number?: string; traceId?: string; spanId?: string; attempt?: number; captured_at?: string;
 }): PlannerFailureExecution {
   const read = <T>(schema: z.ZodType<T>, value: unknown): T | null => {
     const result = schema.safeParse(value);
     return result.success ? result.data : null;
   };
   const fields = PlannerFailureExecutionSchema.shape;
+  const traceId = read(fields.traceId, runtime.traceId);
   return {
     run_id: read(fields.run_id, runtime.captured_at && runtime.run_number
       ? `${runtime.captured_at.slice(0, 10)}-${runtime.run_number}` : null),
-    attempt: read(fields.attempt, runtime.attempt), correlation_id: read(fields.correlation_id, runtime.correlation_id),
+    attempt: read(fields.attempt, runtime.attempt), traceId,
+    spanId: traceId === null ? null : read(fields.spanId, runtime.spanId),
     git_sha: read(fields.git_sha, runtime.git_sha),
   };
 }
@@ -41,7 +43,7 @@ export function runtimeFailureExecution(runtime: {
 function executionIdentity(options: FailureCaptureOptions): PlannerFailureExecution {
   const value = options.execution;
   return value === undefined ? unavailableExecution : "writer" in value ? {
-    run_id: value.run_id, correlation_id: value.correlation_id,
+    run_id: value.run_id, traceId: value.traceId, spanId: value.spanId,
     attempt: value.writer.attempt, git_sha: value.writer.git_sha,
   } : value;
 }
@@ -148,8 +150,9 @@ export function withPlannerFailure(error: unknown, options: FailureCaptureOption
     const execution = error.failure.execution;
     return new PlanError(error.code, error.message, error.field, { cause: error,
       failure: PlannerFailureSchema.parse({ ...error.failure, execution: {
+        ...execution,
         run_id: execution.run_id ?? expected.run_id, attempt: execution.attempt ?? expected.attempt,
-        correlation_id: execution.correlation_id ?? expected.correlation_id, git_sha: execution.git_sha ?? expected.git_sha,
+        git_sha: execution.git_sha ?? expected.git_sha,
       } }),
     });
   }

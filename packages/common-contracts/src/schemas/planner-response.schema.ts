@@ -1,11 +1,13 @@
 /** Which saved planner response retains outcomes without private batches or article bodies? */
 import { z } from "zod";
-import { CountSchema, NonEmptySchema, RelPathSchema, Sha256Schema } from "./primitives";
-import { RequestIdSchema } from "./planner-operation.schema";
+import { CountSchema, NonEmptySchema, PositiveCountSchema, RelPathSchema, Sha256Schema, SlugSchema } from "./primitives";
+import { OperationMetadataSchema, TraceIdSchema } from "./operation-metadata.schema";
 import { PlanRunRowSchema } from "./plan-run.schema";
 import { PlannerErrorResponseSchema, PlannerFailureReadSchema } from "./planner-failure.schema";
+import { FeedHealthStateRowSchema, FeedLifecycleFieldsSchema } from "./feed-health-state.schema";
+import { PlannerRequestReportSchema } from "./planner-request-report.schema";
 
-export const PLANNER_RESPONSE_VERSION = "2026-11-02" as const;
+export const PLANNER_RESPONSE_VERSION = "2026-11-03" as const;
 export const PlannerLedgerWriteResultSchema = z.discriminatedUnion("status", [
   z.strictObject({ status: z.literal("written"), files: z.array(z.strictObject({
     path: RelPathSchema, file_id: z.uuid(), covers: NonEmptySchema,
@@ -13,12 +15,32 @@ export const PlannerLedgerWriteResultSchema = z.discriminatedUnion("status", [
   })).min(1) }),
   z.strictObject({ status: z.literal("empty"), files: z.tuple([]) }),
 ]);
+export const FeedAvailabilityViewSchema = z.strictObject({
+  feed_id: SlugSchema, endpoint_key: Sha256Schema, ...FeedLifecycleFieldsSchema.shape,
+});
+export const FeedAvailabilitySnapshotSchema = z.strictObject({
+  feeds: z.array(FeedAvailabilityViewSchema),
+  eligible_feed_ids: z.array(SlugSchema),
+});
+export const FeedHealthStateUpdateResponseSchema = OperationMetadataSchema.safeExtend({
+  status: z.enum(["summarized", "recorded"]),
+  rows: z.array(FeedHealthStateRowSchema), request_report: PlannerRequestReportSchema,
+  reliability: z.strictObject({ window_days: PositiveCountSchema }),
+  availability: FeedAvailabilitySnapshotSchema.optional(),
+  files: PlannerLedgerWriteResultSchema.optional(),
+}).superRefine((value, ctx) => {
+  if ((value.status === "recorded") !== (value.files !== undefined)) {
+    ctx.addIssue({ code: "custom", message: "Recorded health returns its actual file receipt; summary does not write" });
+  }
+});
+export const PlannerHealthOutcomeSchema = z.union([
+  FeedHealthStateUpdateResponseSchema.safeExtend({ status: z.literal("summarized"), files: z.never().optional() }),
+  z.strictObject({ status: z.literal("failed"), failure: PlannerFailureReadSchema }),
+]).nullable();
+export type PlannerHealthOutcome = z.infer<typeof PlannerHealthOutcomeSchema>;
 export const PlannerRunResponseSchema = PlanRunRowSchema.safeExtend({
-  planning_complete: z.boolean(), correlation_id: RequestIdSchema,
-  batches: z.strictObject({
-    parsed_batch_id: RequestIdSchema.optional(), selection_batch_id: RequestIdSchema.optional(),
-    partition_batch_id: RequestIdSchema.optional(),
-  }),
+  planning_complete: z.boolean(), traceId: TraceIdSchema,
+  health: PlannerHealthOutcomeSchema,
   files: z.strictObject({
     discovered_articles: PlannerLedgerWriteResultSchema.optional(), selected_articles: PlannerLedgerWriteResultSchema.optional(),
     rejected_articles: PlannerLedgerWriteResultSchema.optional(),
@@ -37,9 +59,14 @@ export const PlannerRunResponseSchema = PlanRunRowSchema.safeExtend({
   if ((value.status === "completed") !== (value.failure_code === null)) {
     ctx.addIssue({ code: "custom", message: "Only an unsuccessful run has a failure cause" });
   }
+  if (value.health?.status === "failed" && value.failure === null) {
+    ctx.addIssue({ code: "custom", path: ["failure"], message: "A failed report requires a request failure" });
+  }
+  if (value.planning_complete && value.health === null) {
+    ctx.addIssue({ code: "custom", path: ["health"], message: "Completed planning requires its report outcome" });
+  }
   if (value.failure !== null && (value.failure.execution.run_id !== value.run_id
-    || value.failure.execution.attempt !== value.attempt
-    || value.failure.execution.correlation_id !== value.correlation_id)) {
+    || value.failure.execution.attempt !== value.attempt)) {
     ctx.addIssue({ code: "custom", message: "Execution failure must belong to the saved response" });
   }
   if (value.assignments.some((article, index) => article.url_key !== value.selected_url_keys[index]
@@ -50,7 +77,8 @@ export const PlannerRunResponseSchema = PlanRunRowSchema.safeExtend({
 }).meta({
   version: PLANNER_RESPONSE_VERSION,
   changelog: [
-    { version: PLANNER_RESPONSE_VERSION, change: "Retain optional execution failures; read earlier responses with null evidence." },
+    { version: PLANNER_RESPONSE_VERSION, change: "Include required report outcomes and independent request failures without live references." },
+    { version: "2026-11-02", change: "Retain optional execution failures." },
   ],
 });
 export const PlannerSavedResponseSchema = z.union([PlannerRunResponseSchema, PlannerErrorResponseSchema]).meta({

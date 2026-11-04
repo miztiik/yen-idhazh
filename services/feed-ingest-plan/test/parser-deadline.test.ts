@@ -1,6 +1,6 @@
 /** Bound actual feed and article workers without network access or substitute parsers. */
 import { expect, test } from "bun:test";
-import { FeedHarvestConfigSchema } from "@idhazh/common-contracts";
+import { createChildContext, createRootContext, FeedHarvestConfigSchema } from "@idhazh/common-contracts";
 import { ArticleParserPool } from "../src/harvest-feeds/article-parser-pool";
 import { parseDocument } from "../src/harvest-feeds/parse-document";
 import { ParserError } from "../src/harvest-feeds/parser-error";
@@ -8,6 +8,7 @@ import { documentWork, describeFeedParse } from "../src/harvest-feeds/document-w
 import { inputs, context, readRecordings } from "./harvest-recordings";
 import { attributeIngestOutcome } from "../src/attribute-ingest-outcomes";
 import type { DocumentWorkFact } from "@idhazh/common-contracts";
+import { operationMetadata } from "../src/api/operation-context";
 
 test("parse deadlines are configurable and separate from each HTTP attempt", async () => {
   const loaded = await inputs();
@@ -26,11 +27,11 @@ test("feed and HTML workers return finished work without waiting for the deadlin
   const controller = new AbortController();
   try {
     const feed = await parseDocument("feed", recordings.bodies.rss, "https://news.example/feed",
-      undefined, pool, { signal: controller.signal, timeout_ms: 10000 });
+      undefined, pool, { context: createChildContext(createRootContext()), signal: controller.signal, timeout_ms: 10000 });
     expect(feed).toHaveLength(3);
     expect(feed[0]?.title).toBe("Measured progress & public evidence");
     const article = await parseDocument("article", recordings.bodies.article, "https://news.example/story",
-      loaded.extraction, pool, { timeout_ms: 10000 });
+      loaded.extraction, pool, { context: createRootContext(), timeout_ms: 10000 });
     expect(article.word_count).toBeGreaterThan(0);
     controller.abort();
     expect(await pool.parseFeed(recordings.bodies.atom)).toHaveLength(2);
@@ -127,14 +128,15 @@ test("actual worker deadlines persist explicit pipeline work failures, not sourc
       save: async rows => { facts.push(...rows); },
     },
   }, {
-    run_id: harvestContext.writer.run_id, correlation_id: harvestContext.correlation_id,
+    run_id: harvestContext.writer.run_id,
     article_id: null, feed_id: "recorded-news",
-  }, "parser-request", {
+  }, createRootContext(), {
     document_kind: "feed", feed_id: "recorded-news", publisher_id: null, candidate_id: null,
     observed_run_id: harvestContext.writer.run_id, observed_attempt: harvestContext.writer.attempt,
   });
   try {
-    const result = await work.parse(() => pool.parseFeed(bodies.rss, { timeout_ms: 1 }), "fetch-event", describeFeedParse);
+    const result = await work.parse(metadata => pool.parseFeed(bodies.rss, { context: metadata, timeout_ms: 1 }),
+      createChildContext(operationMetadata(harvestContext)), describeFeedParse);
     expect(result.parsed).toBeNull();
     expect(result.failure).toBe("parser-timeout");
     expect(facts).toMatchObject([{ operation: "parse", outcome: "failed", failure_code: "parser-timeout" }]);

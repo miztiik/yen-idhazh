@@ -37,7 +37,7 @@ export function recordRejection(
 ): CandidateRejectionRecord {
   const rejected_at = utcTimestamp(context.observation_clock ?? context.clock);
   const row = CandidateRejectionRecordSchema.parse({
-    date: rejected_at.slice(0, 10), correlation_id: context.correlation_id,
+    date: rejected_at.slice(0, 10), traceId: context.traceId,
     feed_id: source.feed_id, feed_url: source.feed_url,
     subject: article === null ? "feed" : "article",
     candidate_id: article?.candidate_id ?? null,

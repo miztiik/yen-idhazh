@@ -1,36 +1,38 @@
 /** Which sparse body-free progress event may leave the planner runtime? */
 import { z } from "zod";
 import { CountSchema, NonEmptySchema, RunIdSchema } from "./primitives";
-import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceSnapshotSchema } from "./source.schema";
 import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import { ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema } from "./planner-stage.schema";
 import { PlanApiTimingSchema } from "./plan-run.schema";
 import { FEED_INGEST_EVENT_VERSION, FEED_OUTCOME_PAYLOAD_VERSION } from "../version";
+import { CloudEventSchema } from "./cloud-event.schema";
+import { readCloudEvent } from "../read-cloud-event";
 
 const FEED_INGEST_OPERATIONS = ["history", ...PlanApiTimingSchema.shape.operation.options, "plan", "artifact-upload", "quality", "request-attempt"] as const;
-export const FeedIngestEventSchema = z.strictObject({
-  version: z.literal(FEED_INGEST_EVENT_VERSION).default(FEED_INGEST_EVENT_VERSION),
-  run_id: RunIdSchema, correlation_id: z.uuid({ version: "v4" }),
-  occurred_at: RecordedInstantSchema,
+export const FeedIngestEventDataSchema = z.strictObject({
+  version: z.literal(FEED_INGEST_EVENT_VERSION),
+  run_id: RunIdSchema,
   operation: z.enum(FEED_INGEST_OPERATIONS),
   phase: z.enum(["started", "completed", "failed"]),
   details: z.record(z.string(), z.json()),
+});
+export const FeedIngestEventSchema = CloudEventSchema.safeExtend({
+  type: z.literal("planner.progress"), data: FeedIngestEventDataSchema,
 }).meta({
   version: FEED_INGEST_EVENT_VERSION,
   changelog: [
-    { version: FEED_INGEST_EVENT_VERSION, change: "Remove robots fields and request categories from progress evidence." },
+    { version: FEED_INGEST_EVENT_VERSION, change: "Wrap sparse planner progress in a current CloudEvents envelope." },
+    { version: "2026-11-02", change: "Remove robots fields and request categories from progress evidence." },
     { version: "2026-11-01", change: "Add independently validated native request-failure evidence." },
     { version: "2026-11-01", change: "Require current progress events without earlier-version conversion." },
-    { version: "2026-10-30T22:48", change: "Add separate typed quality-rejection events." },
     { version: "2026-10-29T08:00", change: "Earlier changes are in this file's Git history." },
   ],
 });
 export type FeedIngestEvent = z.infer<typeof FeedIngestEventSchema>;
+export type FeedIngestEventData = z.infer<typeof FeedIngestEventDataSchema>;
 export function readFeedIngestEvent(raw: unknown): FeedIngestEvent {
-  return FeedIngestEventSchema.safeExtend({
-    version: FeedIngestEventSchema.shape.version.unwrap(),
-  }).parse(raw);
+  return FeedIngestEventSchema.parse(readCloudEvent(raw, value => FeedIngestEventDataSchema.parse(value)));
 }
 export const PlannerWorkEventSchema = z.discriminatedUnion("stage", [
   z.strictObject({ stage: z.literal("parsed"), payload: ParsedFeedBatchSchema }),

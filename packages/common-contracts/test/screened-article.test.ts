@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import {
   AdmittedArticleFreshnessSchema, FeedIngestCandidateSchema, NumericalSelectionInputSchema,
   NumericalSelectionOutputSchema, RawArticleFreshnessSchema, ScreenedCandidateSchema,
-  deriveCandidateId, deriveUrlKey,
+  createRootContext, deriveCandidateId, deriveUrlKey,
 } from "../src/index";
 
 const unknownTiming = { timing_at: null, timing_source: "unknown", age_hours: null, recency_bonus: 0 } as const;
@@ -41,7 +41,7 @@ test("admitted freshness requires a measured count and finite score, including z
 test("screened candidates bind retained counts to the original parsed count without changing text", () => {
   const canonical_url = "https://article.example/story";
   const candidate = FeedIngestCandidateSchema.parse({
-    date: "2026-11-02", correlation_id: "recorded", run_id: "2026-11-02-1",
+    date: "2026-11-02", traceId: createRootContext().traceId, run_id: "2026-11-02-1",
     candidate_id: deriveCandidateId("2026-11-02-1", "recorded-feed", 0), entry_ordinal: 0,
     feed_id: "recorded-feed", source: {
       feed_id: "recorded-feed", feed_url: "https://feed.example/rss", publisher_id: null,

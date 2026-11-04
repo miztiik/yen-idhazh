@@ -1,16 +1,16 @@
 /** Keep rejected offers out of HTTP work and assemble collection snapshots only at stage boundaries. */
 import { expect, test } from "bun:test";
-import { ParsedFeedBatchSchema, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { createRootContext, ParsedFeedBatchSchema, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
 import { stageStore } from "../src/api/stage-store";
 import { collectionForRun } from "../src/api/collection-operation";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
-import { randomUUID } from "node:crypto";
 import { getCollection } from "../src/api/collection-operation";
 import { createPlanTestServer } from "./plan-test-server";
 import { collectRecordedFeeds } from "./collection-recordings";
 import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-response.schema";
 import { CancelledCollectionSchema, FinalizedCollectionSchema } from "../src/api/collection-contracts";
+import { operationLink } from "../src/api/operation-context";
 
 test("large feeds retain every rejection without per-offer collection snapshots or rejected HTTP requests", async () => {
   const sources = [source(), source({ id: "second-feed", url: "https://news.example/second.xml" })];
@@ -34,8 +34,7 @@ test("large feeds retain every rejection without per-offer collection snapshots 
       if (/\/\d+$/.test(request.url.pathname)) {
         articleFetches++;
         const collection = collectionForRun(fixture.inputs, "2026-10-21-700")!;
-        const held = stageStore(fixture.inputs).read("parsed", collection.parsed_batch_id, ParsedFeedBatchSchema);
-        if (held.candidates.length || held.offers.length || held.work_rows.some(row => row.article_requests)) snapshotsDuringWork++;
+        if (collection.completed !== undefined) snapshotsDuringWork++;
       }
   };
   try {
@@ -57,37 +56,36 @@ test("large feeds retain every rejection without per-offer collection snapshots 
 test("explicit health reads capture current collection work without allowing premature selection", async () => {
   const fixture = await recordedPlan();
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
-  const id = randomUUID();
+  const caller = createRootContext();
+  const id = caller.traceId;
   const post = (path: string, body: unknown) => app.request(`${PLANNER_API_PREFIX}/${path}`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) }, body: JSON.stringify(body),
   });
   try {
-    expect((await post("collections", { collection_id: id, request: {} })).status).toBe(200);
+    expect((await post("collections", { request: {} })).status).toBe(200);
     const collection = getCollection(fixture.inputs, id);
     const fetchedResponse = await post("fetch", {
-      request_id: randomUUID(), collection_id: id, feed_id: "recorded-news",
-      correlation_id: collection.context.correlation_id, fetch_item_type: "feed",
+      traceId: id, feed_id: "recorded-news", fetch_item_type: "feed",
     });
     expect(fetchedResponse.status).toBe(200);
-    const fetched = await fetchedResponse.json();
-    expect((await post("parse", {
-      request_id: randomUUID(), fetch_request_id: fetched.fetch_request_id,
-      article_id: fetched.article_id, correlation_id: collection.context.correlation_id,
-    })).status).toBe(200);
-    const healthResponse = await post("feed-health-state", { batch_id: collection.parsed_batch_id, action: "summarize" });
+    const fetched = FetchResponseSchema.parse(await fetchedResponse.json());
+    const parseResponse = await post("parse", { links: [operationLink(fetched)] });
+    expect(parseResponse.status).toBe(200);
+    const parsed = ParseResponseSchema.parse(await parseResponse.json());
+    const healthResponse = await post("feed-health-state", { links: [operationLink(parsed)], action: "summarize" });
     expect(healthResponse.status).toBe(200);
     const health = await healthResponse.json();
     expect(health.rows[0]).toMatchObject({ feed_requests: 1, article_requests: 0, items: 2, check_result: "valid-feed" });
-    const captured = stageStore(fixture.inputs).read("parsed", collection.parsed_batch_id, ParsedFeedBatchSchema);
+    const captured = stageStore(fixture.inputs).read("parsed", parsed, ParsedFeedBatchSchema);
     expect(captured.offers).toHaveLength(2);
     expect(captured.input_complete).toBe(false);
-    expect((await post("select-articles", { batch_id: captured.batch_id })).status).toBe(409);
-    expect((await post("collections/cancel", { collection_id: id })).status).toBe(200);
+    expect((await post("select-articles", { links: [operationLink(captured)] })).status).toBe(409);
+    expect((await post("collections/cancel", { traceId: id })).status).toBe(200);
     expect(collection.signal.signal.aborted).toBe(true);
     expect(fixture.transport.requests).toHaveLength(1);
     expect(collection.state.work.rows().some(row => row.checked_at !== null)).toBe(true);
     const outcome = FinalizedCollectionSchema.parse(await (await post("collections/finalize", {
-      collection_id: id, failure_code: "PLANNER_EXECUTION_FAILED",
+      traceId: id, failure_code: "PLANNER_EXECUTION_FAILED",
       collection_timing: { duration_ms: 1, status: "failed" },
     })).json());
     expect(outcome.status).toBe("partial");
@@ -104,33 +102,32 @@ test("cancellation drains owned requests and retains partial accounting without 
   fixture.transport.recordings.bodies.rss = `<rss version="2.0"><channel><title>Recorded cancellation</title>
     <item><title>Pending article</title><link>https://news.example/timeout</link></item></channel></rss>`;
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
-  const id = randomUUID();
+  const caller = createRootContext();
+  const id = caller.traceId;
   const post = (path: string, body: unknown) => app.request(`${PLANNER_API_PREFIX}/${path}`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) }, body: JSON.stringify(body),
   });
   let pending: Promise<Response> | undefined;
   let operationSettled = false;
   try {
-    expect((await post("collections", { collection_id: id, request: {} })).status).toBe(200);
+    expect((await post("collections", { request: {} })).status).toBe(200);
     const collection = getCollection(fixture.inputs, id);
     const fetched = FetchResponseSchema.parse(await (await post("fetch", {
-      request_id: randomUUID(), collection_id: id, feed_id: "recorded-news",
-      correlation_id: collection.context.correlation_id, fetch_item_type: "feed",
+      traceId: id, feed_id: "recorded-news", fetch_item_type: "feed",
     })).json());
     const parsed = ParseResponseSchema.parse(await (await post("parse", {
-      request_id: randomUUID(), fetch_request_id: fetched.fetch_request_id,
-      article_id: fetched.article_id, correlation_id: fetched.correlation_id,
+      links: [operationLink(fetched)],
     })).json());
     if (parsed.fetch_item_type !== "feed") throw new Error("Expected a recorded feed offer");
     pending = post("fetch", {
-      request_id: randomUUID(), feed_id: "recorded-news", fetch_item_type: "article",
-      batch_id: parsed.batch_id, offer_id: parsed.offers[0]!.offer_id, correlation_id: collection.context.correlation_id,
+      fetch_item_type: "article", links: [operationLink(parsed)], offer_id: parsed.offers[0]!.offer_id,
     }).then(response => { operationSettled = true; return response; });
     await fetching;
-    const cancellation = await post("collections/cancel", { collection_id: id });
+    const cancellation = await post("collections/cancel", { traceId: id });
     expect(cancellation.status).toBe(200);
     expect(operationSettled).toBe(true);
-    expect(CancelledCollectionSchema.parse(await cancellation.json()).has_work).toBe(true);
+    const cancelledCollection = CancelledCollectionSchema.parse(await cancellation.json());
+    expect(cancelledCollection.has_work).toBe(true);
     const cancelled = await pending;
     expect(cancelled.status).toBe(200);
     const terminal = FetchResponseSchema.parse(await cancelled.json());
@@ -140,13 +137,13 @@ test("cancellation drains owned requests and retains partial accounting without 
     expect(fixture.transport.active).toBe(0);
     expect(collection.status).toBe("failed");
     expect(collection.signal.signal.aborted).toBe(true);
-    const captured = stageStore(fixture.inputs).read("parsed", collection.parsed_batch_id, ParsedFeedBatchSchema);
+    const captured = stageStore(fixture.inputs).read("parsed", cancelledCollection, ParsedFeedBatchSchema);
     expect(captured.input_complete).toBe(false);
     expect(captured.work_rows.some(row => (row.feed_requests ?? 0) > 0)).toBe(true);
     expect(fixture.transport.peak).toBeLessThanOrEqual(fixture.inputs.harvest.config.harvest.concurrency);
-    expect((await post("select-articles", { batch_id: captured.batch_id })).status).toBe(409);
+    expect((await post("select-articles", { links: [operationLink(captured)] })).status).toBe(409);
     const outcome = FinalizedCollectionSchema.parse(await (await post("collections/finalize", {
-      collection_id: id, failure_code: "PLANNER_EXECUTION_FAILED",
+      traceId: id, failure_code: "PLANNER_EXECUTION_FAILED",
       collection_timing: { duration_ms: 3, status: "failed" },
     })).json());
     expect(outcome.status).toBe("partial");

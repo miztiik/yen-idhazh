@@ -1,13 +1,15 @@
 {
-  "date": "2026-10-25",
-  "run_id": "2026-10-25-1234",
-  "attempt": 1,
   "feed_id": "recorded-feed",
-  "endpoint_key": "1111111111111111111111111111111111111111111111111111111111111111",
+  "endpoint_key": "d5ac862b279674275ef140975760a0e49b3a8aa6121d5dcb999e0b8b445417fb",
   "checked_at": "2026-10-25T10:00:00.123Z",
   "availability": "eligible",
   "strikes": 0,
-  "check_request_id": "11111111-1111-4111-8111-111111111111",
+  "links": [
+    {
+      "traceId": "092a0a501b4106354a29f5e725bf6526",
+      "spanId": "4741a5796b0359d2"
+    }
+  ],
   "check_result": "valid-feed",
   "rest_until": null,
   "first_confirmed_failure_at": null,
@@ -19,6 +21,7 @@
   "last_failure_code": null,
   "status": 200,
   "reliability": null,
+  "date": "2026-10-25",
   "feed_reads": 1,
   "productive_reads": 1,
   "failed_reads": 0,
@@ -36,6 +39,8 @@
       "attribution": "feed"
     }
   ],
+  "run_id": "2026-10-25-1234",
+  "attempt": 1,
   "items": 4,
   "outcome": "ok"
 }

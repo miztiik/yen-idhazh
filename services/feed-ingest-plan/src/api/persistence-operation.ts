@@ -20,22 +20,28 @@ import { healthFingerprint } from "./feed-health-state-operation";
 import { createStageLogger } from "../logging/structured-logger";
 import { withPlannerFailure } from "./plan-failure";
 import { retainFailureThroughCleanup } from "./retain-failure-through-cleanup";
+import { commandContext, operationMetadata, operationRunContext } from "./operation-context";
+import { collectionForRun } from "./collection-operation";
+import type { OperationMetadata } from "@idhazh/common-contracts";
 
-type Result = {
+type PersistedOutput = {
   files: PersistLedgerResult; artifact: string; selected_count: number;
   rejected_files: PersistLedgerResult;
   run_files?: PersistLedgerResult; run_status?: "completed" | "partial" | "failed";
 };
-const finalized = new WeakMap<object, { fingerprint: string; result: Promise<Result> }>();
+type Result = PersistedOutput & OperationMetadata;
+const finalized = new WeakMap<object, { fingerprint: string; result: Promise<PersistedOutput> }>();
 export async function executePersistence(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime): Promise<Result> {
   const request = StageReferenceRequestSchema.parse(raw);
   const store = stageStore(inputs);
-  const held = store.inspect(request.batch_id);
+  const held = store.inspect(request.links[0]);
   const batch = held.stage === "selected" && !inputs.harvest.config.partition.enabled
-    ? { ...store.read("selected", request.batch_id, SelectedFeedBatchSchema), strategy: "none" as const, dispatch_count: 0 }
-    : store.read("partitioned", request.batch_id, PartitionedFeedBatchSchema);
-  const claim = store.ownership(batch.batch_id);
+    ? { ...store.read("selected", request.links[0], SelectedFeedBatchSchema), strategy: "none" as const, dispatch_count: 0 }
+    : store.read("partitioned", request.links[0], PartitionedFeedBatchSchema);
+  const claim = store.ownership(batch);
   requireStageConfiguration(batch, inputs, runtime);
+  const operation = commandContext(runtime, collectionForRun(inputs, batch.context.run_id)?.context, [batch]);
+  const context = { ...batch.context, ...operation };
   const path = selectedArtifactPath(inputs.settings.inputs.artifact_root, batch.context);
   const target = resolve(inputs.root, ...path.split("/"));
   const state = currentExecutionState(inputs, batch.context.run_id);
@@ -44,10 +50,10 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
     const document = await state;
     finalizedHealth ??= document.health_fingerprint;
   } else if (claim.scope !== "plan") {
-    registerStageExecution(inputs, batch.context, "partition", null);
+    registerStageExecution(inputs, operationRunContext(batch), "partition", null);
   }
   if (finalizedHealth !== null && finalizedHealth !== healthFingerprint(batch.health_rows)) {
-    throw new PlanError("REQUEST_CONFLICT", "Selection differs from this execution's finalized health capture", "batch_id");
+    throw new PlanError("REQUEST_CONFLICT", "Selection differs from this execution's finalized health capture", "links");
   }
   await rememberCompletedSelection(inputs, batch);
   const artifact = SelectedArticlesArtifactSchema.parse({
@@ -61,14 +67,14 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
   })).digest("hex");
   const previous = finalized.get(claim);
   if (previous !== undefined) {
-    if (previous.fingerprint !== fingerprint) throw new PlanError("REQUEST_CONFLICT", "This execution already finalized a different selection or partition", "batch_id");
-    return previous.result;
+    if (previous.fingerprint !== fingerprint) throw new PlanError("REQUEST_CONFLICT", "This execution already finalized a different selection or partition", "links");
+    return { ...operationMetadata(context), ...await previous.result };
   }
   let failureOutcomeSaved = false;
-  const result = (async (): Promise<Result> => {
+  const result = (async (): Promise<PersistedOutput> => {
     const began = performance.now();
-    const emit = createStageLogger(batch.context, runtime.log);
-    emit("persist", "started", { batch_id: batch.batch_id });
+    const emit = createStageLogger(context, inputs.event_source, runtime.log);
+    emit("persist", "started");
     try {
       const metadata = batch.articles.map(article => ({
         ...selectedArticleMetadata(article), run_id: batch.context.run_id, attempt: batch.context.writer.attempt, date: batch.context.date,
@@ -94,18 +100,18 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
       if (rejectedFiles.status === "skipped") throw new Error("Rejected metadata write was refused");
       await appendDocumentTiming(inputs, batch.context.run_id, { operation: "persist", duration_ms: Math.round(performance.now() - began), status: "completed" });
       const run = await recordStandaloneRun(inputs, batch, path);
-      emit("persist", "completed", { batch_id: batch.batch_id, output_count: metadata.length,
+      emit("persist", "completed", { output_count: metadata.length,
         duration_ms: Math.round(performance.now() - began), artifact: path });
       return { files, rejected_files: rejectedFiles, artifact: path, selected_count: metadata.length,
         ...(run === undefined ? {} : { run_files: run.files, run_status: run.row.status }) };
     } catch (error) {
       const failure = withPlannerFailure(error, {
-        operation: "persist", execution: batch.context, limits: inputs.settings.diagnostics.failure,
+        operation: "persist", execution: context, limits: inputs.settings.diagnostics.failure,
       });
-      emit("persist", "failed", { batch_id: batch.batch_id, failure_code: "PERSIST_FAILED",
+      emit("persist", "failed", { failure_code: "PERSIST_FAILED",
         duration_ms: Math.round(performance.now() - began), failure: failure.failure });
       throw await retainFailureThroughCleanup(failure, {
-        operation: "persist", execution: batch.context, limits: inputs.settings.diagnostics.failure,
+        operation: "persist", execution: context, limits: inputs.settings.diagnostics.failure,
       }, [
         { operation: "record-run", execute: () => appendDocumentTiming(inputs, batch.context.run_id, {
           operation: "persist", duration_ms: Math.round(performance.now() - began), status: "failed",
@@ -118,7 +124,7 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
     }
   })();
   finalized.set(claim, { fingerprint, result });
-  try { return await result; }
+  try { return { ...operationMetadata(context), ...await result }; }
   catch (error) {
     if (!failureOutcomeSaved) finalized.delete(claim);
     throw error;

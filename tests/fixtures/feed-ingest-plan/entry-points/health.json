@@ -1,5 +1,13 @@
 {
-  "batch_id": "7e638643-4ea5-4a0c-99ae-3b08250d2291",
+  "traceId": "c1cc8807566be21b373f7d96e072b606",
+  "spanId": "f1c7ffe4f9b1e2ca",
+  "parentSpanId": "b3f202e6da7071fc",
+  "links": [
+    {
+      "traceId": "c1cc8807566be21b373f7d96e072b606",
+      "spanId": "5f795f7ffa7fbb46"
+    }
+  ],
   "status": "summarized",
   "rows": [
     {
@@ -8,7 +16,12 @@
       "checked_at": "2026-10-21T23:59:59Z",
       "availability": "eligible",
       "strikes": 0,
-      "check_request_id": "d5d03686-f532-4c4c-a173-8669b24fffd2",
+      "links": [
+        {
+          "traceId": "c1cc8807566be21b373f7d96e072b606",
+          "spanId": "615a4a47666f4d48"
+        }
+      ],
       "check_result": "valid-feed",
       "rest_until": null,
       "first_confirmed_failure_at": null,
@@ -57,7 +70,7 @@
       "checked_at": null,
       "availability": "eligible",
       "strikes": 0,
-      "check_request_id": null,
+      "links": [],
       "check_result": null,
       "rest_until": null,
       "first_confirmed_failure_at": null,

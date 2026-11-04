@@ -6,7 +6,7 @@ import { capturePlannerFailure, combinePlannerFailures } from "./api/plan-failur
 import type { FailureCaptureOptions } from "./api/plan-failure";
 
 type EntityIdentity = Pick<ArticleEntities,
-  "run_id" | "attempt" | "correlation_id" | "git_sha" | "article_id" | "candidate_id" | "feed_id" | "observed_at">;
+  "run_id" | "attempt" | "traceId" | "git_sha" | "article_id" | "candidate_id" | "feed_id" | "observed_at">;
 
 export function recognizeArticleEntities(input: EntityIdentity & {
   title: string | null; article_text: string | null; limits: ArticleEntityLimits;

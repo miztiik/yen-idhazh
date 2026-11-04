@@ -1,6 +1,6 @@
 /** Keep one document chain's actual work and original clock isolated across concurrent requests. */
 import { FetchedDocumentSchema } from "@idhazh/common-contracts";
-import type { PlanApiTiming, PlanRunRow, CandidateRejectionRecord, DiscoveredArticleRow } from "@idhazh/common-contracts";
+import type { PlanApiTiming, PlanRunRow, CandidateRejectionRecord, DiscoveredArticleRow, OperationLink } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { createRunHealth } from "../run-health";
@@ -20,6 +20,7 @@ import type { RunContext } from "../resolve-run-context";
 import type { recordPlanRun } from "../record-plan-run";
 import { selectedArtifactPath } from "../selected-artifact-path";
 import type { DocumentOperationContext } from "./operation-context";
+import { operationKey } from "./operation-context";
 import type { FetchedDocumentReference } from "./stage-store";
 import { finishArticleEntities } from "../record-article-entities";
 import { writeJsonLine } from "../logging/structured-logger";
@@ -37,7 +38,7 @@ export type DocumentState = ExecutionStateBase & {
   kind: "document"; history: Awaited<ReturnType<typeof preparePlanningHealth>>;
   work: ReturnType<typeof createRunHealth>; fetcher: ReturnType<typeof createSourceFetcher>;
   config_sha256: string;
-  fetch_request_ids: Set<string>;
+  fetches: Set<string>;
   baseline: RunHistory;
   discovered_rows: DiscoveredArticleRow[];
 };
@@ -76,7 +77,7 @@ export function registerStageExecution(
   rememberExecution(inputs, context.run_id, Promise.resolve(state));
   return state;
 }
-export function executionHasArtifact(inputs: PlanInputs, context: RunContext) {
+export function executionHasArtifact(inputs: PlanInputs, context: Pick<RunContext, "run_id" | "writer">) {
   // One trusted, deterministic artifact path is evidence of a prior result, not a history scan.
   return existsSync(resolve(inputs.root, ...selectedArtifactPath(inputs.settings.inputs.artifact_root, context).split("/")));
 }
@@ -85,10 +86,10 @@ export function checkFetchedDocument(record: FetchedDocumentReference, inputs: P
   const identity = artifact.fetch_item_type === "feed" ? deriveFeedIdentity(artifact.canonical_url)
     : deriveArticleIdentity(artifact.canonical_url, inputs.harvest.config.harvest);
   if (artifact.article_id !== identity.url_key || artifact.observation.run_id !== record.context.run_id
-    || artifact.observation.correlation_id !== record.context.correlation_id
+    || operationKey(artifact.observation) !== operationKey(record.context)
     || artifact.body_sha256 !== (artifact.body === null ? null : hashText(artifact.body))
     || (artifact.body !== null && Buffer.byteLength(artifact.body) > inputs.harvest.extraction.max_body_bytes)) {
-    throw new PlanError("ARTIFACT_INVALID", "Fetched document identity, digest or byte bound differs", "fetch_request_id");
+    throw new PlanError("ARTIFACT_INVALID", "Fetched document identity, digest or byte bound differs", "links");
   }
   return artifact;
 }
@@ -108,7 +109,7 @@ export async function documentState(record: DocumentOperationContext, inputs: Pl
           { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls,
             clock: runtime.observation_clock ?? (() => new Date()) }),
         fetcher: createSourceFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),
-        config_sha256: record.config_sha256, fetch_request_ids: new Set<string>(), baseline, discovered_rows: [], started,
+        config_sha256: record.config_sha256, fetches: new Set<string>(), baseline, discovered_rows: [], started,
         api_timings: [{ operation: "feed-health-before-fetch", duration_ms: Math.round(performance.now() - historyStarted), status: "completed" }],
         health_written: false, health_fingerprint: null, owns_choice: false,
       };
@@ -116,18 +117,18 @@ export async function documentState(record: DocumentOperationContext, inputs: Pl
     rememberExecution(inputs, record.context.run_id, pending);
   }
   const state = await pending;
-  if (state.kind !== "document") throw new PlanError("ARTIFACT_INVALID", "Document work belongs to a different execution", "fetch_request_id");
-  if (state.context.correlation_id !== record.context.correlation_id) {
-    throw new PlanError("REQUEST_CONFLICT", "Document chain differs from its live execution", "fetch_request_id");
+  if (state.kind !== "document") throw new PlanError("ARTIFACT_INVALID", "Document work belongs to a different execution", "links");
+  if (state.context.writer.attempt !== record.context.writer.attempt || state.config_sha256 !== record.config_sha256) {
+    throw new PlanError("REQUEST_CONFLICT", "Document work differs from its live run attempt or configuration", "links");
   }
   return state;
 }
-export async function readDocumentHealthBatch(batchId: string, inputs: PlanInputs) {
-  const runId = stageStore(inputs).documentRun(batchId);
+export async function readDocumentHealthBatch(reference: OperationLink, inputs: PlanInputs) {
+  const runId = stageStore(inputs).documentRun(reference);
   const pending = runId === undefined ? undefined : statesFor(inputs).get(runId);
-  if (pending === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "No current document work batch exists", "batch_id");
+  if (pending === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "No current document work exists", "links");
   const state = await pending;
-  if (state.kind !== "document") throw new PlanError("ARTIFACT_INVALID", "Document work belongs to a different execution", "batch_id");
+  if (state.kind !== "document") throw new PlanError("ARTIFACT_INVALID", "Document work belongs to a different execution", "links");
   return state;
 }
 export function documentExclusions(state: DocumentState) {
@@ -135,13 +136,13 @@ export function documentExclusions(state: DocumentState) {
 }
 export function capturedExclusions(baseline: RunHistory, now: string) {
   const held = baseline.exclusions.get(now.slice(0, 10));
-  if (held === undefined) throw new PlanError("HISTORY_WINDOW_UNAVAILABLE", "Exclusions lie outside the captured UTC days", "batch_id");
+  if (held === undefined) throw new PlanError("HISTORY_WINDOW_UNAVAILABLE", "Exclusions lie outside the captured UTC days", "links");
   return held;
 }
 export async function requireDocumentState(inputs: PlanInputs, context: RunContext) {
   const state = await currentExecutionState(inputs, context.run_id);
   if (state?.kind !== "document" || state.context.writer.attempt !== context.writer.attempt) {
-    throw new PlanError("ARTIFACT_NOT_FOUND", "Stage has no live captured input", "batch_id");
+    throw new PlanError("ARTIFACT_NOT_FOUND", "Stage has no live captured input", "links");
   }
   return state;
 }

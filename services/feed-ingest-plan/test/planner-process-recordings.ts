@@ -6,13 +6,14 @@ import { recordedPlan } from "./plan-recordings";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { createPlannerStartup } from "../scripts/feed-ingest-plan-supervisor";
 import { readPlannerOutputRecording } from "./planner-output-recordings";
+import { createRootContext } from "@idhazh/common-contracts";
 
 export async function readPlannerStartupRecording() {
   const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
   const { response } = await readPlannerOutputRecording();
   inputs.settings.enabled = true;
   const startup = createPlannerStartup(inputs, {
-    git_sha: "a".repeat(40), run_number: response.run_id.slice(11), correlation_id: response.correlation_id,
+    git_sha: "a".repeat(40), run_number: response.run_id.slice(11), ...createRootContext(),
     attempt: response.attempt, captured_at: response.started_at,
   });
   return { inputs, startup };
@@ -25,7 +26,7 @@ export async function recordedPlannerProcess(
   try {
     const configRoot = new URL("../../../config/", import.meta.url);
     await mkdir(join(fixture.directory, "config"));
-    for (const name of ["idhazh.json", "ledgers.json", "data-delivery.json"]) {
+    for (const name of ["idhazh.json", "ledgers.json", "data-delivery.json", "typescript-event-sources.json"]) {
       await writeFile(join(fixture.directory, "config", name), await Bun.file(new URL(name, configRoot)).text());
     }
     const settings = { ...fixture.inputs.settings, enabled: false };
@@ -47,7 +48,7 @@ export async function recordedPlannerProcess(
     inputs.outputRoot = join(directory, "state");
     const startup = createPlannerStartup(inputs, {
       git_sha: fixture.runtime.git_sha, run_number: "700",
-      correlation_id: fixture.runtime.correlation_id!, attempt: 3,
+      ...createRootContext(), attempt: 3,
       captured_at: fixture.runtime.clock!().toISOString(),
     });
     return {

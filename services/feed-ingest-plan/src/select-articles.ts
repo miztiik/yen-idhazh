@@ -15,15 +15,16 @@ import { createFeedHealthRow } from "./health-row";
 import { sourceSnapshot } from "./harvest-feeds/load-harvest-inputs";
 import type { RunHistory } from "./read-ledger-history/read-run-history";
 import { capturedExclusions, requireDocumentState } from "./api/document-state";
+import { operationRunContext } from "./api/operation-context";
 
 export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs, selectionStartedAt: string,
   currentHealth?: Pick<Awaited<ReturnType<typeof prepareExecutionHealth>>, "sources" | "request_report">,
-  context: RunContext = batch.context, captured?: RunHistory) {
+  context: RunContext = operationRunContext(batch), captured?: RunHistory) {
   const request = resolvePlanRequest(batch.request, inputs.harvest.config);
   const planning = resolvePlanningInputs(inputs, request);
-  const baseline = captured ?? (await requireDocumentState(inputs, batch.context)).baseline;
+  const baseline = captured ?? (await requireDocumentState(inputs, operationRunContext(batch))).baseline;
   const health = currentHealth ?? await prepareExecutionHealth(inputs, selectionStartedAt,
-    { context: batch.context, rows: batch.work_rows }, baseline);
+    { context: operationRunContext(batch), rows: batch.work_rows }, baseline);
   const exclusions = capturedExclusions(baseline, selectionStartedAt);
   const discoveryRows = batch.discovered.availability === "available" ? batch.discovered.rows : [];
   const publishedOn = new Map(exclusions.published_on);
@@ -47,7 +48,7 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
     discovered: batch.discovered.availability === "available"
       ? { availability: "available", rows: foldDiscoveryHistory(discoveryRows) } : batch.discovered, planning,
     clock_config: inputs.clock_config, run: {
-      now: batch.context.now, run_id: batch.context.run_id, correlation_id: batch.context.correlation_id,
+      now: batch.context.now, run_id: batch.context.run_id, traceId: batch.traceId,
     },
     exclusions: {
       published_window_days: inputs.clock_config.collect.published_window_days,

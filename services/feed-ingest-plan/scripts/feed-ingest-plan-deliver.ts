@@ -17,6 +17,8 @@ import { describePlanError } from "../src/api/plan-request";
 import { RelativePathSchema } from "../src/config/service-settings";
 import { z } from "zod";
 import { writeJsonLine } from "../src/logging/structured-logger";
+import { createRootContext, OperationMetadataSchema } from "@idhazh/common-contracts";
+import type { OperationMetadata } from "@idhazh/common-contracts";
 
 export function metadataWritePermissions(registrations: MetadataRegistrations): string[] {
   return Object.values(registrations).map(({ prefix }) => `state/raw/${prefix.join("/")}`);
@@ -66,16 +68,18 @@ export async function deliverPlannerFiles(input: Readonly<{
 
 export async function deliverWorkflowMetadata(input: {
   root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number; gitSha: string;
+  context?: OperationMetadata;
 }) {
   const paths = z.array(RelativePathSchema).parse(JSON.parse(input.currentRunFiles));
-  let execution = runtimeFailureExecution({ git_sha: input.gitSha, attempt: input.attempt });
+  let execution = runtimeFailureExecution({
+    ...OperationMetadataSchema.parse(input.context ?? createRootContext()), git_sha: input.gitSha, attempt: input.attempt,
+  });
   try {
     const context = await readWorkflowDeliveryContext({
       ...input,
     });
     execution = { ...execution, run_id: context.identity.run_id };
     const completed = await collectWorkflowFiles({ ...input, ...context });
-    if (completed.response !== undefined) execution.correlation_id = completed.response.correlation_id;
     if ([...paths].sort().join("\n") !== [...completed.paths].sort().join("\n")) {
       throw new Error("Delivery paths differ from the validated completed API output");
     }

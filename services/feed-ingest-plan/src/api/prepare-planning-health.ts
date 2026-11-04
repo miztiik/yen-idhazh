@@ -13,7 +13,7 @@ export async function preparePlanningHealth(
 ) {
   const input = healthHistoryInput(inputs, now, current);
   if (current !== undefined && baseline === undefined) {
-    throw new PlanError("ARTIFACT_NOT_FOUND", "Health work requires its live captured input", "batch_id");
+    throw new PlanError("ARTIFACT_NOT_FOUND", "Health work requires its live captured input", "links");
   }
   const captured = structuredClone(baseline ?? await readPlanningHistory(inputs, now));
   const result = current === undefined ? captured : {

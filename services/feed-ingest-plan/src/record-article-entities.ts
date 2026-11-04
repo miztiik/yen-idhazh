@@ -33,7 +33,7 @@ export async function recordArticleEntities(inputs: PlanInputs, context: RunCont
     execution: context, limits: inputs.settings.diagnostics.failure };
   try {
     const record = recognizeArticleEntities({
-      ...input, run_id: context.run_id, correlation_id: context.correlation_id,
+      ...input, run_id: context.run_id, traceId: context.traceId,
       attempt: context.writer.attempt, git_sha: context.writer.git_sha,
       limits: inputs.settings.diagnostics.named_entities,
     }, capture);

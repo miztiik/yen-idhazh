@@ -25,10 +25,10 @@ import { plannerMemory } from "../planner-memory";
 import { summarizeFeedAvailability } from "../availability/feed-availability-view";
 import { projectLifecycleFields } from "../health-row";
 import { summarizeRequestReport } from "../read-ledger-history/request-summary";
-import { collectionForBatch } from "./collection-operation";
-import { snapshotCollectionBatch } from "./collection-batch";
+import { collectionForRun } from "./collection-operation";
 import { projectFeedHealthFields } from "../read-ledger-history/read-feed-health-fields";
 import { withPlannerFailure } from "./plan-failure";
+import { commandContext, operationMetadata, operationRunContext } from "./operation-context";
 
 export async function prepareExecutionHealth(inputs: PlanInputs, now: string, current?: CurrentHealthWork, baseline?: RunHistory) {
   const captured = baseline ?? (current === undefined ? undefined : (await requireDocumentState(inputs, current.context)).baseline);
@@ -78,14 +78,14 @@ export async function prepareFeedHealthState(inputs: PlanInputs, now: string, cu
 export async function recordFeedHealthState(
   rows: readonly FeedHealthStateRow[], context: RunContext, inputs: PlanInputs,
 ) {
-  if (rows.some(row => row.run_id !== context.run_id || row.attempt !== context.writer.attempt)) throw new PlanError("ARTIFACT_INVALID", "Health work belongs to another execution", "batch_id");
+  if (rows.some(row => row.run_id !== context.run_id || row.attempt !== context.writer.attempt)) throw new PlanError("ARTIFACT_INVALID", "Health work belongs to another execution", "links");
   const fingerprint = healthFingerprint(rows);
   let finished = healthWrites.get(inputs);
   if (finished === undefined) { finished = new Map(); healthWrites.set(inputs, finished); }
   const key = `${context.run_id}:${context.writer.attempt}`;
   const previous = finished.get(key);
   if (previous !== undefined) {
-    if (previous.fingerprint !== fingerprint) throw new PlanError("REQUEST_CONFLICT", "This execution already finalized different health work", "batch_id");
+    if (previous.fingerprint !== fingerprint) throw new PlanError("REQUEST_CONFLICT", "This execution already finalized different health work", "links");
     return previous.result;
   }
   const result = (async () => {
@@ -110,49 +110,52 @@ export async function recordFeedHealthState(
 export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
   const request = FeedHealthStateUpdateRequestSchema.parse(raw);
+  const reference = request.links[0];
   const reliability = { window_days: inputs.clock_config.collect.reliability_window_days };
-  if (!stageStore(inputs).has(request.batch_id)) {
-    const document = await readDocumentHealthBatch(request.batch_id, inputs);
+  if (!stageStore(inputs).has(reference)) {
+    const document = await readDocumentHealthBatch(reference, inputs);
     requireStageConfiguration(document, inputs, runtime, request.action === "summarize");
+    const context = { ...document.context,
+      ...commandContext(runtime, collectionForRun(inputs, document.context.run_id)?.context, [reference]) };
     const prepare = request.action === "record" ? prepareExecutionHealth : prepareFeedHealthState;
     const summary = await prepare(inputs, utcTimestamp(runtime.selection_clock ?? runtime.clock),
       { context: document.context, rows: document.work.rows() });
     const rows = captureHealthRows(document.work.rows(), summary.sources);
-    const files = request.action === "record" ? await recordFeedHealthState(rows, document.context, inputs) : null;
-    return { batch_id: request.batch_id, status: request.action === "record" ? "recorded" as const : "summarized" as const,
+    const files = request.action === "record" ? await recordFeedHealthState(rows, context, inputs) : null;
+    return { ...operationMetadata(context), status: request.action === "record" ? "recorded" as const : "summarized" as const,
       rows, request_report: summary.request_report, reliability, availability: summary.availability, ...(files === null ? {} : { files }) };
   }
-  const held = stageStore(inputs).inspect(request.batch_id);
+  const held = stageStore(inputs).inspect(reference);
   if (held.stage === "parsed") {
     let parsed = ParsedFeedBatchSchema.parse(held.value);
     requireStageConfiguration(parsed, inputs, runtime, request.action === "summarize");
-    const collection = collectionForBatch(inputs, request.batch_id);
-    if (collection !== undefined && collection.status === "collecting") {
-      parsed = snapshotCollectionBatch(inputs, collection, false);
-    }
     const live = await currentExecutionState(inputs, parsed.context.run_id);
-    if (live?.kind === "document" && stageStore(inputs).ownership(parsed.batch_id).health_fingerprint === null) {
+    if (live?.kind === "document" && stageStore(inputs).ownership(parsed).health_fingerprint === null) {
       parsed = stageStore(inputs).replace("parsed", ParsedFeedBatchSchema, {
         ...parsed, work_rows: live.work.rows(), exclusions: live.work.exclusions(),
       });
     }
+    const context = { ...parsed.context,
+      ...commandContext(runtime, collectionForRun(inputs, parsed.context.run_id)?.context, [reference]) };
     const prepare = request.action === "record" ? prepareExecutionHealth : prepareFeedHealthState;
     const summary = await prepare(inputs, utcTimestamp(runtime.selection_clock ?? runtime.clock),
-      { context: parsed.context, rows: parsed.work_rows });
+      { context: operationRunContext(parsed), rows: parsed.work_rows });
     const rows = captureHealthRows(parsed.work_rows, summary.sources);
-    const files = request.action === "record" ? await recordFeedHealthState(rows, parsed.context, inputs) : null;
-    return { batch_id: request.batch_id, status: request.action === "record" ? "recorded" as const : "summarized" as const,
+    const files = request.action === "record" ? await recordFeedHealthState(rows, context, inputs) : null;
+    return { ...operationMetadata(context), status: request.action === "record" ? "recorded" as const : "summarized" as const,
       rows, request_report: summary.request_report, reliability, availability: summary.availability, ...(files === null ? {} : { files }) };
   }
   const selected = held.stage === "selected" ? SelectedFeedBatchSchema.parse(held.value) : PartitionedFeedBatchSchema.parse(held.value);
   requireStageConfiguration(selected, inputs, runtime, request.action === "summarize");
+  const context = { ...selected.context,
+    ...commandContext(runtime, collectionForRun(inputs, selected.context.run_id)?.context, [reference]) };
   const sources = new Map(selected.health_rows.map(row => [row.feed_id, {
     ...projectLifecycleFields({ ...row, lifecycle: row.availability }),
     lifecycle: row.availability, endpoint_key: row.endpoint_key, reliability: row.reliability,
   }]));
   const availability = summarizeFeedAvailability(sources, utcTimestamp(runtime.observation_clock), inputs.harvest.sources);
-  const files = request.action === "record" ? await recordFeedHealthState(selected.health_rows, selected.context, inputs) : null;
-  return { batch_id: request.batch_id, status: request.action === "record" ? "recorded" as const : "summarized" as const,
+  const files = request.action === "record" ? await recordFeedHealthState(selected.health_rows, context, inputs) : null;
+  return { ...operationMetadata(context), status: request.action === "record" ? "recorded" as const : "summarized" as const,
     rows: selected.health_rows, request_report: selected.request_report, reliability, availability, ...(files === null ? {} : { files }) };
 }
 

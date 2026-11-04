@@ -19,12 +19,13 @@ import {
   PARSED_FEED_BATCH_VERSION, SELECTED_FEED_BATCH_VERSION,
 } from "../version";
 import { PlannerRequestReportSchema } from "./planner-request-report.schema";
+import { OperationLinkSchema, OperationMetadataSchema } from "./operation-metadata.schema";
 export { PlannerRequestReportSchema } from "./planner-request-report.schema";
 export type { PlannerRequestReport } from "./planner-request-report.schema";
 
 export const PlannerStageContextSchema = z.strictObject({
   now: TimestampSchema, captured_at: RecordedInstantSchema, date: DateStampSchema,
-  run_id: RunIdSchema, correlation_id: z.uuid({ version: "v4" }), writer: WriterIdentitySchema,
+  run_id: RunIdSchema, writer: WriterIdentitySchema,
 }).superRefine((value, ctx) => {
   if (value.now.slice(0, 19) !== value.captured_at.slice(0, 19) || value.date !== value.now.slice(0, 10)
     || value.writer.run_id !== value.run_id || !value.run_id.startsWith(`${value.date}-`)) {
@@ -75,11 +76,12 @@ export const PlannerFeedEntrySchema = z.strictObject({
 export const PlannerFeedOfferSchema = z.strictObject({
   offer_id: Sha256Schema, source: SourceSnapshotSchema, entry: PlannerFeedEntrySchema,
   state: z.enum(["pending", "fetched", "parsed", "rejected"]),
-  fetch_request_id: z.uuid({ version: "v4" }).nullable(),
+  links: z.array(OperationLinkSchema).max(1),
 }).meta({
   version: PARSED_FEED_BATCH_VERSION,
   changelog: [
-    { version: PARSED_FEED_BATCH_VERSION, change: "Retain configured feed weights without planner tier fields." },
+    { version: PARSED_FEED_BATCH_VERSION, change: "Link an offered article to its claimed fetch operation." },
+    { version: "2026-11-02", change: "Retain configured feed weights without planner tier fields." },
   ],
 });
 export type PlannerFeedOffer = z.infer<typeof PlannerFeedOfferSchema>;
@@ -91,9 +93,9 @@ export type PlannerRejectionCount = z.infer<typeof PlannerRejectionCountSchema>;
 export const PlannerHealthDaySchema = z.strictObject({ day: DateStampSchema, complete: z.boolean() });
 export const SelectedArticleContentSchema = SelectedArticleRowSchema.safeExtend({ article_text: z.string() });
 const batchIdentity = {
-  batch_id: z.uuid({ version: "v4" }), config_sha256: Sha256Schema, context: PlannerStageContextSchema,
+  config_sha256: Sha256Schema, context: PlannerStageContextSchema,
 };
-export const ParsedFeedBatchSchema = z.strictObject({
+export const ParsedFeedBatchSchema = OperationMetadataSchema.safeExtend({
   ...batchIdentity, version: z.literal(PARSED_FEED_BATCH_VERSION).default(PARSED_FEED_BATCH_VERSION), request: PlannerStageRequestSchema,
   candidates: z.array(FeedIngestCandidateSchema),
   observations: z.record(Sha256Schema, PlannerHarvestObservationSchema),
@@ -102,14 +104,12 @@ export const ParsedFeedBatchSchema = z.strictObject({
   history_rows: z.array(FeedHealthStateRowSchema), history_days: z.array(PlannerHealthDaySchema),
   work_rows: z.array(FeedHealthStateRowSchema), exclusions: z.array(PlannerRejectionCountSchema),
   offers: z.array(PlannerFeedOfferSchema).default([]),
-  feed_fetch_request_id: z.uuid({ version: "v4" }).nullable().default(null),
-  article_fetch_request_id: z.uuid({ version: "v4" }).nullable().default(null),
   input_complete: z.boolean().default(true),
 }).superRefine((value, ctx) => {
   const ids = new Set(value.candidates.map(candidate => candidate.candidate_id));
   if (ids.size !== value.candidates.length) reject(ctx, "parsed candidate identities must be distinct");
   for (const candidate of value.candidates) {
-    if (candidate.run_id !== value.context.run_id || candidate.correlation_id !== value.context.correlation_id) {
+    if (candidate.run_id !== value.context.run_id) {
       reject(ctx, "parsed candidates must belong to their batch run");
     }
   }
@@ -120,16 +120,16 @@ export const ParsedFeedBatchSchema = z.strictObject({
 }).meta({
   version: PARSED_FEED_BATCH_VERSION,
   changelog: [
-    { version: PARSED_FEED_BATCH_VERSION, change: "Remove robots evidence and health counters from parsed work." },
-    { version: PARSED_FEED_BATCH_VERSION, change: "Retain candidates and offers without planner tier fields." },
+    { version: PARSED_FEED_BATCH_VERSION, change: "Address parsed output by its producing operation and input links." },
+    { version: "2026-11-02", change: "Remove robots evidence and health counters from parsed work." },
+    { version: "2026-11-02", change: "Retain candidates and offers without planner tier fields." },
     { version: "2026-10-31", change: "Require the current parsed batch without older-format readers." },
-    { version: "2026-10-30", change: "Retain parser deadlines, collection completion and response byte-limit evidence." },
     { version: "2026-10-25", change: "Earlier changes are in git." },
   ],
 });
 export type ParsedFeedBatch = z.infer<typeof ParsedFeedBatchSchema>;
-export const SelectedFeedBatchSchema = z.strictObject({
-  ...batchIdentity, version: z.literal(SELECTED_FEED_BATCH_VERSION).default(SELECTED_FEED_BATCH_VERSION), parsed_batch_id: z.uuid({ version: "v4" }),
+export const SelectedFeedBatchSchema = OperationMetadataSchema.safeExtend({
+  ...batchIdentity, version: z.literal(SELECTED_FEED_BATCH_VERSION).default(SELECTED_FEED_BATCH_VERSION),
   selection_started_at_utc: TimestampSchema, evaluated_at: TimestampSchema,
   articles: z.array(SelectedArticleContentSchema), health_rows: z.array(FeedHealthStateRowSchema),
   rejected_articles: z.array(RejectedArticleRowSchema),
@@ -137,21 +137,20 @@ export const SelectedFeedBatchSchema = z.strictObject({
 }).meta({
   version: SELECTED_FEED_BATCH_VERSION,
   changelog: [
-    { version: SELECTED_FEED_BATCH_VERSION, change: "Give private selections their own stamp and target-only health and reports." },
+    { version: SELECTED_FEED_BATCH_VERSION, change: "Address selected output by its producing operation and input links." },
+    { version: "2026-11-02", change: "Give private selections their own stamp and target-only health and reports." },
     { version: "2026-11-02", change: "Carry both word counts, complete diversity scores and global timing." },
     { version: "2026-10-31", change: "Carry independent request totals with explicit counter coverage." },
-    { version: "2026-10-31", change: "Identify selections produced with shared query-free article cleanup." },
     { version: "2026-10-27", change: "Earlier changes are in git." },
   ],
 });
 export type SelectedFeedBatch = z.infer<typeof SelectedFeedBatchSchema>;
 export const PartitionedFeedBatchSchema = SelectedFeedBatchSchema.safeExtend({
-  selection_batch_id: z.uuid({ version: "v4" }),
   strategy: z.enum(["bin-pack", "round-robin", "none"]), dispatch_count: PositiveCountSchema,
   work: z.array(NonNegativeSchema),
 });
 export type PartitionedFeedBatch = z.infer<typeof PartitionedFeedBatchSchema>;
-export const StageReferenceRequestSchema = z.strictObject({ batch_id: z.uuid({ version: "v4" }) });
+export const StageReferenceRequestSchema = z.strictObject({ links: z.tuple([OperationLinkSchema]) });
 export const PartitionArticlesRequestSchema = StageReferenceRequestSchema.extend({
   strategy: z.enum(["bin-pack", "round-robin", "none"]).optional(), shards: PositiveCountSchema.optional(),
 });

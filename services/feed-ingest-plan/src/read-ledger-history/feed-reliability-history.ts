@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { FeedHealthReliability, FeedHealthStateRow } from "@idhazh/common-contracts";
 import { selectSavedReliability } from "./saved-reliability";
 import { feedReliability } from "./feed-reliability";
+import { operationKey } from "../api/operation-context";
 
 const partialReliability = z.object(FeedHealthReliabilityFieldsSchema.shape).partial();
 type Evidence = z.infer<typeof partialReliability>;
@@ -19,13 +20,15 @@ export function settleLogicalFeedReads(rows: readonly Evidence[], now: string): 
     if (!parsed.success || row.checked_at == null || row.items == null || row.outcome == null
       || Date.parse(row.checked_at) > Date.parse(now)
       || row.outcome === "skipped") continue;
-    if (row.check_request_id !== null && row.check_request_id !== undefined) {
-      const fact = JSON.stringify([row.checked_at, row.items, row.outcome]);
-      const previous = seen.get(row.check_request_id);
+    const check = row.links?.[0];
+    if (check !== undefined) {
+      const key = operationKey(check);
+      const fact = JSON.stringify([row.feed_id, row.endpoint_key, row.checked_at, row.items, row.outcome]);
+      const previous = seen.get(key);
       if (previous !== undefined && previous !== fact) throw new Error("Conflicting copies of one completed logical feed read");
-      seen.set(row.check_request_id, fact);
+      seen.set(key, fact);
     }
-    const key = `${row.run_id}:${row.feed_id}`;
+    const key = check === undefined ? `${row.run_id}:${row.feed_id}` : operationKey(check);
     const value: Read = { key, date: row.date!, checked_at: row.checked_at, productive: row.outcome === "ok" && row.items > 0 };
     const previous = reads.get(key);
     if (previous === undefined || (value.productive && !previous.productive)
@@ -97,8 +100,7 @@ export function reuseFeedReliability(input: {
   }
   const current = settleLogicalFeedReads(input.current, input.now);
   for (const check of current.filter(row => input.days.includes(row.date))) {
-    const previous = settleLogicalFeedReads(input.rows.filter(row => `${row.run_id}:${row.feed_id}` === check.key), input.now)
-      .find(row => input.days.includes(row.date));
+    const previous = evidence().find(row => row.key === check.key && input.days.includes(row.date));
     const productive = check.productive || previous?.productive === true;
     if (previous === undefined) {
       // With no measured baseline, current work is a supported partial count, not complete history.
@@ -108,7 +110,7 @@ export function reuseFeedReliability(input: {
         : value.attempted === null ? null : value.attempted + 1;
     } else if (productive && !previous.productive && value.productive !== null) value.productive++;
   }
-  if (input.current.some(row => row.check_request_id !== null && (row.items === null || row.check_result === "interrupted"))) {
+  if (input.current.some(row => row.links.length !== 0 && (row.items === null || row.check_result === "interrupted"))) {
     input.onGap("reliability-current-work-incomplete");
     value.complete = false;
   }

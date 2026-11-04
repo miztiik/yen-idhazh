@@ -1,6 +1,6 @@
 /** Bound native feed and article parsing, including time waiting for a worker. */
-import { randomUUID } from "node:crypto";
-import { FeedHarvestConfigSchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import { createRootContext, FeedHarvestConfigSchema, OperationMetadataSchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import type { OperationMetadata } from "@idhazh/common-contracts";
 import { ArticleExtractionError } from "./dom-extractor";
 import { FeedParseError } from "./parse-feed";
 import { ParserError } from "./parser-error";
@@ -18,7 +18,7 @@ type ArticleParserActivity = (
 ) => void;
 
 export type ParserOptions = {
-  activity?: ArticleParserActivity; signal?: AbortSignal; timeout_ms?: number;
+  context?: OperationMetadata; activity?: ArticleParserActivity; signal?: AbortSignal; timeout_ms?: number;
 };
 type ParserResult = ArticleParserResult | FeedParserResult;
 type Job = {
@@ -43,11 +43,13 @@ export class ArticleParserPool {
   }
 
   parse(body: string, url: string, config: ExtractionControls, options: ParserOptions = {}): Promise<ArticleParserResult> {
-    return this.enqueue({ id: randomUUID(), kind: "article", body, url, config }, options) as Promise<ArticleParserResult>;
+    const context = OperationMetadataSchema.parse(options.context ?? createRootContext());
+    return this.enqueue({ ...context, kind: "article", body, url, config }, options) as Promise<ArticleParserResult>;
   }
 
   parseFeed(body: string, options: ParserOptions = {}): Promise<FeedParserResult> {
-    return this.enqueue({ id: randomUUID(), kind: "feed", body }, options) as Promise<FeedParserResult>;
+    const context = OperationMetadataSchema.parse(options.context ?? createRootContext());
+    return this.enqueue({ ...context, kind: "feed", body }, options) as Promise<FeedParserResult>;
   }
 
   private enqueue(request: ArticleParserRequest, options: ParserOptions) {
@@ -110,7 +112,9 @@ export class ArticleParserPool {
           }
           const response: ArticleParserResponse = checked.data;
           const job = held.job;
-          if (job === null || response.id !== job.request.id) {
+          if (job === null || response.traceId !== job.request.traceId || response.spanId !== job.request.spanId
+            || response.parentSpanId !== job.request.parentSpanId || response.traceState !== job.request.traceState
+            || JSON.stringify(response.links) !== JSON.stringify(job.request.links)) {
             this.failSlot(held, new ParserError("parser-failed"));
             return;
           }

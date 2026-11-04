@@ -1,6 +1,6 @@
 /** Do independent recorded counters retain honest coverage and report-only request ordering? */
 import { expect, test } from "bun:test";
-import { FeedHealthStateRowSchema, SourceSnapshotSchema } from "@idhazh/common-contracts";
+import { createRootContext, FeedHealthStateRowSchema, SourceSnapshotSchema } from "@idhazh/common-contracts";
 import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-health-fields";
 import { summarizeRequestReport } from "../src/read-ledger-history/request-summary";
 import { inputEndpointKey } from "../src/read-ledger-history/health-summary";
@@ -8,7 +8,7 @@ import { renderRequestReport } from "../src/reporting/request-report-markdown";
 import { renderPlanMarkdown } from "../src/reporting/plan-markdown";
 import { readPlannerOutputRecording } from "./planner-output-recordings";
 import { escapeMarkdown } from "../src/reporting/markdown-format";
-import { randomUUID } from "node:crypto";
+import { operationLink } from "../src/api/operation-context";
 
 async function fixture() {
   const source = SourceSnapshotSchema.parse({
@@ -38,10 +38,10 @@ test("sums each usable counter across full and partial records without double co
   const { row, report } = await fixture();
   const { article_requests: _missing, ...partial } = row;
   const result = report([
-    row, row, { ...row, attempt: 2, check_request_id: randomUUID(), article_requests: null },
-    { ...partial, attempt: 3, check_request_id: randomUUID() },
-    { ...row, attempt: 4, check_request_id: randomUUID(), article_requests: -1 },
-    { ...row, attempt: 5, check_request_id: randomUUID(), endpoint_key: "2".repeat(64), article_requests: 100 },
+    row, row, { ...row, attempt: 2, links: [operationLink(createRootContext())], article_requests: null },
+    { ...partial, attempt: 3, links: [operationLink(createRootContext())] },
+    { ...row, attempt: 4, links: [operationLink(createRootContext())], article_requests: -1 },
+    { ...row, attempt: 5, links: [operationLink(createRootContext())], endpoint_key: "2".repeat(64), article_requests: 100 },
     { ...row, date: "2026-10-26", run_id: "2026-10-26-1", article_requests: 200 },
     { ...row, date: "2026-10-23", run_id: "2026-10-23-1", article_requests: 400 },
   ]);
@@ -125,13 +125,13 @@ test("sorts request rows by article requests, feed requests, then name with unkn
     { feed_id: "most-articles", feed_requests: 2, article_requests: 5 },
     { feed_id: "most-feeds", feed_requests: 3, article_requests: 0 },
   ];
-  const request_report = report(cases.map(value => ({ ...row, ...value, check_request_id: randomUUID() })), {
+  const request_report = report(cases.map(value => ({ ...row, ...value, links: [operationLink(createRootContext())] })), {
     sources: cases.map(value => ({ ...source, feed_id: value.feed_id })),
   });
   const before = structuredClone(request_report);
     const { response, health } = await readPlannerOutputRecording();
-    const original = renderPlanMarkdown({ response, health });
-    const rendered = renderPlanMarkdown({ response, health: { ...health, request_report } });
+    const original = renderPlanMarkdown({ response });
+    const rendered = renderPlanMarkdown({ response: { ...response, health: { ...health, request_report } } });
     const lines = rendered.markdown.split("\n").filter(line => /^\| D\d+ \| Historical window/.test(line));
     expect(lines.map(line => line.split(" | ")[2])).toEqual([
       "zero", "unknown", "most-articles", "alpha", "beta", "most-feeds", "missing-article",
@@ -155,11 +155,11 @@ test("sorts feed results by selected then technical admission and groups routine
       { feed_id: "charlie", chosen: 7, admitted: 7, reason: "REJECTED_SCREENING_MIN_WORDS", count: 5 },
       { feed_id: "delta", chosen: 5, admitted: 12, reason: "EXTRACT_EMPTY", count: 5 },
     ];
-    const rendered = renderPlanMarkdown({ response, health: { ...health, rows: [...rows.map(value => ({
+    const rendered = renderPlanMarkdown({ response: { ...response, health: { ...health, rows: [...rows.map(value => ({
       ...base, feed_id: value.feed_id, article_candidates: value.admitted, articles_selected: value.chosen,
       rejection_counts: [{ ...cause, reason_code: value.reason, count: value.count }],
     })), { ...base, feed_id: "epsilon", article_candidates: 12, articles_selected: 6, rejection_counts: [] },
-    { ...base, feed_id: "unknown", article_candidates: null, counts_complete: false, articles_selected: 99, rejection_counts: [] }] } });
+    { ...base, feed_id: "unknown", article_candidates: null, counts_complete: false, articles_selected: 99, rejection_counts: [] }] } } });
     const lines = rendered.markdown.split("\n");
     const feedRows = lines.filter(line => /^\| C\d+ \|/.test(line));
     expect(feedRows.map(line => line.split(" | ")[1])).toEqual(["unknown", "charlie", "epsilon", "beta", "delta", "alpha"]);

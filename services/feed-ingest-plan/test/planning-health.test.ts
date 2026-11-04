@@ -3,8 +3,7 @@ import { expect, test } from "bun:test";
 import { dirname, join } from "node:path";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
-import { COMPACT_INDEX_VERSION, CompactIndexSchema, FeedHealthStateRowContract, FeedHealthStateRowSchema } from "@idhazh/common-contracts";
+import { createRootContext, COMPACT_INDEX_VERSION, CompactIndexSchema, FeedHealthStateRowContract, FeedHealthStateRowSchema } from "@idhazh/common-contracts";
 import type { FeedHealthReliability } from "@idhazh/common-contracts";
 import { healthFieldFixture, rewriteHealthFields } from "./health-field-fixtures";
 import { recordedPlan } from "./plan-recordings";
@@ -17,6 +16,7 @@ import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
 import { createFeedHealthRow } from "../src/health-row";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { compactRows, writeRows } from "./partition-fixtures";
+import { operationLink } from "../src/api/operation-context";
 
 const schema = z.object(FeedHealthStateRowSchema.shape);
 async function recording() {
@@ -46,7 +46,7 @@ async function writeCarriedSummary(
 ) {
   const row = FeedHealthStateRowSchema.parse({
     ...setup.row, date: day, run_id: `${day}-${run}`, checked_at: null,
-    check_request_id: null, check_result: null, outcome: null, status: null, items: null,
+    links: [], check_result: null, outcome: null, status: null, items: null,
     availability: "resting", strikes: 5, rest_until: "2026-11-01T10:00:00.000Z",
     first_confirmed_failure_at: "2026-10-29T10:00:00.000Z", availability_updated_at: updatedAt,
     feed_reads: null, productive_reads: null, failed_reads: null, article_candidates: null,
@@ -115,7 +115,7 @@ test("carried reliability reuses the requested saved window even when the availa
     const snapshots = [...read.uses.feed_reliability.rows, ...read.uses.feed_reliability.partial_rows]
       .filter(row => row.date !== undefined && row.date >= older.day);
     expect(snapshots).toHaveLength(2);
-    expect(snapshots.every(row => row.checked_at === null && row.check_request_id === null)).toBe(true);
+    expect(snapshots.every(row => row.checked_at === null && row.links?.length === 0)).toBe(true);
     const carried = await writeCarriedSummary(setup, "2026-11-01", "9102", {
       productive: 0, attempted: 0, success_fraction: null, production_factor: null,
       from_day: "2026-10-30", through_day: "2026-10-31", complete: true,
@@ -266,7 +266,7 @@ test("a recovered calculation is reused across API calls after its original fact
     withoutFacts.uses.feed_reliability.rows.length = 0;
     withoutFacts.uses.feed_reliability.partial_rows.length = 0;
     const current = FeedHealthStateRowSchema.parse({
-      ...setup.row, run_id: context.run_id, check_request_id: randomUUID(), checked_at: now,
+      ...setup.row, run_id: context.run_id, links: [operationLink(createRootContext())], checked_at: now,
       check_result: "confirmed-http-failure", status: 503, outcome: "transient", items: 0,
     });
     const updated = await preparePlanningHealth(setup.inputs, now, { context, rows: [current] }, withoutFacts);
@@ -288,7 +288,7 @@ test("finalized carry-forward Parquet reloads supported calculations without cla
     const written = await recordFeedHealthState([carry], context, setup.inputs);
     const actual = await readPlannerParquet(join(setup.inputs.outputRoot, written.files[0]!.path), "feed-health-state", FeedHealthStateRowContract);
     expect(actual.rows[0]).toMatchObject({
-      checked_at: null, check_request_id: null, check_result: null, feed_reads: 0, feed_requests: 0,
+      checked_at: null, links: [], check_result: null, feed_reads: 0, feed_requests: 0,
       availability_updated_at: setup.row.availability_updated_at, availability_complete: true,
       reliability: setup.row.reliability,
     });
@@ -340,7 +340,7 @@ test("a real known skipped day expires the last measured read without carrying i
     const nextDay = setup.now.slice(0, 10);
     const skipped = FeedHealthStateRowSchema.parse({
       ...measured, run_id: `${nextDay}-901`, date: nextDay,
-      check_request_id: null, check_result: null, checked_at: null, outcome: null, items: null,
+      links: [], check_result: null, checked_at: null, outcome: null, items: null,
       feed_reads: 0, productive_reads: 0, failed_reads: 0, article_candidates: 0, articles_selected: 0,
       feed_requests: 0, article_requests: 0, rejection_counts: [],
     });

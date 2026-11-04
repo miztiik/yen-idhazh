@@ -112,7 +112,7 @@ test("full sanitized body names survive later failure, artifact preparation and 
     expect(markdown).not.toMatch(/(?:^|[\s"'(\[{])[A-Za-z]:[\\/]/m);
     const files: string[] = [];
     await publishWorkflowUploadInventories({ directory, runNumber: "700",
-      write: event => { if (typeof event.details.file === "string") files.push(event.details.file); } });
+      write: event => { if (typeof event.data.details.file === "string") files.push(event.data.details.file); } });
     expect(files).toContain(filename);
     await expect(finishRunOutput({
       root: fixture.directory, temporaryRoot: fixture.directory,

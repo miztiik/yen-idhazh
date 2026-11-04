@@ -1,7 +1,7 @@
 {
   "run_id": "2026-10-21-700",
   "started_at": "2026-10-21T23:59:59.999Z",
-  "duration_ms": 1164,
+  "duration_ms": 8163,
   "status": "completed",
   "failure_code": null,
   "selected_count": 1,
@@ -16,32 +16,32 @@
   "api_timings": [
     {
       "operation": "feed-health-before-fetch",
-      "duration_ms": 29,
+      "duration_ms": 163,
       "status": "completed"
     },
     {
       "operation": "fetch",
-      "duration_ms": 769,
+      "duration_ms": 6385,
       "status": "completed"
     },
     {
       "operation": "feed-health-for-selection",
-      "duration_ms": 9,
+      "duration_ms": 65,
       "status": "completed"
     },
     {
       "operation": "select",
-      "duration_ms": 225,
+      "duration_ms": 340,
       "status": "completed"
     },
     {
       "operation": "partition",
-      "duration_ms": 3,
+      "duration_ms": 19,
       "status": "completed"
     },
     {
       "operation": "persist",
-      "duration_ms": 47,
+      "duration_ms": 552,
       "status": "completed"
     }
   ],
@@ -55,19 +55,206 @@
   "reliability_window_days": 30,
   "selection_started_at_utc": "2026-10-22T00:00:00Z",
   "planning_complete": true,
-  "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
-  "batches": {
-    "parsed_batch_id": "d85e1d51-a6fa-43bb-90c7-6cd26c2497fa",
-    "selection_batch_id": "7e638643-4ea5-4a0c-99ae-3b08250d2291",
-    "partition_batch_id": "37814bf4-4330-4ba0-8a8e-c0658aa8288d"
+  "traceId": "c1cc8807566be21b373f7d96e072b606",
+  "health": {
+    "traceId": "c1cc8807566be21b373f7d96e072b606",
+    "spanId": "f1c7ffe4f9b1e2ca",
+    "parentSpanId": "b3f202e6da7071fc",
+    "links": [
+      {
+        "traceId": "c1cc8807566be21b373f7d96e072b606",
+        "spanId": "5f795f7ffa7fbb46"
+      }
+    ],
+    "status": "summarized",
+    "rows": [
+      {
+        "feed_id": "recorded-news",
+        "endpoint_key": "d5ac862b279674275ef140975760a0e49b3a8aa6121d5dcb999e0b8b445417fb",
+        "checked_at": "2026-10-21T23:59:59Z",
+        "availability": "eligible",
+        "strikes": 0,
+        "links": [
+          {
+            "traceId": "c1cc8807566be21b373f7d96e072b606",
+            "spanId": "615a4a47666f4d48"
+          }
+        ],
+        "check_result": "valid-feed",
+        "rest_until": null,
+        "first_confirmed_failure_at": null,
+        "failed_recovery_checks": 0,
+        "retired_at": null,
+        "retirement_reason": null,
+        "availability_updated_at": "2026-10-21T23:59:59Z",
+        "availability_complete": true,
+        "last_failure_code": null,
+        "status": 200,
+        "reliability": {
+          "productive": 1,
+          "attempted": 1,
+          "success_fraction": 1,
+          "from_day": "2026-10-21",
+          "through_day": "2026-10-21",
+          "production_factor": 1,
+          "complete": false
+        },
+        "date": "2026-10-21",
+        "feed_reads": 1,
+        "productive_reads": 1,
+        "failed_reads": 0,
+        "article_candidates": 2,
+        "articles_selected": 0,
+        "feed_requests": 1,
+        "article_requests": 2,
+        "counts_complete": true,
+        "rejection_counts": [
+          {
+            "reason_code": "MISSING_REQUIRED_FIELDS",
+            "count": 1,
+            "subject": "article",
+            "stage": "harvest-feeds",
+            "attribution": null
+          }
+        ],
+        "run_id": "2026-10-21-700",
+        "attempt": 3,
+        "items": 2,
+        "outcome": "ok"
+      },
+      {
+        "feed_id": "recorded-news",
+        "endpoint_key": "d5ac862b279674275ef140975760a0e49b3a8aa6121d5dcb999e0b8b445417fb",
+        "checked_at": null,
+        "availability": "eligible",
+        "strikes": 0,
+        "links": [],
+        "check_result": null,
+        "rest_until": null,
+        "first_confirmed_failure_at": null,
+        "failed_recovery_checks": 0,
+        "retired_at": null,
+        "retirement_reason": null,
+        "availability_updated_at": "2026-10-21T23:59:59Z",
+        "availability_complete": true,
+        "last_failure_code": null,
+        "status": null,
+        "reliability": {
+          "productive": 1,
+          "attempted": 1,
+          "success_fraction": 1,
+          "from_day": "2026-10-21",
+          "through_day": "2026-10-21",
+          "production_factor": 1,
+          "complete": false
+        },
+        "date": "2026-10-22",
+        "feed_reads": 0,
+        "productive_reads": 0,
+        "failed_reads": 0,
+        "article_candidates": 0,
+        "articles_selected": 1,
+        "feed_requests": 0,
+        "article_requests": 0,
+        "counts_complete": true,
+        "rejection_counts": [
+          {
+            "reason_code": "REJECTED_GLOBAL_CAPACITY_REACHED",
+            "count": 1,
+            "subject": "article",
+            "stage": "curate-article-portfolio",
+            "attribution": null
+          }
+        ],
+        "run_id": "2026-10-21-700",
+        "attempt": 3,
+        "items": null,
+        "outcome": null
+      }
+    ],
+    "request_report": {
+      "from_day": "2026-10-15",
+      "through_day": "2026-10-21",
+      "complete": true,
+      "missing_days": [],
+      "unattributed_days": [],
+      "input_complete": true,
+      "feeds": [
+        {
+          "feed_id": "recorded-news",
+          "feed_requests": 1,
+          "article_requests": 2,
+          "counts_complete": true,
+          "coverage": {
+            "feed_requests": {
+              "status": "complete",
+              "known_records": 1,
+              "unknown_records": 0,
+              "recorded_days": [
+                "2026-10-21"
+              ],
+              "complete_days": [
+                "2026-10-15",
+                "2026-10-16",
+                "2026-10-17",
+                "2026-10-18",
+                "2026-10-19",
+                "2026-10-20",
+                "2026-10-21"
+              ]
+            },
+            "article_requests": {
+              "status": "complete",
+              "known_records": 1,
+              "unknown_records": 0,
+              "recorded_days": [
+                "2026-10-21"
+              ],
+              "complete_days": [
+                "2026-10-15",
+                "2026-10-16",
+                "2026-10-17",
+                "2026-10-18",
+                "2026-10-19",
+                "2026-10-20",
+                "2026-10-21"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "reliability": {
+      "window_days": 30
+    },
+    "availability": {
+      "feeds": [
+        {
+          "feed_id": "recorded-news",
+          "endpoint_key": "d5ac862b279674275ef140975760a0e49b3a8aa6121d5dcb999e0b8b445417fb",
+          "availability": "eligible",
+          "strikes": 0,
+          "rest_until": null,
+          "first_confirmed_failure_at": null,
+          "failed_recovery_checks": 0,
+          "retired_at": null,
+          "retirement_reason": null,
+          "availability_updated_at": "2026-10-21T23:59:59Z",
+          "availability_complete": true
+        }
+      ],
+      "eligible_feed_ids": [
+        "recorded-news"
+      ]
+    }
   },
   "files": {
     "discovered_articles": {
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/discovered-articles/2026/10/21/01a19e39-a34a-8b9b-9d65-ae68c3c24481.parquet",
-          "file_id": "01a19e39-a34a-8b9b-9d65-ae68c3c24481",
+          "path": "raw/feed-ingest-plan/discovered-articles/2026/10/21/01a1a3b6-dd1d-88d0-95ab-52fd2f34ec1c.parquet",
+          "file_id": "01a1a3b6-dd1d-88d0-95ab-52fd2f34ec1c",
           "covers": "2026-10-21",
           "content_sha256": "cb68a24de5661af2f04213d9e91c525727d58f274a41e627d77444f31e808eef",
           "row_count": 2
@@ -78,8 +265,8 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/selected-articles/2026/10/21/01a19e39-a4d2-87a2-b752-2dddb6b491fc.parquet",
-          "file_id": "01a19e39-a4d2-87a2-b752-2dddb6b491fc",
+          "path": "raw/feed-ingest-plan/selected-articles/2026/10/21/01a1a3b6-e3a5-899d-8f5c-afe3df8cfa20.parquet",
+          "file_id": "01a1a3b6-e3a5-899d-8f5c-afe3df8cfa20",
           "covers": "2026-10-21",
           "content_sha256": "8bb632dd5e89124cfe1322cd682bf07c196926360aa4f1a6a63349a3005e4dc9",
           "row_count": 1
@@ -102,17 +289,17 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/21/01a19e39-a496-8e70-929a-381623ed8c1e.parquet",
-          "file_id": "01a19e39-a496-8e70-929a-381623ed8c1e",
+          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/21/01a1a3b6-e157-8908-a6d3-32cf9ecd3a0c.parquet",
+          "file_id": "01a1a3b6-e157-8908-a6d3-32cf9ecd3a0c",
           "covers": "2026-10-21",
-          "content_sha256": "75f622c93c7a6c748f6f7a73d7def656f4415018487df7c0e5d95d3bb57ff877",
+          "content_sha256": "6aa784d3ee4e7520a0d47a7127517757513fc64f845ab32ffb924e22f8b2a53d",
           "row_count": 1
         },
         {
-          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/22/01a19e39-a4af-8b67-806a-32559d5eb7d7.parquet",
-          "file_id": "01a19e39-a4af-8b67-806a-32559d5eb7d7",
+          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/22/01a1a3b6-e297-8b86-b673-e616070b42c1.parquet",
+          "file_id": "01a1a3b6-e297-8b86-b673-e616070b42c1",
           "covers": "2026-10-22",
-          "content_sha256": "4a9a1c3ca769964efe3b0b59ef684208d0e5b5e24ed7d21a7a873ecd34c530e8",
+          "content_sha256": "ee173260ef58eaa009988d8399b289c49aaf8d2b37d2f0540c29d6ca6c9b7f33",
           "row_count": 1
         }
       ]
@@ -121,10 +308,10 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/plan-runs/2026/10/21/01a19e39-a4ff-86fa-abb2-9f1571799d31.parquet",
-          "file_id": "01a19e39-a4ff-86fa-abb2-9f1571799d31",
+          "path": "raw/feed-ingest-plan/plan-runs/2026/10/21/01a1a3b6-e593-8a6e-8031-81536e4473d4.parquet",
+          "file_id": "01a1a3b6-e593-8a6e-8031-81536e4473d4",
           "covers": "2026-10-21",
-          "content_sha256": "5c603a55d2931ed104bc1f5b3fb8c62e4d3e66251dcc5219055cc2efd1c5c130",
+          "content_sha256": "f262a2d3c868bc25bda24c77477283ddfaec693cb044ea78482895aa15e9d132",
           "row_count": 1
         }
       ]
@@ -139,5 +326,6 @@
       "editorial_rank": 1,
       "worker_assignment": 0
     }
-  ]
+  ],
+  "failure": null
 }

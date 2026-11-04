@@ -24,7 +24,7 @@ async function runWorkflow(signal: AbortSignal) {
         ? host.host.files.map(file => file.path) : []),
     });
     result = await invokePlannerHttp(inputs, startup, request, directory, { signal });
-    if (!result.summary.planning_complete || result.http_status !== 200) process.exitCode = 2;
+    if (!result.summary.planning_complete || result.summary.failure !== null || result.http_status !== 200) process.exitCode = 2;
   } catch (error) { failure = withPlannerFailure(error, capture); }
   const finish = async () => {
     const completed = await collectWorkflowFiles({ root, directory, identity, registrations });

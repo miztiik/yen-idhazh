@@ -8,6 +8,7 @@ import type { FeedLifecycleFields, FeedLifecyclePolicy, FeedHealthStateRow } fro
 import { applyFeedCheck, resolveFeedEligibility, createUnknownFeedLifecycle } from "../availability/feed-lifecycle";
 import type { FeedCheck } from "../availability/feed-lifecycle";
 import { selectNewestCalculation } from "./saved-calculation";
+import { operationKey } from "../api/operation-context";
 
 const partialRest = z.object(FeedHealthRestFieldsSchema.shape).partial();
 type Evidence = z.infer<typeof partialRest>;
@@ -38,7 +39,7 @@ export function reuseFeedLifecycle(
   }
   if (selected.value !== null && FeedLifecycleFieldsSchema.safeParse(selected.value).success) {
     const saved = FeedLifecycleFieldsSchema.parse(selected.value);
-    const knownFailure = rows.some(row => row.check_request_id != null && row.checked_at != null
+    const knownFailure = rows.some(row => row.links?.length === 1 && row.checked_at != null
       && row.check_result != null && row.check_result !== "valid-feed" && row.check_result !== "interrupted"
       && Date.parse(row.checked_at) <= Date.parse(now));
     if (saved.strikes === null && knownFailure) {
@@ -79,21 +80,22 @@ export function recoverFeedLifecycle(
   for (const row of rows) {
     const parsed = partialRest.safeParse(row);
     if (!parsed.success || row.run_id === undefined || row.date === undefined
-      || row.check_request_id == null || row.check_result == null || row.checked_at == null
+      || row.links?.length !== 1 || row.check_result == null || row.checked_at == null
       || row.status === undefined || !RecordedInstantSchema.safeParse(row.checked_at).success
       || Date.parse(row.checked_at) > Date.parse(now)) continue;
-    const fact = { check_request_id: row.check_request_id, check_result: row.check_result,
+    const key = operationKey(row.links[0]!);
+    const fact = { links: row.links, check_result: row.check_result,
       checked_at: row.checked_at, status: row.status };
-    const previous = checks.get(row.check_request_id);
+    const previous = checks.get(key);
     if (previous !== undefined && !isDeepStrictEqual({
-      check_request_id: previous.check_request_id, check_result: previous.check_result,
+      links: previous.links, check_result: previous.check_result,
       checked_at: previous.checked_at, status: previous.status,
-    }, fact)) conflicted.add(row.check_request_id);
-    else checks.set(row.check_request_id, { ...fact, date: row.date, run_id: row.run_id });
+    }, fact)) conflicted.add(key);
+    else checks.set(key, { ...fact, date: row.date, run_id: row.run_id });
   }
   if (conflicted.size) onGap("logical-check-conflict");
   let value = createUnknownFeedLifecycle();
-  const ordered = observationGroups([...checks.values()].filter(row => !conflicted.has(row.check_request_id!)));
+  const ordered = observationGroups([...checks].filter(([key]) => !conflicted.has(key)).map(([, row]) => row));
   for (const group of ordered) {
     if (group.length > 1) {
       onGap("availability-order-ambiguous");
@@ -111,8 +113,10 @@ export function updateFeedLifecycle(
   let value = prior;
   const seen = new Set<string>();
   for (const row of [...rows].sort((a, b) => (a.checked_at ?? "").localeCompare(b.checked_at ?? ""))) {
-    if (row.check_request_id === null || seen.has(row.check_request_id)) continue;
-    seen.add(row.check_request_id);
+    if (row.links.length === 0) continue;
+    const key = operationKey(row.links[0]!);
+    if (seen.has(key)) continue;
+    seen.add(key);
     value = applyFeedCheck(value, row, policy);
   }
   return value;

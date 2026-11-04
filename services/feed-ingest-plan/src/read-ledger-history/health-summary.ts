@@ -84,7 +84,7 @@ export function summarizePlanningHealth(input: {
         && !input.uses.feed_reliability.gaps.some(gap => gap.day === day
           && (gap.identity === null || matches(gap.identity))
           && (gap.identity === null || gap.code === "conflict"
-            || ["checked_at", "outcome", "items", "check_request_id"].includes(gap.field))),
+            || ["checked_at", "outcome", "items", "links"].includes(gap.field))),
     });
     if (conflicting("feed_reliability")) reliability.complete = false;
     const articleRows = [...input.uses.article_admission.rows, ...currentAdmission].filter(row => row.feed_id === source.feed_id

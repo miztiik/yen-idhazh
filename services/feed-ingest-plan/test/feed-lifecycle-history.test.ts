@@ -3,20 +3,20 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
-import { FeedHealthStateRowContract, FeedHealthStateRowSchema } from "@idhazh/common-contracts";
+import { createRootContext, FeedHealthStateRowContract, FeedHealthStateRowSchema } from "@idhazh/common-contracts";
+import { operationLink } from "../src/api/operation-context";
 import { readLifecyclePolicy } from "./health-field-fixtures";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-health-fields";
 import { reuseFeedLifecycle, recoverFeedLifecycle } from "../src/read-ledger-history/feed-lifecycle-history";
-import { reuseFeedReliability } from "../src/read-ledger-history/feed-reliability-history";
+import { reuseFeedReliability, settleLogicalFeedReads } from "../src/read-ledger-history/feed-reliability-history";
 import { readFeedHealthFieldsDay } from "../src/read-ledger-history/read-feed-health-fields";
 import { compactRows, registration, writeRows } from "./partition-fixtures";
 
 function row(day: string, run: number, productive = true) {
   const seed = plannerRecordings(day).find(record => record.name === "feed-health-state")!.row;
   return FeedHealthStateRowSchema.parse({
-    ...seed, run_id: `${day}-${run}`, check_request_id: randomUUID(),
+    ...seed, run_id: `${day}-${run}`, links: [operationLink(createRootContext())],
     check_result: productive ? "valid-feed" : "confirmed-http-failure",
     outcome: productive ? "ok" : "transient", status: productive ? 200 : 503, items: productive ? 1 : 0,
   });
@@ -26,7 +26,7 @@ test("independent cumulative snapshots are selected by actual check order, not s
   const settings = await readLifecyclePolicy();
   const earlier = { ...row("2026-10-01", 1, false), strikes: 1,
     checked_at: "2026-10-01T10:00:00.000Z", availability_updated_at: "2026-10-01T10:00:00.000Z" };
-  const later = { ...earlier, run_id: "2026-10-01-2", check_request_id: randomUUID(),
+  const later = { ...earlier, run_id: "2026-10-01-2", links: [operationLink(createRootContext())],
     checked_at: "2026-10-01T11:00:00.000Z", availability_updated_at: "2026-10-01T11:00:00.000Z" };
   const gaps: string[] = [];
   expect(reuseFeedLifecycle([later, earlier, later], "2026-10-02T00:00:00Z", settings, reason => gaps.push(reason)))
@@ -68,6 +68,26 @@ test("a check present in monthly Parquet and a late raw file is one fact across 
       onGap: () => { throw new Error("Saved reliability unexpectedly required recovery"); },
     })).toMatchObject({ productive: 2, attempted: 3, success_fraction: 0.666, complete: true });
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("the same logical check in another run projection counts once and conflicting work remains invalid", async () => {
+  const failure = row("2026-10-01", 1, false);
+  const carried = { ...failure, run_id: "2026-10-01-2", attempt: 2 };
+  const gaps: string[] = [];
+  expect(recoverFeedLifecycle([failure, carried], "2026-10-02T00:00:00Z",
+    await readLifecyclePolicy(), reason => gaps.push(reason))).toMatchObject({ strikes: 1 });
+  expect(gaps).toEqual([]);
+  expect(settleLogicalFeedReads([failure, carried], "2026-10-02T00:00:00Z")).toHaveLength(1);
+  expect(reuseFeedReliability({
+    rows: [failure, carried], current: [], days: [failure.date], history_days: [failure.date],
+    now: "2026-10-02T00:00:00Z", floor: 0.5, window: 1, knownDay: () => true,
+    onGap: reason => gaps.push(reason),
+  })).toMatchObject({ attempted: 1, productive: 0, success_fraction: 0, complete: true });
+  expect(() => settleLogicalFeedReads([failure, { ...carried, items: 1 }],
+    "2026-10-02T00:00:00Z")).toThrow("Conflicting copies");
+  recoverFeedLifecycle([failure, { ...carried, status: 200, check_result: "valid-feed" }],
+    "2026-10-02T00:00:00Z", await readLifecyclePolicy(), reason => gaps.push(reason));
+  expect(gaps).toContain("logical-check-conflict");
 });
 
 test("rolling windows subtract only known leaving work and retain uncertainty when contributions disappear", () => {

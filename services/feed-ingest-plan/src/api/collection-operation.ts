@@ -1,17 +1,17 @@
 /** Own one complete collection and refuse selection before all its work settles. */
-import { randomUUID } from "node:crypto";
-import { ParsedFeedBatchSchema, PlanApiTimingSchema } from "@idhazh/common-contracts";
-import type { PlannerStageContext, PlannerFeedOffer } from "@idhazh/common-contracts";
+import { createChildContext, PlanApiTimingSchema } from "@idhazh/common-contracts";
+import type { OperationLink, PlannerFeedOffer } from "@idhazh/common-contracts";
 import type { HarvestArticleResult } from "../harvest-feeds/harvest-types";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { resolveRunContext } from "../resolve-run-context";
+import type { RunContext } from "../resolve-run-context";
 import { resolvePlanRequest, PlanError } from "./plan-request";
 import {
-  BeginCollectionSchema, CollectionReferenceSchema, FinalizeCollectionRequestSchema, FinalizedCollectionSchema,
+  BeginCollectionSchema, CollectionReferenceSchema, CollectionResponseSchema, FinalizeCollectionRequestSchema, FinalizedCollectionSchema,
   ReleaseCollectionRequestSchema,
 } from "./collection-contracts";
-import { captureDocumentContext } from "./operation-context";
+import { captureDocumentContext, commandContext, operationLink, operationMetadata, stageContext } from "./operation-context";
 import { documentState } from "./document-state";
 import type { DocumentState } from "./document-state";
 import { stageStore } from "./stage-store";
@@ -28,32 +28,49 @@ import { capturePlannerFailure, combinePlannerFailures } from "./plan-failure";
 import { retainFailureThroughCleanup } from "./retain-failure-through-cleanup";
 
 export type Collection = {
-  collection_id: string;
   config_sha256: string;
-  parsed_batch_id: string; feed_requests: Map<string, string>;
-  context: PlannerStageContext; request: ReturnType<typeof resolvePlanRequest>;
+  context: RunContext; request: ReturnType<typeof resolvePlanRequest>;
   state: DocumentState; signal: AbortController; status: "collecting" | "complete" | "failed";
   closing: boolean; finalizing: boolean;
-  feeds: Map<string, { state: "pending" | "fetching" | "parsing" | "terminal"; batch_id: string | null }>;
+  feeds: Map<string, { state: "pending" | "fetching" | "parsing" | "terminal"; parse: OperationLink | null }>;
   complete?: Promise<z.infer<typeof CompletedCollectionSchema>>;
   operations: Set<Promise<unknown>>;
   finalization?: { request: string; result: z.infer<typeof FinalizedCollectionSchema> };
   rejections?: ReturnType<typeof recordHarvestFailures>;
-  completed_batch_id?: string;
+  completed?: OperationLink;
+  parses: Map<string, OperationLink | undefined>;
   offers: Map<string, PlannerFeedOffer>;
   results: Map<string, HarvestArticleResult>;
   pending_offers: number;
 };
 const collections = new WeakMap<PlanInputs, Map<string, Collection>>();
-const pendingContexts = new WeakMap<PlanInputs, Map<string, PlannerStageContext>>();
-export function prepareCollectionContext(inputs: PlanInputs, id: string, context: PlannerStageContext) {
+const pendingContexts = new WeakMap<PlanInputs, Map<string, RunContext>>();
+const collectionOwners = new WeakMap<Collection, RunContext>();
+const preparedStarts = new WeakMap<PlanInputs, WeakMap<RunContext, Promise<z.infer<typeof CollectionResponseSchema>>>>();
+const startingCollections = new WeakMap<PlanInputs, Set<string>>();
+export function prepareCollectionContext(inputs: PlanInputs, context: RunContext) {
   let pending = pendingContexts.get(inputs);
   if (pending === undefined) { pending = new Map(); pendingContexts.set(inputs, pending); }
+  if (pending.has(context.traceId) || collections.get(inputs)?.has(context.traceId)
+    || startingCollections.get(inputs)?.has(context.traceId)
+    || [...pending.values()].some(value => value.run_id === context.run_id)
+    || stageStore(inputs).isRunActive(context.run_id)) {
+    throw new PlanError("REQUEST_CONFLICT", "Collection execution already belongs to live work", "traceId");
+  }
   if (pending.size >= inputs.settings.listener.max_stage_batches) throw new PlanError("REQUEST_BUSY", "Collection startup capacity is occupied");
-  pending.set(id, context);
+  pending.set(context.traceId, context);
 }
-export function discardCollectionContext(inputs: PlanInputs, id: string) {
-  pendingContexts.get(inputs)?.delete(id);
+export function discardCollectionContext(inputs: PlanInputs, context: RunContext) {
+  const pending = pendingContexts.get(inputs);
+  if (pending?.get(context.traceId) === context) pending.delete(context.traceId);
+  preparedStarts.get(inputs)?.delete(context);
+}
+export async function awaitCollectionStartup(inputs: PlanInputs, context: RunContext) {
+  await preparedStarts.get(inputs)?.get(context);
+}
+export function ownsPreparedCollection(inputs: PlanInputs, context: RunContext) {
+  const collection = collections.get(inputs)?.get(context.traceId);
+  return collection !== undefined && collectionOwners.get(collection) === context;
 }
 function held(inputs: PlanInputs) {
   let value = collections.get(inputs);
@@ -65,121 +82,138 @@ function collectionCancelled(collection: Collection) {
 }
 export function getCollection(inputs: PlanInputs, id: string) {
   const collection = held(inputs).get(id);
-  if (collection === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Collection is missing or expired", "collection_id");
+  if (collection === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Collection is missing or expired", "traceId");
   return collection;
 }
 export function collectionExists(raw: unknown, inputs: PlanInputs) {
   const request = CollectionReferenceSchema.parse(raw);
-  return { collection_id: request.collection_id, exists: collections.get(inputs)?.has(request.collection_id) ?? false };
+  return { traceId: request.traceId, exists: collections.get(inputs)?.has(request.traceId) ?? false };
 }
 export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
+  if (runtime.signal?.aborted) {
+    throw runtime.signal.reason instanceof Error ? runtime.signal.reason
+      : new DOMException("Collection startup was cancelled", "AbortError");
+  }
   const request = BeginCollectionSchema.parse(raw);
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
   const controls = resolvePlanRequest(request.request, inputs.harvest.config);
   const owned = held(inputs);
-  if (owned.has(request.collection_id)) throw new PlanError("REQUEST_CONFLICT", "Collection identity already exists", "collection_id");
-  if (owned.size >= inputs.settings.listener.max_stage_batches) {
+  const operation = commandContext(runtime);
+  let starting = startingCollections.get(inputs);
+  if (starting === undefined) { starting = new Set(); startingCollections.set(inputs, starting); }
+  if (owned.has(operation.traceId) || starting.has(operation.traceId)) {
+    throw new PlanError("REQUEST_CONFLICT", "Collection execution already exists", "traceId");
+  }
+  const pending = pendingContexts.get(inputs);
+  const prepared = pending?.get(operation.traceId);
+  if (prepared !== undefined && operation.parentSpanId !== prepared.spanId) {
+    throw new PlanError("REQUEST_CONFLICT", "Collection startup belongs to another operation", "traceId");
+  }
+  const context: RunContext = prepared === undefined
+    ? resolveRunContext(inputs.settings, runtime.git_sha, runtime.clock?.() ?? new Date(),
+      runtime.run_number, operation, runtime.captured_at, runtime.attempt, runtime.producer)
+    : { ...stageContext(prepared), ...operation };
+  const stages = stageStore(inputs);
+  if ([...owned.values()].some(value => value.context.run_id === context.run_id)
+    || stages.isRunActive(context.run_id)
+    || [...(pending?.values() ?? [])].some(value => value !== prepared && value.run_id === context.run_id)) {
+    throw new PlanError("REQUEST_CONFLICT", "Execution identity already belongs to live work", "traceId");
+  }
+  if (owned.size + starting.size >= inputs.settings.listener.max_stage_batches) {
     const finished = [...owned].find(([, value]) => value.status !== "collecting"
       && !stageStore(inputs).isRunActive(value.context.run_id));
-    if (finished === undefined) throw new PlanError("REQUEST_BUSY", "Collection capacity is occupied by active work", "collection_id");
+    if (finished === undefined) throw new PlanError("REQUEST_BUSY", "Collection capacity is occupied by active work", "traceId");
     owned.delete(finished[0]);
   }
-  const context = pendingContexts.get(inputs)?.get(request.collection_id) ?? resolveRunContext(inputs.settings, runtime.git_sha, runtime.clock?.() ?? new Date(),
-    runtime.run_number, runtime.correlation_id ?? request.collection_id, runtime.captured_at, runtime.attempt, runtime.producer);
-  pendingContexts.get(inputs)?.delete(request.collection_id);
-  if ([...owned.values()].some(value => value.context.run_id === context.run_id)) {
-    throw new PlanError("REQUEST_CONFLICT", "Execution identity already belongs to a collection", "collection_id");
+  const record = captureDocumentContext(inputs, runtime, context);
+  if (prepared !== undefined) pending?.delete(operation.traceId);
+  starting.add(operation.traceId);
+  const startup = (async () => {
+    stages.retainRun(context.run_id);
+    try {
+      const state = await documentState(record, inputs, runtime);
+      state.plan_owned = true;
+      const preflightAt = utcTimestamp(runtime.observation_clock);
+      const availability = summarizeFeedAvailability(state.history.sources, preflightAt, inputs.harvest.sources);
+      for (const source of inputs.harvest.sources.filter(source => source.status === "active")) {
+        state.work.carryFeed(source.id, preflightAt);
+      }
+      const eligible = new Set(availability.eligible_feed_ids);
+      const feeds = new Map(inputs.harvest.sources.filter(source => source.status === "active" && eligible.has(source.id))
+        .map(source => [source.id, { state: "pending" as const, parse: null }]));
+      const collection: Collection = { context, request: controls, state, feeds, parses: new Map(),
+        offers: new Map(), results: new Map(), pending_offers: 0,
+        config_sha256: record.config_sha256, signal: new AbortController(), status: "collecting",
+        closing: false, finalizing: false, operations: new Set() };
+      owned.set(operation.traceId, collection);
+      if (prepared !== undefined) collectionOwners.set(collection, prepared);
+      return { ...operationMetadata(context), context: stageContext(context), feeds: [...feeds.keys()] };
+    } catch (error) {
+      throw await retainFailureThroughCleanup(error, {
+        operation: "feed-health-before-fetch", execution: context, limits: inputs.settings.diagnostics.failure,
+      }, [{ operation: "collection-cancel", execute: () => stages.releaseRun(context.run_id) }]);
+    } finally { starting.delete(operation.traceId); }
+  })();
+  if (prepared !== undefined) {
+    let starts = preparedStarts.get(inputs);
+    if (starts === undefined) { starts = new WeakMap(); preparedStarts.set(inputs, starts); }
+    starts.set(prepared, startup);
   }
-  const record = captureDocumentContext(request.collection_id, context.correlation_id, inputs, runtime, context);
-  const stages = stageStore(inputs);
-  stages.retainRun(context.run_id);
-  try {
-    const state = await documentState(record, inputs, runtime);
-    state.plan_owned = true;
-    const preflightAt = utcTimestamp(runtime.observation_clock);
-    const availability = summarizeFeedAvailability(state.history.sources, preflightAt, inputs.harvest.sources);
-    for (const source of inputs.harvest.sources.filter(source => source.status === "active")) {
-      state.work.carryFeed(source.id, preflightAt);
-    }
-    const eligible = new Set(availability.eligible_feed_ids);
-    const feeds = new Map(inputs.harvest.sources.filter(source => source.status === "active" && eligible.has(source.id))
-      .map(source => [source.id, { state: "pending" as const, batch_id: null }]));
-    const parsed = stages.write("parsed", ParsedFeedBatchSchema, {
-      batch_id: randomUUID(), context, config_sha256: record.config_sha256, request: controls,
-      candidates: [], observations: {}, evidence: {}, offers: [], input_complete: false,
-      discovered: { availability: "available", rows: [] }, history_rows: [], history_days: state.history.days,
-      work_rows: state.work.rows(), exclusions: state.work.exclusions(),
-    });
-    owned.set(request.collection_id, { collection_id: request.collection_id, context, request: controls, state, feeds,
-      parsed_batch_id: parsed.batch_id, feed_requests: new Map(),
-      offers: new Map(), results: new Map(), pending_offers: 0,
-      config_sha256: record.config_sha256, signal: new AbortController(), status: "collecting",
-      closing: false, finalizing: false, operations: new Set() });
-    return { collection_id: request.collection_id, context, feeds: [...feeds.keys()] };
-  } catch (error) {
-    throw await retainFailureThroughCleanup(error, {
-      operation: "feed-health-before-fetch", execution: context, limits: inputs.settings.diagnostics.failure,
-    }, [{ operation: "collection-cancel", execute: () => stages.releaseRun(context.run_id) }]);
-  }
+  return startup;
 }
-export function claimCollectionFeed(inputs: PlanInputs, id: string, feedId: string, correlationId: string) {
+export function claimCollectionFeed(inputs: PlanInputs, id: string, feedId: string) {
   const collection = getCollection(inputs, id);
   const feed = collection.feeds.get(feedId);
   if (collection.status !== "collecting" || collection.closing || collection.signal.signal.aborted
-    || collection.context.correlation_id !== correlationId || feed?.state !== "pending") {
-    throw new PlanError("REQUEST_CONFLICT", "Feed is not pending in this collection", "collection_id");
+    || feed?.state !== "pending") {
+    throw new PlanError("REQUEST_CONFLICT", "Feed is not pending in this collection", "traceId");
   }
   feed.state = "fetching";
   return collection;
 }
-export function settleCollectionFeed(inputs: PlanInputs, runId: string, feedId: string, batchId: string | null) {
+export function settleCollectionFeed(inputs: PlanInputs, runId: string, feedId: string, parse: OperationLink | null) {
   const collection = [...held(inputs).values()].find(value => value.context.run_id === runId);
   if (collection === undefined) return;
   const feed = collection.feeds.get(feedId);
   if (feed === undefined) throw new PlanError("ARTIFACT_INVALID", "Feed does not belong to this collection", "feed_id");
   feed.state = "terminal";
-  feed.batch_id = batchId;
+  feed.parse = parse === null ? null : operationLink(parse);
 }
 export function collectionForRun(inputs: PlanInputs, runId: string) {
   return [...held(inputs).values()].find(value => value.context.run_id === runId);
-}
-export function collectionForBatch(inputs: PlanInputs, batchId: string) {
-  return [...held(inputs).values()].find(value => value.parsed_batch_id === batchId);
-}
-export function collectionFeedRequest(inputs: PlanInputs, runId: string, feedId: string) {
-  return collectionForRun(inputs, runId)?.feed_requests.get(feedId);
 }
 export async function completeCollection(inputs: PlanInputs, id: string) {
   const collection = getCollection(inputs, id);
   if (collection.complete !== undefined) return collection.complete;
   if (collectionCancelled(collection) || collection.finalizing) {
-    throw new PlanError("REQUEST_INCOMPLETE", "Cancelled collection cannot be selected", "collection_id");
+    throw new PlanError("REQUEST_INCOMPLETE", "Cancelled collection cannot be selected", "traceId");
   }
+  const operation = createChildContext(operationMetadata(collection.context));
   collection.closing = true;
   collection.complete = (async () => {
     await drainCollectionOperations(collection);
     if (collectionCancelled(collection)) {
-      throw new PlanError("REQUEST_INCOMPLETE", "Cancelled collection cannot be selected", "collection_id");
+      throw new PlanError("REQUEST_INCOMPLETE", "Cancelled collection cannot be selected", "traceId");
     }
     if ([...collection.feeds.values()].some(feed => feed.state !== "terminal")) {
-      throw new PlanError("BATCH_INCOMPLETE", "Every configured feed needs a terminal result", "collection_id");
+      throw new PlanError("BATCH_INCOMPLETE", "Every configured feed needs a terminal result", "traceId");
     }
     if (collection.pending_offers !== 0) {
-      throw new PlanError("BATCH_INCOMPLETE", "Every offered article needs a terminal result", "collection_id");
+      throw new PlanError("BATCH_INCOMPLETE", "Every offered article needs a terminal result", "traceId");
     }
     const saved = await rememberDiscoveries(collection.state.baseline.discovered.rows,
       collection.state.discovered_rows, collection.context, {
       outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
     });
-    const batch = snapshotCollectionBatch(inputs, collection, true);
-    stageStore(inputs).ownership(batch.batch_id).scope = "plan";
+    const batch = snapshotCollectionBatch(inputs, collection, operation, true);
+    stageStore(inputs).ownership(batch).scope = "plan";
     const rejected = await finalizeCollectionRejections(inputs, collection);
     if (collectionCancelled(collection)) {
-      throw new PlanError("REQUEST_INCOMPLETE", "Cancelled collection cannot be selected", "collection_id");
+      throw new PlanError("REQUEST_INCOMPLETE", "Cancelled collection cannot be selected", "traceId");
     }
     collection.status = "complete";
-    collection.completed_batch_id = batch.batch_id;
-    return { collection_id: id, batch_id: batch.batch_id, discovered_articles: saved.result, rejected_articles: rejected };
+    collection.completed = operationLink(batch);
+    return { ...operationMetadata(batch), discovered_articles: saved.result, rejected_articles: rejected };
   })();
   try { return await collection.complete; }
   catch (error) {
@@ -196,22 +230,23 @@ async function finalizeCollectionRejections(inputs: PlanInputs, collection: Coll
 export async function cancelCollection(inputs: PlanInputs, id: string) {
   const collection = getCollection(inputs, id);
   if (collection.finalizing || collection.finalization !== undefined) {
-    throw new PlanError("REQUEST_CONFLICT", "Finalized collection cannot be cancelled", "collection_id");
+    throw new PlanError("REQUEST_CONFLICT", "Finalized collection cannot be cancelled", "traceId");
   }
+  const operation = createChildContext(operationMetadata(collection.context));
   collection.status = "failed";
   collection.closing = true;
   collection.signal.abort();
   await drainCollectionOperations(collection);
   await collection.complete?.catch(() => undefined);
   await drainCollectionOperations(collection);
-  const parsed = snapshotCollectionBatch(inputs, collection, false);
-  return { collection_id: id, status: "cancelled" as const, batch_id: parsed.batch_id,
+  const parsed = snapshotCollectionBatch(inputs, collection, operation, false);
+  return { ...operationMetadata(parsed), status: "cancelled" as const,
     rejected_articles: await finalizeCollectionRejections(inputs, collection),
     has_work: collection.state.work.rows().length > 0 };
 }
 export async function trackCollectionOperation<T>(collection: Collection, operation: () => Promise<T>) {
   if (collection.status !== "collecting" || collection.closing || collection.signal.signal.aborted) {
-    throw new PlanError("REQUEST_INCOMPLETE", "Collection no longer accepts document work", "collection_id");
+    throw new PlanError("REQUEST_INCOMPLETE", "Collection no longer accepts document work", "traceId");
   }
   const pending = Promise.resolve().then(operation);
   collection.operations.add(pending);
@@ -223,23 +258,22 @@ async function drainCollectionOperations(collection: Collection) {
 }
 export async function finalizeCollection(raw: unknown, inputs: PlanInputs) {
   const request = FinalizeCollectionRequestSchema.parse(raw);
-  const collection = getCollection(inputs, request.collection_id);
+  const collection = getCollection(inputs, request.traceId);
   const requestKey = JSON.stringify(request);
   if (collection.finalization !== undefined) {
     if (collection.finalization.request !== requestKey) {
-      throw new PlanError("REQUEST_CONFLICT", "Collection already has a different final outcome", "collection_id");
+      throw new PlanError("REQUEST_CONFLICT", "Collection already has a different final outcome", "traceId");
     }
     return collection.finalization.result;
   }
   if (collection.status === "collecting" || collection.finalizing) {
-    throw new PlanError("REQUEST_INCOMPLETE", "Collection work must settle before final accounting", "collection_id");
+    throw new PlanError("REQUEST_INCOMPLETE", "Collection work must settle before final accounting", "traceId");
   }
   if (collection.status === "failed" && request.failure_code === null) {
     throw new PlanError("INVALID_REQUEST", "Cancelled collection requires a failure cause", "failure_code");
   }
   if (request.failure !== null && (request.failure.execution.run_id !== collection.context.run_id
-    || request.failure.execution.attempt !== collection.context.writer.attempt
-    || request.failure.execution.correlation_id !== collection.context.correlation_id)) {
+    || request.failure.execution.attempt !== collection.context.writer.attempt)) {
     throw new PlanError("INVALID_REQUEST", "Failure evidence belongs to another execution", "failure");
   }
   collection.closing = true;
@@ -268,7 +302,7 @@ export async function finalizeCollection(raw: unknown, inputs: PlanInputs) {
   const status = failureCode === null ? "completed"
     : collection.state.work.rows().some(row => row.checked_at !== null) ? "partial" : "failed";
   const result = FinalizedCollectionSchema.parse({
-    collection_id: request.collection_id, status, failure_code: failureCode, failure,
+    traceId: request.traceId, status, failure_code: failureCode, failure,
     api_timings: [...collection.state.api_timings],
   });
   collection.finalization = { request: requestKey, result };
@@ -283,7 +317,7 @@ export function releaseCollection(raw: unknown, inputs: PlanInputs) {
   if (collection.finalization === undefined || collection.finalizing || collection.operations.size) {
     throw new PlanError("REQUEST_INCOMPLETE", "Collection cannot be released before final accounting", "run_id");
   }
-  held(inputs).delete(collection.collection_id);
+  held(inputs).delete(collection.context.traceId);
   stageStore(inputs).releaseRun(collection.context.run_id);
   return { ...request, released: true };
 }

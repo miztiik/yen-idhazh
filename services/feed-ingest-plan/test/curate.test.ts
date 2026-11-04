@@ -1,12 +1,11 @@
 /** Does real screening deliver the chosen identities, unchanged content and measured evidence? */
 import { expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import {
-  FeedHealthStateRowSchema, FeedIngestCandidateSchema, ParsedFeedBatchSchema, PartitionedFeedBatchSchema, PlanRunRowContract, SelectedArticleRowContract,
+  createChildContext, createRootContext, FeedHealthStateRowSchema, FeedIngestCandidateSchema, ParsedFeedBatchSchema, PartitionedFeedBatchSchema, PlanRunRowContract, SelectedArticleRowContract,
   SelectedArticlesArtifactSchema, deriveCandidateId, deriveUrlKey, selectedArticleMetadata,
 } from "@idhazh/common-contracts";
 import type { FeedIngestConfig, PlannerArticleEvidence } from "@idhazh/common-contracts";
@@ -27,7 +26,7 @@ import { endpointKey } from "../src/read-ledger-history/read-feed-history";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { source } from "./harvest-recordings";
 import { recordedPlan } from "./plan-recordings";
-import { stageConfigFingerprint } from "../src/api/operation-context";
+import { operationLink, operationMetadata, operationRunContext, stageConfigFingerprint, stageContext } from "../src/api/operation-context";
 import { summarizeRequestReport } from "../src/read-ledger-history/request-summary";
 import { stageStore } from "../src/api/stage-store";
 import { executePersistence } from "../src/api/persistence-operation";
@@ -64,7 +63,7 @@ async function inputs(patch: Partial<Knobs> = {}) {
     },
   });
   const context = resolveRunContext(loaded.settings, "a".repeat(40), new Date(fixture.observed_at),
-    fixture.run_id.slice(11), "c6fc0434-baaa-4b34-937a-fe2412f3a720");
+    fixture.run_id.slice(11), createRootContext());
   return { fixture, planning, context, inputs: { ...loaded, harvest: { ...loaded.harvest, ...planning } } };
 }
 type Setup = Awaited<ReturnType<typeof inputs>>;
@@ -73,7 +72,7 @@ function article(spec: CandidateCase, setup: Setup): ScreenedCandidate {
   const url = `https://${spec.domain}/${spec.name}`;
   const article_text = "Recorded factual report. ".repeat(100).trim();
   const candidate = FeedIngestCandidateSchema.parse({
-    date: context.date, run_id: context.run_id, correlation_id: context.correlation_id,
+    date: context.date, run_id: context.run_id, traceId: context.traceId,
     candidate_id: deriveCandidateId(context.run_id, spec.source, spec.ordinal), entry_ordinal: spec.ordinal,
     feed_id: spec.source, source: {
       feed_id: spec.source, publisher_id: spec.publisher_id, feed_url: `https://${spec.domain}/feed`,
@@ -97,7 +96,7 @@ function selectionInput(setup: Setup, articles: ScreenedCandidate[], options: {
     articles, inputs: setup.inputs, selectionStartedAt: setup.context.now,
     health: options.health ?? new Map<string, SourceHistoryEvidence>(),
     batch: ParsedFeedBatchSchema.parse({
-      batch_id: randomUUID(), config_sha256: "b".repeat(64), context: setup.context, request: {},
+      ...operationMetadata(setup.context), config_sha256: "b".repeat(64), context: stageContext(setup.context), request: {},
       candidates: articles.map(value => value.candidate),
       observations: Object.fromEntries(articles.map(({ candidate }) => [candidate.candidate_id, {
         candidate_id: candidate.candidate_id, http_status: 200, paywall: false,
@@ -142,7 +141,7 @@ test("question headlines and retained openings complete real screening and selec
       const screened = await screenArticleCandidates({
         candidates: [candidate], observations: {}, discovered: { availability: "unavailable" },
         planning: setup.planning, clock_config: { collect: { max_future_hours: 0 } },
-        run: { now: setup.context.now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id },
+        run: { now: setup.context.now, run_id: setup.context.run_id, traceId: setup.context.traceId },
       });
       expect(screened.rejections, title).toEqual([]);
       expect(screened.admitted, title).toHaveLength(1);
@@ -333,7 +332,7 @@ test("real screening joins the strongest duplicate body and preserves both count
   const screened = await screenArticleCandidates({
     candidates: [original, other, stronger, short, zero], observations: {}, discovered: { availability: "unavailable" },
     planning: setup.planning, clock_config: { collect: { max_future_hours: 0 } },
-    run: { now: setup.context.now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id },
+    run: { now: setup.context.now, run_id: setup.context.run_id, traceId: setup.context.traceId },
   });
   expect(screened.rejections.map(row => row.drop_reason)).toEqual(["REJECTED_SCREENING_MIN_WORDS"]);
   const before = structuredClone(screened.admitted);
@@ -385,15 +384,14 @@ test("real screening joins the strongest duplicate body and preserves both count
       "REJECTED_DUPLICATE_CANONICAL_CARRIER", "REJECTED_SCREENING_MIN_WORDS",
     ]);
     const batch = stageStore(fixture.inputs).write("partitioned", PartitionedFeedBatchSchema, {
-      batch_id: randomUUID(), parsed_batch_id: randomUUID(), context: setup.context,
-      selection_batch_id: randomUUID(),
+      ...createChildContext(operationMetadata(setup.context)), context: stageContext(setup.context),
       config_sha256: stageConfigFingerprint(fixture.inputs, fixture.runtime),
       evaluated_at: setup.context.now, selection_started_at_utc: setup.context.now,
       ...selection, ...packed,
     });
-    const health = await executeFeedHealthState({ batch_id: batch.batch_id, action: "record" },
+    const health = await executeFeedHealthState({ links: [operationLink(batch)], action: "record" },
       fixture.inputs, fixture.runtime);
-    const persisted = await executePersistence({ batch_id: batch.batch_id }, fixture.inputs, fixture.runtime);
+    const persisted = await executePersistence({ links: [operationLink(batch)] }, fixture.inputs, fixture.runtime);
     const raw = await readWritten(fixture.inputs.outputRoot, "selected-articles", setup.context.date,
       SelectedArticleRowContract, persisted.files);
     const compact = await compactRows(fixture.inputs.outputRoot, "selected-articles", setup.context.date,
@@ -425,10 +423,12 @@ test("real screening joins the strongest duplicate body and preserves both count
         history: fixture.inputs.clock_config.collect,
         parser_concurrency: fixture.inputs.settings.listener.parser_concurrency,
       };
+      const reportHealth = await executeFeedHealthState({ links: [operationLink(batch)], action: "summarize" },
+        fixture.inputs, fixture.runtime);
       const report = renderWorkflowPlanMarkdown({
         response: {
           ...savedRun.rows[0], planning_complete: persisted.run_status === "completed",
-          correlation_id: setup.context.correlation_id, batches: { selection_batch_id: batch.batch_id },
+          traceId: setup.context.traceId,
           files: {
             selected_articles: persisted.files, rejected_articles: persisted.rejected_files,
             feed_health_state: health.files, plan_runs: persisted.run_files,
@@ -436,8 +436,9 @@ test("real screening joins the strongest duplicate body and preserves both count
           selected_url_keys: packed.articles.map(row => row.url_key),
           assignments: packed.articles.map(({ url_key, editorial_rank, worker_assignment }) =>
             ({ url_key, editorial_rank, worker_assignment })),
+          health: reportHealth,
         },
-        selected: raw.rows, health, policy, failures: { articles: selection.rejected_articles },
+        selected: raw.rows, policy, failures: { articles: selection.rejected_articles },
       });
       await Promise.all([
         writeFile(join(capture, "selected-evidence.md"), report.markdown),
@@ -480,7 +481,7 @@ test("real selection keeps source pass denominators and isolates a later run's h
       endpoint_key: endpointKey(first.candidate.source.feed_url), checked_at: setup.context.now,
       items: 2, article_candidates: 1, articles_selected: 0,
     })];
-    const baseline = await readRunHistory(setup.inputs, pair.context);
+    const baseline = await readRunHistory(setup.inputs, operationRunContext(pair));
     const selected = await selectArticles(pair, setup.inputs, setup.context.now, undefined, setup.context, baseline);
     expect(selected.health_rows[0]).toMatchObject({ article_candidates: 1, articles_selected: 1 });
     expect(selected.exclusions).toContainEqual({
@@ -510,7 +511,7 @@ test("screening and packing retain the owning run day across UTC midnight", asyn
     const screened = await screenArticleCandidates({
       candidates: [original], observations: {}, discovered: { availability: "unavailable" }, planning: setup.planning,
       clock_config: { collect: { max_future_hours: 0 } },
-      run: { now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id },
+      run: { now, run_id: setup.context.run_id, traceId: setup.context.traceId },
     });
     const selected = curateArticles(selectionInput(setup, screened.admitted)).articles;
     const row = partitionArticles(selected, { strategy: "none", dispatch_count: 1 }).articles[0]!;

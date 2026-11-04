@@ -1,7 +1,6 @@
 {
   "observed_at": "2026-10-21T12:00:00Z",
   "run_id": "2026-10-21-66",
-  "correlation_id": "portfolio-fixture",
   "policy_version": "portfolio-recorded-1",
   "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "reliability_floor": 0.5,

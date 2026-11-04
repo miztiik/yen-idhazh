@@ -6,10 +6,11 @@ import {
   TimestampSchema, UrlSchema, checkUrlIdentity, deriveCandidateId, reject,
 } from "./primitives";
 import { FEED_INGEST_CANDIDATE_VERSION } from "../version";
+import { TraceIdSchema } from "./operation-metadata.schema";
 
 export const FeedIngestCandidateSchema = z.strictObject({
   version: z.literal(FEED_INGEST_CANDIDATE_VERSION).default(FEED_INGEST_CANDIDATE_VERSION),
-  date: DateStampSchema, correlation_id: NonEmptySchema, run_id: RunIdSchema,
+  date: DateStampSchema, traceId: TraceIdSchema, run_id: RunIdSchema,
   candidate_id: Sha256Schema, entry_ordinal: CountSchema,
   feed_id: SlugSchema, source: SourceSnapshotSchema,
   canonical_url: UrlSchema, url_key: Sha256Schema, title: NonEmptySchema, categories: z.array(z.string()),
@@ -24,10 +25,10 @@ export const FeedIngestCandidateSchema = z.strictObject({
 }).meta({
   version: FEED_INGEST_CANDIDATE_VERSION,
   changelog: [
-    { version: FEED_INGEST_CANDIDATE_VERSION, change: "Retain configured source weights without planner tier fields." },
+    { version: FEED_INGEST_CANDIDATE_VERSION, change: "Associate candidates with their producing execution." },
+    { version: "2026-11-02", change: "Retain configured source weights without planner tier fields." },
     { version: "2026-10-31", change: "Identify candidates with the shared query-free article cleanup policy." },
     { version: "2026-10-28", change: "Rename the configured feed identity from source_id to feed_id." },
-    { version: "2026-10-27", change: "Remove source classification fields from planner candidates." },
     { version: "2026-10-25", change: "Earlier changes are in git." },
   ],
 });

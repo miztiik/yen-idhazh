@@ -1,8 +1,9 @@
 /** Which bounded, body-free execution failure may cross planner boundaries? */
 import { z } from "zod";
 import { CommitShaSchema, CountSchema, PositiveCountSchema, RelPathSchema, RunIdSchema } from "./primitives";
+import { TraceIdSchema, SpanIdSchema } from "./operation-metadata.schema";
 
-export const PLANNER_FAILURE_VERSION = "2026-11-02" as const;
+export const PLANNER_FAILURE_VERSION = "2026-11-03" as const;
 // These protocol caps keep one failure inside the existing structured-event byte limit.
 export const MAX_PLANNER_FAILURE_CAUSES = 3;
 export const MAX_PLANNER_ERROR_ISSUES = 32;
@@ -32,7 +33,9 @@ export const PlannerFailureDetailSchema = z.strictObject({
 });
 export const PlannerFailureExecutionSchema = z.strictObject({
   run_id: RunIdSchema.max(512).nullable(), attempt: PositiveCountSchema.nullable(),
-  correlation_id: z.uuid({ version: "v4" }).nullable(), git_sha: CommitShaSchema.nullable(),
+  traceId: TraceIdSchema.nullable(), spanId: SpanIdSchema.nullable(), git_sha: CommitShaSchema.nullable(),
+}).refine(value => value.spanId === null || value.traceId !== null, {
+  message: "an operation requires its execution identity", path: ["traceId"],
 });
 export const PlannerFailureSchema = PlannerFailureDetailSchema.extend({
   schema_version: z.literal(PLANNER_FAILURE_VERSION).default(PLANNER_FAILURE_VERSION),
@@ -42,7 +45,8 @@ export const PlannerFailureSchema = PlannerFailureDetailSchema.extend({
 }).meta({
   version: PLANNER_FAILURE_VERSION,
   changelog: [
-    { version: PLANNER_FAILURE_VERSION, change: "Retain safe original frames and bounded secondary failures." },
+    { version: PLANNER_FAILURE_VERSION, change: "Retain known execution and operation context without duplicate UUIDs." },
+    { version: "2026-11-02", change: "Retain safe original frames and bounded secondary failures." },
   ],
 });
 export type PlannerFailure = z.infer<typeof PlannerFailureSchema>;
@@ -62,6 +66,6 @@ export const PlannerErrorResponseSchema = z.strictObject({
 }).meta({
   version: PLANNER_FAILURE_VERSION,
   changelog: [
-    { version: PLANNER_FAILURE_VERSION, change: "Read earlier errors with explicitly unavailable execution evidence." },
+    { version: PLANNER_FAILURE_VERSION, change: "Require current error context without earlier-format readers." },
   ],
 });

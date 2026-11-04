@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
 import {
-  CandidateRejectionRecordSchema, DiscoveredArticleRowSchema, DropReasonSchema, FeedIngestCandidateSchema,
+  createRootContext, CandidateRejectionRecordSchema, DiscoveredArticleRowSchema, DropReasonSchema, FeedIngestCandidateSchema,
   HarvestDiagnosticsSchema, deriveCandidateId,
   ScreenedCandidateSchema,
 } from "@idhazh/common-contracts";
@@ -40,7 +40,7 @@ async function inputs() {
   // Build current strict payloads from recorded content, URLs and clocks only.
   const recorded = fixture.candidate;
   const candidate = FeedIngestCandidateSchema.parse({
-    date: recorded.date, correlation_id: recorded.correlation_id, run_id: recorded.run_id,
+    date: recorded.date, traceId: recorded.traceId, run_id: recorded.run_id,
     candidate_id: recorded.candidate_id, entry_ordinal: recorded.entry_ordinal, feed_id: recorded.feed_id,
     source: {
       feed_id: recorded.source.feed_id, publisher_id: recorded.source.publisher_id ?? null,
@@ -64,7 +64,7 @@ async function inputs() {
       curate_articles: { ...authored.curate_articles, global_age_ceiling_hours: 36 },
     }),
     clock_config: { collect: { max_future_hours: 6 } },
-    run: { now: fixture.now, run_id: candidate.run_id, correlation_id: candidate.correlation_id },
+    run: { now: fixture.now, run_id: candidate.run_id, traceId: candidate.traceId },
   };
   const discovered = {
     old: DiscoveredRowSchema.parse({
@@ -286,12 +286,13 @@ test("repeated undated and far-future fetches keep the settled first discovery",
   const { input, candidate, discovered } = await inputs();
   for (const published_at of [null, "2026-11-01T00:00:00Z"]) {
     for (const run_id of ["2026-10-21-123", "2026-10-21-124"]) {
+      const traceId = createRootContext().traceId;
       const candidate_id = deriveCandidateId(run_id, candidate.feed_id, candidate.entry_ordinal);
       const result = await screenArticleCandidates({
         ...input, candidates: [{
-          ...candidate, run_id, candidate_id, correlation_id: run_id, published_at,
+          ...candidate, run_id, candidate_id, traceId, published_at,
           fetched_at: run_id.endsWith("-123") ? "2026-10-21T09:00:00Z" : "2026-10-21T12:00:00Z",
-        }], observations: {}, run: { ...input.run, run_id, correlation_id: run_id },
+        }], observations: {}, run: { ...input.run, run_id, traceId },
         discovered: { availability: "available", rows: [discovered.old] },
       });
       expect(result.rejections[0]?.details.age_hours).toBe(50);
@@ -377,7 +378,7 @@ test("survivors require real substance evidence while cheap refusals avoid parag
   expect(rawFailure.rejections[0]?.drop_reason).toBe("REJECTED_SCREENING_MIN_WORDS");
 });
 
-test("invalid config, observations and batch identities fail by name without mutation", async () => {
+test("invalid business inputs fail without mutation while independent execution metadata remains valid", async () => {
   const { input, candidate, observation } = await inputs();
   const before = structuredClone(input);
   await expect(screenArticleCandidates({
@@ -392,9 +393,9 @@ test("invalid config, observations and batch identities fail by name without mut
     } },
   })).rejects.toThrow("candidate_id");
   await expect(screenArticleCandidates({ ...input, candidates: [candidate, candidate] })).rejects.toThrow("candidate_id");
-  await expect(screenArticleCandidates({
-    ...input, run: { ...input.run, correlation_id: "another-run" },
-  })).rejects.toThrow("correlation_id");
+  expect(await screenArticleCandidates({
+    ...input, run: { ...input.run, traceId: createRootContext().traceId },
+  })).toEqual(await screenArticleCandidates(input));
   await expect(screenArticleCandidates({
     ...input, run: { ...input.run, run_id: "2026-10-21-999" },
   })).rejects.toThrow("run_id");
@@ -470,7 +471,7 @@ test("public harvesting observations compose with screening without duplicating 
   const fetchedAt = "2026-10-22T00:00:00Z";
   const recorded = context();
   const harvested = await harvestFeeds(loaded, {
-    ...recorded, writer: { ...recorded.writer, run_id: input.run.run_id }, correlation_id: input.run.correlation_id,
+    ...recorded, writer: { ...recorded.writer, run_id: input.run.run_id },
     max_future_hours: input.clock_config.collect.max_future_hours,
     clock: () => new Date(input.run.now), observation_clock: () => new Date(fetchedAt),
   }, { transport });

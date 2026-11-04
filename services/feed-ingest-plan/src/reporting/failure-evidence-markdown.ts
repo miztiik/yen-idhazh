@@ -6,6 +6,7 @@ import { isDeepStrictEqual } from "node:util";
 import type { FeedAvailabilitySnapshotSchema } from "../api/feed-health-state.schema";
 import { escapeMarkdown } from "./markdown-format";
 import { describeReason } from "./selection-exclusions-markdown";
+import { operationKey } from "../api/operation-context";
 
 type AttentionRow = { scope: string; problem: string; impact: string; period: string; next: string };
 export type ReportFailureEvidence = Readonly<{
@@ -92,7 +93,7 @@ export function renderFailureEvidence(
       if (covered) remaining.set(keyForReason, remaining.get(keyForReason)! - covered);
       const count = failure.count - covered;
       if (count === 0) continue;
-      const status = failure.subject === "feed" && feed.checked_at !== null && feed.check_request_id !== null
+      const status = failure.subject === "feed" && feed.checked_at !== null && feed.links.length !== 0
         && (feed.check_result === "confirmed-http-failure" || feed.check_result === "other-http-failure")
         && failure.reason_code === feed.last_failure_code ? feed.status : null;
       const unknownArticleStatus = failure.subject === "article" && failure.reason_code === "FETCH_FAILED_HTTP";
@@ -118,18 +119,22 @@ export function renderFailureEvidence(
     const paused = feed.availability === "resting" || feed.availability === "retired";
     const checks = (evidence?.earlier_checks ?? []).filter(check =>
       check.feed_id === feed.feed_id && check.endpoint_key === feed.endpoint_key
-      && check.checked_at !== null && check.check_request_id !== null && check.check_result !== null
+      && check.checked_at !== null && check.links.length !== 0 && check.check_result !== null
       && feed.availability_updated_at !== null
       && Date.parse(check.checked_at) === Date.parse(feed.availability_updated_at)
       && (run === undefined || ((check.run_id !== run.run_id || check.attempt !== run.attempt)
         && Date.parse(check.checked_at) <= Date.parse(run.started_at))));
-    const distinctChecks = new Map<string | null, FeedHealthRestFields>();
+    const distinctChecks = new Map<string, FeedHealthRestFields>();
     for (const check of checks) {
-      const previous = distinctChecks.get(check.check_request_id);
-      if (previous !== undefined && !isDeepStrictEqual(previous, check)) {
+      const key = operationKey(check.links[0]!);
+      const previous = distinctChecks.get(key);
+      const facts = (row: FeedHealthRestFields) => [
+        row.feed_id, row.endpoint_key, row.checked_at, row.check_result, row.status, row.outcome, row.items,
+      ];
+      if (previous !== undefined && !isDeepStrictEqual(facts(previous), facts(check))) {
         throw new Error("Conflicting saved feed-check evidence");
       }
-      distinctChecks.set(check.check_request_id, check);
+      distinctChecks.set(key, check);
     }
     const earlier = distinctChecks.size === 1 ? [...distinctChecks.values()][0] : undefined;
     const currentRows = (feeds ?? []).filter(row => row.feed_id === feed.feed_id && row.endpoint_key === feed.endpoint_key);

@@ -9,10 +9,3 @@ export type ProgressDetails = {
 export type ProgressRecord = {
   eventType: ProgressEventType; feed_id: string | null; output_count: number | null;
 };
-export function createProgressLogger(
-  _correlationId: string, write?: (record: ProgressRecord) => void,
-) {
-  return (eventType: ProgressEventType, details: ProgressDetails = {}) => {
-    write?.({ eventType, feed_id: details.feed_id ?? null, output_count: details.output_count ?? null });
-  };
-}

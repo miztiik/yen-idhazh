@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 
 How do the API and CLI execute one real feed plan?
 Both compose the same units. The production Python news pipeline, digest
@@ -44,10 +44,11 @@ one workflow step. It verifies private-pipe readiness against the child's
 process ID, a fresh startup nonce, run, attempt, captured UTC clock and code
 revision, then checks that the HTTP health response matches. An occupied port,
 wrong identity, early child exit or expired readiness fails the step explicitly.
-The same child handles planning and the health summary before shutdown. The
-outer HTTP client releases the finalized collection only after its
-health-summary attempt; a failed attempt still runs the release call before the
-child closes.
+The same child handles one complete planning request. That request captures
+the actual health report, then releases its finalized collection before
+replying. The HTTP client saves and verifies the returned result; it makes
+no report or release continuation. A failed report or release fails the
+request without erasing independently completed planning output.
 Always-run finalization then owns a separate
 [safe-persist HTTP child](feed-operator-api.md#safe-persist-http-delivery).
 It reuses the existing metadata adapter and the same process-lifetime code,
@@ -98,8 +99,23 @@ assignment without bypassing article selection.
 The router dispatches to execution modules. `/plan` calls the stage APIs over
 the trusted local listener using validated JSON requests and outcomes. HTTP
 is transport, not process isolation or an external message broker. If the
-collection-start response is ambiguous, the planner checks collection ownership
-over HTTP instead of reading the collection state directly.
+collection-start response is ambiguous, the planner checks existence over HTTP.
+That reply does not grant ownership. Recovery also requires the private startup
+reservation that created the collection. A rejected invocation cannot cancel,
+finalize, release or write an outcome over another live run. Only the matching
+child operation consumes a pending reservation, and only its invocation can
+discard it.
+The reservation retains the actual admitted startup promise while preparation
+is in flight. If the caller cancels, that invocation awaits its preparation
+before deciding whether to cancel, account for and release the created work.
+It never waits on another invocation's preparation.
+A received request carries its own cancellation signal into admission. A
+cancelled queued start is refused, rather than becoming an independent direct
+start after its reservation was withdrawn. Non-cancelled direct stage calls
+keep their existing lifecycle.
+An unreadable existence reply still permits cancellation, final accounting and
+release when that private reservation proves ownership. The failed result keeps
+the original startup failure, lookup failure and bounded cleanup evidence.
 Orchestration takes selected metadata and the exact saved selection-start and
 evaluation UTC timestamps from the validated selection response. It takes
 assigned metadata, strategy and dispatch count from the partition response,
@@ -177,10 +193,14 @@ run queue is added.
 One process-local source pacing scheduler is shared by the listener's collection
 and standalone document fetches. Its domain and non-null publisher queues cover
 each dispatched source request without reserving sources across runs.
-Final accounting does not unpin the collection. The workflow reads its health
-summary while the same child still owns the batch, then explicitly releases the
-collection. A long-lived listener keeps it pinned until release or child
-shutdown, preserving the configured capacity bound.
+Final accounting does not unpin the collection. The planning request captures
+its health summary while the same child still owns the selected result, or the
+completed global parsed result if selection failed. It releases that collection
+in its final cleanup path, even after report, run-recording or cancellation
+failure. Direct stage callers retain explicit release. The configured
+capacity bound still applies; no saved response can reopen released input.
+Closing a request-local listener does not release another collection's pinned
+input. That collection's explicit release ends its live ownership.
 The feed pool bounds active feed chains by `harvest.concurrency`. The article
 pool allows that many fetches plus `listener.parser_concurrency` parses to be
 in flight; waiting for a parser does not occupy every fetch slot. The listener
@@ -211,7 +231,9 @@ stops accepting requests, cancels parsing and drains its listener. If drain does
 not finish within the configured bound, the child exits and the supervisor
 reaps it, using a forced kill only if needed. Completed response and health files
 remain in the temporary run directory for the unchanged finalization, report,
-artifact and recovery tasks. A planning failure remains a failed workflow.
+artifact and recovery tasks. A planning or later request failure remains a
+failed workflow. The saved response retains completed planning facts and the
+actual report even if a separate report-file write or child shutdown fails.
 
 ## First sight and retained output
 
@@ -240,9 +262,10 @@ empty result. The [ledger reference](../../reference/feed-planner-ledgers.md)
 owns the exact fields and row identities.
 
 Progress and failure events are sparse and body-free. Each JSONL
-line has a strict run envelope and a flexible `details` object; callers may
+line has a CloudEvents envelope with a fresh occurrence ID, native operation
+context and a flexible `data.details` object; callers may
 name required detail keys for an event. The publisher marks missing requested
-keys or unsafe details with `details._compliance.status` set to
+keys or unsafe details with `data.details._compliance.status` set to
 `NON_COMPLIANT`, and does not include rejected values in that marker. Unknown
 detail keys are allowed. Caller-supplied HTTP URLs and detail keys for article
 text, bodies, policies, headers, credentials or URLs are refused. Details are limited to
@@ -254,7 +277,7 @@ its budget remain intact; they do not remove this typed evidence.
 The [diagnostic contract](feed-failure-diagnostics.md) owns its bounds.
 The document execution unit emits one started and one completed
 or failed event for each fetch or parse, both in `/plan` and standalone calls.
-It names the server-owned request and article identity, `feed_id` and
+It names the actual operation and article identity, `feed_id` and
 `publisher_id`. `scope: document` identifies this work; `scope: plan` identifies
 aggregate orchestration, not a second fetch of that document. Worker callbacks
 do not emit duplicate lifecycles. Started events have null duration; terminal
@@ -265,7 +288,7 @@ overlapping durations. Standalone document chains retain their own API timings.
 Persistence emits its lifecycle around the actual write, including standalone
 requests.
 
-Article fetch and parse failure events alone may include `details.article_url`.
+Article fetch and parse failure events alone may include `data.details.article_url`.
 The execution unit supplies this address separately from flexible details.
 The publisher removes its query and fragment, rejects credentials and signed
 or token-bearing addresses, and refuses non-HTTP addresses. Started and
@@ -319,12 +342,12 @@ The strict envelope remains shared; details remain flexible rather than
 operation-specific schemas.
 
 One supervised step gives the child the same lifetime as the HTTP client
-without losing in-memory batch references between planning and health reporting.
+while the planning request owns its live inputs, report capture and release.
 Startup is a transient native payload, not a ledger, because no later run reads
 it. Pipe closure gives the child a cleanup signal even when the supervisor
 cannot deliver termination. Planning stages use actual HTTP calls to that listener. The CLI and direct
 library entry start an owned ephemeral loopback listener for their stage calls
-and stop it after finalization. Completed stages proceed immediately; neither
+and stop it after finalization, report capture and release. Completed stages proceed immediately; neither
 HTTP nor parser deadlines impose a minimum duration.
 
 Native workers provide real extraction overlap rather than promises around

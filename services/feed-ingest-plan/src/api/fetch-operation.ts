@@ -29,28 +29,28 @@ import { createStageLogger } from "../logging/structured-logger";
 import { recordDocumentRejections } from "./record-document-rejections";
 import { resolveFeedEligibility } from "../availability/feed-lifecycle";
 import { projectLifecycleFields } from "../health-row";
-import { collectionFeedRequest } from "./collection-operation";
 import { stageStore } from "./stage-store";
+import { operationKey, operationMetadata } from "./operation-context";
 
 type FetchRequest = z.infer<typeof FetchRequestSchema>;
 const requestPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
 export function resolveFetchParent(request: FetchRequest, inputs: PlanInputs, runtime: PlanRuntime) {
-  if (request.batch_id === undefined || request.offer_id === undefined) return null;
-  const { batch, offer } = readFeedOffer(inputs, request.batch_id, request.offer_id);
+  if (!("offer_id" in request)) return null;
+  const { batch, offer } = readFeedOffer(inputs, request.links[0], request.offer_id);
   requireStageConfiguration(batch, inputs, runtime);
-  if (offer === undefined || offer.source.feed_id !== request.feed_id || request.correlation_id !== batch.context.correlation_id
-    ) throw new PlanError("INVALID_REQUEST", "Article reference does not belong to this feed batch", "offer_id");
-  const rootId = batch.feed_fetch_request_id ?? collectionFeedRequest(inputs, batch.context.run_id, request.feed_id);
-  if (rootId === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Feed batch has no captured feed reference", "batch_id");
-  return { batch, offer, fetch_request_id: rootId };
+  if (offer === undefined) throw new PlanError("INVALID_REQUEST", "Article offer is not a member of this feed parse", "offer_id");
+  const fetch = batch.links[0];
+  if (fetch === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Feed parse has no captured input fetch", "links");
+  return { batch, offer, fetch };
 }
 export async function fetchDocument(
   request: FetchRequest, record: DocumentOperationContext, inputs: PlanInputs, runtime: PlanRuntime,
   parent: ReturnType<typeof resolveFetchParent>,
 ) {
-  const source = inputs.harvest.sources.find(source => source.id === request.feed_id);
+  const feedId = parent?.offer.source.feed_id ?? ("feed_id" in request ? request.feed_id : undefined);
+  const source = inputs.harvest.sources.find(source => source.id === feedId);
   if (source === undefined || source.status !== "active") throw new PlanError("INVALID_REQUEST", "Fetch requires an active configured feed", "feed_id");
-  const url = request.fetch_item_type === "feed" ? source.url : parent?.offer.entry.link ?? request.url;
+  const url = request.fetch_item_type === "feed" ? source.url : parent?.offer.entry.link ?? ("url" in request ? request.url : undefined);
   if (url == null) throw new PlanError("INVALID_REQUEST", "Article fetch requires its authorized address", "url");
   if (parent === null) {
     try { validateTargetName(url); }
@@ -60,12 +60,13 @@ export async function fetchDocument(
     }
   }
   const state = await documentState(record, inputs, runtime);
-  if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; start a new feed fetch for new work", "request_id");
-  if (state.fetch_request_ids.has(record.request_id)) throw new PlanError("REQUEST_CONFLICT", "Fetch request identity already belongs to this live execution", "request_id");
-  if (parent !== null && !state.fetch_request_ids.has(parent.fetch_request_id)) {
-    throw new PlanError("ARTIFACT_NOT_FOUND", "Feed batch has no live captured work", "batch_id");
+  if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; start a new feed fetch for new work", "links");
+  const key = operationKey(record.context);
+  if (state.fetches.has(key)) throw new PlanError("REQUEST_CONFLICT", "Fetch operation already belongs to this live execution", "spanId");
+  if (parent !== null && !state.fetches.has(operationKey(parent.fetch))) {
+    throw new PlanError("ARTIFACT_NOT_FOUND", "Feed parse has no live captured work", "links");
   }
-  state.fetch_request_ids.add(record.request_id);
+  state.fetches.add(key);
   let identity: ReturnType<typeof deriveArticleIdentity>;
   try {
     identity = request.fetch_item_type === "feed" ? deriveFeedIdentity(url)
@@ -75,14 +76,15 @@ export async function fetchDocument(
     throw new PlanError("INVALID_REQUEST", "Cleaned fetch address is invalid or unsafe", "url");
   }
   const attemptObservations: ReturnType<typeof observeDocument>[] = [];
-  const emit = createStageLogger(state.context, runtime.log);
+  const emit = createStageLogger(record.context, inputs.event_source, runtime.log);
   const work = documentWork({
-    document_activity: (operation, phase, details, url, feedUrls, evidence) =>
-      emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls, evidence),
+    ...operationMetadata(record.context),
+    document_activity: (operation, phase, details, url, feedUrls, evidence, context) =>
+      emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls, evidence, context),
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
     on_attempt: observation => { attemptObservations.push(observation); },
-  }, { run_id: record.context.run_id, correlation_id: record.context.correlation_id, article_id: identity.url_key, feed_id: source.id },
-  record.request_id, {
+  }, { run_id: record.context.run_id, article_id: identity.url_key, feed_id: source.id },
+  operationMetadata(record.context), {
     document_kind: request.fetch_item_type, feed_id: source.id, publisher_id: source.publisher_id,
     observed_run_id: record.context.run_id, observed_attempt: state.context.writer.attempt, candidate_id: parent?.offer.offer_id ?? null,
   });
@@ -97,7 +99,7 @@ export async function fetchDocument(
       entry_ordinal: 0, title: null, link: url, categories: [], author: null, published_at: null, media_types: [],
     } };
     const prepared = prepareArticle(offered, inputs.harvest, {
-      writer: state.context.writer, correlation_id: state.context.correlation_id,
+      ...operationMetadata(record.context), writer: state.context.writer,
       max_future_hours: inputs.clock_config.collect.max_future_hours, clock: () => new Date(state.context.now),
       observation_clock: runtime.observation_clock ?? (() => new Date()),
       exclusions: { ...exclusions, published_window_days: inputs.clock_config.collect.published_window_days },
@@ -107,10 +109,10 @@ export async function fetchDocument(
       work.rejectFetch(url, "ARTICLE_EXCLUDED");
       state.work.article(prepared.result);
       if (prepared.result.rejection !== null) await recordDocumentRejections([prepared.result.rejection], state, inputs);
-      if (parent !== null) updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id, "rejected");
+      if (parent !== null) updateFeedOffer(inputs, state, parent.batch, parent.offer.offer_id, "rejected");
       throw new PlanError("ARTICLE_EXCLUDED", prepared.result.rejection!.drop_reason, parent === null ? "url" : "offer_id");
     }
-    if (parent !== null) updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id, "fetched", record.request_id);
+    if (parent !== null) updateFeedOffer(inputs, state, parent.batch, parent.offer.offer_id, "fetched", record.context);
   }
   let permit = requestPools.get(inputs);
   if (permit === undefined) { permit = workPool(inputs.harvest.config.harvest.concurrency); requestPools.set(inputs, permit); }
@@ -119,11 +121,11 @@ export async function fetchDocument(
   try {
     result = await bounded(() => {
       runtime.signal?.throwIfAborted();
-      return work.fetch(state.fetcher, url, request.caused_by_event_id ?? null, runtime.signal);
+      return work.fetch(state.fetcher, url, runtime.signal);
     });
   } catch (error) {
     if (request.fetch_item_type === "feed") {
-      state.work.interruptFeed(source.id, record.request_id, utcTimestamp(runtime.observation_clock));
+      state.work.interruptFeed(source.id, record.context, utcTimestamp(runtime.observation_clock));
     }
     throw error;
   }
@@ -134,19 +136,18 @@ export async function fetchDocument(
     error_code: fetched.error_code ?? null,
     body_sha256: fetched.body === null ? null : hashText(fetched.body), attempts: fetched.attempts ?? [],
     observation, attempt_observations: attemptObservations,
-    parent_fetch_request_id: parent?.fetch_request_id ?? null, parent_batch_id: parent?.batch.batch_id ?? null,
     entry_ordinal: parent?.offer.entry.entry_ordinal ?? null,
   });
-  stageStore(inputs).rememberFetchedDocument(record.request_id, artifact);
-  stageStore(inputs).rememberDocumentWork(record.request_id, record.context.run_id);
+  stageStore(inputs).rememberFetchedDocument(record.context, artifact);
+  stageStore(inputs).rememberDocumentWork(record.context, record.context.run_id, request.fetch_item_type);
   if (request.fetch_item_type === "feed") {
-    state.work.pendingFeed(source.id, fetched, observation.occurred_at, record.request_id);
+    state.work.pendingFeed(source.id, fetched, observation.occurred_at, record.context);
   }
   let sourceOutcome: SourceArticleOutcome | null = null;
   if (request.fetch_item_type === "article" && fetched.body === null) {
     const refusal = fetchRejection(fetched, inputs.harvest.config.harvest.fetch_timeout_ms, fetchDiagnostics(fetched, null));
     const rejection = recordRejection({ feed_id: source.id, feed_url: source.url }, {
-      writer: state.context.writer, correlation_id: state.context.correlation_id,
+      ...operationMetadata(record.context), writer: state.context.writer,
       max_future_hours: inputs.clock_config.collect.max_future_hours,
       observation_clock: runtime.observation_clock ?? (() => new Date()),
     }, refusal.reason, refusal.details, {
@@ -163,17 +164,17 @@ export async function fetchDocument(
     });
     sourceOutcome = resolveArticleSourceOutcome(result, inputs.harvest.config.triage.min_words,
       inputs.harvest.config.triage.blocked_http_statuses, utcTimestamp(runtime.observation_clock));
-    state.work.article(result, record.request_id, sourceOutcome);
+    state.work.article(result, key, sourceOutcome);
     await recordDocumentRejections([rejection], state, inputs);
   }
   if (request.fetch_item_type === "article") {
-    state.work.captureArticle(record.request_id, source.id, observation.occurred_at, sourceOutcome);
+    state.work.captureArticle(key, source.id, observation.occurred_at, sourceOutcome);
   }
-  if (parent !== null) updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id,
-    fetched.failure === null && fetched.body !== null ? "fetched" : "rejected", record.request_id);
+  if (parent !== null) updateFeedOffer(inputs, state, parent.batch, parent.offer.offer_id,
+    fetched.failure === null && fetched.body !== null ? "fetched" : "rejected", record.context);
   return { artifact, response_json: JSON.stringify({
-    fetch_request_id: record.request_id, batch_id: parent?.batch.batch_id ?? record.request_id,
-    run_id: record.context.run_id, correlation_id: record.context.correlation_id, fetch_item_type: request.fetch_item_type, feed_id: source.id,
+    ...operationMetadata(record.context),
+    run_id: record.context.run_id, fetch_item_type: request.fetch_item_type, feed_id: source.id,
     article_id: identity.url_key, canonical_url: identity.canonical_url, http_status: fetched.http_status,
     failure: fetched.failure, body_sha256: artifact.body_sha256,
   }) };

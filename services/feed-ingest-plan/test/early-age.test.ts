@@ -136,7 +136,7 @@ test("collection records early losses once in native health counters without fet
       { title: "Expired second", path: "stale-two", date: "2026-10-19T11:00:00Z" },
     ]);
     const { batch } = await collectRecordedFeeds(fixture.inputs, fixture.runtime);
-    const summary = await executeFeedHealthState({ batch_id: batch.batch_id, action: "record" }, fixture.inputs, fixture.runtime);
+    const summary = await executeFeedHealthState({ links: [{ traceId: batch.traceId, spanId: batch.spanId }], action: "record" }, fixture.inputs, fixture.runtime);
     expect(fixture.transport.requests.some(request => request.url.pathname.startsWith("/stale-"))).toBe(false);
     expect(progress.filter(event => event.feed_id === "recorded-news"
       && ["ARTICLE_HARVEST_STARTED", "ARTICLE_HARVEST_COMPLETED"].includes(event.eventType))).toHaveLength(0);
@@ -166,7 +166,7 @@ test("empty RSS and Atom category labels stay valid through candidate and select
     const article = recorded.articles[0]!;
     const entries = [...await parseFeed(rss), ...await parseFeed(atom)];
     const candidates = entries.map((entry, ordinal) => FeedIngestCandidateSchema.parse({
-      date: recorded.date, run_id: recorded.run_id, correlation_id: response.correlation_id,
+      date: recorded.date, run_id: recorded.run_id, traceId: response.traceId,
       candidate_id: deriveCandidateId(recorded.run_id, article.feed_id, ordinal), entry_ordinal: ordinal,
       feed_id: article.feed_id, source: sourceSnapshot(configured.sources[0]!),
       canonical_url: article.canonical_url, url_key: article.url_key, title: entry.title ?? article.title,

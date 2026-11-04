@@ -1,17 +1,17 @@
 /** Screen and curate declared work-size vectors without writing files or reading history. */
-import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
-  FeedIngestCandidateSchema, ParsedFeedBatchSchema, deriveCandidateId, deriveUrlKey,
+  createRootContext, FeedIngestCandidateSchema, ParsedFeedBatchSchema, deriveCandidateId, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { loadPlanningConfig } from "../src/config/resolve-policy";
 import { curateArticles } from "../src/curate-article-portfolio/editorial-selection";
 import { screenArticleCandidates } from "../src/screen-article-candidates/triage-gates";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { resolveRunContext } from "../src/resolve-run-context";
+import { operationMetadata, stageContext } from "../src/api/operation-context";
 
 export type HistoryFixture = {
-  date: string; run_id: string; correlation_id: string; observed_at: string;
+  date: string; run_id: string; observed_at: string;
   word_work: number[]; bin_pack_workers: number[]; bin_pack_work: number[];
   round_robin_workers: number[]; round_robin_work: number[];
 };
@@ -36,14 +36,14 @@ export async function fixtureInput(options: { count?: number; words?: number[] }
   };
   const context = resolveRunContext(
     loaded.settings, "a".repeat(40), new Date(fixture.observed_at),
-    fixture.run_id.slice(11), "a2742c40-bc4e-461b-9f0f-5e8ab9c58c04",
+    fixture.run_id.slice(11), createRootContext(),
   );
   const words = options.words ?? fixture.word_work.slice(0, options.count ?? fixture.word_work.length);
   const candidates = words.map((work, ordinal) => {
     const sourceId = `source-${ordinal}`;
     const url = `https://example.org/article-${ordinal}`;
     return FeedIngestCandidateSchema.parse({
-      date: fixture.date, run_id: fixture.run_id, correlation_id: context.correlation_id,
+      date: fixture.date, run_id: fixture.run_id, traceId: context.traceId,
       candidate_id: deriveCandidateId(fixture.run_id, sourceId, ordinal), entry_ordinal: ordinal,
       feed_id: sourceId,
       source: {
@@ -59,10 +59,10 @@ export async function fixtureInput(options: { count?: number; words?: number[] }
   const screening = await screenArticleCandidates({
     candidates, observations: {}, discovered: { availability: "unavailable" }, planning,
     clock_config: { collect: { max_future_hours: 1 } },
-    run: { now: fixture.observed_at, run_id: context.run_id, correlation_id: context.correlation_id },
+    run: { now: fixture.observed_at, run_id: context.run_id, traceId: context.traceId },
   });
   const batch = ParsedFeedBatchSchema.parse({
-    batch_id: randomUUID(), config_sha256: "b".repeat(64), context, request: {},
+    ...operationMetadata(context), config_sha256: "b".repeat(64), context: stageContext(context), request: {},
     candidates,
     observations: Object.fromEntries(candidates.map(candidate => [candidate.candidate_id, {
       candidate_id: candidate.candidate_id, http_status: 200, paywall: false,

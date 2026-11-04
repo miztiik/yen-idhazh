@@ -2,17 +2,16 @@
 import { join } from "node:path";
 import { RejectedArticleRowSchema } from "@idhazh/common-contracts";
 import { PlanResponseSchema } from "../src/api/plan-response.schema";
-import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-state.schema";
 import type { ReportFailureEvidence } from "../src/reporting/failure-evidence-markdown";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { readPlanningHistory } from "../src/read-ledger-history/read-run-history";
 import { verifyParquetFiles } from "./feed-ingest-plan-verification";
 
 export async function readReportFailureEvidence(input: {
-  directory: string; root?: string; response: unknown; health?: unknown;
+  directory: string; root?: string; response: unknown;
 }): Promise<ReportFailureEvidence> {
   const response = PlanResponseSchema.parse(input.response);
-  const health = input.health === undefined ? undefined : FeedHealthStateUpdateResponseSchema.parse(input.health);
+  const health = response.health?.status === "summarized" ? response.health : null;
   const gaps: [string, string, string][] = [];
   let articles: ReportFailureEvidence["articles"];
   const receipt = response.files.rejected_articles;

@@ -1,8 +1,7 @@
 /** Prepare bounded history, effective settings and execution evidence for one workflow invocation. */
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
-import { CommitShaSchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import { CommitShaSchema, createRootContext, PositiveCountSchema } from "@idhazh/common-contracts";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { parseCliRequest } from "../src/api/plan-request";
 import { parseGlobalAgeCeiling, resolveRunPolicy, RunPolicyOverridesSchema } from "../src/config/resolve-run-policy";
@@ -49,7 +48,7 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
   });
   inputs.outputRoot = join(directory, "state");
   const captured = new Date();
-  const correlationId = randomUUID();
+  const context = createRootContext();
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(WorkflowPolicySchema.parse({
     config: inputs.harvest.config, request: { ...request, ...policyOverrides }, history: inputs.clock_config.collect,
@@ -63,7 +62,7 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
     root, directory, stateRoot: inputs.outputRoot, registryPath, identity, registrations,
   });
   const startup = createPlannerStartup(inputs, {
-    git_sha: identity.git_sha, run_number: GITHUB_RUN_ID, correlation_id: correlationId,
+    ...context, git_sha: identity.git_sha, run_number: GITHUB_RUN_ID,
     attempt, captured_at: captured.toISOString(),
   });
   return { root, directory, inputs, startup, request, identity, registrations, host,

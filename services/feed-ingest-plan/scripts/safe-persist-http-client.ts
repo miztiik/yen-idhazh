@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CommitShaSchema, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { CommitShaSchema, createRootContext, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
 import { z } from "zod";
 import { PlanError } from "../src/api/plan-request";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
@@ -23,8 +23,9 @@ export async function deliverWorkflowMetadataHttp(input: {
   const request = SafePersistHttpRequestSchema.parse({
     runNumber: input.runNumber, attempt: input.attempt, paths: JSON.parse(input.currentRunFiles),
   });
+  const context = createRootContext();
   const capture = { operation: "commit-ledgers" as const,
-    execution: { run_id: null, attempt: request.attempt, correlation_id: null, git_sha: gitSha } };
+    execution: { run_id: null, attempt: request.attempt, traceId: context.traceId, spanId: context.spanId, git_sha: gitSha } };
   try {
     const settings = ServiceSettingsSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan-service.json")).json());
     const startup = SafePersistHttpStartupSchema.parse({
@@ -53,12 +54,14 @@ export async function deliverWorkflowMetadataHttp(input: {
       },
       request: async (base, signal) => {
         const response = await fetch(`${base}/safe-persist-data`, {
-          method: "POST", headers: { "content-type": "application/json" },
+          method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(context) },
           body: JSON.stringify(request), signal, timeout: false,
         });
         const body: unknown = await response.json();
         if (response.status !== 200) {
-          throw readPlannerResponseError(body, { ...capture, limits: settings.diagnostics.failure });
+          throw readPlannerResponseError(body, {
+            ...capture, execution: { ...capture.execution, spanId: null }, limits: settings.diagnostics.failure,
+          });
         }
         const result = MetadataDeliveryResultSchema.parse(body);
         if (!isMetadataDeliveryConfirmed(result, request.paths)) {
