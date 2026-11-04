@@ -3,10 +3,11 @@
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import pytest
 
-from hhem_evaluator.contracts.base import API_PREFIX
+from hhem_evaluator.contracts.base import API_PREFIX, EVALUATE_PATH
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 
 from .contract_examples import REPOSITORY
@@ -31,7 +32,7 @@ def test_valid_invalid_and_unknown_name_canaries_never_reach_public_output(
         ]
         async with running_service() as service:
             response = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={
                     "source_text": private.source_text,
                     "summary_text": private.summary_text,
@@ -52,13 +53,13 @@ def test_valid_invalid_and_unknown_name_canaries_never_reach_public_output(
                 },
                 {"source_text": ["InvalidValueCanary"], "summary_text": private.summary_text},
             ):
-                failed = await service.client.post(f"{API_PREFIX}/evaluate", json=body)
+                failed = await service.client.post(EVALUATE_PATH, json=body)
                 assert failed.status_code == 400
                 public.append(failed.text)
             unknown = json.loads(public[1])
             assert unknown["errors"][0]["field"] is None
             malformed = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 content=b'{"MalformedJsonCanary":',
                 headers={"Content-Type": "application/json"},
             )
@@ -98,7 +99,7 @@ def test_streamed_overflow_slow_input_and_capacity_are_bounded_before_parsing() 
                 yield b"x" * 800
 
             overflowed = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 content=overflow(),
                 headers={"Content-Type": "application/json"},
             )
@@ -115,7 +116,7 @@ def test_streamed_overflow_slow_input_and_capacity_are_bounded_before_parsing() 
 
             slow_task = asyncio.create_task(
                 service.client.post(
-                    f"{API_PREFIX}/evaluate",
+                    EVALUATE_PATH,
                     content=slow(),
                     headers={"Content-Type": "application/json"},
                 )
@@ -140,12 +141,12 @@ def test_streamed_overflow_slow_input_and_capacity_are_bounded_before_parsing() 
                 {"Content-Type": "application/json", "Content-Encoding": "gzip"},
             ):
                 response = await service.client.post(
-                    f"{API_PREFIX}/evaluate", content=b"PrivateEncodingCanary", headers=headers
+                    EVALUATE_PATH, content=b"PrivateEncodingCanary", headers=headers
                 )
                 assert response.status_code == 415
                 assert "PrivateEncodingCanary" not in response.text
             invalid_utf8 = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 content=b"\xff",
                 headers={"Content-Type": "application/json"},
             )
@@ -164,7 +165,7 @@ def test_terminal_logging_failure_preserves_a_score_without_a_false_log_link(
             old_pid = service.worker.worker.pid if service.worker.worker is not None else None
             service.log.fail_terminal = True
             response = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={
                     "source_text": case.source_text,
                     "summary_text": case.summary_text,
@@ -189,6 +190,31 @@ def test_terminal_logging_failure_preserves_a_score_without_a_false_log_link(
     asyncio.run(check())
 
 
+def test_unavailable_file_mirror_does_not_change_a_completed_score(tmp_path: Path) -> None:
+    async def check() -> None:
+        occupied = tmp_path / "occupied"
+        occupied.write_text("A real file prevents opening the log directory.", encoding="ascii")
+        inputs, predictions, _ = read_recordings(REPOSITORY)
+        case = inputs.cases[0]
+        async with running_service(log_directory=occupied) as service:
+            response = await service.client.post(
+                EVALUATE_PATH,
+                json={"source_text": case.source_text, "summary_text": case.summary_text},
+            )
+            assert response.status_code == 200
+            result = EvaluationResult.model_validate_json(response.content)
+            assert result.status == "complete" and result.hhem == predictions.cases[0].score
+            assert not result.errors
+            health = await service.client.get("/health")
+            assert health.status_code == 200 and not health.json()["log_available"]
+            assert any(
+                envelope.type == "fastapi-server.log.unavailable"
+                for envelope in service.log.envelopes
+            )
+
+    asyncio.run(check())
+
+
 def test_child_exception_text_is_not_forwarded(
     capfd: pytest.CaptureFixture[str],
 ) -> None:
@@ -197,7 +223,7 @@ def test_child_exception_text_is_not_forwarded(
         case = inputs.cases[3]
         async with running_service(scenarios=(Scenario(actions=("raise",)), Scenario())) as service:
             response = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={
                     "source_text": case.source_text,
                     "summary_text": case.summary_text,

@@ -1,9 +1,9 @@
 # HHEM evaluation API
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-03
 
 Which fields, identities and startup settings the independent HHEM evaluator
-accepts. The package serves synchronous local CPU evaluations with one owned
+accepts. The HHEM component serves synchronous local CPU evaluations with one owned
 model process and bounded waiting. Existing pipeline evaluation and published
 data are unchanged. The [architecture](../architecture/evaluation/hhem-evaluation-api.md)
 owns admission, cancellation, model loading and failure handling.
@@ -21,7 +21,8 @@ then reads its revision and runtime fields. It does not rewrite recorded scores.
 
 The protocol reserves `GET /api/2026-11-02/health`,
 `POST /api/2026-11-02/summary-eval-hhem` and `GET /api/2026-11-02/openapi.json`.
-The existing `/evaluate` route remains callable as a compatibility alias.
+There is no `/evaluate` alias. These HHEM routes are registered only when the
+shared application's explicit component selection includes `hhem`.
 The request body's version comes from that route, not a body field. These
 are protocol names, not listener settings. No interactive documentation UI,
 streaming, polling or result-history endpoint is defined.
@@ -138,6 +139,11 @@ Table E - Strict event fields
 | E5 | `occurred_at`, `level` | A timezone-aware UTC emission instant; level is `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
 | E6 | `details` | One strict model with omittable typed `status`, `worker`, `model`, `window_index`, `window_count`, `scored_window_count`, `queue_depth`, `duration_ms`, `score`, `errors`. Include only measured fields, not explicit null or an arbitrary diagnostic dictionary. Counts must agree. |
 
+The shared server wraps each native event in the current CloudEvents
+`ServerEvent` contract, preserving its event ID and UTC occurrence time.
+The old unwrapped event transport is not accepted. The
+[server reference](fastapi-server.md#diagnostics) owns the envelope and file behavior.
+
 `encode_json_line` counts the complete UTF-8 JSONL record, including its
 newline, against `logging.max_event_bytes` and refuses overflow without
 truncation. The parent emitter writes these records to stderr through
@@ -165,8 +171,10 @@ messages or a broker.
 
 ## Authored startup settings
 
-`config/hhem-evaluator/settings.json` supplies the API's operational values.
-`load_settings` reads only its explicit path, validates it and returns frozen
+`config/hhem-evaluator/settings.json` supplies HHEM's assets, scoring, queue,
+response and worker settings. `config/fastapi-server.json` supplies the shared
+listener, logging and explicit component selection. `load_settings` reads
+these two named files, validates the combined snapshot and returns frozen
 nested models and immutable asset inventories. Missing or invalid settings
 fail by name. There is no environment-selected model destination, source
 fallback, remote lookup or live reload. A replacement must use the same
@@ -176,18 +184,18 @@ Table G - Initial settings and units
 
 | Id | Keys | Authored values |
 | --- | --- | --- |
-| G1 | `enabled` | `false` during development. The field declares removal when the standalone API is released after real-model workflow verification. |
+| G1 | `enabled` | A private-worker snapshot value derived from shared `enabled_routes`, not another authored flag. The shared development default enables no component. |
 | G2 | `hhem.model`, `hhem.foundation` | Required references, full immutable revisions and finite named file lists in the committed settings. The model revision is `8e4a2e6e96c708cc76c2344f7e4757df2515292c`; the foundation revision is `7bcac572ce56db69c1ea7c8af255c5d7c9672fc2`. Foundation files are tokenizer/config assets, not another model's weights. |
 | G3 | `hhem.cache_directory` | `services/hhem-evaluator/var/model-cache`, a relative POSIX operator path; never a request control. |
 | G4 | `scoring.chunk_words`, `scoring.chunk_overlap_words`, `scoring.max_windows_per_comparison` | 5000 words per window, 500 words of regular overlap and at most 256 planned windows per comparison. Reject a larger plan; never drop windows. |
 | G5 | `response.hhem_full`, `response.include_window_details` | Both `false`; independent permanent optional API controls. |
-| G6 | `listener.host`, `listener.port` | `127.0.0.1`, port 3010. Only configured loopback literals `127.0.0.1` and `::1` validate. |
+| G6 | `listener.host`, `listener.port` | Read from the shared server configuration: `127.0.0.1`, port 3010. Only configured loopback literals `127.0.0.1` and `::1` validate. |
 | G7 | `listener.max_body_bytes`, `listener.body_read_timeout_ms` | 1048576 bytes (1 MiB) and 5000 milliseconds (five seconds) for bounded input reads. |
 | G8 | `queue.capacity`, `queue.wait_timeout_ms`, `queue.retry_after_seconds` | Eight waiting reservations, 60000 milliseconds (one minute), two seconds. A body being read uses a reservation; the active evaluation is separate. |
 | G9 | `evaluation.timeout_ms` | 120000 milliseconds (two minutes), shared across both comparisons after dequeue. |
 | G10 | `worker.startup_timeout_ms`, `worker.replacement_timeout_ms` | 600000 milliseconds (ten minutes) initially; 120000 milliseconds (two minutes) for cached replacement. |
 | G11 | `worker.stop_grace_ms`, `worker.forced_stop_ms`, `worker.shutdown_timeout_ms` | 5000 milliseconds (five seconds) each for graceful and forced-stop confirmation; 15000 milliseconds (fifteen seconds) for shutdown. Shutdown must accommodate both stop phases. |
-| G12 | `worker.max_proc_identity_bytes`, `logging.level`, `logging.max_event_bytes` | 4096 bytes for one process identity read; `INFO`; 4096 serialized bytes per event. Bounds are refusal limits, not truncation instructions. |
+| G12 | `worker.max_proc_identity_bytes`, `logging.level`, `logging.max_event_bytes` | 4096 bytes for one process identity read; shared logging level `INFO`; shared bound of 4096 serialized bytes per record. These are refusal limits, not truncation instructions or a log-file quota. |
 
 CPU affinity, quotas, memory limits and fixed compute/inter-operation thread
 counts are not settings. The host and runtime schedule all available CPU and
@@ -216,8 +224,9 @@ their package metadata alone is not evidence that the official model loads.
 
 Run `python -m hhem_evaluator` in the independent model environment. `--root`
 names the repository root and `--settings` names its committed settings file;
-both are required operator paths. `--enable` enables that invocation without
-editing the development flag. There is one HTTP process, no reload or worker
+both are required operator paths. `--routes hhem` enables that invocation without editing the shared development
+selection. `--api-settings` can name the shared settings file; otherwise the
+file is read under the supplied root. There is one HTTP process, no reload or worker
 count control, and no request-selected executable or destination.
 
 `scripts/capture-model-recordings.py` uses that same production loader and
@@ -240,6 +249,7 @@ that code belongs to the evaluator package.
 ## See also
 
 - [../how-to/run-the-gates.md#independent-python-service-contracts](../how-to/run-the-gates.md#independent-python-service-contracts) - preparation and model-free checks.
+- [fastapi-server.md](fastapi-server.md) - shared readiness, native llama forwarding and diagnostic files.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - native schema ownership.
 - [../architecture/contracts/identity.md#6-hhem-execution-and-event-identity](../architecture/contracts/identity.md#6-hhem-execution-and-event-identity) - caller, execution and event identities.
 - [repository-layout.md](repository-layout.md) - package, configuration and fixture locations.

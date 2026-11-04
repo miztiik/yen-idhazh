@@ -1,6 +1,5 @@
 {
   "version": "2026-11-02",
-  "enabled": false,
   "hhem": {
     "model": {
       "reference": "vectara/hallucination_evaluation_model",
@@ -34,12 +33,6 @@
     "hhem_full": false,
     "include_window_details": false
   },
-  "listener": {
-    "host": "127.0.0.1",
-    "port": 3010,
-    "max_body_bytes": 1048576,
-    "body_read_timeout_ms": 5000
-  },
   "queue": {
     "capacity": 8,
     "wait_timeout_ms": 60000,
@@ -55,9 +48,5 @@
     "forced_stop_ms": 5000,
     "shutdown_timeout_ms": 15000,
     "max_proc_identity_bytes": 4096
-  },
-  "logging": {
-    "level": "INFO",
-    "max_event_bytes": 4096
   }
 }

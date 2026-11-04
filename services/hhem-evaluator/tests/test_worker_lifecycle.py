@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from hhem_evaluator.contracts.base import API_PREFIX, SCHEMA_VERSION
+from hhem_evaluator.contracts.base import API_PREFIX, EVALUATE_PATH, SCHEMA_VERSION
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.service_health import ServiceHealth
 from hhem_evaluator.contracts.worker_message import ScoreWindow
@@ -46,7 +46,7 @@ def test_oracle_full_timeout_retains_primary_and_preserves_queued_work() -> None
             assert (await service.worker.handshake())["phase"] == "loading"
             active = asyncio.create_task(
                 service.client.post(
-                    f"{API_PREFIX}/evaluate",
+                    EVALUATE_PATH,
                     json={
                         "request_id": REQUEST_ID,
                         "source_text": primary.source_text + " " + other.source_text,
@@ -66,7 +66,7 @@ def test_oracle_full_timeout_retains_primary_and_preserves_queued_work() -> None
                 queued.append(
                     asyncio.create_task(
                         service.client.post(
-                            f"{API_PREFIX}/evaluate",
+                            EVALUATE_PATH,
                             json={
                                 "source_text": primary.source_text,
                                 "summary_text": primary.summary_text,
@@ -151,13 +151,11 @@ def test_queued_expiry_and_disconnect_do_not_stop_the_active_worker() -> None:
         settings = service_settings(queue={"wait_timeout_ms": 1000})
         async with running_service(settings, (Scenario(actions=("hold",)),)) as service:
             assert (await service.worker.handshake())["phase"] == "loading"
-            active = asyncio.create_task(service.client.post(f"{API_PREFIX}/evaluate", json=body))
+            active = asyncio.create_task(service.client.post(EVALUATE_PATH, json=body))
             assert (await service.worker.handshake())["phase"] == "prediction"
             original = service.worker.worker
             waiting = asyncio.create_task(
-                service.client.post(
-                    f"{API_PREFIX}/evaluate", json={**body, "request_id": QUEUED_ID}
-                )
+                service.client.post(EVALUATE_PATH, json={**body, "request_id": QUEUED_ID})
             )
             await service.log.wait("queue", "started", QUEUED_ID)
             expired = await waiting
@@ -206,9 +204,7 @@ def test_active_disconnect_stops_only_its_worker_and_sends_no_response() -> None
             assert service.worker.worker is not None
             old_pid = service.worker.worker.pid
             queued = asyncio.create_task(
-                service.client.post(
-                    f"{API_PREFIX}/evaluate", json={**body, "request_id": QUEUED_ID}
-                )
+                service.client.post(EVALUATE_PATH, json={**body, "request_id": QUEUED_ID})
             )
             await service.log.wait("queue", "started", QUEUED_ID)
             request.disconnected.set()
@@ -247,7 +243,7 @@ def test_primary_timeout_does_not_report_an_unfinished_maximum() -> None:
             (Scenario(actions=("score", "block")), Scenario()),
         ) as service:
             response = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={
                     "source_text": case.source_text + " " + other.source_text,
                     "summary_text": case.summary_text,
@@ -315,7 +311,7 @@ def test_replacement_identity_mismatch_fails_closed() -> None:
             scenarios=(Scenario(actions=("score", "invalid")), Scenario(changed_identity=True))
         ) as service:
             response = await service.client.post(
-                f"{API_PREFIX}/evaluate",
+                EVALUATE_PATH,
                 json={
                     "source_text": primary.source_text,
                     "summary_text": primary.summary_text,
@@ -351,7 +347,7 @@ def test_unverifiable_process_handle_cannot_start_a_second_model() -> None:
                 assert (await service.worker.handshake())["phase"] == "loading"
                 active = asyncio.create_task(
                     service.client.post(
-                        f"{API_PREFIX}/evaluate",
+                        EVALUATE_PATH,
                         json={
                             "source_text": case.source_text,
                             "summary_text": case.summary_text,
@@ -391,7 +387,7 @@ def test_owned_shutdown_stops_blocked_scoring_and_loading() -> None:
             assert (await service.worker.handshake())["phase"] == "loading"
             active = asyncio.create_task(
                 service.client.post(
-                    f"{API_PREFIX}/evaluate",
+                    EVALUATE_PATH,
                     json={
                         "source_text": case.source_text,
                         "summary_text": case.summary_text,

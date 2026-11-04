@@ -8,7 +8,7 @@ import pytest
 from fastapi import FastAPI
 from pydantic import ValidationError
 
-from hhem_evaluator.contracts.base import API_PREFIX, SCHEMA_VERSION, NativeContract
+from hhem_evaluator.contracts.base import API_PREFIX, EVALUATE_PATH, SCHEMA_VERSION, NativeContract
 from hhem_evaluator.contracts.error_detail import (
     ERROR_POLICIES,
     ErrorCode,
@@ -115,9 +115,7 @@ def test_fastapi_openapi_matches_native_omission_and_null_rules() -> None:
     def accept_native_request(request: EvaluateRequest) -> EvaluateRequest:
         return request
 
-    app.add_api_route(
-        f"{API_PREFIX}/evaluate", accept_native_request, methods=["POST"], response_model=None
-    )
+    app.add_api_route(EVALUATE_PATH, accept_native_request, methods=["POST"], response_model=None)
     schema = app.openapi()["components"]["schemas"]["EvaluateRequest"]
     native = EvaluateRequest.model_json_schema(mode="validation")
     assert schema["required"] == ["source_text", "summary_text"]

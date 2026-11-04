@@ -187,6 +187,15 @@ the existing TypeScript `createUuidV5` implementation. Missing Bun or its locked
 dependencies fails that comparison; no TypeScript runtime is added to the
 service installation.
 
+The shared Python server carries each HHEM event in CloudEvents 1.0. Its
+envelope `id` is the native `event_id`, and `time` is the native UTC
+`occurred_at`; the native ordered event is `data`. Shared API, llama and
+diagnostic-file occurrences instead receive fresh UUIDv4 event IDs. Their
+producer `source` is the fixed URI reference `/fastapi-server`. These are
+native Python events, not manufactured TypeScript trace identifiers.
+Readers accept the current structured envelope only. Private startup and
+worker-control packets remain native JSON, not CloudEvents.
+
 ## Design rationale
 
 An event occurrence, an execution, an operation and a domain item answer
