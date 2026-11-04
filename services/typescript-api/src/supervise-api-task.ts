@@ -75,7 +75,7 @@ export async function superviseApiTask<T>(input: {
         if (event.phase !== "started" && event.phase !== "startup_failed") logger.write({
           phase: event.phase === "cleanup_failed" ? "failed" : event.phase,
           severity: event.phase === "cleanup_failed" || event.phase === "forced" ? "error" : "info",
-          pid: event.pid, duration_ms: event.phase === "ready" ? evidence.startup_ms : null,
+          duration_ms: event.phase === "ready" ? evidence.startup_ms : null,
           exit_code: event.exit_code ?? null,
         });
       },
@@ -91,7 +91,7 @@ export async function superviseApiTask<T>(input: {
       evidence.startup = "failed";
       evidence.startup_ms ??= performance.now() - started;
     }
-    logger.write({ phase: "failed", severity: "error", pid: evidence.pid, code: failure.code });
+    logger.write({ phase: "failed", severity: "error", code: failure.code });
     throw error;
   } finally {
     logger.close();

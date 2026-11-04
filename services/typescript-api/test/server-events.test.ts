@@ -45,6 +45,7 @@ test("server restarts append identical live CloudEvents without private bodies o
     expect(text).not.toContain("PRIVATE_BODY");
     expect(text).not.toContain("PRIVATE_HEADER");
     const events = text.trim().split("\n").map(line => readCloudEvent(JSON.parse(line), value => ServerEventDataSchema.parse(value)));
+    for (const event of events) expect(event.data).not.toHaveProperty("pid");
     expect(new Set(events.map(event => event.id)).size).toBe(events.length);
     expect(events.filter(event => event.data.phase === "starting")).toHaveLength(2);
     expect(events.every(event => event.source === "/fixtures/typescript-api")).toBe(true);
@@ -131,6 +132,7 @@ test("a failed file mirror does not stop a real machine-only child or its finger
     const [evidence] = await readServerEvidence(fixture.evidence);
     expect(evidence).toMatchObject({ startup: "ready", shutdown: "stopped", log_available: false, error_code: null });
     if (evidence === undefined) throw new Error("The real child must retain its same-run server outcome");
+    expect(evidence.pid).toBeGreaterThan(0);
     expect(ServerEvidenceSchema.safeParse({
       ...evidence, log_filename: serverLogFilename({ ...run, attempt: 4 }),
     }).success).toBe(false);
