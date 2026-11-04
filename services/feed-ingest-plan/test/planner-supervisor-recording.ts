@@ -2,7 +2,7 @@
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PlannerStartupSchema } from "../src/config/planner-startup";
-import { restorePlannerStartup } from "../scripts/feed-ingest-plan-server";
+import { restorePlannerStartup } from "../scripts/restore-planner-startup";
 import { invokePlannerHttp } from "../scripts/feed-ingest-plan-supervisor";
 
 const startup = PlannerStartupSchema.parse(JSON.parse(await Bun.stdin.text()));

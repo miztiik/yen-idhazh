@@ -16,6 +16,8 @@ import type { ReportFailureEvidence } from "../src/reporting/failure-evidence-ma
 import { verifyParquetFiles } from "./feed-ingest-plan-verification";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { articleEntitiesFilename, articleEntitiesPath } from "../src/selected-artifact-path";
+import { readServerEvidence } from "../../typescript-api/src/read-server-evidence";
+import { renderServerEvidence } from "./feed-ingest-plan-server-report";
 
 export type WorkflowReportEvidence = {
   response: unknown; selected?: unknown; policy?: unknown; host?: unknown;
@@ -106,6 +108,7 @@ export async function readExecutionReport(directory: string) {
 
 export async function writeWorkflowReport(input: {
   root: string; directory: string; summaryPath?: string; runNumber: string; runId?: string;
+  attempt?: number;
 }) {
   const config = FeedIngestConfigSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan.json")).json());
   if (!config.workflow_reporting.enabled) return { status: "disabled" as const };
@@ -144,7 +147,14 @@ export async function writeWorkflowReport(input: {
       }
     }
   }
-  const markdown = `${report.markdown}\n\n## Per-run named entities\n\nPeople, places and organizations are recognized from the original title and full sanitized extracted article, not downloaded HTML. These names do not change scores or checks that decide whether an article is eligible.\n\n${entityEvidence}\n`;
+  const servers = await readServerEvidence(input.directory);
+  const expectedAttempt = input.attempt ?? (response !== undefined && "planning_complete" in response
+    ? response.attempt : response?.failure?.execution.attempt);
+  if (servers.some(server => server.run_id !== input.runNumber
+    || (expectedAttempt != null && server.attempt !== expectedAttempt))) {
+    throw new Error("Report server evidence belongs to another run or attempt");
+  }
+  const markdown = `${report.markdown}\n\n${renderServerEvidence(servers)}\n## Per-run named entities\n\nPeople, places and organizations are recognized from the original title and full sanitized extracted article, not downloaded HTML. These names do not change scores or checks that decide whether an article is eligible.\n\n${entityEvidence}\n`;
   const filename = workflowReportFilename({ ...input, ...(runId === undefined ? {} : { runId }) });
   await writeFile(join(input.directory, filename), markdown + diagnostics, "utf8");
   await appendFile(input.summaryPath, markdown, "utf8");
@@ -161,11 +171,12 @@ export function workflowReportFilename(input: { runNumber: string; runId?: strin
 }
 
 if (import.meta.main) {
-  const { RUNNER_TEMP, GITHUB_STEP_SUMMARY, GITHUB_RUN_ID, RUN_ID } = process.env;
+  const { RUNNER_TEMP, GITHUB_STEP_SUMMARY, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, RUN_ID } = process.env;
   if (!RUNNER_TEMP || !GITHUB_RUN_ID) throw new Error("Workflow report controls are missing");
   await writeWorkflowReport({
     root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
     runNumber: GITHUB_RUN_ID,
+    ...(GITHUB_RUN_ATTEMPT === undefined ? {} : { attempt: WriterIdentitySchema.shape.attempt.parse(Number(GITHUB_RUN_ATTEMPT)) }),
     ...(RUN_ID === undefined || RUN_ID === "" ? {} : { runId: RUN_ID }),
     ...(GITHUB_STEP_SUMMARY === undefined ? {} : { summaryPath: GITHUB_STEP_SUMMARY }),
   });

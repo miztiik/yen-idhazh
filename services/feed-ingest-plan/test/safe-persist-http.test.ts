@@ -4,22 +4,24 @@ import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { createRootContext, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { SafePersistDataCommitterSchema } from "@idhazh/data-delivery";
 import { createSafePersistApp } from "../scripts/safe-persist-http-api";
 import { deliverWorkflowMetadataHttp } from "../scripts/safe-persist-http-client";
 import { finalizeRunOutput } from "../scripts/finalize-run-output";
 import {
-  MetadataDeliveryResultSchema, SafePersistHttpReadySchema, SafePersistHttpStartupFailureSchema,
+  MetadataDeliveryResultSchema, SafePersistHttpReadySchema,
   SafePersistHttpStartupSchema,
 } from "../scripts/feed-ingest-plan-delivery-result";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { publicationGitRecording, publicationRecording } from "./publication-recordings";
 import { fixtureGit } from "./fixture-git";
 import { writeRecordedHostOutput } from "./host-output-recordings";
+import { ApiReadySchema, ApiStartupFailureSchema, ApiStartupSchema } from "../../typescript-api/src/api-startup";
+import { loadHonoSettings } from "../../typescript-api/src/load-settings";
 
 type Recording = Awaited<ReturnType<typeof publicationGitRecording>>;
-const serverEntry = fileURLToPath(new URL("../scripts/safe-persist-http-server.ts", import.meta.url));
+const serverEntry = fileURLToPath(new URL("../../typescript-api/src/index.ts", import.meta.url));
 const requestFor = (f: Recording, paths = f.commit.paths) => ({ runNumber: "700", attempt: 3, paths });
 const inputFor = (f: Recording) => ({
   root: f.repository, directory: f.directory, currentRunFiles: JSON.stringify(f.commit.paths), runNumber: "700", attempt: 3,
@@ -268,9 +270,14 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
   const f = await publicationGitRecording();
   try {
     const settings = ServiceSettingsSchema.parse(await Bun.file(join(f.repository, "config", "feed-ingest-plan-service.json")).json());
-    const startup = SafePersistHttpStartupSchema.parse({
+    const delivery = SafePersistHttpStartupSchema.parse({
       nonce: randomUUID(), settings, output_root: relative(f.repository, f.directory).replaceAll("\\", "/"),
       git_sha: f.identity.git_sha,
+    });
+    const startup = ApiStartupSchema.parse({
+      group: "delivery", delivery, server: await loadHonoSettings(f.repository),
+      directory: relative(f.repository, f.directory).replaceAll("\\", "/"),
+      run: { run_id: "700", attempt: 3, started_at: "2026-10-21T23:59:59Z", context: createRootContext() },
     });
     const invalid = Bun.spawn([process.execPath, serverEntry], {
       cwd: f.repository, stdin: "pipe", stdout: "pipe", stderr: "pipe",
@@ -281,7 +288,7 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
       new Response(invalid.stdout).text(), new Response(invalid.stderr).text(), invalid.exited,
     ]);
     expect(code).toBe(2);
-    expect(SafePersistHttpStartupFailureSchema.parse(JSON.parse(output)).code).toBe("SAFE_PERSIST_STARTUP_FAILED");
+    expect(ApiStartupFailureSchema.parse(JSON.parse(output)).code).toBe("TYPESCRIPT_API_STARTUP_FAILED");
     expect(() => process.kill(invalid.pid, 0)).toThrow();
     await assertReleased(settings.listener.port);
 
@@ -294,11 +301,11 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
       child.stdin.write(`${JSON.stringify(startup)}\n`);
       await child.stdin.flush();
       const ready = await waitForHealth(settings.listener.port, AbortSignal.timeout(settings.supervision.readiness_timeout_ms));
-      expect(ready).toMatchObject({ nonce: startup.nonce, pid: child.pid });
+      expect(ready).toMatchObject({ nonce: delivery.nonce, pid: child.pid });
       expect(ready.pid).not.toBe(process.pid);
       child.stdin.end();
       expect(await child.exited).toBe(0);
-      expect(SafePersistHttpReadySchema.parse(JSON.parse(await outputRead))).toEqual(ready);
+      expect(ApiReadySchema.parse(JSON.parse(await outputRead))).toMatchObject({ nonce: ready.nonce, pid: ready.pid, group: "delivery" });
       expect(await errorsRead).toBe("");
       expect(() => process.kill(child.pid, 0)).toThrow();
       await assertReleased(settings.listener.port);

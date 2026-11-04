@@ -4,6 +4,7 @@ import { z } from "zod";
 import { EventSourceSchema } from "./schemas/cloud-event.schema";
 
 const EventSourcesSchema = z.strictObject({
+  typescript_api: EventSourceSchema,
   planner: EventSourceSchema,
   summarizer: EventSourceSchema,
   workflow: EventSourceSchema,

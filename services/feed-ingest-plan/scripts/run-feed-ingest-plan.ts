@@ -8,9 +8,10 @@ import { join } from "node:path";
 import { runtimeFailureExecution, withPlannerFailure } from "../src/api/plan-failure";
 import { retainFailureThroughCleanup } from "../src/api/retain-failure-through-cleanup";
 import { retainWorkflowFailure } from "./retain-workflow-failure";
+import { captureWorkflowHostFingerprint } from "./feed-ingest-plan-host-fingerprint";
 
-async function runWorkflow(signal: AbortSignal) {
-  const { root, directory, inputs, startup, request, identity, registrations, host, outputPath, date }
+export async function runWorkflow(signal: AbortSignal, options: { serverEntry?: string } = {}) {
+  const { root, directory, inputs, startup, request, identity, registrations, outputPath, date }
     = await preparePlannerWorkflow(process.cwd(), process.env);
   let result: Awaited<ReturnType<typeof invokePlannerHttp>> | undefined;
   const capture = { operation: "workflow" as const, execution: runtimeFailureExecution(startup.runtime),
@@ -20,10 +21,17 @@ async function runWorkflow(signal: AbortSignal) {
     await writeGitHubOutputs(outputPath, {
       run_id: identity.run_id, date, planning_complete: "false",
       dump_raw_document_contents: String(inputs.settings.dump_raw_document_contents),
-      current_run_files: JSON.stringify(host.host.status === "recorded"
-        ? host.host.files.map(file => file.path) : []),
+      current_run_files: "[]",
     });
-    result = await invokePlannerHttp(inputs, startup, request, directory, { signal });
+    result = await invokePlannerHttp(inputs, startup, request, directory, {
+      signal, ...options,
+      beforePlan: async (origin, requestSignal) => {
+        await captureWorkflowHostFingerprint({
+          root, directory, stateRoot: inputs.outputRoot, identity, registrations,
+          origin, signal: requestSignal,
+        });
+      },
+    });
     if (!result.summary.planning_complete || result.summary.failure !== null || result.http_status !== 200) process.exitCode = 2;
   } catch (error) { failure = withPlannerFailure(error, capture); }
   const finish = async () => {

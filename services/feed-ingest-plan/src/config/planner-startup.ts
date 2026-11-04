@@ -7,8 +7,7 @@ import { ServiceSettingsSchema } from "./service-settings";
 export const PlannerStartupSchema = z.strictObject({
   nonce: z.uuid(),
   planning: FeedIngestConfigSchema,
-  settings: ServiceSettingsSchema.refine(value =>
-    ["127.0.0.1", "::1"].includes(value.listener.hostname), "Workflow listener must bind loopback"),
+  settings: ServiceSettingsSchema,
   output_root: z.string().min(1).refine(value =>
     !value.startsWith("/") && !value.includes("\\") && !value.includes(":"),
   "Output root must be relative to the child checkout with POSIX separators"),

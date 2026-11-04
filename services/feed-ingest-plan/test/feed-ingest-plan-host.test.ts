@@ -13,6 +13,8 @@ import { formatHostFingerprintSummary } from "../scripts/feed-ingest-plan-host-s
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
 import { renderUnavailablePlanMarkdown } from "../src/reporting";
 import { metadataRegistrations, recordedWorkflowHost } from "./host-recordings";
+import { serveApiApp } from "../../typescript-api/src/create-api-app";
+import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 
 const identity = { run_id: "2026-10-21-700", attempt: 1, git_sha: "a".repeat(40) };
 
@@ -81,11 +83,19 @@ test("workflow collection retains the actual host fingerprint beside planner fil
     for (const name of ["ledgers.json"]) {
       await copyFile(new URL(`../../../config/${name}`, import.meta.url), join(f.directory, "config", name));
     }
-    const evidence = await captureWorkflowHostFingerprint({
-      root: f.directory, directory, stateRoot: join(directory, "state"),
-      registryPath: join(f.directory, "config", "ledgers.json"),
-      identity, registrations: await metadataRegistrations(),
+    const shared = await serveApiApp({ hostname: "127.0.0.1", port: config.listen_port, idle_timeout_seconds: 30 }, {
+      identity: { event: "typescript_api_ready", nonce: crypto.randomUUID(), pid: process.pid,
+        port: config.listen_port, group: "machine", modules: ["machine"], enabled: true },
+      fingerprint: { config, settings, options: { outputRoot: join(directory, "state"),
+        registryPath: join(f.directory, "config", "ledgers.json") } },
+      probes: { config: await loadProbeConfig(new URL("../../../config/host-probes.json", import.meta.url)) },
     });
+    let evidence: Awaited<ReturnType<typeof captureWorkflowHostFingerprint>>;
+    try { evidence = await captureWorkflowHostFingerprint({
+      root: f.directory, directory, stateRoot: join(directory, "state"),
+      identity, registrations: await metadataRegistrations(),
+      origin: `http://127.0.0.1:${shared.port}`,
+    }); } finally { await shared.stop(); }
     const saved = WorkflowHostFingerprintSchema.parse(await Bun.file(join(directory, "host-fingerprint.json")).json());
     expect(saved).toEqual(evidence);
     expect(saved.host.status).toBe("recorded");
@@ -111,8 +121,9 @@ test("configured off does not start a listener, read missing host config, or cre
       await writeFile(join(f.directory, "config", "idhazh.json"), JSON.stringify({ ...settings,
         observability: { ...settings.observability, host_telemetry_enabled: true, host_fingerprint: true, [key]: false } }));
       const evidence = await captureWorkflowHostFingerprint({
-        root: f.directory, directory, stateRoot: join(directory, "state"), registryPath: "missing",
+        root: f.directory, directory, stateRoot: join(directory, "state"),
         identity, registrations: await metadataRegistrations(),
+        origin: "http://127.0.0.1:1",
       });
       expect(evidence.host).toEqual({ status: "disabled", reason: `observability.${key}=false` });
       const completed = await collectWorkflowFiles({ root: f.directory, directory, identity, registrations: await metadataRegistrations() });

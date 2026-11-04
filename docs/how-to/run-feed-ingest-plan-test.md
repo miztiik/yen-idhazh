@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -17,7 +17,10 @@ the Python pipeline and global health data are unchanged.
 
 The workflow calls `services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts`.
 Its preparation and HTTP client are separate modules. Execution supervises the
-real loopback server in a separate child process within one workflow step.
+shared TypeScript application in a separate child process within one workflow
+step. Its planning group includes the actual fingerprint and measurement
+handlers on the same socket. The address comes only from
+[`config/hono-server.json`](../reference/typescript-api-server.md#listener-authority).
 Validated private startup data preserves local input settings, invocation-only
 enablement, temporary output, run/attempt/revision identity and UTC clocks.
 Readiness must match that exact child and invocation, not merely an available
@@ -67,8 +70,10 @@ bypassed. Worker controls cannot change winners or fill missing article slots.
 The [selection rules](../architecture/sources/feed-curation.md) explain the
 global unique-URL capacity, cached scores and soft diversity adjustments.
 
-The workflow does not profile live planner CPU or RAM. It still records the
-configured host fingerprint and commits it with the planner ledgers.
+The workflow does not profile live planner CPU or RAM. After exact-child HTTP
+readiness, it records the configured host fingerprint through that same
+listener, then calls the planner. The host write retains its native identity
+and is committed with the planner ledgers.
 
 Each enabled manual run also writes the separate
 [article-entity diagnostic](../architecture/sources/planner-run-diagnostics.md#recognized-article-names).
@@ -84,6 +89,8 @@ changes, use the installed declared packages rather than a full Python group:
 ```text
 bun run --cwd packages/common-contracts check
 bun run --cwd packages/ledger-file-writer check
+bun run --cwd services/typescript-api check
+bun run --cwd services/typescript-api test
 bun run --cwd services/feed-ingest-plan check
 bun run --cwd services/feed-ingest-plan test
 ```
@@ -123,8 +130,9 @@ The generated bare-origin case executes the actual commit CLI, checks the
 new remote metadata without raw-day indexes, replays it safely and verifies that
 the checkout did not change. Helper-only coverage cannot certify this entry.
 `safe-persist-http.test.ts` checks real loopback delivery and exact remote bytes.
-The finalization cases also run the actual finalizer CLI through its separate
-delivery child and require the `safe_persist_http_completed` log event.
+The finalization cases also run the actual finalizer CLI through the same
+application restarted with its delivery group and require its
+`safe_persist_http_completed` CloudEvent.
 They retain report and metadata recovery checks after delivery failure.
 Independent writer and contract tests own native digest, identifier and
 historical ledger coverage. The workflow does not add a synthetic receipt.
@@ -187,16 +195,17 @@ Startup and finalization validate the supplied `GITHUB_SHA`; they do not query
 `HEAD`. The safe-persist child receives that identity through its existing
 private startup pipe, never through public planning or delivery controls.
 
-Six tasks follow `Collect and select articles with a supervised server`:
+Finalization keeps delivery, reporting and artifact preparation separate:
 
-1. `Commit ledgers and write report` starts its own supervised
-   [safe-persist HTTP child](../architecture/sources/feed-operator-api.md#safe-persist-http-delivery)
+1. `Commit ledgers` restarts the same supervised application with only its
+   [safe-persist routes](../architecture/sources/feed-operator-api.md#safe-persist-http-delivery)
    and sends one request for all verified completed ledgers. The existing
    adapter and Git engine perform delivery. The task closes and reaps that
-   child, then calls the Markdown API and prepares the upload directory.
+   child. `Write run report and annotations` then calls the Markdown API in
+   its own visible task; preparation remains independent.
    A delivery or report failure does not stop the remaining preparation;
    the task still fails after preserving its useful output.
-2. `List actual upload files as JSONL` uses the existing structured publisher
+2. `Prepare artifacts and list upload files as JSONL` uses the existing structured publisher
    to name each actual file relative to the ZIP root, then its total count.
    It reads only this run's prepared `artifacts` directory, follows the
    upload's ordinary file matching and excludes hidden files and directories.
@@ -224,8 +233,13 @@ Six tasks follow `Collect and select articles with a supervised server`:
    `article-entities-<UTC-day>-<numeric-run-id>-<attempt>.jsonl`. Each article
    record distinguishes empty name sets, incomplete analysis and omitted
    names. No file means no upload, not a successful empty result.
-6. `Finish and clean up` checks collection, finalization and the normal upload's
-   returned artifact identity, plus both diagnostic uploads when applicable.
+6. `Upload server failure logs` retains available
+   `hono-server_<yyyy_mm_dd>_<run>_<attempt>.log` files after failure or
+   cancellation. The date is the UTC run-start day. Native lifecycle evidence
+   is retained in the normal artifact even when the planner never replied.
+   There is no retention override.
+7. `Finish and clean up` checks collection, finalization and the normal upload's
+   returned artifact identity, plus diagnostic uploads when applicable.
    It rechecks the saved result and exact Git
    delivery receipt before removing only the temporary run directory.
    An earlier collection failure still fails the job after completed
@@ -264,6 +278,9 @@ completed planning. Only Run
 outcome and Needs attention are visible. Per-feed article results, Request
 counts and coverage, Why articles were not selected, Selected article evidence,
 Effective settings and Execution measurements use closed-by-default folds.
+The API servers fold reads actual startup and shutdown outcomes and log
+filenames, not terminal log matches. A failed file mirror is shown as
+unavailable without changing the API outcome.
 Routine notices do not repeat the tables;
 actionable run and progress warnings remain. The report cannot establish
 publication and stays separate from the delivery receipt.

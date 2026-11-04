@@ -1,10 +1,14 @@
 /** Run the production child lifecycle against recorded feed bytes and UTC clocks, without network access. */
-import { runPlannerServer, restorePlannerStartup } from "../scripts/feed-ingest-plan-server";
+import { runApiServer } from "../../typescript-api/src/index";
+import { restorePlannerStartup } from "../scripts/restore-planner-startup";
 import { readRecordings, RecordedTransport } from "./harvest-recordings";
 import { appendFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
-await runPlannerServer(async startup => {
+await runApiServer({ restorePlanner: async startup => {
+  if (await Bun.file(join(process.cwd(), "recorded-readiness-mismatch")).exists()) startup.nonce = randomUUID();
+  if (await Bun.file(join(process.cwd(), "recorded-runtime-mismatch")).exists()) startup.runtime.attempt++;
   const restored = await restorePlannerStartup(startup);
   const transport = new RecordedTransport(await readRecordings());
   writeFileSync(join(process.cwd(), "recorded-startup.json"), JSON.stringify({
@@ -34,4 +38,4 @@ await runPlannerServer(async startup => {
       observation_clock: () => new Date("2026-10-21T23:59:59Z"),
     },
   };
-});
+} });

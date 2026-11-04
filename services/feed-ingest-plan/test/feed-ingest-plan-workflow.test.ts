@@ -31,22 +31,35 @@ test("workflow preparation, supervised missing-history refusal, reports and outp
       join(fixture.directory, "config", "host-fingerprints.json"));
     await writeFile(join(fixture.directory, "config", "sources.json"),
       JSON.stringify({ feeds: [], retired: [], publishers: [] }));
+    const selected = await Bun.file(join(fixture.directory, "config", "idhazh.json")).json();
+    selected.observability.host_telemetry_enabled = true;
+    selected.observability.host_fingerprint = true;
+    selected.observability.host_fingerprint_placement_enabled = false;
+    selected.observability.host_fingerprint_bandwidth_jobs = [];
+    await writeFile(join(fixture.directory, "config", "idhazh.json"), JSON.stringify(selected));
     const script = [
       'import assert from "node:assert/strict";',
       'import { join } from "node:path";',
-      `import { preparePlannerWorkflow } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-workflow-inputs.ts", import.meta.url).href)};`,
-      `import { invokePlannerHttp } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-supervisor.ts", import.meta.url).href)};`,
       `import { readWorkflowDeliveryContext } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-current-files.ts", import.meta.url).href)};`,
       `import { writeWorkflowReport } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-report.ts", import.meta.url).href)};`,
       `import { prepareWorkflowArtifacts } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-artifacts.ts", import.meta.url).href)};`,
       'assert.equal(Bun.which("git"), null);',
       'const controls = JSON.parse(await Bun.stdin.text());',
-      'const prepared = await preparePlannerWorkflow(process.cwd(), controls.environment);',
-      'const result = await invokePlannerHttp(prepared.inputs, prepared.startup, prepared.request, prepared.directory, { serverEntry: controls.serverEntry });',
-      'assert.equal(result.summary.planning_complete, false);',
-      'assert.equal(result.summary.status, "failed");',
-      'assert.equal(result.summary.failure_code, "HISTORY_WINDOW_UNAVAILABLE");',
-      'const input = { root: prepared.root, directory: prepared.directory, runNumber: controls.environment.GITHUB_RUN_ID, attempt: 3, gitSha: controls.environment.GITHUB_SHA, summaryPath: join(prepared.directory, "job-summary.md") };',
+      `const taskProgram = ${JSON.stringify(`import { runWorkflow } from ${JSON.stringify(new URL("../scripts/run-feed-ingest-plan.ts", import.meta.url).href)}; await runWorkflow(new AbortController().signal, { serverEntry: ${JSON.stringify(fixture.serverEntry)} });`)};`,
+      'const task = Bun.spawn([process.execPath, "-e", taskProgram], { cwd: process.cwd(), env: { ...process.env, ...controls.environment }, stdout: "pipe", stderr: "pipe" });',
+      'const [output, error, code] = await Promise.all([new Response(task.stdout).text(), new Response(task.stderr).text(), task.exited]);',
+      'assert.equal(code, 2, output + error);',
+      'const directory = join(controls.environment.RUNNER_TEMP, "feed-ingest-plan");',
+      'const result = await Bun.file(join(directory, "response.json")).json();',
+      'assert.equal(result.planning_complete, false);',
+      'assert.equal(result.status, "failed");',
+      'assert.equal(result.failure_code, "HISTORY_WINDOW_UNAVAILABLE");',
+      'const host = await Bun.file(join(directory, "host-fingerprint.json")).json();',
+      'assert.equal(host.host.status, "recorded");',
+      'const server = await Bun.file(join(directory, "hono-server-planning.json")).json();',
+      'assert.equal(server.startup, "ready");',
+      'assert.equal(server.shutdown, "stopped");',
+      'const input = { root: process.cwd(), directory, runNumber: controls.environment.GITHUB_RUN_ID, attempt: 3, gitSha: controls.environment.GITHUB_SHA, summaryPath: join(directory, "job-summary.md") };',
       'const context = await readWorkflowDeliveryContext(input);',
       'assert.equal(context.identity.git_sha, input.gitSha);',
       'await assert.rejects(readWorkflowDeliveryContext({ ...input, gitSha: "b".repeat(40) }));',
@@ -54,7 +67,7 @@ test("workflow preparation, supervised missing-history refusal, reports and outp
       'const artifacts = await prepareWorkflowArtifacts(input);',
       'assert.equal(artifacts.artifact_directory, "artifacts");',
       'assert.equal(Bun.which("git"), null);',
-      'console.log(JSON.stringify({ git_unavailable: true, startup_and_http: true, missing_history_refused: true, supplied_identity: true, report_and_artifacts: true }));',
+      'console.log(JSON.stringify({ git_unavailable: true, startup_and_http: true, fingerprint_http: true, missing_history_refused: true, supplied_identity: true, report_and_artifacts: true }));',
     ].join("\n");
     const child = Bun.spawn([process.execPath, "-e", script], {
       cwd: fixture.directory, env: { ...process.env, PATH: "", Path: "" },
@@ -64,7 +77,6 @@ test("workflow preparation, supervised missing-history refusal, reports and outp
           GITHUB_OUTPUT: join(fixture.directory, "workflow-outputs"),
           GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "3", GITHUB_SHA: fixture.runtime.git_sha,
         },
-        serverEntry: fixture.serverEntry,
       })]),
       stdout: "pipe", stderr: "pipe",
     });
@@ -75,7 +87,7 @@ test("workflow preparation, supervised missing-history refusal, reports and outp
     const result = output.trim().split("\n").at(-1);
     if (result === undefined) throw new Error("The workflow boundary child returned no oracle result");
     expect(JSON.parse(result)).toEqual({
-      git_unavailable: true, startup_and_http: true, missing_history_refused: true,
+      git_unavailable: true, startup_and_http: true, fingerprint_http: true, missing_history_refused: true,
       supplied_identity: true, report_and_artifacts: true,
     });
   } finally { await fixture.close(); }
@@ -143,8 +155,8 @@ test("manual controls exercise the planner API and keep only required outputs", 
   });
   expect(plan.run).not.toContain("${{");
   const closing = steps.slice(steps.indexOf(plan) + 1);
-  expect(closing).toHaveLength(8);
-  const [cancellation, commit, report, finalize, upload, , entityUpload, finish] = closing;
+  expect(closing).toHaveLength(9);
+  const [cancellation, commit, report, finalize, upload, , entityUpload, serverUpload, finish] = closing;
   expect(controls.write_report).toMatchObject({ default: true, type: "boolean", required: false });
   expect(commit?.id).toBe("commit");
   expect(commit?.if).toBe("${{ always() }}");
@@ -179,7 +191,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(finalize?.run).not.toContain("git push");
   expect(upload?.id).toBe("upload");
   expect(upload?.uses).toBe("actions/upload-artifact@v7");
-  expect(steps.filter(step => step.uses === upload?.uses)).toHaveLength(3);
+  expect(steps.filter(step => step.uses === upload?.uses)).toHaveLength(4);
   expect(upload?.with?.archive).not.toBe(false);
   expect(upload?.with?.name).toBe("collect-and-select-articles-${{ github.run_id }}-${{ github.run_attempt }}");
   expect(upload?.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.finalize.outputs.artifact_directory }}");
@@ -192,6 +204,10 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(entityUpload?.with?.name).toBe("article-entities-${{ github.run_id }}-${{ github.run_attempt }}");
   expect(entityUpload?.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.finalize.outputs.article_entities }}");
   expect(entityUpload?.with?.["if-no-files-found"]).toBe("error");
+  expect(serverUpload?.id).toBe("upload-server-logs");
+  expect(serverUpload?.if).toBe("${{ always() && (failure() || cancelled()) && steps.finalize.outputs.server_logs != '' }}");
+  expect(serverUpload?.with?.["retention-days"]).toBeUndefined();
+  expect(serverUpload?.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.finalize.outputs.server_logs }}");
   expect(finish?.if).toContain("always()");
   expect(finish?.run).toBe("bun run services/feed-ingest-plan/scripts/finish-run-output.ts");
   expect(finish?.env).toEqual({
@@ -208,6 +224,9 @@ test("manual controls exercise the planner API and keep only required outputs", 
     ARTICLE_ENTITIES: "${{ steps.finalize.outputs.article_entities }}",
     ENTITY_UPLOAD_OUTCOME: "${{ steps.upload-article-entities.outcome }}",
     ENTITY_UPLOAD_ARTIFACT_ID: "${{ steps.upload-article-entities.outputs.artifact-id }}",
+    SERVER_LOGS: "${{ steps.finalize.outputs.server_logs }}",
+    SERVER_UPLOAD_OUTCOME: "${{ steps.upload-server-logs.outcome }}",
+    SERVER_UPLOAD_ARTIFACT_ID: "${{ steps.upload-server-logs.outputs.artifact-id }}",
   });
   expect(text).toContain("/state/raw/feed-ingest-plan/");
   expect(text).toContain("/state/compact/feed-ingest-plan/");
@@ -216,7 +235,8 @@ test("manual controls exercise the planner API and keep only required outputs", 
   const optional = steps.filter(step => step["continue-on-error"]);
   expect(optional).toHaveLength(0);
   expect(text).not.toContain("profile_machine_memory");
-  expect(text).not.toContain("services/host-probes");
+  expect(text).toContain("/services/host-probes/src/");
+  expect(text).toContain("/services/typescript-api/src/");
   expect(text).not.toContain("runtime.log");
   expect(text).not.toContain("delivery.log");
   expect(text).not.toContain("audited_complete");
@@ -338,7 +358,7 @@ test("the initial workflow checkout includes runtime code and every registered s
   const selection = steps.find(step => step.uses?.startsWith("actions/checkout@"))!.with?.["sparse-checkout"];
   if (typeof selection !== "string") throw new Error("Expected a named sparse selection");
   expect(selection).not.toContain("/services/feed-ingest-plan/test/");
-  expect(selection).not.toContain("/services/host-probes/");
+  expect(selection).not.toContain("/services/host-probes/test/");
   expect(selection).not.toContain("/tests/");
   const inputs = await loadPlanInputs(root);
   const entries = selection.trim().split("\n").map(value => value.trim());
@@ -355,11 +375,10 @@ test("the initial workflow checkout includes runtime code and every registered s
     "services/feed-ingest-plan/scripts/feed-ingest-plan-http-client.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-workflow-inputs.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-supervisor.ts",
-    "services/feed-ingest-plan/scripts/feed-ingest-plan-server.ts",
+    "services/feed-ingest-plan/scripts/restore-planner-startup.ts",
     "services/feed-ingest-plan/scripts/http-child-lifetime.ts",
     "services/feed-ingest-plan/scripts/safe-persist-http-api.ts",
     "services/feed-ingest-plan/scripts/safe-persist-http-client.ts",
-    "services/feed-ingest-plan/scripts/safe-persist-http-server.ts",
     "services/feed-ingest-plan/src/config/planner-startup.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts",
     "services/feed-ingest-plan/scripts/finalize-run-output.ts",
@@ -380,6 +399,23 @@ test("the initial workflow checkout includes runtime code and every registered s
     "services/host-fingerprints/package.json",
     "services/host-fingerprints/bun.lock",
     "services/host-fingerprints/src/api/local-fingerprint.ts",
+    "services/host-probes/package.json",
+    "services/host-probes/bun.lock",
+    "services/host-probes/src/api/server.ts",
+    "services/host-probes/src/task-profile/collector.worker.ts",
+    "services/typescript-api/package.json",
+    "services/typescript-api/bun.lock",
+    "services/typescript-api/src/index.ts",
+    "services/typescript-api/src/create-api-app.ts",
+    "services/typescript-api/src/api-startup.ts",
+    "services/typescript-api/src/load-settings.ts",
+    "services/typescript-api/src/read-api-readiness.ts",
+    "services/typescript-api/src/read-server-evidence.ts",
+    "services/typescript-api/src/supervise-api-task.ts",
+    "services/typescript-api/src/write-server-event.ts",
+    "services/typescript-api/src/server-evidence.ts",
+    "config/hono-server.json",
+    "config/host-probes.json",
     "config/feed-ingest-plan-service.json",
     "config/feed-ingest-plan.json",
     "config/taxonomy.json",

@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -355,6 +355,29 @@ bun run --cwd .\services\feed-ingest-plan test .\test\plan-entry-points.test.ts 
 ```
 
 The shared selection lists affected surfaces; it does not execute Bun.
+For the composed feed listener, install the declared native modules before
+the composition package, using their frozen locks. Check the actual shared
+server and its named workflow dependants:
+
+```powershell
+bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
+bun install --frozen-lockfile --cwd .\services\host-fingerprints
+bun install --frozen-lockfile --cwd .\services\host-probes
+bun install --frozen-lockfile --cwd .\services\typescript-api
+bun run --cwd .\services\typescript-api check
+bun run --cwd .\services\typescript-api test
+bun run --cwd .\services\feed-ingest-plan test .\test\feed-ingest-plan-supervisor.test.ts .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-workflow.test.ts .\test\feed-ingest-plan-report.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\feed-ingest-plan-host.test.ts
+```
+
+The shared-port oracle uses real fingerprint and sampling handlers, recorded
+source fetch/parse operations and real profile-worker shutdown. Existing
+engine cases still cover uncertain startup/lookup/release replies and
+cancellation during preparation. Failed startup retains reportable lifecycle
+evidence and available log artifacts independently of a planner result.
+These checks do not dispatch the data-writing workflow or prove live feed
+delivery. The [server reference](../reference/typescript-api-server.md) owns
+configuration, current-task evidence and log semantics.
+
 The native package command supplies its declared timeout. Keep shorter
 process deadlines and existing independent failure checks; do not raise
 timeouts to retain repeated planning work.

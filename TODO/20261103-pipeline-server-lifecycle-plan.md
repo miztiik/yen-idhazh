@@ -136,7 +136,7 @@ Table I - PR sequence
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| I1 | 1 | Serve TypeScript APIs together in the feed workflow | - | A | PENDING | - | - | - |
+| I1 | 1 | Serve TypeScript APIs together in the feed workflow | - | A | IN-FLIGHT | sturdy-waffle (shared-hono-server) | - | Shared Hono server |
 | I2 | 2 | Serve HHEM and llama through one FastAPI application | - | B | DONE | fuzzy-giggle (shared-fastapi-server) | #1906 | Shared FastAPI server |
 | I3 | 3 | Deliver the live summary-eval-tests workflow | 1, 2 | C | PENDING | - | - | - |
 
@@ -152,40 +152,63 @@ Table I - PR sequence
   - `services/typescript-api/src/index.ts`
   - `services/typescript-api/src/create-api-app.ts`
   - `services/typescript-api/src/load-settings.ts`
+  - `services/typescript-api/src/api-startup.ts`
+  - `services/typescript-api/src/server-evidence.ts`
+  - `services/typescript-api/src/read-server-evidence.ts`
+  - `services/typescript-api/src/read-api-readiness.ts`
+  - `services/typescript-api/src/supervise-api-task.ts`
   - `services/typescript-api/src/write-server-event.ts`
   - `services/typescript-api/test/api-composition.test.ts`
+  - `services/typescript-api/test/server-events.test.ts`
+  - `services/typescript-api/test/write-server-events.ts`
   - `services/feed-ingest-plan/package.json`
-  - `services/feed-ingest-plan/bun.lock`
-  - `services/feed-ingest-plan/src/api/server.ts`
   - `services/feed-ingest-plan/src/config/service-settings.ts`
+  - `services/feed-ingest-plan/src/config/planner-startup.ts`
   - `services/feed-ingest-plan/scripts/http-child-lifetime.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-supervisor.ts`
-  - `services/feed-ingest-plan/scripts/feed-ingest-plan-http-client.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-workflow-inputs.ts`
-  - `services/feed-ingest-plan/scripts/feed-ingest-plan-server.ts`
+  - `services/feed-ingest-plan/scripts/restore-planner-startup.ts`
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-server.ts` - remove the replaced launcher.
   - `services/feed-ingest-plan/scripts/safe-persist-http-client.ts`
-  - `services/feed-ingest-plan/scripts/safe-persist-http-server.ts`
+  - `services/feed-ingest-plan/scripts/safe-persist-http-server.ts` - remove the replaced launcher.
   - `services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts`
+  - `services/feed-ingest-plan/scripts/finish-run-output.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts`
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-server-report.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts`
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-server-artifacts.ts`
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-upload-inventory.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-supervisor.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts`
-  - `services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts`
-  - `services/host-fingerprints/src/index.ts`
-  - `services/host-fingerprints/src/api/server.ts`
+  - `services/feed-ingest-plan/test/feed-ingest-plan-finalization.test.ts`
+  - `services/feed-ingest-plan/test/feed-ingest-plan-host.test.ts`
+  - `services/feed-ingest-plan/test/feed-ingest-plan-delivery.test.ts`
+  - `services/feed-ingest-plan/test/safe-persist-http.test.ts`
+  - `services/feed-ingest-plan/test/planner-process-recordings.ts`
+  - `services/feed-ingest-plan/test/planner-server-recording.ts`
+  - `services/feed-ingest-plan/test/planner-supervisor-recording.ts`
+  - `services/feed-ingest-plan/test/planner-cli-recording.ts`
+  - `services/feed-ingest-plan/test/publication-recordings.ts`
+  - `services/feed-ingest-plan/test/run-policy.test.ts`
+  - `services/host-fingerprints/package.json`
+  - `services/host-fingerprints/src/api/local-fingerprint.ts`
   - `services/host-probes/package.json`
   - `services/host-probes/src/index.ts`
-  - `services/host-probes/src/api/server.ts`
+  - `packages/common-contracts/src/load-event-sources.ts`
   - `config/hono-server.json`
-  - `config/typescript-event-sources.json` - use the upstream metadata version.
-  - `config/feed-ingest-plan-service.json`
+  - `config/typescript-event-sources.json` - retain existing sources and name the composition producer.
   - `.github/workflows/feed-ingest-plan-test.yml`
   - `.github/workflows/ci.yml`
   - `frontend/scripts/test-scope.ts`
   - `frontend/scripts/tests/test-scope.test.mjs`
   - `docs/how-to/run-feed-ingest-plan-test.md`
   - `docs/reference/host-probe-api.md`
+  - `docs/reference/host-metrics.md`
+  - `docs/reference/typescript-api-server.md`
   - `docs/reference/repository-layout.md`
+  - `docs/architecture/sources/feed-operator-api.md`
+  - `docs/architecture/sources/feed-plan-runner.md`
+  - `docs/architecture/contracts/identity.md`
   - `docs/how-to/run-the-gates.md`
 
 Table J - Detailed tasks

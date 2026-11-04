@@ -11,6 +11,10 @@ import { metadataRegistrations } from "./host-recordings";
 import { source } from "./harvest-recordings";
 import { writePlannerOutputRecording } from "./planner-output-recordings";
 import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { readServerEvidence } from "../../typescript-api/src/read-server-evidence";
+import { writeWorkflowReport } from "../scripts/feed-ingest-plan-report";
+import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
+import { HonoServerSettingsSchema, loadHonoSettings } from "../../typescript-api/src/load-settings";
 
 function assertReleased(port: number) {
   const probe = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response() });
@@ -36,6 +40,27 @@ test("an occupied port fails without stopping or planning against the unrelated 
     })).rejects.toMatchObject({ code: "PLANNER_BIND_FAILED" });
     expect(requests).toBe(0);
     expect(await Bun.file(join(fixture.evidence, "response.json")).exists()).toBe(false);
+    const [server] = await readServerEvidence(fixture.evidence, { run_id: "700", attempt: 3 });
+    expect(server).toMatchObject({
+      group: "planning", startup: "failed", error_code: "PLANNER_BIND_FAILED", shutdown: "stopped",
+    });
+    expect(server?.startup_ms).toBeGreaterThanOrEqual(0);
+    if (server === undefined) throw new Error("Failed startup must retain its observed server outcome");
+    expect(await Bun.file(join(fixture.evidence, server.log_filename)).exists()).toBe(true);
+    const report = await writeWorkflowReport({
+      root: fixture.directory, directory: fixture.evidence, runNumber: "700", runId: "2026-10-21-700",
+      summaryPath: join(fixture.evidence, "summary.md"),
+    });
+    expect(report.status).toBe("written");
+    if (report.status !== "written") throw new Error("Configured reporting must retain failed startup");
+    expect(report.markdown).toContain("PLANNER_BIND_FAILED");
+    const artifacts = await prepareWorkflowArtifacts({
+      root: fixture.directory, directory: fixture.evidence, runNumber: "700", attempt: 3,
+      gitSha: fixture.startup.runtime.git_sha, runId: "2026-10-21-700", reportFilename: report.filename,
+    });
+    expect(artifacts.server_logs).toBe("server-logs");
+    expect(await Bun.file(join(fixture.evidence, "server-logs", server.log_filename)).text())
+      .toBe(await Bun.file(join(fixture.evidence, server.log_filename)).text());
     expect((await fetch(`http://127.0.0.1:${occupied.port}`)).status).toBe(200);
   } finally { await occupied.stop(true); await fixture.close(); }
 });
@@ -63,19 +88,17 @@ test("expired readiness cancels startup and leaves no listener", async () => {
 });
 
 test("identity mismatch refuses HTTP work and closes the owned child", async () => {
-  const fixture = await recordedPlannerProcess();
-  try {
-    // The parent expects a different port; the child must never receive a plan.
-    fixture.inputs.settings = {
-      ...fixture.inputs.settings,
-      listener: { ...fixture.inputs.settings.listener, port: fixture.inputs.settings.listener.port + 1 },
-    };
-    await expect(invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
-      serverEntry: fixture.serverEntry,
-    })).rejects.toMatchObject({ code: "PLANNER_READY_IDENTITY" });
-    expect(await Bun.file(join(fixture.evidence, "response.json")).exists()).toBe(false);
-    await assertReleased(fixture.startup.settings.listener.port);
-  } finally { await fixture.close(); }
+  for (const marker of ["recorded-readiness-mismatch", "recorded-runtime-mismatch"]) {
+    const fixture = await recordedPlannerProcess();
+    try {
+      await writeFile(join(fixture.directory, marker), "Return different captured child controls");
+      await expect(invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
+        serverEntry: fixture.serverEntry,
+      })).rejects.toMatchObject({ code: "PLANNER_READY_IDENTITY" });
+      expect(await Bun.file(join(fixture.evidence, "response.json")).exists()).toBe(false);
+      await assertReleased(fixture.startup.settings.listener.port);
+    } finally { await fixture.close(); }
+  }
 });
 
 test("cancellation during real recorded feed work reaps the child and releases its port", async () => {
@@ -172,9 +195,8 @@ test("startup rejects executable runtime members, unknown controls and non-loopb
     expect(PlannerStartupSchema.safeParse({
       ...fixture.startup, runtime: { ...fixture.startup.runtime, clock: () => new Date() },
     }).success).toBe(false);
-    expect(PlannerStartupSchema.safeParse({
-      ...fixture.startup, settings: { ...fixture.startup.settings,
-        listener: { ...fixture.startup.settings.listener, hostname: "0.0.0.0" } },
+    expect(HonoServerSettingsSchema.safeParse({
+      ...await loadHonoSettings(fixture.inputs.root), hostname: "0.0.0.0",
     }).success).toBe(false);
     expect(PlannerStartupSchema.safeParse({ ...fixture.startup, output_root: "C:\\state" }).success).toBe(false);
 });

@@ -10,6 +10,22 @@ import { options, selection } from '../run-checks.ts';
 import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+test('composed TypeScript APIs select the native gate and all named module dependants', () => {
+	for (const path of ['services/typescript-api/src/create-api-app.ts',
+		'services/feed-ingest-plan/scripts/http-child-lifetime.ts',
+		'services/host-fingerprints/src/api/server.ts', 'services/host-probes/src/api/server.ts',
+		'config/hono-server.json', '.github/workflows/feed-ingest-plan-test.yml']) {
+		for (const separator of ['/', '\\']) {
+			const selected = selectPaths([path.replaceAll('/', separator)]);
+			assert.deepEqual(selected.groups, ['backend']);
+			assert.match(selected.reasons[0].reason, /composition, planner, fingerprints and probes/);
+			assert.equal(ciAnswer([path], true).code, true);
+			assert.equal(ciAnswer([path], true).browser, false);
+		}
+	}
+	assert.deepEqual(selectPaths(['packages/common-contracts/src/load-event-sources.ts']).groups,
+		['backend', ...FRONTEND_GROUPS]);
+});
 test('Pipelines retained and native evidence joins representative groups without a panels matrix', () => {
 	for (const separator of ['/', '\\']) {
 		for (const path of [

@@ -26,7 +26,10 @@ export async function recordedPlannerProcess(
   try {
     const configRoot = new URL("../../../config/", import.meta.url);
     await mkdir(join(fixture.directory, "config"));
-    for (const name of ["idhazh.json", "ledgers.json", "data-delivery.json", "typescript-event-sources.json"]) {
+    for (const name of [
+      "idhazh.json", "ledgers.json", "data-delivery.json", "typescript-event-sources.json",
+      "host-fingerprints.json", "host-probes.json",
+    ]) {
       await writeFile(join(fixture.directory, "config", name), await Bun.file(new URL(name, configRoot)).text());
     }
     const settings = { ...fixture.inputs.settings, enabled: false };
@@ -36,6 +39,10 @@ export async function recordedPlannerProcess(
       settings.listener.port = reservation.port!;
       await reservation.stop(true);
     }
+    const server = await Bun.file(new URL("hono-server.json", configRoot)).json();
+    await writeFile(join(fixture.directory, "config", "hono-server.json"), JSON.stringify({
+      ...server, port: settings.listener.port,
+    }));
     await writeFile(join(fixture.directory, "config", "feed-ingest-plan-service.json"), JSON.stringify(settings));
     await writeFile(join(fixture.directory, "config", "feed-ingest-plan.json"), JSON.stringify(fixture.inputs.harvest.config));
     await writeFile(join(fixture.directory, "config", "sources.json"), JSON.stringify({

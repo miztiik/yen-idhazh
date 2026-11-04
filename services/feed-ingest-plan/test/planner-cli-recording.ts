@@ -2,7 +2,7 @@
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { PlannerStartupSchema } from "../src/config/planner-startup";
-import { restorePlannerStartup } from "../scripts/feed-ingest-plan-server";
+import { restorePlannerStartup } from "../scripts/restore-planner-startup";
 import { main } from "../src/index";
 import { describePlanError } from "../src/api/plan-request";
 import { writeJsonLine } from "../src/logging/structured-logger";

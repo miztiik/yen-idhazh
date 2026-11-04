@@ -1,4 +1,5 @@
 {
+  "typescript_api": "/services/typescript-api",
   "planner": "/services/feed-ingest-plan",
   "summarizer": "/services/summarizer",
   "workflow": "/workflows/ai-pipeline"

@@ -2,6 +2,8 @@
 import { loadConfig } from "./config";
 import { serveSamples } from "./api/server";
 import { sampleHost } from "./probe/sample-host";
+export { createSampleHandler } from "./api/server";
+export { loadConfig } from "./config";
 
 async function main(): Promise<void> {
   const args = Bun.argv.slice(2);

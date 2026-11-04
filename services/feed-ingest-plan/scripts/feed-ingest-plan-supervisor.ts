@@ -1,16 +1,14 @@
 /** Keep one owned planner child alive through its HTTP calls and reap it on every exit path. */
 import { randomUUID } from "node:crypto";
 import { relative } from "node:path";
-import { fileURLToPath } from "node:url";
-import { z } from "zod";
 import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
-import { PlannerReadySchema, PlannerStartupSchema, PlannerStartupFailureSchema } from "../src/config/planner-startup";
+import { PlannerStartupSchema } from "../src/config/planner-startup";
 import type { PlannerStartup } from "../src/config/planner-startup";
 import type { PlanInputs } from "../src/load-plan-inputs";
-import { PlanError } from "../src/api/plan-request";
 import type { PlanRequest } from "../src/api/plan-request";
 import { requestPlannerHttp } from "./feed-ingest-plan-http-client";
-import { superviseHttpChild } from "./http-child-lifetime";
+import { superviseApiTask } from "../../typescript-api/src/supervise-api-task";
+import { loadHonoSettings } from "../../typescript-api/src/load-settings";
 import { runtimeFailureExecution } from "../src/api/plan-failure";
 import { operationMetadata } from "../src/api/operation-context";
 
@@ -23,34 +21,27 @@ export function createPlannerStartup(inputs: PlanInputs, runtime: PlannerStartup
 
 export async function invokePlannerHttp(
   inputs: PlanInputs, startup: PlannerStartup, request: PlanRequest, directory: string,
-  options: { signal?: AbortSignal; serverEntry?: string } = {},
+  options: {
+    signal?: AbortSignal; serverEntry?: string;
+    beforePlan?: (origin: string, signal: AbortSignal) => Promise<void>;
+  } = {},
 ) {
-  return superviseHttpChild({
-    root: inputs.root, kind: "PLANNER", settings: inputs.settings,
-    startup: PlannerStartupSchema.parse(startup),
+  return superviseApiTask({
+    root: inputs.root, kind: "PLANNER",
+    startup: {
+      group: "planning", server: await loadHonoSettings(inputs.root),
+      directory: relative(inputs.root, directory).replaceAll("\\", "/"),
+      run: { run_id: startup.runtime.run_number, attempt: startup.runtime.attempt,
+        started_at: startup.runtime.captured_at, context: operationMetadata(startup.runtime) },
+      planner: PlannerStartupSchema.parse(startup),
+    },
     capture: { operation: "workflow", execution: runtimeFailureExecution(startup.runtime),
       limits: inputs.settings.diagnostics.failure },
-    serverEntry: options.serverEntry ?? fileURLToPath(new URL("./feed-ingest-plan-server.ts", import.meta.url)),
+    ...(options.serverEntry === undefined ? {} : { serverEntry: options.serverEntry }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
-    ready: async (message, pid, signal) => {
-      const ready = z.union([PlannerReadySchema, PlannerStartupFailureSchema]).parse(message);
-      if (ready.event === "planner_startup_failed") throw new PlanError(ready.code, ready.message, null, { failure: ready.failure });
-      if (ready.pid !== pid || ready.nonce !== startup.nonce
-        || JSON.stringify(ready.runtime) !== JSON.stringify(startup.runtime)
-        || ready.port !== inputs.settings.listener.port) {
-        throw new PlanError("PLANNER_READY_IDENTITY", "Readiness does not match the owned child and invocation");
-      }
-      const hostname = inputs.settings.listener.hostname;
-      const base = `http://${hostname === "::1" ? "[::1]" : hostname}:${ready.port}${PLANNER_API_PREFIX}`;
-      await fetch(`${base}/health`, { signal }).then(async response => {
-        const body = z.object({ identity: PlannerReadySchema, planner_enabled: z.boolean() }).parse(await response.json());
-        if (response.status !== 200 || body.planner_enabled !== true
-          || JSON.stringify(PlannerReadySchema.parse(body.identity)) !== JSON.stringify(ready)) {
-          throw new PlanError("PLANNER_READY_IDENTITY", "HTTP readiness does not match the owned child");
-        }
-      });
-      return base;
+    request: async (origin, signal) => {
+      await options.beforePlan?.(origin, signal);
+      return requestPlannerHttp(`${origin}${PLANNER_API_PREFIX}`, inputs, request, directory, signal, operationMetadata(startup.runtime));
     },
-    request: (base, signal) => requestPlannerHttp(base, inputs, request, directory, signal, operationMetadata(startup.runtime)),
   });
 }

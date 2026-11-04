@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import { FeedIngestConfigSchema } from "@idhazh/common-contracts";
 import { createPlannerStartup } from "../scripts/feed-ingest-plan-supervisor";
-import { restorePlannerStartup } from "../scripts/feed-ingest-plan-server";
+import { restorePlannerStartup } from "../scripts/restore-planner-startup";
 import { PlannerStartupSchema } from "../src/config/planner-startup";
 import { stageConfigFingerprint } from "../src/api/operation-context";
 import { PlanRequestSchema } from "../src/api/plan-request";

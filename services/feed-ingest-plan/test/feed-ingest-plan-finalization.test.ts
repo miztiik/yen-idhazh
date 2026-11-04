@@ -68,9 +68,9 @@ test("one Git delivery precedes the report and prepares only the selected handof
       });
       expect(finalized.code, finalized.errors).toBe(0);
       if (operation === "commit-ledgers") {
-        expect(finalized.errors).toContain('"event":"safe_persist_http_completed"');
+        expect(finalized.errors).toContain('"type":"safe_persist_http_completed"');
         expect(await Bun.file(join(f.directory, "feed-ingest-report-2026-10-21-700.md")).exists()).toBe(false);
-      } else expect(finalized.errors).not.toContain('"event":"safe_persist_http_completed"');
+      } else expect(finalized.errors).not.toContain('"type":"safe_persist_http_completed"');
       expect(finalized.errors).not.toContain('"event":"safe_persist_http_failed"');
       expect(finalized.errors).not.toMatch(/[A-Za-z]:[\\/]/);
       expect(finalized.errors).not.toContain("article_text");
@@ -86,10 +86,11 @@ test("one Git delivery precedes the report and prepares only the selected handof
     const artifacts = join(f.directory, "artifacts");
     expect((await readdir(artifacts)).sort()).toEqual([
       "700-3-delivery-result.json", "700-3-response.json", "700-3-selected-articles.json", "feed-ingest-report-2026-10-21-700.md",
+      "hono-server-delivery.json",
     ]);
     const inventory: FeedIngestEvent[] = [];
     expect(await publishUploadInventory({ directory: artifacts, runNumber: "700",
-      write: event => { inventory.push(event); } })).toBe(4);
+      write: event => { inventory.push(event); } })).toBe(5);
     expect(inventory.flatMap(event => typeof event.data.details.file === "string" ? [event.data.details.file] : []).sort())
       .toEqual((await readdir(artifacts)).sort());
     const selected = await readFile(join(f.repository, f.summary.selected_articles_artifact!));
