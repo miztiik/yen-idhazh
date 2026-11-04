@@ -222,12 +222,15 @@ directory:
 npm --prefix .\frontend run test:changed -- --list
 bun install --frozen-lockfile --cwd .\packages\common-contracts
 bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
+bun install --frozen-lockfile --cwd .\packages\data-delivery
 Set-Location .\services\hhem-evaluator
 uv sync --frozen --group dev
 uv run --frozen python .\scripts\prepare-unieval-resources.py --root '..\..'
 uv run --frozen ruff check src tests scripts
-uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-hhem
-uv run --frozen mypy src tests ../../.github/scripts/summary-eval-hhem/summary_eval_pipeline
+Push-Location ..\..
+uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
+Pop-Location
+uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
 uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test_event_ids.py tests/test_llama_contracts.py tests/test_server_events.py
 ```
 
@@ -286,24 +289,41 @@ the captured model identity. Existing full-suite merge-candidate gates remain un
 The [service reference](../reference/hhem-evaluation-api.md) owns the fields
 and dependency boundary.
 
-For the manual caller, prepare the existing locked host APIs from the
-repository root, then run the named modules from the service directory:
+For the manual caller, complete the native preparation above, then prepare the
+existing locked host APIs and shared application from the repository root.
+Run the named modules from the service directory:
 
 ```powershell
 bun install --frozen-lockfile --cwd .\services\host-probes
 bun install --frozen-lockfile --cwd .\services\host-fingerprints
+bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
+bun install --frozen-lockfile --cwd .\services\typescript-api
 Set-Location .\services\hhem-evaluator
 uv run --frozen ruff check src tests scripts
-uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-hhem
-uv run --frozen mypy src tests ../../.github/scripts/summary-eval-hhem/summary_eval_pipeline
-uv run --frozen pytest tests/test_host_profile_reader_parity.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_pipeline_report.py tests/test_manual_workflow.py
+Push-Location ..\..
+uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
+Pop-Location
+uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
+uv run --frozen pytest tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_pipeline_evaluation.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
 ```
 
-The host compatibility test exports the actual native schemas through Bun.
+The host compatibility test exports the actual native schemas through Bun,
+including the consumed shared-server outcomes. The generation checks bind the
+source, answer, model and run before HHEM can start. Separate declaration
+invocations and the named form-default check keep model selection real.
+Run workflow Ruff from the repository root so its backend source discovery
+matches the repository-wide gate; an explicit config path from the service
+directory changes how Ruff resolves relative source roots.
 Missing preparation fails; it does not skip. Caller integration composes the
 real ASGI handler/controller and the native host handler/collector over test
 pipes with named proc fixtures. It opens no HTTP listener. The existing
 Windows asyncio socket-pair limitation above also applies to these cases.
+The native launch-boundary cases additionally require Linux `setpriv` and
+the kernel's parent-death and child-adoption operations. They use actual
+processes and a private pre-arm pipe, not model weights or network access.
+They prove refusal when the owner dies before protection is armed, confirmed
+kernel stop after exec, and normal same-PID startup/shutdown. Linux CI runs
+these cases; their Windows skips do not count as launch-boundary proof.
 Owned-process fixtures launch the actual CPython executable with the same
 environment's installed packages: a Windows virtual-environment redirector
 has a different PID. The runtime ownership check stays strict.

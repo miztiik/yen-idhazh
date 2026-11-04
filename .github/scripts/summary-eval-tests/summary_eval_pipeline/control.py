@@ -1,4 +1,4 @@
-"""Which private body-free packets prove an owned service's startup and shutdown?"""
+"""Which private packets identify a phase's shared API and machine supervisor?"""
 
 from typing import Annotated, Literal
 
@@ -6,33 +6,34 @@ from hhem_evaluator.contracts.base import (
     CommitId,
     NativeContract,
     PositiveCount,
-    SchemaVersion,
     Uuid4,
 )
 from hhem_evaluator.contracts.service_settings import StartupContext
 from pydantic import Field, RootModel
 
-from .contracts import Hardware
-from .host_reader import MachineUsage
+from .contracts import Hardware, PhaseName, RunIdentity, WorkflowVersion
+from .host_reader import HonoServerReader, MachineUsage
 
 
 class StartupPacket(NativeContract):
-    version: SchemaVersion
+    version: WorkflowVersion
     startup_id: Uuid4
     context: StartupContext
     git_sha: CommitId | None = None
     attempt: PositiveCount = 1
     request_id: Uuid4 | None = None
     correlation_id: Uuid4 | None = None
+    phase: PhaseName = "evaluation"
+    run: RunIdentity | None = None
 
 
 class ControlPacket(NativeContract):
-    version: SchemaVersion
+    version: WorkflowVersion
 
 
 class ApiReady(ControlPacket):
     kind: Literal["ready"]
-    service: Literal["hhem"]
+    service: Literal["api"]
     startup_id: Uuid4
     pid: PositiveCount
     service_instance_id: Uuid4
@@ -50,17 +51,19 @@ class HostReady(ControlPacket):
 
 class ServiceStopped(ControlPacket):
     kind: Literal["stopped"]
-    service: Literal["hhem", "host"]
+    service: Literal["api", "host"]
     startup_id: Uuid4
     pid: PositiveCount
     clean: bool
     worker_exit_confirmed: bool | None
     machine: MachineUsage | None = None
+    server: HonoServerReader | None = None
+    log_available: bool | None = None
 
 
 class ServiceStartFailed(ControlPacket):
     kind: Literal["failed"]
-    service: Literal["hhem", "host"]
+    service: Literal["api", "host"]
     startup_id: Uuid4
     pid: PositiveCount
 

@@ -2,7 +2,8 @@
 import { z } from "../../host-probes/node_modules/zod";
 import { createInterface } from "node:readline";
 import { loadConfig, ProbeConfigSchema } from "../../host-probes/src/config";
-import { createSampleHandler, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../host-probes/src/api/server";
+import { START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../host-probes/src/api/server";
+import { createApiApp } from "../../typescript-api/src/create-api-app";
 import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../../host-probes/src/api/task-command-schema";
 import { startTaskProfile } from "../../host-probes/src/task-profile/task-profiler";
 import type { TaskProfileSession } from "../../host-probes/src/task-profile/task-profiler";
@@ -12,12 +13,12 @@ import type { TaskProfile } from "../../host-probes/src/task-profile/profile-sch
 import { OperationMetadataSchema } from "../../../packages/common-contracts/src/schemas/operation-metadata.schema";
 import type { OperationMetadata } from "../../../packages/common-contracts/src/schemas/operation-metadata.schema";
 import { HostFingerprintRowSchema } from "../../../packages/common-contracts/src/schemas/host-fingerprint.schema";
-import { createFingerprintHandler, FINGERPRINT_PATH } from "../../host-fingerprints/src/api/server";
+import { FINGERPRINT_PATH } from "../../host-fingerprints/src/api/server";
 import { fixture } from "../../host-fingerprints/test/fixture";
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
-import { projectMachineProfile } from "../../../.github/scripts/summary-eval-hhem/project-profile";
-import { HardwareSchema } from "../../../.github/scripts/summary-eval-hhem/hardware";
+import { projectMachineProfile, HardwareSchema } from "../../../.github/scripts/summary-eval-tests/machine-results";
+import { ServerEvidenceSchema } from "../../typescript-api/src/server-evidence";
 
 function emit(value: unknown): void { process.stdout.write(JSON.stringify(value) + "\n"); }
 
@@ -25,10 +26,11 @@ if (Bun.argv[2] === "schemas") {
   emit({
     hardware: z.toJSONSchema(HostFingerprintRowSchema),
     machine: z.toJSONSchema(TaskProfileSchema),
+    server: z.toJSONSchema(ServerEvidenceSchema),
   });
 } else if (Bun.argv[2] === "workflow") {
   emit(Bun.YAML.parse(await Bun.file(new URL(
-    "../../../.github/workflows/hhem-evaluation-api-test.yml", import.meta.url,
+    "../../../.github/workflows/summary-eval-tests.yml", import.meta.url,
   )).text()));
 } else {
   const bootstrap = z.strictObject({
@@ -38,7 +40,7 @@ if (Bun.argv[2] === "schemas") {
   });
   const command = z.strictObject({ kind: z.literal("stop"), outcome: z.enum(["success", "error"]) });
   let session: TaskProfileSession | null = null;
-  let handler: ReturnType<typeof createSampleHandler> | undefined;
+  let handler: ReturnType<typeof createApiApp> | undefined;
   let handle: string | undefined;
   let operation: OperationMetadata | undefined;
   let started = false;
@@ -58,17 +60,6 @@ if (Bun.argv[2] === "schemas") {
             memory_enabled: false, ...input.task_profile,
           },
         });
-        const fingerprintHandler = createFingerprintHandler(f.config, f.settings, {
-          outputRoot: join(f.directory, "state"), inspection: f.inspection,
-        });
-        const response = await fingerprintHandler(new Request(`http://127.0.0.1${FINGERPRINT_PATH}`, {
-          method: "POST", body: JSON.stringify(f.apiInput),
-        }));
-        const hardware = z.object({
-          status: z.literal("written"), row: HostFingerprintRowSchema,
-          unavailable: z.record(z.string(), z.string()),
-        }).parse(await response.json());
-        if (response.status !== 200) throw new Error("Native hardware handler failed");
         const recorded = z.object({
           pid: z.int().positive(), stat: z.string(),
         }).parse(await Bun.file(new URL(
@@ -85,15 +76,33 @@ if (Bun.argv[2] === "schemas") {
             if (input.fail_report) throw new Error("Profile reporting failed after collection");
           },
         };
+        handler = createApiApp({
+          identity: {
+            event: "typescript_api_ready", nonce: crypto.randomUUID(), pid: process.pid,
+            port: 8787, group: "machine", modules: ["machine"], enabled: true,
+          },
+          fingerprint: {
+            config: f.config, settings: f.settings,
+            options: { outputRoot: join(f.directory, "state"), inspection: f.inspection },
+          },
+          probes: profiling,
+        });
+        const response = await handler.fetch(new Request(`http://127.0.0.1${FINGERPRINT_PATH}`, {
+          method: "POST", body: JSON.stringify(f.apiInput),
+        }));
+        const hardware = z.object({
+          status: z.literal("written"), row: HostFingerprintRowSchema,
+          unavailable: z.record(z.string(), z.string()),
+        }).parse(await response.json());
+        if (response.status !== 200) throw new Error("Native hardware handler failed");
         const identity = {
-          pipeline_name: "summary-eval-hhem", task_name: "summary-eval-hhem",
+          pipeline_name: "summary-eval-tests", task_name: "summary-eval-tests",
           run_id: f.capture.writer.run_id,
         };
         if (input.platform === "linux" || !config.task_profile.enabled) {
           const processInput = parseProcessStat(recorded.pid, recorded.stat);
           if (processInput.reason !== null) throw new Error("Recorded profile target has no valid process identity");
-          handler = createSampleHandler(config, profiling.context, profiling.report);
-          const response = await handler(new Request(`http://localhost${START_TASK_PROFILE_PATH}`, {
+          const response = await handler.fetch(new Request(`http://localhost${START_TASK_PROFILE_PATH}`, {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ identity, target: { pid: process.pid, start_ticks: processInput.value.start_ticks } }),
           }));
@@ -118,7 +127,7 @@ if (Bun.argv[2] === "schemas") {
       }
       const input = command.parse(JSON.parse(line));
       if (handler !== undefined && handle !== undefined) {
-        const response = await handler(new Request(`http://localhost${STOP_TASK_PROFILE_PATH}`, {
+        const response = await handler.fetch(new Request(`http://localhost${STOP_TASK_PROFILE_PATH}`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ handle, outcome: input.outcome }),
         }));

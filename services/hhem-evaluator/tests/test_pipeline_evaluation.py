@@ -5,18 +5,19 @@ from pathlib import Path
 
 import httpx
 import pytest
-from summary_eval_pipeline.contracts import ServiceShutdown
+from summary_eval_pipeline.contracts import ServiceShutdown, text_sha256
 from summary_eval_pipeline.evaluation import evaluate, read_owned_health
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.host_reader import measurement_complete
 from summary_eval_pipeline.http import call_local_api
-from summary_eval_pipeline.run import build_evidence
+from summary_eval_pipeline.phase_result import build_evidence
 from summary_eval_pipeline.settings import load_pipeline_settings
 
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.service_health import ServiceHealth
 
 from .contract_examples import CORRELATION_ID, REPOSITORY, REQUEST_ID
+from .generation_cases import example_run, handoff_case
 from .pipeline_cases import NativeHostPipe, prepare_proc
 from .replay_predictions import Scenario, read_recordings
 from .service_cases import running_service
@@ -105,11 +106,14 @@ def test_actual_handlers_preserve_scores_including_error_http_results(
                 host.hardware,
                 machine,
                 ServiceShutdown(
-                    hhem_stopped=True,
+                    api_stopped=True,
                     host_stopped=clean,
                     worker_exit_confirmed=service.worker.exit_confirmed,
                 ),
                 errors,
+                run=example_run(),
+                phase="evaluation",
+                generation_sha256=text_sha256(handoff_case()[2].model_dump_json()),
             )
             assert evidence.status == ("partial" if partial else "complete")
             assert status == (500 if partial else 200)
@@ -163,7 +167,8 @@ def test_health_waits_for_actual_model_readiness_without_sending_a_score_request
             assert not waiting.done()
             await service.worker.release_prediction()
             health = await waiting
-            assert health.status == "ready" and health.worker == service.worker.worker
+            assert isinstance(health.hhem, ServiceHealth)
+            assert health.status == "ready" and health.hhem.worker == service.worker.worker
             assert not any(event.operation == "primary" for event in service.log.events)
 
     asyncio.run(check())

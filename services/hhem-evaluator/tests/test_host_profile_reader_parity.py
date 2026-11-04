@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from summary_eval_pipeline.host_reader import HardwareRow, MachineUsage
+from summary_eval_pipeline.host_reader import HardwareRow, HonoServerReader, MachineUsage
 
 from .contract_examples import REPOSITORY
 
@@ -131,7 +131,11 @@ def test_consumed_host_fields_match_actual_native_schemas() -> None:
         "The native host schema export failed; prepare its locked dependencies. " + result.stderr
     )
     native = mapping(json.loads(result.stdout))
-    for name, contract in (("hardware", HardwareRow), ("machine", MachineUsage)):
+    for name, contract in (
+        ("hardware", HardwareRow),
+        ("machine", MachineUsage),
+        ("server", HonoServerReader),
+    ):
         native_schema = mapping(native[name])
         reader_schema: dict[str, object] = contract.model_json_schema()
         compare_projection(native_schema, reader_schema, native_schema, reader_schema, name)

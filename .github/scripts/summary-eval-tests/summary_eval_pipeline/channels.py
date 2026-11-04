@@ -1,4 +1,4 @@
-"""Which private workflow pipes carry only validated control packets and events?"""
+"""Which private task pipes carry only validated control packets and events?"""
 
 import os
 import sys

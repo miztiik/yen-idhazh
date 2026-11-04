@@ -1,6 +1,6 @@
 # HHEM evaluation API
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 
 Which fields, identities and startup settings the independent HHEM evaluator
 accepts. The HHEM component serves synchronous local CPU evaluations with one owned
@@ -28,7 +28,10 @@ are protocol names, not listener settings. No interactive documentation UI,
 streaming, polling or result-history endpoint is defined.
 
 These are transient contracts. The caller supplies both texts and saves the
-response. No service result is an authoritative input to a later run.
+response. The manual [summary workflow](summary-evaluation-workflow.md)
+generates its answer first and binds that saved same-run pair before calling
+this operation. Its model selector changes the summarizer, not HHEM.
+No service result is an authoritative input to a later run.
 
 ## Request and resolved controls
 

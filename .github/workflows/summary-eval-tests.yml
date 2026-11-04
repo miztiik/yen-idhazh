@@ -1,0 +1,96 @@
+name: summary-eval-tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_text:
+        description: Full source text; published in the expandable run report
+        required: true
+        type: string
+      models_file:
+        description: Model JSON path relative to config/; blank uses the committed pointer
+        required: false
+        type: string
+        default: models/ornith-1.5-9b-q5km.json
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: services/hhem-evaluator
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.9.7'
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Prepare frozen tool dependencies
+        working-directory: .
+        run: |
+          bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd packages/ledger-file-writer
+          bun install --frozen-lockfile --cwd packages/data-delivery
+          bun install --frozen-lockfile --cwd services/host-fingerprints
+          bun install --frozen-lockfile --cwd services/host-probes
+          bun install --frozen-lockfile --cwd services/feed-ingest-plan
+          bun install --frozen-lockfile --cwd services/typescript-api
+          uv sync --project services/hhem-evaluator --frozen --extra model --no-dev
+
+      - name: Prepare selected native assets and validate inputs
+        id: prepare
+        run: >-
+          uv run --frozen --extra model --no-dev python
+          ../../.github/scripts/summary-eval-tests/run.py --root ../.. prepare
+
+      - name: Generate through FastAPI and stop the native model
+        run: >-
+          uv run --frozen --extra model --no-dev python
+          ../../.github/scripts/summary-eval-tests/run.py --root ../.. generate
+
+      - name: Evaluate the saved generated answer with HHEM
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        run: >-
+          uv run --frozen --extra model --no-dev python
+          ../../.github/scripts/summary-eval-tests/run.py --root ../.. evaluate
+
+      - name: Report actual results and server outcomes
+        if: always()
+        run: >-
+          uv run --frozen --extra model --no-dev python
+          ../../.github/scripts/summary-eval-tests/report.py --root ../..
+
+      - name: Retain results and escaped report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: summary-eval-tests-report
+          path: |
+            backend/var/summary-eval-tests/run.json
+            backend/var/summary-eval-tests/generation.json
+            backend/var/summary-eval-tests/generation-phase.json
+            backend/var/summary-eval-tests/evaluation.json
+            backend/var/summary-eval-tests/results.json
+            backend/var/summary-eval-tests/report.md
+          if-no-files-found: warn
+
+      - name: Retain server diagnostics after failure or cancellation
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v6
+        with:
+          name: summary-eval-tests-server-logs
+          path: backend/var/summary-eval-tests/logs/
+          if-no-files-found: warn

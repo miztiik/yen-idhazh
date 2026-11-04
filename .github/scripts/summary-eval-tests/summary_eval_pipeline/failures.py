@@ -1,12 +1,11 @@
-"""How are caller failures projected without input or exception text?"""
-
-from typing import Literal
+"""How are phase failures projected without input or exception text?"""
 
 from .contracts import (
     FAILURE_MESSAGES,
     FailureCode,
     FailurePhase,
     PipelineError,
+    ServiceName,
 )
 
 
@@ -15,7 +14,7 @@ class WorkflowError(Exception):
         self,
         code: FailureCode,
         phase: FailurePhase,
-        service: Literal["hhem", "host", "caller"] = "caller",
+        service: ServiceName = "caller",
         http_status: int | None = None,
     ) -> None:
         self.error = PipelineError(

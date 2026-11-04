@@ -22,7 +22,8 @@ def owned_child_command(mode: str) -> list[str]:
         raise AssertionError("The lifetime case requires the actual CPython executable.")
     script = (
         "import runpy,site,sys; packages=sys.argv.pop(1); source=sys.argv.pop(1); "
-        "pipeline=sys.argv.pop(1); sys.path[:0]=[source,pipeline,packages]; "
+        "pipeline=sys.argv.pop(1); backend=sys.argv.pop(1); "
+        "sys.path[:0]=[source,pipeline,backend,packages]; "
         "site.addsitedir(packages); runpy.run_path(sys.argv.pop(1),run_name='__main__')"
     )
     return [
@@ -31,7 +32,8 @@ def owned_child_command(mode: str) -> list[str]:
         script,
         sysconfig.get_path("purelib"),
         str(REPOSITORY / "services" / "hhem-evaluator" / "src"),
-        str(REPOSITORY / ".github" / "scripts" / "summary-eval-hhem"),
+        str(REPOSITORY / ".github" / "scripts" / "summary-eval-tests"),
+        str(REPOSITORY / "backend"),
         str(Path(__file__).with_name("owned_service_child.py")),
         mode,
     ]

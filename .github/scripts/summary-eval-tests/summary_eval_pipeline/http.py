@@ -1,4 +1,4 @@
-"""How is one loopback HTTP response bounded without redirects, proxies or retries?"""
+"""How is one owned HTTP response bounded without redirects, proxies or retries?"""
 
 import asyncio
 from typing import Literal
@@ -6,7 +6,7 @@ from typing import Literal
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from .contracts import FailurePhase
+from .contracts import FailurePhase, ServiceName
 from .failures import WorkflowError
 from .settings import PipelineSettings
 
@@ -24,7 +24,7 @@ async def call_local_api[Result: BaseModel](
     manual: PipelineSettings,
     timeout_ms: float,
     *,
-    service: Literal["hhem", "host"],
+    service: ServiceName,
     phase: FailurePhase,
     body: bytes | None = None,
 ) -> tuple[int, Result]:

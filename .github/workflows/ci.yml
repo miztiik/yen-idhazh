@@ -180,12 +180,15 @@ jobs:
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
+          bun install --frozen-lockfile --cwd packages/data-delivery
 
       - name: Prepare the existing host profile implementation
         working-directory: .
         run: |
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/host-probes
+          bun install --frozen-lockfile --cwd services/feed-ingest-plan
+          bun install --frozen-lockfile --cwd services/typescript-api
 
       - name: Check the caller launchers with the existing host compiler
         working-directory: services/host-probes
@@ -193,7 +196,7 @@ jobs:
           bun run --no-install node_modules/typescript/bin/tsc
           --noEmit --target ESNext --module ESNext --moduleResolution Bundler
           --strict --skipLibCheck --types bun
-          ../../.github/scripts/summary-eval-hhem/measure-host.ts
+          ../../.github/scripts/summary-eval-tests/machine-task.ts
           ../hhem-evaluator/tests/host-profile-bridge.ts
 
       - name: Install only the locked service development environment
@@ -203,12 +206,14 @@ jobs:
         run: uv run --frozen python scripts/prepare-unieval-resources.py --root ../..
 
       - name: Lint native service contracts
-        run: |
-          uv run --frozen ruff check src tests scripts
-          uv run --frozen ruff check --config ../../pyproject.toml ../../.github/scripts/summary-eval-hhem
+        run: uv run --frozen ruff check src tests scripts
+
+      - name: Lint workflow tasks from the repository root
+        working-directory: .
+        run: uv run --project services/hhem-evaluator --frozen ruff check .github/scripts/summary-eval-tests
 
       - name: Check strict service types
-        run: uv run --frozen mypy src tests ../../.github/scripts/summary-eval-hhem/summary_eval_pipeline
+        run: uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
 
       - name: Check offline service and native compatibility
         run: uv run --frozen pytest
