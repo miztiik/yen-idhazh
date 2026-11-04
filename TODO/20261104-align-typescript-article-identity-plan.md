@@ -141,7 +141,7 @@ Table I - Delivery rows
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | I1 | 1 | Preserve resource URLs before hashing and dispatch | - | A | DONE | psychic-waffle | - | Preserve resource URLs |
-| I2 | 2 | Capture a distinct identity for every article input | 1 | B | IN_PROGRESS | upgraded-spoon | - | Capture candidate identity |
+| I2 | 2 | Capture a distinct identity for every article input | 1 | B | DONE | upgraded-spoon | [#1917](https://github.com/miztiik/yen-idhazh/pull/1917) | Capture candidate identity |
 | I3 | 3 | Expose consistent article identities across APIs | 2 | C | PENDING | - | - | - |
 
 ## 2. Row #1 - Preserve resource URLs before hashing and dispatch
