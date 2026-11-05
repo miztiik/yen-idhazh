@@ -314,7 +314,10 @@ defines that context and its carrier.
 
 [`SafePersistHttpDiagnosticSchema`](../../../services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts)
 owns this strict current-only relay shape and derives request/result field
-validators from their native authorities. Paths, process IDs and arbitrary
+validators from their native authorities. The same native module declares
+`DeliveryCompletionDiagnosticSchema` and constructs its completion CloudEvent
+from the native run number, attempt, result and receiving context, without
+importing a server lifecycle contract. Paths, process IDs and arbitrary
 fields are not diagnostic fields. The
 [server writer](../../reference/serve-pipeline-apis.md#diagnostics-and-current-task-evidence)
 retains these facts and context in a separate completion event, not a lifecycle

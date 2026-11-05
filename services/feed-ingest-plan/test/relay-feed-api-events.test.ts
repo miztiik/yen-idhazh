@@ -13,9 +13,8 @@ import {
 import { ServerEventDataSchema, serverLogFilename } from "@idhazh/serve-pipeline-apis/evidence";
 import type { ApiGroup, ServerRun } from "@idhazh/serve-pipeline-apis/evidence";
 import { MachineServerEvidenceSchema as ServerEvidenceSchema } from "@idhazh/host-probes/machine-evidence";
-import { SafePersistHttpDiagnosticSchema } from "../scripts/safe-persist-http-diagnostic";
 import { MetadataDeliveryResultSchema } from "../scripts/feed-ingest-plan-delivery-result";
-import { createDeliveryCompletionEvent, DeliveryCompletionDiagnosticSchema } from "../scripts/delivery-completion-diagnostic";
+import { createDeliveryCompletionEvent, DeliveryCompletionDiagnosticSchema } from "../scripts/safe-persist-http-diagnostic";
 import { readReportFailureEvidence } from "../scripts/feed-ingest-plan-report-evidence";
 import { renderWorkflowPlanMarkdown } from "../scripts/feed-ingest-plan-report";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
@@ -75,14 +74,14 @@ test("completion and lifecycle shapes remain strict while native statuses and an
     { status: "failed", commit: null, files: 1, paths },
   ].map(result => MetadataDeliveryResultSchema.parse(result));
   for (const result of nativeResults) {
-    const diagnostic = SafePersistHttpDiagnosticSchema.parse({
-      event: "safe_persist_http_completed", run_number: "701", attempt: 4,
+    const input = {
+      source: "/fixtures/typescript-api", runNumber: "701", attempt: 4,
       status: result.status, commit: result.commit, files: result.files, context: createRootContext(),
-    });
-    const event = createDeliveryCompletionEvent({ source: "/fixtures/typescript-api", diagnostic });
+    };
+    const event = createDeliveryCompletionEvent(input);
     expect(readCloudEvent(event, value => DeliveryCompletionDiagnosticSchema.parse(value))).toEqual(event);
     expect(event.data).toMatchObject({ status: result.status, commit: result.commit, files: result.files,
-      context: diagnostic.context, severity: "info", duration_ms: null, exit_code: null, code: null });
+      context: input.context, severity: "info", duration_ms: null, exit_code: null, code: null });
     expect(ServerEventDataSchema.safeParse(event.data).success).toBe(false);
     for (const invalid of [
       { phase: "ready" }, { group: "planning" }, { run_id: "local-run" }, { context: undefined },
@@ -91,7 +90,7 @@ test("completion and lifecycle shapes remain strict while native statuses and an
       { exit_code: 0.5 }, { code: "unsafe text" },
     ]) expect(DeliveryCompletionDiagnosticSchema.safeParse({ ...event.data, ...invalid }).success).toBe(false);
     const ancillary = createDeliveryCompletionEvent({
-      source: event.source, diagnostic, severity: "warning", duration_ms: 0, exit_code: -1, code: "RECORDED_FAILURE",
+      ...input, severity: "warning", duration_ms: 0, exit_code: -1, code: "RECORDED_FAILURE",
     });
     expect(ancillary.data).toMatchObject({ severity: "warning", duration_ms: 0, exit_code: -1, code: "RECORDED_FAILURE" });
     const lifecycle = {
@@ -100,7 +99,7 @@ test("completion and lifecycle shapes remain strict while native statuses and an
     } satisfies z.infer<typeof ServerEventDataSchema>;
     expect(ServerEventDataSchema.parse(lifecycle)).toEqual(lifecycle);
     expect(ServerEventDataSchema.safeParse({ ...lifecycle, phase: "operation_completed" }).success).toBe(false);
-    expect(ServerEventDataSchema.safeParse({ ...lifecycle, context: diagnostic.context }).success).toBe(false);
+    expect(ServerEventDataSchema.safeParse({ ...lifecycle, context: input.context }).success).toBe(false);
     expect(ServerEventDataSchema.safeParse({ ...lifecycle, status: result.status }).success).toBe(false);
   }
 });

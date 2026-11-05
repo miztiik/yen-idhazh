@@ -118,7 +118,7 @@ without copying their content. The
 [planner log contract](../architecture/sources/feed-operator-api.md#structured-operation-logs)
 owns this current-only subtype.
 Delivery completion is the other strict diagnostic shape.
-[`DeliveryCompletionDiagnosticSchema`](../../services/feed-ingest-plan/scripts/delivery-completion-diagnostic.ts)
+[`DeliveryCompletionDiagnosticSchema`](../../services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts)
 retains the native `landed`, `already-on-main`, `no-changes` or `failed` status,
 nullable lowercase hexadecimal commit and nonnegative file count.
 Its `run_id` and attempt come from the actual delivery request, not the

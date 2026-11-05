@@ -5,8 +5,9 @@ import type { z } from "zod";
 import type { ApiDiagnostic } from "@idhazh/serve-pipeline-apis/events";
 import { readMachineApiDiagnostic } from "@idhazh/host-probes/machine-diagnostics";
 import type { TaskProfile } from "@idhazh/host-probes/profile";
-import { createDeliveryCompletionEvent, DeliveryCompletionDiagnosticSchema } from "./delivery-completion-diagnostic";
-import { SafePersistHttpDiagnosticSchema } from "./safe-persist-http-diagnostic";
+import {
+  createDeliveryCompletionEvent, DeliveryCompletionDiagnosticSchema, SafePersistHttpDiagnosticSchema,
+} from "./safe-persist-http-diagnostic";
 
 type FeedDiagnosticData = ArticleFailureDiagnostic["data"] | z.infer<typeof DeliveryCompletionDiagnosticSchema>;
 
@@ -29,7 +30,11 @@ export function readFeedApiDiagnostic(raw: unknown): ApiDiagnostic<TaskProfile, 
     if ("event" in raw && raw.event === "safe_persist_http_completed") {
       const diagnostic = SafePersistHttpDiagnosticSchema.safeParse(raw);
       return diagnostic.success
-        ? { kind: "native_event", createEvent: source => createDeliveryCompletionEvent({ source, diagnostic: diagnostic.data }) }
+        ? { kind: "native_event", createEvent: source => createDeliveryCompletionEvent({
+          source, runNumber: diagnostic.data.run_number, attempt: diagnostic.data.attempt,
+          status: diagnostic.data.status, commit: diagnostic.data.commit, files: diagnostic.data.files,
+          context: diagnostic.data.context,
+        }) }
         : { kind: "invalid" };
     }
   }

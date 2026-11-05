@@ -79,7 +79,7 @@ Table F - PR sequence
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | F1 | 1 | Remove the registry and localize existing producer identities | - | A | DONE | urban-goggles | - | - |
-| F2 | 2 | Move native diagnostic contracts to producers and expand relay readers | 1 | B | PENDING | - | - | - |
+| F2 | 2 | Move native diagnostic contracts to producers and expand relay readers | 1 | B | IN-FLIGHT | urban-goggles | - | - |
 | F3 | 3 | Emit native events across every API and retire legacy translation | 2 | C | PENDING | - | - | - |
 
 ## 2. Row #1 - Remove the registry and localize existing producer identities
