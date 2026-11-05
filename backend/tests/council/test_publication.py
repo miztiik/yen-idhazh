@@ -18,20 +18,45 @@ from idhazh.council import registry, session
 from utilities.council_publish import settle_and_publish
 from utilities.publication_git import Repository
 
-from ._config import copy_config, set_host_fingerprint_placement, write_declarations
+from ._config import (
+    copy_config,
+    prepared_selection,
+    set_host_fingerprint_placement,
+    write_declarations,
+)
 from ._tenants import TENANT_SOURCE, a_venue, forget
 from .test_lifecycle import room
 
-SOURCE = TENANT_SOURCE.replace(
-    "from pathlib import Path", "from pathlib import Path\nfrom idhazh import atomic_write"
-).replace(
-    "        self.settled.append(date)",
-    """        self.settled.append(date)
+SOURCE = (
+    TENANT_SOURCE.replace(
+        "atomic_write.write_atomic(path, str(shards))",
+        "atomic_write.write_atomic(path, '\"completed\\\\n\"')",
+    )
+    .replace(
+        "return ShardResult(outcome=ShardOutcome.COMPLETED, files=(session.artifact_path(path),))",
+        "return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO, files=(session.artifact_path(path),))",
+        1,
+    )
+    .replace(
+        "from pathlib import Path",
+        "from pathlib import Path\nimport json\nfrom idhazh import atomic_write",
+    )
+    .replace(
+        "        self.settled.append(date)",
+        """        self.settled.append(date)
         atomic_write.write_atomic(
-            state_dir.parent / self.committed_paths[0] / (date + ".json"), "completed\\n"
+            state_dir.parent / self.committed_paths[0] / (date + ".json"),
+            json.loads(session.unit_file(
+                date, slot="tasks", judge_id=self.judge_id, suffix=".json"
+            ).read_text(encoding="utf-8"))
         )
         if self.judge_id.endswith("failed") and date == "2026-10-08":
             raise RuntimeError("later tenant failed after completing its write")""",
+    )
+    .replace(
+        "return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)\n\n\nTENANT",
+        "return ShardResult(outcome=ShardOutcome.COMPLETED)\n\n\nTENANT",
+    )
 )
 
 
@@ -78,6 +103,12 @@ def test_publication_resolves_only_the_active_judge(
                 "retired-judge": ("retired", False),
             },
         )
+        selected = prepared_selection(
+            target,
+            dates=("2026-10-10",),
+            run_id="2026-10-11-123",
+            commit_sha=git(repo, "rev-parse", "HEAD").strip(),
+        )
         assert (
             settle_and_publish(
                 repo=repo,
@@ -85,6 +116,7 @@ def test_publication_resolves_only_the_active_judge(
                 run_id="2026-10-11-123",
                 commit_sha=git(repo, "rev-parse", "HEAD").strip(),
                 config_root=target,
+                selection=selected,
             )
             == 0
         )
@@ -95,7 +127,7 @@ def test_publication_resolves_only_the_active_judge(
             ["2026-10-10"],
             model=CouncilRunRecord,
         )
-        assert len(rows) == 1 and rows[0].judge_id == "active-judge"
+        assert len(rows) == 2 and {row.judge_id for row in rows} == {"active-judge"}
     finally:
         forget(package)
 
@@ -128,14 +160,21 @@ def test_many_tenants_and_later_dates_survive_a_failure(
     try:
         config_root = configuration(tmp_path, slugs)
         set_host_fingerprint_placement(config_root, False)
+        selected = prepared_selection(
+            config_root,
+            dates=("2026-10-09", "2026-10-08"),
+            run_id="2026-10-09-123",
+            commit_sha=git(repo, "rev-parse", "HEAD").strip(),
+        )
         with refuse_external_placement():
             assert (
                 settle_and_publish(
                     repo=repo,
-                    dates=("2026-10-08", "2026-10-09"),
+                    dates=selected.dates,
                     run_id="2026-10-09-123",
                     commit_sha=git(repo, "rev-parse", "HEAD").strip(),
                     config_root=config_root,
+                    selection=selected,
                     started_at=datetime(2026, 10, 9, 23, 59, tzinfo=UTC),
                     clock=lambda: datetime(2026, 10, 10, 0, 2, tzinfo=UTC),
                 )
@@ -150,12 +189,16 @@ def test_many_tenants_and_later_dates_survive_a_failure(
             ["2026-10-08", "2026-10-09"],
             model=CouncilRunRecord,
         )
-        assert len(rows) == 6
+        assert len(rows) == 12
         assert sum(row.outcome == "failed" and row.fault == "raised" for row in rows) == 1
-        assert sum(row.date == "2026-10-09" for row in rows) == 3
+        assert sum(row.date == "2026-10-09" for row in rows) == 6
         receipts = [
             PublicationReceipt.read(path)
-            for path in (repo / "backend" / "var" / "council" / "publication").iterdir()
+            for path in (
+                repo / "backend" / "var" / "council" / "publication" / f"{index:04}.json"
+                for index in range(10)
+            )
+            if path.is_file()
         ]
         evidence = {path: digest for receipt in receipts for path, digest in receipt.writes.items()}
         machine = {
@@ -193,13 +236,20 @@ def test_empty_venue_writes_no_row_or_commit(
     quiet_git(tmp_path, monkeypatch)
     origin, repo = an_origin(tmp_path, {"seed": "seed\n"})
     before = git(origin, "rev-parse", "main")
+    target = configuration(tmp_path, ())
+    selected = prepared_selection(
+        target,
+        dates=("2026-10-09",),
+        run_id="2026-10-09-123",
+        commit_sha=git(repo, "rev-parse", "HEAD").strip(),
+    )
     assert (
         settle_and_publish(
             repo=repo,
-            dates=("2026-10-09",),
             run_id="2026-10-09-123",
             commit_sha=git(repo, "rev-parse", "HEAD").strip(),
-            config_root=configuration(tmp_path, ()),
+            config_root=target,
+            selection=selected,
         )
         == 0
     )

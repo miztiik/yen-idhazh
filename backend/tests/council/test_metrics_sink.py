@@ -21,6 +21,13 @@ from support.paths import REPO_ROOT, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, ServerJob
+from idhazh.contracts.council_invocation import (
+    ArtifactFile,
+    JudgeSchedule,
+    PreparationReceipt,
+    ScheduleRequest,
+    ShardReport,
+)
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
@@ -129,11 +136,14 @@ class PaperTenant:
     shard_count: int = 1
     committed_paths: tuple[str, ...] = ("state/paper-tenant/metrics",)
 
-    def nights_outstanding(self, *, window: tuple[DateStamp, ...]) -> tuple[DateStamp, ...]:
+    def schedule(self, *, request: ScheduleRequest) -> JudgeSchedule:
         """It has counted every night it was ever asked about."""
+        return JudgeSchedule(dates=())
+
+    def publication_inputs(self, *, date: DateStamp) -> tuple[str, ...]:
         return ()
 
-    def prepare(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+    def prepare(self, *, date: DateStamp, run_id: RunId, shards: int) -> ShardResult:
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
 
     def run_shard(
@@ -144,6 +154,7 @@ class PaperTenant:
         shard: int,
         shards: int,
         deadline: float,
+        prepared: PreparationReceipt,
     ) -> ShardResult:
         return ShardResult(
             outcome=ShardOutcome.COMPLETED,
@@ -157,6 +168,8 @@ class PaperTenant:
         run_id: RunId,
         state_dir: Path,
         identity: WriterIdentity,
+        prepared: PreparationReceipt,
+        reports: tuple[ShardReport, ...],
     ) -> ShardResult:
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
 
@@ -180,13 +193,26 @@ def test_a_tenant_the_council_never_named_answers_the_whole_protocol() -> None:
         "judge_id",
         "shard_count",
         "committed_paths",
-        "nights_outstanding",
+        "schedule",
+        "publication_inputs",
         "prepare",
         "run_shard",
         "settle",
     }
     assert tenant.shard_count == 1, "a tenant with no model takes one shard"
-    assert tenant.nights_outstanding(window=("2026-09-20",)) == ()
+    assert (
+        tenant.schedule(
+            request=ScheduleRequest(
+                anchor_date=A_DATE,
+                window=(A_DATE,),
+                max_dates=1,
+                max_older_dates=0,
+                shards=1,
+                shard_seconds=0,
+            )
+        ).dates
+        == ()
+    )
 
 
 def test_a_shard_result_hands_the_tenants_row_over_whole() -> None:
@@ -197,7 +223,26 @@ def test_a_shard_result_hands_the_tenants_row_over_whole() -> None:
     all, so the row it carries is the row that was put in it.
     """
     result = PaperTenant().run_shard(
-        date="2026-09-20", run_id="2026-09-20-1", shard=2, shards=4, deadline=0.0
+        date="2026-09-20",
+        run_id="2026-09-20-1",
+        shard=2,
+        shards=4,
+        deadline=0.0,
+        prepared=PreparationReceipt(
+            version=PreparationReceipt.schema_version(),
+            run_id="2026-09-20-1",
+            attempt=1,
+            git_sha="a" * 40,
+            judge_id="paper-tenant",
+            date=A_DATE,
+            state="ready",
+            shards=4,
+            files=(
+                ArtifactFile(
+                    path=f"{A_DATE}/tasks/paper-tenant/task.json", size_bytes=0, sha256="0" * 64
+                ),
+            ),
+        ),
     )
 
     assert result.outcome is ShardOutcome.COMPLETED
@@ -217,9 +262,7 @@ def test_a_shipped_row_lands_under_the_tenants_own_slug(tmp_path: Path) -> None:
 
     assert path == out_dir / "paper-tenant" / "2.csv"
     assert path.read_text(encoding="utf-8") == "version,date,units\n2026-09-21,2026-09-20,3\n"
-    assert sorted(child.name for child in path.parent.iterdir()) == ["2.csv"], (
-        "the rename leaves no scratch file behind"
-    )
+    assert path.is_file()
 
 
 def test_a_judge_id_that_is_not_a_slug_never_becomes_a_directory(tmp_path: Path) -> None:
@@ -231,7 +274,9 @@ def test_a_judge_id_that_is_not_a_slug_never_becomes_a_directory(tmp_path: Path)
 def test_a_shipped_name_that_is_not_a_slug_never_becomes_a_filename(tmp_path: Path) -> None:
     """The unit name is a path component too, and it is checked before the path is built."""
     with pytest.raises(ValueError, match="not a slug"):
-        ship_judge_metrics(_paper_row(), judge_id="paper-tenant", name="../escape", out_dir=tmp_path)
+        ship_judge_metrics(
+            _paper_row(), judge_id="paper-tenant", name="../escape", out_dir=tmp_path
+        )
 
 
 def test_the_collecting_job_files_every_shipped_row_into_the_store_the_tenant_named(

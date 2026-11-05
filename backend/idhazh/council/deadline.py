@@ -23,6 +23,7 @@ from __future__ import annotations
 from typing import Final
 
 from idhazh.contracts.base import DateStamp, RunId
+from idhazh.contracts.council_invocation import PreparationReceipt
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council.tenancy import ShardResult, Tenant
 
@@ -61,6 +62,7 @@ def run_shard_under_the_clock(
     shards: int,
     council: CouncilConfig,
     started: float,
+    prepared: PreparationReceipt,
 ) -> ShardResult:
     """Run one shard of a tenant's work under the council's own clock.
 
@@ -75,4 +77,5 @@ def run_shard_under_the_clock(
         shard=shard,
         shards=shards,
         deadline=compute_shard_deadline(council, started=started),
+        prepared=prepared,
     )

@@ -30,6 +30,7 @@ from idhazh.council import event_log, outcome, registry, session
 from utilities.council_publish import settle_and_publish
 from utilities.publication_git import Repository
 
+from ._config import prepared_selection
 from ._tenants import a_venue, forget
 from .test_publication import SOURCE, configuration
 
@@ -139,15 +140,21 @@ def run(
     dates: tuple[str, ...] = DATES,
     units_failed: bool = False,
 ) -> dict[str, Any]:
+    selected = prepared_selection(
+        target, dates=dates, run_id=RUN_ID, commit_sha=git(repo, "rev-parse", "HEAD").strip()
+    )
+    caplog.clear()
+    capsys.readouterr()
     actual = outcome.run(
         CouncilProgram.PUBLISH,
         lambda: settle_and_publish(
             repo=repo,
-            dates=dates,
+            dates=selected.dates,
             run_id=RUN_ID,
             commit_sha=git(repo, "rev-parse", "HEAD").strip(),
             config_root=target,
             units_failed=units_failed,
+            selection=selected,
         ),
     )
     assert actual == code
@@ -164,7 +171,7 @@ def run(
     assert finished[0]["sentence"] == outcome.CouncilExit(code).sentence
     published = [event for event in parsed if event["event"] == "night-published"]
     assert len(published) == 1
-    assert published[0]["dates"] == list(dates)
+    assert published[0]["dates"] == list(selected.dates)
     assert published[0]["run_id"] == RUN_ID
     assert published[0]["code"] == code
     assert published[0]["landing"] == landing
@@ -177,7 +184,10 @@ def run(
 def evidence(repo: Path, *, origin: Path | None = None) -> dict[str, str]:
     receipts = [
         PublicationReceipt.read(path)
-        for path in sorted((repo / "backend/var/council/publication").glob("*.json"))
+        for path in (
+            repo / "backend/var/council/publication" / f"{index:04}.json" for index in range(8)
+        )
+        if path.is_file()
     ]
     assert receipts
     writes = {path: digest for receipt in receipts for path, digest in receipt.writes.items()}
@@ -212,6 +222,10 @@ def test_raising_judge_keeps_later_judges_dates_and_completed_bytes(
         target,
     ):
         council = config.load_council(target)
+        selected = prepared_selection(
+            target, dates=DATES, run_id=RUN_ID, commit_sha=git(repo, "rev-parse", "HEAD").strip()
+        )
+        caplog.clear()
         with pytest.raises(RuntimeError, match="HOSTILE_PUBLICATION_TEXT"):
             session.settle(
                 council,
@@ -219,6 +233,7 @@ def test_raising_judge_keeps_later_judges_dates_and_completed_bytes(
                 run_id=RUN_ID,
                 state_dir=repo / "state",
                 commit_sha=git(repo, "rev-parse", "HEAD").strip(),
+                selection=selected,
             )
         session.settle(
             council,
@@ -226,6 +241,7 @@ def test_raising_judge_keeps_later_judges_dates_and_completed_bytes(
             run_id=RUN_ID,
             state_dir=repo / "state",
             commit_sha=git(repo, "rev-parse", "HEAD").strip(),
+            selection=selected,
         )
         for slug in slugs:
             for date in DATES:
@@ -237,15 +253,17 @@ def test_raising_judge_keeps_later_judges_dates_and_completed_bytes(
         assert failed[0]["error"] == "RuntimeError"
         assert failed[0]["where"].startswith("idhazh.council.")
         recorded = rows(repo)
-        assert len(recorded) == 6
-        assert [(row.judge_id, row.date, row.fault) for row in recorded if row.outcome == "failed"] == [
-            ("second-failed", DATES[0], "raised")
-        ]
-        assert sum(row.date == DATES[1] for row in recorded) == 3
+        assert len(recorded) == 12
+        assert [
+            (row.judge_id, row.date, row.fault) for row in recorded if row.outcome == "failed"
+        ] == [("second-failed", DATES[0], "raised")]
+        assert sum(row.date == DATES[1] for row in recorded) == 6
 
 
 def test_a_push_deadline_can_expire_before_the_rejection_hook_runs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     with venue(tmp_path, monkeypatch, caplog) as (origin, repo, _):
         before = git(origin, "rev-parse", "main").strip()
@@ -296,4 +314,7 @@ def test_post_work_integrity_refusal_does_not_push_or_claim_prework_stop(
         assert (repo / f"state/experiments/second/{DATES[0]}.json").read_bytes() == b"completed\n"
         assert (repo / "state/undeclared/output.json").read_bytes() == b"unowned\n"
         assert on_origin(origin, f"state/experiments/first/{DATES[0]}.json") is None
-        assert len(rows(repo)) == 2
+        assert rows(repo) == [], "fatal integrity refusal prevents collected ledger writes"
+        for slug in ("first", "second"):
+            directory = session.COUNCIL_ROOT / "runs" / RUN_ID / "1" / DATES[0] / "outcomes" / slug
+            assert (directory / "combine-judge-results.csv").is_file()

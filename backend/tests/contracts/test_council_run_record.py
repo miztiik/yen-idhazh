@@ -28,7 +28,14 @@ FIXTURES = CONTRACT_FIXTURES_DIR / "council-run-record"
 FIRST_SHAPE_STAMP: Final = "2026-09-21T12:00"
 
 #: The cells a step that ran no model, and has no part, leaves empty.
-ABSENT: Final = ("work_part_index", "fault", "model_calls", "tokens_in", "tokens_out", "model_seconds")
+ABSENT: Final = (
+    "work_part_index",
+    "fault",
+    "model_calls",
+    "tokens_in",
+    "tokens_out",
+    "model_seconds",
+)
 
 #: One row the first shape really filed, copied out of its committed day file
 #: rather than read from it: the heading line and the row, `host_model` included.
@@ -72,9 +79,7 @@ def test_every_retired_shard_heading_is_refused(number: str) -> None:
 
 @pytest.mark.parametrize("heading", ["shard", "shards"])
 @pytest.mark.parametrize("value", ["", "0"])
-def test_a_retired_heading_beside_a_current_row_is_refused(
-    heading: str, value: str
-) -> None:
+def test_a_retired_heading_beside_a_current_row_is_refused(heading: str, value: str) -> None:
     current = a_record("a-part-that-ran-the-model").csv_row()
     with pytest.raises(ValidationError, match=heading):
         CouncilRunRecord.from_csv_row(current | {heading: value})
@@ -132,7 +137,8 @@ def test_a_cell_outside_its_column_is_refused_by_name(field: str, value: str) ->
     ],
 )
 def test_only_a_failed_outcome_carries_the_closed_raised_fault(
-    outcome: str, fault: str | None,
+    outcome: str,
+    fault: str | None,
 ) -> None:
     payload = a_record("a-part-that-raised").model_dump(mode="json")
     with pytest.raises(ValidationError, match="fault"):
@@ -147,6 +153,28 @@ def test_yesterdays_row_without_a_fault_loads_in_json_and_csv() -> None:
     cells = row.csv_row()
     del cells["fault"]
     assert CouncilRunRecord.from_csv_row(cells) == row
+
+
+@pytest.mark.parametrize(
+    "step",
+    [
+        EvaluationStep.SELECT_JUDGE_WORK,
+        EvaluationStep.COMBINE_JUDGE_RESULTS,
+    ],
+)
+def test_zero_part_non_shard_records_round_trip(step: EvaluationStep) -> None:
+    payload = a_record("a-selection-that-ran-no-model").model_dump(mode="json")
+    row = CouncilRunRecord.model_validate(
+        payload
+        | {
+            "version": CouncilRunRecord.schema_version(),
+            "work_part_count": 0,
+            "evaluation_step": step,
+            "outcome": "nothing_to_do",
+        }
+    )
+    assert CouncilRunRecord.from_csv_row(row.csv_row()) == row
+    assert CouncilRunRecord.from_json(row.to_json()) == row
 
 
 def test_every_recorded_step_round_trips_through_one_csv_file() -> None:
@@ -197,24 +225,49 @@ def test_a_migrated_row_keeps_a_stamp_the_changelog_describes() -> None:
 
 
 @pytest.mark.parametrize("fmt", [Format.PARQUET, Format.JSON])
+@pytest.mark.parametrize("zero_parts", [False, True])
 def test_a_migrated_old_stamp_round_trips_through_raw_and_compact(
-    tmp_path: Path, fmt: Format,
+    tmp_path: Path,
+    fmt: Format,
+    zero_parts: bool,
 ) -> None:
     row = a_record("a-migrated-count-that-had-nothing-to-do")
+    if zero_parts:
+        row = CouncilRunRecord.model_validate(
+            row.model_dump()
+            | {
+                "version": CouncilRunRecord.schema_version(),
+                "work_part_count": 0,
+            }
+        )
     identity = WriterIdentity(
-        run_id=row.run_id, attempt=1, job=ServerJob.SAVE_COUNCIL_RESULTS, shard=0,
-        producer="council.session", git_sha="a" * 40,
+        run_id=row.run_id,
+        attempt=1,
+        job=ServerJob.SAVE_COUNCIL_RESULTS,
+        shard=0,
+        producer="council.session",
+        git_sha="a" * 40,
     )
     raw = ledger.persist(
-        tmp_path, [row], ledger=LedgerName.COUNCIL_RUN_RECORDS,
-        covers=row.date, identity=identity, fmt=fmt,
+        tmp_path,
+        [row],
+        ledger=LedgerName.COUNCIL_RUN_RECORDS,
+        covers=row.date,
+        identity=identity,
+        fmt=fmt,
     )
     assert ledger.load(raw, model=CouncilRunRecord) == [row]
     stored = ledger.load_stored(raw, model=CouncilRunRecord)
     compact = ledger.persist_period(
-        tmp_path, stored, model=CouncilRunRecord, ledger=LedgerName.COUNCIL_RUN_RECORDS,
-        period=Period.DAILY, covers=row.date, fmt=fmt,
-        identity=identity.model_copy(update={"job": ServerJob.RUN_TASKS}), built_from=1,
+        tmp_path,
+        stored,
+        model=CouncilRunRecord,
+        ledger=LedgerName.COUNCIL_RUN_RECORDS,
+        period=Period.DAILY,
+        covers=row.date,
+        fmt=fmt,
+        identity=identity.model_copy(update={"job": ServerJob.RUN_TASKS}),
+        built_from=1,
     )
     assert ledger.load([compact], model=CouncilRunRecord) == [row]
     assert ledger.load_stored([compact], model=CouncilRunRecord) == stored

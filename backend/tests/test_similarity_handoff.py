@@ -20,6 +20,9 @@ from typing import Final
 import pytest
 
 from idhazh.content_similarity_judge import tenant
+from idhazh.contracts.council_invocation import SelectedJudge, Selection
+from idhazh.contracts.council_run_record import ShardOutcome
+from idhazh.contracts.knobs.council import JudgeLifecycleStatus
 from idhazh.council import session
 from idhazh.stages import common, judge_item_pairs
 
@@ -28,6 +31,26 @@ from idhazh.stages import common, judge_item_pairs
 A_NIGHT: Final = "2026-09-20"
 
 A_RUN: Final = "2026-09-21-35534060762"
+
+
+def _selection(*, shards: int = 8) -> Selection:
+    return Selection(
+        version=Selection.schema_version(),
+        run_id=A_RUN,
+        attempt=1,
+        git_sha="a" * 40,
+        mode="manual",
+        anchor_date=A_NIGHT,
+        window=(A_NIGHT,),
+        judges=(
+            SelectedJudge(
+                tenant=tenant.JUDGE_ID,
+                status=JudgeLifecycleStatus.ACTIVE,
+                dates=(A_NIGHT,),
+                shards=shards,
+            ),
+        ),
+    )
 
 
 def _one_runner(tmp_path: Path, name: str, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -46,28 +69,44 @@ def test_every_path_this_tenant_writes_for_a_later_job_is_inside_the_carried_roo
 ) -> None:
     """The rule the whole night rests on, asked of the disk and not of the source.
 
-    A tenant that finds a second way to spell a path fails here as readily as one
-    that never asked the venue at all, because what is read back is every file
-    the runner holds afterwards rather than the paths the tenant meant to write.
+    The declared task file must exist inside the carried invocation, including
+    on an empty day that leaves only its CSV header as bookkeeping.
     """
     runner = _one_runner(tmp_path, "picked-the-work", monkeypatch)
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "no-day-was-published")
 
-    tenant.TENANT.prepare(date=A_NIGHT, run_id=A_RUN)
+    with session._route(_selection(shards=2), tenant.JUDGE_ID):
+        result = tenant.TENANT.prepare(date=A_NIGHT, run_id=A_RUN, shards=2)
+        carried = runner / session.COUNCIL_ROOT_RELPATH
+        drawn = tenant._draw_path(A_NIGHT)
+        assert drawn.is_file()
+        assert drawn.is_relative_to(carried)
+        assert result.files == (session.artifact_path(drawn),)
+        assert result.outcome is ShardOutcome.NOTHING_TO_DO
 
-    carried = runner / session.COUNCIL_ROOT_RELPATH
-    written = sorted(path for path in runner.rglob("*") if path.is_file())
-    stray = [path for path in written if not path.is_relative_to(carried)]
 
-    assert written, (
-        "the unit that picks the work left nothing on this runner at all, so it "
-        "wrote somewhere the council never carries"
-    )
-    assert not stray, (
-        f"{[path.relative_to(runner).as_posix() for path in stray]} is outside "
-        f"{session.COUNCIL_ROOT_RELPATH}, which is the only directory the workflow "
-        "uploads - so no later job can read it"
-    )
+def test_preparation_deals_real_pairs_at_the_admitted_width(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The selected width, not the configured maximum, decides pair ownership."""
+    from test_similarity_fit import a_published_day
+
+    _one_runner(tmp_path, "picked-real-work", monkeypatch)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "digest")
+    a_published_day(common.PUBLIC_ROOT, date=A_NIGHT)
+    with session._route(_selection(shards=2), tenant.JUDGE_ID):
+        result = tenant.TENANT.prepare(date=A_NIGHT, run_id=A_RUN, shards=2)
+        draw = tenant._draw_path(A_NIGHT)
+        rows = [
+            row
+            for shard in range(2)
+            for row in judge_item_pairs._rows_this_shard_owns(draw, shard=shard, shards=2)
+        ]
+
+        assert result.outcome is ShardOutcome.COMPLETED
+        assert rows
+        assert {row.work_part_index for row in rows} <= {0, 1}
+        assert result.files == (session.artifact_path(draw),)
 
 
 def test_a_unit_on_a_second_runner_finds_the_work_the_first_one_picked(
@@ -83,25 +122,25 @@ def test_a_unit_on_a_second_runner_finds_the_work_the_first_one_picked(
     selection writes a header either way, so an absent draw never means "nothing
     to judge" - which is what lets the shard refuse rather than return empty.
     """
-    picked = _one_runner(tmp_path, "picked-the-work", monkeypatch)
+    _one_runner(tmp_path, "picked-the-work", monkeypatch)
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "no-day-was-published")
-    tenant.TENANT.prepare(date=A_NIGHT, run_id=A_RUN)
-    drawn = tenant._draw_path(A_NIGHT)
+    with session._route(_selection(), tenant.JUDGE_ID):
+        result = tenant.TENANT.prepare(date=A_NIGHT, run_id=A_RUN, shards=8)
+        drawn = tenant._draw_path(A_NIGHT)
 
     judged = tmp_path / "judged-a-shard"
-    shutil.copytree(
-        picked / session.COUNCIL_ROOT_RELPATH, judged / session.COUNCIL_ROOT_RELPATH
-    )
     monkeypatch.setattr(session, "COUNCIL_ROOT", judged / session.COUNCIL_ROOT_RELPATH)
-    on_the_second_runner = tenant._draw_path(A_NIGHT)
+    destination = session.invocation_root(_selection(), tenant.JUDGE_ID) / result.files[0]
+    destination.parent.mkdir(parents=True)
+    shutil.copyfile(drawn, destination)
+    with session._route(_selection(), tenant.JUDGE_ID):
+        on_the_second_runner = tenant._draw_path(A_NIGHT)
 
     assert drawn.is_file(), "the unit that picks the work left no draw"
     assert on_the_second_runner.is_file(), (
         "the draw did not travel, so all eight units would die on a missing file"
     )
-    assert (
-        judge_item_pairs._rows_this_shard_owns(on_the_second_runner, shard=0, shards=8) == []
-    )
+    assert judge_item_pairs._rows_this_shard_owns(on_the_second_runner, shard=0, shards=8) == []
 
 
 def test_a_draw_that_did_not_travel_is_refused_and_says_why(tmp_path: Path) -> None:

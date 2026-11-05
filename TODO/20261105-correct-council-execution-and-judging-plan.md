@@ -134,7 +134,7 @@ Table I - Delivery rows
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | I1 | 1 | Reject same-article comparisons in shared scoring | - | A | DONE | sturdy-sniffle | #1925 | Article identity fix |
-| I2 | 2 | Run independent prepared plugin work through the council | - | A | IN-FLIGHT | symmetrical-potato | - | Council plugin execution |
+| I2 | 2 | Run independent prepared plugin work through the council | - | A | DONE | symmetrical-potato | - | Council plugin execution |
 | I3 | 3 | Correct emitted evidence and judge statistics | 1, 2 | B | PENDING | - | - | - |
 | I4 | 4 | Fit only adjustable comparisons and protect published decisions | 3 | C | PENDING | - | - | - |
 | I5 | 5 | Deliver a frozen offline judge evaluator | 4 | D | PENDING | - | - | - |
