@@ -7,12 +7,12 @@ import { loadPlanInputs } from "../src/load-plan-inputs";
 import { readPlanningHistory } from "../src/read-ledger-history/read-run-history";
 import { verifyParquetFiles } from "./feed-ingest-plan-verification";
 import { readArticleFailureDiagnostics } from "./read-article-failure-diagnostics";
-import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
-import type { ServerEvidence } from "../../serve-pipeline-apis/src/server-evidence";
+import { readMachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
+import type { MachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 
 export async function readReportFailureEvidence(input: {
   directory: string; root?: string; response?: unknown;
-  execution?: ReportDiagnosticIdentity; servers?: readonly ServerEvidence[];
+  execution?: ReportDiagnosticIdentity; servers?: readonly MachineServerEvidence[];
 }): Promise<ReportFailureEvidence> {
   const saved = input.response === undefined ? undefined : PlannerSavedResponseSchema.parse(input.response);
   const captured = saved === undefined ? undefined : "planning_complete" in saved ? saved : saved.failure?.execution;
@@ -31,7 +31,7 @@ export async function readReportFailureEvidence(input: {
   if (attempt != null) expected.attempt = attempt;
   if (traceId != null) expected.traceId = traceId;
   const diagnostics = await readArticleFailureDiagnostics({
-    directory: input.directory, expected, servers: input.servers ?? await readServerEvidence(input.directory),
+    directory: input.directory, expected, servers: input.servers ?? await readMachineServerEvidence(input.directory),
   });
   if (saved === undefined || !("planning_complete" in saved)) return diagnostics;
   const response = saved;

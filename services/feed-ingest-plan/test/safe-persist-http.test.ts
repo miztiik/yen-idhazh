@@ -21,13 +21,14 @@ import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { publicationGitRecording, publicationRecording } from "./publication-recordings";
 import { fixtureGit } from "./fixture-git";
 import { writeRecordedHostOutput } from "./host-output-recordings";
-import { ApiReadySchema, ApiStartupFailureSchema, ApiStartupSchema } from "../../serve-pipeline-apis/src/api-startup";
+import { ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
+import { FeedApiStartupFailureSchema, FeedApiStartupSchema } from "../scripts/read-feed-api-startup";
 import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
-import { DeliveryCompletionDiagnosticSchema } from "../../serve-pipeline-apis/src/delivery-completion-diagnostic";
+import { DeliveryCompletionDiagnosticSchema } from "../scripts/delivery-completion-diagnostic";
 import { ServerEventDataSchema, serverLogFilename } from "../../serve-pipeline-apis/src/server-evidence";
 
 type Recording = Awaited<ReturnType<typeof publicationGitRecording>>;
-const serverEntry = fileURLToPath(new URL("../../serve-pipeline-apis/src/index.ts", import.meta.url));
+const serverEntry = fileURLToPath(new URL("../scripts/serve-feed-apis.ts", import.meta.url));
 const requestFor = (f: Recording, paths = f.commit.paths) => ({ runNumber: "700", attempt: 3, paths });
 const inputFor = (f: Recording) => ({
   root: f.repository, directory: f.directory, currentRunFiles: JSON.stringify(f.commit.paths), runNumber: "700", attempt: 3,
@@ -165,7 +166,7 @@ test("two actual delivery request operations survive native stderr, the completi
     run_id: "999", attempt: 9, started_at: "2026-11-05T00:00:00Z",
     context: createRootContext({ traceState: "supervision=retained" }),
   };
-  const startup = ApiStartupSchema.parse({
+  const startup = FeedApiStartupSchema.parse({
     group: "delivery", server: await loadHonoSettings(f.repository),
     directory: relative(f.repository, f.directory).replaceAll("\\", "/"), run,
     delivery: {
@@ -181,7 +182,7 @@ test("two actual delivery request operations survive native stderr, the completi
   try {
     child.stdin.write(`${JSON.stringify(startup)}\n`);
     await child.stdin.flush();
-    const ready = await waitForHealth(settings.listener.port, AbortSignal.timeout(settings.supervision.readiness_timeout_ms));
+    const ready = await waitForHealth(settings.listener.port, AbortSignal.timeout(startup.server.supervision.readiness_timeout_ms));
     expect(ready.pid).toBe(child.pid);
     const callers = [
       createRootContext({ traceState: "request=first" }), createRootContext({ traceState: "request=second" }),
@@ -213,7 +214,7 @@ test("two actual delivery request operations survive native stderr, the completi
     expect(diagnostics).toHaveLength(2);
     expect(diagnostics[0]!.context.spanId).not.toBe(diagnostics[1]!.context.spanId);
     const mirror = Bun.spawn([process.execPath, fileURLToPath(new URL(
-      "../../serve-pipeline-apis/test/write-server-events.ts", import.meta.url,
+      "./write-feed-api-events.ts", import.meta.url,
     ))], {
       stdin: new Blob([JSON.stringify({ directory: f.directory, run, source: PIPELINE_API_EVENT_SOURCE,
         group: "delivery", module_lines: nativeLines })]), stdout: "pipe", stderr: "pipe",
@@ -337,8 +338,8 @@ test("an occupied port cannot reuse an earlier successful receipt or stop anothe
 test("expired delivery readiness reaps the child without starting Git delivery", async () => {
   const f = await publicationGitRecording();
   try {
-    const path = join(f.repository, "config", "feed-ingest-plan-service.json");
-    const settings = ServiceSettingsSchema.parse(await Bun.file(path).json());
+    const path = join(f.repository, "config", "hono-server.json");
+    const settings = await loadHonoSettings(f.repository);
     settings.supervision.readiness_timeout_ms = 1;
     await writeFile(path, JSON.stringify(settings));
     await expect(deliverWorkflowMetadataHttp(inputFor(f))).rejects.toThrow("SAFE_PERSIST_READY_TIMEOUT");
@@ -366,10 +367,10 @@ test("cancellation during a real refused Git push reaps the delivery child and p
   let pending: ReturnType<typeof finalizeRunOutput> | undefined;
   let gitPid: number | undefined;
   try {
-    const settingsPath = join(f.repository, "config", "feed-ingest-plan-service.json");
-    const settings = ServiceSettingsSchema.parse(await Bun.file(settingsPath).json());
-    settings.supervision.shutdown_timeout_ms = 200;
-    await writeFile(settingsPath, JSON.stringify(settings));
+    const settingsPath = join(f.repository, "config", "hono-server.json");
+    const listener = await loadHonoSettings(f.repository);
+    listener.supervision.shutdown_timeout_ms = 200;
+    await writeFile(settingsPath, JSON.stringify(listener));
     await writeFile(join(f.repository, "config", "feed-ingest-plan.json"), JSON.stringify(f.inputs.harvest.config));
     const retryPath = join(f.repository, "config", "push-retry.json");
     const retry = await Bun.file(retryPath).json();
@@ -385,8 +386,8 @@ test("cancellation during a real refused Git push reaps the delivery child and p
       outputPath: join(f.directory, "outputs"), summaryPath: join(f.directory, "summary.md"),
     });
     void pending.catch(() => {});
-    const deadline = AbortSignal.timeout(settings.supervision.readiness_timeout_ms);
-    const ready = await waitForHealth(settings.listener.port, deadline);
+    const deadline = AbortSignal.timeout(listener.supervision.readiness_timeout_ms);
+    const ready = await waitForHealth(listener.port, deadline);
     while (!await Bun.file(marker).exists()) {
       deadline.throwIfAborted();
       await Bun.sleep(10);
@@ -396,7 +397,7 @@ test("cancellation during a real refused Git push reaps the delivery child and p
     cancellation.abort(new Error("Recorded cancellation during delivery"));
     await expect(pending).rejects.toThrow("Run finalization failed");
     expect(() => process.kill(ready.pid, 0)).toThrow();
-    await assertReleased(settings.listener.port);
+    await assertReleased(listener.port);
     await waitForExit(gitPid, AbortSignal.timeout(5000));
     expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
     expect(MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json()).status).toBe("failed");
@@ -420,8 +421,9 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
       nonce: randomUUID(), settings, output_root: relative(f.repository, f.directory).replaceAll("\\", "/"),
       git_sha: f.identity.git_sha,
     });
-    const startup = ApiStartupSchema.parse({
-      group: "delivery", delivery, server: await loadHonoSettings(f.repository),
+    const listener = await loadHonoSettings(f.repository);
+    const startup = FeedApiStartupSchema.parse({
+      group: "delivery", delivery, server: listener,
       directory: relative(f.repository, f.directory).replaceAll("\\", "/"),
       run: { run_id: "700", attempt: 3, started_at: "2026-10-21T23:59:59Z", context: createRootContext() },
     });
@@ -434,7 +436,7 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
       new Response(invalid.stdout).text(), new Response(invalid.stderr).text(), invalid.exited,
     ]);
     expect(code).toBe(2);
-    expect(ApiStartupFailureSchema.parse(JSON.parse(output)).code).toBe("TYPESCRIPT_API_STARTUP_FAILED");
+    expect(FeedApiStartupFailureSchema.parse(JSON.parse(output)).code).toBe("TYPESCRIPT_API_STARTUP_FAILED");
     expect(() => process.kill(invalid.pid, 0)).toThrow();
     await assertReleased(settings.listener.port);
 
@@ -446,7 +448,7 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
     try {
       child.stdin.write(`${JSON.stringify(startup)}\n`);
       await child.stdin.flush();
-      const ready = await waitForHealth(settings.listener.port, AbortSignal.timeout(settings.supervision.readiness_timeout_ms));
+      const ready = await waitForHealth(listener.port, AbortSignal.timeout(listener.supervision.readiness_timeout_ms));
       expect(ready).toMatchObject({ nonce: delivery.nonce, pid: child.pid });
       expect(ready.pid).not.toBe(process.pid);
       child.stdin.end();

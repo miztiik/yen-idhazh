@@ -107,6 +107,9 @@ Linux ASGI coverage on Windows.
 
 The visible tasks prepare named native assets, generate once through FastAPI,
 stop the native model, evaluate through FastAPI and create the report.
+Machine preparation installs shared hosting, fingerprinting and probes without
+feed-ingest-plan or data-delivery. It copies only named machine configuration;
+`config/hono-server.json` owns the listener and supervision waits.
 The [evaluator](../reference/fastapi-server.md) and
 [pipeline API](../reference/serve-pipeline-apis.md) references own listener,
 readiness and process controls. The published site needs neither server.

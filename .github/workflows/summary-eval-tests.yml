@@ -46,12 +46,10 @@ jobs:
         working-directory: .
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
-          bun install --frozen-lockfile --cwd packages/data-delivery
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/host-probes
-          bun install --frozen-lockfile --cwd services/feed-ingest-plan
-          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
           uv sync --project services/hhem-evaluator --frozen --extra model --no-dev
 
       - name: Prepare selected native assets and validate inputs

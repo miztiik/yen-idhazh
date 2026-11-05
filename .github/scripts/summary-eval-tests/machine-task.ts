@@ -5,10 +5,9 @@ import { randomUUID } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import type { Readable } from "node:stream";
 import { createRootContext, OperationMetadataSchema, writeTraceContext } from "../../../packages/common-contracts/src";
-import { superviseApiTask } from "../../../services/serve-pipeline-apis/src/supervise-api-task";
+import { superviseMachineApiTask } from "../../../services/host-probes/src/api/supervise-machine-api-task";
 import { HonoServerSettingsSchema } from "../../../services/serve-pipeline-apis/src/load-settings";
-import { ServerEvidenceSchema } from "../../../services/serve-pipeline-apis/src/server-evidence";
-import { ServiceSettingsSchema } from "../../../services/feed-ingest-plan/src/config/service-settings";
+import { MachineServerEvidenceSchema } from "../../../services/host-probes/src/api/create-machine-server-evidence";
 import { loadConfig } from "../../../services/host-probes/src/config";
 import { readProcessIdentity } from "../../../services/host-probes/src/task-profile/process-stat";
 import { TaskProfileSchema } from "../../../services/host-probes/src/task-profile/profile-schema";
@@ -88,7 +87,7 @@ async function main() {
   }).catch(() => { abort(); return null; });
   let profile: z.infer<typeof TaskProfileSchema> | null = null;
   let clean = true;
-  let server: z.infer<typeof ServerEvidenceSchema> | null = null;
+  let server: z.infer<typeof MachineServerEvidenceSchema> | null = null;
   const context = createRootContext();
   let currentEvidence = false;
   let announced = false;
@@ -98,9 +97,6 @@ async function main() {
   let cleanupErrorCode: string | null = null;
   try {
     const probes = await loadConfig(join(runtime, "config", "host-probes.json"));
-    const service = ServiceSettingsSchema.parse(await Bun.file(join(
-      runtime, "config", "feed-ingest-plan-service.json",
-    )).json());
     // The native evidence filename is reused; a failed restart must not read the previous phase.
     stage = "MACHINE_EVIDENCE_INVALID";
     await unlink(join(runtime, "logs", "hono-server-machine.json")).catch(error => {
@@ -108,12 +104,14 @@ async function main() {
     });
     currentEvidence = true;
     stage = "MACHINE_API_STARTUP_INVALID";
-    await superviseApiTask({
-      root: runtime, kind: "TYPESCRIPT_API", signal: cancellation.signal,
+    const listener = HonoServerSettingsSchema.parse(
+      await Bun.file(join(runtime, "config", "hono-server.json")).json(),
+    );
+    await superviseMachineApiTask({
+      root: runtime, signal: cancellation.signal,
       startup: {
         group: "machine", nonce: randomUUID(), state_root: "host", directory: "logs",
-        server: HonoServerSettingsSchema.parse(await Bun.file(join(runtime, "config", "hono-server.json")).json()),
-        supervision: service.supervision,
+        server: listener,
         run: {
           run_id: startup.run.run_id, attempt: startup.run.attempt,
           started_at: startup.run.started_at, context,
@@ -170,7 +168,7 @@ async function main() {
         emit({
           version: VERSION, kind: "ready", service: "host", startup_id: startup.startup_id,
           pid: process.pid, profile_started: true,
-          lifecycle_timeout_ms: probes.task_profile.lifecycle_timeout_ms + service.supervision.shutdown_timeout_ms,
+          lifecycle_timeout_ms: probes.task_profile.lifecycle_timeout_ms + listener.supervision.shutdown_timeout_ms,
           hardware: HardwareSchema.parse({
             cpu_model: null, cpu_logical_processors: null, cpu_physical_cores: null,
             machine_memory_total_mib: null,
@@ -215,7 +213,7 @@ async function main() {
       if (!currentEvidence) throw new Error("No current machine server evidence was started");
       const file = Bun.file(join(runtime, "logs", "hono-server-machine.json"));
       if (file.size > pipeline.max_response_bytes) throw new Error("Oversized server evidence");
-      server = ServerEvidenceSchema.parse(await file.json());
+      server = MachineServerEvidenceSchema.parse(await file.json());
       if (server.run_id !== startup.run.run_id || server.attempt !== startup.run.attempt
         || server.started_at !== startup.run.started_at) throw new Error("Stale machine evidence");
       profile ??= server.reported_profiles.at(-1) ?? null;

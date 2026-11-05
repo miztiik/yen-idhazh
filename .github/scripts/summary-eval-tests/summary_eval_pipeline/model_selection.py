@@ -65,7 +65,6 @@ def stage_configuration(root: Path, directory: Path, selected: SelectedModel) ->
         "host-fingerprints.json",
         "host-probes.json",
         "ledgers.json",
-        "feed-ingest-plan-service.json",
     )
     destination = directory / "config"
     destination.mkdir(parents=True, exist_ok=True)

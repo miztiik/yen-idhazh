@@ -1,9 +1,9 @@
 /** Show observed server readiness and cleanup without treating diagnostic lines as execution proof. */
-import type { ServerEvidence } from "../../serve-pipeline-apis/src/server-evidence";
+import type { MachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { formatDuration } from "../src/reporting/aggregate-feed-results";
 import { escapeMarkdown } from "../src/reporting/markdown-format";
 
-export function renderServerEvidence(evidence: readonly ServerEvidence[]): string {
+export function renderServerEvidence(evidence: readonly MachineServerEvidence[]): string {
   const profiles = evidence.flatMap(server => server.reported_profiles.map(profile => ({ group: server.group, profile })));
   return [
     "<details>", "<summary>API servers</summary>", "",

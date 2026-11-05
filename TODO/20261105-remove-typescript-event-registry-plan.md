@@ -39,7 +39,7 @@ Table C - Complete TypeScript HTTP API check
 | C3 | Fingerprint: `services/host-fingerprints/src/api/server.ts` and `src/api/routes/fingerprint.route.ts` | `POST /api/2026-10-20/fingerprint`, `GET /api/2026-10-20/health`. | Add native completion/failure events to actual fingerprint work, both standalone and composed. The standalone handler currently has no registry dependency and no native event envelope. |
 | C4 | Host probes: `services/host-probes/src/api/server.ts`, `task-profile-route.ts` and `cache-latency-route.ts` | `GET /api/2026-10-20/sample`; `POST /api/2026-10-24/start-task-profile`, `/stop-task-profile`, `/cache/latency`. | Add safe native operation/failure events. Preserve the actual profile operation and private full-profile reporting. Standalone handlers currently use plain diagnostics. |
 | C5 | Delivery: `services/feed-ingest-plan/scripts/safe-persist-http-api.ts` | Versioned health and `POST /api/2026-11-05/safe-persist-data`, through its exported app and composed delivery group. | Construct the completion event in the handler, not in its supervisor; preserve the already published completion source and payload. |
-| C6 | Composition: `services/serve-pipeline-apis/src/create-api-app.ts`, `src/index.ts` and `src/supervise-api-task.ts` | Planning group mounts planner and machine modules; machine group mounts fingerprint/probes; delivery group mounts delivery; own `GET /health` and request-error boundary. | Local lifecycle source, native request-failure event and validated relay of native module events without relabeling them. Summarizer is not mounted here. |
+| C6 | Composition: shared `services/serve-pipeline-apis/src/create-api-app.ts` and `src/supervise-api-task.ts`; native `services/feed-ingest-plan/scripts/create-feed-api-app.ts`, `serve-feed-apis.ts`, `supervise-feed-api-task.ts`; machine `services/host-probes/src/api/create-machine-app.ts`, `serve-machine-apis.ts`, `supervise-machine-api-task.ts` | Planning group mounts planner and machine modules; machine group mounts fingerprint/probes; delivery group mounts delivery; own `GET /health` and request-error boundary. | Local lifecycle source, native request-failure event and validated relay of native module events without relabeling them. Native assembly and decoders stay in native packages; shared hosting has no reverse native dependency. Summarizer is not mounted here. |
 | C7 | Additional non-HTTP producers | `.github/scripts/ai-pipeline.ts`; planner upload-inventory helper; summarizer CLI. | Migrate their registry reads too. They do not constitute additional HTTP APIs. |
 | C8 | Checked non-API surfaces | Package manifests and serving/route declarations under `packages/`, `frontend/`, `backend/`, `.github/`, `services/`, `tests/`, `notebooks/`, `config/`, `.claude/` and `.vscode/`. | No additional authored TypeScript HTTP implementation was found. Frontend page loaders are static-build inputs; there is no `frontend/src/**/+server.ts`. Package libraries and test-only listeners are not new API services. |
 
@@ -68,7 +68,7 @@ Table E - Native event contracts and boundaries
 | E7 | Delivery failure | The E6 module owns native `safe_persist_http_failed` with strict `{code}`, reusing `PlannerErrorResponseSchema.shape.code`. Use the actual receiving operation and D4. Keep detailed sanitized failure evidence in its existing response/evidence surfaces, not in the new mirrored payload. |
 | E8 | Operation ownership | Ordinary new request events derive a child from a valid incoming carrier, otherwise a root. Enabled profile start uses the operation returned by the real profiler; successful stop, including repeated stop, uses the retained profile operation despite conflicting stop headers. Background profile failure uses its allocated session operation. Disabled commands may have a receiving-request diagnostic context but create no profile, handle or measurement. Shutdown errors use the owned service lifetime context. Existing planner/summarizer relationships do not change. |
 | E9 | Data minimization | New host/composition events contain only their declared safe payloads and standard envelope metadata. No arbitrary details, bodies, prompts, model output, headers, raw exception strings, paths, PIDs or measurements. Parent/input relationships remain in the native operation/profile; the generic carrier is not a second serialized copy of the complete operation. |
-| E10 | Relay | Dispatch known event types to their producer-owned validators. Mirror an accepted native event unchanged, including source, occurrence ID, UTC time, carrier and data. Delivery carrier must agree with `writeTraceContext(data.context)`. Retain terminal article forwarding and ordinary planner failure projection. Unknown/malformed events produce the existing safe `CHILD_DIAGNOSTIC_INVALID` warning, never blanket passthrough. |
+| E10 | Relay | Native feed and machine decoders dispatch known event types to their producer-owned validators and return typed results to shared hosting. Shared hosting validates its own request-failure subtype without importing native packages. Mirror an accepted native event unchanged, including source, occurrence ID, UTC time, carrier and data. Delivery carrier must agree with `writeTraceContext(data.context)`. Retain terminal article forwarding and ordinary planner failure projection. Unknown/malformed events produce the existing safe `CHILD_DIAGNOSTIC_INVALID` warning, never blanket passthrough. |
 | E11 | Private transport | Keep the validated `{event: "task_profile", profile}` callback/child transport and `reported_profiles` evidence exactly as they are, excluded from normal output/mirrors. Keep private readiness packets and CLI result stdout. Native events do not turn these data/control protocols into public diagnostics. |
 | E12 | Versioning | New diagnostic schemas carry a `2026-11-05` metadata version, one-line changelog and current-only read rule. The byte-equivalent delivery schema move does not change its version or saved data. Existing shared, planner, summarizer, workflow and server-evidence versions remain unchanged. |
 
@@ -113,11 +113,14 @@ Table F - PR sequence
   - `services/summarizer/test/model-runtime.test.ts`
   - `services/serve-pipeline-apis/src/declare-event-source.ts` - add.
   - `services/serve-pipeline-apis/src/supervise-api-task.ts`
+  - `services/serve-pipeline-apis/test/supervise-http-child.test.ts`
+  - `services/host-probes/test/machine-api-recordings.ts`
   - `.github/scripts/declare-workflow-event-source.ts` - add.
   - `.github/scripts/ai-pipeline.ts`
   - `.github/scripts/test/workflow-handoff.test.ts`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/model_selection.py`
   - `.github/workflows/ai-pipeline-tests.yml`
+  - `.github/workflows/ci.yml`
   - `services/hhem-evaluator/tests/test_pipeline_preparation.py`
   - `frontend/scripts/tests/test-scope.test.mjs`
   - `docs/architecture/contracts/identity.md`
@@ -134,7 +137,7 @@ Table F - PR sequence
   - Run declared `check` commands for common-contracts, planner, summarizer and composition. Combine affected test selectors within each package invocation.
   - Common-contracts: `metadata-flow.test.ts`, `rejection.test.ts`, `article-failure-diagnostic.test.ts` and existing `article-identity-compatibility.test.ts`. Keep generic URI rejection in memory.
   - Planner: the affected test files above, plus `plan-entry-points.test.ts`, `feed-ingest-plan-supervisor.test.ts` and `feed-ingest-plan-finalization.test.ts`. Their generated roots must omit the deleted config file.
-  - Summarizer: `pipeline-events.test.ts` and `model-runtime.test.ts`. Composition: `api-composition.test.ts`, `server-events.test.ts` and `profile-retention.test.ts`.
+  - Summarizer: `pipeline-events.test.ts` and `model-runtime.test.ts`. Shared hosting: `server-events.test.ts` and `supervise-http-child.test.ts`. Native feed assembly: `serve-feed-apis.test.ts`, `relay-feed-api-events.test.ts` and `retain-api-profiles.test.ts`. Machine assembly: `record-machine-api-events.test.ts` and `serve-machine-apis.test.ts`.
   - Run `bun test .github/scripts/test/workflow-handoff.test.ts` and the existing workflow-handoff type check declared in its workflow.
   - Run `node --test frontend/scripts/tests/test-scope.test.mjs`. Replace its deleted-loader example with the existing shared envelope-schema path; do not weaken selector coverage.
   - From `services/hhem-evaluator`, run `uv run --frozen pytest tests/test_pipeline_preparation.py`; run its existing lint/type commands on the changed staging/test inputs. This is the existing Python staging consumer, not a new planner test path.
@@ -165,18 +168,24 @@ Table H - Row 1 rejected alternatives
 - **Files touched:**
   - `services/feed-ingest-plan/src/declare-event-source.ts` - add D4.
   - `services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts`
+  - `services/feed-ingest-plan/scripts/delivery-completion-diagnostic.ts` - delete after consolidation.
+  - `services/feed-ingest-plan/scripts/read-feed-api-diagnostic.ts`
   - `services/feed-ingest-plan/test/safe-persist-http.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-finalization.test.ts`
+  - `services/feed-ingest-plan/test/relay-feed-api-events.test.ts`
+  - `services/feed-ingest-plan/test/write-feed-api-events.ts`
   - `services/host-fingerprints/src/declare-event-source.ts` - add.
   - `services/host-fingerprints/src/api/create-fingerprint-event.ts` - add.
   - `services/host-fingerprints/package.json`
   - `services/host-fingerprints/test/native-events.test.ts` - add.
   - `services/host-probes/src/declare-event-source.ts` - add.
   - `services/host-probes/src/api/create-probe-event.ts` - add.
+  - `services/host-probes/src/api/read-machine-api-diagnostic.ts`
   - `services/host-probes/package.json`
   - `services/host-probes/test/native-events.test.ts` - add.
+  - `services/host-probes/test/record-machine-api-events.test.ts`
+  - `services/host-probes/test/write-machine-api-events.ts`
   - `services/serve-pipeline-apis/src/create-request-failure-event.ts` - add.
-  - `services/serve-pipeline-apis/src/delivery-completion-diagnostic.ts` - delete after moving its implementation.
   - `services/serve-pipeline-apis/src/write-server-event.ts`
   - `services/serve-pipeline-apis/test/server-events.test.ts`
   - `docs/architecture/sources/feed-operator-api.md`
@@ -185,9 +194,9 @@ Table H - Row 1 rejected alternatives
   - `TODO/20261105-remove-typescript-event-registry-plan.md`
 - **Acceptance gates - local:**
   - Inspect the shared selector, then run declared checks for planner, fingerprint, probes and composition.
-  - Run the new `native-events.test.ts` files, composition `server-events.test.ts`, and planner `safe-persist-http.test.ts` plus `feed-ingest-plan-finalization.test.ts`.
+  - Run the new `native-events.test.ts` files, shared `server-events.test.ts`, machine `record-machine-api-events.test.ts`, and planner `relay-feed-api-events.test.ts`, `safe-persist-http.test.ts` plus `feed-ingest-plan-finalization.test.ts`.
   - Cover strict type/payload validation, malformed source/carrier rejection, new occurrence creation and unchanged replay with minimal in-memory values.
-  - Use the existing real stderr/mirror helper in `services/serve-pipeline-apis/test/write-server-events.ts`. Native host, delivery and request-failure events survive it unchanged; invalid/unknown types or unsafe extra fields yield safe warnings.
+  - Use the existing real stderr/mirror helpers in `services/feed-ingest-plan/test/write-feed-api-events.ts` and `services/host-probes/test/write-machine-api-events.ts` for native events, and the shared `test/write-server-events.ts` for the host's own request-failure events. Accepted events survive unchanged; invalid/unknown types or unsafe extra fields yield safe warnings. Shared tests do not import native packages.
   - Keep existing article forwarding, log-unavailable behavior, private-profile exclusion and completion context/default assertions green.
   - Search the authored tree for the removed delivery schema module and update every import/link found, including the named older plan. No compatibility re-export at the old location.
 - **Acceptance gates - CI:** Existing full native suites and merge-candidate CI pass; locked installs remain valid without dependency or workspace changes.
@@ -197,7 +206,7 @@ Table I - Row 2 decisions
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| I1 | Make the delivery move a behavior-preserving structural commit before reader expansion. Use E6's native field validators directly; the producer must not import `ServerEventDataSchema` or any other supervisor module. Update both planner test imports and the server test import. | Fowler; producer ownership. |
+| I1 | Consolidate the producer's delivery completion module into its native diagnostic module in a behavior-preserving structural commit before reader expansion. Use E6's native field validators directly; the producer must not import `ServerEventDataSchema` or any other supervisor module for this contract. Update every native reader and test import. | Fowler; producer ownership. |
 | I2 | Implement E2-E7 as real owner factories/readers, not placeholders. Export host diagnostic contracts through `./diagnostic` subpaths in the existing host package manifests; reuse the existing planner `./delivery-diagnostic` subpath. No new dependencies or shared application registry. | Fowler; E1-E7. |
 | I3 | Expand the finite relay by event type under E10. Keep the existing plain completion translator only while the current handler still emits it; adapt that translator to E6's final factory input. Row 3 removes it with the writer cutover. Private profile transport is not this legacy branch. | Fowler; reader-before-writer ordering. |
 | I4 | Publish current contract ownership and reader behavior in the named canonical pages. Do not claim host APIs already emit the new events before row 3. Record schema metadata as E12 requires; do not bump unchanged saved families. | Fowler; A5 and E12. |
@@ -224,17 +233,21 @@ Table J - Row 2 rejected alternatives
   - `services/host-probes/src/api/task-profile-manager.ts`
   - `services/host-probes/src/api/cache-latency-route.ts`
   - `services/host-probes/src/api/command-body.ts`
+  - `services/host-probes/src/api/create-machine-app.ts`
   - `services/host-probes/test/native-events.test.ts`
   - `services/host-probes/test/probe.test.ts`
+  - `services/host-probes/test/serve-machine-apis.test.ts`
   - `services/feed-ingest-plan/scripts/safe-persist-http-api.ts`
   - `services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts`
+  - `services/feed-ingest-plan/scripts/create-feed-api-app.ts`
   - `services/feed-ingest-plan/test/safe-persist-http.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-finalization.test.ts`
+  - `services/feed-ingest-plan/test/serve-feed-apis.test.ts`
+  - `services/feed-ingest-plan/test/relay-feed-api-events.test.ts`
+  - `services/feed-ingest-plan/test/retain-api-profiles.test.ts`
   - `services/serve-pipeline-apis/src/create-api-app.ts`
   - `services/serve-pipeline-apis/src/write-server-event.ts`
-  - `services/serve-pipeline-apis/test/api-composition.test.ts`
   - `services/serve-pipeline-apis/test/server-events.test.ts`
-  - `services/serve-pipeline-apis/test/profile-retention.test.ts`
   - `docs/architecture/contracts/identity.md`
   - `docs/architecture/sources/feed-operator-api.md`
   - `docs/reference/serve-pipeline-apis.md`
@@ -249,7 +262,7 @@ Table J - Row 2 rejected alternatives
 - **Acceptance gates - local:**
   - Inspect the shared selector; run declared checks for fingerprint, probes, planner and composition.
   - Extend existing real handler cases, not a separate fake implementation: fingerprint write/disabled/failure; probe sample/start/stop/cache and safe failures; direct delivery and actual finalization; real composed listener and its error boundary.
-  - Run fingerprint `native-events.test.ts` and `fingerprint-persistence.test.ts`; probes `native-events.test.ts` and `probe.test.ts`; planner `safe-persist-http.test.ts` and `feed-ingest-plan-finalization.test.ts`; composition `api-composition.test.ts`, `server-events.test.ts` and `profile-retention.test.ts`.
+  - Run fingerprint `native-events.test.ts` and `fingerprint-persistence.test.ts`; probes `native-events.test.ts`, `probe.test.ts` and `serve-machine-apis.test.ts`; planner `safe-persist-http.test.ts`, `feed-ingest-plan-finalization.test.ts`, `serve-feed-apis.test.ts`, `relay-feed-api-events.test.ts` and `retain-api-profiles.test.ts`; shared hosting `server-events.test.ts`.
   - Use existing recorded host/process inputs and actual ephemeral outputs. Capture through an explicit event-output boundary or real stderr; do not patch business logic, create new disk recordings or scan directories.
   - Verify each Table C API through an actual emitting handler/process case. Reuse unchanged row-1 planner, summarizer and workflow records only when their tested inputs remain unchanged; otherwise rerun the affected selection.
   - Verify enabled profile start/stop carriers against their real operation, including conflicting stop headers and repeated stop. Disabled work must not create handles or measurements. A repeated event occurrence may be new while its retained profile operation stays the same.

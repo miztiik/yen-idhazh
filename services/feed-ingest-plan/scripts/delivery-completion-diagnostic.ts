@@ -1,9 +1,9 @@
 /** Which delivery completion facts and request operation does the server event retain? */
 import { z } from "zod";
 import { createCloudEvent } from "@idhazh/common-contracts";
-import { SafePersistHttpDiagnosticSchema } from "@idhazh/feed-ingest-plan/delivery-diagnostic";
-import type { SafePersistHttpDiagnostic } from "@idhazh/feed-ingest-plan/delivery-diagnostic";
-import { ServerEventDataSchema } from "./server-evidence";
+import { SafePersistHttpDiagnosticSchema } from "./safe-persist-http-diagnostic";
+import type { SafePersistHttpDiagnostic } from "./safe-persist-http-diagnostic";
+import { ServerEventDataSchema } from "@idhazh/serve-pipeline-apis/evidence";
 
 export const DeliveryCompletionDiagnosticSchema = ServerEventDataSchema.pick({
   server_name: true, severity: true, duration_ms: true, exit_code: true, code: true,
