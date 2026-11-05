@@ -6,7 +6,11 @@
     "max_body_bytes": 1048576,
     "body_read_timeout_ms": 5000
   },
-  "enabled_routes": [],
+  "enabled_routes": [
+    "hhem",
+    "llama",
+    "unieval"
+  ],
   "logging": {
     "level": "INFO",
     "max_event_bytes": 4096

@@ -23,7 +23,7 @@ from .contract_examples import API_SETTINGS_FILE, SETTINGS_FILE, read_contract
 def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model() -> None:
     settings = load_settings(SETTINGS_FILE)
     assert settings.version == "2026-11-02"
-    assert not settings.enabled
+    assert settings.enabled
     assert settings.scoring.chunk_words == 5000
     assert settings.scoring.chunk_overlap_words == 500
     assert settings.scoring.max_windows_per_comparison == 256
@@ -265,20 +265,24 @@ def test_missing_settings_have_no_source_or_environment_fallback(tmp_path: Path)
         load_settings(file, shared)
 
 
-def test_shared_listener_is_the_only_authority_and_disabled_routes_are_explicit() -> None:
+@pytest.mark.parametrize("routes", [("hhem",), ()])
+def test_shared_listener_is_the_only_authority_and_disabled_routes_are_explicit(
+    routes: tuple[str, ...],
+) -> None:
     shared = load_api_settings(API_SETTINGS_FILE)
     assert shared.listener.host == "127.0.0.1" and shared.listener.port == 3010
-    assert shared.enabled_routes == ()
+    assert shared.enabled_routes == ("hhem", "llama", "unieval")
     selected = ApiSettings.model_validate_json(
         shared.model_copy(
             update={
-                "enabled_routes": ("hhem",),
+                "enabled_routes": routes,
                 "listener": shared.listener.model_copy(update={"port": 3011}),
             }
         ).model_dump_json()
     )
     frozen = load_settings(SETTINGS_FILE, selected)
-    assert frozen.enabled and frozen.listener.port == 3011
+    assert frozen.enabled == ("hhem" in routes)
+    assert frozen.listener.port == 3011
     assert load_settings(SETTINGS_FILE).listener.port == 3010
 
 

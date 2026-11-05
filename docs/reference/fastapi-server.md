@@ -1,6 +1,6 @@
 # Shared local Python API
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 Which routes and startup settings the single FastAPI application exposes.
 This is a local workflow service, not a backend for the published site.
@@ -23,7 +23,7 @@ Table A - Listener and component selection
 | A1 | `listener.host`, `listener.port` | Loopback `127.0.0.1`, port 3010. The host can also be the literal `::1`. |
 | A2 | `listener.max_body_bytes` | At most 1048576 bytes, or 1 MiB, per input body. |
 | A3 | `listener.body_read_timeout_ms` | An absolute input-read deadline of 5000 milliseconds, or five seconds. |
-| A4 | `enabled_routes` | A distinct list drawn from `hhem`, `llama` and `unieval`. The development default is an empty list. Its declaring field names the removal condition. |
+| A4 | `enabled_routes` | A distinct list drawn from `hhem`, `llama` and `unieval`; all three are enabled by default. Each task selects only its required components. An empty list disables all operation routes. |
 | A5 | `shutdown_timeout_ms` | 15000 milliseconds, or fifteen seconds, for forwarding-request shutdown and Uvicorn's graceful wait. When HHEM is enabled, this cannot be shorter than its worker shutdown wait. |
 
 Table B - Native operations
@@ -41,6 +41,12 @@ Table B - Native operations
 Disabled operation routes return HTTP 404. Shared health explicitly reports
 disabled components; it does not claim their models loaded. Browser origins,
 duplicate or unexpected Host headers and slash redirects remain refused.
+
+The standalone default requires prepared evaluator assets and a separately
+owned native llama process before every component can report ready. Workflow
+phases keep their explicit selections: llama for generation, HHEM and UniEval
+for evaluation. Changing the standalone default does not keep the summarizer
+running while evaluators load.
 
 ## Native llama forwarding
 

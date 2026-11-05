@@ -1,6 +1,6 @@
 # HHEM evaluation API
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 Which fields, identities and startup settings the independent HHEM evaluator
 accepts. The HHEM component serves synchronous local CPU evaluations with one owned
@@ -187,7 +187,7 @@ Table G - Initial settings and units
 
 | Id | Keys | Authored values |
 | --- | --- | --- |
-| G1 | `enabled` | A private-worker snapshot value derived from shared `enabled_routes`, not another authored flag. The shared development default enables no component. |
+| G1 | `enabled` | A private-worker snapshot value derived from [shared route selection](fastapi-server.md#configuration-and-routes), not another authored flag. |
 | G2 | `hhem.model`, `hhem.foundation` | Required references, full immutable revisions and finite named file lists in the committed settings. The model revision is `8e4a2e6e96c708cc76c2344f7e4757df2515292c`; the foundation revision is `7bcac572ce56db69c1ea7c8af255c5d7c9672fc2`. Foundation files are tokenizer/config assets, not another model's weights. |
 | G3 | `hhem.cache_directory` | `services/hhem-evaluator/var/model-cache`, a relative POSIX operator path; never a request control. |
 | G4 | `scoring.chunk_words`, `scoring.chunk_overlap_words`, `scoring.max_windows_per_comparison` | 5000 words per window, 500 words of regular overlap and at most 256 planned windows per comparison. Reject a larger plan; never drop windows. |
