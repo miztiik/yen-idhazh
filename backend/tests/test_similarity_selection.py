@@ -327,6 +327,7 @@ def test_the_picker_excludes_self_pairs_before_population_budget_and_sharding(
 
     def publish(date: str, items: list[DigestItem]) -> None:
         day = DigestDay(
+            version=DigestDay.schema_version(),
             date=date,
             generated_at=f"{date}T23:00:00Z",
             partial=False,
