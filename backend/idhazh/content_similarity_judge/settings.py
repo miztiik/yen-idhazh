@@ -6,7 +6,10 @@ from pathlib import Path
 from pydantic import TypeAdapter, ValidationError
 
 from idhazh import config
-from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityJudgeConfig
+from idhazh.contracts.knobs.content_similarity_judge import (
+    ContentSimilarityEvaluationConfig,
+    ContentSimilarityJudgeConfig,
+)
 
 
 def load(config_dir: Path | None = None) -> ContentSimilarityJudgeConfig:
@@ -23,4 +26,18 @@ def load(config_dir: Path | None = None) -> ContentSimilarityJudgeConfig:
     except (ValidationError, json.JSONDecodeError) as error:
         raise ValueError(
             f"config/judges/content-similarity-judge.json is refused: {error}"
+        ) from error
+
+
+def load_evaluation(config_dir: Path | None = None) -> ContentSimilarityEvaluationConfig:
+    """Read only the offline report settings; never override the selected model."""
+    root = config.DEFAULT_CONFIG_DIR if config_dir is None else config_dir
+    path = root / "judges" / "content-similarity-evaluation.json"
+    try:
+        return ContentSimilarityEvaluationConfig.model_validate_json(
+            path.read_text(encoding="utf-8")
+        )
+    except (ValidationError, json.JSONDecodeError) as error:
+        raise ValueError(
+            f"config/judges/content-similarity-evaluation.json is refused: {error}"
         ) from error

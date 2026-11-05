@@ -1,0 +1,175 @@
+{
+  "blockers": [
+    "missing_labels",
+    "incomplete_capture"
+  ],
+  "labels_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "report_settings": {
+    "confidence_level": 0.95,
+    "max_cases": 200,
+    "resample_seed": 0,
+    "resamples": 2000
+  },
+  "run_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "set_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "state": "blocked",
+  "streams": [
+    {
+      "case_count": 0,
+      "class_metrics": {
+        "NO": {
+          "precision": null,
+          "precision_interval_reason": "blocked",
+          "precision_lower": null,
+          "precision_upper": null,
+          "recall": null,
+          "recall_interval_reason": "blocked",
+          "recall_lower": null,
+          "recall_upper": null
+        },
+        "UNCLEAR": {
+          "precision": null,
+          "precision_interval_reason": "blocked",
+          "precision_lower": null,
+          "precision_upper": null,
+          "recall": null,
+          "recall_interval_reason": "blocked",
+          "recall_lower": null,
+          "recall_upper": null
+        },
+        "YES": {
+          "precision": null,
+          "precision_interval_reason": "blocked",
+          "precision_lower": null,
+          "precision_upper": null,
+          "recall": null,
+          "recall_interval_reason": "blocked",
+          "recall_lower": null,
+          "recall_upper": null
+        }
+      },
+      "confusion": {
+        "NO": {
+          "DISAGREE": 0,
+          "NO": 0,
+          "REFUSED": 0,
+          "UNCLEAR": 0,
+          "YES": 0
+        },
+        "UNCLEAR": {
+          "DISAGREE": 0,
+          "NO": 0,
+          "REFUSED": 0,
+          "UNCLEAR": 0,
+          "YES": 0
+        },
+        "YES": {
+          "DISAGREE": 0,
+          "NO": 0,
+          "REFUSED": 0,
+          "UNCLEAR": 0,
+          "YES": 0
+        }
+      },
+      "disagreement_count": 0,
+      "gold_counts": {
+        "NO": 0,
+        "UNCLEAR": 0,
+        "YES": 0
+      },
+      "group_count": 0,
+      "margin_diagnostics": null,
+      "prediction_counts": {
+        "DISAGREE": 0,
+        "NO": 0,
+        "REFUSED": 0,
+        "UNCLEAR": 0,
+        "YES": 0
+      },
+      "qualified_label_count": 0,
+      "refusal_count": 0,
+      "stream": "representative",
+      "unclear_count": 0,
+      "valid_agreement_count": 0
+    },
+    {
+      "case_count": 0,
+      "class_metrics": {
+        "NO": {
+          "precision": null,
+          "precision_interval_reason": "blocked",
+          "precision_lower": null,
+          "precision_upper": null,
+          "recall": null,
+          "recall_interval_reason": "blocked",
+          "recall_lower": null,
+          "recall_upper": null
+        },
+        "UNCLEAR": {
+          "precision": null,
+          "precision_interval_reason": "blocked",
+          "precision_lower": null,
+          "precision_upper": null,
+          "recall": null,
+          "recall_interval_reason": "blocked",
+          "recall_lower": null,
+          "recall_upper": null
+        },
+        "YES": {
+          "precision": null,
+          "precision_interval_reason": "blocked",
+          "precision_lower": null,
+          "precision_upper": null,
+          "recall": null,
+          "recall_interval_reason": "blocked",
+          "recall_lower": null,
+          "recall_upper": null
+        }
+      },
+      "confusion": {
+        "NO": {
+          "DISAGREE": 0,
+          "NO": 0,
+          "REFUSED": 0,
+          "UNCLEAR": 0,
+          "YES": 0
+        },
+        "UNCLEAR": {
+          "DISAGREE": 0,
+          "NO": 0,
+          "REFUSED": 0,
+          "UNCLEAR": 0,
+          "YES": 0
+        },
+        "YES": {
+          "DISAGREE": 0,
+          "NO": 0,
+          "REFUSED": 0,
+          "UNCLEAR": 0,
+          "YES": 0
+        }
+      },
+      "disagreement_count": 0,
+      "gold_counts": {
+        "NO": 0,
+        "UNCLEAR": 0,
+        "YES": 0
+      },
+      "group_count": 0,
+      "margin_diagnostics": null,
+      "prediction_counts": {
+        "DISAGREE": 0,
+        "NO": 0,
+        "REFUSED": 0,
+        "UNCLEAR": 0,
+        "YES": 0
+      },
+      "qualified_label_count": 0,
+      "refusal_count": 0,
+      "stream": "challenge",
+      "unclear_count": 0,
+      "valid_agreement_count": 0
+    }
+  ],
+  "version": "2026-11-05"
+}

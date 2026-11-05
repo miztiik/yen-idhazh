@@ -137,7 +137,7 @@ Table I - Delivery rows
 | I2 | 2 | Run independent prepared plugin work through the council | - | A | DONE | symmetrical-potato | #1927 | Council plugin execution |
 | I3 | 3 | Correct emitted evidence and judge statistics | 1, 2 | B | DONE | friendly-system | #1929 | Judge evidence correction |
 | I4 | 4 | Fit only adjustable comparisons and protect published decisions | 3 | C | DONE | curly-waffle | #1933 | Similarity calibration |
-| I5 | 5 | Deliver a frozen offline judge evaluator | 4 | D | IN-FLIGHT | - | - | Offline judge evaluation |
+| I5 | 5 | Deliver a frozen offline judge evaluator | 4 | D | DONE | automatic-succotash | - | Offline judge evaluation |
 | I6 | 6 | Establish the independently labelled current-judge baseline | 5 | M | PENDING | - | - | - |
 
 ## 2. Article identity
