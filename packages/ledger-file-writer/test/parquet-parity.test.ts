@@ -19,9 +19,11 @@ import { z } from "zod";
 import { createUnitId, persistLedger } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, LedgerSettings, PersistedLedgerFile } from "@idhazh/ledger-file-writer";
 import { appendIdentityColumns, describeObjectSchema } from "../src/row-schema";
+import { buildRawPath } from "../src/ledger-paths";
 import { digestRows, serializeRowsBytes } from "../src/parquet/row-digest";
 import { buildArrowTable } from "../src/parquet/arrow-builder";
 import { initializeParquetWasm } from "../src/parquet/wasm-serializer";
+import { createRejectedRawFileId } from "../src/uuid/file-id";
 import { plannerRecordings, selectedArticle } from "./planner-recordings";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -440,16 +442,36 @@ describe("ledger Parquet readback", () => {
 
   test("preflights every raw destination before writing the first file", async () => {
     await withOutputRoot(async root => {
-      const blocked = resolve(root, "raw", "feed-health", "2026", "10", "21");
+      // Content-addressed files let absence checks use exact paths without replacing the clock.
+      const ledger = "rejected-articles";
+      const recordings = ["2026-10-20", "2026-10-21"].map(day =>
+        plannerRecordings(day).find(recording => recording.name === ledger)!,
+      );
+      const rowContract = recordings[0]!.contract;
+      const rows = recordings.map(recording => recording.row);
+      const registryEntry = registration(ledger);
+      const fields = describeObjectSchema(rowContract.schema).fields;
+      const targets = rows.map(row => {
+        const day = DateStampSchema.parse(row.date);
+        const id = createRejectedRawFileId(rowContract.schemaVersion, day, digestRows([row], fields));
+        return buildRawPath(root, registryEntry.prefix, day, id);
+      });
+      const blocked = dirname(targets[1]!);
       await mkdir(dirname(blocked), { recursive: true });
       await writeFile(blocked, "not a directory");
-      await expect(persistLedger({
-        ledger: "feed-health", rowContract: { schema: NestedSchema, schemaVersion: "2026-10-20" },
-        rows: [assessment("2026-10-20", null), assessment("2026-10-21", null)],
-        outputRoot: root, period: { tier: "raw", covers: "2026-10-21" }, writerContext,
-        ledgerSettings: compression, registryEntry: registration("feed-health"),
-      })).rejects.toThrow();
-      expect(await readdir(resolve(root, "raw", "feed-health", "2026", "10", "20"))).toEqual([]);
+      const input = {
+        ledger, rowContract, rows, registryEntry, outputRoot: root,
+        period: { tier: "raw" as const, covers: "2026-10-21" }, ledgerSettings: compression,
+      };
+      await expect(persistLedger(input)).rejects.toThrow();
+      for (const target of targets) expect(await Bun.file(target).exists()).toBe(false);
+      expect(await readFile(blocked, "utf8")).toBe("not a directory");
+
+      await rm(blocked);
+      const written = await persistLedger(input);
+      expect(written.status).toBe("written");
+      expect(written.files.map(file => resolve(root, ...file.path.split("/")))).toEqual(targets);
+      for (const target of targets) expect(await Bun.file(target).exists()).toBe(true);
     });
   });
 

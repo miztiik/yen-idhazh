@@ -1,7 +1,7 @@
 """What may the gardener delete and rewrite, and how is each of its tasks declared?
 
 Two shapes, and they answer one question at two sizes. `GardenerConfig` is
-`config/idhazh_gardener.json`: how many shards a wake splits into, how many
+`config/gardener/config/idhazh_gardener.json`: how many shards a wake splits into, how many
 times a shard may try to land its record, how much one shard may download, and
 the first year a ledger can hold.
 `TaskPolicy` is one file under `config/gardener/`: one task, what it owns and
@@ -58,7 +58,7 @@ class PrunableCollection(StrEnum):
     WORKFLOW_RUNS = "workflow-runs"
 
 
-# --- config/idhazh_gardener.json ---------------------------------------------
+# --- config/gardener/config/idhazh_gardener.json ------------------------------
 
 
 #: The most file content one shard may download for its tasks, in megabytes of

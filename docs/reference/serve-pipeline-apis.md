@@ -4,14 +4,15 @@
 
 Which local listener serves planning, article fetching/parsing, machine
 measurements and output delivery?
-`services/serve-pipeline-apis` serves existing pipeline operations through one
-local HTTP server per task. The native handlers run in one Hono application
-served by Bun. It is build-time operator tooling, not a backend for the
-published site.
+`services/serve-pipeline-apis` hosts a native-built application through one
+local HTTP server per task. The native API packages assemble their existing
+Hono handlers; shared hosting supplies the Bun listener and its lifetime.
+It is build-time operator tooling, not a backend for the published site.
 
 ## Listener authority
 
-`config/hono-server.json` is the composed listener's only address source.
+`config/hono-server.json` is the composed listener's only address and
+supervision source.
 Tasks capture that validated file in their private startup data. HTTP input,
 headers and environment values cannot select another destination. Internal
 planning requests use the owned listener address, never the incoming Host
@@ -24,6 +25,14 @@ Table A - Listener settings
 | A1 | `hostname` | `127.0.0.1`; only this loopback address and `::1` are accepted. |
 | A2 | `port` | `8787`; an occupied port fails startup without adopting or stopping its listener. |
 | A3 | `idle_timeout_seconds` | 30 seconds; active planning and delivery disable the per-request idle timer. |
+| A4 | `supervision.readiness_timeout_ms` | 30000 milliseconds; startup and owned-child readiness must finish within this wait. |
+| A5 | `supervision.shutdown_timeout_ms` | 10000 milliseconds; allows graceful application and worker cleanup before forced exit. |
+| A6 | `supervision.forced_exit_timeout_ms` | 5000 milliseconds; bounds confirmation after killing only the spawned child. |
+
+These waits retain their previous effective values. Native startup packets
+capture the shared controls under `server.supervision`; missing controls fail
+validation before spawning. Feed settings and top-level machine startup fields
+provide no fallback.
 
 Extraction, parser limits, host instruments, profiling, ledger registration
 and output validation stay with their existing modules. Their standalone
@@ -33,9 +42,12 @@ collector or separate machine-server process.
 
 ## Explicit task groups
 
-`src/index.ts` receives one validated private startup packet through its owned
-stdin pipe. The caller selects a fixed group before startup, not through an
-API request. There is no module registry or request-selected import.
+The feed package's `scripts/serve-feed-apis.ts` receives planning or delivery
+startup; the probe package's `src/api/serve-machine-apis.ts` receives machine
+startup. Each native entry validates its complete private packet and builds
+the application under the shared child lifetime. The caller selects the
+trusted entry and fixed group before startup, not through an API request.
+There is no shared native entry, module registry or request-selected import.
 
 Table B - Route groups
 
@@ -65,11 +77,10 @@ A socket or a log line is not readiness. A disabled
 instrument still returns its native disabled result; it is not a fabricated
 measurement.
 
-The existing child supervisor detects early exit and enforces finite startup,
-drain and forced-exit waits. Planning and delivery use the existing
-`supervision` settings; a machine task captures the same control shape for
-its own invocation. Cancellation, stop signals and parent-pipe loss close the
-owned application. Shutdown aborts admitted requests, awaits module cleanup,
+The shared parent supervisor and child lifetime detect early exit and enforce
+the invocation's validated startup, drain and forced-exit waits. Native adapters
+retain their own readiness and failure checks. Cancellation, stop signals and
+parent-pipe loss close the owned application. Shutdown aborts admitted requests, awaits module cleanup,
 closes profile workers and parser work, and reaps only the owned child.
 Original work failure and cleanup failure remain separate.
 The supervisor also drains the child diagnostic stream before closing its
@@ -89,7 +100,8 @@ The date is the UTC run-start day. `run_id` is the platform run identifier,
 not the planner's date-prefixed business identity or the startup nonce.
 Local callers use their existing invocation identity and attempt one.
 Restarting the role in the same run appends a fresh start event.
-`config/typescript-event-sources.json` supplies the `typescript_api` source.
+`src/declare-event-source.ts` supplies the unchanged `/services/typescript-api`
+protocol identity, without a source registry.
 The existing common-contracts helpers allocate and validate event and operation
 metadata without a tracing provider, exporter or global active context.
 
@@ -106,7 +118,7 @@ without copying their content. The
 [planner log contract](../architecture/sources/feed-operator-api.md#structured-operation-logs)
 owns this current-only subtype.
 Delivery completion is the other strict diagnostic shape.
-[`DeliveryCompletionDiagnosticSchema`](../../services/serve-pipeline-apis/src/delivery-completion-diagnostic.ts)
+[`DeliveryCompletionDiagnosticSchema`](../../services/feed-ingest-plan/scripts/delivery-completion-diagnostic.ts)
 retains the native `landed`, `already-on-main`, `no-changes` or `failed` status,
 nullable lowercase hexadecimal commit and nonnegative file count.
 Its `run_id` and attempt come from the actual delivery request, not the
@@ -123,12 +135,14 @@ Missing or invalid context and unknown relay fields emit
 `CHILD_DIAGNOSTIC_INVALID`; they never fall back to supervision.
 Lifecycle diagnostics keep their supervision operation and exclude
 `operation_completed`. Both diagnostic readers accept only their current
-shapes; saved task evidence is unchanged. The configured API source, native
+shapes; saved task evidence is unchanged. The local API source, native
 completion event type and server name are unchanged. No path or process ID
 is added to completion data.
 
-Other native module diagnostics are projected to the body-free lifecycle form
-before live output or mirroring. Private startup/control
+The feed package owns both native diagnostic validators and event construction.
+Its decoder supplies typed, validated events to the shared mirror. Other native
+module diagnostics are projected to the body-free lifecycle form before live
+output or mirroring. Private startup/control
 packets remain on stdout. Article bodies, prompts, model output, secrets,
 raw headers and raw exception text are not server-log fields.
 Routine task-profile reports are validated with the native measurement model,
@@ -146,8 +160,10 @@ process and cleanup failures still fail the task.
 Each task writes its current observation atomically to the named
 `hono-server-planning.json`, `hono-server-machine.json` or
 `hono-server-delivery.json` in the disposable run directory.
-`src/server-evidence.ts` owns this versioned native shape. Readers accept the
-current shape only; earlier same-day evidence without profile reports reads as
+`src/server-evidence.ts` owns the versioned envelope. The probe package's
+`src/api/create-machine-server-evidence.ts` binds it to the real native profile
+validator for both machine and feed readers. Readers accept the current shape
+only; earlier same-day evidence without profile reports reads as
 no captured reports, not a successful empty measurement. These files are same-run evidence, not committed ledgers,
 request journals or restart stores.
 
@@ -171,11 +187,19 @@ Hard runner termination cannot guarantee a final report or upload.
 
 ## Design rationale
 
-The composition reuses the real Hono planner and delivery applications and
-the native machine handlers. Explicit groups keep task resources visible
-without another service framework or per-API process. Hono and Zod are existing
-tool dependencies; the new package adds a composition lock and no published-site
-bytes. Existing standalone tools and older workflows are not migrated.
+Native construction reuses the real Hono planner and delivery applications and
+machine handlers. Feed-ingest-plan owns planning and delivery assembly;
+host-probes composes the existing fingerprint and profile implementations.
+Shared hosting imports none of them, including in its tests and dependency
+metadata. Typed construction arguments carry the application, failure policy,
+diagnostic decoder and bound evidence validator without a plugin framework.
+Only validated JSON-shaped controls cross the private process pipe.
+
+Explicit groups keep task resources visible without per-API processes.
+Hono and Zod remain existing tool dependencies. Host-probes adds the shared
+hosting and fingerprint installation closure and the already locked Hono
+version for composition; published-site bytes are unchanged. Existing
+standalone tools and older workflows are not migrated.
 
 Process ownership is established by private control data, not a copied ID in
 a diagnostic line.

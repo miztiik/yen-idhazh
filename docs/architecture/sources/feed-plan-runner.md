@@ -40,7 +40,7 @@ or sparse expansion changes that input. Git is used again only for actual
 final data delivery.
 `scripts/feed-ingest-plan-http-client.ts` calls an existing listener
 and verifies retained output; it does not start or stop the listener. The entry
-supervises `services/serve-pipeline-apis/src/index.ts` as a separate child process in
+supervises its native `scripts/serve-feed-apis.ts` as a separate child process in
 one workflow step. Its address comes only from `config/hono-server.json`;
 standalone listener settings above do not select it.
 It verifies private-pipe readiness against the child's
@@ -76,7 +76,8 @@ request report may read additional closed days; an error in those report-only
 days cannot discard completed feed or article work. Collection startup failures
 still write a failed run, and cleanup errors do not replace the original cause.
 
-`supervision.readiness_timeout_ms` bounds startup and its health check.
+The shared `config/hono-server.json` controls these process waits, not the
+feed service settings. `supervision.readiness_timeout_ms` bounds startup and its health check.
 `shutdown_timeout_ms` allows graceful drain after success, failure, cancellation
 or pipe closure. `forced_exit_timeout_ms` bounds the supervisor's wait after
 killing only its owned child. Defaults allow 30 seconds for readiness, 10 seconds

@@ -1,5 +1,10 @@
 {
   "hostname": "127.0.0.1",
   "port": 8787,
-  "idle_timeout_seconds": 30
+  "idle_timeout_seconds": 30,
+  "supervision": {
+    "readiness_timeout_ms": 30000,
+    "shutdown_timeout_ms": 10000,
+    "forced_exit_timeout_ms": 5000
+  }
 }

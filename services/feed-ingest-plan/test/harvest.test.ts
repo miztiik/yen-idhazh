@@ -5,8 +5,9 @@ import { parseHTML } from "linkedom";
 import {
   CandidateRejectionRecordSchema, DocumentWorkFactSchema, ExtractionQualitySchema,
   ArticleFailureDiagnosticDetailsSchema, ArticleFailureDiagnosticSchema, CandidateIdSchema,
-  FeedIngestCandidateSchema, FeedOutcomePayloadSchema, deriveUrlKey, loadEventSources, writeTraceContext,
+  FeedIngestCandidateSchema, FeedOutcomePayloadSchema, deriveUrlKey, writeTraceContext,
 } from "@idhazh/common-contracts";
+import { PLANNER_EVENT_SOURCE } from "../src/declare-event-source";
 import type { DocumentWorkFact, FeedIngestEvent, OperationMetadata } from "@idhazh/common-contracts";
 import { harvestFeeds, loadHarvestInputs } from "@idhazh/feed-ingest-plan/harvest-feeds";
 import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
@@ -551,9 +552,8 @@ test("rootless extraction, empty content and article request failures do not kil
   const transport = new RecordedTransport(await readRecordings());
   const loaded = await inputs([source({ url: "https://news.example/article-failures.xml" })]);
   const runContext = context();
-  const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
   const events: FeedIngestEvent[] = [];
-  const emit = createStageLogger({ ...runContext, run_id: runContext.writer.run_id }, sources.planner,
+  const emit = createStageLogger({ ...runContext, run_id: runContext.writer.run_id }, PLANNER_EVENT_SOURCE,
     event => events.push(event));
   runContext.document_activity = (operation, phase, details, url, feedUrls, evidence, operationContext) =>
     emit(operation, phase, details, [], url, feedUrls, evidence, operationContext);

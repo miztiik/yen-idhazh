@@ -75,6 +75,8 @@ def test_named_workflow_selects_one_declaration_with_the_current_pointer_default
     assert "summary-eval-tests/report.py --root ../.." in text
     assert "bun install --frozen-lockfile --cwd services/serve-pipeline-apis" in text
     for forbidden in (
+        "bun install --frozen-lockfile --cwd services/feed-ingest-plan",
+        "bun install --frozen-lockfile --cwd packages/data-delivery",
         "git commit",
         "git push",
         "git add",

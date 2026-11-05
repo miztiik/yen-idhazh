@@ -10,9 +10,9 @@ import {
   isMetadataDeliveryConfirmed, MetadataDeliveryResultSchema,
   SafePersistHttpRequestSchema, SafePersistHttpStartupSchema,
 } from "./feed-ingest-plan-delivery-result";
-import { superviseApiTask } from "../../serve-pipeline-apis/src/supervise-api-task";
+import { superviseFeedApiTask } from "./supervise-feed-api-task";
 import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
-import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
+import { readMachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { readPlannerResponseError, withPlannerFailure } from "../src/api/plan-failure";
 import { retainFailureThroughCleanup } from "../src/api/retain-failure-through-cleanup";
 
@@ -32,9 +32,9 @@ export async function deliverWorkflowMetadataHttp(input: {
       nonce: randomUUID(), settings, git_sha: gitSha,
       output_root: relative(input.root, input.directory).replaceAll("\\", "/"),
     });
-    const earlier = await readServerEvidence(input.directory, { run_id: input.runNumber, attempt: input.attempt });
-    return await superviseApiTask({
-      root: input.root, kind: "SAFE_PERSIST",
+    const earlier = await readMachineServerEvidence(input.directory, { run_id: input.runNumber, attempt: input.attempt });
+    return await superviseFeedApiTask({
+      root: input.root,
       startup: {
         group: "delivery", delivery: startup, server: await loadHonoSettings(input.root),
         directory: relative(input.root, input.directory).replaceAll("\\", "/"),

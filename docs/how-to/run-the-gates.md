@@ -102,6 +102,10 @@ not a change to inherited `safe.bareRepository=explicit`. Never lower that
 security control to make fixture tests pass. Install this checkout's package in
 an isolated environment before tests that invoke its console entry point.
 
+Backend pytest fixtures start each test with `GITHUB_RUN_ATTEMPT=1`, independent
+of the hosting CI attempt. Tests that exercise reruns explicitly set their own
+attempt after fixture setup. Production still reads the platform's attempt.
+
 Run records under `backend/var/checks/` hold the source fingerprint, selected
 groups and specs, exit status, step durations, test counts and queue/startup
 time separately. Logic and browser reports use separate output directories.
@@ -297,10 +301,11 @@ existing locked host APIs and shared application from the repository root.
 Run the named modules from the service directory:
 
 ```powershell
-bun install --frozen-lockfile --cwd .\services\host-probes
-bun install --frozen-lockfile --cwd .\services\host-fingerprints
-bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
+bun install --frozen-lockfile --cwd .\packages\common-contracts
 bun install --frozen-lockfile --cwd .\services\serve-pipeline-apis
+bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
+bun install --frozen-lockfile --cwd .\services\host-fingerprints
+bun install --frozen-lockfile --cwd .\services\host-probes
 Set-Location .\services\hhem-evaluator
 uv run --frozen ruff check src tests scripts
 Push-Location ..\..
@@ -359,9 +364,14 @@ Owned-process fixtures launch the actual CPython executable with the same
 environment's installed packages: a Windows virtual-environment redirector
 has a different PID. The runtime ownership check stays strict.
 The local caller checks require the host's locked dependencies, not model packages.
-The bounded workflow inventory change also selects
+Ordinary evaluator preparation
+installs neither feed-ingest-plan nor data-delivery.
+Workflow changes also select
+`backend/tests/workflows/test_ci_selection.py`,
 `backend/tests/workflows/test_workflow_inputs.py` and
 `backend/tests/workflows/test_triggers.py`. Keep full suites in CI.
+Input checks read actual Actions expressions, including implicit job and step
+conditions, not filenames or quoted expression literals.
 The [manual procedure](run-hhem-evaluation-api.md) owns registration and real
 hosted evidence; offline results do not close that check.
 
@@ -395,8 +405,8 @@ bun run --cwd .\packages\ledger-file-writer test .\test\uuid.test.ts
 
 The flow uses the real shared factories, codec and application reader with the
 named selected-article recording. It checks distinct occurrences, unchanged
-replay, parent/input relationships, state propagation and explicit source
-loading. It does not certify service work ownership, live delivery or a tracing
+replay, parent/input relationships, state propagation and producer URI
+validation without a source registry. It does not certify service work ownership, live delivery or a tracing
 runtime. Ordinary CI installs the pinned codec dependencies through the
 publication runtime and runs the full common/native suites. Browser callers
 still use the independent observation-order module.
@@ -411,18 +421,24 @@ bun run --cwd .\services\feed-ingest-plan test .\test\plan-entry-points.test.ts 
 ```
 
 The shared selection lists affected surfaces; it does not execute Bun.
-For the composed feed listener, install the declared native modules before
-the composition package, using their frozen locks. Check the actual shared
-server and its named workflow dependants:
+For the composed feed listener, install shared hosting before the native
+assembly packages, using their frozen locks. Check the actual shared
+server, native construction and named workflow dependants:
 
 ```powershell
-bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
+bun install --frozen-lockfile --cwd .\packages\common-contracts
+bun install --frozen-lockfile --cwd .\services\serve-pipeline-apis
+bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
+bun install --frozen-lockfile --cwd .\packages\data-delivery
 bun install --frozen-lockfile --cwd .\services\host-fingerprints
 bun install --frozen-lockfile --cwd .\services\host-probes
-bun install --frozen-lockfile --cwd .\services\serve-pipeline-apis
+bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
 bun run --cwd .\services\serve-pipeline-apis check
 bun run --cwd .\services\serve-pipeline-apis test
-bun run --cwd .\services\feed-ingest-plan test .\test\feed-ingest-plan-supervisor.test.ts .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-workflow.test.ts .\test\feed-ingest-plan-report.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\feed-ingest-plan-host.test.ts
+bun run --cwd .\services\host-probes check
+bun run --cwd .\services\host-probes test .\test\serve-machine-apis.test.ts .\test\record-machine-api-events.test.ts .\test\check-machine-api-dependencies.test.ts
+bun run --cwd .\services\feed-ingest-plan check
+bun run --cwd .\services\feed-ingest-plan test .\test\serve-feed-apis.test.ts .\test\retain-api-profiles.test.ts .\test\feed-ingest-plan-supervisor.test.ts .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-workflow.test.ts .\test\feed-ingest-plan-report.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\feed-ingest-plan-host.test.ts
 ```
 
 The shared-port oracle uses real fingerprint and sampling handlers, recorded

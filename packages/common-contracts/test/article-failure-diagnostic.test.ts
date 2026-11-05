@@ -3,16 +3,15 @@ import { expect, test } from "bun:test";
 import {
   ARTICLE_FAILURE_DIAGNOSTIC_VERSION, ArticleFailureDiagnosticSchema, ArticleFailureDiagnosticDataSchema,
   articleDiagnosticContentType, createCandidateId, createCloudEvent, createRootContext,
-  FEED_INGEST_EVENT_VERSION, HarvestDiagnosticsSchema, loadEventSources,
+  FEED_INGEST_EVENT_VERSION, HarvestDiagnosticsSchema,
 } from "../src/index";
 
 async function diagnostic() {
   const fixture = await Bun.file(new URL(
     "../../../tests/fixtures/feed-ingest-plan/article-terminal-failures.json", import.meta.url,
   )).json();
-  const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
   return ArticleFailureDiagnosticSchema.parse(createCloudEvent({
-    source: sources.planner, type: "planner.progress", context: createRootContext(),
+    source: "/fixtures/common-contracts", type: "planner.progress", context: createRootContext(),
     data: {
       version: FEED_INGEST_EVENT_VERSION, run_id: "2026-11-05-700", operation: "quality", phase: "failed",
       details: {

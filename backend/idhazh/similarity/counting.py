@@ -17,6 +17,7 @@ from typing import Final
 
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.story_similarity_distribution import (
+    CALIBRATION_POLICY_VERSION,
     ScoreSlot,
     StorySimilarityDistribution,
 )
@@ -75,6 +76,7 @@ def empty_record(
             "judge_temperature": judge.judge_temperature,
             "judge_thinks": judge.thinks,
             "judge_policy_version": judge.judge_policy_version,
+            "calibration_policy_version": CALIBRATION_POLICY_VERSION,
             "counted_dates": (),
             "judged_dates": tuple(judged_dates),
             "slots": tuple(
@@ -198,10 +200,14 @@ def day_counts(
     same rows, but only this one lets the right row win: filtering afterwards
     lets a discarded row from the old instrument take the pair on recency and
     then be thrown away, losing the fresh reading that was standing behind it.
+
+    Headline overrides remain judge audit rows, but their outcome is independent
+    of the adjustable line. Exclude them after recency and usability, using this
+    same population for cumulative slots and today's subtractable contribution.
     """
     counts: dict[int, SlotCounts] = {}
     for row in one_row_a_pair(rows_the_record_admits(rows, record=record)):
-        if not row.usable:
+        if not row.usable or row.headline:
             continue
         index = slot_index(row.composite_score, record=record)
         if index is None:
@@ -283,6 +289,7 @@ def inputs_changed(
         (record.judge_temperature, judge.judge_temperature),
         (record.judge_thinks, judge.thinks),
         (record.judge_policy_version, judge.judge_policy_version),
+        (record.calibration_policy_version, CALIBRATION_POLICY_VERSION),
         (record.band_low, knobs.band_low),
         (record.band_high, knobs.band_high),
         (record.bin_width, knobs.bin_width),

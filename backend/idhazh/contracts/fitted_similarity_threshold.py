@@ -95,8 +95,8 @@ class FittedSimilarityThreshold(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-11-05",
-            change="Judge policy, refused pairs and nullable valid-reading rates are recorded.",
-            why="Historical denominators are not reconstructable and remain unchanged.",
+            change="Judge and calibration policies, refusals and nullable rates are recorded.",
+            why="Historical populations and denominators cannot be reconstructed.",
         ),
         ChangelogEntry(
             version="2026-10-24T19:49",
@@ -124,9 +124,8 @@ class FittedSimilarityThreshold(Contract):
     run_id: RunId = Field(description="The run that fitted the line.")
     record_stamp: Sha256 = Field(
         description=(
-            "Which record this fit read: a digest of the band, the slot width and both "
-            "model stamps. A later reader can tell two rows apart that were fitted either "
-            "side of an archive."
+            "Which record this fit read: a digest of the band, slot width, instruments "
+            "and policies. A later reader can separate fits either side of an archive."
         )
     )
     previous: float = Field(
@@ -277,7 +276,7 @@ class FittedSimilarityThreshold(Contract):
     pairs_usable: int = Field(
         ge=0,
         description=(
-            "How many of those got two agreeing readings. Only these were counted."
+            "How many of those got two agreeing readings, including headline audit pairs."
         ),
     )
     disagreement_rate: float | None = Field(
@@ -308,8 +307,8 @@ class FittedSimilarityThreshold(Contract):
     above_line_on_record: int = Field(
         ge=0,
         description=(
-            "Judged pairs at or above the applied line. These are the entire precision "
-            "measurement, so they are never sampled away."
+            "Calibratable agreed pairs at or above the applied line. Headline overrides "
+            "remain audit evidence, not adjustable-score counts."
         ),
     )
     days_on_record: int = Field(
@@ -353,6 +352,10 @@ class FittedSimilarityThreshold(Contract):
     judge_policy_version: DateStamp | None = Field(
         default=None,
         description="UTC date identifying judge interpretation; null on historical fits.",
+    )
+    calibration_policy_version: DateStamp | None = Field(
+        default=None,
+        description="UTC date identifying the calibration population; null on historical fits.",
     )
 
     @model_validator(mode="after")

@@ -12,7 +12,6 @@
     "./read-cloud-event": "./src/read-cloud-event.ts",
     "./create-operation-context": "./src/create-operation-context.ts",
     "./propagate-trace-context": "./src/propagate-trace-context.ts",
-    "./load-event-sources": "./src/load-event-sources.ts",
     "./observation-order": "./src/observation-order.ts"
   },
   "scripts": {

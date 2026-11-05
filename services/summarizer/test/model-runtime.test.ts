@@ -6,6 +6,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { createChildContext, createRootContext } from "@idhazh/common-contracts/create-operation-context";
 import { loadModelRuntime } from "../src/config/load-model-runtime.js";
+import { SUMMARIZER_EVENT_SOURCE } from "../src/declare-event-source.js";
 import { EnvironmentVariablesSchema } from "../src/schemas/environment-variable.schema.js";
 import { buildModelRequest, readModelContent } from "../src/services/model-request.service.js";
 import { queryLlamaServer } from "../src/services/query-llama.service.js";
@@ -168,7 +169,7 @@ test("the real HTTP caller sends selected settings and rejects incompatible reco
         () => queryLlamaServer(runtime, "System instruction", "Article text", createRootContext()),
         /Model response failed RawModelAnalysisSchema/,
       );
-      const eventBus = new PipelineEventBus(readJson("config/typescript-event-sources.json").summarizer);
+      const eventBus = new PipelineEventBus(SUMMARIZER_EVENT_SOURCE);
       await assert.rejects(() => orchestratePipeline({
         input_text: "Article text", url: "", system_prompt: "System instruction",
         server_url: "https://wrong.example",

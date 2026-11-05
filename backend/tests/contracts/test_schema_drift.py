@@ -127,6 +127,10 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
             expected = {"judge_policy_version": None, **expected}
         if contract.__schema_stem__ == "fitted-similarity-threshold":
             expected = {"pairs_refused": None, **expected}
+        if contract.__schema_stem__ in {
+            "story-similarity-distribution", "fitted-similarity-threshold",
+        }:
+            expected = {"calibration_policy_version": None, **expected}
         if contract.__schema_stem__ == "day-metrics":
             expected.pop("label_similarity", None)
         assert json.loads(once) == expected

@@ -45,14 +45,17 @@ from idhazh.contracts.knobs.council import JudgeLifecycleStatus
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgersConfig
-from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
+from idhazh.contracts.story_similarity_distribution import (
+    CALIBRATION_POLICY_VERSION,
+    StorySimilarityDistribution,
+)
 from idhazh.contracts.story_similarity_pair import (
     JUDGE_POLICY_VERSION,
     SameStoryVerdict,
     StorySimilarityPair,
 )
 from idhazh.council import metrics_sink, session
-from idhazh.similarity import counting
+from idhazh.similarity import counting, fit
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp, judge_inputs, scorer_inputs
 from idhazh.stages import count_verdicts
 
@@ -107,6 +110,7 @@ def a_pair(index: int) -> tuple[str, str, str]:
 def a_row(
     *,
     score: float,
+    headline: bool = False,
     verdict: SameStoryVerdict = SameStoryVerdict.NO,
     usable: bool = True,
     pair: int | None = None,
@@ -126,7 +130,7 @@ def a_row(
             "judged_by_run_id": judged_by_run_id,
             "composite_score": score,
             "cosine": score,
-            "headline": False,
+            "headline": headline,
             "work_part_index": 0,
             "verdict": verdict.value,
             "verdict_swapped": verdict.value if usable else (
@@ -212,6 +216,49 @@ def test_an_unclear_verdict_is_counted_only_as_unclear() -> None:
 
     slot = counted.slots[counting.slot_index(0.55, record=record) or 0]
     assert (slot.same_count, slot.different_count, slot.unclear_count) == (0, 0, 1)
+
+
+@pytest.mark.parametrize("verdict", list(SameStoryVerdict))
+@pytest.mark.parametrize("audit_pairs", [1, 4])
+def test_headline_audits_do_not_change_calibration_or_daily_contributions(
+    verdict: SameStoryVerdict, audit_pairs: int
+) -> None:
+    """Counting headline overrides would change a line that cannot affect them."""
+    knobs = SimilarityThresholdConfig()
+    previous = counting.count_day(
+        counting.empty_record(knobs, scorer=a_scorer(), judge=a_judge()),
+        [a_row(score=0.93, pair=1, date=AN_EARLIER_DATE)],
+        date=AN_EARLIER_DATE,
+    )
+    today = [a_row(score=0.96, pair=2)]
+    audits = [
+        a_row(score=1.0, headline=True, verdict=verdict, pair=10 + index)
+        for index in range(audit_pairs)
+    ]
+
+    plain = counting.count_day(previous, today, date=DATE)
+    audited = counting.count_day(previous, [*today, *audits], date=DATE)
+    contribution = counting.day_counts(today, record=plain)
+
+    assert audited == plain
+    assert counting.day_counts([*today, *audits], record=audited) == contribution
+    assert fit.fit_line(audited, discard_share=knobs.discard_share) == pytest.approx(0.961)
+    assert fit.daily_shift(
+        audited, contribution, discard_share=knobs.discard_share
+    ) == pytest.approx(0.03)
+
+
+def test_a_newest_headline_audit_does_not_restore_an_older_adjustable_reading() -> None:
+    """Pair recency must be settled before the headline branch is excluded."""
+    record = counting.empty_record(
+        SimilarityThresholdConfig(), scorer=a_scorer(), judge=a_judge()
+    )
+    rows = [
+        a_row(score=0.95, judged_by_run_id=f"{DATE}-1"),
+        a_row(score=1.0, headline=True, judged_by_run_id=f"{DATE}-2"),
+    ]
+
+    assert counting.day_counts(rows, record=record) == {}
 
 
 def test_counting_a_date_the_record_already_holds_raises() -> None:
@@ -1073,23 +1120,48 @@ def test_policy_filtering_precedes_pair_recency() -> None:
     ) == ("None", JUDGE_POLICY_VERSION)
 
 
+def test_calibration_policy_changes_the_record_identity_without_moving_the_instrument() -> None:
+    record = a_record()
+    historical = record.model_copy(update={"calibration_policy_version": None})
+
+    assert historical.record_stamp() != record.record_stamp()
+    assert counting.inputs_changed(
+        historical, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()
+    ) == ("None", CALIBRATION_POLICY_VERSION)
+    assert counting.inputs_changed(
+        record, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()
+    ) is None
+
+
 @pytest.mark.parametrize("archive_available", [True, False])
+@pytest.mark.parametrize(
+    "changed_policies",
+    [
+        ("judge_policy_version",),
+        ("calibration_policy_version",),
+        ("judge_policy_version", "calibration_policy_version"),
+    ],
+)
 def test_policy_reset_requires_an_archive_preserves_memory_and_happens_once(
-    tmp_path: Path, archive_available: bool
+    tmp_path: Path, archive_available: bool, changed_policies: tuple[str, ...]
 ) -> None:
     settings = config.load(CONFIG_DIR)
     state = tmp_path / "state"
     old = counting.empty_record(
         settings.app.assemble.same_story.judging_knobs(),
         scorer=scorer_inputs(settings),
-        judge=dataclasses.replace(judge_inputs(settings), judge_policy_version=None),
-        judged_dates=(DATE,),
-    ).model_copy(update={"counted_dates": (DATE,)})
+        judge=judge_inputs(settings),
+        judged_dates=("2026-09-15", DATE),
+    ).model_copy(update={
+        "counted_dates": (DATE,),
+        **dict.fromkeys(changed_policies),
+    })
     old = old.model_copy(update={"slots": (
         old.slots[0].model_copy(update={"different_count": 3}), *old.slots[1:],
     )})
     payload = old.model_dump(mode="json") | {"version": "2026-10-24"}
-    del payload["judge_policy_version"]
+    for policy in changed_policies:
+        del payload[policy]
     old_bytes = json.dumps(payload, indent=2).encode()
     record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
     archive_path = ledger.path(
@@ -1119,8 +1191,9 @@ def test_policy_reset_requires_an_archive_preserves_memory_and_happens_once(
     assert archive_path.read_bytes() == old_bytes
     current = StorySimilarityDistribution.from_json(record_path.read_text(encoding="utf-8"))
     assert current.judge_policy_version == JUDGE_POLICY_VERSION
+    assert current.calibration_policy_version == CALIBRATION_POLICY_VERSION
     assert current.counted_dates == (AN_EARLIER_DATE,)
-    assert current.judged_dates == (AN_EARLIER_DATE, DATE)
+    assert current.judged_dates == ("2026-09-15", AN_EARLIER_DATE, DATE)
     assert all(
         (slot.same_count, slot.different_count, slot.unclear_count) == (0, 0, 0)
         for slot in current.slots
@@ -1128,6 +1201,12 @@ def test_policy_reset_requires_an_archive_preserves_memory_and_happens_once(
     again = count("2026-09-16")
     assert again.counted and again.archived is None and again.held_reason is None
     assert archive_path.read_bytes() == old_bytes
+    assert not ledger.path(
+        state, LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE, current.record_stamp()
+    ).exists()
+    assert StorySimilarityDistribution.from_json(
+        record_path.read_text(encoding="utf-8")
+    ).judged_dates == ("2026-09-15", "2026-09-16", AN_EARLIER_DATE, DATE)
 
 
 def test_a_row_from_another_instrument_is_counted_nowhere() -> None:

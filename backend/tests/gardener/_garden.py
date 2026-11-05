@@ -1,7 +1,7 @@
 """What does every gardener test build before it asks its question?
 
 Three things, each real. A config folder: the committed `config/idhazh.json`,
-`config/appearance.json` and `config/idhazh_gardener.json`, with declarations
+`config/appearance.json` and `config/gardener/config/idhazh_gardener.json`, with declarations
 copied in from a fixture tree under `tests/fixtures/gardener/`. A package of
 task modules, imported from `tests/fixtures/gardener/task_packages/` - real
 modules that do real work through the real core. And a checkout with a bare
@@ -41,7 +41,12 @@ GARDENER_FIXTURES: Final = FIXTURES_DIR / "gardener"
 TASK_PACKAGES: Final = GARDENER_FIXTURES / "task_packages"
 
 #: The committed files a gardener config folder needs beside its declarations.
-COMMITTED_FILES: Final = ("idhazh.json", "ledgers.json", "appearance.json", "idhazh_gardener.json")
+COMMITTED_FILES: Final = (
+    "idhazh.json",
+    "ledgers.json",
+    "appearance.json",
+    "gardener/config/idhazh_gardener.json",
+)
 
 #: The task declarations these integration fixtures exercise, not a directory census.
 COMMITTED_DECLARATIONS: Final = (
@@ -123,7 +128,7 @@ def a_config(root: Path, *declarations: Path) -> Path:
     is on; external placement and the bandwidth benchmark are off.
     """
     config_dir = root / "config"
-    (config_dir / "gardener").mkdir(parents=True, exist_ok=True)
+    (config_dir / "gardener" / "config").mkdir(parents=True, exist_ok=True)
     for name in COMMITTED_FILES:
         shutil.copyfile(CONFIG_DIR / name, config_dir / name)
     app_config = config_dir / "idhazh.json"
@@ -139,7 +144,7 @@ def a_config(root: Path, *declarations: Path) -> Path:
     for given in declarations:
         if given == CONFIG_DIR / "gardener":
             configured = json.loads(
-                (config_dir / "idhazh_gardener.json").read_text(encoding="utf-8")
+                (config_dir / "gardener/config/idhazh_gardener.json").read_text(encoding="utf-8")
             )["task_names"]
             sources = [given / f"{name}.json" for name in configured]
         elif given.parent == GARDENER_FIXTURES:
@@ -151,7 +156,7 @@ def a_config(root: Path, *declarations: Path) -> Path:
         for source in sources:
             shutil.copyfile(source, config_dir / "gardener" / source.name)
             task_names.add(source.stem)
-    gardener_config = config_dir / "idhazh_gardener.json"
+    gardener_config = config_dir / "gardener/config/idhazh_gardener.json"
     gardener_settings = json.loads(gardener_config.read_text(encoding="utf-8"))
     gardener_settings["task_names"] = sorted(task_names)
     gardener_config.write_text(

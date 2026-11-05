@@ -53,10 +53,10 @@ jobs:
 
       - name: Install locked recorder dependencies
         run: |
-          bun install --frozen-lockfile --cwd services/host-fingerprints
-          bun install --frozen-lockfile --cwd services/feed-ingest-plan
-          bun install --frozen-lockfile --cwd services/host-probes
           bun install --frozen-lockfile --cwd services/serve-pipeline-apis
+          bun install --frozen-lockfile --cwd services/host-fingerprints
+          bun install --frozen-lockfile --cwd services/host-probes
+          bun install --frozen-lockfile --cwd services/feed-ingest-plan
 
       - name: Capture current planner recordings from the real offline API
         run: |
@@ -217,10 +217,10 @@ jobs:
       - name: Prepare pipeline API dependencies
         if: needs.scope.outputs.code == 'true'
         run: |
-          bun install --frozen-lockfile --cwd services/feed-ingest-plan
+          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/host-probes
-          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
+          bun install --frozen-lockfile --cwd services/feed-ingest-plan
 
       - name: TypeScript host fingerprints
         if: needs.scope.outputs.code == 'true'

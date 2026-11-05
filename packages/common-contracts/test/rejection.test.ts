@@ -23,7 +23,7 @@ import {
   RetainedRejectionReasonSchema, RejectedArticleRowSchema, ArticleFetchEvidenceSchema,
   CANDIDATE_REJECTION_VERSION, REJECTED_ARTICLE_VERSION,
   FEED_INGEST_EVENT_VERSION,
-  ItemHealthFailureCodeSchema, PlannerItemFailureCodeSchema, FetchFailureSchema, createCloudEvent, createRootContext, createChildContext, loadEventSources,
+  ItemHealthFailureCodeSchema, PlannerItemFailureCodeSchema, FetchFailureSchema, createCloudEvent, createRootContext, createChildContext,
 } from "../src/index";
 import { plannerStageSchemas, runtimeSchemas, schemas } from "./schema-binding";
 
@@ -111,9 +111,8 @@ function assessment() {
   });
 }
 async function event() {
-  const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
   return FeedIngestEventSchema.parse(createCloudEvent({
-    source: sources.planner, type: "planner.progress", context: createRootContext(),
+    source: "/fixtures/common-contracts", type: "planner.progress", context: createRootContext(),
     data: { version: FEED_INGEST_EVENT_VERSION, run_id: run, operation: "fetch", phase: "completed",
       details: { input_count: 0, output_count: 0, duration_ms: 1 } },
     parseData: value => FeedIngestEventDataSchema.parse(value),

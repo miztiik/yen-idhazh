@@ -5,9 +5,10 @@
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
 The sections below define each operation and its current request and response.
-The feed workflow serves them with machine routes through the
-[shared pipeline API server](../../reference/serve-pipeline-apis.md);
-the delivery task restarts that application with its private delivery group.
+The feed package assembles them with machine routes under
+[shared pipeline API hosting](../../reference/serve-pipeline-apis.md).
+The delivery task constructs only its private delivery group. Shared hosting
+owns their listener and process lifetime, not native API construction.
 
 ## Independent fetch and parse endpoints
 
@@ -124,8 +125,11 @@ without adding names to HTTP responses or progress logs.
 Standalone fetch, parse and persistence use the same structured publisher
 as `/plan`. Progress uses a shared event envelope with a fresh occurrence ID
 and application fields under `data`; reading a saved event preserves its
-original occurrence and operation. The configured planner source is loaded
-explicitly from `config/typescript-event-sources.json`.
+original occurrence and operation. The planner selects its local protocol
+identity `/services/feed-ingest-plan` through `PlanInputs.event_source`;
+all mounted routes and the upload inventory use that same declaration.
+The [identity contract](../contracts/identity.md#4-native-typescript-event-and-operation-metadata)
+defines producer selection and validation.
 Invalid controls that
 cannot resolve a document do not log caller-supplied addresses.
 The [runner](feed-plan-runner.md#first-sight-and-retained-output) owns event
@@ -294,7 +298,8 @@ system.
 Always-run finalization owns a separate delivery child because collection has
 already closed its planner child. The delivery child needs no live planner batch
 or collection inputs; completed partial metadata remains deliverable after
-planner failure. It reuses the configured listener and supervision limits,
+planner failure. It reuses the listener and supervision limits from
+`config/hono-server.json`,
 checks owned-child readiness through `/health`, and closes and reaps that child
 after success, failure or cancellation. Cancellation known before finalization
 skips new Git delivery.

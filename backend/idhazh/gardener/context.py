@@ -47,7 +47,7 @@ class TaskContext:
     #: weighs. A task lists its members from here and never from the disk, and
     #: fetches a folder through it before it opens a file inside.
     listing: FileListing
-    #: The UTC year, as YYYY, from `config/idhazh_gardener.json`, before which no
+    #: The UTC year, as YYYY, from `config/gardener/config/idhazh_gardener.json`, before which no
     #: ledger holds a row. A compaction that rebuilds an absent index looks for
     #: year and month files from it, and never further back.
     first_ledger_year: str

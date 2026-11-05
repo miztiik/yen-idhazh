@@ -1,7 +1,7 @@
 /** Preserve available server evidence and logs independently of planner or metadata success. */
 import { copyFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
+import { readMachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { serverEvidenceFilename } from "../../serve-pipeline-apis/src/server-evidence";
 import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 
@@ -11,7 +11,7 @@ export const SERVER_LOG_ARTIFACT_DIRECTORY = "server-logs";
 export async function prepareServerArtifacts(input: {
   directory: string; runNumber: string; attempt: number; outputPath?: string;
 }): Promise<Record<string, string>> {
-  const evidence = await readServerEvidence(input.directory, { run_id: input.runNumber, attempt: input.attempt });
+  const evidence = await readMachineServerEvidence(input.directory, { run_id: input.runNumber, attempt: input.attempt });
   const outputs: Record<string, string> = {};
   const logs = new Set(evidence.map(server => server.log_filename));
   for (const server of evidence) {

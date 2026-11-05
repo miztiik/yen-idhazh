@@ -6,12 +6,12 @@ import {
   TraceIdSchema, readTraceContext,
 } from "@idhazh/common-contracts";
 import type { ArticleFailureDiagnostic } from "@idhazh/common-contracts";
-import type { ServerEvidence } from "../../serve-pipeline-apis/src/server-evidence";
+import type { MachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { distinctArticleDiagnostics } from "../src/reporting/article-failure-evidence";
 import type { ReportDiagnosticIdentity } from "../src/reporting/article-failure-evidence";
 
 export async function readArticleFailureDiagnostics(input: {
-  directory: string; servers: readonly ServerEvidence[]; expected: ReportDiagnosticIdentity;
+  directory: string; servers: readonly MachineServerEvidence[]; expected: ReportDiagnosticIdentity;
 }) {
   const gaps: [string, string, string][] = [];
   const gap = (problem: string, impact: string) => {

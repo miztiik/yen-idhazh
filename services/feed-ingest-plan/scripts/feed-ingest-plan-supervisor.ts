@@ -7,7 +7,7 @@ import type { PlannerStartup } from "../src/config/planner-startup";
 import type { PlanInputs } from "../src/load-plan-inputs";
 import type { PlanRequest } from "../src/api/plan-request";
 import { requestPlannerHttp } from "./feed-ingest-plan-http-client";
-import { superviseApiTask } from "../../serve-pipeline-apis/src/supervise-api-task";
+import { superviseFeedApiTask } from "./supervise-feed-api-task";
 import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
 import { runtimeFailureExecution } from "../src/api/plan-failure";
 import { operationMetadata } from "../src/api/operation-context";
@@ -26,8 +26,8 @@ export async function invokePlannerHttp(
     beforePlan?: (origin: string, signal: AbortSignal) => Promise<void>;
   } = {},
 ) {
-  return superviseApiTask({
-    root: inputs.root, kind: "PLANNER",
+  return superviseFeedApiTask({
+    root: inputs.root,
     startup: {
       group: "planning", server: await loadHonoSettings(inputs.root),
       directory: relative(inputs.root, directory).replaceAll("\\", "/"),

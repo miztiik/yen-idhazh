@@ -32,7 +32,10 @@ from idhazh.contracts.fitted_similarity_threshold import (
     HeldReason,
 )
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
-from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
+from idhazh.contracts.story_similarity_distribution import (
+    CALIBRATION_POLICY_VERSION,
+    StorySimilarityDistribution,
+)
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS,
     JUDGE_POLICY_VERSION,
@@ -405,6 +408,29 @@ def test_current_fits_record_refusals_and_leave_unmeasured_rates_null() -> None:
 
 
 @pytest.mark.parametrize(
+    ("contract", "payload"),
+    [
+        (StorySimilarityDistribution, a_record()),
+        (FittedSimilarityThreshold, a_fit()),
+    ],
+)
+def test_calibration_policy_is_nullable_and_date_valued(
+    contract: type[StorySimilarityDistribution | FittedSimilarityThreshold],
+    payload: dict[str, Any],
+) -> None:
+    historical = contract.model_validate(payload)
+    assert historical.calibration_policy_version is None
+    current = contract.model_validate(payload | {
+        "calibration_policy_version": CALIBRATION_POLICY_VERSION,
+    })
+    assert contract.from_json(current.to_json()) == current
+    if isinstance(current, FittedSimilarityThreshold):
+        assert FittedSimilarityThreshold.from_csv_row(current.csv_row()) == current
+    with pytest.raises(ValidationError, match="calibration_policy_version"):
+        contract.model_validate(payload | {"calibration_policy_version": "current"})
+
+
+@pytest.mark.parametrize(
     ("contract", "fixture"),
     [
         (StorySimilarityPair, "story-similarity-pair/judged-the-same-in-both-orders.json"),
@@ -431,6 +457,8 @@ def test_historical_native_and_parquet_readings_retain_unknown_policy(
 ) -> None:
     original = contract.from_json(read_text(CONTRACT_FIXTURES_DIR / fixture))
     added = {"judge_policy_version"}
+    if contract in (StorySimilarityDistribution, FittedSimilarityThreshold):
+        added.add("calibration_policy_version")
     if contract is FittedSimilarityThreshold:
         added.add("pairs_refused")
     historical = original.model_dump(mode="json", exclude=added)
@@ -452,6 +480,12 @@ def test_historical_native_and_parquet_readings_retain_unknown_policy(
     if isinstance(read_back, FittedSimilarityThreshold):
         assert read_back.pairs_refused is None
         assert read_back.disagreement_rate == historical["disagreement_rate"]
+        historical_csv = {
+            name: cell for name, cell in read_back.csv_row().items() if name not in added
+        }
+        assert FittedSimilarityThreshold.from_csv_row(historical_csv) == read_back
+    if isinstance(read_back, (StorySimilarityDistribution, FittedSimilarityThreshold)):
+        assert read_back.calibration_policy_version is None
 
 
 def test_a_pair_row_refuses_a_first_token_window_that_would_split_the_row() -> None:

@@ -8,7 +8,6 @@
     "./api": "./src/api/server.ts",
     "./startup": "./src/config/planner-startup.ts",
     "./restore-startup": "./scripts/restore-planner-startup.ts",
-    "./http-child-lifetime": "./scripts/http-child-lifetime.ts",
     "./delivery-api": "./scripts/safe-persist-http-api.ts",
     "./delivery-contracts": "./scripts/feed-ingest-plan-delivery-result.ts",
     "./delivery-diagnostic": "./scripts/safe-persist-http-diagnostic.ts",
@@ -35,7 +34,10 @@
   "dependencies": {
     "@idhazh/common-contracts": "file:../../packages/common-contracts",
     "@idhazh/data-delivery": "file:../../packages/data-delivery",
+    "@idhazh/host-fingerprints": "file:../../services/host-fingerprints",
+    "@idhazh/host-probes": "file:../../services/host-probes",
     "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer",
+    "@idhazh/serve-pipeline-apis": "file:../../services/serve-pipeline-apis",
     "apache-arrow": "^21.2.0",
     "bottleneck": "2.19.5",
     "compromise": "14.19.0",

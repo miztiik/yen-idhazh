@@ -696,7 +696,7 @@ one's periods start where the coarser rebuild left them.
 
 | # | Absent index | Where the pass looks |
 | --- | --- | --- |
-| 1 | `yearly.json` | Each year from `first_ledger_year` in `config/idhazh_gardener.json` to the newest year old enough to pack; nowhere when the declaration packs no year |
+| 1 | `yearly.json` | Each year from `first_ledger_year` in `config/gardener/config/idhazh_gardener.json` to the newest year old enough to pack; nowhere when the declaration packs no year |
 | 2 | `monthly.json` | Each month old enough to close, from the keep line when the monthly window's deletes are live; from January after the yearly mark, including `expired_through`, or January of `first_ledger_year` when no mark exists, when the window keeps every month or its deletes only report, or the whole task is a dry run |
 | 3 | `daily.json` | Each due day from the month after the monthly mark; with no monthly mark, from the month a first pass looks back to, or the first month of an operator range when that is earlier |
 

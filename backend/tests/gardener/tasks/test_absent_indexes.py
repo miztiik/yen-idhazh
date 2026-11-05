@@ -57,7 +57,7 @@ COMPACT: Final = "state/compact/visual-prunes"
 #: The ledger's raw folder, as a repository path.
 RAW: Final = "state/raw/visual-prunes"
 
-#: The first year a ledger can hold, as `config/idhazh_gardener.json` says it.
+#: The first year a ledger can hold, as `config/gardener/config/idhazh_gardener.json` says it.
 FIRST_YEAR: Final = "2026"
 
 
