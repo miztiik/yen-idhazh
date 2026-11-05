@@ -195,17 +195,6 @@ metadata. Typed construction arguments carry the application, failure policy,
 diagnostic decoder and bound evidence validator without a plugin framework.
 Only validated JSON-shaped controls cross the private process pipe.
 
-The evaluator CI job checks one sparse candidate checkout in two stages.
-Shared hosting first installs, checks and tests with every native service
-absent. The same checkout then gains only named machine packages, settings and
-recorded inputs. Real Linux child tests verify fingerprint writes, explicit
-profile stop, shutdown-only profile evidence, worker cleanup and released
-listeners while feed source and feed configuration remain physically absent.
-The machine entry, parent adapter and actual summary helper also pass dependency
-inspection. Those builds provide import metadata only; process checks execute
-source entries so worker URLs retain their module-relative paths.
-Inspection supplements execution; it does not replace it.
-
 Explicit groups keep task resources visible without per-API processes.
 Hono and Zod remain existing tool dependencies. Host-probes adds the shared
 hosting and fingerprint installation closure and the already locked Hono
