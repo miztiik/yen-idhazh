@@ -7,21 +7,28 @@ import type { FeedAvailabilitySnapshotSchema } from "../api/feed-health-state.sc
 import { escapeMarkdown } from "./markdown-format";
 import { describeReason } from "./selection-exclusions-markdown";
 import { operationKey } from "../api/operation-context";
+import {
+  articleFailureKey, checkArticleDiagnostic, describeArticleDiagnostic, distinctArticleDiagnostics, renderArticleDiagnostics,
+} from "./article-failure-evidence";
+import type { ArticleFailureDiagnostic } from "@idhazh/common-contracts";
 
 type AttentionRow = { scope: string; problem: string; impact: string; period: string; next: string };
 export type ReportFailureEvidence = Readonly<{
   articles?: readonly RejectedArticleRow[];
+  article_diagnostics?: readonly ArticleFailureDiagnostic[];
   earlier_checks?: readonly FeedHealthRestFields[];
   gaps?: readonly [string, string, string][];
 }>;
 
-function describeArticleFailure(article: RejectedArticleRow) {
+function describeArticleFailure(article: Pick<RejectedArticleRow, "http_status" | "fetch_failure" | "error_code" | "reason_code">,
+  diagnostic?: ArticleFailureDiagnostic) {
   const facts = [
     article.http_status === null ? "article response status unavailable" : `article HTTP ${article.http_status}`,
     ...(article.fetch_failure === null ? [] : [`fetch result: ${article.fetch_failure}`]),
     ...(article.error_code === null ? [] : [`transport code: ${article.error_code}`]),
   ];
-  return `${describeReason(article.reason_code)} (${facts.join("; ")})`;
+  return `${describeReason(article.reason_code)} (${[...facts,
+    ...(diagnostic === undefined ? [] : [describeArticleDiagnostic(diagnostic)])].join("; ")})`;
 }
 
 function distinctArticleFailures(articles: readonly RejectedArticleRow[]) {
@@ -67,12 +74,23 @@ export function renderFailureEvidence(
   if (feeds === undefined) addGap("Run", "Feed work evidence unavailable", "Checks, failures and article totals cannot be established");
   const failures = new Map<string, AttentionRow & { count: number; dates: Set<string> }>();
   const detailed = distinctArticleFailures(evidence?.articles ?? []);
+  const diagnostics = distinctArticleDiagnostics(evidence?.article_diagnostics ?? [], run);
+  const byCandidate = new Map(diagnostics.map(event =>
+    [articleFailureKey(event.data.run_id, event.data.details.attempt, event.data.details.candidate_id), event]));
+  for (const article of evidence?.articles ?? []) {
+    const diagnostic = byCandidate.get(articleFailureKey(article.run_id, article.attempt, article.candidate_id));
+    if (diagnostic !== undefined) checkArticleDiagnostic(article, diagnostic);
+  }
+  const coveredCandidates = new Set<string>();
   const remaining = new Map<string, number>();
   const reasonKey = (feed: string, stage: string, reason: string) => JSON.stringify([feed, stage, reason]);
   for (const article of detailed) {
+    const candidateKey = articleFailureKey(article.run_id, article.attempt, article.candidate_id);
+    const diagnostic = byCandidate.get(candidateKey);
+    coveredCandidates.add(candidateKey);
     const key = reasonKey(article.feed_id, article.stage, article.reason_code);
     remaining.set(key, (remaining.get(key) ?? 0) + 1);
-    const problem = describeArticleFailure(article);
+    const problem = describeArticleFailure(article, diagnostic);
     const groupKey = JSON.stringify([article.feed_id, problem]);
     const group = failures.get(groupKey) ?? {
       scope: article.feed_id, problem, impact: "", period: "", next: "Not recorded",
@@ -80,7 +98,24 @@ export function renderFailureEvidence(
     };
     group.count++;
     group.dates.add(article.date);
-    group.impact = `${group.count} affected ${group.count === 1 ? "article" : "articles"}; underlying cause unavailable`;
+    group.impact = `${group.count} affected ${group.count === 1 ? "article" : "articles"}; ${diagnostic === undefined
+      ? "underlying cause unavailable" : "failure details recorded"}`;
+    failures.set(groupKey, group);
+  }
+  for (const event of diagnostics) {
+    const { details, run_id } = event.data;
+    if (coveredCandidates.has(articleFailureKey(run_id, details.attempt, details.candidate_id))) continue;
+    const key = reasonKey(details.feed_id, details.stage, details.reason_code);
+    remaining.set(key, (remaining.get(key) ?? 0) + 1);
+    const problem = describeArticleFailure({ ...details.diagnostics, reason_code: details.reason_code }, event);
+    const groupKey = JSON.stringify([details.feed_id, problem]);
+    const group = failures.get(groupKey) ?? {
+      scope: details.feed_id, problem, impact: "", period: "", next: "Not recorded",
+      count: 0, dates: new Set<string>(),
+    };
+    group.count++;
+    group.dates.add(run_id.slice(0, 10));
+    group.impact = `${group.count} observed article ${group.count === 1 ? "refusal" : "refusals"}; not an additional health failure`;
     failures.set(groupKey, group);
   }
   for (const feed of feeds ?? []) {
@@ -166,6 +201,7 @@ export function renderFailureEvidence(
         ...rows.map((item, index) => `| B${index + 1} | ${[item.scope, item.problem, item.impact, item.period, item.next].map(escapeMarkdown).join(" | ")} |`),
         "", "An eligible check is not a scheduled request. A saved HTTP status is a response, not an underlying cause. Terminal article failures are counted once, not once per retry.",
       ] : ["No recorded problems in the supplied run and availability evidence."]),
+      renderArticleDiagnostics(diagnostics),
     ].join("\n"),
     notice: `${rows.length} attention items in saved evidence.`,
   };

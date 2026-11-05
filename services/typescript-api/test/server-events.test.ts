@@ -1,11 +1,15 @@
 /** Are accepted diagnostics mirrored safely, append-only and optional? */
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { createRootContext, readCloudEvent } from "@idhazh/common-contracts";
+import {
+  createCandidateId, createCloudEvent, createRootContext, FEED_INGEST_EVENT_VERSION,
+  ArticleFailureDiagnosticSchema, FeedIngestEventDataSchema, HarvestDiagnosticsSchema,
+  PlannerRunResponseSchema, readCloudEvent, readFeedIngestEvent,
+} from "@idhazh/common-contracts";
 import { ServerEventDataSchema, ServerEvidenceSchema, serverLogFilename } from "../src/server-evidence";
 import type { ServerRun } from "../src/server-evidence";
 import { recordedPlannerProcess } from "../../feed-ingest-plan/test/planner-process-recordings";
@@ -16,19 +20,119 @@ import { loadHonoSettings } from "../src/load-settings";
 import { readServerEvidence } from "../src/read-server-evidence";
 import { superviseApiTask } from "../src/supervise-api-task";
 import { TaskProfileSchema } from "@idhazh/host-probes/profile";
+import { readReportFailureEvidence } from "../../feed-ingest-plan/scripts/feed-ingest-plan-report-evidence";
+import { renderWorkflowPlanMarkdown } from "../../feed-ingest-plan/scripts/feed-ingest-plan-report";
+import { prepareProgressEvent } from "../../feed-ingest-plan/src/logging/structured-logger";
 
-async function writeEvents(directory: string, run: ServerRun, moduleLine?: string) {
+async function writeEvents(directory: string, run: ServerRun, moduleLine?: string, moduleLines?: string[]) {
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL("./write-server-events.ts", import.meta.url))], {
     stdin: new Blob([JSON.stringify({ directory, run, source: "/fixtures/typescript-api",
-      ...(moduleLine === undefined ? {} : { module_line: moduleLine }) })]),
+      ...(moduleLine === undefined ? {} : { module_line: moduleLine }),
+      ...(moduleLines === undefined ? {} : { module_lines: moduleLines, group: "planning" }) })]),
     stdout: "pipe", stderr: "pipe",
   });
   const [output, error, code] = await Promise.all([
     new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
   ]);
   expect(code, error).toBe(0);
-  return { result: JSON.parse(output), error };
+  return { result: JSON.parse(output), error, pid: child.pid };
 }
+
+test("terminal article diagnostics retain their original occurrence and operation through real stderr and mirror", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "api-article-events-"));
+  const run = { run_id: "700", attempt: 3, started_at: "2026-11-05T00:00:00Z", context: createRootContext() };
+  const event = createCloudEvent({
+    source: "/fixtures/planner", type: "planner.progress", context: createRootContext(),
+    data: {
+      version: FEED_INGEST_EVENT_VERSION, run_id: "2026-11-05-700", operation: "parse", phase: "failed",
+      details: {
+        attempt: 3, feed_id: "recorded-news", candidate_id: createCandidateId(), url_key: "a".repeat(64),
+        stage: "harvest-feeds", reason_code: "EXTRACT_FAILED",
+        diagnostics: HarvestDiagnosticsSchema.parse({
+          http_status: 200, extraction_failure: "parser-failed", failure_code: "unknown",
+          stopped_stage: "extract", detail: "parser-failed", extract_ms: 0,
+        }),
+      },
+    },
+    parseData: value => FeedIngestEventDataSchema.parse(value),
+  });
+  try {
+    const result = await writeEvents(directory, run, JSON.stringify(event));
+    const lines = result.error.trim().split("\n").map(line => JSON.parse(line));
+    expect(lines[1]).toEqual(event);
+    expect(lines).toHaveLength(3);
+    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(result.error);
+    expect(result.result.available).toBe(true);
+    const invalid = await writeEvents(directory, run, JSON.stringify(prepareProgressEvent({
+      ...event, data: { ...event.data, details: { ...event.data.details, title: "PRIVATE_TITLE" } },
+    })));
+    expect(invalid.error).not.toContain("PRIVATE_TITLE");
+    expect(invalid.error).toContain("CHILD_DIAGNOSTIC_INVALID");
+    const blocked = join(directory, "blocked");
+    await mkdir(join(blocked, serverLogFilename(run)), { recursive: true });
+    const unavailable = await writeEvents(blocked, run, JSON.stringify(event));
+    expect(unavailable.result.available).toBe(false);
+    expect(unavailable.error.trim().split("\n").map(line => JSON.parse(line))).toContainEqual(event);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("real parser, empty, quality, missing-title and fetch failures survive stderr, mirror readback and the native report", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "api-article-report-"));
+  try {
+    const child = Bun.spawn([process.execPath, fileURLToPath(new URL(
+      "../../feed-ingest-plan/test/write-article-failure-events.ts", import.meta.url,
+    ))], { stdin: new Blob([JSON.stringify({ directory })]), stdout: "pipe", stderr: "pipe" });
+    const [output, stderr, code] = await Promise.all([
+      new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+    ]);
+    expect(code, stderr).toBe(0);
+    const response = PlannerRunResponseSchema.parse(JSON.parse(output).response);
+    const before = structuredClone(response);
+    const nativeLines = stderr.trim().split("\n");
+    const native = nativeLines.map(line => readFeedIngestEvent(JSON.parse(line))).flatMap(event => {
+      const parsed = ArticleFailureDiagnosticSchema.safeParse(event);
+      return parsed.success ? [parsed.data] : [];
+    });
+    expect(native).toHaveLength(9);
+    expect(new Set(native.map(event => event.data.details.candidate_id)).size).toBe(9);
+    const run = { run_id: response.run_id.slice(11), attempt: response.attempt,
+      started_at: response.started_at, context: createRootContext() };
+    const mirrored = await writeEvents(directory, run, undefined, nativeLines);
+    const readback = mirrored.error.trim().split("\n").flatMap(line => {
+      const parsed = ArticleFailureDiagnosticSchema.safeParse(JSON.parse(line));
+      return parsed.success ? [parsed.data] : [];
+    });
+    expect(readback).toEqual(native);
+    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(mirrored.error);
+    await writeFile(join(directory, "hono-server-planning.json"), JSON.stringify(ServerEvidenceSchema.parse({
+      version: "2026-11-04", server_name: "hono-server", group: "planning",
+      run_id: run.run_id, attempt: run.attempt, started_at: run.started_at,
+      pid: mirrored.pid, startup: "not_started", startup_ms: null,
+      shutdown: "stopped", exit_code: 0, log_filename: mirrored.result.filename, log_available: mirrored.result.available,
+      error_code: null, cleanup_error_code: null,
+    })));
+    const evidence = await readReportFailureEvidence({ directory, response });
+    expect(evidence.article_diagnostics).toEqual(native);
+    expect(evidence.articles).toHaveLength(8);
+    const paths = response.files.rejected_articles?.files.map(file => join(directory, "state", file.path)) ?? [];
+    const bytes = await Promise.all(paths.map(path => readFile(path)));
+    const report = renderWorkflowPlanMarkdown({ response, failures: evidence });
+    const folded = report.markdown.match(/```json\n([\s\S]*?)\n```/);
+    expect(JSON.parse(folded![1]!)).toEqual(native);
+    const attention = report.markdown.split("<details>")[0]!;
+    for (const cause of ["missing document root", "empty content", "too short", "missing title"]) {
+      expect(attention).toContain(cause);
+    }
+    expect(native.find(event => event.data.operation === "quality")?.data.details.diagnostics).toMatchObject({
+      warnings: ["malformed-json-ld"], quality: { too_short: true, rejected: true, token_count: null },
+    });
+    expect(native.find(event => event.data.details.reason_code === "EXTRACT_EMPTY")?.data.details.diagnostics.quality).toBeNull();
+    expect(JSON.stringify(native)).not.toMatch(/PRIVATE_|https?:\/\/|article_text|<html>/);
+    expect(report.markdown).not.toContain("PRIVATE_");
+    expect(response).toEqual(before);
+    expect(await Promise.all(paths.map(path => readFile(path)))).toEqual(bytes);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 
 test("server restarts append identical live CloudEvents without private bodies or headers", async () => {
   const directory = await mkdtemp(join(tmpdir(), "api-events-"));

@@ -131,6 +131,25 @@ cannot resolve a document do not log caller-supplied addresses.
 The [runner](feed-plan-runner.md#first-sight-and-retained-output) owns event
 fields, failure-only article addresses and elapsed-time meaning.
 
+Terminal article diagnostics use
+[`ArticleFailureDiagnosticSchema`](../../../packages/common-contracts/src/schemas/article-failure-diagnostic.schema.ts).
+The existing `planner.progress` envelope retains its event version and configured
+source. Failed `fetch`, `parse` or `quality` data contains the actual run;
+details contain its positive attempt, feed, captured candidate, address hash,
+`harvest-feeds` stage, native reason and complete `HarvestDiagnosticsSchema`.
+The publisher validates this subtype before generic detail cleaning and quality
+subset checks. It adds neither a publisher identity nor a duplicate quality
+object.
+
+The diagnostic retains native failure codes, extraction warnings and versions,
+timings, pacing, byte-limit facts and all measured quality fields. Unmeasured
+facts stay null; measured zero stays zero. Available response evidence keeps
+only the MIME type without parameters, byte counts and request profile.
+Selected headers and truncated-header names are empty. No article text, HTML,
+title, address, header value, arbitrary exception message or stack enters this
+projection. Standalone parse retains these available fetch facts from its held
+document without inventing a fetch duration. Native HTTP results are unchanged.
+
 ## Live document lifetime
 
 The listener holds current fetched documents under their producing
@@ -315,6 +334,21 @@ successful report in `response.health`. A missing or unwritable separate
 `health.json` does not replace that saved report. Failed health and unavailable
 health remain distinct from a successful empty report.
 
+The adapter also reads terminal article diagnostics from only the distinct
+filenames returned by the existing named server-evidence reader. It checks the
+explicit or saved run and attempt, plus the captured execution trace when
+available. Captured candidate, feed, address hash and reason must agree with
+saved rejection evidence. Identical repeated records count once; conflicting
+records fail explicitly.
+
+Needs attention names each available typed cause. A folded detail block retains
+the complete safe events. Missing identity, missing or partial mirrors and
+malformed lines produce evidence-gap notices; complete valid records from a
+partial log remain usable. Evidence is collected before error-response returns
+and also with explicit run and attempt when no response was saved. Missing
+planning or health is never presented as success. Health remains the aggregate
+authority; log-only missing-title evidence is not an extra health failure.
+
 Planner transport tests may open an
 ephemeral loopback-only listener and call its HTTP APIs. This proves actual
 transport without allowing external network access; source responses remain
@@ -426,6 +460,9 @@ remain separate ledger records.
 The Markdown renderer is a pure package function, not another HTTP route:
 formatting needs no service call, workflow annotations stay in the workflow
 adapter, and production can choose a separate reader-facing presentation.
+Current-only diagnostic readers and writers change together. Same-run logs
+explain a saved failure without extending native responses, retained ledgers
+or the population eligible for publication.
 A single complete response keeps report capture and live input release inside
 the request that owns them. Saved operation metadata explains where output
 came from; it cannot reopen input or require a later client continuation.
