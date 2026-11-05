@@ -1,4 +1,4 @@
-# CLAUDE.md - Yen Idhazh: Engineering Contract
+# Yen Idhazh: Engineering Contract
 
 **Last Updated**: 2026-11-05
 
@@ -74,7 +74,7 @@ Routine progress updates do not need this structure.
 - **Price it**: what the limitation costs to move, what moving it buys, and a recommendation (section 0c). **A limitation named with no next move is an unfinished answer.**
 - **Say what would settle it**, when the price cannot be measured today: name the measurement, what it costs to take, and the smallest step that makes progress while it is unknown. Label the guess an estimate (Guardrail #10) - an estimate carrying its own name is a better answer than a refusal.
 
-**When the measurement refuses the intent, that is a finding and not a veto.** Report what the data says, name the part of the intent it still supports, and hand the decision back with options. The agent never narrows the intent by itself (section 10); the person does (section 0). **When the measurement cannot be taken, or is too coarse to settle the question, that is a finding about the instrument** - it turns none of the three moves above into a refusal (Guardrail #10).
+**When the measurement refuses the intent, that is a finding and not a veto.** Report what the data says, name the part of the intent it still supports, and hand the decision back with options. The agent never narrows the intent by itself (section 9); the person does (section 0). **When the measurement cannot be taken, or is too coarse to settle the question, that is a finding about the instrument** - it turns none of the three moves above into a refusal (Guardrail #10).
 
 **A scope boundary is not an answer either.** A plan's out-of-scope line, a rejected alternative, and a non-goal are all dated decisions somebody made with what they knew then. When intent meets one, it is priced and handed back exactly as section 0a requires of a non-goal. **A refusal that cites only what was decided, and not what that decision costs today, is an unfinished answer.**
 
