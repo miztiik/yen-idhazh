@@ -1,26 +1,23 @@
 /** Do real machine and recorded-source operations share one port and close all owned resources? */
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRootContext, PLANNER_API_PREFIX, PlannerSavedResponseSchema, writeTraceContext } from "@idhazh/common-contracts";
 import { FingerprintResponseSchema } from "@idhazh/host-fingerprints/response";
 import { FINGERPRINT_PATH } from "@idhazh/host-fingerprints/api";
 import { loadConfig as loadProbeConfig } from "@idhazh/host-probes/config";
-import { SAMPLE_PATH, START_TASK_PROFILE_PATH } from "@idhazh/host-probes/api";
+import { SAMPLE_PATH } from "@idhazh/host-probes/api";
 import { fixture as fingerprintFixture } from "../../host-fingerprints/test/fixture";
-import { recordedPlan } from "../../feed-ingest-plan/test/plan-recordings";
-import { FetchResponseSchema, ParseResponseSchema } from "../../feed-ingest-plan/src/api/document-response.schema";
-import { operationLink } from "../../feed-ingest-plan/src/api/operation-context";
-import { PlannerReadySchema } from "../../feed-ingest-plan/src/config/planner-startup";
+import { recordedPlan } from "./plan-recordings";
+import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-response.schema";
+import { operationLink } from "../src/api/operation-context";
+import { PlannerReadySchema } from "../src/config/planner-startup";
 import { HostSampleSchema } from "../../host-probes/src/probe/sample-host";
-import { StartTaskProfileResponseSchema } from "../../host-probes/src/api/task-command-schema";
-import { parseProcessStat } from "../../host-probes/src/task-profile/process-stat";
-import type { TaskProfile } from "../../host-probes/src/task-profile/profile-schema";
-import { ApiReadySchema } from "../src/api-startup";
-import { createApiApp, serveApiApp } from "../src/create-api-app";
-import { HonoServerSettingsSchema, loadHonoSettings } from "../src/load-settings";
+import { ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
+import { serveApiApp } from "@idhazh/serve-pipeline-apis/app";
+import { createFeedApiApp } from "../scripts/create-feed-api-app";
+import { loadHonoSettings } from "@idhazh/serve-pipeline-apis/settings";
 
 const json = (body: unknown, carrier = {}) => ({
   method: "POST", headers: { "content-type": "application/json", ...carrier }, body: JSON.stringify(body),
@@ -44,18 +41,20 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
     group: "planning", modules: ["planning", "machine"], enabled: true,
   });
   const probe = await loadProbeConfig(new URL("../../../config/host-probes.json", import.meta.url));
-  const server = await serveApiApp(settings, {
+  const server = await serveApiApp(settings, createFeedApiApp({
     identity,
     planner: { inputs: recorded.inputs, runtime: recorded.runtime, identity: PlannerReadySchema.parse({
       event: "planner_ready", nonce: identity.nonce, pid: process.pid, port: settings.port,
       runtime: { ...parent, git_sha: recorded.runtime.git_sha, run_number: "700",
         attempt: 1, captured_at: "2026-10-21T23:59:59Z" },
     }) },
-    fingerprint: { config: host.config, settings: host.settings, options: {
-      outputRoot: join(host.directory, "state"), inspection: host.inspection,
-    } },
-    probes: { config: probe, context: { platform: "win32" } },
-  });
+    machine: {
+      fingerprint: { config: host.config, settings: host.settings, options: {
+        outputRoot: join(host.directory, "state"), inspection: host.inspection,
+      } },
+      probes: { config: probe, context: { platform: "win32" } },
+    },
+  }));
   const origin = `http://${settings.hostname}:${server.port}`;
   let unrelatedRequests = 0;
   const unrelated = Bun.serve({ hostname: settings.hostname, port: 0, fetch() {
@@ -111,71 +110,10 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
   }
 });
 
-test("machine-only shutdown waits for its real profile worker and asynchronous report", async () => {
-  const host = await fingerprintFixture();
+test("readiness cannot advertise missing native modules", async () => {
   const settings = await listenerSettings();
-  const config = await loadProbeConfig(new URL("../../../config/host-probes.json", import.meta.url));
-  config.task_profile.enabled = true;
-  const procRoot = join(host.directory, "proc");
-  await mkdir(join(procRoot, String(process.pid)), { recursive: true });
-  const processInput = await Bun.file(new URL("../../../tests/fixtures/host-probes/process-inputs.json", import.meta.url)).json();
-  const stat = processInput.stat.replace("4242 ", `${process.pid} `);
-  await writeFile(join(procRoot, String(process.pid), "stat"), stat);
-  const pin = parseProcessStat(process.pid, stat);
-  if (pin.reason !== null) throw new Error("The named process recording must contain its PID pin");
-  let release!: () => void;
-  let reporting!: () => void;
-  const releaseReport = new Promise<void>(resolve => { release = resolve; });
-  const reportStarted = new Promise<void>(resolve => { reporting = resolve; });
-  const reports: TaskProfile[] = [];
-  const identity = ApiReadySchema.parse({
-    event: "typescript_api_ready", nonce: randomUUID(), pid: process.pid, port: settings.port,
-    group: "machine", modules: ["machine"], enabled: true,
-  });
-  const server = await serveApiApp(settings, {
-    identity,
-    fingerprint: { config: host.config, settings: host.settings, options: { outputRoot: join(host.directory, "state") } },
-    probes: { config, context: { platform: "linux", procRoot }, report: async profile => {
-      reports.push(profile); reporting(); await releaseReport;
-    } },
-  });
-  const origin = `http://${settings.hostname}:${server.port}`;
-  let closing: Promise<void> | undefined;
-  try {
-    expect((await fetch(`${origin}${PLANNER_API_PREFIX}/plan`, json({}))).status).toBe(404);
-    const parent = createRootContext();
-    const response = await fetch(`${origin}${START_TASK_PROFILE_PATH}`, json({
-      identity: { pipeline_name: "recorded-work", task_name: "composed-profile", run_id: "recorded-run" },
-      target: { pid: process.pid, start_ticks: pin.value.start_ticks },
-    }, writeTraceContext(parent)));
-    expect(response.status).toBe(200);
-    const started = StartTaskProfileResponseSchema.parse(await response.json());
-    expect(started.status).toBe("started");
-    if (started.status !== "started") throw new Error("The configured profile must start its real collector");
-    let stopped = false;
-    closing = server.stop();
-    void closing.then(() => { stopped = true; });
-    await reportStarted;
-    expect(stopped).toBe(false);
-    expect(reports).toHaveLength(1);
-    expect(reports[0]!.traceId).toBe(started.traceId);
-    expect(reports[0]!.spanId).toBe(started.spanId);
-    release();
-    await closing;
-    expect(stopped).toBe(true);
-  } finally {
-    release();
-    await (closing ?? server.stop());
-    await host.cleanup();
-  }
-});
-
-test("readiness cannot advertise missing native modules or non-loopback configuration", async () => {
-  const settings = await listenerSettings();
-  expect(() => createApiApp({ identity: {
+  expect(() => createFeedApiApp({ identity: {
     event: "typescript_api_ready", nonce: randomUUID(), pid: process.pid, port: settings.port,
     group: "machine", modules: ["machine"], enabled: true,
   } })).toThrow("actual enabled API modules");
-  expect(HonoServerSettingsSchema.safeParse({ ...settings, hostname: "0.0.0.0" }).success).toBe(false);
-  expect(HonoServerSettingsSchema.safeParse({ ...settings, port: 0 }).success).toBe(false);
 });

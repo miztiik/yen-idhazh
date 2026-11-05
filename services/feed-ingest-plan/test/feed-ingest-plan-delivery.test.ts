@@ -4,7 +4,7 @@ import { deliverPlannerFiles, metadataWritePermissions } from "../scripts/feed-i
 import type { MetadataLedger, MetadataRegistrations } from "../scripts/feed-ingest-plan-metadata";
 import { MetadataDeliveryResultSchema, SafePersistHttpRequestSchema, SafePersistHttpStartupSchema } from "../scripts/feed-ingest-plan-delivery-result";
 import { readPlannerStartupRecording } from "./planner-process-recordings";
-import { ApiStartupSchema } from "../../serve-pipeline-apis/src/api-startup";
+import { FeedApiStartupSchema } from "../scripts/read-feed-api-startup";
 import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
 import { operationMetadata } from "../src/api/operation-context";
 
@@ -63,7 +63,7 @@ test("safe-persist startup keeps only the existing private loopback controls", a
   expect(SafePersistHttpStartupSchema.safeParse({ ...controls, git_sha: "" }).success).toBe(false);
   expect(SafePersistHttpStartupSchema.safeParse({ ...controls, git_sha: undefined }).success).toBe(false);
   expect(SafePersistHttpStartupSchema.safeParse({ ...controls, permittedPaths: ["state"] }).success).toBe(false);
-  expect(ApiStartupSchema.safeParse({
+  expect(FeedApiStartupSchema.safeParse({
     group: "delivery", delivery: controls, directory: "evidence",
     server: { ...await loadHonoSettings(inputs.root), hostname: "0.0.0.0" },
     run: { run_id: startup.runtime.run_number, attempt: startup.runtime.attempt,

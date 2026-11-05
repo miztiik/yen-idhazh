@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { copyFile, mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { fixture } from "../../host-fingerprints/test/fixture";
 import { captureLocalFingerprint } from "../../host-fingerprints/src/api/local-fingerprint";
 import { captureWorkflowHostFingerprint, WorkflowHostFingerprintSchema } from "../scripts/feed-ingest-plan-host-fingerprint";
@@ -13,7 +14,9 @@ import { formatHostFingerprintSummary } from "../scripts/feed-ingest-plan-host-s
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
 import { renderUnavailablePlanMarkdown } from "../src/reporting";
 import { metadataRegistrations, recordedWorkflowHost } from "./host-recordings";
-import { serveApiApp } from "../../serve-pipeline-apis/src/create-api-app";
+import { createApiApp, serveApiApp } from "@idhazh/serve-pipeline-apis/app";
+import { createMachineApp } from "@idhazh/host-probes/machine-app";
+import { loadHonoSettings } from "@idhazh/serve-pipeline-apis/settings";
 import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 
 const identity = { run_id: "2026-10-21-700", attempt: 1, git_sha: "a".repeat(40) };
@@ -83,13 +86,17 @@ test("workflow collection retains the actual host fingerprint beside planner fil
     for (const name of ["ledgers.json"]) {
       await copyFile(new URL(`../../../config/${name}`, import.meta.url), join(f.directory, "config", name));
     }
-    const shared = await serveApiApp({ hostname: "127.0.0.1", port: config.listen_port, idle_timeout_seconds: 30 }, {
+    const listener = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)));
+    const probes = { config: await loadProbeConfig(new URL("../../../config/host-probes.json", import.meta.url)) };
+    const shared = await serveApiApp({ ...listener, port: config.listen_port }, createApiApp({
       identity: { event: "typescript_api_ready", nonce: crypto.randomUUID(), pid: process.pid,
         port: config.listen_port, group: "machine", modules: ["machine"], enabled: true },
-      fingerprint: { config, settings, options: { outputRoot: join(directory, "state"),
-        registryPath: join(f.directory, "config", "ledgers.json") } },
-      probes: { config: await loadProbeConfig(new URL("../../../config/host-probes.json", import.meta.url)) },
-    });
+      create: () => createMachineApp({
+        fingerprint: { config, settings, options: { outputRoot: join(directory, "state"),
+          registryPath: join(f.directory, "config", "ledgers.json") } },
+        probes,
+      }),
+    }));
     let evidence: Awaited<ReturnType<typeof captureWorkflowHostFingerprint>>;
     try { evidence = await captureWorkflowHostFingerprint({
       root: f.directory, directory, stateRoot: join(directory, "state"),

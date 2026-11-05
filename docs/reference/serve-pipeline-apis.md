@@ -4,10 +4,10 @@
 
 Which local listener serves planning, article fetching/parsing, machine
 measurements and output delivery?
-`services/serve-pipeline-apis` serves existing pipeline operations through one
-local HTTP server per task. The native handlers run in one Hono application
-served by Bun. It is build-time operator tooling, not a backend for the
-published site.
+`services/serve-pipeline-apis` hosts a native-built application through one
+local HTTP server per task. The native API packages assemble their existing
+Hono handlers; shared hosting supplies the Bun listener and its lifetime.
+It is build-time operator tooling, not a backend for the published site.
 
 ## Listener authority
 
@@ -33,9 +33,12 @@ collector or separate machine-server process.
 
 ## Explicit task groups
 
-`src/index.ts` receives one validated private startup packet through its owned
-stdin pipe. The caller selects a fixed group before startup, not through an
-API request. There is no module registry or request-selected import.
+The feed package's `scripts/serve-feed-apis.ts` receives planning or delivery
+startup; the probe package's `src/api/serve-machine-apis.ts` receives machine
+startup. Each native entry validates its complete private packet and builds
+the application under the shared child lifetime. The caller selects the
+trusted entry and fixed group before startup, not through an API request.
+There is no shared native entry, module registry or request-selected import.
 
 Table B - Route groups
 
@@ -65,11 +68,10 @@ A socket or a log line is not readiness. A disabled
 instrument still returns its native disabled result; it is not a fabricated
 measurement.
 
-The existing child supervisor detects early exit and enforces finite startup,
-drain and forced-exit waits. Planning and delivery use the existing
-`supervision` settings; a machine task captures the same control shape for
-its own invocation. Cancellation, stop signals and parent-pipe loss close the
-owned application. Shutdown aborts admitted requests, awaits module cleanup,
+The shared parent supervisor and child lifetime detect early exit and enforce
+the invocation's validated startup, drain and forced-exit waits. Native adapters
+retain their own readiness and failure checks. Cancellation, stop signals and
+parent-pipe loss close the owned application. Shutdown aborts admitted requests, awaits module cleanup,
 closes profile workers and parser work, and reaps only the owned child.
 Original work failure and cleanup failure remain separate.
 The supervisor also drains the child diagnostic stream before closing its
@@ -96,8 +98,8 @@ metadata without a tracing provider, exporter or global active context.
 Server diagnostics contain startup, readiness, stop, safe error codes and
 observed lifecycle facts, but no process IDs. Private readiness, supervision,
 profiling and current-task evidence retain their existing process identities.
-Native module diagnostics are projected to this
-body-free form before live output or mirroring. Private startup/control
+Native decoders project module diagnostics to this
+body-free form before shared live output or mirroring. Private startup/control
 packets remain on stdout. Article bodies, prompts, model output, secrets,
 raw headers and raw exception text are not server-log fields.
 Routine task-profile reports are validated with the native measurement model,
@@ -115,8 +117,10 @@ process and cleanup failures still fail the task.
 Each task writes its current observation atomically to the named
 `hono-server-planning.json`, `hono-server-machine.json` or
 `hono-server-delivery.json` in the disposable run directory.
-`src/server-evidence.ts` owns this versioned native shape. Readers accept the
-current shape only; earlier same-day evidence without profile reports reads as
+`src/server-evidence.ts` owns the versioned envelope. The probe package's
+`src/api/create-machine-server-evidence.ts` binds it to the real native profile
+validator for both machine and feed readers. Readers accept the current shape
+only; earlier same-day evidence without profile reports reads as
 no captured reports, not a successful empty measurement. These files are same-run evidence, not committed ledgers,
 request journals or restart stores.
 
@@ -137,11 +141,19 @@ Hard runner termination cannot guarantee a final report or upload.
 
 ## Design rationale
 
-The composition reuses the real Hono planner and delivery applications and
-the native machine handlers. Explicit groups keep task resources visible
-without another service framework or per-API process. Hono and Zod are existing
-tool dependencies; the new package adds a composition lock and no published-site
-bytes. Existing standalone tools and older workflows are not migrated.
+Native construction reuses the real Hono planner and delivery applications and
+machine handlers. Feed-ingest-plan owns planning and delivery assembly;
+host-probes composes the existing fingerprint and profile implementations.
+Shared hosting imports none of them, including in its tests and dependency
+metadata. Typed construction arguments carry the application, failure policy,
+diagnostic decoder and bound evidence validator without a plugin framework.
+Only validated JSON-shaped controls cross the private process pipe.
+
+Explicit groups keep task resources visible without per-API processes.
+Hono and Zod remain existing tool dependencies. Host-probes adds the shared
+hosting and fingerprint installation closure and the already locked Hono
+version for composition; published-site bytes are unchanged. Existing
+standalone tools and older workflows are not migrated.
 
 Process ownership is established by private control data, not a copied ID in
 a diagnostic line.

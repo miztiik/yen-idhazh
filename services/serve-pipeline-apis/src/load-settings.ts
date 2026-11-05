@@ -2,6 +2,13 @@
 import { join } from "node:path";
 import { z } from "zod";
 
+export const SupervisionSettingsSchema = z.strictObject({
+  readiness_timeout_ms: z.int().positive(),
+  shutdown_timeout_ms: z.int().positive(),
+  forced_exit_timeout_ms: z.int().positive(),
+});
+export type SupervisionSettings = z.infer<typeof SupervisionSettingsSchema>;
+
 export const HonoServerSettingsSchema = z.strictObject({
   hostname: z.enum(["127.0.0.1", "::1"]),
   port: z.int().positive().max(65535),

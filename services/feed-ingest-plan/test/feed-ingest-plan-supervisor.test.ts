@@ -11,7 +11,7 @@ import { metadataRegistrations } from "./host-recordings";
 import { source } from "./harvest-recordings";
 import { writePlannerOutputRecording } from "./planner-output-recordings";
 import { PLANNER_API_PREFIX, PlannerFailureSchema } from "@idhazh/common-contracts";
-import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
+import { readMachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { writeWorkflowReport } from "../scripts/feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
 import { HonoServerSettingsSchema, loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
@@ -40,7 +40,7 @@ test("an occupied port fails without stopping or planning against the unrelated 
     })).rejects.toMatchObject({ code: "PLANNER_BIND_FAILED" });
     expect(requests).toBe(0);
     expect(await Bun.file(join(fixture.evidence, "response.json")).exists()).toBe(false);
-    const [server] = await readServerEvidence(fixture.evidence, { run_id: "700", attempt: 3 });
+    const [server] = await readMachineServerEvidence(fixture.evidence, { run_id: "700", attempt: 3 });
     expect(server).toMatchObject({
       group: "planning", startup: "failed", error_code: "PLANNER_BIND_FAILED", shutdown: "stopped",
     });
@@ -207,7 +207,7 @@ test("a real caller failure retains a separate nonzero child cleanup failure", a
     const captured = PlannerFailureSchema.parse(failure.failure);
     expect(captured).toMatchObject({ operation: "workflow", system_code: "ENOENT" });
     expect(captured.causes).toContainEqual(expect.objectContaining({ operation: "listener-close" }));
-    const [server] = await readServerEvidence(fixture.evidence);
+    const [server] = await readMachineServerEvidence(fixture.evidence);
     expect(server).toMatchObject({ startup: "ready", shutdown: "failed", exit_code: 1,
       cleanup_error_code: "PLANNER_CLEANUP_FAILED" });
     await assertReleased(fixture.startup.settings.listener.port);

@@ -17,11 +17,12 @@ import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { publicationGitRecording, publicationRecording } from "./publication-recordings";
 import { fixtureGit } from "./fixture-git";
 import { writeRecordedHostOutput } from "./host-output-recordings";
-import { ApiReadySchema, ApiStartupFailureSchema, ApiStartupSchema } from "../../serve-pipeline-apis/src/api-startup";
+import { ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
+import { FeedApiStartupFailureSchema, FeedApiStartupSchema } from "../scripts/read-feed-api-startup";
 import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
 
 type Recording = Awaited<ReturnType<typeof publicationGitRecording>>;
-const serverEntry = fileURLToPath(new URL("../../serve-pipeline-apis/src/index.ts", import.meta.url));
+const serverEntry = fileURLToPath(new URL("../scripts/serve-feed-apis.ts", import.meta.url));
 const requestFor = (f: Recording, paths = f.commit.paths) => ({ runNumber: "700", attempt: 3, paths });
 const inputFor = (f: Recording) => ({
   root: f.repository, directory: f.directory, currentRunFiles: JSON.stringify(f.commit.paths), runNumber: "700", attempt: 3,
@@ -274,7 +275,7 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
       nonce: randomUUID(), settings, output_root: relative(f.repository, f.directory).replaceAll("\\", "/"),
       git_sha: f.identity.git_sha,
     });
-    const startup = ApiStartupSchema.parse({
+    const startup = FeedApiStartupSchema.parse({
       group: "delivery", delivery, server: await loadHonoSettings(f.repository),
       directory: relative(f.repository, f.directory).replaceAll("\\", "/"),
       run: { run_id: "700", attempt: 3, started_at: "2026-10-21T23:59:59Z", context: createRootContext() },
@@ -288,7 +289,7 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
       new Response(invalid.stdout).text(), new Response(invalid.stderr).text(), invalid.exited,
     ]);
     expect(code).toBe(2);
-    expect(ApiStartupFailureSchema.parse(JSON.parse(output)).code).toBe("TYPESCRIPT_API_STARTUP_FAILED");
+    expect(FeedApiStartupFailureSchema.parse(JSON.parse(output)).code).toBe("TYPESCRIPT_API_STARTUP_FAILED");
     expect(() => process.kill(invalid.pid, 0)).toThrow();
     await assertReleased(settings.listener.port);
 

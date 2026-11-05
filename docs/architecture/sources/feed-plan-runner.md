@@ -40,7 +40,7 @@ or sparse expansion changes that input. Git is used again only for actual
 final data delivery.
 `scripts/feed-ingest-plan-http-client.ts` calls an existing listener
 and verifies retained output; it does not start or stop the listener. The entry
-supervises `services/serve-pipeline-apis/src/index.ts` as a separate child process in
+supervises its native `scripts/serve-feed-apis.ts` as a separate child process in
 one workflow step. Its address comes only from `config/hono-server.json`;
 standalone listener settings above do not select it.
 It verifies private-pipe readiness against the child's

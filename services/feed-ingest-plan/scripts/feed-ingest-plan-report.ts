@@ -16,7 +16,7 @@ import type { ReportFailureEvidence } from "../src/reporting/failure-evidence-ma
 import { verifyParquetFiles } from "./feed-ingest-plan-verification";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { articleEntitiesFilename, articleEntitiesPath } from "../src/selected-artifact-path";
-import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
+import { readMachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { renderServerEvidence } from "./feed-ingest-plan-server-report";
 
 export type WorkflowReportEvidence = {
@@ -147,7 +147,7 @@ export async function writeWorkflowReport(input: {
       }
     }
   }
-  const servers = await readServerEvidence(input.directory);
+  const servers = await readMachineServerEvidence(input.directory);
   const expectedAttempt = input.attempt ?? (response !== undefined && "planning_complete" in response
     ? response.attempt : response?.failure?.execution.attempt);
   if (servers.some(server => server.run_id !== input.runNumber

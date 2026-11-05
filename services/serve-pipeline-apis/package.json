@@ -3,13 +3,19 @@
   "version": "2026.11.04",
   "private": true,
   "type": "module",
-  "description": "Serve existing pipeline operations through one local API server per task. Native modules retain planning, delivery and machine measurements. No published-site backend.",
+  "description": "Reusable local listener, owned-child lifetime and validated evidence envelopes. Native API packages assemble their own operations. Hono and Zod support hosting and validation; no published-site bytes.",
   "exports": {
     "./app": "./src/create-api-app.ts",
     "./settings": "./src/load-settings.ts",
     "./startup": "./src/api-startup.ts",
     "./supervisor": "./src/supervise-api-task.ts",
-    "./evidence": "./src/server-evidence.ts"
+    "./evidence": "./src/server-evidence.ts",
+    "./read-evidence": "./src/read-server-evidence.ts",
+    "./readiness": "./src/read-api-readiness.ts",
+    "./events": "./src/write-server-event.ts",
+    "./child": "./src/run-http-child.ts",
+    "./supervise-child": "./src/supervise-http-child.ts",
+    "./child-failure": "./src/http-child-failure.ts"
   },
   "scripts": {
     "check": "tsc --noEmit",
@@ -17,9 +23,6 @@
   },
   "dependencies": {
     "@idhazh/common-contracts": "file:../../packages/common-contracts",
-    "@idhazh/feed-ingest-plan": "file:../../services/feed-ingest-plan",
-    "@idhazh/host-fingerprints": "file:../../services/host-fingerprints",
-    "@idhazh/host-probes": "file:../../services/host-probes",
     "hono": "^4.10.0",
     "zod": "^4.1.12"
   },

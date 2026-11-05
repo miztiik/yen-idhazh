@@ -5,9 +5,9 @@ import { randomUUID } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import type { Readable } from "node:stream";
 import { createRootContext, OperationMetadataSchema, writeTraceContext } from "../../../packages/common-contracts/src";
-import { superviseApiTask } from "../../../services/serve-pipeline-apis/src/supervise-api-task";
+import { superviseMachineApiTask } from "../../../services/host-probes/src/api/supervise-machine-api-task";
 import { HonoServerSettingsSchema } from "../../../services/serve-pipeline-apis/src/load-settings";
-import { ServerEvidenceSchema } from "../../../services/serve-pipeline-apis/src/server-evidence";
+import { MachineServerEvidenceSchema } from "../../../services/host-probes/src/api/create-machine-server-evidence";
 import { ServiceSettingsSchema } from "../../../services/feed-ingest-plan/src/config/service-settings";
 import { loadConfig } from "../../../services/host-probes/src/config";
 import { readProcessIdentity } from "../../../services/host-probes/src/task-profile/process-stat";
@@ -88,7 +88,7 @@ async function main() {
   }).catch(() => { abort(); return null; });
   let profile: z.infer<typeof TaskProfileSchema> | null = null;
   let clean = true;
-  let server: z.infer<typeof ServerEvidenceSchema> | null = null;
+  let server: z.infer<typeof MachineServerEvidenceSchema> | null = null;
   const context = createRootContext();
   let currentEvidence = false;
   let announced = false;
@@ -108,8 +108,8 @@ async function main() {
     });
     currentEvidence = true;
     stage = "MACHINE_API_STARTUP_INVALID";
-    await superviseApiTask({
-      root: runtime, kind: "TYPESCRIPT_API", signal: cancellation.signal,
+    await superviseMachineApiTask({
+      root: runtime, signal: cancellation.signal,
       startup: {
         group: "machine", nonce: randomUUID(), state_root: "host", directory: "logs",
         server: HonoServerSettingsSchema.parse(await Bun.file(join(runtime, "config", "hono-server.json")).json()),
@@ -215,7 +215,7 @@ async function main() {
       if (!currentEvidence) throw new Error("No current machine server evidence was started");
       const file = Bun.file(join(runtime, "logs", "hono-server-machine.json"));
       if (file.size > pipeline.max_response_bytes) throw new Error("Oversized server evidence");
-      server = ServerEvidenceSchema.parse(await file.json());
+      server = MachineServerEvidenceSchema.parse(await file.json());
       if (server.run_id !== startup.run.run_id || server.attempt !== startup.run.attempt
         || server.started_at !== startup.run.started_at) throw new Error("Stale machine evidence");
       profile ??= server.reported_profiles.at(-1) ?? null;
