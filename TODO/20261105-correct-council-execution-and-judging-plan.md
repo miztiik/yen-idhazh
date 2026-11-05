@@ -418,6 +418,7 @@ Table Q - Row 4 rejected alternatives
 - **Files touched:**
   - `backend/idhazh/contracts/content_similarity_judge_evaluation.py` (new)
   - `backend/idhazh/contracts/__init__.py`
+  - `backend/idhazh/content_similarity_judge/evaluation_events.py` (new)
   - `backend/idhazh/content_similarity_judge/freeze_evaluation.py` (new)
   - `backend/idhazh/content_similarity_judge/run_evaluation.py` (new)
   - `backend/idhazh/content_similarity_judge/score_evaluation.py` (new)
@@ -426,6 +427,7 @@ Table Q - Row 4 rejected alternatives
   - `backend/utilities/evaluate_content_similarity_judge.py` (new)
   - `config/judges/content-similarity-evaluation.json` (new)
   - `backend/tests/test_content_similarity_judge_evaluation.py` (new)
+  - `backend/tests/test_content_similarity_judge_evaluation_events.py` (new)
   - `backend/tests/contracts/test_content_similarity_judge_evaluation.py` (new)
   - `backend/tests/contracts/test_content_similarity_judge_config.py`
   - `backend/tests/contracts/_fixtures.py`
