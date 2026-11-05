@@ -102,6 +102,10 @@ not a change to inherited `safe.bareRepository=explicit`. Never lower that
 security control to make fixture tests pass. Install this checkout's package in
 an isolated environment before tests that invoke its console entry point.
 
+Backend pytest fixtures start each test with `GITHUB_RUN_ATTEMPT=1`, independent
+of the hosting CI attempt. Tests that exercise reruns explicitly set their own
+attempt after fixture setup. Production still reads the platform's attempt.
+
 Run records under `backend/var/checks/` hold the source fingerprint, selected
 groups and specs, exit status, step durations, test counts and queue/startup
 time separately. Logic and browser reports use separate output directories.
