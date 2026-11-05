@@ -17,10 +17,10 @@ the Python pipeline and global health data are unchanged.
 
 The workflow calls `services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts`.
 Its preparation and HTTP client are separate modules. Execution supervises the
-shared TypeScript application in a separate child process within one workflow
+shared pipeline API server in a separate child process within one workflow
 step. Its planning group includes the actual fingerprint and measurement
 handlers on the same socket. The address comes only from
-[`config/hono-server.json`](../reference/typescript-api-server.md#listener-authority).
+[`config/hono-server.json`](../reference/serve-pipeline-apis.md#listener-authority).
 Validated private startup data preserves local input settings, invocation-only
 enablement, temporary output, run/attempt/revision identity and UTC clocks.
 Readiness must match that exact child and invocation, not merely an available
@@ -94,8 +94,8 @@ changes, use the installed declared packages rather than a full Python group:
 ```text
 bun run --cwd packages/common-contracts check
 bun run --cwd packages/ledger-file-writer check
-bun run --cwd services/typescript-api check
-bun run --cwd services/typescript-api test
+bun run --cwd services/serve-pipeline-apis check
+bun run --cwd services/serve-pipeline-apis test
 bun run --cwd services/feed-ingest-plan check
 bun run --cwd services/feed-ingest-plan test
 ```

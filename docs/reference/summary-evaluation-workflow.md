@@ -1,6 +1,6 @@
 # Summary evaluation workflow
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 Which inputs, saved results and process outcomes belong to the manual
 `summary-eval-tests.yml` workflow. Its task programs live in
@@ -223,7 +223,7 @@ UTF-8 answers without changing accepted text.
 
 - [Run and inspect the workflow](../how-to/run-hhem-evaluation-api.md)
 - [Shared Python API](fastapi-server.md)
-- [Shared TypeScript API](typescript-api-server.md)
+- [Serve pipeline APIs](serve-pipeline-apis.md)
 - [Model-file selection](../concepts/config/model-file.md)
 - [Native HHEM operation](hhem-evaluation-api.md)
 - [Native UniEval operation](unieval-api.md)

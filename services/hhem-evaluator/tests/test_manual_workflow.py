@@ -73,7 +73,7 @@ def test_named_workflow_selects_one_declaration_with_the_current_pointer_default
     assert phases == ["prepare", "generate", "evaluate"]
     assert "--frozen --extra model --no-dev" in text
     assert "summary-eval-tests/report.py --root ../.." in text
-    assert "bun install --frozen-lockfile --cwd services/typescript-api" in text
+    assert "bun install --frozen-lockfile --cwd services/serve-pipeline-apis" in text
     for forbidden in (
         "git commit",
         "git push",
@@ -105,7 +105,7 @@ def test_named_workflow_selects_one_declaration_with_the_current_pointer_default
 def test_native_ci_retains_resources_and_prepares_the_actual_shared_api() -> None:
     text = (REPOSITORY / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     selected = text[text.index("  hhem-evaluator:\n") : text.index("\n  gates:\n")]
-    assert "bun install --frozen-lockfile --cwd services/typescript-api" in selected
+    assert "bun install --frozen-lockfile --cwd services/serve-pipeline-apis" in selected
     assert "bun install --frozen-lockfile --cwd packages/data-delivery" in selected
     assert "uv sync --frozen --group dev" in selected and "--extra model" not in selected
     assert "scripts/prepare-unieval-resources.py --root ../.." in selected

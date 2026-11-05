@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -35,7 +35,7 @@ question, and the four answers do not mix.
 | `.github/workflows/` | CI, the daily pipeline, and the Pages deploy | a person | no |
 | `.github/scripts/` | The independent `ai-pipeline.ts` experiment and `serve-evaluator.py`; `summary-eval-tests/` owns manual generation, saved-answer evaluation, shared machine HTTP calls and reporting, not the evaluator APIs | a person | no |
 | `services/feed-ingest-plan/`, `services/host-probes/` | Native API implementations plus their own workflow, report and controlled-host helpers under `scripts/`; offline cases under `test/` | a person | no |
-| `services/typescript-api/` | The task-owned Hono/Bun composition of existing planning, delivery, fingerprint and measurement routes, with same-run server evidence and diagnostics; [listener contract](typescript-api-server.md) | a person | no |
+| `services/serve-pipeline-apis/` | One local API server per workflow task, serving existing planning, delivery, fingerprint and measurement operations, with current-task evidence and diagnostics; [listener contract](serve-pipeline-apis.md) | a person | no |
 | `services/hhem-evaluator/` | Independent local Python HHEM API, locked environment, native transient contracts and owned CPU scoring process; offline cases under `tests/`, production-loader capture under `scripts/`. Settings are `config/hhem-evaluator/settings.json`; bounded vectors and real model recordings are `tests/fixtures/hhem-evaluator/` | a person | no |
 | `packages/feed-probe/` | The standalone TypeScript feed access and article readability probe, its CLI, machine-readable reports and package-local tests | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |

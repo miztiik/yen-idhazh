@@ -13,7 +13,7 @@ import { formatHostFingerprintSummary } from "../scripts/feed-ingest-plan-host-s
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
 import { renderUnavailablePlanMarkdown } from "../src/reporting";
 import { metadataRegistrations, recordedWorkflowHost } from "./host-recordings";
-import { serveApiApp } from "../../typescript-api/src/create-api-app";
+import { serveApiApp } from "../../serve-pipeline-apis/src/create-api-app";
 import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 
 const identity = { run_id: "2026-10-21-700", attempt: 1, git_sha: "a".repeat(40) };

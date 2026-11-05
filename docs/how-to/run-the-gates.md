@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -297,7 +297,7 @@ Run the named modules from the service directory:
 bun install --frozen-lockfile --cwd .\services\host-probes
 bun install --frozen-lockfile --cwd .\services\host-fingerprints
 bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
-bun install --frozen-lockfile --cwd .\services\typescript-api
+bun install --frozen-lockfile --cwd .\services\serve-pipeline-apis
 Set-Location .\services\hhem-evaluator
 uv run --frozen ruff check src tests scripts
 Push-Location ..\..
@@ -417,9 +417,9 @@ server and its named workflow dependants:
 bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
 bun install --frozen-lockfile --cwd .\services\host-fingerprints
 bun install --frozen-lockfile --cwd .\services\host-probes
-bun install --frozen-lockfile --cwd .\services\typescript-api
-bun run --cwd .\services\typescript-api check
-bun run --cwd .\services\typescript-api test
+bun install --frozen-lockfile --cwd .\services\serve-pipeline-apis
+bun run --cwd .\services\serve-pipeline-apis check
+bun run --cwd .\services\serve-pipeline-apis test
 bun run --cwd .\services\feed-ingest-plan test .\test\feed-ingest-plan-supervisor.test.ts .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-workflow.test.ts .\test\feed-ingest-plan-report.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\feed-ingest-plan-host.test.ts
 ```
 
@@ -429,7 +429,7 @@ engine cases still cover uncertain startup/lookup/release replies and
 cancellation during preparation. Failed startup retains reportable lifecycle
 evidence and available log artifacts independently of a planner result.
 These checks do not dispatch the data-writing workflow or prove live feed
-delivery. The [server reference](../reference/typescript-api-server.md) owns
+delivery. The [server reference](../reference/serve-pipeline-apis.md) owns
 configuration, current-task evidence and log semantics.
 
 The native package command supplies its declared timeout. Keep shorter

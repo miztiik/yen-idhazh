@@ -1,9 +1,9 @@
 {
-  "name": "@idhazh/typescript-api",
+  "name": "@idhazh/serve-pipeline-apis",
   "version": "2026.11.04",
   "private": true,
   "type": "module",
-  "description": "Compose existing operator APIs on one task-owned Bun listener. Hono supplies routing; local modules retain their native operations. No browser bundle or tracing runtime.",
+  "description": "Serve existing pipeline operations through one local API server per task. Native modules retain planning, delivery and machine measurements. No published-site backend.",
   "exports": {
     "./app": "./src/create-api-app.ts",
     "./settings": "./src/load-settings.ts",

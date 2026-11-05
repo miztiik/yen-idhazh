@@ -56,7 +56,7 @@ jobs:
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
           bun install --frozen-lockfile --cwd services/host-probes
-          bun install --frozen-lockfile --cwd services/typescript-api
+          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
 
       - name: Capture current planner recordings from the real offline API
         run: |
@@ -188,7 +188,7 @@ jobs:
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/host-probes
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
-          bun install --frozen-lockfile --cwd services/typescript-api
+          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
 
       - name: Check the caller launchers with the existing host compiler
         working-directory: services/host-probes
@@ -280,13 +280,13 @@ jobs:
           bun run check
           bun run test
 
-      - name: Prepare composed TypeScript API dependencies
+      - name: Prepare pipeline API dependencies
         if: needs.scope.outputs.code == 'true'
         run: |
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/host-probes
-          bun install --frozen-lockfile --cwd services/typescript-api
+          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
 
       - name: TypeScript host fingerprints
         if: needs.scope.outputs.code == 'true'
@@ -321,9 +321,9 @@ jobs:
           bun run check
           bun run test
 
-      - name: Composed TypeScript APIs and owned server lifetime
+      - name: Pipeline APIs and owned server lifetime
         if: needs.scope.outputs.code == 'true'
-        working-directory: services/typescript-api
+        working-directory: services/serve-pipeline-apis
         run: |
           bun run check
           bun run test

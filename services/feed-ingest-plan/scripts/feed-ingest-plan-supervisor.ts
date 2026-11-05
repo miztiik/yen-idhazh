@@ -7,8 +7,8 @@ import type { PlannerStartup } from "../src/config/planner-startup";
 import type { PlanInputs } from "../src/load-plan-inputs";
 import type { PlanRequest } from "../src/api/plan-request";
 import { requestPlannerHttp } from "./feed-ingest-plan-http-client";
-import { superviseApiTask } from "../../typescript-api/src/supervise-api-task";
-import { loadHonoSettings } from "../../typescript-api/src/load-settings";
+import { superviseApiTask } from "../../serve-pipeline-apis/src/supervise-api-task";
+import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
 import { runtimeFailureExecution } from "../src/api/plan-failure";
 import { operationMetadata } from "../src/api/operation-context";
 
