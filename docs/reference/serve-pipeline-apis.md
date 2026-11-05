@@ -126,8 +126,8 @@ extraction evidence. Invalid terminal records emit `CHILD_DIAGNOSTIC_INVALID`
 without copying their content. The
 [planner log contract](../architecture/sources/feed-operator-api.md#structured-operation-logs)
 owns this current-only subtype.
-Delivery completion is the other strict diagnostic shape.
-[`DeliveryCompletionDiagnosticSchema`](../../services/feed-ingest-plan/scripts/delivery-completion-diagnostic.ts)
+Delivery completion retains its existing strict diagnostic shape.
+[`DeliveryCompletionDiagnosticSchema`](../../services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts)
 retains the native `landed`, `already-on-main`, `no-changes` or `failed` status,
 nullable lowercase hexadecimal commit and nonnegative file count.
 Its `run_id` and attempt come from the actual delivery request, not the
@@ -148,10 +148,28 @@ shapes; saved task evidence is unchanged. The local API source, native
 completion event type and server name are unchanged. No path or process ID
 is added to completion data.
 
-The feed package owns both native diagnostic validators and event construction.
-Its decoder supplies typed, validated events to the shared mirror. Other native
-module diagnostics are projected to the body-free lifecycle form before live
-output or mirroring. Private startup/control
+Native packages supply typed, validated events to the shared mirror. The feed
+decoder validates delivery completion/failure and terminal article events,
+then delegates machine events to the probe package. Fingerprint's
+`./diagnostic` export validates `host_fingerprint_completed` and
+`host_fingerprint_failed`; probe's `./diagnostic` export validates
+`host_probe_completed`, `host_probe_failed`, `host_probe_cleanup_failed`,
+`host_probe_body_cleanup_failed` and `task_profile_failed`. Their safe data
+contains only native status, command/outcome or the declared failure code,
+never a host row, profile, measurement or path. A handled command does not
+claim that a measurement was available.
+
+Shared hosting validates its own `typescript_api_request_failed` subtype,
+with only `API_OPERATION_FAILED` in its data. It imports no native package.
+Accepted native envelopes are mirrored unchanged, including source, occurrence
+ID, UTC time, carrier and data. Invalid or unknown types produce
+`CHILD_DIAGNOSTIC_INVALID`, not a replacement event. Existing plain diagnostic
+writers retain their strict transition readers; this reader expansion does
+not change the HTTP handlers or claim their native emission.
+Article reports recognize rejection markers only in server lifecycle events;
+a native delivery code with the same spelling does not create an evidence gap.
+Ordinary planner failures still use the body-free lifecycle projection.
+Private startup/control
 packets remain on stdout. Article bodies, prompts, model output, secrets,
 raw headers and raw exception text are not server-log fields.
 Routine task-profile reports are validated with the native measurement model,

@@ -6,9 +6,10 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRootContext, PLANNER_API_PREFIX, readCloudEvent, writeTraceContext } from "@idhazh/common-contracts";
 import { PIPELINE_API_EVENT_SOURCE } from "../../serve-pipeline-apis/src/declare-event-source";
+import { DELIVERY_EVENT_SOURCE } from "../src/declare-event-source";
 import { SafePersistDataCommitterSchema } from "@idhazh/data-delivery";
 import { createSafePersistApp } from "../scripts/safe-persist-http-api";
-import { SafePersistHttpDiagnosticSchema } from "../scripts/safe-persist-http-diagnostic";
+import { DeliveryCompletionDiagnosticSchema, SafePersistHttpDiagnosticSchema } from "../scripts/safe-persist-http-diagnostic";
 import type { SafePersistHttpDiagnostic } from "../scripts/safe-persist-http-diagnostic";
 import { deliverWorkflowMetadataHttp } from "../scripts/safe-persist-http-client";
 import { finalizeRunOutput } from "../scripts/finalize-run-output";
@@ -24,7 +25,6 @@ import { writeRecordedHostOutput } from "./host-output-recordings";
 import { ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
 import { FeedApiStartupFailureSchema, FeedApiStartupSchema } from "../scripts/read-feed-api-startup";
 import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
-import { DeliveryCompletionDiagnosticSchema } from "../scripts/delivery-completion-diagnostic";
 import { ServerEventDataSchema, serverLogFilename } from "../../serve-pipeline-apis/src/server-evidence";
 
 type Recording = Awaited<ReturnType<typeof publicationGitRecording>>;
@@ -230,6 +230,7 @@ test("two actual delivery request operations survive native stderr, the completi
     const completions = events.filter(event => event.type === "safe_persist_http_completed")
       .map(event => readCloudEvent(event, value => DeliveryCompletionDiagnosticSchema.parse(value)));
     expect(completions).toHaveLength(2);
+    expect(DELIVERY_EVENT_SOURCE).toBe(PIPELINE_API_EVENT_SOURCE);
     const requests = [firstRequest, secondRequest];
     const results = [firstResult, secondResult];
     for (const [index, diagnostic] of diagnostics.entries()) {

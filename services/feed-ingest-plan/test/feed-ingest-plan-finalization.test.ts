@@ -12,7 +12,7 @@ import { fixtureGit } from "./fixture-git";
 import { publishUploadInventory } from "../scripts/feed-ingest-plan-upload-inventory";
 import { readCloudEvent, writeTraceContext } from "@idhazh/common-contracts";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
-import { DeliveryCompletionDiagnosticSchema } from "../scripts/delivery-completion-diagnostic";
+import { DeliveryCompletionDiagnosticSchema } from "../scripts/safe-persist-http-diagnostic";
 import { readMachineServerEvidence as readServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { ServerEventDataSchema } from "../../serve-pipeline-apis/src/server-evidence";
 

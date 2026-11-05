@@ -198,7 +198,7 @@ Table H - Evaluated article alternatives
 - `services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts` - new native relay contract derived from existing field authorities.
 - `services/feed-ingest-plan/scripts/safe-persist-http-api.ts` - emit the already allocated request context with completion facts.
 - `services/feed-ingest-plan/package.json` - export that diagnostic contract; no new dependency.
-- `services/feed-ingest-plan/scripts/delivery-completion-diagnostic.ts` - strict completion payload/builder.
+- `services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts` - strict completion payload/builder.
 - `services/feed-ingest-plan/scripts/read-feed-api-diagnostic.ts` - supply validated completion separately from lifecycle events.
 - `services/serve-pipeline-apis/src/server-evidence.ts` - separate lifecycle phase membership/metadata; do not change saved task evidence.
 - `services/feed-ingest-plan/test/safe-persist-http.test.ts`

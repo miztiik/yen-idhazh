@@ -13,12 +13,17 @@ import {
 import { ServerEventDataSchema, serverLogFilename } from "@idhazh/serve-pipeline-apis/evidence";
 import type { ApiGroup, ServerRun } from "@idhazh/serve-pipeline-apis/evidence";
 import { MachineServerEvidenceSchema as ServerEvidenceSchema } from "@idhazh/host-probes/machine-evidence";
-import { SafePersistHttpDiagnosticSchema } from "../scripts/safe-persist-http-diagnostic";
 import { MetadataDeliveryResultSchema } from "../scripts/feed-ingest-plan-delivery-result";
-import { createDeliveryCompletionEvent, DeliveryCompletionDiagnosticSchema } from "../scripts/delivery-completion-diagnostic";
+import {
+  createDeliveryCompletionEvent, createDeliveryFailureEvent, DeliveryCompletionDiagnosticSchema, readDeliveryEvent,
+} from "../scripts/safe-persist-http-diagnostic";
+import { createFingerprintCompletionEvent, createFingerprintFailureEvent } from "@idhazh/host-fingerprints/diagnostic";
+import { createProbeCompletionEvent, createProbeFailureEvent } from "@idhazh/host-probes/diagnostic";
+import { DELIVERY_EVENT_SOURCE } from "../src/declare-event-source";
 import { readReportFailureEvidence } from "../scripts/feed-ingest-plan-report-evidence";
 import { renderWorkflowPlanMarkdown } from "../scripts/feed-ingest-plan-report";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
+import { readArticleFailureDiagnostics } from "../scripts/read-article-failure-diagnostics";
 
 async function writeEvents(directory: string, run: ServerRun, moduleLine?: string, moduleLines?: string[], group?: ApiGroup) {
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL("./write-feed-api-events.ts", import.meta.url))], {
@@ -75,14 +80,14 @@ test("completion and lifecycle shapes remain strict while native statuses and an
     { status: "failed", commit: null, files: 1, paths },
   ].map(result => MetadataDeliveryResultSchema.parse(result));
   for (const result of nativeResults) {
-    const diagnostic = SafePersistHttpDiagnosticSchema.parse({
-      event: "safe_persist_http_completed", run_number: "701", attempt: 4,
+    const input = {
+      source: "/fixtures/typescript-api", runNumber: "701", attempt: 4,
       status: result.status, commit: result.commit, files: result.files, context: createRootContext(),
-    });
-    const event = createDeliveryCompletionEvent({ source: "/fixtures/typescript-api", diagnostic });
+    };
+    const event = createDeliveryCompletionEvent(input);
     expect(readCloudEvent(event, value => DeliveryCompletionDiagnosticSchema.parse(value))).toEqual(event);
     expect(event.data).toMatchObject({ status: result.status, commit: result.commit, files: result.files,
-      context: diagnostic.context, severity: "info", duration_ms: null, exit_code: null, code: null });
+      context: input.context, severity: "info", duration_ms: null, exit_code: null, code: null });
     expect(ServerEventDataSchema.safeParse(event.data).success).toBe(false);
     for (const invalid of [
       { phase: "ready" }, { group: "planning" }, { run_id: "local-run" }, { context: undefined },
@@ -91,7 +96,7 @@ test("completion and lifecycle shapes remain strict while native statuses and an
       { exit_code: 0.5 }, { code: "unsafe text" },
     ]) expect(DeliveryCompletionDiagnosticSchema.safeParse({ ...event.data, ...invalid }).success).toBe(false);
     const ancillary = createDeliveryCompletionEvent({
-      source: event.source, diagnostic, severity: "warning", duration_ms: 0, exit_code: -1, code: "RECORDED_FAILURE",
+      ...input, severity: "warning", duration_ms: 0, exit_code: -1, code: "RECORDED_FAILURE",
     });
     expect(ancillary.data).toMatchObject({ severity: "warning", duration_ms: 0, exit_code: -1, code: "RECORDED_FAILURE" });
     const lifecycle = {
@@ -100,7 +105,7 @@ test("completion and lifecycle shapes remain strict while native statuses and an
     } satisfies z.infer<typeof ServerEventDataSchema>;
     expect(ServerEventDataSchema.parse(lifecycle)).toEqual(lifecycle);
     expect(ServerEventDataSchema.safeParse({ ...lifecycle, phase: "operation_completed" }).success).toBe(false);
-    expect(ServerEventDataSchema.safeParse({ ...lifecycle, context: diagnostic.context }).success).toBe(false);
+    expect(ServerEventDataSchema.safeParse({ ...lifecycle, context: input.context }).success).toBe(false);
     expect(ServerEventDataSchema.safeParse({ ...lifecycle, status: result.status }).success).toBe(false);
   }
 });
@@ -131,6 +136,76 @@ test("invalid or missing completion context and unlisted fields produce safe typ
     expect(result.error).not.toContain("PRIVATE_");
     expect(result.error).not.toContain('"pid"');
     expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(result.error);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("native delivery and machine events retain their exact producer envelopes through feed relay", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "feed-native-events-"));
+  const run = { run_id: "700", attempt: 3, started_at: "2026-11-05T00:00:00Z", context: createRootContext() };
+  const parent = createRootContext({ traceState: "delivery=retained" });
+  const linked = createRootContext();
+  const context = createChildContext(parent, { links: [{ traceId: linked.traceId, spanId: linked.spanId }] });
+  const completion = createDeliveryCompletionEvent({
+    source: DELIVERY_EVENT_SOURCE, runNumber: "701", attempt: 4, status: "no-changes", commit: null, files: 0, context,
+  });
+  const events = [
+    completion, createDeliveryFailureEvent({ context, code: "INVALID_REQUEST" }),
+    createDeliveryFailureEvent({ context, code: "CHILD_DIAGNOSTIC_INVALID" }),
+    createFingerprintCompletionEvent({ context, status: "written" }), createFingerprintFailureEvent({ context }),
+    createProbeCompletionEvent({ context, operation: "sample", outcome: "handled" }),
+    ...(["host_probe_failed", "host_probe_cleanup_failed", "host_probe_body_cleanup_failed", "task_profile_failed"] as const)
+      .map(type => createProbeFailureEvent({ context, type })),
+  ];
+  expect(readDeliveryEvent(JSON.parse(JSON.stringify(completion)))).toEqual(completion);
+  try {
+    const projected = await writeEvents(directory, run, undefined, events.map(event => JSON.stringify(event)), "delivery");
+    const readback = projected.error.trim().split("\n").map(line => JSON.parse(line));
+    expect(readback.filter(event => event.type !== "hono.server")).toEqual(events);
+    expect(readback.filter(event => event.type === "hono.server" && event.data.code === "CHILD_DIAGNOSTIC_INVALID"))
+      .toHaveLength(0);
+    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(projected.error);
+    const server = ServerEvidenceSchema.parse({
+      version: "2026-11-04", server_name: "hono-server", group: "delivery",
+      run_id: run.run_id, attempt: run.attempt, started_at: run.started_at,
+      pid: projected.pid, startup: "not_started", startup_ms: null, shutdown: "stopped", exit_code: 0,
+      log_filename: projected.result.filename, log_available: projected.result.available,
+      error_code: null, cleanup_error_code: null,
+    });
+    const evidence = await readArticleFailureDiagnostics({
+      directory, servers: [server],
+      expected: { run_id: "2026-11-05-700", attempt: run.attempt, traceId: run.context.traceId },
+    });
+    expect(evidence).toEqual({ article_diagnostics: [], gaps: [] });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("native delivery carrier conflicts and unsafe extra fields yield warnings without replacement events", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "feed-invalid-native-events-"));
+  const run = { run_id: "700", attempt: 3, started_at: "2026-11-05T00:00:00Z", context: createRootContext() };
+  const context = createRootContext({ traceState: "delivery=retained" });
+  const completion = createDeliveryCompletionEvent({
+    source: DELIVERY_EVENT_SOURCE, runNumber: "701", attempt: 4, status: "no-changes", commit: null, files: 0, context,
+  });
+  const invalid = [
+    { ...completion, traceparent: writeTraceContext(createRootContext()).traceparent },
+    { ...completion, tracestate: "different=state" }, { ...completion, source: "has spaces" },
+    { ...completion, data: { ...completion.data, context: undefined } },
+    { ...completion, data: { ...completion.data, context: { ...context, spanId: "0".repeat(16) } } },
+    { ...completion, data: { ...completion.data, context: { ...context, links: undefined } } },
+    { ...completion, data: { ...completion.data, headers: { authorization: "PRIVATE_HEADER" } } },
+    { ...createDeliveryFailureEvent({ context, code: "INVALID_REQUEST" }), data: { code: "PRIVATE_EXCEPTION text" } },
+    { ...completion, type: "unknown" },
+  ];
+  try {
+    for (const event of invalid) expect(() => readDeliveryEvent(event)).toThrow();
+    const projected = await writeEvents(directory, run, undefined, invalid.map(event => JSON.stringify(event)), "delivery");
+    const readback = projected.error.trim().split("\n")
+      .map(line => readCloudEvent(JSON.parse(line), value => ServerEventDataSchema.parse(value)));
+    expect(readback.filter(event => event.data.phase === "module_failed")).toHaveLength(invalid.length);
+    expect(readback.filter(event => event.data.phase === "module_failed")
+      .every(event => event.data.code === "CHILD_DIAGNOSTIC_INVALID")).toBe(true);
+    expect(projected.error).not.toContain("PRIVATE_");
+    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(projected.error);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

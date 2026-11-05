@@ -4,8 +4,9 @@ import { join } from "node:path";
 import type { z } from "zod";
 import { createChildContext, createCloudEvent } from "@idhazh/common-contracts";
 import type { CloudEvent, OperationMetadata } from "@idhazh/common-contracts";
-import { ServerEventDataSchema, serverLogFilename } from "./server-evidence";
+import { SERVER_LIFECYCLE_EVENT_TYPE, ServerEventDataSchema, serverLogFilename } from "./server-evidence";
 import type { ApiGroup, ServerRun } from "./server-evidence";
+import { RequestFailureDiagnosticSchema, RequestFailureEventSchema } from "./create-request-failure-event";
 
 export type ServerEventInput = Pick<z.infer<typeof ServerEventDataSchema>, "phase">
   & Partial<Pick<z.infer<typeof ServerEventDataSchema>, "severity" | "duration_ms" | "exit_code" | "code">>;
@@ -34,7 +35,7 @@ export function createServerEventWriter<Profile, NativeData = never>(input: {
   }
   function record(data: ServerEventInput, mirror = true) {
     const event = createCloudEvent({
-      source: input.source, type: "hono.server", context,
+      source: input.source, type: SERVER_LIFECYCLE_EVENT_TYPE, context,
       data: {
         server_name: "hono-server", group: input.group, run_id: input.run.run_id, attempt: input.run.attempt,
         severity: data.severity ?? "info",
@@ -50,6 +51,9 @@ export function createServerEventWriter<Profile, NativeData = never>(input: {
     available = false;
     record({ phase: "log_unavailable", severity: "warning", code: "LOG_FILE_UNAVAILABLE" }, false);
   }
+  function invalidDiagnostic() {
+    record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
+  }
   try { descriptor = openSync(join(input.directory, filename), "a"); }
   catch { unavailable(); }
   return {
@@ -62,12 +66,28 @@ export function createServerEventWriter<Profile, NativeData = never>(input: {
       let raw: unknown;
       try { raw = JSON.parse(line); }
       catch {
-        record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
+        invalidDiagnostic();
         return;
+      }
+      if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
+        if ("type" in raw && raw.type === "typescript_api_request_failed") {
+          const event = RequestFailureEventSchema.safeParse(raw);
+          if (event.success) publish(event.data);
+          else invalidDiagnostic();
+          return;
+        }
+        if ("event" in raw && raw.event === "typescript_api_request_failed") {
+          const diagnostic = RequestFailureDiagnosticSchema.safeParse(raw);
+          if (diagnostic.success) record({
+            phase: "module_failed", severity: "error", code: diagnostic.data.code,
+          });
+          else invalidDiagnostic();
+          return;
+        }
       }
       const diagnostic = input.decode(raw);
       if (diagnostic.kind === "invalid") {
-        record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
+        invalidDiagnostic();
       } else if (diagnostic.kind === "profile") {
         profiles.set(`${diagnostic.operation.traceId}:${diagnostic.operation.spanId}`, diagnostic.profile);
       } else if (diagnostic.kind === "event") {

@@ -8,6 +8,7 @@
     "./api": "./src/api/server.ts",
     "./config": "./src/config.ts",
     "./response": "./src/api/fingerprint-response.ts",
+    "./diagnostic": "./src/api/create-fingerprint-event.ts",
     "./client": "./src/api/local-fingerprint.ts"
   },
   "scripts": {

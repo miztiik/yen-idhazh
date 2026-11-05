@@ -13,10 +13,16 @@ import { superviseMachineApiTask } from "../src/api/supervise-machine-api-task";
 import { MachineServerEvidenceSchema, readMachineServerEvidence } from "../src/api/create-machine-server-evidence";
 import { TaskProfileSchema } from "../src/task-profile/profile-schema";
 import { recordedMachineTask } from "./machine-api-recordings";
+import { createFingerprintCompletionEvent, createFingerprintFailureEvent } from "@idhazh/host-fingerprints/diagnostic";
+import { createProbeCompletionEvent, createProbeFailureEvent } from "../src/api/create-probe-event";
 
-async function writeEvents(directory: string, run: ServerRun, moduleLine: string) {
+async function writeEvents(directory: string, run: ServerRun, moduleLine?: string, moduleLines?: string[]) {
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL("./write-machine-api-events.ts", import.meta.url))], {
-    stdin: new Blob([JSON.stringify({ directory, run, source: "/fixtures/typescript-api", module_line: moduleLine })]),
+    stdin: new Blob([JSON.stringify({
+      directory, run, source: "/fixtures/typescript-api",
+      ...(moduleLine === undefined ? {} : { module_line: moduleLine }),
+      ...(moduleLines === undefined ? {} : { module_lines: moduleLines }),
+    })]),
     stdout: "pipe", stderr: "pipe",
   });
   const [output, error, code] = await Promise.all([
@@ -25,6 +31,37 @@ async function writeEvents(directory: string, run: ServerRun, moduleLine: string
   expect(code, error).toBe(0);
   return { result: JSON.parse(output), error };
 }
+
+test("native machine events are mirrored unchanged while unknown and unsafe events are refused", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "machine-native-events-"));
+  const run = { run_id: "700", attempt: 3, started_at: "2026-11-05T00:00:00Z", context: createRootContext() };
+  const context = createRootContext({ traceState: "machine=retained" });
+  const fingerprint = createFingerprintCompletionEvent({ context, status: "disabled" });
+  const probe = createProbeCompletionEvent({ context, operation: "cache-latency", outcome: "disabled" });
+  const events = [
+    fingerprint, probe, createFingerprintFailureEvent({ context }),
+    ...(["host_probe_failed", "host_probe_cleanup_failed", "host_probe_body_cleanup_failed", "task_profile_failed"] as const)
+      .map(type => createProbeFailureEvent({ context, type })),
+    fingerprint,
+  ];
+  const invalid = [
+    { ...fingerprint, type: "unknown" }, { ...fingerprint, source: "has spaces" },
+    { ...probe, traceparent: "invalid" }, { ...probe, data: { ...probe.data, profile: "PRIVATE_PROFILE" } },
+    { event: "unknown", body: "PRIVATE_BODY" },
+  ];
+  try {
+    const projected = await writeEvents(directory, run, undefined,
+      [...events, ...invalid].map(event => JSON.stringify(event)));
+    const readback = projected.error.trim().split("\n").map(line => JSON.parse(line));
+    expect(readback.filter(event => event.type !== "hono.server")).toEqual(events);
+    const warnings = readback.filter(event => event.type === "hono.server" && event.data.phase === "module_failed");
+    expect(warnings).toHaveLength(invalid.length);
+    expect(warnings.every(event => event.data.code === "CHILD_DIAGNOSTIC_INVALID")).toBe(true);
+    expect(projected.result.profile_count).toBe(0);
+    expect(projected.error).not.toContain("PRIVATE_");
+    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(projected.error);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 
 test("a real successful default profile report is not a server error or a repeated measurement dump", async () => {
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL("./report-recorded-task-profile.ts", import.meta.url))], {

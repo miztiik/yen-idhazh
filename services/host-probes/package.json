@@ -8,6 +8,7 @@
     "./api": "./src/api/server.ts",
     "./config": "./src/config.ts",
     "./profile": "./src/task-profile/profile-schema.ts",
+    "./diagnostic": "./src/api/create-probe-event.ts",
     "./machine-app": "./src/api/create-machine-app.ts",
     "./machine-startup": "./src/api/read-machine-api-startup.ts",
     "./machine-supervisor": "./src/api/supervise-machine-api-task.ts",
