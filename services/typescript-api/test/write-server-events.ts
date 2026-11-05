@@ -9,6 +9,7 @@ const input = z.strictObject({
 }).parse(await Bun.stdin.json());
 const writer = createServerEventWriter({ ...input, group: input.group ?? "machine" });
 writer.write({ phase: "starting" });
+if (input.group === "delivery") writer.write({ phase: "ready" });
 if (input.module_line !== undefined) writer.acceptModuleLine(input.module_line);
 for (const line of input.module_lines ?? []) writer.acceptModuleLine(line);
 writer.write({ phase: "stopped", exit_code: 0 });

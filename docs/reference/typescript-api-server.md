@@ -94,7 +94,7 @@ metadata without a tracing provider, exporter or global active context.
 Server diagnostics contain startup, readiness, stop, safe error codes and
 observed lifecycle facts, but no process IDs. Private readiness, supervision,
 profiling and current-task evidence retain their existing process identities.
-Validated terminal article diagnostics are the narrow exception to the lifecycle
+Validated terminal article diagnostics are a narrow exception to the lifecycle
 projection: the writer emits and mirrors the original accepted
 [`ArticleFailureDiagnosticSchema`](../../packages/common-contracts/src/schemas/article-failure-diagnostic.schema.ts)
 CloudEvent unchanged. Its occurrence ID, UTC time, planner source and actual
@@ -103,8 +103,30 @@ extraction evidence. Invalid terminal records emit `CHILD_DIAGNOSTIC_INVALID`
 without copying their content. The
 [planner log contract](../architecture/sources/feed-operator-api.md#structured-operation-logs)
 owns this current-only subtype.
-Other native module diagnostics are projected to the
-body-free lifecycle form before live output or mirroring. Private startup/control
+Delivery completion is the other strict diagnostic shape.
+[`DeliveryCompletionDiagnosticSchema`](../../services/typescript-api/src/delivery-completion-diagnostic.ts)
+retains the native `landed`, `already-on-main`, `no-changes` or `failed` status,
+nullable lowercase hexadecimal commit and nonnegative file count.
+Its `run_id` and attempt come from the actual delivery request, not the
+supervised task. Its group remains `delivery` and phase remains
+`operation_completed`. Severity and nullable duration, exit code and safe code
+keep their existing validation and defaults.
+
+The complete native request `context` appears in completion data and supplies
+the CloudEvent carrier without allocating another operation. The writer
+preserves its execution, operation, optional parent and trace state, and
+required input links under the
+[shared identity contract](../architecture/contracts/identity.md#4-native-typescript-event-and-operation-metadata).
+Missing or invalid context and unknown relay fields emit
+`CHILD_DIAGNOSTIC_INVALID`; they never fall back to supervision.
+Lifecycle diagnostics keep their supervision operation and exclude
+`operation_completed`. Both diagnostic readers accept only their current
+shapes; saved task evidence is unchanged. The configured API source, native
+completion event type and server name are unchanged. No path or process ID
+is added to completion data.
+
+Other native module diagnostics are projected to the body-free lifecycle form
+before live output or mirroring. Private startup/control
 packets remain on stdout. Article bodies, prompts, model output, secrets,
 raw headers and raw exception text are not server-log fields.
 Routine task-profile reports are validated with the native measurement model,
@@ -157,6 +179,8 @@ Process ownership is established by private control data, not a copied ID in
 a diagnostic line.
 Preserving the validated article event avoids assigning its failure to the
 server's supervision operation or losing the measured cause in a generic error.
+Delivery results need their own payload because completion describes a request,
+while lifecycle events describe the server that receives it.
 
 ## See also
 

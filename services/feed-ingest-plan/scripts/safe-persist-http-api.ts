@@ -7,6 +7,7 @@ import { describePlanError, PlanError } from "../src/api/plan-request";
 import { writeJsonLine } from "../src/logging/structured-logger";
 import { deliverWorkflowMetadata } from "./feed-ingest-plan-deliver";
 import { SafePersistHttpRequestSchema } from "./feed-ingest-plan-delivery-result";
+import { SafePersistHttpDiagnosticSchema } from "./safe-persist-http-diagnostic";
 import type { SafePersistHttpReadySchema } from "./feed-ingest-plan-delivery-result";
 import { withPlannerFailure } from "../src/api/plan-failure";
 import type { FailureCaptureLimits } from "../src/config/service-settings";
@@ -49,10 +50,10 @@ export function createSafePersistApp(input: {
         }, ...(input.failureLimits === undefined ? {} : { limits: input.failureLimits }),
       });
     }
-    writeJsonLine({
+    writeJsonLine(SafePersistHttpDiagnosticSchema.parse({
       event: "safe_persist_http_completed", run_number: request.runNumber, attempt: request.attempt,
-      status: result.status, commit: result.commit, files: result.files,
-    });
+      status: result.status, commit: result.commit, files: result.files, context,
+    }));
     return c.json(result);
   });
   app.notFound(c => c.json({ code: "NOT_FOUND", issues: [{ field: "route", message: "Unknown API route" }] }, 404));

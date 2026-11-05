@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-11-05
 **Level**: 5 - versioned diagnostic contracts.
-**Status**: Row 1 is implemented; selected local checks passed and review is pending. Row 2 is pending.
+**Status**: Row 1 is implemented; selected local checks passed and review is pending. Row 2 is implemented; selected local checks passed and review is pending.
 
 ## 0. Operating contract
 
@@ -39,7 +39,7 @@ Table C - PR rows
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Article failure diagnostics and same-run report | - | A | IN-FLIGHT | jubilant-giggle | - | - |
-| C2 | 2 | Delivery completion facts and request context | 1 | A | PENDING | - | - | - |
+| C2 | 2 | Delivery completion facts and request context | 1 | A | IN-FLIGHT | verbose-couscous | - | - |
 
 ## 2. Row #1 - Article failure diagnostics and same-run report
 
