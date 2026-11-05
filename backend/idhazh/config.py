@@ -12,7 +12,7 @@ fixed, so a run that did not record it could not say which model's numbers it
 read.
 
 The gardener reads its own two inputs through `load_gardener`: its knobs in
-`config/idhazh_gardener.json` and one declaration per task under
+`config/gardener/config/idhazh_gardener.json` and one declaration per task under
 `config/gardener/`. They are loaded apart from `load`, because a digest run has
 no use for them and a gardener run has no use for the model files. Every
 refusal that needs only those files and `config/idhazh.json` is made here, as
@@ -280,7 +280,7 @@ def with_memory_profiling_override(settings: Settings, override: bool | None) ->
 # --- the gardener ------------------------------------------------------------
 
 #: The gardener's own knobs: how a wake is sharded and how hard a shard pushes.
-GARDENER_FILE: Final = "idhazh_gardener.json"
+GARDENER_FILE: Final = "gardener/config/idhazh_gardener.json"
 #: One declaration a task, named for the task. A missing folder means no tasks.
 GARDENER_TASKS_DIR: Final = "gardener"
 #: What a declaration's name ends in. The plan job's glob reads the same suffix.

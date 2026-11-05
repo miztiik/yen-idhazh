@@ -5,7 +5,7 @@ the module for its kind as a fallback. `bind` selects the named module first.
 No task-package directory is listed.
 
 **The committed config names the task set.** A task runs only when its name is
-in `config/idhazh_gardener.json` and its declaration validates. The runner's
+in `config/gardener/config/idhazh_gardener.json` and its declaration validates. The runner's
 pre-flight refuses a declaration that has no module.
 
 **A config value never names a module.** The folder is fixed in code and the

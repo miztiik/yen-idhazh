@@ -92,10 +92,10 @@ def test_unbounded_published_inputs_use_the_declared_start_and_all_index_heads(
 ) -> None:
     quiet_git(tmp_path, monkeypatch)
     which = LedgerName.PUBLISHED
-    gardener = json.loads((CONFIG_DIR / "idhazh_gardener.json").read_text(encoding="utf-8"))
+    gardener = json.loads((CONFIG_DIR / "gardener/config/idhazh_gardener.json").read_text(encoding="utf-8"))
     gardener["first_ledger_year"] = "2023"
     seed = {
-        "config/idhazh_gardener.json": json.dumps(gardener),
+        "config/gardener/config/idhazh_gardener.json": json.dumps(gardener),
         "state/raw/published/2023/01/01/older-than-the-index.json": "old raw\n",
         "state/raw/published/2022/01/01/foreign-archive.json": "outside the declared start\n",
     }

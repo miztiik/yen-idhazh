@@ -1,7 +1,7 @@
 """Which shard runs which gardener task at this wake, worked out with nothing of ours installed?
 
 The gardener's plan job runs this before the package is installed, so it is
-the standard library alone. It reads `config/idhazh_gardener.json` and every
+the standard library alone. It reads `config/gardener/config/idhazh_gardener.json` and every
 declaration under `config/gardener/`, and prints the plan the matrix reads:
 
     python backend/utilities/gardener_shards.py           three lines for $GITHUB_OUTPUT
@@ -34,8 +34,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-#: The gardener's own knobs, and the folder of declarations beside them.
-GARDENER_FILE = "idhazh_gardener.json"
+#: The gardener's own knobs, and the folder of named task declarations.
+GARDENER_FILE = "gardener/config/idhazh_gardener.json"
 TASKS_DIR = "gardener"
 DECLARATION_SUFFIX = ".json"
 
@@ -61,9 +61,9 @@ def declarations(config_root: Path) -> dict[str, dict[str, Any]]:
         not isinstance(name, str) or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name) is None
         for name in names
     ):
-        raise SystemExit("config/idhazh_gardener.json task_names must be a list of task slugs")
+        raise SystemExit(f"config/{GARDENER_FILE} task_names must be a list of task slugs")
     if len(names) != len(set(names)):
-        raise SystemExit("config/idhazh_gardener.json task_names repeats a task")
+        raise SystemExit(f"config/{GARDENER_FILE} task_names repeats a task")
     for name in names:
         if not (folder / f"{name}{DECLARATION_SUFFIX}").is_file():
             raise SystemExit(f"config/{TASKS_DIR}/{name}{DECLARATION_SUFFIX} is missing")

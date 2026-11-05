@@ -83,7 +83,6 @@ def test_plan_shards_prints_the_payload_the_plan_job_prints(
 
 def test_an_empty_garden_lists_nothing_and_plans_nothing(tmp_path: Path) -> None:
     config_dir = a_config(tmp_path)
-    (config_dir / "gardener").rmdir()
 
     settings = config.load_gardener(config_dir)
     assert listing.tasks(settings) == ["no task is declared: config/gardener/ holds no declaration"]
@@ -94,13 +93,13 @@ def test_an_unconfigured_declaration_is_not_read(
 ) -> None:
     config_dir = the_garden(tmp_path)
     (config_dir / "gardener" / "Not A Name.json").write_text("{}", encoding="ascii")
-    knobs_path = config_dir / "idhazh_gardener.json"
+    knobs_path = config_dir / "gardener/config/idhazh_gardener.json"
     knobs = json.loads(knobs_path.read_text(encoding="utf-8"))
     knobs["task_names"].append("Not A Name")
     knobs_path.write_text(json.dumps(knobs), encoding="ascii", newline="\n")
 
     assert cli.main(["gardener", "list-tasks", "--config", str(config_dir)]) == EXIT_INTEGRITY
-    assert "config/idhazh_gardener.json is refused" in capsys.readouterr().err
+    assert "config/gardener/config/idhazh_gardener.json is refused" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

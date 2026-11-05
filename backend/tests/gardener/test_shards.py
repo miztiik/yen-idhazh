@@ -64,9 +64,8 @@ def test_fewer_tasks_than_shards_is_one_shard_a_task(tmp_path: Path) -> None:
 
 
 def test_an_empty_garden_is_the_empty_shape_on_one_line(tmp_path: Path) -> None:
-    """No folder of declarations is no tasks, and the workflow still reads every key."""
+    """No named declarations is no tasks, and the workflow still reads every key."""
     config_dir = a_config(tmp_path)
-    (config_dir / "gardener").rmdir()
 
     planned = shards.plan(config.load_gardener(config_dir))
 

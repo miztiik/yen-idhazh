@@ -107,7 +107,8 @@ def test_real_partial_assembly_and_delivery_keep_source_and_writer_separate(
         },
     )
     _copy_config(repo / "config")
-    for name in ("idhazh_gardener.json",):
+    for name in ("gardener/config/idhazh_gardener.json",):
+        (repo / "config" / name).parent.mkdir(parents=True, exist_ok=True)
         (repo / "config" / name).write_bytes((CONFIG_DIR / name).read_bytes())
     git(repo, "add", "config")
     git(repo, "commit", "--quiet", "-m", "fixture config")

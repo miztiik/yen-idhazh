@@ -40,8 +40,6 @@ EMPTY = '{"any_active_task":false,"matrix":{"include":[]},"shard_count":0,"shard
 
 def a_fixture_config(root: Path, garden: str | None) -> Path:
     config_dir = a_config(root, *([GARDENER_FIXTURES / garden] if garden else []))
-    if garden is None:
-        (config_dir / "gardener").rmdir()
     return config_dir
 
 
@@ -112,8 +110,8 @@ def test_the_script_runs_with_the_standard_library_alone(tmp_path: Path) -> None
 @pytest.mark.parametrize(
     ("failure", "sentence"),
     [
-        ("slugs", "config/idhazh_gardener.json task_names must be a list of task slugs"),
-        ("duplicate", "config/idhazh_gardener.json task_names repeats a task"),
+        ("slugs", "config/gardener/config/idhazh_gardener.json task_names must be a list of task slugs"),
+        ("duplicate", "config/gardener/config/idhazh_gardener.json task_names repeats a task"),
         ("missing", "config/gardener/traces.json is missing"),
     ],
 )
@@ -128,7 +126,7 @@ def test_the_script_prints_its_refusal_and_exits_1(
     type and frame.
     """
     bare, config_dir = a_bare_script(tmp_path)
-    knobs_path = config_dir / "idhazh_gardener.json"
+    knobs_path = config_dir / "gardener/config/idhazh_gardener.json"
     knobs = json.loads(knobs_path.read_text(encoding="utf-8"))
     if failure == "slugs":
         knobs["task_names"] = "traces"
@@ -164,10 +162,25 @@ def test_both_loaders_ignore_unnamed_declarations(tmp_path: Path) -> None:
     assert shards.payload(shards.plan(config.load_gardener(config_dir))) == before
 
 
+def test_both_loaders_read_nested_knobs_without_reading_the_old_path(tmp_path: Path) -> None:
+    config_dir = a_fixture_config(tmp_path, "garden")
+    nested = config_dir / "gardener/config/idhazh_gardener.json"
+    knobs = json.loads(nested.read_text(encoding="utf-8"))
+    knobs["shards"] = 2
+    nested.write_text(json.dumps(knobs), encoding="ascii")
+    (config_dir / "idhazh_gardener.json").write_text("not JSON", encoding="ascii")
+
+    plain = gardener_shards.plan(config_dir)
+    typed = shards.plan(config.load_gardener(config_dir))
+
+    assert plain["shard_count"] == typed.shard_count == 2
+    assert gardener_shards.payload(plain) == shards.payload(typed)
+
+
 @pytest.mark.parametrize("failure", ["missing", "duplicate"])
 def test_both_loaders_refuse_bad_named_lists(tmp_path: Path, failure: str) -> None:
     config_dir = a_fixture_config(tmp_path, "garden")
-    knobs_path = config_dir / "idhazh_gardener.json"
+    knobs_path = config_dir / "gardener/config/idhazh_gardener.json"
     knobs = json.loads(knobs_path.read_text(encoding="utf-8"))
     name = knobs["task_names"][0]
     if failure == "missing":
