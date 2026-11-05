@@ -1,4 +1,4 @@
-# CLAUDE.md - Yen Idhazh: Engineering Contract
+# Yen Idhazh: Engineering Contract
 
 **Last Updated**: 2026-11-05
 
