@@ -13,6 +13,7 @@ import { renderSelectionExclusions } from "./selection-exclusions-markdown";
 import { renderSelectedEvidence } from "./selected-evidence-markdown";
 import { renderExecutionFailure } from "./execution-failure-markdown";
 import type { PlannerFailure } from "@idhazh/common-contracts";
+import { distinctArticleDiagnostics } from "./article-failure-evidence";
 
 export type MarkdownSection = Readonly<{ markdown: string; notice: string }>;
 export type PlannerMarkdownNotice = Readonly<{
@@ -73,6 +74,11 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
   }
   const failures = input.failures === undefined ? undefined : {
     ...input.failures,
+    ...(input.failures.article_diagnostics === undefined ? {} : {
+      article_diagnostics: distinctArticleDiagnostics(input.failures.article_diagnostics, {
+        run_id: row.run_id, attempt: row.attempt, traceId: response.traceId,
+      }),
+    }),
     ...(input.failures.articles === undefined ? {}
       : { articles: RejectedArticleRowSchema.array().parse(input.failures.articles) }),
     ...(input.failures.earlier_checks === undefined ? {}
@@ -152,10 +158,22 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
   return { markdown: summary, notices };
 }
 
-export function renderUnavailablePlanMarkdown(input: { host?: MarkdownSection; failure?: PlannerFailure | null } = {}): PlannerMarkdown {
-  const message = "No planner HTTP result was saved, so planning completion, feed work, request counts and exclusions were not recorded.";
+export function renderUnavailablePlanMarkdown(input: {
+  host?: MarkdownSection; failure?: PlannerFailure | null; failures?: ReportFailureEvidence;
+} = {}): PlannerMarkdown {
+  const message = "No planning result was saved, so planning completion, feed work, request counts and exclusions were not recorded.";
+  const execution = input.failure?.execution;
+  const failures = input.failures === undefined ? undefined : {
+    ...input.failures,
+    article_diagnostics: distinctArticleDiagnostics(input.failures.article_diagnostics ?? [], {
+      ...(execution?.run_id == null ? {} : { run_id: execution.run_id }),
+      ...(execution?.attempt == null ? {} : { attempt: execution.attempt }),
+      ...(execution?.traceId == null ? {} : { traceId: execution.traceId }),
+    }),
+  };
+  const attention = renderFailureEvidence(undefined, undefined, undefined, [], failures);
   return {
-    markdown: `# Feed planner run\n\n## Table A - Run outcome\n\n**Planning result unavailable.**\n\n## Table B - Needs attention\n\n${message}\n\n${renderExecutionFailure(input.failure ?? null)}${input.host === undefined ? "" : `\n\n<details>\n<summary>Execution measurements</summary>\n\n## Table H - Execution measurements\n\n| Id | Measure | Recorded value |\n| --- | --- | --- |\n${input.host.markdown}\n\n</details>`}`,
+    markdown: `# Feed planner run\n\n## Table A - Run outcome\n\n**Planning result unavailable.**\n\n${message}\n\n${attention.markdown}\n\n${renderExecutionFailure(input.failure ?? null)}${input.host === undefined ? "" : `\n\n<details>\n<summary>Execution measurements</summary>\n\n## Table H - Execution measurements\n\n| Id | Measure | Recorded value |\n| --- | --- | --- |\n${input.host.markdown}\n\n</details>`}`,
     notices: [
       { level: "warning", title: "Feed planner outcome", message },
     ],

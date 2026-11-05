@@ -3,7 +3,10 @@ import { expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
-import { createRootContext, loadEventSources, readTraceContext, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import {
+  ArticleFailureDiagnosticDetailsSchema, ArticleFailureDiagnosticSchema, createCandidateId, createRootContext, HarvestDiagnosticsSchema,
+  loadEventSources, readTraceContext, PLANNER_API_PREFIX,
+} from "@idhazh/common-contracts";
 import { selectedArtifactPath, rawDocumentContentsFilename } from "../src/selected-artifact-path";
 import { createPlanTestServer } from "./plan-test-server";
 import { createStageLogger, prepareProgressEvent } from "../src/logging/structured-logger";
@@ -50,9 +53,13 @@ test("standalone document work logs failure addresses only and persistence logs 
       const events = f.events.filter(event => readTraceContext({
         traceparent: event.traceparent, tracestate: event.tracestate,
       })?.traceId === fetched.traceId);
-      expect(events.filter(event => event.data.operation === "fetch").map(event => event.data.phase))
+      const diagnostics = events.filter(event => ArticleFailureDiagnosticSchema.safeParse(event).success);
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]!.data.details.diagnostics).toMatchObject({ http_status: 404, fetch_failure: "http" });
+      const documentEvents = events.filter(event => !ArticleFailureDiagnosticSchema.safeParse(event).success);
+      expect(documentEvents.filter(event => event.data.operation === "fetch").map(event => event.data.phase))
         .toEqual(["started", "failed"]);
-      for (const event of events) {
+      for (const event of documentEvents) {
         const { operation, phase, details } = event.data;
         expect(details._compliance).toBeUndefined();
         if (operation === "fetch" || operation === "parse") {
@@ -89,6 +96,42 @@ test("standalone document work logs failure addresses only and persistence logs 
       .toEqual(["started", "failed", "started", "completed"]);
     expect(f.events.at(-1)?.data.details.artifact).toBe(persisted.artifact);
   } finally { await app.close(); await f.close(); }
+});
+
+test("the terminal publisher preserves the native object before generic quality checks and refuses unsafe additions", async () => {
+  const events: FeedIngestEvent[] = [];
+  const source = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
+  const fixture = await Bun.file(new URL(
+    "../../../tests/fixtures/feed-ingest-plan/article-terminal-failures.json", import.meta.url,
+  )).json();
+  const emit = createStageLogger({ run_id: "2026-11-05-700", ...createRootContext() },
+    source.planner, event => events.push(event));
+  const details = ArticleFailureDiagnosticDetailsSchema.parse({
+    attempt: 3, feed_id: "recorded-news", candidate_id: createCandidateId(), url_key: "a".repeat(64),
+    stage: "harvest-feeds", reason_code: "EXTRACT_FAILED",
+    diagnostics: HarvestDiagnosticsSchema.parse(fixture.quality_diagnostic),
+  });
+  emit("quality", "failed", details, ["feed_id", "publisher_id"], "https://news.example/private?token=PRIVATE_SECRET");
+  const event = ArticleFailureDiagnosticSchema.parse(events[0]);
+  expect(event.data.details).toEqual(details);
+  expect(event.data.details).not.toHaveProperty("publisher_id");
+  expect(event.data.details).not.toHaveProperty("quality_rejection");
+  expect(prepareProgressEvent(event)).toEqual(event);
+  for (const change of [
+    { title: "PRIVATE_TITLE" }, { article_text: "PRIVATE_BODY" }, { diagnostics: {
+      ...details.diagnostics, error_code: "PRIVATE_EXCEPTION includes arbitrary exception text",
+    } }, { diagnostics: { ...details.diagnostics,
+      response_evidence: { ...details.diagnostics.response_evidence, selected_headers: { server: "PRIVATE_HEADER" } },
+    } }, { diagnostics: { ...details.diagnostics,
+      quality: { ...details.diagnostics.quality, extractor_version: "v".repeat(513) },
+    } },
+  ]) {
+    const rejected = prepareProgressEvent({ ...event, data: { ...event.data, details: { ...details, ...change } } });
+    expect(rejected.data.details._compliance).toMatchObject({ status: "NON_COMPLIANT",
+      violations: expect.arrayContaining([{ code: "invalid_article_diagnostic", path: "details" }]) });
+    expect(rejected.data.details.diagnostics).toBeUndefined();
+    expect(JSON.stringify(rejected)).not.toContain("PRIVATE_");
+  }
 });
 
 test("failed redirected feeds identify the requested URL and final dispatched target", async () => {

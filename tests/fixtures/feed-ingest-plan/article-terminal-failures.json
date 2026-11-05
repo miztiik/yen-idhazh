@@ -7,5 +7,72 @@
     {"name": "tls", "url": "https://news.example/tls", "responses": [{"error": "CERT_HAS_EXPIRED"}], "expected": {"http_status": null, "fetch_failure": "network", "error_code": "CERT_HAS_EXPIRED"}},
     {"name": "timeout", "url": "https://news.example/deadline", "responses": [{"error": "ETIMEDOUT"}], "expected": {"http_status": null, "fetch_failure": "timeout", "error_code": "ETIMEDOUT"}},
     {"name": "empty-extraction", "url": "https://news.example/empty-body", "responses": [{"status": 200, "body": ""}], "expected": {"http_status": 200, "fetch_failure": null, "error_code": null}}
-  ]
+  ],
+  "preflight_inputs": [
+    {"url": "https://127.0.0.1/private", "reason_code": "FETCH_FAILED"},
+    {"url": null, "reason_code": "MISSING_REQUIRED_FIELDS"}
+  ],
+  "article_inputs": [
+    {
+      "name": "parser-failure",
+      "url": "https://news.example/terminal-rootless",
+      "responses": [{"status": 200, "body": "<!DOCTYPE html><!-- PRIVATE_HTML has no document root -->", "headers": {"content-type": "text/html; private=PRIVATE_HEADER", "server": "PRIVATE_HEADER"}}],
+      "reason_code": "EXTRACT_FAILED",
+      "operation": "parse",
+      "extraction_failure": "missing-document-root"
+    },
+    {
+      "name": "quality-refusal",
+      "url": "https://news.example/terminal-short",
+      "responses": [{"status": 200, "body": "<html><head><title>PRIVATE_TITLE</title><script type=\"application/ld+json\">PRIVATE_HTML</script></head><body><article><p>Workers checked the bridge supports after the river rose overnight. They found no cracks and will inspect the footings again. Engineers said the crossing remains open while the measurements continue. The full PRIVATE_BODY report will be published after the next inspection.</p></article></body></html>", "headers": {"content-type": "text/html; private=PRIVATE_HEADER", "server": "PRIVATE_HEADER"}}],
+      "reason_code": "EXTRACT_FAILED",
+      "operation": "quality",
+      "extraction_failure": null
+    },
+    {
+      "name": "missing-title",
+      "url": "https://news.example/terminal-untitled",
+      "responses": [{"status": 200, "body": "<html><body><article><p>A readable PRIVATE_BODY article has no supplied headline. Its paragraphs still carry actual prose and evidence rather than a title invented by the harvester.</p></article></body></html>", "headers": {"content-type": "text/html; private=PRIVATE_HEADER", "server": "PRIVATE_HEADER"}}],
+      "reason_code": "MISSING_REQUIRED_FIELDS",
+      "operation": "parse",
+      "extraction_failure": "missing-title"
+    }
+  ],
+  "quality_diagnostic": {
+    "http_status": 200,
+    "extraction_failure": null,
+    "failure_code": "too_short",
+    "stopped_stage": "extract",
+    "detail": "too_short",
+    "fetch_ms": null,
+    "extract_ms": 0,
+    "pacing_time_ms": 0,
+    "pacing_settings": {"enabled": true, "domain_delay_ms": 0, "publisher_delay_ms": 0, "jitter_ms": 0},
+    "response_evidence": {
+      "content_type": "text/html",
+      "decoded_bytes": 0,
+      "declared_content_length": null,
+      "selected_headers": {},
+      "headers_truncated": [],
+      "request_profile": "firefox"
+    },
+    "warnings": ["malformed-json-ld", "semantic-dom-fallback"],
+    "quality": {
+      "source_word_count": 45,
+      "word_count": 45,
+      "corroborated_word_count": null,
+      "token_count": null,
+      "truncated": null,
+      "truncated_at_tokens": null,
+      "truncation_cap_tokens": 4096,
+      "too_short": true,
+      "not_prose": false,
+      "boilerplate": null,
+      "contaminated": null,
+      "failure_code": "too_short",
+      "rejected": true,
+      "extractor_version": "recorded-extractor-v1",
+      "sanitizer_version": "recorded-sanitizer-v1"
+    }
+  }
 }

@@ -4,9 +4,12 @@ import { join } from "node:path";
 import type { z } from "zod";
 import {
   createChildContext, createCloudEvent, FeedIngestEventDataSchema, readCloudEvent,
+  ArticleFailureDiagnosticSchema, isArticleFailureDiagnostic,
 } from "@idhazh/common-contracts";
 import { TaskProfileSchema } from "@idhazh/host-probes/profile";
 import type { TaskProfile } from "@idhazh/host-probes/profile";
+import { SafePersistHttpDiagnosticSchema } from "@idhazh/feed-ingest-plan/delivery-diagnostic";
+import { createDeliveryCompletionEvent } from "./delivery-completion-diagnostic";
 import { ServerEventDataSchema, serverLogFilename } from "./server-evidence";
 import type { ApiGroup, ServerRun } from "./server-evidence";
 
@@ -19,9 +22,17 @@ export function createServerEventWriter(input: { directory: string; source: stri
   let descriptor: number | undefined;
   let available = true;
   const profiles = new Map<string, TaskProfile>();
-  function record(data: EventInput, mirror = true, type = "hono.server") {
+  function publish(event: unknown, mirror = true) {
+    const line = `${JSON.stringify(event)}\n`;
+    process.stderr.write(line);
+    if (mirror && available && descriptor !== undefined) {
+      try { appendFileSync(descriptor, line, "utf8"); }
+      catch { unavailable(); }
+    }
+  }
+  function record(data: EventInput, mirror = true) {
     const event = createCloudEvent({
-      source: input.source, type, context,
+      source: input.source, type: "hono.server", context,
       data: {
         server_name: "hono-server", group: input.group, run_id: input.run.run_id, attempt: input.run.attempt,
         severity: data.severity ?? "info",
@@ -30,12 +41,7 @@ export function createServerEventWriter(input: { directory: string; source: stri
       },
       parseData: value => ServerEventDataSchema.parse(value),
     });
-    const line = `${JSON.stringify(event)}\n`;
-    process.stderr.write(line);
-    if (mirror && available && descriptor !== undefined) {
-      try { appendFileSync(descriptor, line, "utf8"); }
-      catch { unavailable(); }
-    }
+    publish(event, mirror);
   }
   function unavailable() {
     if (!available) return;
@@ -62,6 +68,11 @@ export function createServerEventWriter(input: { directory: string; source: stri
         return;
       }
       if ("specversion" in raw) {
+        if (isArticleFailureDiagnostic(raw)) {
+          if (ArticleFailureDiagnosticSchema.safeParse(raw).success) publish(raw);
+          else record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
+          return;
+        }
         try {
           const event = readCloudEvent(raw, value => FeedIngestEventDataSchema.parse(value));
           if (event.data.phase === "failed") record({ phase: "module_failed", severity: "error", code: "API_OPERATION_FAILED" });
@@ -71,7 +82,9 @@ export function createServerEventWriter(input: { directory: string; source: stri
         return;
       }
       if ("event" in raw && raw.event === "safe_persist_http_completed") {
-        record({ phase: "operation_completed" }, true, "safe_persist_http_completed");
+        const diagnostic = SafePersistHttpDiagnosticSchema.safeParse(raw);
+        if (diagnostic.success) publish(createDeliveryCompletionEvent({ source: input.source, diagnostic: diagnostic.data }));
+        else record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
         return;
       }
       if ("event" in raw && raw.event === "task_profile") {
