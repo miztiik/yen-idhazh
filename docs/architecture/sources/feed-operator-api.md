@@ -1,6 +1,6 @@
 # Feed planning operator APIs
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
@@ -11,7 +11,7 @@ the delivery task restarts that application with its private delivery group.
 
 ## Independent fetch and parse endpoints
 
-`POST /api/2026-11-04/fetch` accepts an active configured `feed_id` and
+`POST /api/2026-11-05/fetch` accepts an active configured `feed_id` and
 `fetch_item_type` (`feed` or `article`). A feed request uses its configured
 URL. A direct article request also supplies its permitted operator URL.
 These requests may name their owning collection with `traceId`.
@@ -29,7 +29,7 @@ fetch remains a typed failure. Article fetch responses include `article_id`
 and the captured `candidate_id`. Feed responses include configured `feed_id`
 and `document_id`, with no article or candidate field.
 
-`POST /api/2026-11-04/parse` accepts
+`POST /api/2026-11-05/parse` accepts
 `links: [{ traceId, spanId }]`, naming exactly one completed fetch operation.
 It claims that live input and checks its expected kind, configuration,
 URL hash, byte limit and business ownership, then parses without any network call.
@@ -259,7 +259,7 @@ endpoint has no alias and returns ordinary HTTP 404.
 
 ## Safe-persist HTTP delivery
 
-`POST /api/2026-11-04/safe-persist-data` calls the existing verified metadata
+`POST /api/2026-11-05/safe-persist-data` calls the existing verified metadata
 adapter and `safe_persist_data`, not another Git implementation. Its strict
 request contains `runNumber`, `attempt` and `paths`, the exact completed paths
 relative to the run's state directory. The response retains the existing
@@ -323,7 +323,7 @@ recorded fixtures. The exception does not permit live source fetching in tests.
 ## Request flow
 
 The diagram shows every stage HTTP call made by
-`POST /api/2026-11-04/plan` on its trusted local listener. Every stage call
+`POST /api/2026-11-05/plan` on its trusted local listener. Every stage call
 uses actual loopback HTTP; no in-process transport substitutes for it. Selection
 uses the run's captured calculations and actual completed work but does not
 write health. The

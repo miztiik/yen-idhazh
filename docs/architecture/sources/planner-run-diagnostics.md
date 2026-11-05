@@ -1,6 +1,6 @@
 # Planner run diagnostics
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 What evidence remains when a planner run fails?
 The existing response and report retain safe execution context. A separate

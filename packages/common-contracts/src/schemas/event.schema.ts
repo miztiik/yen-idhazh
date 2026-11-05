@@ -23,7 +23,7 @@ export const FeedIngestEventSchema = CloudEventSchema.safeExtend({
   version: FEED_INGEST_EVENT_VERSION,
   changelog: [
     { version: FEED_INGEST_EVENT_VERSION, change: "Name generic document progress identities document_id." },
-    { version: FEED_INGEST_EVENT_VERSION, change: "Retain captured article candidates in document progress evidence." },
+    { version: "2026-11-04", change: "Retain captured article candidates in document progress evidence." },
     { version: "2026-11-03", change: "Wrap sparse planner progress in a current CloudEvents envelope." },
     { version: "2026-11-02", change: "Remove robots fields and request categories from progress evidence." },
     { version: "2026-10-29T08:00", change: "Earlier changes are in this file's Git history." },

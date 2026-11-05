@@ -5,7 +5,7 @@ import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { checkDocumentCandidate, checkDocumentObservations, FetchedDocumentSchema } from "./planner-operation.schema";
 import { OperationMetadataSchema } from "./operation-metadata.schema";
 
-export const RAW_DOCUMENT_FAILURE_VERSION = "2026-11-04" as const;
+export const RAW_DOCUMENT_FAILURE_VERSION = "2026-11-05" as const;
 const FailedObservationSchema = OperationMetadataSchema.safeExtend(
   z.strictObject(FetchedDocumentSchema.shape.observation.shape).omit({ run_id: true }).shape,
 );
@@ -19,7 +19,7 @@ export const FailedDocumentMetadataSchema = z.strictObject(FetchedDocumentSchema
   version: RAW_DOCUMENT_FAILURE_VERSION,
   changelog: [
     { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Validate generic document identities and their matching observations." },
-    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Require matching captured article candidates in failed-document metadata." },
+    { version: "2026-11-04", change: "Require matching captured article candidates in failed-document metadata." },
     { version: "2026-11-03", change: "Keep native operation context in failed-document observations." },
     { version: "2026-11-02", change: "Remove robots fields from failed-document metadata." },
     { version: "2026-11-01", change: "Earlier changes are in Git history." },
@@ -39,7 +39,7 @@ export const RawDocumentFailureSchema = OperationMetadataSchema.safeExtend({
   version: RAW_DOCUMENT_FAILURE_VERSION,
   changelog: [
     { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Name the failed input's generic address key document_id." },
-    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Retain the captured article candidate in private failure records." },
+    { version: "2026-11-04", change: "Retain the captured article candidate in private failure records." },
     { version: "2026-11-03", change: "Identify the failed operation with native context and input links." },
     { version: "2026-11-02", change: "Retain target-only fetched metadata in failure artifacts." },
     { version: "2026-11-01", change: "Earlier changes are in Git history." },

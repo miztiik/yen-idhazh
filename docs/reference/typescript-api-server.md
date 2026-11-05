@@ -1,6 +1,6 @@
 # Shared TypeScript API server
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 Which listener, routes and task outcomes do TypeScript workflow callers use?
 `services/typescript-api` composes the existing native handlers on one Hono
@@ -49,7 +49,7 @@ no identity aliases or response wrapper. The existing
 [profile commands](host-probe-api.md) retain their own validation, operation
 metadata and resource handles. CloudEvents are diagnostic envelopes, not
 wrappers around each HTTP command.
-The current planner prefix is `/api/2026-11-04`. Its
+The current planner prefix is `/api/2026-11-05`. Its
 [document and article identities](../architecture/sources/feed-operator-api.md#independent-fetch-and-parse-endpoints)
 and [combined response controls](../architecture/sources/feed-plan-runner.md#entry-points-and-controls)
 also apply on this shared listener.

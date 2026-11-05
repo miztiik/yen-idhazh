@@ -1,6 +1,6 @@
 # Feed article partitioning
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 How are chosen articles assigned to workers without changing the selection?
 Partitioning consumes one validated selected batch and returns the same

@@ -172,7 +172,7 @@ export const FeedIngestConfigSchema = z.strictObject({
   version: FEED_INGEST_CONFIG_VERSION,
   changelog: [
     { version: FEED_INGEST_CONFIG_VERSION, change: "Configure optional selected URLs in combined response summaries." },
-    { version: FEED_INGEST_CONFIG_VERSION, change: "Remove optional destructive URL cleanup; resource identity is one fixed protocol." },
+    { version: "2026-11-04", change: "Remove optional destructive URL cleanup; resource identity is one fixed protocol." },
     { version: "2026-11-02", change: "Remove article robots policy from target-only ingestion." },
     { version: "2026-11-02", change: "Use global age, substance and diversity scoring without tier allocation or selection caps." },
     { version: "2026-11-01", change: "Earlier changes are in git." },

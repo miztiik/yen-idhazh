@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work

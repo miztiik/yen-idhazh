@@ -1,6 +1,6 @@
 # Identity contracts
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 How files, work units, content, event occurrences and operations retain distinct identities.
 

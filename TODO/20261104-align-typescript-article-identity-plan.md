@@ -1,6 +1,6 @@
 # Align TypeScript article identity
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 **Level**: 5 - identity and persisted TypeScript contracts.
 
 ## 0. Operating contract

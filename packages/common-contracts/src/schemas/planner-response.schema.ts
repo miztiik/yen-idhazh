@@ -7,7 +7,7 @@ import { PlannerErrorResponseSchema, PlannerFailureReadSchema } from "./planner-
 import { FeedHealthStateRowSchema, FeedLifecycleFieldsSchema } from "./feed-health-state.schema";
 import { PlannerRequestReportSchema } from "./planner-request-report.schema";
 
-export const PLANNER_RESPONSE_VERSION = "2026-11-04" as const;
+export const PLANNER_RESPONSE_VERSION = "2026-11-05" as const;
 export const PlannerLedgerWriteResultSchema = z.discriminatedUnion("status", [
   z.strictObject({ status: z.literal("written"), files: z.array(z.strictObject({
     path: RelPathSchema, file_id: z.uuid(), covers: NonEmptySchema,

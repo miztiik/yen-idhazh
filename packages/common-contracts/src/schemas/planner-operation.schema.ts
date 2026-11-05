@@ -8,7 +8,7 @@ import { HttpResponseEvidenceSchema, RequestProfileSchema } from "./http-respons
 import { RequestPacingSettingsSchema } from "./config.schema";
 import { OperationLinkSchema, OperationMetadataSchema, TraceIdSchema } from "./operation-metadata.schema";
 
-export const OPERATION_VERSION = "2026-11-04" as const;
+export const OPERATION_VERSION = "2026-11-05" as const;
 const NETWORK_FAILURE_VERSION = "2026-11-03" as const;
 const OperationVersionSchema = z.literal(OPERATION_VERSION).default(OPERATION_VERSION);
 export const SourceArticleOutcomeSchema = z.strictObject({
@@ -101,8 +101,8 @@ export const FetchedDocumentSchema = z.strictObject({
   version: OPERATION_VERSION,
   changelog: [
     { version: OPERATION_VERSION, change: "Use validated document identities for generic fetched inputs and observations." },
-    { version: OPERATION_VERSION, change: "Retain the captured article candidate across the document and its observations." },
-    { version: OPERATION_VERSION, change: "Preserve normalized feed and article queries while refusing canonical fragments." },
+    { version: "2026-11-04", change: "Retain the captured article candidate across the document and its observations." },
+    { version: "2026-11-04", change: "Preserve normalized feed and article queries while refusing canonical fragments." },
     { version: "2026-11-03", change: "Identify fetch and attempt operations with native context and input links." },
     { version: "2026-10-28", change: "Earlier changes are in this file's Git history." },
   ],

@@ -1,6 +1,6 @@
 # Feed planner ledgers
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 Which data does each feed planner ledger retain?
 
