@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createRootContext, loadEventSources, RawDocumentFailureSchema, NetworkFailureDetailsSchema, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
+import { createRootContext, deriveUrlKey, loadEventSources, RawDocumentFailureSchema, NetworkFailureDetailsSchema, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import { rawDocumentContentsFilename, rawDocumentContentsPath, ArtifactRootSchema } from "../src/selected-artifact-path";
 import { createStageLogger, prepareProgressEvent } from "../src/logging/structured-logger";
@@ -48,11 +48,15 @@ test("actual parse failures write and package metadata under one validated gener
     const artifact = captured.document;
     const parsed = ParseResponseSchema.parse(await post("parse", { links: [operationLink(fetched)] }));
     expect(parsed.failure).toBe("malformed-feed");
+    const canonicalUrl = `${artifact.canonical_url}?page=2`;
+    const documentId = deriveUrlKey(canonicalUrl);
     const projection = failureMetadata({
       ...operationMetadata(parsed), document_kind: "feed", operation: "parse",
       failed_at: "2026-10-21T23:59:59Z", failure_reason: "malformed-feed",
       document: {
-        ...artifact, canonical_url: `${artifact.canonical_url}?page=2`,
+        ...artifact, canonical_url: canonicalUrl, document_id: documentId,
+        observation: { ...artifact.observation, document_id: documentId },
+        attempt_observations: artifact.attempt_observations.map(observation => ({ ...observation, document_id: documentId })),
         requested_url: "https://news.example/feed.xml?token=private",
         attempts: artifact.attempts.map(attempt => ({ ...attempt,
           request_url: "https://news.example/request?tracking=private#fragment" })),
@@ -62,6 +66,7 @@ test("actual parse failures write and package metadata under one validated gener
     });
     assertBodyFree(projection);
     expect(projection.document.canonical_url).toBe(artifact.canonical_url);
+    expect(projection.document.document_id).toBe(documentId);
     expect(projection.document.requested_url).toBeNull();
     expect(projection.document.attempts.every(attempt => attempt.request_url === "https://news.example/request")).toBe(true);
     expect(projection.document.redirects[0]).toMatchObject({

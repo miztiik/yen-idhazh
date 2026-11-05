@@ -398,6 +398,7 @@ Table M - Row 2 alternatives
 - `services/feed-ingest-plan/src/run-feed-plan.ts`
 - `services/feed-ingest-plan/scripts/feed-ingest-plan-verification.ts`
 - `services/feed-ingest-plan/test/operation-logging.test.ts`
+- `services/feed-ingest-plan/test/network-failure-evidence.test.ts` (keep the query-bearing diagnostic input and its observations consistent before URL redaction)
 - `services/feed-ingest-plan/test/harvest.test.ts`
 - `services/feed-ingest-plan/test/parser-deadline.test.ts`
 - `services/feed-ingest-plan/test/article-source-outcome.test.ts`
