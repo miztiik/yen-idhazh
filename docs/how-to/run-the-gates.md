@@ -240,9 +240,12 @@ uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test
 
 If Bun cannot copy the local writer dependency on Windows, repeat its locked
 install with `--linker=isolated`; do not change either package manifest or lock.
-The isolated `hhem-evaluator` CI job runs the complete offline service suite,
-strict types and lint when the scope job selects code. It installs neither
-the backend nor the model extra. The named UUID test fails with preparation
+The evaluator's offline suite, strict types and lint are local checks, not jobs
+in `ci.yml`. The dedicated manual `summary-eval-tests.yml` workflow exercises
+the HHEM and UniEval APIs without adding evaluator setup to ordinary CI; the
+[manual procedure](run-hhem-evaluation-api.md) owns dispatch and live evidence.
+The model-free environment installs neither the backend nor the model extra.
+The named UUID test fails with preparation
 instructions when its real TypeScript dependency is absent; it never skips.
 The model-free environment includes the pinned tokenizer and sentence-rule
 libraries for UniEval. Preparation fetches only their named resources, not
@@ -273,7 +276,7 @@ without opening an HTTP listener or weakening the socket guard.
 The socket guard allows only Unix-domain sockets for local event-loop IPC.
 Windows asyncio needs an internal TCP socket pair and cannot run these ASGI
 cases under that guard. Record this platform limitation rather than weakening
-the guard; the complete isolated Linux CI suite remains authoritative.
+the guard; run the complete offline service suite on Linux.
 
 Real recordings are a separate operator check, not an ordinary test. From the
 service directory, prepare a separate environment so later model-free checks
@@ -289,7 +292,7 @@ Keep the model-extra selector while using that environment. In a fresh shell,
 ordinary commands use the service's default model-free environment again.
 Commit only the named bounded fixtures and actual provenance, never `var/`,
 weights, caches or raw third-party diagnostics. A cached-only reload must match
-the captured model identity. Existing full-suite merge-candidate gates remain unchanged.
+the captured model identity. Recordings do not replace the offline service checks.
 The [service reference](../reference/hhem-evaluation-api.md) owns the fields
 and dependency boundary.
 
@@ -355,20 +358,13 @@ The native launch-boundary cases additionally require Linux `setpriv` and
 the kernel's parent-death and child-adoption operations. They use actual
 processes and a private pre-arm pipe, not model weights or network access.
 They prove refusal when the owner dies before protection is armed, confirmed
-kernel stop after exec, and normal same-PID startup/shutdown. Linux CI runs
-these cases; their Windows skips do not count as launch-boundary proof.
+kernel stop after exec, and normal same-PID startup/shutdown. Run these cases
+on Linux; their Windows skips do not count as launch-boundary proof.
 Owned-process fixtures launch the actual CPython executable with the same
 environment's installed packages: a Windows virtual-environment redirector
 has a different PID. The runtime ownership check stays strict.
-The isolated CI job prepares the host's locked dependencies and checks the
-new Bun scripts with that package's compiler; it still installs no model.
-Its sparse source check includes the shared package's inherited common-contracts
-compiler settings, first runs shared hosting with native services absent, then
-adds only named machine inputs and executes the real Linux child.
-The checkout's file-pattern mode is set once; `git sparse-checkout add`
-inherits it.
-Feed source and feed configuration stay absent through both stages; dependency
-metadata also checks the actual summary helper. Ordinary evaluator preparation
+The local caller checks require the host's locked dependencies, not model packages.
+Ordinary evaluator preparation
 installs neither feed-ingest-plan nor data-delivery.
 Workflow changes also select
 `backend/tests/workflows/test_ci_selection.py`,

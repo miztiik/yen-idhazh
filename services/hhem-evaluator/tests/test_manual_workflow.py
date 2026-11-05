@@ -104,28 +104,6 @@ def test_named_workflow_selects_one_declaration_with_the_current_pointer_default
     assert not (REPOSITORY / "config" / "summary-eval-hhem.json").exists()
 
 
-def test_native_ci_retains_resources_and_prepares_the_actual_shared_api() -> None:
-    text = (REPOSITORY / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    selected = text[text.index("  hhem-evaluator:\n") : text.index("\n  gates:\n")]
-    assert "bun install --frozen-lockfile --cwd services/serve-pipeline-apis" in selected
-    assert "bun install --frozen-lockfile --cwd services/feed-ingest-plan" not in selected
-    assert "bun install --frozen-lockfile --cwd packages/data-delivery" not in selected
-    assert "path: backend/var/checks/api-host-isolation" in selected
-    assert "/packages/common-contracts/tsconfig.json" in selected
-    assert "sparse-checkout-cone-mode: false" in selected
-    assert "git sparse-checkout add --stdin <<'INPUTS'" in selected
-    assert "test ! -e services/feed-ingest-plan" in selected
-    assert "test ! -e config/feed-ingest-plan-service.json" in selected
-    assert (
-        "./test/serve-machine-apis.test.ts "
-        "./test/check-machine-api-dependencies.test.ts"
-    ) in selected
-    assert "uv sync --frozen --group dev" in selected and "--extra model" not in selected
-    assert "scripts/prepare-unieval-resources.py --root ../.." in selected
-    assert "uv run --frozen pytest" in selected
-    assert "summary-eval-hhem/" not in selected
-
-
 def test_workflow_scopes_the_standard_token_to_native_preparation_only() -> None:
     workflow = named_workflow()
     job = mapping(mapping(workflow["jobs"])["evaluate"])
