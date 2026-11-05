@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 How do configured feeds become sanitized article candidates?
 This build-time path leaves production Python discovery and extraction
@@ -225,6 +225,12 @@ refusals have no article candidate. Neither becomes a terminal article ledger
 row. Article HTTP status and low-level failure
 codes describe only the actual article operation, with null for unobserved
 target facts. Removed permission fields have no placeholders.
+After native rejection validation, final article fetch and extraction failures
+also emit one [terminal diagnostic](feed-operator-api.md#structured-operation-logs).
+Post-parse missing title is included; feed outcomes, preflight exclusions and
+recoverable attempts are not. The event uses the actual fetch or parse operation;
+quality rejection keeps that same parse context. It neither allocates another
+tracking identity nor changes article admission or saved rejection rows.
 Attempt facts retain each actual target dispatch on its dispatch UTC day,
 even when the response settles after midnight. HTTP success still requires
 extraction and content admission.
@@ -245,6 +251,10 @@ response, event export or artifact archives the full parsed/rejected population.
 Only selected article text enters the summarizer artifact.
 
 ## Design rationale
+
+The complete safe final cause belongs in same-run diagnostic evidence, not in
+another retained ledger. This keeps extraction measurements available to the
+operator without turning transient parser detail into a later-run input.
 
 The TypeScript path fetches only the feed or article targets it needs.
 The actual target response determines download success.

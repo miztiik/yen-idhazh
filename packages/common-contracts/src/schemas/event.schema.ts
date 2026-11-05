@@ -9,6 +9,8 @@ import { FEED_INGEST_EVENT_VERSION, FEED_OUTCOME_PAYLOAD_VERSION } from "../vers
 import { CloudEventSchema } from "./cloud-event.schema";
 import { readCloudEvent } from "../read-cloud-event";
 
+// Protocol caps keep each sparse diagnostic bounded independently of run size.
+export const PLANNER_PROGRESS_DETAIL_LIMITS = { depth: 6, entries: 128, stringLength: 512, bytes: 4096 } as const;
 const FEED_INGEST_OPERATIONS = ["history", ...PlanApiTimingSchema.shape.operation.options, "plan", "artifact-upload", "quality", "request-attempt"] as const;
 export const FeedIngestEventDataSchema = z.strictObject({
   version: z.literal(FEED_INGEST_EVENT_VERSION),

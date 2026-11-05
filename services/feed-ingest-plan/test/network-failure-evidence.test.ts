@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createRootContext, deriveUrlKey, loadEventSources, RawDocumentFailureSchema, NetworkFailureDetailsSchema, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
+import { ArticleFailureDiagnosticSchema, createRootContext, deriveUrlKey, loadEventSources, RawDocumentFailureSchema, NetworkFailureDetailsSchema, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import { rawDocumentContentsFilename, rawDocumentContentsPath, ArtifactRootSchema } from "../src/selected-artifact-path";
 import { createStageLogger, prepareProgressEvent } from "../src/logging/structured-logger";
@@ -26,6 +26,38 @@ function assertBodyFree(value: unknown) {
     assertBodyFree(nested);
   }
 }
+
+test("article byte cutoffs retain the native lower bound, response bytes and profile without header values", async () => {
+  const f = await recordedPlan();
+  f.inputs.harvest.extraction.max_body_bytes = 1024;
+  f.inputs.harvest.config.harvest.request_headers.secondary = null;
+  f.transport.recordings.responses["https://news.example/second"]![0]!.headers = {
+    "content-type": "text/html; private=PRIVATE_HEADER", server: "PRIVATE_HEADER",
+  };
+  const app = createPlanTestServer(f.inputs, f.runtime);
+  try {
+    const result = await app.request(`${PLANNER_API_PREFIX}/fetch`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fetch_item_type: "article", feed_id: "recorded-news", url: "https://news.example/second" }),
+    });
+    expect(result.status).toBe(200);
+    const response = FetchResponseSchema.parse(await result.json());
+    expect(response.failure).toBe("body-too-large");
+    expect(response).not.toHaveProperty("diagnostics");
+    const [diagnostic] = f.events.flatMap(event => {
+      const parsed = ArticleFailureDiagnosticSchema.safeParse(event);
+      return parsed.success ? [parsed.data] : [];
+    });
+    expect(diagnostic?.data.details.diagnostics).toMatchObject({
+      fetch_failure: "body-too-large", fetch_ms: null, quality: null,
+      body_limit: { configured_limit_bytes: 1024,
+        observed_at_least_bytes: Buffer.byteLength(f.transport.recordings.bodies.article) },
+      response_evidence: { decoded_bytes: Buffer.byteLength(f.transport.recordings.bodies.article),
+        request_profile: "firefox", content_type: "text/html", selected_headers: {}, headers_truncated: [] },
+    });
+    expect(JSON.stringify(diagnostic)).not.toMatch(/PRIVATE_|https?:\/\//);
+  } finally { await app.close(); await f.close(); }
+});
 
 test("actual parse failures write and package metadata under one validated generated filename", async () => {
   const fixture = await recordedPlan([source({ url: "https://news.example/malformed.xml" })]);

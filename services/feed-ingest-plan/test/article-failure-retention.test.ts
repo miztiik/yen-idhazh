@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { CandidateIdSchema, ParsedFeedBatchSchema, PLANNER_API_PREFIX, RawDocumentFailureSchema, RejectedArticleRowContract, RejectedArticleRowSchema, SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
+import { ArticleFailureDiagnosticSchema, CandidateIdSchema, ParsedFeedBatchSchema, PLANNER_API_PREFIX, RawDocumentFailureSchema, RejectedArticleRowContract, RejectedArticleRowSchema, SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { recordedPlan } from "./plan-recordings";
 import { createPlanTestServer } from "./plan-test-server";
@@ -154,7 +154,53 @@ test("a successful retry retains captured identity and text without a stale nati
     expect(recorded.events.filter(event => event.data.details.document_kind === "article")
       .every(event => event.data.details.candidate_id === candidateId)).toBe(true);
     expect(await rejectedRows(recorded)).toEqual([]);
+    expect(recorded.events.some(event => ArticleFailureDiagnosticSchema.safeParse(event).success)).toBe(false);
     expect(recorded.transport.requests.filter(request => request.url.pathname === "/second")).toHaveLength(2);
+  } finally { await recorded.close(); }
+});
+
+test("native parser, quality and missing-title refusals keep complete safe diagnostics without changing saved row membership", async () => {
+  const fixture = await Bun.file(new URL(
+    "../../../tests/fixtures/feed-ingest-plan/article-terminal-failures.json", import.meta.url,
+  )).json();
+  const recorded = await recordedPlan();
+  try {
+    recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
+    for (const entry of fixture.article_inputs) recorded.transport.recordings.responses[entry.url] = entry.responses;
+    await capture(recorded, fixture.article_inputs.map((entry: { url: string }) => entry.url));
+    const diagnostics = recorded.events.flatMap(event => {
+      const parsed = ArticleFailureDiagnosticSchema.safeParse(event);
+      return parsed.success ? [parsed.data] : [];
+    });
+    expect(diagnostics).toHaveLength(fixture.article_inputs.length);
+    const rows = await rejectedRows(recorded);
+    expect(rows).toHaveLength(2);
+    for (const entry of fixture.article_inputs) {
+      const event = diagnostics.find(event => event.data.details.url_key === deriveArticleIdentity(entry.url).url_key)!;
+      expect(event.data).toMatchObject({
+        operation: entry.operation, phase: "failed", details: {
+          reason_code: entry.reason_code, diagnostics: { extraction_failure: entry.extraction_failure, fetch_ms: null,
+            response_evidence: { content_type: "text/html", selected_headers: {}, headers_truncated: [] } },
+        },
+      });
+      expect(event.data.details.diagnostics.extract_ms).toBeGreaterThanOrEqual(0);
+      expect(event.data.details).not.toHaveProperty("publisher_id");
+      expect(event.data.details).not.toHaveProperty("quality_rejection");
+      expect(event.data.details).not.toHaveProperty("_compliance");
+      const parse = recorded.events.find(value => value.data.operation === "parse" && value.data.phase === "started"
+        && value.data.details.candidate_id === event.data.details.candidate_id)!;
+      expect(event.traceparent).toBe(parse.traceparent);
+      const row = rows.find(row => row.candidate_id === event.data.details.candidate_id);
+      if (entry.name === "missing-title") expect(row).toBeUndefined();
+      else expect(row).toMatchObject({
+        reason_code: entry.reason_code, http_status: event.data.details.diagnostics.http_status,
+        candidate_id: event.data.details.candidate_id, url_key: event.data.details.url_key,
+      });
+    }
+    const quality = diagnostics.find(event => event.data.operation === "quality")!.data.details.diagnostics;
+    expect(quality.quality).toMatchObject({ too_short: true, not_prose: false, rejected: true, token_count: null });
+    expect(quality.warnings).toContain("malformed-json-ld");
+    expect(JSON.stringify(diagnostics)).not.toMatch(/PRIVATE_|https?:\/\/|article_text|<html>/);
   } finally { await recorded.close(); }
 });
 

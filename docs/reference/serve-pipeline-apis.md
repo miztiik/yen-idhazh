@@ -96,8 +96,17 @@ metadata without a tracing provider, exporter or global active context.
 Server diagnostics contain startup, readiness, stop, safe error codes and
 observed lifecycle facts, but no process IDs. Private readiness, supervision,
 profiling and current-task evidence retain their existing process identities.
-Native module diagnostics are projected to this
-body-free form before live output or mirroring. Private startup/control
+Validated terminal article diagnostics are the narrow exception to the lifecycle
+projection: the writer emits and mirrors the original accepted
+[`ArticleFailureDiagnosticSchema`](../../packages/common-contracts/src/schemas/article-failure-diagnostic.schema.ts)
+CloudEvent unchanged. Its occurrence ID, UTC time, planner source and actual
+operation carrier are preserved, including full safe native quality and
+extraction evidence. Invalid terminal records emit `CHILD_DIAGNOSTIC_INVALID`
+without copying their content. The
+[planner log contract](../architecture/sources/feed-operator-api.md#structured-operation-logs)
+owns this current-only subtype.
+Other native module diagnostics are projected to the
+body-free lifecycle form before live output or mirroring. Private startup/control
 packets remain on stdout. Article bodies, prompts, model output, secrets,
 raw headers and raw exception text are not server-log fields.
 Routine task-profile reports are validated with the native measurement model,
@@ -132,7 +141,10 @@ Table C - Evidence meanings
 
 The feed report reads these outcomes, including failed startup. Artifact
 preparation retains available evidence and logs without requiring a successful
-planner response. Failure/cancellation uploads use platform retention defaults.
+planner response. Its terminal-article reader reads only these distinct named
+mirrors, not a directory listing or latest-file search. A partial mirror can
+supply complete validated records with an explicit evidence-gap notice.
+Failure/cancellation uploads use platform retention defaults.
 Hard runner termination cannot guarantee a final report or upload.
 
 ## Design rationale
@@ -145,6 +157,8 @@ bytes. Existing standalone tools and older workflows are not migrated.
 
 Process ownership is established by private control data, not a copied ID in
 a diagnostic line.
+Preserving the validated article event avoids assigning its failure to the
+server's supervision operation or losing the measured cause in a generic error.
 
 Event producer URIs and private control identifiers identify the existing
 protocol, not a source directory. Their names stay unchanged when the source

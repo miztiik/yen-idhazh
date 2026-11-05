@@ -7,6 +7,7 @@ import { SelectedArticleRowContract, SelectedArticlesArtifactSchema } from "@idh
 import { verifyParquetFiles, verifyPlanningCompletion } from "../scripts/feed-ingest-plan-verification";
 import { createExecutionOutputs, writeGitHubOutputs } from "../scripts/feed-ingest-plan-outputs";
 import { readExecutionReport, renderWorkflowPlanMarkdown, writePlannerReport } from "../scripts/feed-ingest-plan-report";
+import { readReportFailureEvidence } from "../scripts/feed-ingest-plan-report-evidence";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
 import { formatWorkflowAnnotation } from "../scripts/feed-ingest-plan-report-format";
 import { renderPlanMarkdown } from "@idhazh/feed-ingest-plan/markdown";
@@ -73,10 +74,13 @@ test("both report modes leave the recorded result and every native file unchange
     const before = structuredClone({ response, health, selected: selected.rows });
     const paths: string[] = JSON.parse(fixture.outputs.current_run_files!);
     const bytes = await Promise.all(paths.map(path => readFile(join(fixture.inputs.outputRoot, path))));
-    const evidence = { response, selected: selected.rows, policy: {
+    const evidence = { response, selected: selected.rows,
+      failures: await readReportFailureEvidence({ directory: fixture.directory, response }), policy: {
       config: fixture.inputs.harvest.config, request: {}, history: fixture.inputs.clock_config.collect,
       parser_concurrency: fixture.inputs.settings.listener.parser_concurrency,
     } };
+    expect(evidence.failures.article_diagnostics).toEqual([]);
+    expect(evidence.failures.gaps).toHaveLength(1);
     expect(renderPlanMarkdown({ response }).markdown).toContain("# Feed planner run");
     const summary = join(fixture.directory, "summary.md");
     const annotations: string[] = [];

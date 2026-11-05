@@ -1,11 +1,13 @@
-/** Validate one transient harvest rejection without writing or logging its article population. */
+/** Validate one transient harvest rejection and publish only its safe terminal diagnostic. */
 import {
-  CandidateRejectionRecordSchema, RejectionDetailsSchema,
+  ArticleFailureDiagnosticDetailsSchema, articleDiagnosticContentType,
+  CandidateRejectionRecordSchema, HarvestArticleFailureReasonSchema, RejectionDetailsSchema,
 } from "@idhazh/common-contracts";
 import type { CandidateRejectionRecord, DropReason, HarvestDiagnostics, RejectionDetails, SourceSnapshot } from "@idhazh/common-contracts";
 import type { HarvestContext } from "./harvest-types";
 import { utcTimestamp } from "./harvest-types";
 import type { FetchResult } from "./fetch-source";
+import { operationMetadata } from "../api/operation-context";
 
 export function fetchRejection(result: FetchResult, timeout_ms: number, diagnostics: HarvestDiagnostics | null): {
   reason: DropReason; details: Partial<RejectionDetails>;
@@ -46,5 +48,22 @@ export function recordRejection(
     stage: "harvest-feeds", drop_reason: reason, details: RejectionDetailsSchema.parse(details), rejected_at,
   });
   context.log?.(row);
+  const diagnostics = row.details.diagnostics;
+  if (context.document_activity !== undefined && row.subject === "article" && diagnostics !== null
+    && (HarvestArticleFailureReasonSchema.safeParse(reason).success
+      || (reason === "MISSING_REQUIRED_FIELDS" && diagnostics.extraction_failure === "missing-title"))) {
+    const response = diagnostics.response_evidence;
+    const details = ArticleFailureDiagnosticDetailsSchema.parse({
+      attempt: context.writer.attempt, feed_id: row.feed_id, candidate_id: row.candidate_id, url_key: row.url_key,
+      stage: row.stage, reason_code: row.drop_reason,
+      diagnostics: { ...diagnostics, response_evidence: response === null ? null : {
+        ...response, content_type: articleDiagnosticContentType(response.content_type),
+        selected_headers: {}, headers_truncated: [],
+      } },
+    });
+    const operation = reason === "FETCH_FAILED" || reason === "FETCH_FAILED_HTTP" || reason === "FETCH_TIMEOUT"
+      ? "fetch" : diagnostics.quality?.rejected ? "quality" : "parse";
+    context.document_activity(operation, "failed", details, undefined, undefined, undefined, operationMetadata(context));
+  }
   return row;
 }
