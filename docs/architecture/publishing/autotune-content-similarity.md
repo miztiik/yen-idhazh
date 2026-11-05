@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-11-05
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -22,7 +22,9 @@ A day runs the same story from more than one of our feeds, and until 2026-09-01 
 
 ```mermaid
 flowchart TD
-  start["Two items on the same published day"] --> src{"Same source?"}
+  start["Two items on the same published day"] --> article{"Same canonical article URL?"}
+  article -- yes --> repeated["Not a comparison.<br/>Both placements keep their addresses;<br/>neither corroborates the other"]
+  article -- no --> src{"Same source?"}
   src -- yes --> apart["Two stories.<br/>One outlet twice is a different problem,<br/>bounded by collect.max_source_share_per_day"]
   src -- no --> vec{"Do both carry a vector?"}
   vec -- no --> unknown["No answer. also_covered_by stays null,<br/>which reads as unknown and not as zero"]
@@ -74,6 +76,18 @@ fragment. The payload and the grouping are unchanged.
 **The pager's floor comes off when anything is folded.** `Show N more` counts against the day's own published total rather than the list in hand, because on a reading route the list in hand can be a seed. A fold takes cards off the page that the day's total still counts, so leaving the floor alone would offer a reader stories the pager can never draw. A filter and a hide already had the same rule: a list narrowed on purpose IS the promise.
 
 **Nothing is unpublished.** A grouped item keeps its place in the published order, its address, and its entry in the month search index. Measured on the committed 2026-08-30 day, 2026-09-01: **431 items in, 431 items out**, 5 of them marked as the same story as another.
+
+**A comparison requires two distinct canonical article URLs.** `DigestItem.source_url`
+holds the canonical URL supplied by the article producer. The shared eligibility
+predicate in `assemble._pair_terms` refuses equal URLs before headline or vector
+scoring, for same-day and earlier-day placements alike. Different item ids, desks
+or source labels do not turn one article into independent coverage. The refusal
+also prevents both placements from entering one all-pairs group through a third
+article. A valid comparison with that third article still scores normally; every
+published placement keeps its id, address and order. The judge picker uses the
+same predicate before counting its population, spending its budget or assigning
+shards, so strict pair-address validation stays unchanged. This does not discover
+URL aliases, rename sources or remove repeated placements.
 
 **A group is always across outlets**, and that is a rule rather than an observation. The sentence a reader gets is about sources, so a group of one source has nothing to say - the survivor's line is the one it already had, and forming it would still cost a story. It is also where the encoder is least trustworthy: two press releases off one desk share their boilerplate and differ only in a date, so the Federal Reserve's June minutes and its July minutes score **0.9867** against each other on the committed 2026-08-25 day and are two different documents. One outlet publishing twice is bounded by `collect.max_source_share_per_day` instead.
 

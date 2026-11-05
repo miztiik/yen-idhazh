@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@idhazh/typescript-api",
+      "name": "@idhazh/serve-pipeline-apis",
       "dependencies": {
         "@idhazh/common-contracts": "file:../../packages/common-contracts",
         "@idhazh/feed-ingest-plan": "file:../../services/feed-ingest-plan",
