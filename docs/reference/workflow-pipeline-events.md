@@ -20,6 +20,10 @@ The workflow selects `/workflows/ai-pipeline` from its local
 Project data version `2026-11-03` is attached to `PipelineEventDataSchema`;
 CloudEvents `specversion` remains `1.0`. This is a current-only reader with no
 aliases, old-format reader, identity conversion or backfill.
+The [native support matrix](../architecture/contracts/identity.md#native-api-support)
+also identifies this non-HTTP producer and the upload inventory. Native API
+support does not convert the workflow's saved application payload or its
+foreign evaluator protocol into a different transport.
 
 Table A - workflow application data
 

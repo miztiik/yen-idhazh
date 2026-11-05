@@ -6,7 +6,7 @@ import { createChildContext, createCloudEvent } from "@idhazh/common-contracts";
 import type { CloudEvent, OperationMetadata } from "@idhazh/common-contracts";
 import { SERVER_LIFECYCLE_EVENT_TYPE, ServerEventDataSchema, serverLogFilename } from "./server-evidence";
 import type { ApiGroup, ServerRun } from "./server-evidence";
-import { RequestFailureDiagnosticSchema, RequestFailureEventSchema } from "./create-request-failure-event";
+import { RequestFailureEventSchema } from "./create-request-failure-event";
 
 export type ServerEventInput = Pick<z.infer<typeof ServerEventDataSchema>, "phase">
   & Partial<Pick<z.infer<typeof ServerEventDataSchema>, "severity" | "duration_ms" | "exit_code" | "code">>;
@@ -73,14 +73,6 @@ export function createServerEventWriter<Profile, NativeData = never>(input: {
         if ("type" in raw && raw.type === "typescript_api_request_failed") {
           const event = RequestFailureEventSchema.safeParse(raw);
           if (event.success) publish(event.data);
-          else invalidDiagnostic();
-          return;
-        }
-        if ("event" in raw && raw.event === "typescript_api_request_failed") {
-          const diagnostic = RequestFailureDiagnosticSchema.safeParse(raw);
-          if (diagnostic.success) record({
-            phase: "module_failed", severity: "error", code: diagnostic.data.code,
-          });
           else invalidDiagnostic();
           return;
         }

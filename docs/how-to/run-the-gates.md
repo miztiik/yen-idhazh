@@ -450,6 +450,26 @@ These checks do not dispatch the data-writing workflow or prove live feed
 delivery. The [server reference](../reference/serve-pipeline-apis.md) owns
 configuration, current-task evidence and log semantics.
 
+For native API event changes, use the same declared checks and combine these
+functional cases within each package invocation:
+
+```powershell
+bun run --cwd .\services\host-fingerprints test .\test\native-events.test.ts .\test\fingerprint-persistence.test.ts
+bun run --cwd .\services\host-probes test .\test\native-events.test.ts .\test\probe.test.ts .\test\serve-machine-apis.test.ts .\test\record-machine-api-events.test.ts
+bun run --cwd .\services\serve-pipeline-apis test .\test\server-events.test.ts .\test\supervise-http-child.test.ts
+bun run --cwd .\services\feed-ingest-plan test .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\serve-feed-apis.test.ts .\test\relay-feed-api-events.test.ts .\test\retain-api-profiles.test.ts .\test\plan-entry-points.test.ts
+```
+
+These are real handler/process and named-mirror checks, not source-constant
+existence checks. They verify the
+[API support matrix](../architecture/contracts/identity.md#native-api-support),
+including disabled commands, retained profile operations, native delivery
+before supervision and unchanged relay identity. Private profiles and
+summarizer contents remain private. Reuse unchanged summarizer/workflow check
+records only when their tested inputs are unchanged. Keep Linux-only native
+instrument coverage and the full suite in merge-candidate CI; no live
+data-writing workflow or published-site browser gate is added.
+
 The native package command supplies its declared timeout. Keep shorter
 process deadlines and existing independent failure checks; do not raise
 timeouts to retain repeated planning work.

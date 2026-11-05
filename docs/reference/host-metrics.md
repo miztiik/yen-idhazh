@@ -134,6 +134,14 @@ does not accept task timing or model counters. The CLI retains those optional
 caller inputs, and the shared ledger retains their fields for other producers.
 The service is build-time operator tooling, not a backend for the published site.
 
+Fingerprint HTTP and CLI follow the
+[native event standard](../architecture/contracts/identity.md#native-api-support).
+The producing boundary emits `host_fingerprint_completed` with the actual
+`written` or `disabled` status, or `host_fingerprint_failed` with its fixed
+code. These events contain no hardware row, measurements or output paths.
+Health remains a native JSON read with no capture side effects; CLI result
+stdout and persisted hardware rows keep their existing shapes.
+
 `machine_memory_total_mib` is total RAM visible to the Linux kernel at capture,
 from `MemTotal` in `/proc/meminfo`. Linux kB means 1024 bytes; division by 1024
 gives MiB without rounding. This optional positive number is machine capacity,

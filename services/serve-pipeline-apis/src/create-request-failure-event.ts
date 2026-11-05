@@ -15,9 +15,6 @@ const diagnosticContract = {
 const RequestFailureDataSchema = z.strictObject({
   code: z.literal("API_OPERATION_FAILED"),
 }).meta(diagnosticContract);
-export const RequestFailureDiagnosticSchema = RequestFailureDataSchema.extend({
-  event: z.literal("typescript_api_request_failed"),
-}).meta(diagnosticContract);
 export const RequestFailureEventSchema = CloudEventSchema.safeExtend({
   source: z.literal(PIPELINE_API_EVENT_SOURCE),
   type: z.literal("typescript_api_request_failed"), data: RequestFailureDataSchema,
