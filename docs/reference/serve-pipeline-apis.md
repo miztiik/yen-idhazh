@@ -100,7 +100,8 @@ The date is the UTC run-start day. `run_id` is the platform run identifier,
 not the planner's date-prefixed business identity or the startup nonce.
 Local callers use their existing invocation identity and attempt one.
 Restarting the role in the same run appends a fresh start event.
-`config/typescript-event-sources.json` supplies the `typescript_api` source.
+`src/declare-event-source.ts` supplies the unchanged `/services/typescript-api`
+protocol identity, without a source registry.
 The existing common-contracts helpers allocate and validate event and operation
 metadata without a tracing provider, exporter or global active context.
 
@@ -134,7 +135,7 @@ Missing or invalid context and unknown relay fields emit
 `CHILD_DIAGNOSTIC_INVALID`; they never fall back to supervision.
 Lifecycle diagnostics keep their supervision operation and exclude
 `operation_completed`. Both diagnostic readers accept only their current
-shapes; saved task evidence is unchanged. The configured API source, native
+shapes; saved task evidence is unchanged. The local API source, native
 completion event type and server name are unchanged. No path or process ID
 is added to completion data.
 

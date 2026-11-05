@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRootContext, loadEventSources, PLANNER_API_PREFIX, readCloudEvent, writeTraceContext } from "@idhazh/common-contracts";
+import { createRootContext, PLANNER_API_PREFIX, readCloudEvent, writeTraceContext } from "@idhazh/common-contracts";
+import { PIPELINE_API_EVENT_SOURCE } from "../../serve-pipeline-apis/src/declare-event-source";
 import { SafePersistDataCommitterSchema } from "@idhazh/data-delivery";
 import { createSafePersistApp } from "../scripts/safe-persist-http-api";
 import { SafePersistHttpDiagnosticSchema } from "../scripts/safe-persist-http-diagnostic";
@@ -212,11 +213,10 @@ test("two actual delivery request operations survive native stderr, the completi
     const diagnostics = nativeLines.map(line => SafePersistHttpDiagnosticSchema.parse(JSON.parse(line)));
     expect(diagnostics).toHaveLength(2);
     expect(diagnostics[0]!.context.spanId).not.toBe(diagnostics[1]!.context.spanId);
-    const sources = await loadEventSources(join(f.repository, "config", "typescript-event-sources.json"));
     const mirror = Bun.spawn([process.execPath, fileURLToPath(new URL(
       "./write-feed-api-events.ts", import.meta.url,
     ))], {
-      stdin: new Blob([JSON.stringify({ directory: f.directory, run, source: sources.typescript_api,
+      stdin: new Blob([JSON.stringify({ directory: f.directory, run, source: PIPELINE_API_EVENT_SOURCE,
         group: "delivery", module_lines: nativeLines })]), stdout: "pipe", stderr: "pipe",
     });
     const [output, emittedText, code] = await Promise.all([
@@ -252,7 +252,7 @@ test("two actual delivery request operations survive native stderr, the completi
         status: diagnostic.status, commit: diagnostic.commit, files: diagnostic.files, context: diagnostic.context,
         severity: "info", duration_ms: null, exit_code: null, code: null,
       });
-      expect(completions[index]).toMatchObject({ source: sources.typescript_api, ...writeTraceContext(diagnostic.context) });
+      expect(completions[index]).toMatchObject({ source: PIPELINE_API_EVENT_SOURCE, ...writeTraceContext(diagnostic.context) });
     }
     const lifecycle = events.filter(event => event.type === "hono.server")
       .map(event => readCloudEvent(event, value => ServerEventDataSchema.parse(value)));

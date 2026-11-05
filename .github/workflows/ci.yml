@@ -205,7 +205,6 @@ jobs:
             /services/serve-pipeline-apis/src/
             /services/serve-pipeline-apis/test/
             /config/hono-server.json
-            /config/typescript-event-sources.json
 
       - name: Verify the isolated shared hosting implementation
         working-directory: backend/var/checks/api-host-isolation

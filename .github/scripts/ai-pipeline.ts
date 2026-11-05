@@ -18,7 +18,6 @@ import {
   createCloudEvent,
   createRootContext,
   createChildContext,
-  loadEventSources,
   type OperationMetadata,
 } from "../../packages/common-contracts/src/index.ts";
 import {
@@ -29,6 +28,7 @@ import {
   type PipelineEvent,
 } from "./read-pipeline-events.ts";
 import { prepareEvaluationRequest, readEvaluationResponse } from "./prepare-evaluation-request.ts";
+import { WORKFLOW_EVENT_SOURCE } from "./declare-workflow-event-source.ts";
 
 // -------------------------------------------------------------
 // 0. CONFIGURATION & STRUCTURED SCHEMAS
@@ -1893,14 +1893,13 @@ async function main() {
   const phase = (process.argv.find((a) => a.startsWith("--phase="))?.split("=")[1] || "infer").toLowerCase();
   const modelName = modelRuntime.request.model;
   const pipelineEventsPath = process.env.PIPELINE_EVENTS_PATH || "pipeline-events.jsonl";
-  const sources = await loadEventSources(new URL("../../config/typescript-event-sources.json", import.meta.url));
 
   // -------------------------------------------------------------
   // PHASE 2: EVALUATION (SEQUENTIAL DISPATCH & TELEMETRY INGESTION)
   // -------------------------------------------------------------
   if (phase === "eval") {
     logStructured("INFO", "Executing Phase 2: Sequential UniEval Quality Audit");
-    const pipeline = new AIEventPipeline(runnerMetadata, sources.workflow, pipelineEventsPath);
+    const pipeline = new AIEventPipeline(runnerMetadata, WORKFLOW_EVENT_SOURCE, pipelineEventsPath);
     pipeline.loadPriorEvents();
     const structuredEvents = selectStructuredOutputs(pipeline.getEventHistory());
 
@@ -2080,7 +2079,7 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
   const maxAgeHours = parseFloat(process.env.FEED_MAX_AGE_HOURS || "24");
   const goalCount = parseInt(process.env.ARTICLE_COUNT_GOAL || "1", 10);
   const maxWordLength = parseInt(process.env.MAX_WORD_LENGTH || String(DEFAULT_ARTICLE_CONFIG.maxWordLength), 10);
-  const pipeline = new AIEventPipeline(runnerMetadata, sources.workflow, pipelineEventsPath);
+  const pipeline = new AIEventPipeline(runnerMetadata, WORKFLOW_EVENT_SOURCE, pipelineEventsPath);
 
   interface IngestionTarget {
     sourceType: SourceAudit["sourceType"];

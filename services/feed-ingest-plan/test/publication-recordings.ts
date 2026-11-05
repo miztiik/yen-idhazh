@@ -18,7 +18,7 @@ export async function publicationGitRecording() {
     await mkdir(join(repository, "config"), { recursive: true });
     await fixtureGit(plan.directory, ["init", "--bare", "--initial-branch=main", origin]);
     await fixtureGit(repository, ["init", "--initial-branch=main"]);
-    for (const name of ["ledgers.json", "feed-ingest-plan-service.json", "data-delivery.json", "typescript-event-sources.json"]) {
+    for (const name of ["ledgers.json", "feed-ingest-plan-service.json", "data-delivery.json"]) {
       await copyFile(new URL(`../../../config/${name}`, import.meta.url), join(repository, "config", name));
     }
     const settingsPath = join(repository, "config", "feed-ingest-plan-service.json");
@@ -34,7 +34,7 @@ export async function publicationGitRecording() {
     await writeFile(join(repository, "config", "push-retry.json"), JSON.stringify(retry));
     await fixtureGit(repository, ["add", "--", "config/ledgers.json",
       "config/feed-ingest-plan-service.json", "config/push-retry.json", "config/data-delivery.json",
-      "config/hono-server.json", "config/typescript-event-sources.json"]);
+      "config/hono-server.json"]);
     await fixtureGit(repository, ["commit", "-m", "Create generated publication inputs"]);
     await fixtureGit(repository, ["remote", "add", "origin", origin]);
     await fixtureGit(repository, ["push", "origin", "HEAD:refs/heads/main"]);

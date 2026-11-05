@@ -2,7 +2,7 @@
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { z } from "zod";
-import { loadEventSources } from "@idhazh/common-contracts";
+import { PIPELINE_API_EVENT_SOURCE } from "./declare-event-source";
 import { superviseHttpChild } from "./supervise-http-child";
 import { ApiHostStartupSchema } from "./api-startup";
 import type { ApiHostStartup } from "./api-startup";
@@ -26,9 +26,8 @@ export async function superviseApiTask<T, Profile, Failure extends HttpChildFail
   const startup = ApiHostStartupSchema.parse(input.startup);
   const directory = resolve(input.root, startup.directory);
   await mkdir(directory, { recursive: true });
-  const sources = await loadEventSources(join(input.root, "config", "typescript-event-sources.json"));
   const logger = createServerEventWriter({
-    directory, source: sources.typescript_api, group: input.startup.group, run: startup.run,
+    directory, source: PIPELINE_API_EVENT_SOURCE, group: input.startup.group, run: startup.run,
     decode: input.decodeDiagnostic,
   });
   const started = performance.now();

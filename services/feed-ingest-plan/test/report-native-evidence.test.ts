@@ -7,8 +7,9 @@ import { parseHTML } from "linkedom";
 import {
   ArticleFailureDiagnosticDataSchema, ArticleFailureDiagnosticSchema, createCandidateId, createCloudEvent,
   createRootContext, FEED_INGEST_EVENT_VERSION, FeedHealthStateRowContract, FeedHealthStateRowSchema,
-  HarvestDiagnosticsSchema, loadEventSources, RejectedArticleRowContract, RejectedArticleRowSchema, writeTraceContext,
+  HarvestDiagnosticsSchema, RejectedArticleRowContract, RejectedArticleRowSchema, writeTraceContext,
 } from "@idhazh/common-contracts";
+import { PLANNER_EVENT_SOURCE } from "../src/declare-event-source";
 import type { RejectedArticleRow } from "@idhazh/common-contracts";
 import { readExecutionEvidence, renderWorkflowPlanMarkdown, writeWorkflowReport } from "../scripts/feed-ingest-plan-report";
 import { readReportFailureEvidence } from "../scripts/feed-ingest-plan-report-evidence";
@@ -48,9 +49,8 @@ async function terminalRows(f: Awaited<ReturnType<typeof plannerOutputRecording>
 }
 
 async function terminalDiagnostic(f: Awaited<ReturnType<typeof plannerOutputRecording>>, article: RejectedArticleRow) {
-  const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
   return ArticleFailureDiagnosticSchema.parse(createCloudEvent({
-    source: sources.planner, type: "planner.progress", context: { ...createRootContext(), traceId: f.response.traceId },
+    source: PLANNER_EVENT_SOURCE, type: "planner.progress", context: { ...createRootContext(), traceId: f.response.traceId },
     data: {
       version: FEED_INGEST_EVENT_VERSION, run_id: article.run_id, operation: "fetch", phase: "failed",
       details: {
@@ -131,7 +131,7 @@ test("report uses a staged earlier check at the saved pause instant, never a new
     const root = join(f.directory, "staged");
     const sourceRoot = fileURLToPath(new URL("../../../", import.meta.url));
     const paths = f.inputs.settings.inputs;
-    for (const path of ["config/feed-ingest-plan-service.json", "config/typescript-event-sources.json",
+    for (const path of ["config/feed-ingest-plan-service.json",
       paths.planning, paths.sources, paths.extraction, paths.registrations]) {
       const destination = join(root, path);
       await mkdir(dirname(destination), { recursive: true });

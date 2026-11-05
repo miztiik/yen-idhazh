@@ -25,7 +25,7 @@ test('pipeline APIs select the native gate and all named module dependants', () 
 			assert.equal(ciAnswer([path], true).browser, false);
 		}
 	}
-	assert.deepEqual(selectPaths(['packages/common-contracts/src/load-event-sources.ts']).groups,
+	assert.deepEqual(selectPaths(['packages/common-contracts/src/schemas/cloud-event.schema.ts']).groups,
 		['backend', ...FRONTEND_GROUPS]);
 });
 test('Pipelines retained and native evidence joins representative groups without a panels matrix', () => {

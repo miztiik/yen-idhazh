@@ -409,8 +409,8 @@ bun run --cwd .\packages\ledger-file-writer test .\test\uuid.test.ts
 
 The flow uses the real shared factories, codec and application reader with the
 named selected-article recording. It checks distinct occurrences, unchanged
-replay, parent/input relationships, state propagation and explicit source
-loading. It does not certify service work ownership, live delivery or a tracing
+replay, parent/input relationships, state propagation and producer URI
+validation without a source registry. It does not certify service work ownership, live delivery or a tracing
 runtime. Ordinary CI installs the pinned codec dependencies through the
 publication runtime and runs the full common/native suites. Browser callers
 still use the independent observation-order module.

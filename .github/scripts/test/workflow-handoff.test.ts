@@ -7,16 +7,15 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import {
   createRootContext,
-  loadEventSources,
   readTraceContext,
 } from "../../../packages/common-contracts/src/index.ts";
 import { AIEventPipeline, publishStepSummary } from "../ai-pipeline.ts";
+import { WORKFLOW_EVENT_SOURCE } from "../declare-workflow-event-source.ts";
 import { readPipelineEvents, selectStructuredOutputs, type PipelineEvent } from "../read-pipeline-events.ts";
 import { prepareEvaluationRequest, readEvaluationResponse } from "../prepare-evaluation-request.ts";
 
 const fixtures = new URL("../../../tests/fixtures/typescript-metadata/", import.meta.url);
 const outputPath = fileURLToPath(new URL("workflow-output-event.json", fixtures));
-const sourcesPath = new URL("../../../config/typescript-event-sources.json", import.meta.url);
 
 function readSavedOutput() {
   const [event] = selectStructuredOutputs(readPipelineEvents(outputPath));
@@ -64,10 +63,9 @@ test("the production reader hands unchanged source and summary to the foreign re
 test("distinct occurrences and input producers survive saved handoff into independent phase operations", async () =>
   withDirectory(async directory => {
     const saved = readSavedOutput();
-    const sources = await loadEventSources(sourcesPath);
     const path = join(directory, "events.jsonl");
-    const first = new AIEventPipeline(saved.data.result.runner_metadata, sources.workflow, path);
-    const second = new AIEventPipeline(saved.data.result.runner_metadata, sources.workflow, path);
+    const first = new AIEventPipeline(saved.data.result.runner_metadata, WORKFLOW_EVENT_SOURCE, path);
+    const second = new AIEventPipeline(saved.data.result.runner_metadata, WORKFLOW_EVENT_SOURCE, path);
     const result = {
       ...saved.data.result,
       source_audit: { ...saved.data.result.source_audit, feedAudit: undefined },
@@ -84,12 +82,13 @@ test("distinct occurrences and input producers survive saved handoff into indepe
       }),
     ];
     expect(new Set(produced.map(event => event.id)).size).toBe(produced.length);
+    expect(produced.every(event => event.source === "/workflows/ai-pipeline")).toBe(true);
     expect(produced[0]!.data.result).toEqual(saved.data.result);
     expect(produced[0]!.traceparent).toBe(produced[1]!.traceparent);
     const bytes = await readFile(path, "utf8");
     const selected = selectStructuredOutputs(readPipelineEvents(path));
     expect(produced).toEqual(selected);
-    const evaluation = new AIEventPipeline(saved.data.result.runner_metadata, sources.workflow, path);
+    const evaluation = new AIEventPipeline(saved.data.result.runner_metadata, WORKFLOW_EVENT_SOURCE, path);
     evaluation.loadPriorEvents();
     const prepared = selected.map(event =>
       prepareEvaluationRequest(event, evaluation.context, saved.data.result.runner_metadata));
@@ -106,7 +105,7 @@ test("distinct occurrences and input producers survive saved handoff into indepe
     }
     expect(prepared[2]!.context.links).not.toEqual(prepared[0]!.context.links);
     expect(prepared[2]!.request.sourceText).not.toBe(prepared[0]!.request.sourceText);
-    const anotherPhase = new AIEventPipeline(saved.data.result.runner_metadata, sources.workflow, path);
+    const anotherPhase = new AIEventPipeline(saved.data.result.runner_metadata, WORKFLOW_EVENT_SOURCE, path);
     expect(anotherPhase.context.traceId).not.toBe(evaluation.context.traceId);
     expect(await readFile(path, "utf8")).toBe(bytes);
   }));
@@ -119,9 +118,8 @@ test("the foreign response keeps its machine measurements through native event r
     const received = readEvaluationResponse(response);
     expect(received.metrics).toEqual(response.metrics);
     expect(received.serverTelemetry).toEqual(response.event.payload.serverTelemetry);
-    const sources = await loadEventSources(sourcesPath);
     const path = join(directory, "events.jsonl");
-    const evaluation = new AIEventPipeline(saved.data.result.runner_metadata, sources.workflow, path);
+    const evaluation = new AIEventPipeline(saved.data.result.runner_metadata, WORKFLOW_EVENT_SOURCE, path);
     const { context } = prepareEvaluationRequest(saved, evaluation.context, saved.data.result.runner_metadata);
     const measurements = { serverTelemetry: received.serverTelemetry };
     const enriched = { ...saved.data.result, quality_metrics: received.metrics };
@@ -143,10 +141,9 @@ test("the foreign response keeps its machine measurements through native event r
 test("resuming keeps the cumulative counter while each new log gap uses the phase clock", async () =>
   withDirectory(async directory => {
     const saved = readSavedOutput();
-    const sources = await loadEventSources(sourcesPath);
     const path = join(directory, "events.jsonl");
     await copyFile(outputPath, path);
-    const pipeline = new AIEventPipeline(saved.data.result.runner_metadata, sources.workflow, path);
+    const pipeline = new AIEventPipeline(saved.data.result.runner_metadata, WORKFLOW_EVENT_SOURCE, path);
     const beforeLoad = performance.now();
     pipeline.loadPriorEvents();
     const afterLoad = performance.now();
@@ -171,7 +168,6 @@ test.each(["json", "carrier", "measurement", "result", "blank"])(
   "a malformed saved %s record fails the real reader and continuation without rewriting the file",
   async failure => withDirectory(async directory => {
     const saved = readSavedOutput();
-    const sources = await loadEventSources(sourcesPath);
     const malformed = {
       json: "{",
       carrier: JSON.stringify({ ...saved, traceparent: "invalid" }),
@@ -187,7 +183,7 @@ test.each(["json", "carrier", "measurement", "result", "blank"])(
     const content = `${JSON.stringify(saved)}\n${malformed}\n`;
     await writeFile(path, content);
     expect(() => readPipelineEvents(path)).toThrow("INVALID_PIPELINE_EVENT at line 2");
-    const pipeline = new AIEventPipeline(saved.data.result.runner_metadata, sources.workflow, path);
+    const pipeline = new AIEventPipeline(saved.data.result.runner_metadata, WORKFLOW_EVENT_SOURCE, path);
     expect(() => pipeline.loadPriorEvents()).toThrow("INVALID_PIPELINE_EVENT at line 2");
     expect(await readFile(path, "utf8")).toBe(content);
   }),
