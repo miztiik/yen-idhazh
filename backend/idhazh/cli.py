@@ -282,7 +282,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         from idhazh.contracts.council_events import CouncilProgram
         from idhazh.council import outcome
 
-        program = CouncilProgram(words[0].removeprefix("council-"))
+        program = (
+            CouncilProgram.VERIFY_WORK
+            if words[0] == "council-shard" and "--verify-only" in words
+            else CouncilProgram(words[0].removeprefix("council-"))
+        )
         return outcome.run(program, lambda: _main(words))
     return _main(words)
 
@@ -320,6 +324,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
     parser.add_argument("--commit", default=_STAND_IN_COMMIT)
+    parser.add_argument("--verify-only", action="store_true")
     parser.add_argument("--shard", type=int, default=0)
     parser.add_argument("--shards", type=int, default=None)
     parser.add_argument(
@@ -576,9 +581,15 @@ def _dispatch(
     parser: argparse.ArgumentParser, args: argparse.Namespace, settings: config.Settings
 ) -> int:
     if args.stage.startswith("council-"):
+        from idhazh import run_context
         from idhazh.council.selection import from_environment
 
         council_selection = from_environment(settings.council)
+        council_selection.identify(
+            run_id=_council_run(parser, args.stage, args.run_id),
+            attempt=run_context.run_attempt(),
+            git_sha=args.commit,
+        )
     if args.stage == "derived-paths":
         # Above everything, including the config-dependent verbs: it reads one
         # tuple and prints one line, and the commit step that consumes it runs
@@ -675,7 +686,7 @@ def _dispatch(
 
         results = council_session.prepare(
             settings.council,
-            date=a_date(args.date or _today(), what="--date"),
+            date=a_date(args.date, what="--date") if args.date else None,
             run_id=_council_run(parser, args.stage, args.run_id),
             selection=council_selection,
         )
@@ -705,11 +716,7 @@ def _dispatch(
                 if args.job_started_at
                 else None,
             )
-            if (
-                settings.council.running()
-                if council_selection is None
-                else council_selection.names(publish=True)
-            )
+            if council_selection.names(publish=True)
             else contextlib.nullcontext()
         )
         with machine:
@@ -736,6 +743,38 @@ def _dispatch(
                 "registered tenant it is a shard of, and a shard with no tenant would "
                 "spend a whole runner deciding it had nothing to do"
             )
+        from idhazh.council import work_files
+
+        incoming = (
+            council_session.COUNCIL_ROOT
+            / "incoming"
+            / (f"council-selection-{council_selection.anchor_date}")
+        )
+        canonical = work_files.preparation_path(
+            council_session.COUNCIL_ROOT,
+            council_selection,
+            args.tenant,
+            args.date,
+        )
+        if not canonical.exists():
+            work_files.import_preparation(
+                council_session.COUNCIL_ROOT,
+                incoming,
+                council_selection,
+                args.tenant,
+                args.date,
+            )
+        if args.verify_only:
+            council_session.verify_work(
+                settings.council,
+                slug=args.tenant,
+                date=args.date,
+                run_id=args.run_id,
+                shard=args.shard,
+                shards=args.shards,
+                selection=council_selection,
+            )
+            return 0
         result = council_session.run_shard(
             settings.council,
             slug=args.tenant,

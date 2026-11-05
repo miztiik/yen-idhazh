@@ -19,8 +19,9 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Callable, Sequence
-from contextlib import nullcontext
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager, nullcontext
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -29,6 +30,12 @@ from typing import Final
 from idhazh import completed_writes, config, ledger, run_context
 from idhazh.contracts.base import DateStamp, RunId, ServerJob
 from idhazh.contracts.council_events import NightPlanned, RowsCollected, UnitFinished
+from idhazh.contracts.council_invocation import (
+    ArtifactFile,
+    PreparationReceipt,
+    ShardFiles,
+    ShardReport,
+)
 from idhazh.contracts.council_run_record import (
     CouncilRunRecord,
     EvaluationStep,
@@ -37,7 +44,7 @@ from idhazh.contracts.council_run_record import (
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.council import event_log, metrics_sink, outcome, trial_paths
+from idhazh.council import event_log, metrics_sink, outcome, trial_paths, work_files
 from idhazh.council.deadline import run_shard_under_the_clock
 from idhazh.council.registry import VENUE_LEDGERS as VENUE_LEDGERS
 from idhazh.council.registry import tenant, tenants
@@ -66,6 +73,32 @@ OUTCOMES_DIRNAME: Final = "outcomes"
 #: How a recorded instant is spelled. The contract pins the shape, and this is
 #: the one place a council row is stamped with it.
 STARTED_AT_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
+_ROOT: ContextVar[Path | None] = ContextVar("council_invocation_root", default=None)
+
+
+def invocation_root(selection: Selection, judge_id: str) -> Path:
+    return work_files.invocation_root(COUNCIL_ROOT, selection, judge_id)
+
+
+def artifact_path(path: Path) -> str:
+    root = _ROOT.get()
+    if root is None:
+        raise work_files.FileIntegrityError("file declaration requires an invocation")
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError as error:
+        raise work_files.FileIntegrityError("file exceeds invocation root") from error
+
+
+@contextmanager
+def _route(selection: Selection, judge_id: str) -> Iterator[None]:
+    root = invocation_root(selection, judge_id)
+    token = _ROOT.set(root)
+    try:
+        with trial_paths.route(root if selection.trial(judge_id) else None):
+            yield
+    finally:
+        _ROOT.reset(token)
 
 
 def publication_paths(
@@ -94,7 +127,7 @@ def publication_paths(
 
 def scratch_root(date: DateStamp) -> Path:
     """The directory one date's work is written under, on whichever runner runs it."""
-    return trial_paths.scratch(COUNCIL_ROOT) / date
+    return trial_paths.scratch(_ROOT.get() or COUNCIL_ROOT) / date
 
 
 def outcomes_dir(date: DateStamp) -> Path:
@@ -162,30 +195,119 @@ def shard_width(council: CouncilConfig, host: Tenant) -> int:
 def prepare(
     council: CouncilConfig,
     *,
-    date: DateStamp,
+    date: DateStamp | None = None,
     run_id: RunId,
-    selection: Selection | None = None,
+    selection: Selection,
 ) -> tuple[ShardResult, ...]:
     """Pick the work, once a date, before any shard runs.
 
     In the order the config names the tenants, because a venue that ran them in
     an order it never declared could not be re-run into the same state.
     """
+    selected = selection.check(council)
+    selected.identify(run_id=run_id, attempt=run_context.run_attempt(), git_sha=selected.git_sha)
+    if date is not None and date not in selected.dates:
+        raise ValueError("preparation date is not selected")
+    # Resolve every declaration before the first plugin does work.
+    hosted = tenants(selected.names(), council=council, trials=selected.trials)
+    _check_widths(council, selected, hosted)
     results: list[ShardResult] = []
-    for host in _hosted(council, date, selection):
-        with trial_paths.route(_trial_root(selection, host.judge_id, run_id)):
-            results.append(
-                _recorded(
-                    host.judge_id,
-                    date=date,
-                    run_id=run_id,
-                    evaluation_step=EvaluationStep.SELECT_JUDGE_WORK,
-                    work_part_index=None,
-                    work_part_count=shard_width(council, host),
-                    work=partial(host.prepare, date=date, run_id=run_id),
+    for host in hosted:
+        own = next(judge for judge in selected.judges if judge.tenant == host.judge_id)
+        for day in own.dates:
+            if date is not None and day != date:
+                continue
+            with _route(selected, host.judge_id):
+                admitted: tuple[ArtifactFile, ...] = ()
+
+                def work(
+                    host: Tenant = host,
+                    day: str = day,
+                    width: int = own.shards,
+                ) -> ShardResult:
+                    nonlocal admitted
+                    result = host.prepare(date=day, run_id=run_id, shards=width)
+                    if result.outcome not in (ShardOutcome.COMPLETED, ShardOutcome.NOTHING_TO_DO):
+                        raise ValueError("preparation must complete, decline or raise")
+                    admitted = work_files.evidence(
+                        invocation_root(selected, host.judge_id),
+                        result.files,
+                        day=day,
+                        judge_id=host.judge_id,
+                    )
+                    if result.outcome is ShardOutcome.COMPLETED and not admitted:
+                        raise work_files.FileIntegrityError("ready preparation has no task file")
+                    return result
+
+                try:
+                    result = _recorded(
+                        host.judge_id,
+                        date=day,
+                        run_id=run_id,
+                        evaluation_step=EvaluationStep.SELECT_JUDGE_WORK,
+                        work_part_index=None,
+                        work_part_count=own.shards,
+                        work=work,
+                    )
+                except BaseException as error:
+                    if work_files.fatal(error):
+                        raise
+                    error_name, where = event_log.cause_of(error)
+                    receipt = PreparationReceipt(
+                        version=PreparationReceipt.schema_version(),
+                        run_id=run_id,
+                        attempt=selected.attempt,
+                        git_sha=selected.git_sha,
+                        judge_id=host.judge_id,
+                        date=day,
+                        state="failed",
+                        shards=0,
+                        files=(),
+                        error=error_name,
+                        where=where,
+                    )
+                    result = ShardResult(outcome=ShardOutcome.FAILED)
+                else:
+                    ready = result.outcome is ShardOutcome.COMPLETED
+                    receipt = PreparationReceipt(
+                        version=PreparationReceipt.schema_version(),
+                        run_id=run_id,
+                        attempt=selected.attempt,
+                        git_sha=selected.git_sha,
+                        judge_id=host.judge_id,
+                        date=day,
+                        state="ready" if ready else "no_work",
+                        shards=own.shards if ready else 0,
+                        files=admitted,
+                    )
+                work_files.write_document(
+                    work_files.preparation_path(COUNCIL_ROOT, selected, host.judge_id, day),
+                    receipt,
                 )
-            )
+                work_files.export(
+                    COUNCIL_ROOT, COUNCIL_ROOT / "outgoing" / "planner", selected, receipt
+                )
+                _export_record(selected, host.judge_id, day, "select-judge-work", "planner")
+                results.append(result)
+    print("preparation_finished=true")
     return tuple(results)
+
+
+def _check_widths(council: CouncilConfig, selected: Selection, hosted: Sequence[Tenant]) -> None:
+    for host, judge in zip(hosted, selected.judges, strict=True):
+        if host.judge_id != judge.tenant or shard_width(council, host) != judge.shards:
+            raise ValueError("selected width differs from the plugin declaration")
+
+
+def _export_record(selected: Selection, name: str, day: str, unit: str, bundle: str) -> None:
+    import shutil
+
+    source = outcomes_dir(day) / name / f"{unit}.csv"
+    target = COUNCIL_ROOT / "outgoing" / bundle / source.relative_to(COUNCIL_ROOT)
+    work_files.check_destination(target)
+    work_files.checked_file(COUNCIL_ROOT, source.relative_to(COUNCIL_ROOT).as_posix())
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, target)
 
 
 def settle(
@@ -196,8 +318,9 @@ def settle(
     state_dir: Path,
     commit_sha: str,
     completed: Callable[[Tenant | None, dict[Path, str]], None] | None = None,
-    selection: Selection | None = None,
+    selection: Selection,
     prepare_inputs: Callable[[Tenant], None] | None = None,
+    reports: Callable[[str, str, int], tuple[ShardReport, ...]] | None = None,
 ) -> tuple[ShardResult, ...]:
     """Count, fit, or do nothing, once a date after every shard has reported.
 
@@ -210,8 +333,20 @@ def settle(
     files its own rows under, so a tenant's files and the venue's name one run,
     one attempt and one commit.
     """
+    selection.check(council).identify(
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        git_sha=commit_sha,
+    )
     identity = _identify_writer(run_id=run_id, commit_sha=commit_sha)
     hosted = _hosted(council, date, selection)
+    _check_widths(
+        council,
+        selection.model_copy(
+            update={"judges": tuple(judge for judge in selection.judges if date in judge.dates)}
+        ),
+        hosted,
+    )
     active = tuple(host for host in hosted if _trial_root(selection, host.judge_id, run_id) is None)
     results: list[ShardResult] = []
     failures: list[Exception] = []
@@ -222,10 +357,20 @@ def settle(
             if trial is None
             else lifecycle.isolated_trial(trial / "state", identity=identity)
         )
-        with trial_paths.route(trial), trial_writes, completed_writes.collect() as evidence:
+        with _route(selection, host.judge_id), trial_writes, completed_writes.collect() as evidence:
             try:
+                prepared = work_files.read_preparation(COUNCIL_ROOT, selection, host.judge_id, date)
+                if prepared is None or prepared.state == "failed":
+                    raise ValueError("preparation failed or was not reported")
+                for part in range(prepared.shards):
+                    work_files.read_shard(COUNCIL_ROOT, selection, host.judge_id, date, part)
                 if prepare_inputs is not None:
                     prepare_inputs(host)
+                normalized = (
+                    reports(host.judge_id, date, prepared.shards)
+                    if reports is not None
+                    else _reports(selection, host.judge_id, date, prepared.shards)
+                )
                 results.append(
                     _recorded(
                         host.judge_id,
@@ -233,39 +378,53 @@ def settle(
                         run_id=run_id,
                         evaluation_step=EvaluationStep.COMBINE_JUDGE_RESULTS,
                         work_part_index=None,
-                        work_part_count=shard_width(council, host),
+                        work_part_count=prepared.shards,
                         work=partial(
                             host.settle,
                             date=date,
                             run_id=run_id,
                             state_dir=state_dir if trial is None else trial / "state",
                             identity=identity,
+                            prepared=prepared,
+                            reports=normalized,
                         ),
                     )
                 )
             except Exception as error:
+                if work_files.fatal(error):
+                    raise
                 failures.append(error)
             finally:
                 if completed is not None and trial is None:
                     try:
                         completed(host, evidence)
                     except Exception as error:
+                        if work_files.fatal(error):
+                            raise
                         failures.append(error)
             if trial is not None:
                 try:
                     _collect((host,), date=date, state_dir=trial / "state", identity=identity)
                 except Exception as error:
+                    if work_files.fatal(error):
+                        raise
                     failures.append(error)
     with completed_writes.collect() as evidence:
         try:
-            _collect(active, date=date, state_dir=state_dir, identity=identity)
+            if active:
+                with _route(selection, active[0].judge_id):
+                    _collect(active, date=date, state_dir=state_dir, identity=identity)
         except Exception as error:
+            if work_files.fatal(error):
+                raise
             failures.append(error)
         finally:
             if completed is not None and active:
                 try:
                     completed(None, evidence)
                 except Exception as error:
+                    if work_files.fatal(error):
+                        raise
                     failures.append(error)
     if failures:
         if len(failures) == 1:
@@ -283,7 +442,7 @@ def run_shard(
     shard: int,
     shards: int,
     started: float,
-    selection: Selection | None = None,
+    selection: Selection,
 ) -> ShardResult:
     """One shard of one tenant's work, stopped on the council's own clock.
 
@@ -291,32 +450,110 @@ def run_shard(
     invocation, so two tenants sharing a job would each be handed the whole span
     the venue meant for one of them.
     """
-    names = council.running() if selection is None else selection.check(council).names(date=date)
-    if slug not in names:
-        raise ValueError(f"judge '{slug}' is not active in this council")
-    trial = _trial_root(selection, slug, run_id)
-    host = tenant(slug, council=council, trial=trial is not None)
-    if shards != shard_width(council, host) or not 0 <= shard < shards:
-        raise ValueError("shard differs from its selected width")
-    with trial_paths.route(trial):
-        return _recorded(
-            host.judge_id,
-            date=date,
-            run_id=run_id,
-            evaluation_step=EvaluationStep.EVALUATE_WORK_PART,
-            work_part_index=shard,
-            work_part_count=shards,
-            work=partial(
-                run_shard_under_the_clock,
-                host,
+    host, prepared = verify_work(
+        council,
+        slug=slug,
+        date=date,
+        run_id=run_id,
+        shard=shard,
+        shards=shards,
+        selection=selection,
+    )
+    with _route(selection, slug):
+        bundle = f"shard-{slug}-{date}-{shard}"
+        try:
+            result = _recorded(
+                host.judge_id,
                 date=date,
                 run_id=run_id,
-                shard=shard,
-                shards=shards,
-                council=council,
-                started=started,
-            ),
+                evaluation_step=EvaluationStep.EVALUATE_WORK_PART,
+                work_part_index=shard,
+                work_part_count=shards,
+                work=partial(
+                    run_shard_under_the_clock,
+                    host,
+                    date=date,
+                    run_id=run_id,
+                    shard=shard,
+                    shards=shards,
+                    council=council,
+                    started=started,
+                    prepared=prepared,
+                ),
+            )
+        finally:
+            if work_files.record_path(COUNCIL_ROOT, selection, slug, date, shard).is_file():
+                _export_record(selection, slug, date, str(shard), bundle)
+        work_files.verify(
+            invocation_root(selection, slug),
+            prepared.files,
+            day=date,
+            judge_id=slug,
         )
+        files = work_files.evidence(
+            invocation_root(selection, slug),
+            result.files,
+            day=date,
+            judge_id=slug,
+        )
+        if {file.path for file in files} & {file.path for file in prepared.files}:
+            raise work_files.FileIntegrityError("shard cannot overwrite preparation")
+        document = ShardFiles(
+            version=ShardFiles.schema_version(),
+            run_id=run_id,
+            attempt=selection.attempt,
+            git_sha=selection.git_sha,
+            judge_id=slug,
+            date=date,
+            shard=shard,
+            shards=shards,
+            files=files,
+        )
+        work_files.write_document(
+            work_files.shard_path(COUNCIL_ROOT, selection, slug, date, shard),
+            document,
+        )
+        work_files.export(COUNCIL_ROOT, COUNCIL_ROOT / "outgoing" / bundle, selection, document)
+        return result
+
+
+def verify_work(
+    council: CouncilConfig,
+    *,
+    slug: str,
+    date: str,
+    run_id: str,
+    shard: int,
+    shards: int,
+    selection: Selection,
+) -> tuple[Tenant, PreparationReceipt]:
+    selection.check(council).identify(
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        git_sha=selection.git_sha,
+    )
+    judge = selection.judge(slug, date)
+    host = tenant(slug, council=council, trial=selection.trial(slug))
+    if shards != judge.shards or shards != shard_width(council, host) or not 0 <= shard < shards:
+        raise ValueError("shard differs from selected width")
+    receipt = work_files.read_preparation(COUNCIL_ROOT, selection, slug, date)
+    if receipt is None or receipt.state != "ready" or receipt.shards != shards:
+        raise work_files.FileIntegrityError("shard has no matching ready preparation")
+    return host, receipt
+
+
+def _reports(selection: Selection, name: str, day: str, width: int) -> tuple[ShardReport, ...]:
+    from idhazh.contracts.council_invocation import Cell
+    from idhazh.council.run_summary import reported
+
+    return tuple(
+        reported(
+            Cell(tenant=name, date=day, shard=part, shards=width, runs_model=False),
+            COUNCIL_ROOT / "events",
+            selection.run_id,
+        ).normalized()
+        for part in range(width)
+    )
 
 
 def _trial_root(selection: Selection | None, name: str, run_id: RunId) -> Path | None:
@@ -327,12 +564,10 @@ def _trial_root(selection: Selection | None, name: str, run_id: RunId) -> Path |
     )
 
 
-def _hosted(
-    council: CouncilConfig, date: DateStamp, selection: Selection | None = None
-) -> tuple[Tenant, ...]:
+def _hosted(council: CouncilConfig, date: DateStamp, selection: Selection) -> tuple[Tenant, ...]:
     """The tenants this night hosts, said out loud so an empty night is readable."""
-    names = council.running() if selection is None else selection.check(council).names(date=date)
-    hosted = tenants(names, council=council, trials=() if selection is None else selection.trials)
+    names = selection.check(council).names(date=date)
+    hosted = tenants(names, council=council, trials=selection.trials)
     if not hosted:
         event_log.emit(NightPlanned(dates=(date,), judges=0, units=0))
     return hosted
@@ -363,9 +598,14 @@ def _recorded(
     produced: ShardResult | None = None
     try:
         file_result = partial(
-            _file, judge_id=judge_id, date=date, run_id=run_id,
-            evaluation_step=evaluation_step, work_part_index=work_part_index,
-            work_part_count=work_part_count, began=began,
+            _file,
+            judge_id=judge_id,
+            date=date,
+            run_id=run_id,
+            evaluation_step=evaluation_step,
+            work_part_index=work_part_index,
+            work_part_count=work_part_count,
+            began=began,
         )
         try:
             produced = work()
@@ -376,6 +616,7 @@ def _recorded(
                 file_result(
                     ShardResult(outcome=ShardOutcome.FAILED),
                     seconds=time.monotonic() - started,
+                    failed=True,
                 )
             except BaseException as filing_error:
                 raise BaseExceptionGroup(
@@ -397,9 +638,20 @@ def _recorded(
                 run_id=run_id,
                 evaluation_step=evaluation_step,
                 work_part_index=work_part_index,
-                work_part_count=work_part_count,
+                work_part_count=(
+                    work_part_count
+                    if evaluation_step is EvaluationStep.EVALUATE_WORK_PART
+                    or evaluation_step is EvaluationStep.COMBINE_JUDGE_RESULTS
+                    or (
+                        failure is None
+                        and produced is not None
+                        and produced.outcome is not ShardOutcome.NOTHING_TO_DO
+                    )
+                    else 0
+                ),
                 outcome=produced.outcome
-                if failure is None and produced is not None else ShardOutcome.FAILED,
+                if failure is None and produced is not None
+                else ShardOutcome.FAILED,
                 error=error_name,
                 where=where,
             ),
@@ -420,6 +672,7 @@ def _file(
     work_part_count: int,
     began: str,
     seconds: float,
+    failed: bool = False,
 ) -> Path:
     """Write the venue's own row where the job that commits it will find it.
 
@@ -435,7 +688,13 @@ def _file(
             "judge_id": judge_id,
             "evaluation_step": evaluation_step,
             "work_part_index": work_part_index,
-            "work_part_count": work_part_count,
+            "work_part_count": (
+                work_part_count
+                if evaluation_step is EvaluationStep.EVALUATE_WORK_PART
+                or evaluation_step is EvaluationStep.COMBINE_JUDGE_RESULTS
+                or (not failed and result.outcome is not ShardOutcome.NOTHING_TO_DO)
+                else 0
+            ),
             "outcome": result.outcome,
             "fault": "raised" if result.outcome is ShardOutcome.FAILED else None,
             "started_at": began,
@@ -446,14 +705,16 @@ def _file(
             "model_seconds": result.model_seconds,
         }
     )
+    name = (
+        str(work_part_index)
+        if work_part_index is not None
+        else evaluation_step.value.replace("_", "-")
+    )
+    work_files.check_destination(outcomes_dir(date) / judge_id / f"{name}.csv")
     return metrics_sink.ship_judge_metrics(
         row,
         judge_id=judge_id,
-        name=(
-            str(work_part_index)
-            if work_part_index is not None
-            else evaluation_step.value.replace("_", "-")
-        ),
+        name=name,
         out_dir=outcomes_dir(date),
     )
 

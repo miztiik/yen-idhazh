@@ -31,8 +31,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from idhazh.contracts.base import DateStamp, RunId
+from idhazh.contracts.council_invocation import (
+    JudgeSchedule, PreparationReceipt, ScheduleRequest, ShardReport,
+)
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh import atomic_write
+from idhazh.council import session
 from idhazh.council.tenancy import ShardResult
 
 JUDGE_ID = "{slug}"
@@ -40,7 +45,7 @@ JUDGE_ID = "{slug}"
 
 @dataclass
 class PaperTenant:
-    """A tenant that files nothing and remembers what the venue handed it."""
+    """Write named tasks, process each admitted part, and record the handoff."""
 
     judge_id: str = JUDGE_ID
     shard_count: int = {shard_count}
@@ -51,13 +56,19 @@ class PaperTenant:
     settled: list[str] = field(default_factory=list)
     asked: list[tuple[DateStamp, ...]] = field(default_factory=list)
 
-    def nights_outstanding(self, *, window: tuple[DateStamp, ...]) -> tuple[DateStamp, ...]:
-        self.asked.append(window)
-        return tuple(window)
+    def schedule(self, *, request: ScheduleRequest) -> JudgeSchedule:
+        self.asked.append(request.window)
+        older = tuple(sorted((day for day in request.window if day != request.anchor_date), reverse=True))
+        return JudgeSchedule(dates=(request.anchor_date,) + older[:request.max_older_dates])
 
-    def prepare(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+    def publication_inputs(self, *, date: DateStamp) -> tuple[str, ...]:
+        return ()
+
+    def prepare(self, *, date: DateStamp, run_id: RunId, shards: int) -> ShardResult:
         self.prepared.append(date)
-        return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
+        path = session.unit_file(date, slot="tasks", judge_id=self.judge_id, suffix=".json")
+        atomic_write.write_atomic(path, str(shards))
+        return ShardResult(outcome=ShardOutcome.COMPLETED, files=(session.artifact_path(path),))
 
     def run_shard(
         self,
@@ -67,10 +78,19 @@ class PaperTenant:
         shard: int,
         shards: int,
         deadline: float,
+        prepared: PreparationReceipt,
     ) -> ShardResult:
         self.handed.append(deadline)
         self.ran.append((date, run_id, shard, shards))
-        return ShardResult(outcome=ShardOutcome.COMPLETED)
+        task = session.unit_file(
+            date, slot="tasks", judge_id=self.judge_id, suffix=".json")
+        width = int(task.read_text(encoding="utf-8"))
+        if width != shards:
+            raise ValueError("task width differs from the dispatched width")
+        path = session.unit_file(date, slot="verdicts", judge_id=self.judge_id,
+                                 shard=shard, suffix=".json")
+        atomic_write.write_atomic(path, str(shard))
+        return ShardResult(outcome=ShardOutcome.COMPLETED, files=(session.artifact_path(path),))
 
     def settle(
         self,
@@ -79,6 +99,8 @@ class PaperTenant:
         run_id: RunId,
         state_dir: Path,
         identity: WriterIdentity,
+        prepared: PreparationReceipt,
+        reports: tuple[ShardReport, ...],
     ) -> ShardResult:
         self.settled.append(date)
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
@@ -106,8 +128,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from idhazh.contracts.base import DateStamp, RunId
+from idhazh.contracts.council_invocation import (
+    JudgeSchedule, PreparationReceipt, ScheduleRequest, ShardReport,
+)
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh import atomic_write
+from idhazh.council import session
 from idhazh.council.tenancy import ShardResult
 
 JUDGE_ID = "{slug}"
@@ -123,17 +150,23 @@ MODEL_CALLS = {model_calls}
 
 @dataclass
 class ScriptedTenant:
-    """A tenant that files nothing of its own and reports what it was written to."""
+    """Process named tasks while exercising explicit failure and deadline boundaries."""
 
     judge_id: str = JUDGE_ID
     shard_count: int = {shard_count}
     committed_paths: tuple[str, ...] = ()
 
-    def nights_outstanding(self, *, window: tuple[DateStamp, ...]) -> tuple[DateStamp, ...]:
-        return tuple(window)
+    def schedule(self, *, request: ScheduleRequest) -> JudgeSchedule:
+        older = tuple(sorted((day for day in request.window if day != request.anchor_date), reverse=True))
+        return JudgeSchedule(dates=(request.anchor_date,) + older[:request.max_older_dates])
 
-    def prepare(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
-        return ShardResult(outcome=ShardOutcome.COMPLETED)
+    def publication_inputs(self, *, date: DateStamp) -> tuple[str, ...]:
+        return ()
+
+    def prepare(self, *, date: DateStamp, run_id: RunId, shards: int) -> ShardResult:
+        path = session.unit_file(date, slot="tasks", judge_id=self.judge_id, suffix=".json")
+        atomic_write.write_atomic(path, str(shards))
+        return ShardResult(outcome=ShardOutcome.COMPLETED, files=(session.artifact_path(path),))
 
     def run_shard(
         self,
@@ -143,10 +176,18 @@ class ScriptedTenant:
         shard: int,
         shards: int,
         deadline: float,
+        prepared: PreparationReceipt,
     ) -> ShardResult:
         if shard in DEAD_UNITS:
             raise RuntimeError("this unit died before it reported anything back")
-        return ShardResult(outcome=OUTCOME, model_calls=MODEL_CALLS)
+        task = session.unit_file(date, slot="tasks", judge_id=self.judge_id, suffix=".json")
+        if int(task.read_text(encoding="utf-8")) != shards:
+            raise ValueError("task width differs from the dispatched width")
+        path = session.unit_file(date, slot="verdicts", judge_id=self.judge_id,
+                                 shard=shard, suffix=".json")
+        atomic_write.write_atomic(path, str(shard))
+        return ShardResult(outcome=OUTCOME, model_calls=MODEL_CALLS,
+                           files=(session.artifact_path(path),))
 
     def settle(
         self,
@@ -155,6 +196,8 @@ class ScriptedTenant:
         run_id: RunId,
         state_dir: Path,
         identity: WriterIdentity,
+        prepared: PreparationReceipt,
+        reports: tuple[ShardReport, ...],
     ) -> ShardResult:
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
 
@@ -178,6 +221,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from idhazh.contracts.base import DateStamp, RunId
+from idhazh.contracts.council_invocation import (
+    JudgeSchedule, PreparationReceipt, ScheduleRequest, ShardReport,
+)
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.council.tenancy import ShardResult
@@ -200,11 +246,15 @@ class BelatedTenant:
     shard_count: int = {shard_count}
     committed_paths: tuple[str, ...] = ()
 
-    def nights_outstanding(self, *, window: tuple[DateStamp, ...]) -> tuple[DateStamp, ...]:
-        owed = tuple(night for night in window if night in BEHIND_ON)
-        return owed + UNASKED
+    def schedule(self, *, request: ScheduleRequest) -> JudgeSchedule:
+        owed = tuple(sorted((night for night in request.window
+                            if night in BEHIND_ON and night != request.anchor_date), reverse=True))
+        return JudgeSchedule(dates=(request.anchor_date,) + owed[:request.max_older_dates] + UNASKED)
 
-    def prepare(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+    def publication_inputs(self, *, date: DateStamp) -> tuple[str, ...]:
+        return ()
+
+    def prepare(self, *, date: DateStamp, run_id: RunId, shards: int) -> ShardResult:
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
 
     def run_shard(
@@ -215,8 +265,9 @@ class BelatedTenant:
         shard: int,
         shards: int,
         deadline: float,
+        prepared: PreparationReceipt,
     ) -> ShardResult:
-        return ShardResult(outcome=ShardOutcome.COMPLETED)
+        raise ValueError("no tasks were prepared")
 
     def settle(
         self,
@@ -225,6 +276,8 @@ class BelatedTenant:
         run_id: RunId,
         state_dir: Path,
         identity: WriterIdentity,
+        prepared: PreparationReceipt,
+        reports: tuple[ShardReport, ...],
     ) -> ShardResult:
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
 
@@ -265,16 +318,12 @@ def a_venue(
     if quiet_neighbour:
         neighbour = root / package / quiet_neighbour
         neighbour.mkdir(parents=True, exist_ok=True)
-        (neighbour / "__init__.py").write_text(
-            UNIMPORTABLE_SOURCE, encoding="utf-8", newline="\n"
-        )
+        (neighbour / "__init__.py").write_text(UNIMPORTABLE_SOURCE, encoding="utf-8", newline="\n")
     if poisoned_neighbour:
         neighbour = root / package / poisoned_neighbour.replace("-", "_")
         neighbour.mkdir(parents=True, exist_ok=True)
         (neighbour / "__init__.py").write_text("", encoding="utf-8", newline="\n")
-        (neighbour / "tenant.py").write_text(
-            UNIMPORTABLE_SOURCE, encoding="utf-8", newline="\n"
-        )
+        (neighbour / "tenant.py").write_text(UNIMPORTABLE_SOURCE, encoding="utf-8", newline="\n")
 
 
 def a_scripted_venue(

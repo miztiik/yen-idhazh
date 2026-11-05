@@ -94,6 +94,7 @@ MODULE_NAMES = (
     "idhazh.council.selection",
     "idhazh.council.trial_paths",
     "idhazh.council.tenancy",
+    "idhazh.council.work_files",
     "idhazh.day_partition",
     "idhazh.event_lines",
     "idhazh.ledger",

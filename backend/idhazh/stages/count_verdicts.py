@@ -74,9 +74,17 @@ def stage_count_verdicts(
     verdicts_dir: Path,
     settings: config.Settings,
     identity: WriterIdentity,
+    expected_shards: int,
+    reports_complete: bool,
     state_dir: Path | None = None,
 ) -> CountReport:
-    """File the day's verdicts, then count them into the record if every shard reported.
+    """File arrived verdicts, counting only when every admitted shard finished.
+
+    The preparation receipt supplies `expected_shards`; the configured maximum
+    is not tonight's admitted width. `reports_complete` requires successful unit
+    and program evidence, since a verdict file can survive a failed or stopped
+    shard. Zero admitted shards completes an empty date without creating shard
+    files or readings.
 
     **A day with a missing shard is not counted at all.** Every row that did arrive
     is still filed, so nothing a shard produced is lost, but the date stays out
@@ -118,7 +126,9 @@ def stage_count_verdicts(
     that produced it at all.
     """
     knobs = settings.app.assemble.same_story.judging_knobs()
-    shards = settings.council.shards
+    if expected_shards < 0:
+        raise ValueError("expected_shards must not be negative")
+    shards = expected_shards
     state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
     writer = WriterIdentity.model_validate(identity.model_dump() | {"producer": PRODUCER})
 
@@ -159,8 +169,12 @@ def stage_count_verdicts(
         )
         LOG.info("count-verdicts date=%s archived=%s was=%s now=%s", date, archived, *moved)
 
-    counts = len(present) >= shards and ledger.accepts_new_rows(
-        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION, len(rows)
+    counts = (
+        len(present) >= shards
+        and reports_complete
+        and ledger.accepts_new_rows(
+            LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION, len(rows)
+        )
     )
     if not counts:
         report = CountReport(
@@ -171,7 +185,13 @@ def stage_count_verdicts(
             rows_appended=appended,
             metrics_appended=metrics,
             counted=False,
-            held_reason="shards_missing" if len(present) < shards else "family_not_active",
+            held_reason=(
+                "shards_missing"
+                if len(present) < shards
+                else "reports_incomplete"
+                if not reports_complete
+                else "family_not_active"
+            ),
             archived=archived,
         )
     else:

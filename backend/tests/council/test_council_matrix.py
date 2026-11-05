@@ -12,14 +12,17 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from support.paths import CONFIG_DIR, read_text
+from support.paths import read_text
 
-from idhazh.council import registry
+from idhazh import config
+from idhazh.contracts.council_invocation import SelectedJudge, Selection
+from idhazh.contracts.knobs.council import JudgeLifecycleStatus
+from idhazh.council import night_plan, registry, session
 from idhazh.council.session import VENUE_LEDGERS
 from idhazh.ledger import staging
 from utilities import council_matrix
 
-from ._config import copy_config, write_declarations
+from ._config import COMMIT, RUN_ID, copy_config, write_declarations
 from ._tenants import a_venue, forget
 
 A_VENUE = "a_paper_venue"
@@ -34,6 +37,8 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """A writable package on the import path, pointed at by the registry."""
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(registry, "TENANT_PACKAGE", A_VENUE)
+    monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "scratch")
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
     forget(A_VENUE)
     yield tmp_path
     forget(A_VENUE)
@@ -57,10 +62,30 @@ def _emitted(
     capsys: pytest.CaptureFixture[str], *, config_root: Path, dates: tuple[str, ...]
 ) -> dict[str, str]:
     """The key-value lines the utility prints, as a mapping."""
-    argv = ["--config-root", str(config_root)]
-    for date in dates:
-        argv += ["--date", date]
-    assert council_matrix.main(argv) == 0
+    council = config.load_council(config_root)
+    dates = tuple(dict.fromkeys(dates))
+    selected = Selection(
+        version=Selection.schema_version(),
+        run_id=RUN_ID,
+        attempt=1,
+        git_sha=COMMIT,
+        mode="scheduled",
+        anchor_date=dates[0],
+        window=(dates[0], *night_plan.window_before(council, tonight=dates[0])),
+        judges=tuple(
+            SelectedJudge(
+                tenant=host.judge_id,
+                status=council.declaration(host.judge_id).lifecycle_status,
+                dates=dates,
+                shards=min(council.shards, host.shard_count),
+            )
+            for host in registry.tenants(council.running(), council=council)
+        ),
+    )
+    session.prepare(council, date=None, run_id=RUN_ID, selection=selected)
+    with pytest.MonkeyPatch.context() as environment:
+        environment.setenv("COUNCIL_SELECTION", selected.model_dump_json())
+        assert council_matrix.main(["--config-root", str(config_root)]) == 0
     return dict(line.split("=", 1) for line in capsys.readouterr().out.splitlines() if line)
 
 
@@ -80,7 +105,7 @@ def test_a_night_with_no_tenant_fans_out_to_nothing(
     emitted = _emitted(capsys, config_root=_config_registering(tmp_path, slugs=()), dates=(A_DATE,))
 
     assert json.loads(emitted["matrix"]) == []
-    assert json.loads(emitted["dates"]) == [A_DATE]
+    assert json.loads(emitted["dates"]) == []
     assert emitted["committed_paths"] == ""
     assert int(emitted["max_parallel"]) >= 1
 
@@ -106,10 +131,31 @@ def test_a_cell_carries_the_tenant_the_date_the_shard_and_that_tenants_width(
 
 @pytest.mark.parametrize("root", ["state", "state/raw", "state/compact"])
 def test_a_tenant_cannot_declare_a_blanket_state_root(
-    venue: Path, capsys: pytest.CaptureFixture[str], root: str
+    venue: Path,
+    capsys: pytest.CaptureFixture[str],
+    root: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (1, (root,))})
     config_root = _config_registering(venue, slugs=("a-paper-tenant",))
+    selected = Selection(
+        version=Selection.schema_version(),
+        run_id=RUN_ID,
+        attempt=1,
+        git_sha=COMMIT,
+        mode="manual",
+        anchor_date=A_DATE,
+        window=(A_DATE,),
+        judges=(
+            SelectedJudge(
+                tenant="a-paper-tenant",
+                status=JudgeLifecycleStatus.ACTIVE,
+                dates=(A_DATE,),
+                shards=1,
+            ),
+        ),
+    )
+    monkeypatch.setenv("COUNCIL_SELECTION", selected.model_dump_json())
     assert council_matrix.main(["--config-root", str(config_root), "--date", A_DATE]) == 2
     assert capsys.readouterr().out == ""
 
@@ -223,6 +269,7 @@ def test_the_staged_paths_are_every_tenants_and_each_one_once(
 
 
 def test_a_date_named_twice_is_judged_once(
+    venue: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A repeated date would run every tenant's work over that date twice.
@@ -230,6 +277,8 @@ def test_a_date_named_twice_is_judged_once(
     Once in the cells and once in the collecting job's loop, which would ask a
     tenant to settle a date it had already settled.
     """
-    emitted = _emitted(capsys, config_root=CONFIG_DIR, dates=(A_DATE, A_DATE))
+    a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (1, ())})
+    target = _config_registering(venue, slugs=("a-paper-tenant",))
+    emitted = _emitted(capsys, config_root=target, dates=(A_DATE, A_DATE))
 
     assert json.loads(emitted["dates"]) == [A_DATE]
