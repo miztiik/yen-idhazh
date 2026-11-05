@@ -66,7 +66,6 @@ def stage_configuration(root: Path, directory: Path, selected: SelectedModel) ->
         "host-probes.json",
         "ledgers.json",
         "typescript-event-sources.json",
-        "feed-ingest-plan-service.json",
     )
     destination = directory / "config"
     destination.mkdir(parents=True, exist_ok=True)

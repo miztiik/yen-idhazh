@@ -4,6 +4,7 @@ import { createInterface } from "node:readline";
 import { loadConfig, ProbeConfigSchema } from "../../host-probes/src/config";
 import { START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../host-probes/src/api/server";
 import { createApiApp } from "../../serve-pipeline-apis/src/create-api-app";
+import { createMachineApp } from "../../host-probes/src/api/create-machine-app";
 import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../../host-probes/src/api/task-command-schema";
 import { startTaskProfile } from "../../host-probes/src/task-profile/task-profiler";
 import type { TaskProfileSession } from "../../host-probes/src/task-profile/task-profiler";
@@ -18,7 +19,7 @@ import { fixture } from "../../host-fingerprints/test/fixture";
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { projectMachineProfile, HardwareSchema } from "../../../.github/scripts/summary-eval-tests/machine-results";
-import { ServerEvidenceSchema } from "../../serve-pipeline-apis/src/server-evidence";
+import { MachineServerEvidenceSchema } from "../../host-probes/src/api/create-machine-server-evidence";
 
 function emit(value: unknown): void { process.stdout.write(JSON.stringify(value) + "\n"); }
 
@@ -26,7 +27,7 @@ if (Bun.argv[2] === "schemas") {
   emit({
     hardware: z.toJSONSchema(HostFingerprintRowSchema),
     machine: z.toJSONSchema(TaskProfileSchema),
-    server: z.toJSONSchema(ServerEvidenceSchema),
+    server: z.toJSONSchema(MachineServerEvidenceSchema),
   });
 } else if (Bun.argv[2] === "workflow") {
   emit(Bun.YAML.parse(await Bun.file(new URL(
@@ -81,11 +82,13 @@ if (Bun.argv[2] === "schemas") {
             event: "typescript_api_ready", nonce: crypto.randomUUID(), pid: process.pid,
             port: 8787, group: "machine", modules: ["machine"], enabled: true,
           },
-          fingerprint: {
-            config: f.config, settings: f.settings,
-            options: { outputRoot: join(f.directory, "state"), inspection: f.inspection },
-          },
-          probes: profiling,
+          create: () => createMachineApp({
+            fingerprint: {
+              config: f.config, settings: f.settings,
+              options: { outputRoot: join(f.directory, "state"), inspection: f.inspection },
+            },
+            probes: profiling,
+          }),
         });
         const response = await handler.fetch(new Request(`http://127.0.0.1${FINGERPRINT_PATH}`, {
           method: "POST", body: JSON.stringify(f.apiInput),

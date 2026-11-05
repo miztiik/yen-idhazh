@@ -21,9 +21,13 @@ backend. Requests with a browser `Origin` header are refused.
 
 The feed workflow uses the same native handlers through the
 [shared pipeline API server](serve-pipeline-apis.md), alongside
-fingerprint and planning routes. Its single loopback address comes from
-`config/hono-server.json`. The standalone command above retains its own
-listener controls.
+fingerprint and planning routes. The probe package's
+`src/api/serve-machine-apis.ts` also assembles the machine-only application for
+summary evaluation without feed source or feed settings. It composes the real
+fingerprint and profiling implementations; shared hosting owns only their
+listener and process lifetime. The single loopback address and supervision
+waits come from `config/hono-server.json`. The standalone command above retains
+its own listener controls.
 
 Task commands require UTF-8 JSON and `Content-Type: application/json`.
 Unknown fields fail. No command accepts a path, executable, URL, proc root,

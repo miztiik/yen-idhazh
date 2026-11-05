@@ -2,9 +2,9 @@
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "@idhazh/host-probes/api";
-import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../../host-probes/src/api/task-command-schema";
-import { loadHonoSettings } from "../src/load-settings";
-import { serveRecordedMachine } from "./recorded-machine-api";
+import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../src/api/task-command-schema";
+import { loadHonoSettings } from "@idhazh/serve-pipeline-apis/settings";
+import { serveRecordedMachine } from "./serve-recorded-machine-api";
 
 async function recordProfileReport() {
   const root = fileURLToPath(new URL("../../../", import.meta.url));

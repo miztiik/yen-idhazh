@@ -5,9 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig as loadFingerprintConfig, loadSettings } from "@idhazh/host-fingerprints/config";
 import { loadConfig as loadProbeConfig } from "@idhazh/host-probes/config";
-import { parseProcessStat } from "../../host-probes/src/task-profile/process-stat";
-import { serveApiApp } from "../src/create-api-app";
-import type { HonoServerSettings } from "../src/load-settings";
+import { parseProcessStat } from "../src/task-profile/process-stat";
+import { createApiApp, serveApiApp } from "@idhazh/serve-pipeline-apis/app";
+import type { HonoServerSettings } from "@idhazh/serve-pipeline-apis/settings";
+import { createMachineApp } from "../src/api/create-machine-app";
 
 export async function serveRecordedMachine(root: string, listener: HonoServerSettings, nonce: string = randomUUID()) {
   const directory = await mkdtemp(join(tmpdir(), "api-profile-report-"));
@@ -24,15 +25,16 @@ export async function serveRecordedMachine(root: string, listener: HonoServerSet
       event: "typescript_api_ready" as const, nonce, pid: process.pid,
       port: listener.port, group: "machine" as const, modules: ["machine" as const], enabled: true,
     };
-    const server = await serveApiApp(listener, {
-      identity,
-      fingerprint: {
-        config: await loadFingerprintConfig(join(root, "config", "host-fingerprints.json")),
-        settings: await loadSettings(join(root, "config", "idhazh.json")),
-        options: { outputRoot: join(directory, "state"), registryPath: join(root, "config", "ledgers.json") },
-      },
-      probes: { config, context: { platform: "linux", procRoot: directory } },
-    });
+    const fingerprint = {
+      config: await loadFingerprintConfig(join(root, "config", "host-fingerprints.json")),
+      settings: await loadSettings(join(root, "config", "idhazh.json")),
+      options: { outputRoot: join(directory, "state"), registryPath: join(root, "config", "ledgers.json") },
+    };
+    const server = await serveApiApp(listener, createApiApp({
+      identity, create: () => createMachineApp({
+        fingerprint, probes: { config, context: { platform: "linux", procRoot: directory } },
+      }),
+    }));
     return {
       identity, target: { pid: process.pid, start_ticks: pin.value.start_ticks },
       port: server.port,

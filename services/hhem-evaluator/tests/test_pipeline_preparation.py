@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from summary_eval_pipeline.contracts import PipelineEvidence, PreparedRun
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.inputs import ManualInputs
+from summary_eval_pipeline.model_selection import select_model, stage_configuration
 from summary_eval_pipeline.phases import collect_phase
 from summary_eval_pipeline.preparation import prepare_assets, prepare_run, read_prepared
 from summary_eval_pipeline.report_task import collect_results
@@ -79,7 +80,6 @@ def test_real_preparation_failure_is_saved_and_reported_with_both_model_phases_n
                 "host-probes.json",
                 "ledgers.json",
                 "typescript-event-sources.json",
-                "feed-ingest-plan-service.json",
             ):
                 (tmp_path / "config" / name).write_bytes(
                     (REPOSITORY / "config" / name).read_bytes()
@@ -146,6 +146,30 @@ def test_unfinished_preparation_is_not_assumed_complete_or_reported_as_a_missing
     assert evidence.status == "failed" and evidence.prepared == prepared
     assert evidence.errors == () and evidence.generation is None
     assert evidence.generation_phase is None and evidence.evaluation_phase is None
+
+
+def test_staged_machine_configuration_needs_no_feed_settings(tmp_path: Path) -> None:
+    selected_root(tmp_path)
+    for name in (
+        "hono-server.json",
+        "host-fingerprints.json",
+        "host-probes.json",
+        "ledgers.json",
+        "typescript-event-sources.json",
+    ):
+        (tmp_path / "config" / name).write_bytes(
+            (REPOSITORY / "config" / name).read_bytes()
+        )
+    selected = select_model(tmp_path, "")
+    directory = tmp_path / "runtime"
+    stage_configuration(tmp_path, directory, selected)
+    assert (directory / "config" / "hono-server.json").read_bytes() == (
+        tmp_path / "config" / "hono-server.json"
+    ).read_bytes()
+    probes = json.loads((directory / "config" / "host-probes.json").read_bytes())
+    assert probes["task_profile"]["enabled"] is True
+    assert not (tmp_path / "config" / "feed-ingest-plan-service.json").exists()
+    assert not (directory / "config" / "feed-ingest-plan-service.json").exists()
 
 
 def test_reference_identity_is_saved_before_generation_and_changed_reference_is_refused(

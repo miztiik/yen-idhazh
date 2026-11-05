@@ -280,7 +280,7 @@ verified files remain recoverable. Cancellation skips new Git delivery while
 still attempting the report and recovery upload.
 
 Readiness, graceful drain and forced-exit waits are finite settings under
-`supervision` in `config/feed-ingest-plan-service.json`; the
+`supervision` in `config/hono-server.json`; the
 [runner](../architecture/sources/feed-plan-runner.md#entry-points-and-controls)
 defines their defaults and failure behavior. Termination cancels the real HTTP
 client, then closes the child pipe. Pipe closure also triggers child cleanup

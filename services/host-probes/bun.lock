@@ -6,6 +6,9 @@
       "name": "@idhazh/host-probes",
       "dependencies": {
         "@idhazh/common-contracts": "file:../../packages/common-contracts",
+        "@idhazh/host-fingerprints": "file:../../services/host-fingerprints",
+        "@idhazh/serve-pipeline-apis": "file:../../services/serve-pipeline-apis",
+        "hono": "4.13.13",
         "zod": "^4.1.12",
       },
       "devDependencies": {
@@ -17,24 +20,52 @@
   "packages": {
     "@idhazh/common-contracts": ["@idhazh/common-contracts@file:../../packages/common-contracts", { "dependencies": { "@opentelemetry/api": "1.9.0", "@opentelemetry/core": "2.12.0", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "typescript": "^5.9.3" } }],
 
-    "@opentelemetry/api": ["@opentelemetry/api@1.9.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@opentelemetry/api/-/api-1.9.0.tgz", {}, "sha1-0D66aCc9wPdQnio9XLoh6uEDef4="],
+    "@idhazh/host-fingerprints": ["@idhazh/host-fingerprints@file:../host-fingerprints", { "dependencies": { "@idhazh/common-contracts": "file:../../packages/common-contracts", "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "apache-arrow": "^21.2.0", "parquet-wasm": "^0.9.0", "typescript": "^5.9.3" } }],
 
-    "@opentelemetry/core": ["@opentelemetry/core@2.12.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@opentelemetry/core/-/core-2.12.0.tgz", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.29.0" }, "peerDependencies": { "@opentelemetry/api": ">=1.0.0 <1.10.0" } }, "sha512-1HsSAuvT4/my0QrXWsyXFdWjKaPeCHsismKZgEEIb8NK13LP6DrMRlsUbvD/0F9mDWK3xDom9AMv3IscxgOnOQ=="],
+    "@idhazh/serve-pipeline-apis": ["@idhazh/serve-pipeline-apis@file:../serve-pipeline-apis", { "dependencies": { "@idhazh/common-contracts": "file:../../packages/common-contracts", "hono": "^4.10.0", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "typescript": "^5.9.3" } }],
 
-    "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.43.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@opentelemetry/semantic-conventions/-/semantic-conventions-1.43.0.tgz", {}, "sha1-8/Rn42wnMy8Oc17IbNzXjdbyeGU="],
+    "@opentelemetry/api": ["@opentelemetry/api@1.9.0", "https://packagefeedproxy.microsoft.io/npm/@opentelemetry/api/-/api-1.9.0.tgz", {}, ""],
 
-    "@types/bun": ["@types/bun@1.4.3", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/bun/-/bun-1.4.3.tgz", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+    "@opentelemetry/core": ["@opentelemetry/core@2.12.0", "https://packagefeedproxy.microsoft.io/npm/@opentelemetry/core/-/core-2.12.0.tgz", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.29.0" }, "peerDependencies": { "@opentelemetry/api": ">=1.0.0 <1.10.0" } }, ""],
 
-    "@types/node": ["@types/node@26.6.5", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/node/-/node-26.6.5.tgz", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg=="],
+    "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.43.0", "https://packagefeedproxy.microsoft.io/npm/@opentelemetry/semantic-conventions/-/semantic-conventions-1.43.0.tgz", {}, ""],
 
-    "bun-types": ["bun-types@1.4.3", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/bun-types/-/bun-types-1.4.3.tgz", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+    "@types/bun": ["@types/bun@1.4.3", "https://packagefeedproxy.microsoft.io/npm/@types/bun/-/bun-1.4.3.tgz", { "dependencies": { "bun-types": "1.4.3" } }, ""],
 
-    "typescript": ["typescript@5.9.3", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/typescript/-/typescript-5.9.3.tgz", { "bin": { "tsc": "./bin/tsc", "tsserver": "./bin/tsserver" } }, "sha1-W09Z4VMQqxeiFvXWz1PuR27eZw8="],
+    "@types/node": ["@types/node@26.6.5", "https://packagefeedproxy.microsoft.io/npm/@types/node/-/node-26.6.5.tgz", { "dependencies": { "undici-types": "~8.9.0" } }, ""],
 
-    "undici-types": ["undici-types@8.11.2", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/undici-types/-/undici-types-8.11.2.tgz", {}, "sha512-iMVNmWZ0leK/goS6eXMizSzmm9CDWtyphwbaCms3DNLqRxDL+mMoNVcZMTyyVgXP0N+Z8neAMzDoUOUJL8veKg=="],
+    "apache-arrow": ["apache-arrow@21.2.0", "https://packagefeedproxy.microsoft.io/npm/apache-arrow/-/apache-arrow-21.2.0.tgz", { "dependencies": { "@types/node": "^25.2.0", "flatbuffers": "^25.1.24", "json-with-bigint": "^3.5.3", "tslib": "^2.6.2" }, "bin": { "arrow2csv": "bin/arrow2csv.js" } }, ""],
 
-    "zod": ["zod@4.6.7", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/zod/-/zod-4.6.7.tgz", {}, "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="],
+    "bun-types": ["bun-types@1.4.3", "https://packagefeedproxy.microsoft.io/npm/bun-types/-/bun-types-1.4.3.tgz", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, ""],
 
-    "@types/node/undici-types": ["undici-types@8.9.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/undici-types/-/undici-types-8.9.0.tgz", {}, "sha1-4kDZfItdheU0fOc9JYZceQbB7J8="],
+    "flatbuffers": ["flatbuffers@25.9.23", "https://packagefeedproxy.microsoft.io/npm/flatbuffers/-/flatbuffers-25.9.23.tgz", {}, ""],
+
+    "hono": ["hono@4.13.13", "https://packagefeedproxy.microsoft.io/npm/hono/-/hono-4.13.13.tgz", {}, ""],
+
+    "json-with-bigint": ["json-with-bigint@3.5.12", "https://packagefeedproxy.microsoft.io/npm/json-with-bigint/-/json-with-bigint-3.5.12.tgz", {}, ""],
+
+    "parquet-wasm": ["parquet-wasm@0.9.0", "https://packagefeedproxy.microsoft.io/npm/parquet-wasm/-/parquet-wasm-0.9.0.tgz", {}, ""],
+
+    "tslib": ["tslib@2.8.1", "https://packagefeedproxy.microsoft.io/npm/tslib/-/tslib-2.8.1.tgz", {}, ""],
+
+    "typescript": ["typescript@5.9.3", "https://packagefeedproxy.microsoft.io/npm/typescript/-/typescript-5.9.3.tgz", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, ""],
+
+    "undici-types": ["undici-types@8.11.2", "https://packagefeedproxy.microsoft.io/npm/undici-types/-/undici-types-8.11.2.tgz", {}, ""],
+
+    "zod": ["zod@4.6.7", "https://packagefeedproxy.microsoft.io/npm/zod/-/zod-4.6.7.tgz", {}, ""],
+
+    "@idhazh/host-fingerprints/@idhazh/common-contracts": ["@idhazh/common-contracts@file:../../packages/common-contracts", { "dependencies": { "@opentelemetry/api": "1.9.0", "@opentelemetry/core": "2.12.0", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "typescript": "^5.9.3" } }],
+
+    "@idhazh/host-fingerprints/@idhazh/ledger-file-writer": ["@idhazh/ledger-file-writer@file:../../packages/ledger-file-writer", { "dependencies": { "@idhazh/common-contracts": "file:../common-contracts", "apache-arrow": "^21.2.0", "parquet-wasm": "^0.9.0", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "typescript": "^5.9.3" } }],
+
+    "@idhazh/serve-pipeline-apis/@idhazh/common-contracts": ["@idhazh/common-contracts@file:../../packages/common-contracts", { "dependencies": { "@opentelemetry/api": "1.9.0", "@opentelemetry/core": "2.12.0", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "typescript": "^5.9.3" } }],
+
+    "@types/node/undici-types": ["undici-types@8.9.0", "https://packagefeedproxy.microsoft.io/npm/undici-types/-/undici-types-8.9.0.tgz", {}, ""],
+
+    "apache-arrow/@types/node": ["@types/node@25.9.9", "https://packagefeedproxy.microsoft.io/npm/@types/node/-/node-25.9.9.tgz", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, ""],
+
+    "@idhazh/host-fingerprints/@idhazh/ledger-file-writer/@idhazh/common-contracts": ["@idhazh/common-contracts@file:../../packages/common-contracts", { "dependencies": { "@opentelemetry/api": "1.9.0", "@opentelemetry/core": "2.12.0", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "typescript": "^5.9.3" } }],
+
+    "apache-arrow/@types/node/undici-types": ["undici-types@7.24.6", "https://packagefeedproxy.microsoft.io/npm/undici-types/-/undici-types-7.24.6.tgz", {}, ""],
   }
 }

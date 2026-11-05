@@ -12,7 +12,9 @@ import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 test('pipeline APIs select the native gate and all named module dependants', () => {
 	for (const path of ['services/serve-pipeline-apis/src/create-api-app.ts',
-		'services/feed-ingest-plan/scripts/http-child-lifetime.ts',
+		'services/serve-pipeline-apis/src/supervise-http-child.ts',
+		'services/feed-ingest-plan/scripts/serve-feed-apis.ts',
+		'services/host-probes/src/api/serve-machine-apis.ts',
 		'services/host-fingerprints/src/api/server.ts', 'services/host-probes/src/api/server.ts',
 		'config/hono-server.json', '.github/workflows/feed-ingest-plan-test.yml']) {
 		for (const separator of ['/', '\\']) {

@@ -5,9 +5,10 @@
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
 The sections below define each operation and its current request and response.
-The feed workflow serves them with machine routes through the
-[shared pipeline API server](../../reference/serve-pipeline-apis.md);
-the delivery task restarts that application with its private delivery group.
+The feed package assembles them with machine routes under
+[shared pipeline API hosting](../../reference/serve-pipeline-apis.md).
+The delivery task constructs only its private delivery group. Shared hosting
+owns their listener and process lifetime, not native API construction.
 
 ## Independent fetch and parse endpoints
 
@@ -294,7 +295,8 @@ system.
 Always-run finalization owns a separate delivery child because collection has
 already closed its planner child. The delivery child needs no live planner batch
 or collection inputs; completed partial metadata remains deliverable after
-planner failure. It reuses the configured listener and supervision limits,
+planner failure. It reuses the listener and supervision limits from
+`config/hono-server.json`,
 checks owned-child readiness through `/health`, and closes and reaps that child
 after success, failure or cancellation. Cancellation known before finalization
 skips new Git delivery.
