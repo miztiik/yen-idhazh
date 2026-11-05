@@ -49,6 +49,15 @@ the application under the shared child lifetime. The caller selects the
 trusted entry and fixed group before startup, not through an API request.
 There is no shared native entry, module registry or request-selected import.
 
+The workflow and its task programs order work, call APIs and check results.
+Shared hosting does not orchestrate a pipeline or define its tests. Another
+workflow can reuse the machine entry without feed code or changes to hosting.
+New API routes require code in the package that implements them, not only
+workflow YAML. That package supplies startup and readiness checks,
+request/control byte limits, awaited cleanup, safe diagnostic decoding and
+evidence validation. The workflow selects its trusted entry; shared hosting
+must not import the API implementation.
+
 Table B - Route groups
 
 | Id | Group | Native modules and lifetime |
@@ -100,7 +109,8 @@ The date is the UTC run-start day. `run_id` is the platform run identifier,
 not the planner's date-prefixed business identity or the startup nonce.
 Local callers use their existing invocation identity and attempt one.
 Restarting the role in the same run appends a fresh start event.
-`config/typescript-event-sources.json` supplies the `typescript_api` source.
+`src/declare-event-source.ts` supplies the unchanged `/services/typescript-api`
+protocol identity, without a source registry.
 The existing common-contracts helpers allocate and validate event and operation
 metadata without a tracing provider, exporter or global active context.
 
@@ -134,7 +144,7 @@ Missing or invalid context and unknown relay fields emit
 `CHILD_DIAGNOSTIC_INVALID`; they never fall back to supervision.
 Lifecycle diagnostics keep their supervision operation and exclude
 `operation_completed`. Both diagnostic readers accept only their current
-shapes; saved task evidence is unchanged. The configured API source, native
+shapes; saved task evidence is unchanged. The local API source, native
 completion event type and server name are unchanged. No path or process ID
 is added to completion data.
 
@@ -193,17 +203,6 @@ Shared hosting imports none of them, including in its tests and dependency
 metadata. Typed construction arguments carry the application, failure policy,
 diagnostic decoder and bound evidence validator without a plugin framework.
 Only validated JSON-shaped controls cross the private process pipe.
-
-The evaluator CI job checks one sparse candidate checkout in two stages.
-Shared hosting first installs, checks and tests with every native service
-absent. The same checkout then gains only named machine packages, settings and
-recorded inputs. Real Linux child tests verify fingerprint writes, explicit
-profile stop, shutdown-only profile evidence, worker cleanup and released
-listeners while feed source and feed configuration remain physically absent.
-The machine entry, parent adapter and actual summary helper also pass dependency
-inspection. Those builds provide import metadata only; process checks execute
-source entries so worker URLs retain their module-relative paths.
-Inspection supplements execution; it does not replace it.
 
 Explicit groups keep task resources visible without per-API processes.
 Hono and Zod remain existing tool dependencies. Host-probes adds the shared

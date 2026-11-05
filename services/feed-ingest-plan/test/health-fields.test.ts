@@ -5,7 +5,8 @@ import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { createRootContext, FeedHealthStateRowContract, FeedHealthStateRowSchema, FeedIngestEventSchema, loadEventSources, writeTraceContext } from "@idhazh/common-contracts";
+import { createRootContext, FeedHealthStateRowContract, FeedHealthStateRowSchema, FeedIngestEventSchema, writeTraceContext } from "@idhazh/common-contracts";
+import { PLANNER_EVENT_SOURCE } from "../src/declare-event-source";
 import {
   persistLedger, readPlannerParquet, readStoredPlannerParquet, PlannerUnsupportedFormatError,
 } from "@idhazh/ledger-file-writer";
@@ -112,8 +113,7 @@ test("request field gaps retain independent checks and individual valid counters
     await rewriteHealthFields(path, [stored], variant, { stamp: "2026-10-25" });
     const logged: unknown[] = [];
     const operation = createRootContext();
-    const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
-    const log = createStageLogger({ run_id: row.run_id, ...operation }, sources.planner, event => logged.push(event));
+    const log = createStageLogger({ run_id: row.run_id, ...operation }, PLANNER_EVENT_SOURCE, event => logged.push(event));
     const read = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
       day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     }, createPlannerHistoryCache(), undefined, log);

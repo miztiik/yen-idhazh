@@ -79,7 +79,6 @@ def test_real_preparation_failure_is_saved_and_reported_with_both_model_phases_n
                 "host-fingerprints.json",
                 "host-probes.json",
                 "ledgers.json",
-                "typescript-event-sources.json",
             ):
                 (tmp_path / "config" / name).write_bytes(
                     (REPOSITORY / "config" / name).read_bytes()
@@ -155,7 +154,6 @@ def test_staged_machine_configuration_needs_no_feed_settings(tmp_path: Path) -> 
         "host-fingerprints.json",
         "host-probes.json",
         "ledgers.json",
-        "typescript-event-sources.json",
     ):
         (tmp_path / "config" / name).write_bytes(
             (REPOSITORY / "config" / name).read_bytes()

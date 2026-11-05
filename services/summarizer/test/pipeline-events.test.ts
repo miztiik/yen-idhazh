@@ -7,7 +7,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
 import { createRootContext } from "@idhazh/common-contracts/create-operation-context";
-import { loadEventSources } from "@idhazh/common-contracts/load-event-sources";
+import { SUMMARIZER_EVENT_SOURCE } from "../src/declare-event-source.js";
 import { readTraceContext, writeTraceContext } from "@idhazh/common-contracts/propagate-trace-context";
 import { createHttpServer } from "../src/api/serve-http-api.js";
 import { orchestratePipeline } from "../src/pipeline/orchestrate-pipeline.service.js";
@@ -66,10 +66,9 @@ test("CLI configuration failure returns no summary and keeps diagnostics content
 
 test("same-operation occurrences survive saved-event readback without losing validated data", () =>
   withConfig(async root => {
-    const sources = await loadEventSources(path.join(repositoryRoot, "config/typescript-event-sources.json"));
     const eventFile = path.join(root, "events.jsonl");
     const context = createRootContext();
-    const bus = new PipelineEventBus(sources.summarizer, eventFile);
+    const bus = new PipelineEventBus(SUMMARIZER_EVENT_SOURCE, eventFile);
     const data = { url: "https://source.example/recorded", bytes: 42 };
     const first = bus.emitEvent("URL_HTTP_FETCH_COMPLETED", data, context);
     const second = bus.emitEvent("URL_HTTP_FETCH_COMPLETED", data, context);
@@ -92,9 +91,8 @@ test("a real source failure retains fallback output and the request's operation 
     const url = await listen(source);
     try {
       const context = createRootContext();
-      const sources = await loadEventSources(path.join(repositoryRoot, "config/typescript-event-sources.json"));
       const eventFile = path.join(root, "fallback-events.jsonl");
-      const bus = new PipelineEventBus(sources.summarizer, eventFile);
+      const bus = new PipelineEventBus(SUMMARIZER_EVENT_SOURCE, eventFile);
       const inputText = "The original direct input remains available after source failure.";
       const result = await orchestratePipeline({
         url, input_text: inputText, system_prompt: "Return the structured summary.",
@@ -124,6 +122,7 @@ test("the actual CLI saves its complete returned summary and keeps diagnostics c
     const events = readPipelineEvents(path.join(directory, "pipeline-events.jsonl"));
     const output = events.find(event => event.type === "OUTPUT_STRUCTURED");
     assert.ok(output);
+    assert.equal(output.source, "/services/summarizer");
     assert.deepEqual(output.data, result);
     assert.equal(result.input_text, inputText);
     const reply = readJson("tests/fixtures/typescript-metadata/summarizer-model-response.json");
@@ -156,8 +155,7 @@ test("concurrent HTTP requests retain separate histories even when their incomin
     const reportFile = path.join(root, "http-summary.md");
     const previousSummary = process.env.GITHUB_STEP_SUMMARY;
     process.env.GITHUB_STEP_SUMMARY = reportFile;
-    const sources = await loadEventSources(path.join(repositoryRoot, "config/typescript-event-sources.json"));
-    const app = createHttpServer({ port: 0, runtime, eventSource: sources.summarizer, eventFilePath: eventFile });
+    const app = createHttpServer({ port: 0, runtime, eventSource: SUMMARIZER_EVENT_SOURCE, eventFilePath: eventFile });
     const baseUrl = await listen(app.server);
     try {
       const incoming = createRootContext({ traceState: "test=recorded" });
@@ -244,8 +242,7 @@ test("concurrent HTTP requests retain separate histories even when their incomin
 test("a recorded model validation failure does not save a successful output", { timeout: 120000 }, () =>
   withConfig(root => withRecordedModel(root, async ({ runtime }) => {
     const eventFile = path.join(root, "failed-events.jsonl");
-    const sources = await loadEventSources(path.join(repositoryRoot, "config/typescript-event-sources.json"));
-    const app = createHttpServer({ port: 0, runtime, eventSource: sources.summarizer, eventFilePath: eventFile });
+    const app = createHttpServer({ port: 0, runtime, eventSource: SUMMARIZER_EVENT_SOURCE, eventFilePath: eventFile });
     const baseUrl = await listen(app.server);
     try {
       const response = await fetch(`${baseUrl}/api/summarize`, {
@@ -277,8 +274,7 @@ test("a recorded model validation failure does not save a successful output", { 
 
 test("source callbacks retain fetch context without propagating it to a source", { timeout: 120000 }, () =>
   withConfig(async root => {
-    const sources = await loadEventSources(path.join(repositoryRoot, "config/typescript-event-sources.json"));
-    const bus = new PipelineEventBus(sources.summarizer, path.join(root, "source-events.jsonl"));
+    const bus = new PipelineEventBus(SUMMARIZER_EVENT_SOURCE, path.join(root, "source-events.jsonl"));
     const context = createRootContext();
     let sourceHeaders: http.IncomingHttpHeaders | undefined;
     const server = http.createServer((request, response) => {

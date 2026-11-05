@@ -14,7 +14,7 @@ export async function recordedMachineTask() {
     await mkdir(join(root, "config"));
     await mkdir(join(root, "logs"));
     for (const name of [
-      "hono-server.json", "typescript-event-sources.json", "host-fingerprints.json",
+      "hono-server.json", "host-fingerprints.json",
       "host-probes.json", "idhazh.json", "ledgers.json",
     ]) await copyFile(new URL(`../../../config/${name}`, import.meta.url), join(root, "config", name));
     const authored = await loadHonoSettings(root);

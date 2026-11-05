@@ -125,8 +125,11 @@ without adding names to HTTP responses or progress logs.
 Standalone fetch, parse and persistence use the same structured publisher
 as `/plan`. Progress uses a shared event envelope with a fresh occurrence ID
 and application fields under `data`; reading a saved event preserves its
-original occurrence and operation. The configured planner source is loaded
-explicitly from `config/typescript-event-sources.json`.
+original occurrence and operation. The planner selects its local protocol
+identity `/services/feed-ingest-plan` through `PlanInputs.event_source`;
+all mounted routes and the upload inventory use that same declaration.
+The [identity contract](../contracts/identity.md#4-native-typescript-event-and-operation-metadata)
+defines producer selection and validation.
 Invalid controls that
 cannot resolve a document do not log caller-supplied addresses.
 The [runner](feed-plan-runner.md#first-sight-and-retained-output) owns event

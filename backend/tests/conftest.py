@@ -50,6 +50,12 @@ def isolate_committed_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
 
 
+@pytest.fixture(autouse=True)
+def isolate_run_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the hosting CI attempt out of tests unless they select another."""
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+
+
 @pytest.fixture
 def article_ok() -> Article:
     return Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))

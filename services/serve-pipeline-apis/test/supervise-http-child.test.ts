@@ -42,12 +42,7 @@ async function withHost(
       startup_delay_ms: 0, close_delay_ms: 0, max_request_body_bytes: 1024,
       ...overrides,
     });
-    await mkdir(join(root, "config"));
     await mkdir(join(root, startup.directory));
-    await Bun.write(join(root, "config", "typescript-event-sources.json"), JSON.stringify({
-      typescript_api: "/fixtures/shared-host", planner: "/fixtures/planner",
-      summarizer: "/fixtures/summarizer", workflow: "/fixtures/workflow",
-    }));
     await exercise({ root, startup });
   } finally { await rm(root, { recursive: true, force: true }); }
 }
@@ -156,7 +151,7 @@ test("shared hosting awaits cancelled work, application close and the final diag
     });
     expect(events.some(event => event.data.code === "HOST_CLOSED")).toBe(true);
     expect(events.some(event => event.data.phase === "ready")).toBe(true);
-    expect(events.every(event => event.source === "/fixtures/shared-host")).toBe(true);
+    expect(events.every(event => event.source === "/services/typescript-api")).toBe(true);
     for (const secret of ["PRIVATE_REQUEST_BODY", "PRIVATE_HEADER", "PRIVATE_OPERATION_FAILURE"]) {
       expect(log).not.toContain(secret);
     }
