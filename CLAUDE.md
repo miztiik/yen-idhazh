@@ -288,7 +288,7 @@ Does not apply to backend-only, tooling, docs, or schema-only changes.
 Goal: Test functional software logic, boundaries, and build integrity. Do NOT test data quality, dataset contents, or snapshot accidental historical quirks.
 
 ### 1. In-Memory Payloads Over Disk Fixtures
-- NEVER create a new file in `tests/fixtures/` to reproduce a bug or patch an edge case. 
+- NEVER create a new file in `tests/fixtures/` to reproduce a bug or patch an edge case.
 - Reproduce bugs in-memory using the smallest possible literal input (e.g., a dictionary with only the offending key, not a 200-line recorded payload).
 - Existing fixtures in `tests/fixtures/` are strictly for schema/contract verification. If a test can run using an in-memory literal or `io.StringIO`, using a disk fixture is a policy violation.
 
@@ -306,7 +306,7 @@ Goal: Test functional software logic, boundaries, and build integrity. Do NOT te
 - If upstream data is malformed, test your *sanitizer/validator logic* at the intake boundary. Do not write an integration test that drags bad data through the entire engine.
 
 ### 5. Browser & E2E are Strictly Bounded
-- Exactly ONE happy-path journey verifies layout and pipeline-to-browser integration. 
+- Exactly ONE happy-path journey verifies layout and pipeline-to-browser integration.
 - Never multiply browser cases across themes, viewports, or data states. Boundary values and error branches belong strictly in Unit or Contract tests.
 
 ### Tier Definitions
