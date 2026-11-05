@@ -201,7 +201,9 @@ recorded inputs. Real Linux child tests verify fingerprint writes, explicit
 profile stop, shutdown-only profile evidence, worker cleanup and released
 listeners while feed source and feed configuration remain physically absent.
 The machine entry, parent adapter and actual summary helper also pass dependency
-inspection. Inspection supplements execution; it does not replace it.
+inspection. Those builds provide import metadata only; process checks execute
+source entries so worker URLs retain their module-relative paths.
+Inspection supplements execution; it does not replace it.
 
 Explicit groups keep task resources visible without per-API processes.
 Hono and Zod remain existing tool dependencies. Host-probes adds the shared
