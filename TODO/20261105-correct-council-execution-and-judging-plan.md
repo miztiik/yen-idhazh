@@ -137,8 +137,8 @@ Table I - Delivery rows
 | I2 | 2 | Run independent prepared plugin work through the council | - | A | DONE | symmetrical-potato | #1927 | Council plugin execution |
 | I3 | 3 | Correct emitted evidence and judge statistics | 1, 2 | B | DONE | friendly-system | #1929 | Judge evidence correction |
 | I4 | 4 | Fit only adjustable comparisons and protect published decisions | 3 | C | DONE | curly-waffle | #1933 | Similarity calibration |
-| I5 | 5 | Deliver a frozen offline judge evaluator | 4 | D | DONE | automatic-succotash | - | Offline judge evaluation |
-| I6 | 6 | Establish the independently labelled current-judge baseline | 5 | M | PENDING | - | - | - |
+| I5 | 5 | Deliver a frozen offline judge evaluator | 4 | D | DONE | automatic-succotash | #1936 | Offline judge evaluation |
+| I6 | 6 | Establish the independently labelled current-judge baseline | 5 | M | BLOCKED | - | - | - |
 
 ## 2. Article identity
 
@@ -475,6 +475,7 @@ Table S - Row 5 rejected alternatives
 ### Row #6 - Establish the independently labelled current-judge baseline
 
 - **Scope:** Freeze a real bounded confirmation set, obtain G2's independent annotations, capture the unchanged current judge and preserve its first correctly qualified quality reading.
+- **Blocker:** Awaiting an independent blinded annotation resource and confirmation of an operator-controlled model process. Neither prerequisite has been established for this measurement; no real baseline has been captured or scored.
 - **Level:** 3 - measured evidence under row 5's declared private contracts; any model/prompt/adoption change escalates under A7.
 - **Files touched:**
   - `docs/reference/benchmarks/content-similarity-judge-current-set.json` (new real evidence)
