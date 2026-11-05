@@ -575,9 +575,9 @@ def over_the_ceiling(downloaded: Mapping[str, int], *, ceiling_mb: int, shard: i
     return (
         f"shard {shard}: its tasks downloaded {total / BYTES_PER_MB:.1f} MB ({total:,} bytes) "
         f"of file content, over max_downloaded_mb {ceiling_mb} in "
-        f"config/idhazh_gardener.json. The heaviest: {named}. A step that chooses its "
-        "periods by the budget never passes it, so a task downloaded without choosing by "
-        "it, which is a code defect. Its tasks ran and its record still lands, and the "
+        f"config/gardener/config/idhazh_gardener.json. The heaviest: {named}. A step that "
+        "chooses its periods by the budget never passes it, so a task downloaded without "
+        "choosing by it, which is a code defect. Its tasks ran and its record still lands, and the "
         "shard exits 1"
     )
 

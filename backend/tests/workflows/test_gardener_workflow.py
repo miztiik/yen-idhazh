@@ -96,7 +96,7 @@ def _sparse(checkout: dict[str, object]) -> list[str]:
 def a_config_with_shards(root: Path, shards: int) -> Path:
     """Three named declarations, with the gardener's `shards` set to this."""
     config_dir = root / "config"
-    (config_dir / "gardener").mkdir(parents=True, exist_ok=True)
+    (config_dir / "gardener" / "config").mkdir(parents=True, exist_ok=True)
     for filename in TASK_FILES:
         (config_dir / "gardener" / filename).write_text(
             read_text(CONFIG_DIR / "gardener" / filename), encoding="ascii", newline="\n"
@@ -105,10 +105,10 @@ def a_config_with_shards(root: Path, shards: int) -> Path:
         (config_dir / filename).write_text(
             read_text(CONFIG_DIR / filename), encoding="ascii", newline="\n"
         )
-    knobs = json.loads(read_text(CONFIG_DIR / "idhazh_gardener.json"))
+    knobs = json.loads(read_text(CONFIG_DIR / "gardener/config/idhazh_gardener.json"))
     knobs["shards"] = shards
     knobs["task_names"] = [Path(filename).stem for filename in TASK_FILES]
-    (config_dir / "idhazh_gardener.json").write_text(
+    (config_dir / "gardener/config/idhazh_gardener.json").write_text(
         json.dumps(knobs), encoding="ascii", newline="\n"
     )
     return config_dir

@@ -1,15 +1,15 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-11-05
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
-`config/idhazh_gardener.json`, and one declaration per task in
+`config/gardener/config/idhazh_gardener.json`, and one declaration per task in
 `config/gardener/<task>.json`. How the gardener runs is
 [../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md);
 what a knob is at all is [../config.md](../config.md).
 
-## `config/idhazh_gardener.json`
+## `config/gardener/config/idhazh_gardener.json`
 
 | Knob | Committed | What it decides |
 | --- | --- | --- |
@@ -29,7 +29,7 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/traces.json` declares the task
-`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read.
+`traces`. `task_names` in `config/gardener/config/idhazh_gardener.json` names the files to read.
 Thirty-three tasks ship today: five `retention`, two `collection`, twenty-five
 `compaction` - twenty-three for production ledgers and two for trial roots -
 and one `corpus-squash` history task.

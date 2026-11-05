@@ -250,7 +250,7 @@ into an active family unchanged. See [judge status](../publishing/llm-council.md
   - Its row in `REGISTRY` in `backend/idhazh/ledger/staging.py`: what writes it, and which `digest.yml` commit job stages its files.
 - **Retention and gardener.**
   - A compaction declaration, `config/gardener/compact-<folder>.json`, where `<folder>` is its prefix with each `/` written `-`. `compaction_task` in `backend/idhazh/config.py` builds that name, and `test_a_compaction_and_a_door_ledger_come_together` refuses a door ledger without one.
-  - That task's name in `task_names` of `config/idhazh_gardener.json`. The gardener loads only the declarations named there.
+  - That task's name in `task_names` of `config/gardener/config/idhazh_gardener.json`. The gardener loads only the declarations named there.
   - The maintainer-approved retention in that declaration: live packing (`dry_run` false, `compact_after_days` 1), `daily_keep_days` 45, `monthly_keep_days` 93, a `monthly_window` of `forever`, and yearly expiry after 36 calendar months (`yearly_keep_months` 36, `yearly_prune_enable` true). `test_every_ledger_uses_the_approved_live_retention_chain` holds every compaction to it.
   - Its entry in `backend/tests/contracts/test_gardener_config.py` - the ledger in `RETENTION_LEDGERS`, or its task in `MOVED_LEDGER_TASKS` - which `test_every_ledger_uses_the_approved_live_retention_chain` reads, so a compaction missing from both is refused. A switch ships in dry run, and the commit that turns one live names the maintainer's decision in its message; no test holds that list (maintainer ruling, 2026-10-11).
 

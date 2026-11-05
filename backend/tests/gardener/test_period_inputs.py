@@ -50,7 +50,7 @@ def test_every_compaction_names_its_ledger_s_marks_and_nothing_else(tmp_path: Pa
         if isinstance(policy, CompactionPolicy) and not name.startswith("compact-trial-")
     }
 
-    assert compactions, "config/idhazh_gardener.json names no compaction"
+    assert compactions, "config/gardener/config/idhazh_gardener.json names no compaction"
     for name, policy in compactions.items():
         compact = f"state/compact/{'/'.join(ledger.door_folders(policy.ledger))}"
         assert scheduled_range(name, policy, today) is None, name

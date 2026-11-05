@@ -45,7 +45,7 @@ def a_garden(tmp_path: Path, **declarations: dict[str, Any] | None) -> Path:
     app = json.loads(app_path.read_text(encoding="utf-8"))
     app["collect"]["published_window_days"] = -1
     app_path.write_text(json.dumps(app), encoding="ascii")
-    gardener_config = config_dir / "idhazh_gardener.json"
+    gardener_config = config_dir / "gardener/config/idhazh_gardener.json"
     settings = json.loads(gardener_config.read_text(encoding="utf-8"))
     names = set(settings["task_names"])
     for name, declared in declarations.items():

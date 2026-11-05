@@ -64,7 +64,7 @@ Knobs, by the surface they tune:
  ([evaluation.md](evaluation.md#comparable-domain-samples)).
 - **Logging** - the level, plus one flag per kind of record the pipeline builds about itself ([telemetry.md](telemetry.md)). The two are unrelated: the flags decide which records exist, the level decides how loud the logger that prints them is.
 - **Observability** - which instruments run, how often the scorer runs, and how long a ledger stays at full grain ([config/retention-ages.md](config/retention-ages.md)).
-- **Gardener** - how many shards a wake splits into and how many times a shard may push, in `config/idhazh_gardener.json`, and one declaration per task under `config/gardener/` ([config/idhazh-gardener.md](config/idhazh-gardener.md)).
+- **Gardener** - how many shards a wake splits into and how many times a shard may push, in `config/gardener/config/idhazh_gardener.json`, and one declaration per task under `config/gardener/` ([config/idhazh-gardener.md](config/idhazh-gardener.md)).
 - **Console** - the telemetry viewport's default window, today anchor, pan step,
  zoom factor, minimum denominator for rate bars, and chart height ([config/appearance.md](config/appearance.md)).
 

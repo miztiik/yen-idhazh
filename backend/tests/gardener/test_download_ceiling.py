@@ -92,8 +92,8 @@ def a_garden_downloading(
     )
     shard = a_partial_clone(tmp_path, origin, "config")
     config_dir = a_config(shard, GARDENER_FIXTURES / "runner")
-    knobs = json.loads((config_dir / "idhazh_gardener.json").read_text(encoding="utf-8"))
-    (config_dir / "idhazh_gardener.json").write_text(
+    knobs = json.loads((config_dir / "gardener/config/idhazh_gardener.json").read_text(encoding="utf-8"))
+    (config_dir / "gardener/config/idhazh_gardener.json").write_text(
         json.dumps(knobs | {"max_downloaded_mb": CEILING_MB}), encoding="ascii"
     )
     return origin, shard, config.load_gardener(config_dir)
@@ -144,7 +144,7 @@ def test_a_shard_at_under_and_over_its_ceiling(
         return
     (line,) = over
     assert line.startswith(f"shard 0: its tasks downloaded 1.0 MB ({total:,} bytes)")
-    assert f"over max_downloaded_mb {CEILING_MB} in config/idhazh_gardener.json" in line
+    assert f"over max_downloaded_mb {CEILING_MB} in config/gardener/config/idhazh_gardener.json" in line
     assert (
         "The heaviest: state/compact/gardener 1.0 MB, state/old-days 0.0 MB, "
         "state/rehearsal 0.0 MB." in line
@@ -294,8 +294,8 @@ def packed_by_a_shard(
     committed = json.loads(read_text(CONFIG_DIR / "gardener" / f"{PACKING}.json"))
     declaration.write_text(json.dumps(committed | {"dry_run": False}), encoding="ascii")
     config_dir = a_config(shard, declaration)
-    knobs = json.loads((config_dir / "idhazh_gardener.json").read_text(encoding="utf-8"))
-    (config_dir / "idhazh_gardener.json").write_text(
+    knobs = json.loads((config_dir / "gardener/config/idhazh_gardener.json").read_text(encoding="utf-8"))
+    (config_dir / "gardener/config/idhazh_gardener.json").write_text(
         json.dumps(knobs | {"max_downloaded_mb": CEILING_MB}), encoding="ascii"
     )
     outcome = gardener_publish.run_and_land(
