@@ -358,14 +358,18 @@ environment's installed packages: a Windows virtual-environment redirector
 has a different PID. The runtime ownership check stays strict.
 The isolated CI job prepares the host's locked dependencies and checks the
 new Bun scripts with that package's compiler; it still installs no model.
-Its sparse source check first runs shared hosting with native services absent,
-then adds only named machine inputs and executes the real Linux child.
+Its sparse source check includes the shared package's inherited common-contracts
+compiler settings, first runs shared hosting with native services absent, then
+adds only named machine inputs and executes the real Linux child.
 Feed source and feed configuration stay absent through both stages; dependency
 metadata also checks the actual summary helper. Ordinary evaluator preparation
 installs neither feed-ingest-plan nor data-delivery.
-The bounded workflow inventory change also selects
+Workflow changes also select
+`backend/tests/workflows/test_ci_selection.py`,
 `backend/tests/workflows/test_workflow_inputs.py` and
 `backend/tests/workflows/test_triggers.py`. Keep full suites in CI.
+Input checks read actual Actions expressions, including implicit job and step
+conditions, not filenames or quoted expression literals.
 The [manual procedure](run-hhem-evaluation-api.md) owns registration and real
 hosted evidence; offline results do not close that check.
 

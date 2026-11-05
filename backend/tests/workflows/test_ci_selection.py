@@ -144,7 +144,7 @@ def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs(
     assert not prepare.get("continue-on-error")
     assert _script(prepare, "native API dependency preparation").splitlines() == [
         f"bun install --frozen-lockfile --cwd services/{name}"
-        for name in ("feed-ingest-plan", "host-fingerprints", "host-probes", "serve-pipeline-apis")
+        for name in ("serve-pipeline-apis", "host-fingerprints", "host-probes", "feed-ingest-plan")
     ]
     planner = _step(workflow, "gates", "name", "TypeScript feed planner and native audit evidence")
     assert _script(planner, "ordinary planner gates").splitlines() == [

@@ -197,6 +197,7 @@ jobs:
           sparse-checkout: |
             /packages/common-contracts/package.json
             /packages/common-contracts/bun.lock
+            /packages/common-contracts/tsconfig.json
             /packages/common-contracts/src/
             /services/serve-pipeline-apis/package.json
             /services/serve-pipeline-apis/bun.lock

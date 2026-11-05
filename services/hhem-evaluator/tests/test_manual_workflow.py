@@ -111,6 +111,7 @@ def test_native_ci_retains_resources_and_prepares_the_actual_shared_api() -> Non
     assert "bun install --frozen-lockfile --cwd services/feed-ingest-plan" not in selected
     assert "bun install --frozen-lockfile --cwd packages/data-delivery" not in selected
     assert "path: backend/var/checks/api-host-isolation" in selected
+    assert "/packages/common-contracts/tsconfig.json" in selected
     assert "test ! -e services/feed-ingest-plan" in selected
     assert "test ! -e config/feed-ingest-plan-service.json" in selected
     assert (

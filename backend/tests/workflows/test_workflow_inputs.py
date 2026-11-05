@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
-import re
 from typing import Final
 
 import pytest
 
-from ._harness import _declared_dispatch_inputs, _load_workflows, _strings
+from ._harness import (
+    _declared_dispatch_inputs,
+    _expression,
+    _expression_references,
+    _load_workflows,
+    _mapping,
+    _strings,
+)
 
 pytestmark = pytest.mark.workflow
-
-#: `${{ inputs.x }}`, `${{ fromJSON(inputs.x) }}` and the older
-#: `${{ github.event.inputs.x }}` all resolve against the same declared form, so
-#: one pattern covers the three spellings.
-INPUT_REFERENCE: Final = re.compile(r"(?:github\.event\.)?inputs\.([a-z0-9_]+)")
 
 #: The `on:` block is where the form is declared, not where it is read, and a
 #: `workflow_run` trigger names other workflows. Reading it back here would let
@@ -24,9 +25,24 @@ DECLARATION_KEY: Final = "on"
 
 def _referenced_inputs(workflow: dict[str, object]) -> set[str]:
     body = {key: value for key, value in workflow.items() if key != DECLARATION_KEY}
-    return {
-        name for text in _strings(body) for name in INPUT_REFERENCE.findall(text)
-    }
+    expressions = list(_strings(body))
+    for value in _mapping(body.get("jobs", {}), "workflow jobs").values():
+        job = _mapping(value, "workflow job")
+        steps = job.get("steps", [])
+        assert isinstance(steps, list), "job steps must contain a YAML sequence"
+        declarations = [job] + [_mapping(step, "workflow step") for step in steps]
+        for declaration in declarations:
+            condition = declaration.get("if")
+            if isinstance(condition, str) and "${{" not in condition:
+                expressions.append(_expression(condition))
+    names: set[str] = set()
+    for text in expressions:
+        for reference in _expression_references(text, ("inputs", "github")):
+            if len(reference) > 1 and reference[0] == "inputs":
+                names.add(reference[1])
+            elif len(reference) > 3 and reference[:3] == ("github", "event", "inputs"):
+                names.add(reference[3])
+    return names
 
 
 def test_input_check_helpers_distinguish_references_from_declarations() -> None:
@@ -53,6 +69,32 @@ def test_input_check_helpers_distinguish_references_from_declarations() -> None:
     assert declared == {"declared"}
     assert referenced == {"declared", "missing"}
     assert referenced - declared == {"missing"}
+
+
+def test_input_references_exclude_filenames_and_quoted_expression_literals() -> None:
+    workflow: dict[str, object] = {
+        "jobs": {
+            "check": {
+                "steps": [{
+                    "run": (
+                        "cat tests/fixtures/host-probes/process-inputs.json inputs.json\n"
+                        "echo ${{ format('inputs.literal', inputs['selected-name']) }} "
+                        "${{ fromJSON(github.event.inputs.legacy) }}"
+                    ),
+                }],
+            },
+        },
+    }
+    assert _referenced_inputs(workflow) == {"selected-name", "legacy"}
+
+
+@pytest.mark.parametrize("conditional_scope", ["job", "step"])
+def test_input_references_include_implicit_conditional_expressions(conditional_scope: str) -> None:
+    condition = "inputs.enabled == true && github.event.inputs.mode != 'inputs.literal'"
+    step: dict[str, object] = {"run": "echo inputs.not_a_reference"}
+    job: dict[str, object] = {"steps": [step]}
+    (job if conditional_scope == "job" else step)["if"] = condition
+    assert _referenced_inputs({"jobs": {"check": job}}) == {"enabled", "mode"}
 
 
 def test_every_input_an_expression_reads_is_declared_by_that_workflow() -> None:
