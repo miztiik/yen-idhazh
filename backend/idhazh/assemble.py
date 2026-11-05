@@ -622,7 +622,9 @@ class _DayScoring:
 def _pair_terms(left: str, right: str, day: _DayScoring) -> _Terms | None:
     """Score two items as one story, or refuse the pair outright.
 
-    Four steps, and the order is the rule. **A pair that crosses a published day
+    Five steps, and the order is the rule. **Two placements of the same canonical
+    article URL are not a pair**, regardless of their ids, desks or source labels.
+    **A pair that crosses a published day
     is refused unless it is inside the window**, which is what bounds how far
     back the pass can reach. **A clash of numbers refuses**, and nothing below it
     can overturn that. **Two matching reduced headlines join**
@@ -642,6 +644,8 @@ def _pair_terms(left: str, right: str, day: _DayScoring) -> _Terms | None:
     thought of a pair the headline joined - which is the measurement that put
     the headline rule above the cosine in the first place.
     """
+    if day.by_id[left].source_url == day.by_id[right].source_url:
+        return None
     if (left in day.earlier or right in day.earlier) and not day.inside_the_window(left, right):
         return None
     key, other = day.keys.get(left), day.keys.get(right)
@@ -844,10 +848,10 @@ def cross_source_pairs(
 ) -> Iterator[ScoredPair]:
     """Every pair two different mastheads carried, with what it scored.
 
-    The same four steps `_pair_terms` applies, reported rather than acted on. A
-    pair that pass refuses - a clash of numbers, or a day boundary the window
-    cannot reach across - is not yielded, so a caller sees exactly the pairs the
-    grouping pass would have weighed.
+    The same five steps `_pair_terms` applies, reported rather than acted on. A
+    pair that pass refuses - one canonical article URL, a clash of numbers, or
+    a day boundary the window cannot reach across - is not yielded, so a caller
+    sees exactly the pairs the grouping pass would have weighed.
 
     Across mastheads for the reason the grouping pass is: one newsroom's second
     piece is a different problem with a different control, and it is where the
@@ -898,8 +902,12 @@ def collapse_same_story(
     view draws instead, and every item in a group carries the count of other
     sources so the sentence on it is true whichever one is on screen.
 
-    **Three steps decide a pair, and the order is the rule.** A clash of numbers
-    inside two otherwise identical headlines refuses the pair outright. Two
+    **Only distinct canonical article URLs are eligible**, including across days.
+    Repeated placements keep their ids and published order, but cannot corroborate
+    each other or join the same all-pairs group.
+
+    **Three steps score an eligible pair, and the order is the rule.** A clash of
+    numbers inside two otherwise identical headlines refuses the pair outright. Two
     headlines that reduce identically are one story. Everything else is scored
     by `same_story`, a weighted sum of terms that each run 0 to 1 and whose
     weights sum to 1.0, against `same_story.floor_min`. Either way **every pair
