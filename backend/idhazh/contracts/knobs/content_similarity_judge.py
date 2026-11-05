@@ -31,3 +31,12 @@ class ContentSimilarityJudgeConfig(Model):
             "without adding sampling noise; the summarizer's temperature stays separate."
         ),
     )
+
+
+class ContentSimilarityEvaluationConfig(Model):
+    """The explicit offline input ceiling and event-group interval settings."""
+
+    max_cases: int = Field(default=200, strict=True, gt=0)
+    confidence_level: float = Field(default=0.95, gt=0, lt=1, allow_inf_nan=False)
+    resamples: int = Field(default=2000, strict=True, gt=0)
+    resample_seed: int = Field(default=0, strict=True)

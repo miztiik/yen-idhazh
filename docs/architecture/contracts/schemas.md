@@ -72,6 +72,36 @@ readable without rewriting their bytes, and older council records without
 `fault` still read with no recorded fault. Unknown preparation or a missing
 shard report never becomes successful no work.
 
+## Private judge evaluation documents
+
+`backend/idhazh/contracts/content_similarity_judge_evaluation.py` declares
+`EvaluationSet`, `EvaluationLabels`, `EvaluationRun` and `EvaluationReport`,
+initially versioned `2026-11-05`. They are private documents, not production
+ledgers or frontend payloads. Each has one named, minimal schema example;
+empty examples are not annotation evidence or recordings. Nested selection
+models validate the project-authored pair manifest without adding a fifth
+retained document family.
+
+The source hash covers exact snapshot bytes. The corpus hash covers canonical
+source declarations and complete frozen cases. Input hashes cover both ordered,
+sanitized production user turns; case hashes additionally bind the ordered
+canonical article identities and explicit parent/mutation identity. Consumers
+recompute these identities and the named sanitizer implementation hash.
+Labels bind the canonical set and exact rubric; reports bind the canonical set,
+labels and run, including their recorded versions. Omitted labels are identified
+by the canonical JSON null hash and an explicit `missing_labels` blocker.
+A stable capture filename hashes immutable run-header fields; the complete run
+hash also covers its readings and final state.
+
+Readers retain versions and evidence as recorded. Compatible shape-preserving
+documents continue to validate; a breaking shape change requires its read-side
+migration in the same change. Unknown instrument provenance is never upgraded
+to the current policy. Missing or invalid labels and unfinished captures cannot
+acquire measured metrics. Exact request/response strings are private data and
+are never replayed into a network request, trusted instruction or output path.
+The [operator procedure](../../how-to/evaluate-content-similarity-judge.md)
+owns freezing, blinded review, explicit capture and fully offline scoring.
+
 ## Recursive ledger types
 
 Source classification uses open string kind identifiers and positive integer
