@@ -299,9 +299,24 @@ checks owned-child readiness through `/health`, and closes and reaps that child
 after success, failure or cancellation. Cancellation known before finalization
 skips new Git delivery.
 
-`safe_persist_http_completed` records the run number, attempt, confirmed status,
-commit and file count in the workflow log. The API and client use the existing
-`writeJsonLine` helper to write one JSON object per stderr line.
+After native result validation, `safe_persist_http_completed` records the
+request's run number, attempt, native status, nullable commit and file count,
+plus its complete receiving-operation `context`. The handler emits the same
+context it allocated from the incoming trace headers; it does not allocate
+another operation for logging or use the server's supervision operation.
+The [shared identity contract](../contracts/identity.md#4-native-typescript-event-and-operation-metadata)
+defines that context and its carrier.
+
+[`SafePersistHttpDiagnosticSchema`](../../../services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts)
+owns this strict current-only relay shape and derives request/result field
+validators from their native authorities. Paths, process IDs and arbitrary
+fields are not diagnostic fields. The
+[server writer](../../reference/serve-pipeline-apis.md#diagnostics-and-current-task-evidence)
+retains these facts and context in a separate completion event, not a lifecycle
+payload. The native HTTP result and saved `delivery-result.json`, including
+their exact paths, remain unchanged and remain the delivery authority.
+The API and client use the existing `writeJsonLine` helper to write one JSON
+object per stderr line.
 `safe_persist_http_failed` and
 `safe_persist_http_client_failed` identify server and transport failures without
 article bodies. An unconfirmed response or failed child shutdown records a failed

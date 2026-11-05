@@ -5,13 +5,17 @@ import { join, relative } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import type { z } from "zod";
 import {
-  createCandidateId, createCloudEvent, createRootContext, FEED_INGEST_EVENT_VERSION,
+  createCandidateId, createChildContext, createCloudEvent, createRootContext, FEED_INGEST_EVENT_VERSION,
   ArticleFailureDiagnosticSchema, FeedIngestEventDataSchema, HarvestDiagnosticsSchema,
-  PlannerRunResponseSchema, readCloudEvent, readFeedIngestEvent,
+  PlannerRunResponseSchema, readCloudEvent, readFeedIngestEvent, writeTraceContext,
 } from "@idhazh/common-contracts";
 import { ServerEventDataSchema, ServerEvidenceSchema, serverLogFilename } from "../src/server-evidence";
-import type { ServerRun } from "../src/server-evidence";
+import type { ApiGroup, ServerRun } from "../src/server-evidence";
+import { SafePersistHttpDiagnosticSchema } from "@idhazh/feed-ingest-plan/delivery-diagnostic";
+import { MetadataDeliveryResultSchema } from "@idhazh/feed-ingest-plan/delivery-contracts";
+import { createDeliveryCompletionEvent, DeliveryCompletionDiagnosticSchema } from "../src/delivery-completion-diagnostic";
 import { recordedPlannerProcess } from "../../feed-ingest-plan/test/planner-process-recordings";
 import { hostWriter } from "../../feed-ingest-plan/scripts/feed-ingest-plan-metadata";
 import { FingerprintResponseSchema } from "@idhazh/host-fingerprints/response";
@@ -24,11 +28,12 @@ import { readReportFailureEvidence } from "../../feed-ingest-plan/scripts/feed-i
 import { renderWorkflowPlanMarkdown } from "../../feed-ingest-plan/scripts/feed-ingest-plan-report";
 import { prepareProgressEvent } from "../../feed-ingest-plan/src/logging/structured-logger";
 
-async function writeEvents(directory: string, run: ServerRun, moduleLine?: string, moduleLines?: string[]) {
+async function writeEvents(directory: string, run: ServerRun, moduleLine?: string, moduleLines?: string[], group?: ApiGroup) {
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL("./write-server-events.ts", import.meta.url))], {
     stdin: new Blob([JSON.stringify({ directory, run, source: "/fixtures/typescript-api",
       ...(moduleLine === undefined ? {} : { module_line: moduleLine }),
-      ...(moduleLines === undefined ? {} : { module_lines: moduleLines, group: "planning" }) })]),
+      ...(moduleLines === undefined ? {} : { module_lines: moduleLines }),
+      group: group ?? (moduleLines === undefined ? "machine" : "planning") })]),
     stdout: "pipe", stderr: "pipe",
   });
   const [output, error, code] = await Promise.all([
@@ -37,6 +42,105 @@ async function writeEvents(directory: string, run: ServerRun, moduleLine?: strin
   expect(code, error).toBe(0);
   return { result: JSON.parse(output), error, pid: child.pid };
 }
+
+test("delivery completions retain native facts and full request context instead of supervision", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "api-delivery-events-"));
+  const run = { run_id: "700", attempt: 3, started_at: "2026-11-05T00:00:00Z", context: createRootContext() };
+  const linked = createRootContext();
+  const context = createChildContext(createRootContext({ traceState: "diagnostics=retained" }), {
+    links: [{ traceId: linked.traceId, spanId: linked.spanId }],
+  });
+  const diagnostic = {
+    event: "safe_persist_http_completed", run_number: "701", attempt: 4,
+    status: "landed", commit: "a".repeat(40), files: 2, context,
+  };
+  try {
+    const result = await writeEvents(directory, run, JSON.stringify(diagnostic), undefined, "delivery");
+    const events = result.error.trim().split("\n").map(line => JSON.parse(line));
+    const completion = events.find(event => event.type === diagnostic.event);
+    expect(completion.data).toEqual({
+      server_name: "hono-server", group: "delivery", run_id: diagnostic.run_number, attempt: diagnostic.attempt,
+      phase: "operation_completed", status: diagnostic.status, commit: diagnostic.commit, files: diagnostic.files,
+      context, severity: "info", duration_ms: null, exit_code: null, code: null,
+    });
+    expect(completion).toMatchObject(writeTraceContext(context));
+    expect(completion.source).toBe("/fixtures/typescript-api");
+    const lifecycle = events.filter(event => event.type === "hono.server")
+      .map(event => readCloudEvent(event, value => ServerEventDataSchema.parse(value)));
+    expect(lifecycle.map(event => event.data.phase)).toEqual(["starting", "ready", "stopped"]);
+    expect(lifecycle.every(event => event.traceparent === lifecycle[0]!.traceparent)).toBe(true);
+    expect(lifecycle[0]!.traceparent).not.toBe(completion.traceparent);
+    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(result.error);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("completion and lifecycle shapes remain strict while native statuses and ancillary fields retain their meaning", () => {
+  const paths = ["raw/generated.parquet"];
+  const nativeResults = [
+    { status: "landed", commit: "a".repeat(40), files: 1, paths },
+    { status: "already-on-main", commit: "b".repeat(64), files: 1, paths },
+    { status: "no-changes", commit: null, files: 0, paths: [] },
+    { status: "failed", commit: null, files: 1, paths },
+  ].map(result => MetadataDeliveryResultSchema.parse(result));
+  for (const result of nativeResults) {
+    const diagnostic = SafePersistHttpDiagnosticSchema.parse({
+      event: "safe_persist_http_completed", run_number: "701", attempt: 4,
+      status: result.status, commit: result.commit, files: result.files, context: createRootContext(),
+    });
+    const event = createDeliveryCompletionEvent({ source: "/fixtures/typescript-api", diagnostic });
+    expect(readCloudEvent(event, value => DeliveryCompletionDiagnosticSchema.parse(value))).toEqual(event);
+    expect(event.data).toMatchObject({ status: result.status, commit: result.commit, files: result.files,
+      context: diagnostic.context, severity: "info", duration_ms: null, exit_code: null, code: null });
+    expect(ServerEventDataSchema.safeParse(event.data).success).toBe(false);
+    for (const invalid of [
+      { phase: "ready" }, { group: "planning" }, { run_id: "local-run" }, { context: undefined },
+      { context: null }, { paths }, { pid: process.pid }, { status: "completed" }, { commit: "A".repeat(40) },
+      { files: -1 }, { severity: "debug" }, { duration_ms: -1 }, { duration_ms: Infinity },
+      { exit_code: 0.5 }, { code: "unsafe text" },
+    ]) expect(DeliveryCompletionDiagnosticSchema.safeParse({ ...event.data, ...invalid }).success).toBe(false);
+    const ancillary = createDeliveryCompletionEvent({
+      source: event.source, diagnostic, severity: "warning", duration_ms: 0, exit_code: -1, code: "RECORDED_FAILURE",
+    });
+    expect(ancillary.data).toMatchObject({ severity: "warning", duration_ms: 0, exit_code: -1, code: "RECORDED_FAILURE" });
+    const lifecycle = {
+      server_name: "hono-server", group: "delivery", run_id: "local-run", attempt: 1,
+      phase: "ready", severity: "info", duration_ms: null, exit_code: null, code: null,
+    } satisfies z.infer<typeof ServerEventDataSchema>;
+    expect(ServerEventDataSchema.parse(lifecycle)).toEqual(lifecycle);
+    expect(ServerEventDataSchema.safeParse({ ...lifecycle, phase: "operation_completed" }).success).toBe(false);
+    expect(ServerEventDataSchema.safeParse({ ...lifecycle, context: diagnostic.context }).success).toBe(false);
+    expect(ServerEventDataSchema.safeParse({ ...lifecycle, status: result.status }).success).toBe(false);
+  }
+});
+
+test("invalid or missing completion context and unlisted fields produce safe typed warnings, not fallback completions", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "api-invalid-delivery-"));
+  const run = { run_id: "700", attempt: 3, started_at: "2026-11-05T00:00:00Z", context: createRootContext() };
+  const diagnostic = {
+    event: "safe_persist_http_completed", run_number: "701", attempt: 4,
+    status: "no-changes", commit: null, files: 0, context: createRootContext(),
+  };
+  const invalid = [
+    { context: undefined }, { context: null }, { context: { ...diagnostic.context, spanId: "0".repeat(16) } },
+    { context: { ...diagnostic.context, links: undefined } },
+    { paths: ["PRIVATE_PATH"] }, { headers: { authorization: "PRIVATE_HEADER" } }, { pid: process.pid },
+    { status: "PRIVATE_STATUS" }, { commit: "PRIVATE_COMMIT" }, { files: -1 }, { run_number: undefined },
+    { attempt: 0 },
+  ];
+  try {
+    const result = await writeEvents(directory, run, undefined,
+      invalid.map(fields => JSON.stringify({ ...diagnostic, ...fields })), "delivery");
+    const events = result.error.trim().split("\n")
+      .map(line => readCloudEvent(JSON.parse(line), value => ServerEventDataSchema.parse(value)));
+    expect(events.filter(event => event.data.phase === "module_failed")).toHaveLength(invalid.length);
+    expect(events.filter(event => event.data.phase === "module_failed").every(event =>
+      event.data.severity === "warning" && event.data.code === "CHILD_DIAGNOSTIC_INVALID")).toBe(true);
+    expect(events.every(event => event.type === "hono.server")).toBe(true);
+    expect(result.error).not.toContain("PRIVATE_");
+    expect(result.error).not.toContain('"pid"');
+    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(result.error);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 
 test("terminal article diagnostics retain their original occurrence and operation through real stderr and mirror", async () => {
   const directory = await mkdtemp(join(tmpdir(), "api-article-events-"));

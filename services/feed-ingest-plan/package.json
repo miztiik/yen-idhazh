@@ -11,6 +11,7 @@
     "./http-child-lifetime": "./scripts/http-child-lifetime.ts",
     "./delivery-api": "./scripts/safe-persist-http-api.ts",
     "./delivery-contracts": "./scripts/feed-ingest-plan-delivery-result.ts",
+    "./delivery-diagnostic": "./scripts/safe-persist-http-diagnostic.ts",
     "./plan-request": "./src/api/plan-request.ts",
     "./plan-failure": "./src/api/plan-failure.ts",
     "./harvest-feeds": "./src/harvest-feeds/harvest-pool.ts",

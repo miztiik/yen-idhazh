@@ -8,6 +8,8 @@ import {
 } from "@idhazh/common-contracts";
 import { TaskProfileSchema } from "@idhazh/host-probes/profile";
 import type { TaskProfile } from "@idhazh/host-probes/profile";
+import { SafePersistHttpDiagnosticSchema } from "@idhazh/feed-ingest-plan/delivery-diagnostic";
+import { createDeliveryCompletionEvent } from "./delivery-completion-diagnostic";
 import { ServerEventDataSchema, serverLogFilename } from "./server-evidence";
 import type { ApiGroup, ServerRun } from "./server-evidence";
 
@@ -28,9 +30,9 @@ export function createServerEventWriter(input: { directory: string; source: stri
       catch { unavailable(); }
     }
   }
-  function record(data: EventInput, mirror = true, type = "hono.server") {
+  function record(data: EventInput, mirror = true) {
     const event = createCloudEvent({
-      source: input.source, type, context,
+      source: input.source, type: "hono.server", context,
       data: {
         server_name: "hono-server", group: input.group, run_id: input.run.run_id, attempt: input.run.attempt,
         severity: data.severity ?? "info",
@@ -80,7 +82,9 @@ export function createServerEventWriter(input: { directory: string; source: stri
         return;
       }
       if ("event" in raw && raw.event === "safe_persist_http_completed") {
-        record({ phase: "operation_completed" }, true, "safe_persist_http_completed");
+        const diagnostic = SafePersistHttpDiagnosticSchema.safeParse(raw);
+        if (diagnostic.success) publish(createDeliveryCompletionEvent({ source: input.source, diagnostic: diagnostic.data }));
+        else record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
         return;
       }
       if ("event" in raw && raw.event === "task_profile") {

@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-11-05
 **Level**: 5 - versioned diagnostic contracts.
-**Status**: Both review PRs are open. Row 1 is updated for current main; the combined candidate is under verification.
+**Status**: Both review PRs are open. The combined candidate includes the main service rename and is under verification.
 
 ## 0. Operating contract
 
@@ -39,7 +39,7 @@ Table C - PR rows
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Article failure diagnostics and same-run report | - | A | IN-FLIGHT | jubilant-giggle | #1922 | - |
-| C2 | 2 | Delivery completion facts and request context | 1 | A | IN-FLIGHT | - | #1923 | - |
+| C2 | 2 | Delivery completion facts and request context | 1 | A | IN-FLIGHT | verbose-couscous | #1923 | - |
 
 ## 2. Row #1 - Article failure diagnostics and same-run report
 
