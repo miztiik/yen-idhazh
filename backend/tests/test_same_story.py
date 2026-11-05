@@ -174,6 +174,69 @@ def item(
 # --- the window past midnight ----------------------------------------------
 
 
+@pytest.mark.parametrize("earlier_count", [0, 1, 2], ids=["same-day", "cross-day", "earlier-day"])
+def test_one_article_never_corroborates_its_other_placement(earlier_count: int) -> None:
+    """Removing the shared URL guard would score a self-pair and inflate coverage."""
+    first = item(
+        "world-01",
+        source="wire",
+        score=3.0,
+        title="Floods reach the delta",
+        when="2026-08-30T22:00:00Z",
+    )
+    duplicate = item(
+        "business-02",
+        source="paper",
+        score=2.0,
+        title=first.title,
+        when="2026-08-31T04:00:00Z",
+    ).model_copy(update={"source_url": first.source_url, "desk": "business"})
+    distinct = item(
+        "science-03",
+        source="herald",
+        score=1.0,
+        title=first.title,
+        when="2026-08-31T05:00:00Z",
+    )
+    placements = [first, duplicate, distinct]
+    today = placements[earlier_count:]
+    vectors = block({one.item_id: unit(0) for one in today})
+    earlier = (
+        [
+            EarlierDay(
+                date="2026-08-30",
+                items=placements[:earlier_count],
+                embeddings=block({one.item_id: unit(0) for one in placements[:earlier_count]}),
+            )
+        ]
+        if earlier_count
+        else []
+    )
+    before = [one.model_dump_json() for one in placements]
+
+    pairs = list(cross_source_pairs(today, vectors, window_hours=36.0, earlier=earlier))
+    assert {(pair.left, pair.right) for pair in pairs} == {
+        tuple(sorted((first.item_id, distinct.item_id))),
+        tuple(sorted((duplicate.item_id, distinct.item_id))),
+    }
+    assert all(pair.headline and pair.score == 1.0 for pair in pairs)
+
+    grouped = collapse_same_story(today, vectors, window_hours=36.0, earlier=earlier)
+    assert [(one.item_id, one.source_url) for one in grouped] == [
+        (one.item_id, one.source_url) for one in today
+    ]
+    assert [one.model_dump_json() for one in placements] == before
+    if earlier_count == 0:
+        assert [one.also_covered_by for one in grouped] == [1, 0, 1]
+        assert [one.same_story_as for one in grouped] == [None, None, first.item_id]
+        assert all(not one.also_ran_earlier for one in grouped)
+    else:
+        assert all(one.also_covered_by == 0 and one.same_story_as is None for one in grouped)
+        assert [one.item_id for one in grouped[-1].also_ran_earlier] == [first.item_id]
+        if earlier_count == 1:
+            assert grouped[0].also_ran_earlier == ()
+
+
 def one_story_two_days(
     *, broke: str, picked_up: str
 ) -> tuple[list[DigestItem], DigestEmbeddings, list[EarlierDay]]:
