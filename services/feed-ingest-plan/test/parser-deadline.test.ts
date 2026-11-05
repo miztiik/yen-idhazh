@@ -129,7 +129,7 @@ test("actual worker deadlines persist explicit pipeline work failures, not sourc
     },
   }, {
     run_id: harvestContext.writer.run_id,
-    article_id: null, feed_id: "recorded-news", candidate_id: null,
+    document_id: null, feed_id: "recorded-news", candidate_id: null,
   }, createRootContext(), {
     document_kind: "feed", feed_id: "recorded-news", publisher_id: null, candidate_id: null,
     observed_run_id: harvestContext.writer.run_id, observed_attempt: harvestContext.writer.attempt,

@@ -86,7 +86,7 @@ export async function fetchDocument(
       emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls, evidence, context),
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
     on_attempt: observation => { attemptObservations.push(observation); },
-  }, { run_id: record.context.run_id, article_id: identity.url_key, feed_id: source.id, candidate_id: candidateId },
+  }, { run_id: record.context.run_id, document_id: identity.url_key, feed_id: source.id, candidate_id: candidateId },
   operationMetadata(record.context), {
     document_kind: request.fetch_item_type, feed_id: source.id, publisher_id: source.publisher_id,
     observed_run_id: record.context.run_id, observed_attempt: state.context.writer.attempt, candidate_id: candidateId,
@@ -135,7 +135,7 @@ export async function fetchDocument(
   const { fetched, observation } = result;
   const fetchedDocument = fetched;
   const artifact = FetchedDocumentSchema.parse({
-    ...fetchedDocument, fetch_item_type: request.fetch_item_type, canonical_url: identity.canonical_url, article_id: identity.url_key, feed_id: source.id,
+    ...fetchedDocument, fetch_item_type: request.fetch_item_type, canonical_url: identity.canonical_url, document_id: identity.url_key, feed_id: source.id,
     error_code: fetched.error_code ?? null,
     body_sha256: fetched.body === null ? null : hashText(fetched.body), attempts: fetched.attempts ?? [],
     observation, attempt_observations: attemptObservations,
@@ -179,8 +179,9 @@ export async function fetchDocument(
   return { artifact, response_json: JSON.stringify({
     ...operationMetadata(record.context),
     run_id: record.context.run_id, fetch_item_type: request.fetch_item_type, feed_id: source.id,
-    article_id: identity.url_key, canonical_url: identity.canonical_url, http_status: fetched.http_status,
+    canonical_url: identity.canonical_url, http_status: fetched.http_status,
     failure: fetched.failure, body_sha256: artifact.body_sha256,
-    ...(request.fetch_item_type === "article" ? { candidate_id: candidateId } : {}),
+    ...(request.fetch_item_type === "article"
+      ? { article_id: identity.url_key, candidate_id: candidateId } : { document_id: identity.url_key }),
   }) };
 }

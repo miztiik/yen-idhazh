@@ -47,7 +47,7 @@ test("entity records require scoped bounds, explicit omissions and current versi
   const record = ArticleEntitiesSchema.parse({
     schema_version: ARTICLE_ENTITIES_VERSION,
     run_id: recorded.run_id, attempt: recorded.attempt, traceId: recorded.traceId,
-    git_sha: "a".repeat(40), article_id: recorded.selected_url_keys[0],
+    git_sha: "a".repeat(40), article_id: recorded.selected_article_ids[0],
     candidate_id: createCandidateId(), feed_id: "recorded-news",
     observed_at: recorded.started_at, recognizer: "compromise",
     title_status: "complete", body_status: "complete", status: "complete",

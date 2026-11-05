@@ -1,7 +1,7 @@
 /** Do captured article inputs retain their identity and live ownership through the real local API? */
 import { expect, test } from "bun:test";
 import {
-  CandidateIdSchema, createCandidateId, createRootContext, ParsedFeedBatchSchema, PLANNER_API_PREFIX, writeTraceContext,
+  CandidateIdSchema, createCandidateId, createRootContext, deriveUrlKey, ParsedFeedBatchSchema, PLANNER_API_PREFIX, writeTraceContext,
 } from "@idhazh/common-contracts";
 import { CompletedCollectionSchema } from "../src/api/collection-contracts";
 import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-response.schema";
@@ -30,7 +30,17 @@ test("two direct URLs in one collection retain two inputs; a fresh repeated URL 
     const feed = FetchResponseSchema.parse(await post("fetch", {
       traceId: caller.traceId, feed_id: "recorded-news", fetch_item_type: "feed",
     }));
-    await post("parse", { links: [operationLink(feed)] });
+    if (feed.fetch_item_type !== "feed") throw new Error("Recorded feed returned an article");
+    expect(feed.document_id).toBe(deriveUrlKey(feed.canonical_url));
+    expect(feed.feed_id).toBe("recorded-news");
+    expect(feed).not.toHaveProperty("article_id");
+    expect(feed).not.toHaveProperty("candidate_id");
+    expect(FetchResponseSchema.safeParse({ ...feed, article_id: feed.document_id }).success).toBe(false);
+    expect(FetchResponseSchema.safeParse({ ...feed, document_id: "a".repeat(64) }).success).toBe(false);
+    const parsedFeed = ParseResponseSchema.parse(await post("parse", { links: [operationLink(feed)] }));
+    expect(parsedFeed).toMatchObject({ fetch_item_type: "feed", feed_id: feed.feed_id, document_id: feed.document_id });
+    expect(parsedFeed).not.toHaveProperty("article_id");
+    expect(parsedFeed).not.toHaveProperty("candidate_id");
     const captured = [];
     for (const url of ["https://news.example/story?id=one", "https://news.example/story?id=two",
       "https://news.example/story?id=one"]) {
@@ -45,6 +55,14 @@ test("two direct URLs in one collection retain two inputs; a fresh repeated URL 
       expect(batch.candidates).toHaveLength(1);
       expect(CandidateIdSchema.parse(fetched.candidate_id)).toBe(parsed.candidate_id);
       expect(batch.candidates[0]!.candidate_id).toBe(fetched.candidate_id);
+      expect(fetched.article_id).toBe(deriveUrlKey(fetched.canonical_url));
+      expect(parsed.article_id).toBe(fetched.article_id);
+      expect(batch.candidates[0]!.url_key).toBe(fetched.article_id);
+      expect(fetched).not.toHaveProperty("document_id");
+      expect(parsed).not.toHaveProperty("document_id");
+      expect(FetchResponseSchema.safeParse({ ...fetched, document_id: fetched.article_id }).success).toBe(false);
+      expect(FetchResponseSchema.safeParse({ ...fetched, article_id: "a".repeat(64) }).success).toBe(false);
+      expect(ParseResponseSchema.safeParse({ ...parsed, document_id: parsed.article_id }).success).toBe(false);
       expect(batch.candidates[0]!.entry_ordinal).toBeNull();
       captured.push(batch.candidates[0]!);
     }
@@ -73,6 +91,13 @@ test("a valid candidate cannot replace its producing parse, captured document or
     const parsedFeed = ParseResponseSchema.parse(await (await post("parse", { links: [operationLink(feed)] })).json());
     if (parsedFeed.fetch_item_type !== "feed") throw new Error("Recorded feed must return captured offers");
     const offer = parsedFeed.offers[0]!;
+    expect(offer.article_id).toBe(deriveUrlKey(offer.canonical_url));
+    expect(offer).not.toHaveProperty("document_id");
+    expect(offer).not.toHaveProperty("url_key");
+    expect(ParseResponseSchema.safeParse({ ...parsedFeed, candidate_id: offer.candidate_id }).success).toBe(false);
+    expect(ParseResponseSchema.safeParse({
+      ...parsedFeed, offers: [{ ...offer, article_id: "a".repeat(64) }],
+    }).success).toBe(false);
     const request = { fetch_item_type: "article", candidate_id: offer.candidate_id, links: [operationLink(parsedFeed)] };
     const unknown = await post("fetch", { ...request, candidate_id: createCandidateId() });
     expect(unknown.status).toBe(400);
@@ -86,6 +111,7 @@ test("a valid candidate cannot replace its producing parse, captured document or
     const fetched = FetchResponseSchema.parse(await (await post("fetch", request)).json());
     if (fetched.fetch_item_type !== "article") throw new Error("Offered article must retain its captured candidate");
     expect(fetched.candidate_id).toBe(offer.candidate_id);
+    expect(fetched.article_id).toBe(offer.article_id);
     const store = stageStore(fixture.inputs);
     const held = store.fetchedDocument(fetched)!;
     const captured = store.read("parsed", parsedFeed, ParsedFeedBatchSchema).offers
@@ -101,6 +127,10 @@ test("a valid candidate cannot replace its producing parse, captured document or
     expect(store.fetchedDocument(fetched)?.candidate_id).toBe(offer.candidate_id);
 
     const parse = { links: [operationLink(fetched)] };
+    for (const copied of [
+      { article_id: fetched.article_id }, { candidate_id: fetched.candidate_id },
+      { url: fetched.canonical_url }, { document_id: fetched.article_id },
+    ]) expect((await post("parse", { ...parse, ...copied })).status).toBe(400);
     const concurrency = fixture.inputs.harvest.config.harvest.concurrency;
     fixture.inputs.harvest.config.harvest.concurrency++;
     expect((await post("parse", parse)).status).toBe(409);

@@ -1,7 +1,7 @@
 /** Do CLI controls share strict API semantics and disclose failures safely? */
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import { PlanError, PlanRequestSchema, describePlanError, parseCliRequest, resolvePlanRequest } from "../src/api/plan-request";
+import { PlanError, PlanRequestSchema, describePlanError, parseCliRequest, resolvePlanRequest, resolveSelectedUrls } from "../src/api/plan-request";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { resolveRunContext } from "../src/resolve-run-context";
 import { join } from "node:path";
@@ -82,6 +82,39 @@ test("one captured UTC day determines identity while independent runs have disti
     .toBe("parent.runner");
   expect(resolveRunContext(settings, "a".repeat(40), now).run_id)
     .not.toBe(resolveRunContext(settings, "a".repeat(40), now).run_id);
+});
+
+test("selected URL controls preserve booleans, omission and explicit false overrides", async () => {
+  const { harvest: { config } } = await loadPlanInputs(root);
+  for (const configured of [false, true]) {
+    const settings = { ...config, response: { include_selected_urls: configured } };
+    expect(resolveSelectedUrls(PlanRequestSchema.parse({}), settings)).toBe(configured);
+    for (const include_selected_urls of [false, true]) {
+      const request = PlanRequestSchema.parse({ include_selected_urls });
+      expect(resolveSelectedUrls(request, settings)).toBe(include_selected_urls);
+      for (const args of [
+        ["--cli", "--include-selected-urls", String(include_selected_urls)],
+        ["--cli", `--include-selected-urls=${include_selected_urls}`],
+      ]) {
+        expect(parseCliRequest(args).request).toEqual(request);
+        expect(resolveSelectedUrls(parseCliRequest(args).request, settings)).toBe(include_selected_urls);
+      }
+    }
+  }
+  expect(parseCliRequest(["--cli", "--include-selected-urls"]).request).toEqual({ include_selected_urls: true });
+  expect(parseCliRequest(["--cli", "--include-selected-urls", "--article-limit=1"]).request)
+    .toEqual({ include_selected_urls: true, article_limit: 1 });
+  expect(parseCliRequest(["--cli"]).request).not.toHaveProperty("include_selected_urls");
+  for (const value of ["true", "false", 0, 1, null, "", [], {}]) {
+    expect(PlanRequestSchema.safeParse({ include_selected_urls: value }).success).toBe(false);
+  }
+  for (const args of [
+    ["--cli", "--include-selected-urls="], ["--cli", "--include-selected-urls", ""],
+    ["--cli", "--include-selected-urls=TRUE"], ["--cli", "--include-selected-urls=1"],
+    ["--cli", "--include-selected-urls", "no"], ["--serve", "--include-selected-urls"],
+    ["--cli", "--include-selected-urls", "--include-selected-urls=false"],
+    ["--cli", "--include-selected-urls=false", "--include-selected-urls", "true"],
+  ]) expect(() => parseCliRequest(args)).toThrow();
 });
 
 test("public request errors retain their fields without exposing checkout paths", () => {

@@ -126,6 +126,11 @@ export const FeedPartitionConfigSchema = z.strictObject({
 export const FeedSealConfigSchema = z.strictObject({
   compression: z.enum(["snappy", "zstd", "none"]),
 });
+export const FeedResponseConfigSchema = z.strictObject({
+  include_selected_urls: z.boolean().default(false).describe(
+    "Default false. Include selected URLs in combined summaries. Remove this option and its conditional projection together if readable URLs become mandatory or unsupported.",
+  ),
+});
 export const FeedWorkflowReportingConfigSchema = z.strictObject({
   score_decimal_places: z.int().min(0).max(100).default(3)
     .describe("Displayed score precision within the ECMAScript Number.toFixed range; saved scores remain exact."),
@@ -156,6 +161,7 @@ export const FeedIngestConfigSchema = z.strictObject({
   discovered_articles: z.strictObject({ lookback_days: z.int().nonnegative().default(90) }).default({ lookback_days: 90 }),
   partition: FeedPartitionConfigSchema,
   seal: FeedSealConfigSchema,
+  response: FeedResponseConfigSchema.default({ include_selected_urls: false }),
   workflow_reporting: FeedWorkflowReportingConfigSchema,
   feedback: FeedFeedbackConfigSchema.default(
     FeedFeedbackConfigSchema.parse({}),
@@ -165,10 +171,10 @@ export const FeedIngestConfigSchema = z.strictObject({
 }).meta({
   version: FEED_INGEST_CONFIG_VERSION,
   changelog: [
-    { version: FEED_INGEST_CONFIG_VERSION, change: "Remove optional destructive URL cleanup; resource identity is one fixed protocol." },
+    { version: FEED_INGEST_CONFIG_VERSION, change: "Configure optional selected URLs in combined response summaries." },
+    { version: "2026-11-04", change: "Remove optional destructive URL cleanup; resource identity is one fixed protocol." },
     { version: "2026-11-02", change: "Remove article robots policy from target-only ingestion." },
     { version: "2026-11-02", change: "Use global age, substance and diversity scoring without tier allocation or selection caps." },
-    { version: "2026-11-01", change: "Configure shared domain and publisher request pacing." },
     { version: "2026-11-01", change: "Earlier changes are in git." },
   ],
 });

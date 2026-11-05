@@ -439,9 +439,10 @@ test("real screening joins the strongest duplicate body and preserves both count
             selected_articles: persisted.files, rejected_articles: persisted.rejected_files,
             feed_health_state: health.files, plan_runs: persisted.run_files,
           },
-          selected_url_keys: packed.articles.map(row => row.url_key),
+          include_selected_urls: false,
+          selected_article_ids: packed.articles.map(row => row.url_key),
           assignments: packed.articles.map(({ url_key, editorial_rank, worker_assignment }) =>
-            ({ url_key, editorial_rank, worker_assignment })),
+            ({ article_id: url_key, editorial_rank, worker_assignment })),
           health: reportHealth,
         },
         selected: raw.rows, policy, failures: { articles: selection.rejected_articles },

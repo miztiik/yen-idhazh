@@ -7,7 +7,7 @@ import {
   DiscoveredArticleRowContract, FeedHealthStateRowContract, FeedIngestEventSchema,
   PlanRunRowContract, RejectedArticleRowContract, SelectedArticleRowContract,
   SelectedArticlesArtifactSchema, selectedArticleMetadata,
-  readArticleEntities,
+  readArticleEntities, FetchedDocumentSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerRowContract } from "@idhazh/ledger-file-writer";
 import { invokePlannerHttp } from "../scripts/feed-ingest-plan-supervisor";
@@ -17,6 +17,11 @@ import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parq
 import { recordedPlannerProcess } from "./planner-process-recordings";
 import { summarizeSelectionMetrics } from "../src/summarize-selection-metrics";
 import { articleEntitiesPath } from "../src/selected-artifact-path";
+import { recordedPlan } from "./plan-recordings";
+import { source } from "./harvest-recordings";
+import { captureDocumentContext } from "../src/api/operation-context";
+import { fetchDocument } from "../src/api/fetch-operation";
+import { stageStore } from "../src/api/stage-store";
 
 const recordings = new URL("../../../tests/fixtures/feed-ingest-plan/entry-points/", import.meta.url);
 
@@ -24,13 +29,18 @@ test("one recorded API request writes a valid selected artifact", async () => {
   const fixture = await recordedPlannerProcess();
   fixture.startup.planning.partition.enabled = true;
   try {
-    const result = await invokePlannerHttp(fixture.inputs, fixture.startup, { article_limit: 1 }, fixture.evidence, {
+    const result = await invokePlannerHttp(fixture.inputs, fixture.startup, {
+      article_limit: 1, include_selected_urls: true,
+    }, fixture.evidence, {
       serverEntry: fixture.serverEntry,
     });
     const summary = PlanResponseSchema.parse(result.summary);
     expect(result.http_status).toBe(200);
     expect(summary.planning_complete).toBe(true);
     expect(summary.selected_count).toBe(1);
+    expect(summary.include_selected_urls).toBe(true);
+    expect(await Bun.file(join(fixture.evidence, "response.json")).json()).toEqual(summary);
+    expect(summary).not.toHaveProperty("selected_url_keys");
     expect(summary.dispatch_count).toBe(fixture.startup.planning.partition.default_shards);
     expect(summary.assignments[0]!.worker_assignment).not.toBeNull();
     expect(summary.selection_started_at_utc).toBe("2026-10-22T00:00:00Z");
@@ -42,6 +52,11 @@ test("one recorded API request writes a valid selected artifact", async () => {
     expect(artifact.attempt).toBe(summary.attempt);
     expect(artifact.articles).toHaveLength(1);
     expect(artifact.articles[0]!.article_text.length).toBeGreaterThan(0);
+    expect(summary.selected_article_ids).toEqual(artifact.articles.map(article => article.url_key));
+    expect(summary.assignments).toEqual(artifact.articles.map(article => ({
+      article_id: article.url_key, canonical_url: article.canonical_url,
+      editorial_rank: article.editorial_rank, worker_assignment: article.worker_assignment,
+    })));
     const entities = (await readFile(join(fixture.directory, articleEntitiesPath(
       fixture.inputs.settings.inputs.artifact_root, { run_id: summary.run_id, writer: { attempt: summary.attempt } },
     )), "utf8")).trim().split("\n").map(line => readArticleEntities(JSON.parse(line)));
@@ -97,6 +112,22 @@ test("one recorded API request writes a valid selected artifact", async () => {
         captureRows("feed_health_state", "feed-health-state", FeedHealthStateRowContract),
         captureRows("plan_runs", "plan-runs", PlanRunRowContract),
       ]);
+      const refused = await recordedPlan([source({ url: "https://news.example/network-error" })]);
+      const context = captureDocumentContext(refused.inputs, refused.runtime);
+      const store = stageStore(refused.inputs);
+      store.beginFetch(context);
+      try {
+        const fetched = await fetchDocument({
+          feed_id: "recorded-news", fetch_item_type: "feed",
+        }, context, refused.inputs, refused.runtime, null);
+        const document = FetchedDocumentSchema.parse(fetched.artifact);
+        expect(document.failure).toBe("network");
+        await writeFile(new URL("../../../tests/fixtures/contracts/fetched-document/refused.json", import.meta.url),
+          `${JSON.stringify(document, null, 2)}\n`);
+      } finally {
+        store.finishFetch(context.context, false);
+        await refused.close();
+      }
     }
     const recorded = SelectedArticlesArtifactSchema.parse(await Bun.file(new URL("selected-articles.json", recordings)).json());
     expect(artifact.articles.map(article => ({
@@ -131,11 +162,12 @@ test("one awaited CLI invocation writes one valid result", async () => {
     expect(summary.selected_count).toBe(1);
     expect(summary.dispatch_count).toBe(0);
     expect(summary.strategy).toBe("none");
+    expect(summary.include_selected_urls).toBe(false);
     expect(summary.selection_started_at_utc).toBe("2026-10-22T00:00:00Z");
     expect(summary.evaluated_at).toBe(fixture.startup.runtime.captured_at.replace(/\.\d{3}Z$/, "Z"));
     expect(JSON.stringify(summary)).not.toContain("article_text");
     expect(summary.assignments).toEqual([{
-      url_key: summary.selected_url_keys[0]!, editorial_rank: 1, worker_assignment: null,
+      article_id: summary.selected_article_ids[0]!, editorial_rank: 1, worker_assignment: null,
     }]);
     const artifact = SelectedArticlesArtifactSchema.parse(await Bun.file(
       join(fixture.directory, summary.selected_articles_artifact!)).json());

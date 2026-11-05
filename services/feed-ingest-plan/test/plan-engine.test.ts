@@ -23,6 +23,7 @@ import { operationLink, operationMetadata } from "../src/api/operation-context";
 import { beginCollection, collectionForRun, getCollection, prepareCollectionContext } from "../src/api/collection-operation";
 import { CollectionResponseSchema, CompletedCollectionSchema, FinalizedCollectionSchema, ReleasedCollectionSchema } from "../src/api/collection-contracts";
 import { source } from "./harvest-recordings";
+import { projectSelectedArticle, restoreSelectedArticle } from "../src/api/article-identity-projection";
 
 const recordings = new URL("../../../tests/fixtures/feed-ingest-plan/entry-points/", import.meta.url);
 
@@ -67,7 +68,8 @@ async function recordedResult() {
       discovered_articles: discovered, selected_articles: selectedRows, rejected_articles: rejected,
       feed_health_state: healthRows, plan_runs: rows,
     },
-    result: { context, row: rows[0]!, files, selected, health: response.health } satisfies FeedPlanResult,
+    result: { context, row: rows[0]!, files, selected, health: response.health,
+      include_selected_urls: response.include_selected_urls } satisfies FeedPlanResult,
   };
 }
 
@@ -96,6 +98,27 @@ test("one recorded saved run agrees with its public summary and selected identit
       ...assignment, worker_assignment: summary.dispatch_count,
     })) },
   ]) expect(PlannerRunResponseSchema.safeParse(invalid).success).toBe(false);
+});
+
+test("URL display projects the same captured rows without changing selection or persisted data", async () => {
+  const { result, nativeRows } = await recordedResult();
+  const original = structuredClone({ result, nativeRows });
+  for (const partitionEnabled of [true, false]) {
+    const captured: FeedPlanResult = partitionEnabled ? result : {
+      ...result, row: { ...result.row, dispatch_count: 0, strategy: "none" },
+      selected: result.selected.map(row => ({ ...row, worker_assignment: null })),
+    };
+    const hidden = summarizePlan({ ...captured, include_selected_urls: false });
+    const shown = summarizePlan({ ...captured, include_selected_urls: true });
+    expect(hidden.selected_article_ids).toEqual(shown.selected_article_ids);
+    expect(hidden.assignments).toEqual(shown.assignments.map(({ canonical_url: _url, ...assignment }) => assignment));
+    expect(shown.assignments.map(row => row.canonical_url)).toEqual(captured.selected.map(row => row.canonical_url));
+    expect(hidden.assignments.every(row => !Object.hasOwn(row, "canonical_url"))).toBe(true);
+    expect(shown.files).toEqual(hidden.files);
+    expect(shown.selection_metrics).toEqual(hidden.selection_metrics);
+    expect(shown.selected_count).toBe(hidden.selected_count);
+  }
+  expect({ result, nativeRows }).toEqual(original);
 });
 
 test("uncertain collection startup uses its preallocated trace to recover ownership and release", async () => {
@@ -336,7 +359,7 @@ test("real stage responses supply saved timestamps and metadata to orchestration
           const batch = stageStore(fixture.inputs).read("selected", selection, SelectedFeedBatchSchema);
           expect(selection.selection_started_at_utc).toBe(batch.selection_started_at_utc);
           expect(selection.evaluated_at).toBe(batch.evaluated_at);
-          expect(selection.articles).toEqual(batch.articles.map(article => ({
+          expect(selection.articles).toEqual(batch.articles.map(article => projectSelectedArticle({
             ...selectedArticleMetadata(article), run_id: article.run_id, attempt: article.attempt, date: article.date,
           })));
           expect(batch.articles.every(article => article.article_text.length > 0)).toBe(true);
@@ -362,8 +385,8 @@ test("real stage responses supply saved timestamps and metadata to orchestration
       expect(result.row.evaluated_at).toBe(selection!.evaluated_at);
       expect(result.row.evaluated_at).toBe(result.context.now);
       expect(result.selected.length).toBeGreaterThan(0);
-      expect(result.row.selection_metrics).toEqual(summarizeSelectionMetrics(selection!.articles, true));
-      expect(result.selected).toEqual((enabled ? partition : selection)!.articles);
+      expect(result.row.selection_metrics).toEqual(summarizeSelectionMetrics(selection!.articles.map(restoreSelectedArticle), true));
+      expect(result.selected).toEqual((enabled ? partition : selection)!.articles.map(restoreSelectedArticle));
       expect(persistenceInput).toEqual({ links: [operationLink((enabled ? partition : selection)!)] });
       if (enabled) {
         expect(partition).toBeDefined();
@@ -377,7 +400,7 @@ test("real stage responses supply saved timestamps and metadata to orchestration
         expect(result.selected.every(article => article.worker_assignment === null)).toBe(true);
       }
       expect(PlannerRunResponseSchema.parse(summarizePlan(result)).assignments).toEqual(result.selected.map(article => ({
-        url_key: article.url_key, editorial_rank: article.editorial_rank, worker_assignment: article.worker_assignment,
+        article_id: article.url_key, editorial_rank: article.editorial_rank, worker_assignment: article.worker_assignment,
       })));
     } finally { await server.stop(true); await app.close(); await fixture.close(); }
   }

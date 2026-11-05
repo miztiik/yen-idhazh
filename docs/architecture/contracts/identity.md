@@ -1,6 +1,6 @@
 # Identity contracts
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 How files, work units, content, event occurrences and operations retain distinct identities.
 
@@ -23,6 +23,7 @@ Table A - distinct identities
 | A6 | Native TypeScript `spanId` | Nonzero 8 random bytes, encoded as 16 lowercase hexadecimal characters | One operation within that execution. |
 | A7 | Python protocol identifiers | The owning Python contract's UUID rules | Foreign caller, execution and operation identities; see section 6. |
 | A8 | Native TypeScript `candidate_id` | A fresh lowercase hyphenated UUIDv4 | One captured article input, not its URL, event or operation. |
+| A9 | Native TypeScript `document_id` | The full SHA-256 resource address key | A fetched feed or article document, without calling a feed an article. |
 
 ---
 
@@ -163,6 +164,19 @@ An article address key is the complete 64-character lowercase hexadecimal
 SHA-256 of the UTF-8 `canonical_url`. The native feed-document key uses the
 same resource URL rule. Feed, publisher, taxonomy, run, model and article text
 do not enter this hash.
+
+Article HTTP results use `article_id`. Generic fetched documents, operation
+observations and failed-document metadata use `document_id`, since their input
+can be a feed or an article. A feed HTTP result has its configured `feed_id`
+and `document_id`, not an article or candidate identity. Genuine article entity
+records retain `article_id`.
+
+Native discovery, selected and rejected storage retain `url_key`. Selection
+and partition HTTP rows expose that value as `article_id` through one strict
+projection derived from native selected metadata. The real orchestrator
+restores the native field when it needs native rows. Neither side accepts the
+other spelling. Foreign publication and item-health read copies keep their
+existing `item_id` and `url_key`.
 
 Trim the input, accept HTTP scheme spelling without regard to case, then use
 the runtime's standard `URL` parser and serializer. Check the existing URL

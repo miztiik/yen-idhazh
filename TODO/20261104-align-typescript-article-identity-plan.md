@@ -1,6 +1,6 @@
 # Align TypeScript article identity
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 **Level**: 5 - identity and persisted TypeScript contracts.
 
 ## 0. Operating contract
@@ -142,7 +142,7 @@ Table I - Delivery rows
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | I1 | 1 | Preserve resource URLs before hashing and dispatch | - | A | DONE | psychic-waffle | - | Preserve resource URLs |
 | I2 | 2 | Capture a distinct identity for every article input | 1 | B | DONE | upgraded-spoon | [#1917](https://github.com/miztiik/yen-idhazh/pull/1917) | Capture candidate identity |
-| I3 | 3 | Expose consistent article identities across APIs | 2 | C | PENDING | - | - | - |
+| I3 | 3 | Expose consistent article identities across APIs | 2 | C | DONE | jubilant-disco | #1919 | Align article API output |
 
 ## 2. Row #1 - Preserve resource URLs before hashing and dispatch
 
@@ -375,10 +375,14 @@ Table M - Row 2 alternatives
 - `packages/common-contracts/src/schemas/planner-operation.schema.ts`
 - `packages/common-contracts/src/schemas/planner-response.schema.ts`
 - `packages/common-contracts/src/schemas/raw-document-failure.schema.ts`
+- `packages/common-contracts/src/schemas/event.schema.ts`
+- `packages/common-contracts/test/article-identity-compatibility.test.ts`
 - `packages/common-contracts/test/config.test.ts`
 - `packages/common-contracts/test/planner-diagnostics.test.ts`
+- `packages/common-contracts/test/planner-response.test.ts` (new)
 - `packages/common-contracts/test/metadata-flow.test.ts`
 - `services/feed-ingest-plan/src/api/article-identity-projection.ts` (new)
+- `services/feed-ingest-plan/src/api/collection-operation.ts` (exclude the response-only choice from native stage controls)
 - `services/feed-ingest-plan/src/api/plan-request.ts`
 - `services/feed-ingest-plan/src/api/document-response.schema.ts`
 - `services/feed-ingest-plan/src/api/stage-response.schema.ts`
@@ -394,9 +398,15 @@ Table M - Row 2 alternatives
 - `services/feed-ingest-plan/src/run-feed-plan.ts`
 - `services/feed-ingest-plan/scripts/feed-ingest-plan-verification.ts`
 - `services/feed-ingest-plan/test/operation-logging.test.ts`
+- `services/feed-ingest-plan/test/network-failure-evidence.test.ts` (keep the query-bearing diagnostic input and its observations consistent before URL redaction)
 - `services/feed-ingest-plan/test/harvest.test.ts`
 - `services/feed-ingest-plan/test/parser-deadline.test.ts`
 - `services/feed-ingest-plan/test/article-source-outcome.test.ts`
+- `services/feed-ingest-plan/test/article-failure-retention.test.ts`
+- `services/feed-ingest-plan/test/article-identity-projection.test.ts` (new)
+- `services/feed-ingest-plan/test/candidate-capture-http.test.ts`
+- `services/feed-ingest-plan/test/curate.test.ts`
+- `services/feed-ingest-plan/test/selection-metrics.test.ts`
 - `services/feed-ingest-plan/test/planner-diagnostics.test.ts`
 - `services/feed-ingest-plan/test/plan-api.test.ts`
 - `services/feed-ingest-plan/test/plan-entry-points.test.ts`

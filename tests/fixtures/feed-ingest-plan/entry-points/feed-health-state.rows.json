@@ -7,8 +7,8 @@
     "strikes": 0,
     "links": [
       {
-        "traceId": "d3da03c7c0eacb4fa0cf7c0b01896cd6",
-        "spanId": "a6926ff172600719"
+        "traceId": "8d14163285780c17de78f68a7abdd7e3",
+        "spanId": "10faad4fdf14d7b0"
       }
     ],
     "check_result": "valid-feed",

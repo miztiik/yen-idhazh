@@ -1,6 +1,6 @@
 # Feed planner ledgers
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 Which data does each feed planner ledger retain?
 
@@ -14,6 +14,12 @@ Which data does each feed planner ledger retain?
 
 Selected text is written to a separate workflow artifact for the summarizer.
 It is not stored in committed selected rows.
+
+The [article identity contract](../architecture/contracts/identity.md#typescript-resource-addresses)
+maps public API `article_id` to native `url_key`. Discovery, selected and
+rejected column names do not change. Combined summaries may include readable
+URLs under the [response option](../architecture/sources/feed-plan-runner.md#entry-points-and-controls);
+that option adds no ledger column, including to `plan-runs`.
 
 The TypeScript schemas own planner settings, events, requests, receipts, stage
 payloads and these ledgers. Python runs the gardener scheduler and delegates

@@ -10,6 +10,7 @@ import { executePersistence } from "../persistence-operation";
 import { PlanError } from "../plan-request";
 import { SelectionResponseSchema, PartitionResponseSchema, PersistenceResponseSchema } from "../stage-response.schema";
 import { captureRequestRuntime, operationMetadata } from "../operation-context";
+import { projectSelectedArticle } from "../article-identity-projection";
 
 export async function readRequestBody(request: Request): Promise<unknown> {
   try { return await request.json(); }
@@ -27,7 +28,7 @@ export function stagesRoute(inputs: PlanInputs, runtime: () => PlanRuntime) {
     return c.json(SelectionResponseSchema.parse({
       ...operationMetadata(batch), run_id: batch.context.run_id,
       selection_started_at_utc: batch.selection_started_at_utc, evaluated_at: batch.evaluated_at,
-      articles: batch.articles.map(article => ({ ...selectedArticleMetadata(article),
+      articles: batch.articles.map(article => projectSelectedArticle({ ...selectedArticleMetadata(article),
         run_id: batch.context.run_id, attempt: batch.context.writer.attempt, date: batch.context.date })),
       exclusions: batch.exclusions, request_report: batch.request_report,
     }));
@@ -39,7 +40,7 @@ export function stagesRoute(inputs: PlanInputs, runtime: () => PlanRuntime) {
     return c.json(PartitionResponseSchema.parse({
       ...operationMetadata(batch), run_id: batch.context.run_id,
       strategy: batch.strategy, dispatch_count: batch.dispatch_count, work: batch.work,
-      articles: batch.articles.map(article => ({ ...selectedArticleMetadata(article),
+      articles: batch.articles.map(article => projectSelectedArticle({ ...selectedArticleMetadata(article),
         run_id: batch.context.run_id, attempt: batch.context.writer.attempt, date: batch.context.date })),
     }));
   });

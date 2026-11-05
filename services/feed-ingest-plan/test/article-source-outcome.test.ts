@@ -71,7 +71,7 @@ test("retries and redirects count once on their dispatch UTC day, not the later 
     observation_clock: clock, observations: createIngestObservations(health.observe),
   }, {
     run_id: context.run_id,
-    article_id: deriveUrlKey(target), feed_id: source.feed_id, candidate_id,
+    document_id: deriveUrlKey(target), feed_id: source.feed_id, candidate_id,
   }, createChildContext(operationMetadata(context)), {
     document_kind: "article", publisher_id: null, candidate_id,
     observed_run_id: context.run_id, observed_attempt: context.writer.attempt, feed_id: source.feed_id,

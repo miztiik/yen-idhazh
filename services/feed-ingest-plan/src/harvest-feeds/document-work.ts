@@ -35,7 +35,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, opera
     fetched?: FetchResult) => context.document_activity?.(
     operation, phase, {
       scope: "document",
-      article_id: identity.article_id, candidate_id: identity.candidate_id, document_kind: scope.document_kind,
+      document_id: identity.document_id, candidate_id: identity.candidate_id, document_kind: scope.document_kind,
       feed_id: scope.feed_id, publisher_id: scope.publisher_id, duration_ms,
       ...(failure_code == null ? {} : { failure_code }),
       ...(quality_rejection === undefined ? {} : { quality_rejection }),
@@ -105,7 +105,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, opera
             context.on_attempt?.(observation);
             if (measurement.outcome === "failed" && measurement.dispatched_request_count > 0) {
               context.document_activity?.("request-attempt", "failed", {
-                scope: "request", article_id: identity.article_id, candidate_id: identity.candidate_id,
+                scope: "request", document_id: identity.document_id, candidate_id: identity.candidate_id,
                 document_kind: scope.document_kind, feed_id: scope.feed_id, publisher_id: scope.publisher_id,
                 duration_ms: measurement.attempt.duration_ms,
               }, undefined, undefined, failureDetails({

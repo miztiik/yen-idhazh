@@ -96,7 +96,7 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
   }
   const request = BeginCollectionSchema.parse(raw);
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
-  const controls = resolvePlanRequest(request.request, inputs.harvest.config);
+  const { include_selected_urls: _display, ...controls } = resolvePlanRequest(request.request, inputs.harvest.config);
   const owned = held(inputs);
   const operation = commandContext(runtime);
   let starting = startingCollections.get(inputs);
