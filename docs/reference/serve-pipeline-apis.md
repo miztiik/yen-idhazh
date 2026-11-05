@@ -11,7 +11,8 @@ It is build-time operator tooling, not a backend for the published site.
 
 ## Listener authority
 
-`config/hono-server.json` is the composed listener's only address source.
+`config/hono-server.json` is the composed listener's only address and
+supervision source.
 Tasks capture that validated file in their private startup data. HTTP input,
 headers and environment values cannot select another destination. Internal
 planning requests use the owned listener address, never the incoming Host
@@ -24,6 +25,14 @@ Table A - Listener settings
 | A1 | `hostname` | `127.0.0.1`; only this loopback address and `::1` are accepted. |
 | A2 | `port` | `8787`; an occupied port fails startup without adopting or stopping its listener. |
 | A3 | `idle_timeout_seconds` | 30 seconds; active planning and delivery disable the per-request idle timer. |
+| A4 | `supervision.readiness_timeout_ms` | 30000 milliseconds; startup and owned-child readiness must finish within this wait. |
+| A5 | `supervision.shutdown_timeout_ms` | 10000 milliseconds; allows graceful application and worker cleanup before forced exit. |
+| A6 | `supervision.forced_exit_timeout_ms` | 5000 milliseconds; bounds confirmation after killing only the spawned child. |
+
+These waits retain their previous effective values. Native startup packets
+capture the shared controls under `server.supervision`; missing controls fail
+validation before spawning. Feed settings and top-level machine startup fields
+provide no fallback.
 
 Extraction, parser limits, host instruments, profiling, ledger registration
 and output validation stay with their existing modules. Their standalone
@@ -148,6 +157,15 @@ Shared hosting imports none of them, including in its tests and dependency
 metadata. Typed construction arguments carry the application, failure policy,
 diagnostic decoder and bound evidence validator without a plugin framework.
 Only validated JSON-shaped controls cross the private process pipe.
+
+The evaluator CI job checks one sparse candidate checkout in two stages.
+Shared hosting first installs, checks and tests with every native service
+absent. The same checkout then gains only named machine packages, settings and
+recorded inputs. Real Linux child tests verify fingerprint writes, explicit
+profile stop, shutdown-only profile evidence, worker cleanup and released
+listeners while feed source and feed configuration remain physically absent.
+The machine entry, parent adapter and actual summary helper also pass dependency
+inspection. Inspection supplements execution; it does not replace it.
 
 Explicit groups keep task resources visible without per-API processes.
 Hono and Zod remain existing tool dependencies. Host-probes adds the shared

@@ -3,7 +3,7 @@ import { runHttpChild } from "@idhazh/serve-pipeline-apis/child";
 import { runtimeFailureExecution } from "../src/api/plan-failure";
 import { restorePlannerStartup } from "./restore-planner-startup";
 import { captureFeedApiFailure } from "./capture-feed-api-failure";
-import { FeedApiStartupSchema, feedApiSupervision } from "./read-feed-api-startup";
+import { FeedApiStartupSchema } from "./read-feed-api-startup";
 import { startFeedApiApp } from "./create-feed-api-app";
 
 export function runFeedApiServer(options: { restorePlanner?: typeof restorePlannerStartup } = {}) {
@@ -21,7 +21,7 @@ export function runFeedApiServer(options: { restorePlanner?: typeof restorePlann
       }),
     };
     return {
-      shutdownTimeoutMs: feedApiSupervision(startup).shutdown_timeout_ms,
+      shutdownTimeoutMs: startup.server.supervision.shutdown_timeout_ms,
       failure: captureFeedApiFailure(capture),
       start: signal => startFeedApiApp(startup, signal, options.restorePlanner),
     };

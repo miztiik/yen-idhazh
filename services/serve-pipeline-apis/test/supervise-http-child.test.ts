@@ -5,8 +5,8 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRootContext, readCloudEvent } from "@idhazh/common-contracts";
 import { z } from "zod";
-import { enabledModules } from "../src/api-startup";
-import { apiOrigin, SupervisionSettingsSchema } from "../src/load-settings";
+import { ApiHostStartupSchema, enabledModules } from "../src/api-startup";
+import { apiOrigin, loadHonoSettings, SupervisionSettingsSchema } from "../src/load-settings";
 import { readApiReadiness } from "../src/read-api-readiness";
 import { readServerEvidence } from "../src/read-server-evidence";
 import { createServerEvidenceSchema, ServerEventDataSchema, serverEvidenceFilename } from "../src/server-evidence";
@@ -17,7 +17,9 @@ import { HOST_CLOSED_FILENAME, HostClosedSchema, HostFailure, HostStartupSchema,
 import type { HostStartup } from "./run-host-lifetime";
 
 const serverEntry = fileURLToPath(new URL("./run-host-lifetime.ts", import.meta.url));
+const sharedSettings = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)));
 const supervision = SupervisionSettingsSchema.parse({
+  ...sharedSettings.supervision,
   readiness_timeout_ms: 10_000, shutdown_timeout_ms: 5_000, forced_exit_timeout_ms: 3_000,
 });
 const evidenceSchema = createServerEvidenceSchema(z.never());
@@ -30,14 +32,14 @@ async function withHost(
 ) {
   const root = resolve(await mkdtemp(".host-lifetime-"));
   try {
-    const reservation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
+    const reservation = Bun.serve({ hostname: sharedSettings.hostname, port: 0, fetch: () => new Response() });
     const port = reservation.port!;
     await reservation.stop(true);
     const startup = HostStartupSchema.parse({
-      server: { hostname: "127.0.0.1", port, idle_timeout_seconds: 5 },
+      server: { ...sharedSettings, port, idle_timeout_seconds: 5, supervision },
       run: { run_id: "shared-host", attempt: 1, started_at: "2026-11-05T00:00:00Z", context: createRootContext() },
       directory: "evidence", group: "machine", nonce: crypto.randomUUID(),
-      shutdown_timeout_ms: 5_000, startup_delay_ms: 0, close_delay_ms: 0, max_request_body_bytes: 1024,
+      startup_delay_ms: 0, close_delay_ms: 0, max_request_body_bytes: 1024,
       ...overrides,
     });
     await mkdir(join(root, "config"));
@@ -53,7 +55,7 @@ async function withHost(
 function childInput({ root, startup }: HostFixture) {
   return {
     root, startup, serverEntry, kind: "TYPESCRIPT_API" as const,
-    supervision, maxControlBytes: 4096, failure: hostFailure,
+    supervision: startup.server.supervision, maxControlBytes: 4096, failure: hostFailure,
     ready: (message: unknown, pid: number, signal: AbortSignal) => readApiReadiness({
       message, expected: {
         event: "typescript_api_ready", nonce: startup.nonce, pid, port: startup.server.port,
@@ -96,6 +98,28 @@ async function assertReleased(fixture: HostFixture, pid: number | null) {
       .toBe("replacement");
   } finally { await replacement.stop(true); }
 }
+
+test("private startup rejects missing or invalid server.supervision by field name", () => {
+  const { supervision: controls, ...server } = sharedSettings;
+  const startup = {
+    server: sharedSettings, directory: "evidence",
+    run: { run_id: "shared-startup", attempt: 1, started_at: "2026-11-05T00:00:00Z", context: createRootContext() },
+  };
+  expect(ApiHostStartupSchema.parse(startup).server.supervision).toEqual(controls);
+  const invalid = [
+    { server, path: "server.supervision" },
+    { server: { ...server, supervision: null }, path: "server.supervision" },
+    { server: { ...server, supervision: { ...controls, readiness_timeout_ms: 0 } }, path: "server.supervision.readiness_timeout_ms" },
+    { server: { ...server, supervision: { ...controls, shutdown_timeout_ms: -1 } }, path: "server.supervision.shutdown_timeout_ms" },
+    { server: { ...server, supervision: { ...controls, forced_exit_timeout_ms: 1.5 } }, path: "server.supervision.forced_exit_timeout_ms" },
+  ];
+  for (const input of invalid) {
+    const result = ApiHostStartupSchema.safeParse({ ...startup, server: input.server });
+    expect(result.success, input.path).toBe(false);
+    if (result.success) throw new Error(`Startup accepted invalid ${input.path}`);
+    expect(result.error.issues.map(issue => issue.path.join("."))).toContain(input.path);
+  }
+});
 
 test("shared hosting awaits cancelled work, application close and the final diagnostic", async () => {
   await withHost({}, async fixture => {
@@ -143,7 +167,7 @@ test("shared hosting awaits cancelled work, application close and the final diag
 test("a readiness deadline retains failed-startup evidence and reaps the child", async () => {
   await withHost({ startup_delay_ms: 1000 }, async fixture => {
     await expect(superviseApiTask({
-      ...taskInput(fixture), supervision: { ...supervision, readiness_timeout_ms: 50 },
+      ...taskInput(fixture), supervision: { ...fixture.startup.server.supervision, readiness_timeout_ms: 50 },
       async request() { throw new Error("A request must not run before readiness"); },
     })).rejects.toMatchObject({ code: "TYPESCRIPT_API_READY_TIMEOUT" });
     const { evidence } = await retained(fixture);
@@ -161,7 +185,7 @@ test("a failed request retains both causes when its exact child needs forced cle
     try {
       const original = new HostFailure("HOST_TASK_FAILED", "Task request failed");
       const error: unknown = await superviseApiTask({
-        ...taskInput(fixture), supervision: { ...supervision, shutdown_timeout_ms: 300 },
+        ...taskInput(fixture), supervision: { ...fixture.startup.server.supervision, shutdown_timeout_ms: 300 },
         async request() { throw original; },
       }).catch((failure: unknown) => failure);
       expect(error).toBeInstanceOf(HostFailure);

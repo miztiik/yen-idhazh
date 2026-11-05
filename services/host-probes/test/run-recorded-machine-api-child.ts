@@ -7,7 +7,7 @@ import { serveRecordedMachine } from "./serve-recorded-machine-api";
 await runHttpChild("TYPESCRIPT_API", captureMachineApiFailure(), message => {
   const startup = MachineApiStartupSchema.parse(message);
   return {
-    shutdownTimeoutMs: startup.supervision.shutdown_timeout_ms,
+    shutdownTimeoutMs: startup.server.supervision.shutdown_timeout_ms,
     start: async signal => {
       signal.throwIfAborted();
       const server = await serveRecordedMachine(process.cwd(), startup.server, startup.nonce);

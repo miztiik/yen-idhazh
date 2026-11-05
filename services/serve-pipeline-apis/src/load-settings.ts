@@ -13,6 +13,7 @@ export const HonoServerSettingsSchema = z.strictObject({
   hostname: z.enum(["127.0.0.1", "::1"]),
   port: z.int().positive().max(65535),
   idle_timeout_seconds: z.int().positive().max(255),
+  supervision: SupervisionSettingsSchema,
 });
 export type HonoServerSettings = z.infer<typeof HonoServerSettingsSchema>;
 

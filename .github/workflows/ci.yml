@@ -53,10 +53,10 @@ jobs:
 
       - name: Install locked recorder dependencies
         run: |
-          bun install --frozen-lockfile --cwd services/host-fingerprints
-          bun install --frozen-lockfile --cwd services/feed-ingest-plan
-          bun install --frozen-lockfile --cwd services/host-probes
           bun install --frozen-lockfile --cwd services/serve-pipeline-apis
+          bun install --frozen-lockfile --cwd services/host-fingerprints
+          bun install --frozen-lockfile --cwd services/host-probes
+          bun install --frozen-lockfile --cwd services/feed-ingest-plan
 
       - name: Capture current planner recordings from the real offline API
         run: |
@@ -175,20 +175,93 @@ jobs:
         with:
           bun-version: '1.3.13'
 
-      - name: Prepare the existing UUID implementation
+      - name: Prepare shared API dependencies
         working-directory: .
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
-          bun install --frozen-lockfile --cwd packages/data-delivery
 
       - name: Prepare the existing host profile implementation
         working-directory: .
         run: |
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/host-probes
-          bun install --frozen-lockfile --cwd services/feed-ingest-plan
+
+      - name: Check out shared hosting without native APIs
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: backend/var/checks/api-host-isolation
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /packages/common-contracts/package.json
+            /packages/common-contracts/bun.lock
+            /packages/common-contracts/src/
+            /services/serve-pipeline-apis/package.json
+            /services/serve-pipeline-apis/bun.lock
+            /services/serve-pipeline-apis/tsconfig.json
+            /services/serve-pipeline-apis/src/
+            /services/serve-pipeline-apis/test/
+            /config/hono-server.json
+            /config/typescript-event-sources.json
+
+      - name: Verify the isolated shared hosting implementation
+        working-directory: backend/var/checks/api-host-isolation
+        run: |
+          set -euo pipefail
+          test ! -e services/feed-ingest-plan
+          test ! -e services/host-fingerprints
+          test ! -e services/host-probes
+          test ! -e config/feed-ingest-plan-service.json
+          bun install --frozen-lockfile --cwd packages/common-contracts
           bun install --frozen-lockfile --cwd services/serve-pipeline-apis
+          bun run --cwd services/serve-pipeline-apis check
+          bun run --cwd services/serve-pipeline-apis test
+
+      - name: Expand the same checkout with only native machine inputs
+        working-directory: backend/var/checks/api-host-isolation
+        run: |
+          set -euo pipefail
+          git sparse-checkout add --no-cone --stdin <<'INPUTS'
+          /packages/ledger-file-writer/package.json
+          /packages/ledger-file-writer/bun.lock
+          /packages/ledger-file-writer/src/
+          /services/host-fingerprints/package.json
+          /services/host-fingerprints/bun.lock
+          /services/host-fingerprints/src/
+          /services/host-fingerprints/test/fixture.ts
+          /services/host-probes/package.json
+          /services/host-probes/bun.lock
+          /services/host-probes/tsconfig.json
+          /services/host-probes/src/
+          /services/host-probes/test/machine-api-recordings.ts
+          /services/host-probes/test/serve-machine-apis.test.ts
+          /services/host-probes/test/check-machine-api-dependencies.test.ts
+          /.github/scripts/summary-eval-tests/machine-task.ts
+          /.github/scripts/summary-eval-tests/machine-results.ts
+          /config/idhazh.json
+          /config/host-fingerprints.json
+          /config/host-probes.json
+          /config/ledgers.json
+          /tests/fixtures/host-fingerprints/linux-inputs.json
+          /tests/fixtures/host-probes/process-inputs.json
+          INPUTS
+          test ! -e services/feed-ingest-plan
+          test ! -e config/feed-ingest-plan-service.json
+          bun install --frozen-lockfile --cwd packages/ledger-file-writer
+          bun install --frozen-lockfile --cwd services/host-fingerprints
+          bun install --frozen-lockfile --cwd services/host-probes
+
+      - name: Run real machine children with feed source and settings absent
+        working-directory: backend/var/checks/api-host-isolation
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = Linux
+          test ! -e services/feed-ingest-plan
+          test ! -e config/feed-ingest-plan-service.json
+          bun run --cwd services/host-probes check
+          bun run --cwd services/host-probes test ./test/serve-machine-apis.test.ts ./test/check-machine-api-dependencies.test.ts
 
       - name: Check the caller launchers with the existing host compiler
         working-directory: services/host-probes
@@ -283,10 +356,10 @@ jobs:
       - name: Prepare pipeline API dependencies
         if: needs.scope.outputs.code == 'true'
         run: |
-          bun install --frozen-lockfile --cwd services/feed-ingest-plan
+          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/host-probes
-          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
+          bun install --frozen-lockfile --cwd services/feed-ingest-plan
 
       - name: TypeScript host fingerprints
         if: needs.scope.outputs.code == 'true'

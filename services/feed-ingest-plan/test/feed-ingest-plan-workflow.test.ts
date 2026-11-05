@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { loadHonoSettings } from "@idhazh/serve-pipeline-apis/settings";
 import {
   COMPACT_INDEX_VERSION, CompactIndexSchema,
   FeedHealthStateRowContract, FeedHealthStateRowSchema, FeedIngestConfigSchema, PUBLICATION_INVENTORY_VERSION,
@@ -259,6 +260,12 @@ test("planner configuration refuses retired acquisition controls", async () => {
   expect(ServiceSettingsSchema.safeParse({
     ...settings, inputs: { ...settings.inputs, digest_root: "frontend/public/digest" },
   }).success).toBe(false);
+});
+
+test("planner settings reject the shared supervision authority", async () => {
+  const settings = ServiceSettingsSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan-service.json")).json());
+  const server = await loadHonoSettings(root);
+  expect(ServiceSettingsSchema.safeParse({ ...settings, supervision: server.supervision }).success).toBe(false);
 });
 
 test("bounded discovery history preserves covered-day membership and planner raw overlap", async () => {

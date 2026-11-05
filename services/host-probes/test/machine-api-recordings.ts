@@ -36,7 +36,6 @@ export async function recordedMachineTask() {
     await Bun.write(join(root, "config", "host-probes.json"), JSON.stringify(probes));
     const startup = MachineApiStartupSchema.parse({
       group: "machine", nonce: randomUUID(), state_root: "state", directory: "logs", server,
-      supervision: { readiness_timeout_ms: 30000, shutdown_timeout_ms: 10000, forced_exit_timeout_ms: 5000 },
       run: { run_id: "700", attempt: 3, started_at: "2026-11-04T00:00:00Z", context: createRootContext() },
     });
     return {

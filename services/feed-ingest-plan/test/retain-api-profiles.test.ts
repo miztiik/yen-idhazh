@@ -27,7 +27,7 @@ test("shutdown-only native profile data survives manager cleanup and the owned p
         group: "machine", nonce: randomUUID(), server: await loadHonoSettings(fixture.directory),
         directory: relative(fixture.directory, fixture.evidence).replaceAll("\\", "/"),
         state_root: relative(fixture.directory, fixture.inputs.outputRoot).replaceAll("\\", "/"),
-        supervision: fixture.inputs.settings.supervision, run,
+        run,
       },
       request: async (origin, signal) => {
         const health = await fetch(new URL("/health", origin), { signal });

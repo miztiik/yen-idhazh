@@ -1,12 +1,10 @@
 /** Which private controls start a machine-only child without any feed configuration? */
 import { z } from "zod";
 import { ApiHostStartupSchema, ApiReadySchema, PrivatePathSchema } from "@idhazh/serve-pipeline-apis/startup";
-import { SupervisionSettingsSchema } from "@idhazh/serve-pipeline-apis/settings";
 
 export const MachineApiStartupSchema = z.strictObject({
   ...ApiHostStartupSchema.shape,
   group: z.literal("machine"), nonce: z.uuid(), state_root: PrivatePathSchema,
-  supervision: SupervisionSettingsSchema,
 });
 export type MachineApiStartup = z.infer<typeof MachineApiStartupSchema>;
 export const MachineApiStartupFailureSchema = z.strictObject({

@@ -20,7 +20,7 @@ export async function superviseMachineApiTask<T>(input: {
   return superviseApiTask({
     ...input, startup, kind: "TYPESCRIPT_API", failure,
     serverEntry: input.serverEntry ?? fileURLToPath(new URL("./serve-machine-apis.ts", import.meta.url)),
-    supervision: startup.supervision, maxControlBytes: config.max_request_body_bytes,
+    supervision: startup.server.supervision, maxControlBytes: config.max_request_body_bytes,
     evidenceSchema: MachineServerEvidenceSchema, decodeDiagnostic: readMachineApiDiagnostic,
     ready: (message, pid, signal) => {
       const failed = MachineApiStartupFailureSchema.safeParse(message);

@@ -4,7 +4,7 @@ import { superviseApiTask } from "@idhazh/serve-pipeline-apis/supervisor";
 import { MachineServerEvidenceSchema } from "@idhazh/host-probes/machine-evidence";
 import type { FailureCaptureOptions } from "../src/api/plan-failure";
 import { captureFeedApiFailure } from "./capture-feed-api-failure";
-import { FeedApiStartupSchema, feedApiSupervision } from "./read-feed-api-startup";
+import { FeedApiStartupSchema } from "./read-feed-api-startup";
 import type { FeedApiStartup } from "./read-feed-api-startup";
 import { readFeedApiReadiness } from "./read-feed-api-readiness";
 import { readFeedApiDiagnostic } from "./read-feed-api-diagnostic";
@@ -20,7 +20,7 @@ export function superviseFeedApiTask<T>(input: {
   return superviseApiTask({
     ...input, startup, kind, failure,
     serverEntry: input.serverEntry ?? fileURLToPath(new URL("./serve-feed-apis.ts", import.meta.url)),
-    supervision: feedApiSupervision(startup),
+    supervision: startup.server.supervision,
     maxControlBytes: (startup.group === "planning" ? startup.planner : startup.delivery).settings.listener.max_body_bytes,
     evidenceSchema: MachineServerEvidenceSchema, decodeDiagnostic: readFeedApiDiagnostic,
     ready: (message, pid, signal) => readFeedApiReadiness({ message, pid, signal, startup, kind, failure }),

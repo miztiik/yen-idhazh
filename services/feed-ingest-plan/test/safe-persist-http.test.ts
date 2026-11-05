@@ -192,8 +192,8 @@ test("an occupied port cannot reuse an earlier successful receipt or stop anothe
 test("expired delivery readiness reaps the child without starting Git delivery", async () => {
   const f = await publicationGitRecording();
   try {
-    const path = join(f.repository, "config", "feed-ingest-plan-service.json");
-    const settings = ServiceSettingsSchema.parse(await Bun.file(path).json());
+    const path = join(f.repository, "config", "hono-server.json");
+    const settings = await loadHonoSettings(f.repository);
     settings.supervision.readiness_timeout_ms = 1;
     await writeFile(path, JSON.stringify(settings));
     await expect(deliverWorkflowMetadataHttp(inputFor(f))).rejects.toThrow("SAFE_PERSIST_READY_TIMEOUT");
@@ -221,10 +221,10 @@ test("cancellation during a real refused Git push reaps the delivery child and p
   let pending: ReturnType<typeof finalizeRunOutput> | undefined;
   let gitPid: number | undefined;
   try {
-    const settingsPath = join(f.repository, "config", "feed-ingest-plan-service.json");
-    const settings = ServiceSettingsSchema.parse(await Bun.file(settingsPath).json());
-    settings.supervision.shutdown_timeout_ms = 200;
-    await writeFile(settingsPath, JSON.stringify(settings));
+    const settingsPath = join(f.repository, "config", "hono-server.json");
+    const listener = await loadHonoSettings(f.repository);
+    listener.supervision.shutdown_timeout_ms = 200;
+    await writeFile(settingsPath, JSON.stringify(listener));
     await writeFile(join(f.repository, "config", "feed-ingest-plan.json"), JSON.stringify(f.inputs.harvest.config));
     const retryPath = join(f.repository, "config", "push-retry.json");
     const retry = await Bun.file(retryPath).json();
@@ -240,8 +240,8 @@ test("cancellation during a real refused Git push reaps the delivery child and p
       outputPath: join(f.directory, "outputs"), summaryPath: join(f.directory, "summary.md"),
     });
     void pending.catch(() => {});
-    const deadline = AbortSignal.timeout(settings.supervision.readiness_timeout_ms);
-    const ready = await waitForHealth(settings.listener.port, deadline);
+    const deadline = AbortSignal.timeout(listener.supervision.readiness_timeout_ms);
+    const ready = await waitForHealth(listener.port, deadline);
     while (!await Bun.file(marker).exists()) {
       deadline.throwIfAborted();
       await Bun.sleep(10);
@@ -251,7 +251,7 @@ test("cancellation during a real refused Git push reaps the delivery child and p
     cancellation.abort(new Error("Recorded cancellation during delivery"));
     await expect(pending).rejects.toThrow("Run finalization failed");
     expect(() => process.kill(ready.pid, 0)).toThrow();
-    await assertReleased(settings.listener.port);
+    await assertReleased(listener.port);
     await waitForExit(gitPid, AbortSignal.timeout(5000));
     expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
     expect(MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json()).status).toBe("failed");
@@ -275,8 +275,9 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
       nonce: randomUUID(), settings, output_root: relative(f.repository, f.directory).replaceAll("\\", "/"),
       git_sha: f.identity.git_sha,
     });
+    const listener = await loadHonoSettings(f.repository);
     const startup = FeedApiStartupSchema.parse({
-      group: "delivery", delivery, server: await loadHonoSettings(f.repository),
+      group: "delivery", delivery, server: listener,
       directory: relative(f.repository, f.directory).replaceAll("\\", "/"),
       run: { run_id: "700", attempt: 3, started_at: "2026-10-21T23:59:59Z", context: createRootContext() },
     });
@@ -301,7 +302,7 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
     try {
       child.stdin.write(`${JSON.stringify(startup)}\n`);
       await child.stdin.flush();
-      const ready = await waitForHealth(settings.listener.port, AbortSignal.timeout(settings.supervision.readiness_timeout_ms));
+      const ready = await waitForHealth(listener.port, AbortSignal.timeout(listener.supervision.readiness_timeout_ms));
       expect(ready).toMatchObject({ nonce: delivery.nonce, pid: child.pid });
       expect(ready.pid).not.toBe(process.pid);
       child.stdin.end();

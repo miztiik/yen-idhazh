@@ -9,7 +9,7 @@ export function runMachineApiServer() {
   return runHttpChild("TYPESCRIPT_API", captureMachineApiFailure(), message => {
     const startup = MachineApiStartupSchema.parse(message);
     return {
-      shutdownTimeoutMs: startup.supervision.shutdown_timeout_ms,
+      shutdownTimeoutMs: startup.server.supervision.shutdown_timeout_ms,
       start: async signal => {
         const inputs = await loadMachineApiInputs(process.cwd(), startup.state_root);
         const identity = readMachineApiIdentity(startup, process.pid);

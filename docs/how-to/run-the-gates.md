@@ -294,10 +294,11 @@ existing locked host APIs and shared application from the repository root.
 Run the named modules from the service directory:
 
 ```powershell
-bun install --frozen-lockfile --cwd .\services\host-probes
-bun install --frozen-lockfile --cwd .\services\host-fingerprints
-bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
+bun install --frozen-lockfile --cwd .\packages\common-contracts
 bun install --frozen-lockfile --cwd .\services\serve-pipeline-apis
+bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
+bun install --frozen-lockfile --cwd .\services\host-fingerprints
+bun install --frozen-lockfile --cwd .\services\host-probes
 Set-Location .\services\hhem-evaluator
 uv run --frozen ruff check src tests scripts
 Push-Location ..\..
@@ -357,6 +358,11 @@ environment's installed packages: a Windows virtual-environment redirector
 has a different PID. The runtime ownership check stays strict.
 The isolated CI job prepares the host's locked dependencies and checks the
 new Bun scripts with that package's compiler; it still installs no model.
+Its sparse source check first runs shared hosting with native services absent,
+then adds only named machine inputs and executes the real Linux child.
+Feed source and feed configuration stay absent through both stages; dependency
+metadata also checks the actual summary helper. Ordinary evaluator preparation
+installs neither feed-ingest-plan nor data-delivery.
 The bounded workflow inventory change also selects
 `backend/tests/workflows/test_workflow_inputs.py` and
 `backend/tests/workflows/test_triggers.py`. Keep full suites in CI.
@@ -409,18 +415,24 @@ bun run --cwd .\services\feed-ingest-plan test .\test\plan-entry-points.test.ts 
 ```
 
 The shared selection lists affected surfaces; it does not execute Bun.
-For the composed feed listener, install the declared native modules before
-the composition package, using their frozen locks. Check the actual shared
-server and its named workflow dependants:
+For the composed feed listener, install shared hosting before the native
+assembly packages, using their frozen locks. Check the actual shared
+server, native construction and named workflow dependants:
 
 ```powershell
-bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
+bun install --frozen-lockfile --cwd .\packages\common-contracts
+bun install --frozen-lockfile --cwd .\services\serve-pipeline-apis
+bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
+bun install --frozen-lockfile --cwd .\packages\data-delivery
 bun install --frozen-lockfile --cwd .\services\host-fingerprints
 bun install --frozen-lockfile --cwd .\services\host-probes
-bun install --frozen-lockfile --cwd .\services\serve-pipeline-apis
+bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
 bun run --cwd .\services\serve-pipeline-apis check
 bun run --cwd .\services\serve-pipeline-apis test
-bun run --cwd .\services\feed-ingest-plan test .\test\feed-ingest-plan-supervisor.test.ts .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-workflow.test.ts .\test\feed-ingest-plan-report.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\feed-ingest-plan-host.test.ts
+bun run --cwd .\services\host-probes check
+bun run --cwd .\services\host-probes test .\test\serve-machine-apis.test.ts .\test\record-machine-api-events.test.ts .\test\check-machine-api-dependencies.test.ts
+bun run --cwd .\services\feed-ingest-plan check
+bun run --cwd .\services\feed-ingest-plan test .\test\serve-feed-apis.test.ts .\test\retain-api-profiles.test.ts .\test\feed-ingest-plan-supervisor.test.ts .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-workflow.test.ts .\test\feed-ingest-plan-report.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\feed-ingest-plan-host.test.ts
 ```
 
 The shared-port oracle uses real fingerprint and sampling handlers, recorded

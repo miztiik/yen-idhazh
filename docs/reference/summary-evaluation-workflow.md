@@ -57,9 +57,12 @@ token is neither persisted nor sent to generation, evaluation or reporting.
 Missing authentication fails before network or asset work with
 `ASSET_AUTH_MISSING`.
 
-Both active phases use the shared Hono server's `machine` group for the actual
-fingerprint and task-profile HTTP operations. TypeScript owns collection;
-Python owns only HTTP orchestration and the small native result projection.
+Both active phases use the probe package's machine application under shared
+Hono hosting for the actual fingerprint and task-profile HTTP operations.
+TypeScript owns collection; Python owns only HTTP orchestration and the small
+native result projection. Preparation installs neither feed-ingest-plan nor
+data-delivery and stages no feed configuration. The actual machine child and
+the summary helper depend only on the common, hosting and machine packages.
 Named schema checks bind the consumed field types, requiredness, nullability
 and vocabularies to the actual TypeScript models.
 
@@ -71,6 +74,9 @@ metadata. The shared server schema is not relaxed to accept extra fields.
 Run-local configuration copies enable the existing whole-machine CPU/RAM
 instruments without changing committed defaults. Reads name only their required
 files; there is no configuration-tree scan or second collector.
+`config/hono-server.json` supplies both listener controls and supervision waits,
+including the helper's profile-stop cleanup allowance. There is no feed-settings
+fallback.
 The native Hono supervisor verifies its startup nonce, spawned PID, uncached
 health and enabled module group. FastAPI's private readiness and shared health
 must identify the actual application instance and selected component. Native

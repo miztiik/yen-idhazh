@@ -20,6 +20,3 @@ export function readFeedApiIdentity(startup: FeedApiStartup, pid: number) {
     enabled: startup.group !== "planning" || startup.planner.settings.enabled,
   });
 }
-export function feedApiSupervision(startup: FeedApiStartup) {
-  return startup.group === "planning" ? startup.planner.settings.supervision : startup.delivery.settings.supervision;
-}

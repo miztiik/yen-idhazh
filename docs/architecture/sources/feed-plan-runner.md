@@ -76,7 +76,8 @@ request report may read additional closed days; an error in those report-only
 days cannot discard completed feed or article work. Collection startup failures
 still write a failed run, and cleanup errors do not replace the original cause.
 
-`supervision.readiness_timeout_ms` bounds startup and its health check.
+The shared `config/hono-server.json` controls these process waits, not the
+feed service settings. `supervision.readiness_timeout_ms` bounds startup and its health check.
 `shutdown_timeout_ms` allows graceful drain after success, failure, cancellation
 or pipe closure. `forced_exit_timeout_ms` bounds the supervisor's wait after
 killing only its owned child. Defaults allow 30 seconds for readiness, 10 seconds

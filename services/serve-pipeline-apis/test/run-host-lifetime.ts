@@ -36,7 +36,6 @@ export const hostFailure: HttpChildFailurePolicy<HostFailure> = {
 export const HostStartupSchema = ApiHostStartupSchema.extend({
   group: z.literal("machine"),
   nonce: z.uuid(),
-  shutdown_timeout_ms: z.int().positive(),
   startup_delay_ms: z.int().nonnegative(),
   close_delay_ms: z.int().nonnegative(),
   max_request_body_bytes: z.int().positive(),
@@ -56,7 +55,7 @@ if (import.meta.main) {
     await runHttpChild("TYPESCRIPT_API", hostFailure, message => {
       const startup = HostStartupSchema.parse(message);
       return {
-        shutdownTimeoutMs: startup.shutdown_timeout_ms,
+        shutdownTimeoutMs: startup.server.supervision.shutdown_timeout_ms,
         async start(parentSignal) {
           await Bun.sleep(startup.startup_delay_ms);
           if (parentSignal.aborted) throw hostFailure.create("HOST_STARTUP_CANCELLED", "Parent closed during startup");

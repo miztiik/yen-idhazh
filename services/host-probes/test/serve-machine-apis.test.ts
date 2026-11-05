@@ -21,9 +21,24 @@ import { parseProcessStat, readProcessIdentity } from "../src/task-profile/proce
 import { TaskProfileSchema } from "../src/task-profile/profile-schema";
 import type { TaskProfile } from "../src/task-profile/profile-schema";
 import { recordedMachineTask } from "./machine-api-recordings";
+import { MachineApiStartupSchema } from "../src/api/read-machine-api-startup";
 
 const json = (body: unknown, carrier = {}) => ({
   method: "POST", headers: { "content-type": "application/json", ...carrier }, body: JSON.stringify(body),
+});
+
+test("machine startup requires shared supervision without a legacy feed or top-level fallback", async () => {
+  const server = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)));
+  const startup = MachineApiStartupSchema.parse({
+    group: "machine", nonce: randomUUID(), state_root: "state", directory: "logs", server,
+    run: { run_id: "700", attempt: 3, started_at: "2026-11-04T00:00:00Z", context: createRootContext() },
+  });
+  const { supervision, ...listener } = server;
+  const missing = MachineApiStartupSchema.safeParse({ ...startup, server: listener });
+  expect(missing.success).toBe(false);
+  if (missing.success) throw new Error("Missing shared supervision must fail before child startup");
+  expect(missing.error.issues.map(issue => issue.path)).toContainEqual(["server", "supervision"]);
+  expect(MachineApiStartupSchema.safeParse({ ...startup, supervision }).success).toBe(false);
 });
 
 test("machine-only shutdown waits for its real profile worker and asynchronous report", async () => {

@@ -78,8 +78,9 @@ test("a real child with missing authored inputs exits before readiness and is re
 test("expired readiness cancels startup and leaves no listener", async () => {
   const fixture = await recordedPlannerProcess();
   try {
-    fixture.inputs.settings.supervision.readiness_timeout_ms = 1;
-    fixture.startup.settings.supervision.readiness_timeout_ms = 1;
+    const server = await loadHonoSettings(fixture.directory);
+    server.supervision.readiness_timeout_ms = 1;
+    await writeFile(join(fixture.directory, "config", "hono-server.json"), JSON.stringify(server));
     await expect(invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
       serverEntry: fixture.serverEntry,
     })).rejects.toThrow("PLANNER_READY_TIMEOUT");
@@ -106,14 +107,15 @@ test("cancellation during real recorded feed work reaps the child and releases i
   const cancellation = new AbortController();
   let pending: ReturnType<typeof invokePlannerHttp> | undefined;
   try {
-    fixture.inputs.settings.supervision.shutdown_timeout_ms = 200;
-    fixture.startup.settings.supervision.shutdown_timeout_ms = 200;
+    const server = await loadHonoSettings(fixture.directory);
+    server.supervision.shutdown_timeout_ms = 200;
+    await writeFile(join(fixture.directory, "config", "hono-server.json"), JSON.stringify(server));
     pending = invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
       serverEntry: fixture.serverEntry, signal: cancellation.signal,
     });
     void pending.catch(() => {});
     const health = `http://127.0.0.1:${fixture.inputs.settings.listener.port}${PLANNER_API_PREFIX}/health`;
-    const deadline = AbortSignal.timeout(fixture.inputs.settings.supervision.readiness_timeout_ms);
+    const deadline = AbortSignal.timeout(server.supervision.readiness_timeout_ms);
     let identity: ReturnType<typeof PlannerReadySchema.parse> | undefined;
     while (!identity) {
       deadline.throwIfAborted();
@@ -135,14 +137,16 @@ test("cancellation during real recorded feed work reaps the child and releases i
 
 test("parent disappearance closes the child pipe and the child bounds its own drain", async () => {
   const fixture = await recordedPlannerProcess([source({ url: "https://news.example/timeout" })]);
-  fixture.startup.settings.supervision.shutdown_timeout_ms = 200;
+  const server = await loadHonoSettings(fixture.directory);
+  server.supervision.shutdown_timeout_ms = 200;
+  await writeFile(join(fixture.directory, "config", "hono-server.json"), JSON.stringify(server));
   const parent = Bun.spawn([process.execPath, fileURLToPath(new URL("./planner-supervisor-recording.ts", import.meta.url))], {
     cwd: fixture.directory, stdin: new Blob([JSON.stringify(fixture.startup)]), stdout: "ignore", stderr: "inherit",
   });
   let childPid: number | undefined;
   let childGone = false;
   try {
-    await awaitRecordedRequest(fixture.directory, AbortSignal.timeout(fixture.startup.settings.supervision.readiness_timeout_ms));
+    await awaitRecordedRequest(fixture.directory, AbortSignal.timeout(server.supervision.readiness_timeout_ms));
     childPid = (await Bun.file(join(fixture.directory, "recorded-startup.json")).json()).pid;
     expect(childPid).not.toBe(parent.pid);
     parent.kill("SIGKILL");
