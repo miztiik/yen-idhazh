@@ -97,9 +97,6 @@ async function main() {
   let cleanupErrorCode: string | null = null;
   try {
     const probes = await loadConfig(join(runtime, "config", "host-probes.json"));
-    const listener = HonoServerSettingsSchema.parse(
-      await Bun.file(join(runtime, "config", "hono-server.json")).json(),
-    );
     // The native evidence filename is reused; a failed restart must not read the previous phase.
     stage = "MACHINE_EVIDENCE_INVALID";
     await unlink(join(runtime, "logs", "hono-server-machine.json")).catch(error => {
@@ -107,6 +104,9 @@ async function main() {
     });
     currentEvidence = true;
     stage = "MACHINE_API_STARTUP_INVALID";
+    const listener = HonoServerSettingsSchema.parse(
+      await Bun.file(join(runtime, "config", "hono-server.json")).json(),
+    );
     await superviseMachineApiTask({
       root: runtime, signal: cancellation.signal,
       startup: {

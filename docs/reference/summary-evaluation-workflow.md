@@ -77,6 +77,8 @@ files; there is no configuration-tree scan or second collector.
 `config/hono-server.json` supplies both listener controls and supervision waits,
 including the helper's profile-stop cleanup allowance. There is no feed-settings
 fallback.
+Invalid shared listener controls retain `MACHINE_API_STARTUP_INVALID`;
+invalid probe settings retain `MACHINE_SETTINGS_INVALID`.
 The native Hono supervisor verifies its startup nonce, spawned PID, uncached
 health and enabled module group. FastAPI's private readiness and shared health
 must identify the actual application instance and selected component. Native
