@@ -1,4 +1,4 @@
-/** Which shared scalar spellings do the Python contracts admit? */
+/** Which scalar spellings do shared and native TypeScript contracts admit? */
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { CONTRACT_VERSION } from "../version";
@@ -13,6 +13,7 @@ export const SlugSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 export const RunIdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}-[0-9]+$/);
 export const UrlSchema = z.string().max(2048).regex(/^https?:\/\/[^\s"'<>\\]+$/);
 export const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
+export const CandidateIdSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 export const CommitShaSchema = z.string().regex(/^[0-9a-f]{40}$/);
 export const JobNameSchema = z.string().min(1).max(64).regex(/^[a-z][a-z0-9_-]*$/);
 export const ServerJobSchema = z.enum(["plan", "work", "assemble", "visuals", "runtime", "decide", "migrate", "run-tasks", "history", "save_council_results", "collect", "operator"]);
@@ -29,10 +30,6 @@ export const RejectionStageSchema = z.enum(["harvest-feeds", "screen-article-can
 
 export function deriveUrlKey(canonicalUrl: string): string {
   return createHash("sha256").update(canonicalUrl, "utf8").digest("hex");
-}
-
-export function deriveCandidateId(runId: string, feedId: string, entryOrdinal: number): string {
-  return deriveUrlKey(`${RunIdSchema.parse(runId)}\n${SlugSchema.parse(feedId)}\n${CountSchema.parse(entryOrdinal)}`);
 }
 
 export function reject(ctx: z.RefinementCtx, message: string, path: PropertyKey[] = []): void {

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { ParsedFeedBatchSchema, PLANNER_API_PREFIX, RejectedArticleRowContract, RejectedArticleRowSchema, SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
+import { CandidateIdSchema, ParsedFeedBatchSchema, PLANNER_API_PREFIX, RawDocumentFailureSchema, RejectedArticleRowContract, RejectedArticleRowSchema, SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { recordedPlan } from "./plan-recordings";
 import { createPlanTestServer } from "./plan-test-server";
@@ -15,6 +15,7 @@ import { executePersistence } from "../src/api/persistence-operation";
 import { writeRows } from "./partition-fixtures";
 import { executeSelection } from "../src/api/selection-operation";
 import { operationLink } from "../src/api/operation-context";
+import { rawDocumentContentsPath } from "../src/selected-artifact-path";
 import type { OperationLink } from "@idhazh/common-contracts";
 
 async function failureCases() {
@@ -53,14 +54,23 @@ async function capture(recorded: Awaited<ReturnType<typeof recordedPlan>>, urls:
       });
       expect(response.status).toBe(200);
       const fetched = FetchResponseSchema.parse(await response.json());
+      if (fetched.fetch_item_type !== "article") throw new Error("Expected an article fetch");
+      expect(CandidateIdSchema.parse(fetched.candidate_id)).toBe(fetched.candidate_id);
       if (fetched.body_sha256 !== null) {
+        const held = stageStore(recorded.inputs).fetchedDocument(fetched);
+        expect(held?.candidate_id).toBe(fetched.candidate_id);
+        expect(held?.document.candidate_id).toBe(fetched.candidate_id);
+        expect(held?.document.attempt_observations.every(value => value.candidate_id === fetched.candidate_id)).toBe(true);
         const parsed = await app.request(`${PLANNER_API_PREFIX}/parse`, {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
             links: [operationLink(fetched)],
           }),
         });
         expect(parsed.status).toBe(200);
-        references.push(operationLink(ParseResponseSchema.parse(await parsed.json())));
+        const result = ParseResponseSchema.parse(await parsed.json());
+        if (result.fetch_item_type !== "article") throw new Error("Expected an article parse");
+        expect(result.candidate_id).toBe(fetched.candidate_id);
+        references.push(operationLink(result));
       }
     }
     return references;
@@ -73,6 +83,7 @@ test("terminal HTTP, DNS, TLS, timeout and extraction failures retain their nati
   try {
     delete recorded.runtime.run_number;
     recorded.inputs.harvest.extraction.max_retries = 0;
+    recorded.inputs.settings.dump_raw_document_contents = true;
     recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
     for (const entry of cases) if (entry.responses) recorded.transport.recordings.responses[entry.url] = entry.responses;
     await capture(recorded, cases.map(entry => entry.url));
@@ -88,6 +99,14 @@ test("terminal HTTP, DNS, TLS, timeout and extraction failures retain their nati
       });
       expect(row?.pacing_time_ms).not.toBeNull();
       expect(Object.keys(row!).sort()).toEqual(Object.keys(RejectedArticleRowSchema.shape).sort());
+      const failures = (await readFile(join(recorded.directory, rawDocumentContentsPath(
+        recorded.inputs.settings.inputs.artifact_root, { run_id: row!.run_id, writer: { attempt: row!.attempt } },
+      )), "utf8")).trim().split("\n").map(line => RawDocumentFailureSchema.parse(JSON.parse(line)));
+      expect(failures).toHaveLength(1);
+      expect(failures[0]!.document.candidate_id).toBe(row!.candidate_id);
+      expect(failures[0]!.document.observation.candidate_id).toBe(row!.candidate_id);
+      expect(recorded.events.some(event => event.data.phase === "started"
+        && event.data.details.candidate_id === row!.candidate_id)).toBe(true);
     }
     expect(recorded.transport.requests.map(request => request.url.href)).toEqual(cases.map(entry => entry.url));
   } finally { await recorded.close(); }
@@ -113,12 +132,23 @@ test("a successful retry retains captured identity and text without a stale nati
   const recorded = await recordedPlan();
   try {
     recorded.inputs.harvest.extraction.max_retries = 1;
+    const beforeDispatch: string[] = [];
+    recorded.transport.on_request = () => {
+      const started = recorded.events.findLast(event => event.data.operation === "fetch"
+        && event.data.phase === "started" && event.data.details.document_kind === "article");
+      beforeDispatch.push(CandidateIdSchema.parse(started?.data.details.candidate_id));
+    };
     recorded.transport.recordings.responses["https://news.example/second"]!.unshift({ status: 503, body: "" });
     const [id] = await capture(recorded, ["https://news.example/second"]);
     const batch = stageStore(recorded.inputs).read("parsed", id!, ParsedFeedBatchSchema);
     expect(batch.candidates).toHaveLength(1);
     expect(batch.candidates[0]!.article_text.length).toBeGreaterThan(0);
     expect(batch.candidates[0]!.url_key).toBe(deriveArticleIdentity("https://news.example/second").url_key);
+    const candidateId = batch.candidates[0]!.candidate_id;
+    expect(beforeDispatch).toEqual([candidateId, candidateId]);
+    expect(batch.observations[candidateId]!.candidate_id).toBe(candidateId);
+    expect(recorded.events.filter(event => event.data.details.document_kind === "article")
+      .every(event => event.data.details.candidate_id === candidateId)).toBe(true);
     expect(await rejectedRows(recorded)).toEqual([]);
     expect(recorded.transport.requests.filter(request => request.url.pathname === "/second")).toHaveLength(2);
   } finally { await recorded.close(); }

@@ -141,7 +141,7 @@ Table I - Delivery rows
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | I1 | 1 | Preserve resource URLs before hashing and dispatch | - | A | DONE | psychic-waffle | - | Preserve resource URLs |
-| I2 | 2 | Capture a distinct identity for every article input | 1 | B | PENDING | - | - | - |
+| I2 | 2 | Capture a distinct identity for every article input | 1 | B | DONE | upgraded-spoon | [#1917](https://github.com/miztiik/yen-idhazh/pull/1917) | Capture candidate identity |
 | I3 | 3 | Expose consistent article identities across APIs | 2 | C | PENDING | - | - | - |
 
 ## 2. Row #1 - Preserve resource URLs before hashing and dispatch
@@ -260,6 +260,7 @@ Table K - Row 1 alternatives
 - `packages/common-contracts/src/schemas/planner-operation.schema.ts`
 - `packages/common-contracts/src/schemas/article-entities.schema.ts`
 - `packages/common-contracts/src/schemas/raw-document-failure.schema.ts`
+- `packages/common-contracts/src/schemas/event.schema.ts`
 - `packages/common-contracts/test/article-identity-compatibility.test.ts`
 - `packages/common-contracts/test/planner-diagnostics.test.ts`
 - `packages/common-contracts/test/rejection.test.ts`
@@ -272,46 +273,36 @@ Table K - Row 1 alternatives
 - `services/feed-ingest-plan/src/api/stage-store.ts`
 - `services/feed-ingest-plan/src/api/document-operations.ts`
 - `services/feed-ingest-plan/src/api/document-response.schema.ts`
+- `services/feed-ingest-plan/src/api/document-state.ts`
 - `services/feed-ingest-plan/src/api/feed-offer-state.ts`
 - `services/feed-ingest-plan/src/api/feed-offers.ts`
 - `services/feed-ingest-plan/src/api/fetch-operation.ts`
 - `services/feed-ingest-plan/src/api/parse-operation.ts`
-- `services/feed-ingest-plan/src/api/collection-operation.ts`
 - `services/feed-ingest-plan/src/api/collection-batch.ts`
 - `services/feed-ingest-plan/src/harvest-feeds/harvest-types.ts`
 - `services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`
 - `services/feed-ingest-plan/src/harvest-feeds/prepare-article.ts`
 - `services/feed-ingest-plan/src/harvest-feeds/harvest-article.ts`
-- `services/feed-ingest-plan/src/harvest-feeds/record-rejection.ts`
 - `services/feed-ingest-plan/src/harvest-feeds/document-work.ts`
 - `services/feed-ingest-plan/src/harvest-feeds/document-observation.ts`
 - `services/feed-ingest-plan/src/harvest-feeds/feed-client.ts`
-- `services/feed-ingest-plan/src/logging/progress-logger.ts`
-- `services/feed-ingest-plan/src/recognize-article-entities.ts`
-- `services/feed-ingest-plan/src/record-article-entities.ts`
 - `services/feed-ingest-plan/src/record-harvest-failures.ts`
 - `services/feed-ingest-plan/src/reporting/failure-evidence-markdown.ts`
-- `services/feed-ingest-plan/src/run-health.ts`
 - `services/feed-ingest-plan/src/run-feed-plan.ts`
 - `services/feed-ingest-plan/src/screen-article-candidates/screening-input.ts`
-- `services/feed-ingest-plan/src/screen-article-candidates/triage-gates.ts`
-- `services/feed-ingest-plan/src/curate-article-portfolio/editorial-selection.ts`
-- `services/feed-ingest-plan/src/curate-article-portfolio/select-diverse-articles.ts`
-- `services/feed-ingest-plan/src/select-articles.ts`
 - `services/feed-ingest-plan/test/article-entities-workflow.test.ts`
 - `services/feed-ingest-plan/test/article-failure-retention.test.ts`
 - `services/feed-ingest-plan/test/article-source-outcome.test.ts`
+- `services/feed-ingest-plan/test/candidate-capture-http.test.ts` (new)
+- `services/feed-ingest-plan/test/collection-capacity.test.ts`
 - `services/feed-ingest-plan/test/collection-recordings.ts`
-- `services/feed-ingest-plan/test/collection-http.test.ts`
 - `services/feed-ingest-plan/test/collection-work.test.ts`
 - `services/feed-ingest-plan/test/curate.test.ts`
 - `services/feed-ingest-plan/test/diverse-selection.test.ts`
 - `services/feed-ingest-plan/test/early-age.test.ts`
 - `services/feed-ingest-plan/test/file-baseline-recording.ts`
 - `services/feed-ingest-plan/test/harvest.test.ts`
-- `services/feed-ingest-plan/test/harvest-recordings.ts`
 - `services/feed-ingest-plan/test/harvest-safety.test.ts`
-- `services/feed-ingest-plan/test/observation-recordings.ts`
 - `services/feed-ingest-plan/test/parser-deadline.test.ts`
 - `services/feed-ingest-plan/test/partition-recordings.ts`
 - `services/feed-ingest-plan/test/plan-engine.test.ts`
@@ -323,15 +314,14 @@ Table K - Row 1 alternatives
 - `tests/fixtures/feed-ingest-plan/report-events.json`
 - `tests/fixtures/feed-ingest-plan/entry-points/response.json`
 - `tests/fixtures/feed-ingest-plan/entry-points/health.json`
-- `tests/fixtures/feed-ingest-plan/entry-points/selected-articles.json`
-- `tests/fixtures/feed-ingest-plan/entry-points/discovered-articles.rows.json`
-- `tests/fixtures/feed-ingest-plan/entry-points/selected-articles.rows.json`
 - `tests/fixtures/feed-ingest-plan/entry-points/rejected-articles.rows.json`
 - `tests/fixtures/feed-ingest-plan/entry-points/feed-health-state.rows.json`
 - `tests/fixtures/feed-ingest-plan/entry-points/plan-runs.rows.json`
 - `docs/architecture/contracts/identity.md`
+- `docs/architecture/sources/feed-harvesting.md`
 - `docs/architecture/sources/feed-operator-api.md`
 - `docs/architecture/sources/feed-curation.md`
+- `docs/architecture/sources/feed-plan-runner.md`
 - `docs/architecture/sources/planner-run-diagnostics.md`
 - `docs/architecture/sources/planner-feed-history.md`
 - `docs/reference/diversity-metrics.md`

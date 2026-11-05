@@ -1,6 +1,6 @@
 # Planner run diagnostics
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 
 What evidence remains when a planner run fails?
 The existing response and report retain safe execution context. A separate
@@ -59,8 +59,10 @@ failure. These files do not prove summarization or publication.
 [`ArticleEntitiesSchema`](../../../packages/common-contracts/src/schemas/article-entities.schema.ts)
 owns each JSONL record. Records carry `run_id`, `attempt`, `traceId`,
 `git_sha`, `article_id`, `candidate_id`, `feed_id` and actual UTC
-`observed_at`. Article identity uses the existing URL hash and run/feed/entry
-identity; source text never selects a filename.
+`observed_at`. The article key is its URL hash; the candidate is the same
+[captured input UUID](../contracts/identity.md#typescript-captured-article-inputs)
+held before extraction. It is not recomputed from run, feed or position.
+Source text never selects a filename.
 
 Recognition runs immediately after article extraction. It reads the original
 resolved title and the complete sanitized extracted body, not downloaded HTML,
@@ -118,7 +120,7 @@ output. The run/attempt directory stays under the authored artifact root;
 the workflow uses the existing artifact-directory persistence helper and
 does not add a retention policy.
 
-The entity family uses `2026-11-03`. Its reader requires that explicit version
+The entity family uses `2026-11-04`. Its reader requires that explicit version
 and rejects missing or unknown versions without conversion. TypeScript owns
 this private format; Python does not read it.
 

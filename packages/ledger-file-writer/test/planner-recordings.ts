@@ -3,7 +3,7 @@ import {
   DiscoveredArticleRowContract, DiscoveredArticleRowSchema, FeedHealthStateRowContract,
   FeedHealthStateRowSchema, PlanRunRowContract, PlanRunRowSchema,
   SelectedArticleRowContract, SelectedArticleRowSchema, SelectedArtifactArticleSchema,
-  RejectedArticleRowContract, RejectedArticleRowSchema, deriveCandidateId, deriveUrlKey, selectedArticleMetadata,
+  RejectedArticleRowContract, RejectedArticleRowSchema, deriveUrlKey, selectedArticleMetadata,
 } from "@idhazh/common-contracts";
 import type { PlannerLedgerName } from "@idhazh/common-contracts";
 import type { LedgerRowContract } from "../src/ledger-types";
@@ -77,7 +77,7 @@ export function plannerRecordings(day = "2026-10-20", attempt = 1, execution = 1
     {
       name: "rejected-articles", contract: RejectedArticleRowContract,
       row: RejectedArticleRowSchema.parse({
-        run_id, attempt, date: day, candidate_id: deriveCandidateId(run_id, "fixture-feed", 1),
+        run_id, attempt, date: day, candidate_id: "00000000-0000-4000-8000-000000000001",
         url_key: deriveUrlKey("https://example.org/article/2"), feed_id: "fixture-feed",
         stage: "curate-article-portfolio", reason_code: "REJECTED_GLOBAL_CAPACITY_REACHED",
         freshness_cutoff_at: `${day}T00:00:00Z`,

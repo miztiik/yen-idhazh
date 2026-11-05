@@ -1,6 +1,6 @@
 /** Which native request, document and attempt shapes can live operator APIs use? */
 import { z } from "zod";
-import { CountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema } from "./primitives";
+import { CandidateIdSchema, CountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, reject } from "./primitives";
 import { BodyLimitEvidenceSchema, FetchFailureSchema } from "./harvest-diagnostics.schema";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
@@ -51,13 +51,14 @@ export const NetworkFailureDetailsSchema = z.strictObject({
 });
 export type NetworkFailureDetails = z.infer<typeof NetworkFailureDetailsSchema>;
 export const PlannerObservationSchema = OperationMetadataSchema.safeExtend({
-  run_id: RunIdSchema, article_id: Sha256Schema,
+  run_id: RunIdSchema, article_id: Sha256Schema, candidate_id: CandidateIdSchema.nullable(),
   feed_id: SlugSchema, occurred_at: TimestampSchema,
   operation: z.enum(["fetch", "parse", "attempt"]),
 });
 export const FetchedDocumentSchema = z.strictObject({
   version: OperationVersionSchema,
   fetch_item_type: z.enum(["feed", "article"]), canonical_url: UrlSchema, article_id: Sha256Schema, feed_id: SlugSchema,
+  candidate_id: CandidateIdSchema.nullable(),
   body: z.string().nullable(), http_status: z.int().min(100).max(599).nullable(),
   failure: FetchFailureSchema.nullable(),
   error_code: FetchAttemptSchema.shape.error_code,
@@ -76,6 +77,7 @@ export const FetchedDocumentSchema = z.strictObject({
   attempt_observations: z.array(PlannerObservationSchema), body_sha256: Sha256Schema.nullable(),
   entry_ordinal: CountSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
+  checkDocumentCandidate(value, ctx);
   if (value.canonical_url.includes("#")) {
     ctx.addIssue({ code: "custom", message: "canonical resource address must not contain a fragment" });
   }
@@ -102,19 +104,32 @@ export const FetchedDocumentSchema = z.strictObject({
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
+    { version: OPERATION_VERSION, change: "Retain the captured article candidate across the document and its observations." },
     { version: OPERATION_VERSION, change: "Preserve normalized feed and article queries while refusing canonical fragments." },
     { version: "2026-11-03", change: "Identify fetch and attempt operations with native context and input links." },
     { version: "2026-11-02", change: "Remove robots fields and attempts from current fetched documents." },
-    { version: "2026-11-01", change: "Preserve request pacing waits and effective settings." },
     { version: "2026-10-28", change: "Earlier changes are in this file's Git history." },
   ],
 });
 export type FetchedDocument = z.infer<typeof FetchedDocumentSchema>;
 
+export function checkDocumentCandidate(value: {
+  fetch_item_type: "feed" | "article"; candidate_id: string | null;
+  observation: { candidate_id: string | null }; attempt_observations: { candidate_id: string | null }[];
+}, ctx: z.RefinementCtx): void {
+  if ((value.fetch_item_type === "article") === (value.candidate_id === null)) {
+    reject(ctx, "Article documents require a captured candidate; feed documents have none", ["candidate_id"]);
+  }
+  if (value.observation.candidate_id !== value.candidate_id
+    || value.attempt_observations.some(observation => observation.candidate_id !== value.candidate_id)) {
+    reject(ctx, "Document observations must retain the captured candidate", ["observation", "candidate_id"]);
+  }
+}
+
 export const FetchRequestSchema = z.union([
   z.strictObject({ feed_id: SlugSchema, fetch_item_type: z.literal("feed"), traceId: TraceIdSchema.optional() }),
   z.strictObject({ feed_id: SlugSchema, fetch_item_type: z.literal("article"), url: UrlSchema, traceId: TraceIdSchema.optional() }),
-  z.strictObject({ fetch_item_type: z.literal("article"), offer_id: Sha256Schema, links: z.tuple([OperationLinkSchema]) }),
+  z.strictObject({ fetch_item_type: z.literal("article"), candidate_id: CandidateIdSchema, links: z.tuple([OperationLinkSchema]) }),
 ]);
 export const ParseRequestSchema = z.strictObject({
   links: z.tuple([OperationLinkSchema]),

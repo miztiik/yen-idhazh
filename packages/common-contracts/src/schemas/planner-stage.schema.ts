@@ -9,7 +9,7 @@ import { SelectedArticleRowSchema } from "./selected-article.schema";
 import { RejectedArticleRowSchema } from "./rejected-article.schema";
 import { FeedHealthStateRowSchema } from "./feed-health-state.schema";
 import {
-  CountSchema, DateStampSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema,
+  CandidateIdSchema, CountSchema, DateStampSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema,
   RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject,
 } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
@@ -44,7 +44,7 @@ export const PreflightFreshnessSchema = z.strictObject({
 });
 export type PreflightFreshness = z.infer<typeof PreflightFreshnessSchema>;
 export const PlannerHarvestObservationSchema = z.strictObject({
-  candidate_id: Sha256Schema, http_status: z.int().min(100).max(599).nullable(),
+  candidate_id: CandidateIdSchema, http_status: z.int().min(100).max(599).nullable(),
   fetch_failure: FetchFailureSchema.nullable(),
   paywall: z.boolean().nullable(),
   paywall_evidence: z.enum(["json-ld", "configured-marker", "none", "not-observed"]),
@@ -74,13 +74,14 @@ export const PlannerFeedEntrySchema = z.strictObject({
   media_types: z.array(NonEmptySchema).default([]),
 });
 export const PlannerFeedOfferSchema = z.strictObject({
-  offer_id: Sha256Schema, source: SourceSnapshotSchema, entry: PlannerFeedEntrySchema,
+  candidate_id: CandidateIdSchema, source: SourceSnapshotSchema, entry: PlannerFeedEntrySchema,
   state: z.enum(["pending", "fetched", "parsed", "rejected"]),
   links: z.array(OperationLinkSchema).max(1),
 }).meta({
   version: PARSED_FEED_BATCH_VERSION,
   changelog: [
-    { version: PARSED_FEED_BATCH_VERSION, change: "Link an offered article to its claimed fetch operation." },
+    { version: PARSED_FEED_BATCH_VERSION, change: "Retain captured candidate UUIDv4 values under their native name." },
+    { version: "2026-11-03", change: "Link an offered article to its claimed fetch operation." },
     { version: "2026-11-02", change: "Retain configured feed weights without planner tier fields." },
   ],
 });
@@ -98,9 +99,9 @@ const batchIdentity = {
 export const ParsedFeedBatchSchema = OperationMetadataSchema.safeExtend({
   ...batchIdentity, version: z.literal(PARSED_FEED_BATCH_VERSION).default(PARSED_FEED_BATCH_VERSION), request: PlannerStageRequestSchema,
   candidates: z.array(FeedIngestCandidateSchema),
-  observations: z.record(Sha256Schema, PlannerHarvestObservationSchema),
+  observations: z.record(CandidateIdSchema, PlannerHarvestObservationSchema),
   discovered: PlannerDiscoveredEvidenceSchema,
-  evidence: z.record(Sha256Schema, PlannerArticleEvidenceSchema),
+  evidence: z.record(CandidateIdSchema, PlannerArticleEvidenceSchema),
   history_rows: z.array(FeedHealthStateRowSchema), history_days: z.array(PlannerHealthDaySchema),
   work_rows: z.array(FeedHealthStateRowSchema), exclusions: z.array(PlannerRejectionCountSchema),
   offers: z.array(PlannerFeedOfferSchema).default([]),
@@ -120,10 +121,10 @@ export const ParsedFeedBatchSchema = OperationMetadataSchema.safeExtend({
 }).meta({
   version: PARSED_FEED_BATCH_VERSION,
   changelog: [
-    { version: PARSED_FEED_BATCH_VERSION, change: "Address parsed output by its producing operation and input links." },
+    { version: PARSED_FEED_BATCH_VERSION, change: "Carry captured UUIDv4 candidates through offers and keyed article evidence." },
+    { version: "2026-11-03", change: "Address parsed output by its producing operation and input links." },
     { version: "2026-11-02", change: "Remove robots evidence and health counters from parsed work." },
     { version: "2026-11-02", change: "Retain candidates and offers without planner tier fields." },
-    { version: "2026-10-31", change: "Require the current parsed batch without older-format readers." },
     { version: "2026-10-25", change: "Earlier changes are in git." },
   ],
 });
@@ -137,10 +138,10 @@ export const SelectedFeedBatchSchema = OperationMetadataSchema.safeExtend({
 }).meta({
   version: SELECTED_FEED_BATCH_VERSION,
   changelog: [
-    { version: SELECTED_FEED_BATCH_VERSION, change: "Address selected output by its producing operation and input links." },
+    { version: SELECTED_FEED_BATCH_VERSION, change: "Require captured UUIDv4 identities in terminal article rows." },
+    { version: "2026-11-03", change: "Address selected output by its producing operation and input links." },
     { version: "2026-11-02", change: "Give private selections their own stamp and target-only health and reports." },
     { version: "2026-11-02", change: "Carry both word counts, complete diversity scores and global timing." },
-    { version: "2026-10-31", change: "Carry independent request totals with explicit counter coverage." },
     { version: "2026-10-27", change: "Earlier changes are in git." },
   ],
 });

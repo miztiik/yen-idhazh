@@ -1,7 +1,7 @@
 /** Screen and curate declared work-size vectors without writing files or reading history. */
 import { fileURLToPath } from "node:url";
 import {
-  createRootContext, FeedIngestCandidateSchema, ParsedFeedBatchSchema, deriveCandidateId, deriveUrlKey,
+  createRootContext, FeedIngestCandidateSchema, ParsedFeedBatchSchema, createCandidateId, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { loadPlanningConfig } from "../src/config/resolve-policy";
 import { curateArticles } from "../src/curate-article-portfolio/editorial-selection";
@@ -44,7 +44,7 @@ export async function fixtureInput(options: { count?: number; words?: number[] }
     const url = `https://example.org/article-${ordinal}`;
     return FeedIngestCandidateSchema.parse({
       date: fixture.date, run_id: fixture.run_id, traceId: context.traceId,
-      candidate_id: deriveCandidateId(fixture.run_id, sourceId, ordinal), entry_ordinal: ordinal,
+      candidate_id: createCandidateId(), entry_ordinal: ordinal,
       feed_id: sourceId,
       source: {
         feed_id: sourceId, feed_url: "https://example.org/feed", title: "Recorded source",

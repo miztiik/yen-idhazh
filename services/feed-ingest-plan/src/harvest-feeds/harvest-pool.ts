@@ -1,5 +1,5 @@
 /** Overlap independent feed reads and article work within the configured request bound. */
-import { FeedOutcomePayloadSchema, PositiveCountSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
+import { createCandidateId, FeedOutcomePayloadSchema, PositiveCountSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
 import type { HarvestContext, HarvestResult, OfferedArticle } from "./harvest-types";
 import { utcTimestamp } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
@@ -89,14 +89,17 @@ export async function harvestFeeds(
       const feed = await readFeed(source, boundedFetcher, runContext, inputs.config.harvest.fetch_timeout_ms);
       context.on_feed?.(feed.outcome, feed.entries, utcTimestamp(context.observation_clock));
       context.progress?.("FEED_FETCH_COMPLETED", { feed_id: source.feed_id, output_count: feed.entries.length });
-      const articles = await mapPool(feed.entries, inputs.config.harvest.concurrency, async entry => {
+      const offeredArticles: OfferedArticle[] = feed.entries.map(entry => ({
+        candidate_id: createCandidateId(), source, entry,
+        ...(feed.parse === null ? {} : { input: feed.parse }),
+      }));
+      const articles = await mapPool(offeredArticles, inputs.config.harvest.concurrency, async offered => {
         if (feed.parse === null) throw new Error("Offered article requires its completed feed parse");
-        const offered: OfferedArticle = { source, entry, input: feed.parse };
-        context.progress?.("ARTICLE_HARVEST_STARTED", { feed_id: source.feed_id });
+        context.progress?.("ARTICLE_HARVEST_STARTED", { feed_id: source.feed_id, candidate_id: offered.candidate_id });
         const result = await harvestArticle(offered, inputs, boundedFetcher, runContext);
         context.on_article?.(result);
         context.progress?.("ARTICLE_HARVEST_COMPLETED", {
-          feed_id: source.feed_id, output_count: result.candidate === null ? 0 : 1,
+          feed_id: source.feed_id, candidate_id: offered.candidate_id, output_count: result.candidate === null ? 0 : 1,
         });
         return result;
       });

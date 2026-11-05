@@ -1,11 +1,11 @@
 /** Which original sanitized article entities may enter one private per-run JSONL record? */
 import { z } from "zod";
-import { CommitShaSchema, CountSchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema } from "./primitives";
+import { CandidateIdSchema, CommitShaSchema, CountSchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { PlannerFailureSchema } from "./planner-failure.schema";
 import { TraceIdSchema } from "./operation-metadata.schema";
 
-export const ARTICLE_ENTITIES_VERSION = "2026-11-03" as const;
+export const ARTICLE_ENTITIES_VERSION = "2026-11-04" as const;
 // The private JSONL protocol caps a record; authored limits may select smaller output.
 export const MAX_ARTICLE_ENTITIES = 1024;
 export const MAX_ARTICLE_ENTITY_CHARS = 512;
@@ -16,7 +16,7 @@ export const ArticleEntityLimitsSchema = z.strictObject({
 export const ArticleEntitiesSchema = z.strictObject({
   schema_version: z.literal(ARTICLE_ENTITIES_VERSION).default(ARTICLE_ENTITIES_VERSION),
   run_id: RunIdSchema, attempt: PositiveCountSchema, traceId: TraceIdSchema,
-  git_sha: CommitShaSchema, article_id: Sha256Schema, candidate_id: Sha256Schema, feed_id: SlugSchema,
+  git_sha: CommitShaSchema, article_id: Sha256Schema, candidate_id: CandidateIdSchema, feed_id: SlugSchema,
   observed_at: RecordedInstantSchema.describe("Actual recorded UTC entity analysis instant."),
   recognizer: z.literal("compromise"),
   title_status: z.enum(["complete", "unavailable", "failed"]),
@@ -50,7 +50,8 @@ export const ArticleEntitiesSchema = z.strictObject({
 }).meta({
   version: ARTICLE_ENTITIES_VERSION,
   changelog: [
-    { version: ARTICLE_ENTITIES_VERSION, change: "Associate entity output with its producing execution." },
+    { version: ARTICLE_ENTITIES_VERSION, change: "Retain the captured UUIDv4 identity of the analyzed article input." },
+    { version: "2026-11-03", change: "Associate entity output with its producing execution." },
     { version: "2026-11-02", change: "Declare scoped rule-based entities with explicit incomplete and truncated evidence." },
   ],
 });

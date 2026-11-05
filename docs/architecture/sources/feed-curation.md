@@ -1,6 +1,6 @@
 # Selecting an editorial portfolio
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-04
 
 How does the isolated planner choose articles from the admitted batch?
 It prepares one fixed score per eligible candidate, then chooses each next
@@ -11,9 +11,10 @@ allocation.
 ## Inputs and independent evidence
 
 A **feed ID** identifies one configured feed, `sources[].id` in
-`config/sources.json`. A **candidate ID** identifies one offered article in
-one run. Several candidates can carry the same canonical URL. They remain
-separate until one wins; the chosen candidate supplies the actual content.
+`config/sources.json`. A **candidate ID** identifies one
+[captured article input](../contracts/identity.md#typescript-captured-article-inputs).
+Several candidates can carry the same canonical URL. They remain separate
+until one wins; the chosen candidate supplies the actual content.
 
 Curation receives screened candidates, the effective global policy, the
 captured UTC age clock and measured technical article-pass history. Source
@@ -190,6 +191,9 @@ a tie. Do not clamp negative scores or stop at zero. Unequal bases can
 produce exactly equal current scores: with shared prior feed/site counts of
 ten and bases 1.0 and 1.0000000000000002, the specified native arithmetic
 gives -5.0 for both. The smaller ID wins even if it has the lower base.
+The same captured batch keeps its tie order. A newly captured batch has fresh
+candidate IDs and can choose another exactly tied representative; scores,
+diversity and URL deduplication do not change.
 
 For `M` admitted records and `K'` winners, the scan inspects at most
 `(K' + 1) * M` records, including a possible exhaustion sweep, and evaluates

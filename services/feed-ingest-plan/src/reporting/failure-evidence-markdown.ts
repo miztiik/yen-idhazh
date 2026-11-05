@@ -28,8 +28,7 @@ function distinctArticleFailures(articles: readonly RejectedArticleRow[]) {
   const distinct = new Map<string, RejectedArticleRow>();
   for (const article of articles) {
     if (article.stage !== "harvest-feeds" || !HarvestArticleFailureReasonSchema.safeParse(article.reason_code).success) continue;
-    const key = JSON.stringify([article.run_id, article.attempt,
-      article.candidate_id ?? [article.feed_id, article.url_key]]);
+    const key = JSON.stringify([article.run_id, article.attempt, article.candidate_id]);
     const previous = distinct.get(key);
     if (previous !== undefined && !isDeepStrictEqual(previous, article)) {
       throw new Error("Conflicting terminal article failure evidence");

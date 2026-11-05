@@ -40,8 +40,9 @@ export type FeedEntry = {
   media_types?: string[];
 };
 export type OfferedArticle = {
+  candidate_id: string;
   source: z.infer<typeof SourceSnapshotSchema>;
-  entry: FeedEntry;
+  entry: Omit<FeedEntry, "entry_ordinal"> & { entry_ordinal: number | null };
   input?: OperationLink;
 };
 export type HarvestContext = OperationMetadata & {

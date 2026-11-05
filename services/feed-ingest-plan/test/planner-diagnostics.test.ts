@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { createCloudEvent, createRootContext, deriveCandidateId, deriveUrlKey, FEED_INGEST_EVENT_VERSION, FeedIngestEventDataSchema, FetchRequestSchema, loadEventSources, PlannerSavedResponseSchema } from "@idhazh/common-contracts";
+import { createCloudEvent, createRootContext, createCandidateId, deriveUrlKey, FEED_INGEST_EVENT_VERSION, FeedIngestEventDataSchema, FetchRequestSchema, loadEventSources, PlannerSavedResponseSchema } from "@idhazh/common-contracts";
 import { recognizeArticleEntities } from "../src/recognize-article-entities";
 import { capturePlannerFailure, combinePlannerFailures, describePlanError, readPlannerResponseError } from "../src/api/plan-failure";
 import { retainFailureThroughCleanup } from "../src/api/retain-failure-through-cleanup";
@@ -31,7 +31,7 @@ async function entityRecording() {
 function identity(execution: ReturnType<typeof captureOptions>["execution"]) {
   return { run_id: execution.run_id, attempt: execution.attempt, traceId: execution.traceId, git_sha: execution.git_sha,
     article_id: deriveUrlKey("https://news.example/second"),
-    candidate_id: deriveCandidateId(execution.run_id, "recorded-news", 0),
+    candidate_id: createCandidateId(),
     feed_id: "recorded-news", observed_at: "2026-11-02T23:00:00Z" };
 }
 

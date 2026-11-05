@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import {
   createChildContext, createRootContext, FeedHealthStateRowSchema, FeedIngestCandidateSchema, ParsedFeedBatchSchema, PartitionedFeedBatchSchema, PlanRunRowContract, SelectedArticleRowContract,
-  SelectedArticlesArtifactSchema, deriveCandidateId, deriveUrlKey, selectedArticleMetadata,
+  SelectedArticlesArtifactSchema, createCandidateId, deriveUrlKey, selectedArticleMetadata,
 } from "@idhazh/common-contracts";
 import type { FeedIngestConfig, PlannerArticleEvidence } from "@idhazh/common-contracts";
 import { loadPlanningConfig, resolvePolicy } from "../src/config/resolve-policy";
@@ -73,7 +73,7 @@ function article(spec: CandidateCase, setup: Setup): ScreenedCandidate {
   const article_text = "Recorded factual report. ".repeat(100).trim();
   const candidate = FeedIngestCandidateSchema.parse({
     date: context.date, run_id: context.run_id, traceId: context.traceId,
-    candidate_id: deriveCandidateId(context.run_id, spec.source, spec.ordinal), entry_ordinal: spec.ordinal,
+    candidate_id: createCandidateId(), entry_ordinal: spec.ordinal,
     feed_id: spec.source, source: {
       feed_id: spec.source, publisher_id: spec.publisher_id, feed_url: `https://${spec.domain}/feed`,
       title: `${spec.source} configured feed`, status: "active", weight: 1,
@@ -296,7 +296,13 @@ test("byline is independent of scores while technical pass evidence keeps its me
     }
     const specs = [configured.fixture.candidates[0]!, configured.fixture.candidates[2]!]
       .map(spec => ({ ...spec, published_at: configured.fixture.observed_at }));
-    expect(run(configured, specs, { health }).articles[0]!.feed_id, recorded.name).toBe(recorded.winner);
+    const captures = specs.map(spec => article(spec, configured));
+    const winner = curateArticles(selectionInput(configured, captures, { health }));
+    const expectedFeed = (recorded.alpha_penalty ?? 0) === (recorded.gamma_penalty ?? 0)
+      ? [...captures].sort((a, b) => a.candidate.candidate_id.localeCompare(b.candidate.candidate_id))[0]!.candidate.feed_id
+      : recorded.winner;
+    expect(winner.articles[0]!.feed_id, recorded.name).toBe(expectedFeed);
+    expect(curateArticles(selectionInput(configured, [...captures].reverse(), { health })).articles).toEqual(winner.articles);
     for (const spec of specs) {
       const offered = article(spec, configured);
       const row = run(configured, [spec], { health }).articles[0]!;
@@ -316,17 +322,17 @@ test("real screening joins the strongest duplicate body and preserves both count
   const other = article({ ...setup.fixture.candidates[2]!, published_at: setup.context.now }, setup).candidate;
   const strongerText: string = recordedScreening.candidate.article_text;
   const stronger = { ...original, feed_id: "strong-carrier", entry_ordinal: 99,
-    candidate_id: deriveCandidateId(original.run_id, "strong-carrier", 99),
+    candidate_id: createCandidateId(),
     article_text: strongerText, word_count: recordedScreening.candidate.word_count,
     source: { ...original.source, feed_id: "strong-carrier", feed_url: "https://one.example/strong-feed", weight: 1 } };
-  const short = { ...original, entry_ordinal: 100, candidate_id: deriveCandidateId(original.run_id, original.feed_id, 100),
+  const short = { ...original, entry_ordinal: 100, candidate_id: createCandidateId(),
     canonical_url: "https://one.example/short", url_key: deriveUrlKey("https://one.example/short"),
     word_count: 3, article_text: "Too little substance" };
   const emptyView = recordedScreening.substance_cases.find((entry: { name: string }) =>
     entry.name === "technically admitted empty retained view");
   if (emptyView === undefined) throw new Error("The measured-zero retained recording is required");
   const emptyText = Array.from({ length: emptyView.repetitions }, () => emptyView.block).join("\n");
-  const zero = { ...original, entry_ordinal: 101, candidate_id: deriveCandidateId(original.run_id, original.feed_id, 101),
+  const zero = { ...original, entry_ordinal: 101, candidate_id: createCandidateId(),
     canonical_url: "https://one.example/zero", url_key: deriveUrlKey("https://one.example/zero"),
     article_text: emptyText, word_count: countWords(emptyText), title: emptyView.title, published_at: null };
   const screened = await screenArticleCandidates({
@@ -458,7 +464,7 @@ test("real selection keeps source pass denominators and isolates a later run's h
   const setup = await inputs();
   const first = article(setup.fixture.candidates[0]!, setup);
   const short = { ...first.candidate, entry_ordinal: 99,
-    candidate_id: deriveCandidateId(first.candidate.run_id, first.candidate.feed_id, 99),
+    candidate_id: createCandidateId(),
     canonical_url: "https://one.example/short", url_key: deriveUrlKey("https://one.example/short"),
     word_count: 3, article_text: "Too little substance" };
   const configured = source({

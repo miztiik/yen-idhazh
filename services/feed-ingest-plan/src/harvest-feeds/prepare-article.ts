@@ -1,5 +1,5 @@
 /** Apply the same pre-download gates to a feed offer in the planner and public stage APIs. */
-import { deriveCandidateId } from "@idhazh/common-contracts";
+import { CandidateIdSchema } from "@idhazh/common-contracts";
 import type { DropReason, RejectionDetails } from "@idhazh/common-contracts";
 import type { HarvestContext, OfferedArticle, HarvestArticleResult } from "./harvest-types";
 import { HarvestArticleResultSchema, utcTimestamp } from "./harvest-types";
@@ -23,7 +23,7 @@ export function resolveArticleTitle(feedTitle: string | null, pageTitle: string 
 }
 export function prepareArticle(offered: OfferedArticle, inputs: HarvestInputs, context: HarvestContext) {
   const { source, entry } = offered;
-  const candidateId = deriveCandidateId(context.writer.run_id, source.feed_id, entry.entry_ordinal);
+  const candidateId = CandidateIdSchema.parse(offered.candidate_id);
   let identity: ReturnType<typeof deriveArticleIdentity> | null = null;
   let unsafe = false;
   if (entry.link) {

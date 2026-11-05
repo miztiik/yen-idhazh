@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import {
   ARTICLE_ENTITIES_VERSION, ArticleEntitiesSchema, PlannerErrorResponseSchema,
-  PlannerFailureSchema, PlannerRunResponseSchema, PlannerSavedResponseSchema, deriveCandidateId, readArticleEntities,
+  PlannerFailureSchema, PlannerRunResponseSchema, PlannerSavedResponseSchema, createCandidateId, readArticleEntities,
 } from "../src/index";
 
 async function responseRecording() {
@@ -48,7 +48,7 @@ test("entity records require scoped bounds, explicit omissions and current versi
     schema_version: ARTICLE_ENTITIES_VERSION,
     run_id: recorded.run_id, attempt: recorded.attempt, traceId: recorded.traceId,
     git_sha: "a".repeat(40), article_id: recorded.selected_url_keys[0],
-    candidate_id: deriveCandidateId(recorded.run_id, "recorded-news", 0), feed_id: "recorded-news",
+    candidate_id: createCandidateId(), feed_id: "recorded-news",
     observed_at: recorded.started_at, recognizer: "compromise",
     title_status: "complete", body_status: "complete", status: "complete",
     limits: { max_entities: 1, max_entity_chars: 20 },

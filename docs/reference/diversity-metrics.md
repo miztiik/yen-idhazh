@@ -1,6 +1,6 @@
 # Feed planning diversity readings
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-11-04
 
 Which population and denominator does each available feed planning reading use?
 
@@ -12,9 +12,14 @@ Source kind comes from each recorded source snapshot, not a later classification
 The declared source snapshot always requires a kind; an absent label is not
 silently assigned a current label.
 
-Before selection, each distinct `candidate_id` is one source-candidate instance.
+Before selection, each distinct `candidate_id` is one captured article input.
+For native TypeScript its
+[captured UUID](../architecture/contracts/identity.md#typescript-captured-article-inputs)
+is separate from the article address and operation identifiers. Another
+submission of one address is another input, including within the same feed
+and run. This does not change foreign metric schemas.
 The same article can appear through several carriers. A repeated occurrence of
-one candidate record is refused, not counted again. These instance distributions
+one candidate record is refused, not counted again. These input distributions
 are necessary to measure source diversity before and after duplicate removal.
 They are not unique selected-article or publication distributions.
 

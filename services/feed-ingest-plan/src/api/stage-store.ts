@@ -67,7 +67,8 @@ export class StageStore {
     const held = this.documents.get(id);
     if (held === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Fetch reference is no longer live", "links");
     const value = FetchedDocumentSchema.parse(document);
-    if (operationKey(value.observation) !== id || value.observation.run_id !== held.context.run_id) {
+    if (operationKey(value.observation) !== id || value.observation.run_id !== held.context.run_id
+      || value.candidate_id !== held.candidate_id) {
       throw new PlanError("ARTIFACT_INVALID", "Fetched result differs from its producing operation", "links");
     }
     this.documents.set(id, { ...held, document: value });
@@ -75,7 +76,8 @@ export class StageStore {
   fetchedDocument(reference: OperationLink): FetchedDocumentReference | undefined {
     const held = this.documents.get(operationKey(reference));
     return held?.document === undefined ? undefined : {
-      context: structuredClone(held.context), config_sha256: held.config_sha256, document: structuredClone(held.document),
+      context: structuredClone(held.context), config_sha256: held.config_sha256, candidate_id: held.candidate_id,
+      document: structuredClone(held.document),
     };
   }
   finishFetch(reference: OperationLink, retain: boolean) {
@@ -100,7 +102,8 @@ export class StageStore {
     }
     held.claimant = id;
     this.documentRequests.add(id);
-    return { context: structuredClone(held.context), config_sha256: held.config_sha256, document: structuredClone(held.document) };
+    return { context: structuredClone(held.context), config_sha256: held.config_sha256, candidate_id: held.candidate_id,
+      document: structuredClone(held.document) };
   }
   consumeDocument(fetch: OperationLink, parse: OperationLink) {
     const fetchId = operationKey(fetch);

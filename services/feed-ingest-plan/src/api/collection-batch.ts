@@ -65,7 +65,8 @@ function capturedBatchReader(captured: CapturedBatch, content: CollectionContent
 }
 
 function collectionBatch(captured: CapturedBatch, content: CollectionContent, includePrivateSuffixes: boolean) {
-  const candidates = content.articles.map(article => article.candidate).sort((a, b) => a.entry_ordinal - b.entry_ordinal);
+  const candidates = content.articles.map(article => article.candidate).sort((a, b) => a.entry_ordinal === null || b.entry_ordinal === null
+    ? Number(a.entry_ordinal === null) - Number(b.entry_ordinal === null) : a.entry_ordinal - b.entry_ordinal);
   return {
     ...captured, candidates, offers: content.offers,
     observations: Object.fromEntries(content.articles.map(article => [article.candidate.candidate_id, article.observation])),

@@ -13,6 +13,7 @@ import { hashText } from "../hash-text";
 export type DocumentOperationContext = {
   context: RunContext;
   config_sha256: string;
+  candidate_id: string | null;
 };
 
 export function operationMetadata(value: OperationMetadata): OperationMetadata {
@@ -74,7 +75,7 @@ export function stageConfigFingerprint(inputs: PlanInputs, runtime: PlanRuntime)
 }
 
 export function captureDocumentContext(
-  inputs: PlanInputs, runtime: PlanRuntime, context?: RunContext,
+  inputs: PlanInputs, runtime: PlanRuntime, context?: RunContext, candidateId: string | null = null,
 ): DocumentOperationContext {
   // Independent documents must not inherit a listener run and its cancellation or candidate identities.
   return {
@@ -82,5 +83,6 @@ export function captureDocumentContext(
       undefined, runtimeOperation(runtime) ?? createRootContext(), runtime.captured_at,
       runtime.attempt, runtime.producer),
     config_sha256: stageConfigFingerprint(inputs, runtime),
+    candidate_id: candidateId,
   };
 }

@@ -43,6 +43,7 @@ export * from "./schemas/operation-metadata.schema";
 export * from "./schemas/cloud-event.schema";
 export * from "./create-operation-context";
 export * from "./create-cloud-event";
+export * from "./create-candidate-id";
 export * from "./read-cloud-event";
 export * from "./propagate-trace-context";
 export * from "./load-event-sources";

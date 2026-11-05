@@ -1,11 +1,11 @@
 {
   "now": "2026-10-21T12:00:00Z",
   "candidate": {
-    "version": "2026-11-03",
+    "version": "2026-11-04",
     "date": "2026-10-21",
-    "traceId": "c0ca63c74ce1abbb67f7fdf772fd2d9e",
+    "traceId": "516c3c6da623b3e9891fc97fc7890739",
     "run_id": "2026-10-21-123",
-    "candidate_id": "d60a9dad872cff31431c23b6ba34d1ce2a80c95a0a8bd5bbd003fa37f70af13c",
+    "candidate_id": "57dd84fe-d311-4b22-9b17-2bf6b5d12f53",
     "entry_ordinal": 0,
     "feed_id": "fixture-source",
     "source": {
@@ -29,7 +29,7 @@
     "fetched_at": "2026-10-21T12:00:00Z"
   },
   "observation": {
-    "candidate_id": "d60a9dad872cff31431c23b6ba34d1ce2a80c95a0a8bd5bbd003fa37f70af13c",
+    "candidate_id": "57dd84fe-d311-4b22-9b17-2bf6b5d12f53",
     "http_status": 200,
     "fetch_failure": null,
     "paywall": false,
@@ -43,7 +43,7 @@
       "error_code": null,
       "response_evidence": {
         "content_type": null,
-        "decoded_bytes": 1678,
+        "decoded_bytes": 1737,
         "declared_content_length": null,
         "selected_headers": {},
         "headers_truncated": [],
@@ -53,7 +53,7 @@
       "failure_code": null,
       "stopped_stage": null,
       "detail": null,
-      "fetch_ms": 100,
+      "fetch_ms": 13,
       "pacing_time_ms": 0,
       "pacing_settings": {
         "enabled": false,
@@ -61,7 +61,7 @@
         "publisher_delay_ms": 1000,
         "jitter_ms": 500
       },
-      "extract_ms": 4391,
+      "extract_ms": 249,
       "warnings": [],
       "quality": {
         "source_word_count": 229,

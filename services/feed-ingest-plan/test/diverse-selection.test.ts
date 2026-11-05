@@ -36,12 +36,12 @@ async function fixture() {
   ).json());
 }
 
-function identity(ordinal: number): string { return ordinal.toString(16).padStart(64, "0"); }
+function identity(ordinal: number): string { return `00000000-0000-4000-8000-${ordinal.toString(16).padStart(12, "0")}`; }
 function candidate(
   id: number, base_score: number, feed_id = "main", website_group = "main.example", url = id,
 ): NumericalSelectionInput {
   return NumericalSelectionInputSchema.parse({
-    candidate_id: identity(id), url_key: identity(url), feed_id, website_group, base_score,
+    candidate_id: identity(id), url_key: url.toString(16).padStart(64, "0"), feed_id, website_group, base_score,
   });
 }
 

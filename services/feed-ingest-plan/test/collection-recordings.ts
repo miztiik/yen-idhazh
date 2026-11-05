@@ -32,7 +32,7 @@ export async function collectRecordedFeeds(inputs: PlanInputs, runtime: PlanRunt
       if (parsed.fetch_item_type !== "feed") throw new Error("The recorded source must parse as a feed");
       for (const offer of parsed.offers) {
         const article = FetchResponseSchema.parse(await post("fetch", {
-          fetch_item_type: "article", links: [{ traceId: parsed.traceId, spanId: parsed.spanId }], offer_id: offer.offer_id,
+          fetch_item_type: "article", links: [{ traceId: parsed.traceId, spanId: parsed.spanId }], candidate_id: offer.candidate_id,
         }));
         if (article.body_sha256 !== null) await post("parse", {
           links: [{ traceId: article.traceId, spanId: article.spanId }],

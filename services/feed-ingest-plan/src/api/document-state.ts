@@ -85,7 +85,8 @@ export function checkFetchedDocument(record: FetchedDocumentReference, inputs: P
   const artifact = FetchedDocumentSchema.parse(record.document);
   const identity = artifact.fetch_item_type === "feed" ? deriveFeedIdentity(artifact.canonical_url)
     : deriveArticleIdentity(artifact.canonical_url);
-  if (artifact.article_id !== identity.url_key || artifact.observation.run_id !== record.context.run_id
+  if (artifact.article_id !== identity.url_key || artifact.candidate_id !== record.candidate_id
+    || artifact.observation.run_id !== record.context.run_id
     || operationKey(artifact.observation) !== operationKey(record.context)
     || artifact.body_sha256 !== (artifact.body === null ? null : hashText(artifact.body))
     || (artifact.body !== null && Buffer.byteLength(artifact.body) > inputs.harvest.extraction.max_body_bytes)) {

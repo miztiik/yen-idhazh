@@ -120,7 +120,7 @@ test("cancellation drains owned requests and retains partial accounting without 
     })).json());
     if (parsed.fetch_item_type !== "feed") throw new Error("Expected a recorded feed offer");
     pending = post("fetch", {
-      fetch_item_type: "article", links: [operationLink(parsed)], offer_id: parsed.offers[0]!.offer_id,
+      fetch_item_type: "article", links: [operationLink(parsed)], candidate_id: parsed.offers[0]!.candidate_id,
     }).then(response => { operationSettled = true; return response; });
     await fetching;
     const cancellation = await post("collections/cancel", { traceId: id });

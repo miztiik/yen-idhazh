@@ -29,8 +29,12 @@ Parsing saved bytes makes no network request.
 
 ## Inputs and identity
 
-Candidates retain sanitized content, canonical URL identity, original offered
-ordinal and configured source facts. Those facts include nullable curated
+Candidates retain sanitized content, canonical URL identity,
+[captured input identity](../contracts/identity.md#typescript-captured-article-inputs),
+original offered ordinal and configured source facts. Capture each feed entry
+before preflight and pass that candidate unchanged into article work. Preparing
+the same captured input again does not allocate another value.
+Those source facts include nullable curated
 publisher ID, feed URL/title, lifecycle status and configured feed weight.
 They contain no inferred vertical, desk, lens, entity or quality judgment.
 
@@ -215,8 +219,10 @@ the private fetch receipt is not their sole store.
 Writing a local ledger file is separate from
 [verified Git delivery](feed-ingest-audit.md#what-is-checked-and-written).
 Only terminal outcomes are retained, not each retry or successful article.
-The offered candidate and URL identities stay unchanged; missing addresses
-never gain invented identities. Article HTTP status and low-level failure
+The captured candidate and URL identities stay unchanged. Malformed article
+entries keep their captured candidate, with null URL and address hash; feed
+refusals have no article candidate. Neither becomes a terminal article ledger
+row. Article HTTP status and low-level failure
 codes describe only the actual article operation, with null for unobserved
 target facts. Removed permission fields have no placeholders.
 Attempt facts retain each actual target dispatch on its dispatch UTC day,

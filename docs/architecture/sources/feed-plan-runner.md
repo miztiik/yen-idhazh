@@ -83,7 +83,7 @@ killing only its owned child. Defaults allow 30 seconds for readiness, 10 second
 for drain and 5 seconds to confirm forced exit. The child also applies its own
 drain bound if its supervisor disappears. No process is detached, no process
 name is used for cleanup, and runner process tracking remains enabled.
-`POST /api/2026-11-02/plan` accepts optional numeric `article_limit` and `shards`,
+`POST /api/2026-11-04/plan` accepts optional numeric `article_limit` and `shards`,
 plus a configured `partition_strategy`. Unknown fields, strings in numeric API
 fields, invalid counts and null controls fail before work. CLI blanks mean
 omission. There is no date control.
