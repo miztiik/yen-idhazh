@@ -17,7 +17,9 @@ export async function harvestArticle(
   offered: OfferedArticle, inputs: HarvestInputs, fetcher: Pick<SourceFetcher, "fetch">, context: HarvestContext,
 ): Promise<HarvestArticleResult> {
   const { source, entry } = offered;
-  const prepared = prepareArticle(offered, inputs, context);
+  const preflightContext = { ...context };
+  delete preflightContext.document_activity;
+  const prepared = prepareArticle(offered, inputs, preflightContext);
   const { candidate_id, identity, article, observation } = prepared;
   const eventIdentity = {
     run_id: context.writer.run_id, candidate_id,
@@ -49,7 +51,7 @@ export async function harvestArticle(
     const failure = fetchRejection(fetched, inputs.config.harvest.fetch_timeout_ms, diagnostics);
     return HarvestArticleResultSchema.parse({
       candidate: null,
-      rejection: recordRejection(source, context, failure.reason, failure.details, article),
+      rejection: recordRejection(source, { ...context, ...fetchContext }, failure.reason, failure.details, article),
       observation: fetchedObservation,
     });
   }
@@ -64,9 +66,11 @@ export async function harvestArticle(
       phase, duration_ms, source.feed_id, source.publisher_id,
     ) }),
   };
+  const parseContext = createChildContext(operationMetadata(context), { links: [operationLink(fetchedEvent)] });
+  const rejectionContext = { ...context, ...parseContext };
   const parsed = await work.parse(
     operation => parseDocument("article", body, link, inputs.extraction, context.parser_pool, { ...parserOptions, context: operation }),
-    createChildContext(operationMetadata(context), { links: [operationLink(fetchedEvent)] }), describeArticleParse,
+    parseContext, describeArticleParse,
   );
   if (parsed.parsed === null) {
     diagnostics = {
@@ -76,7 +80,7 @@ export async function harvestArticle(
     };
     return HarvestArticleResultSchema.parse({
       candidate: null,
-      rejection: recordRejection(source, context, "EXTRACT_FAILED", {
+      rejection: recordRejection(source, rejectionContext, "EXTRACT_FAILED", {
         ...fetchEvidence(fetched), diagnostics,
       }, article),
       observation: { ...fetchedObservation, extraction: "failed", diagnostics },
@@ -110,13 +114,13 @@ export async function harvestArticle(
     };
     return HarvestArticleResultSchema.parse({
       candidate: null,
-      rejection: recordRejection(source, context, "EXTRACT_FAILED", { ...fetchEvidence(fetched), diagnostics }, article),
+      rejection: recordRejection(source, rejectionContext, "EXTRACT_FAILED", { ...fetchEvidence(fetched), diagnostics }, article),
       observation: { ...completeObservation, diagnostics },
     });
   }
   if (!article.title || !extracted.article_text) {
     return HarvestArticleResultSchema.parse({
-      candidate: null, rejection: recordRejection(source, context, extracted.article_text ? "MISSING_REQUIRED_FIELDS" : "EXTRACT_EMPTY", {
+      candidate: null, rejection: recordRejection(source, rejectionContext, extracted.article_text ? "MISSING_REQUIRED_FIELDS" : "EXTRACT_EMPTY", {
         ...fetchEvidence(fetched), diagnostics,
       }, article),
       observation: completeObservation,

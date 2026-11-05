@@ -1,5 +1,5 @@
 /** Write the reusable planner Markdown into the workflow run summary. */
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { FeedIngestConfigSchema, WriterIdentitySchema, PlannerSavedResponseSchema } from "../../../packages/common-contracts/src/index";
 import { z } from "zod";
@@ -18,6 +18,8 @@ import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { articleEntitiesFilename, articleEntitiesPath } from "../src/selected-artifact-path";
 import { readMachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { renderServerEvidence } from "./feed-ingest-plan-server-report";
+import type { MachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
+import type { ReportDiagnosticIdentity } from "../src/reporting/article-failure-evidence";
 
 export type WorkflowReportEvidence = {
   response: unknown; selected?: unknown; policy?: unknown; host?: unknown;
@@ -27,10 +29,13 @@ export type WorkflowReportEvidence = {
 export function renderWorkflowPlanMarkdown(
   input: WorkflowReportEvidence, documentationUrl = resolveWorkflowGuideUrl(process.env),
 ): PlannerMarkdown {
-  const response = PlannerSavedResponseSchema.parse(input.response);
-  if (!("planning_complete" in response)) {
+  const response = input.response === undefined ? undefined : PlannerSavedResponseSchema.parse(input.response);
+  if (response === undefined || !("planning_complete" in response)) {
     const host = formatHostFingerprintSummary(input.host);
-    return renderUnavailablePlanMarkdown({ failure: response.failure, host: { markdown: host.cells, notice: host.notice } });
+    return renderUnavailablePlanMarkdown({
+      failure: response?.failure ?? null, host: { markdown: host.cells, notice: host.notice },
+      ...(input.failures === undefined ? {} : { failures: input.failures }),
+    });
   }
   const policy = formatPolicyTable(input.policy, response.selection_started_at_utc !== null, documentationUrl);
   const host = formatHostFingerprintSummary(input.host);
@@ -68,8 +73,11 @@ export async function writePlannerReport(input: {
   return { status: "written" as const, annotations: report.notices.length, markdown: report.markdown };
 }
 
-export async function readExecutionEvidence(directory: string, root?: string): Promise<WorkflowReportEvidence> {
-  const response: unknown = JSON.parse(await readFile(join(directory, "response.json"), "utf8"));
+export async function readExecutionEvidence(directory: string, root?: string, options: {
+  execution?: ReportDiagnosticIdentity; servers?: readonly MachineServerEvidence[];
+} = {}): Promise<WorkflowReportEvidence> {
+  const responseFile = Bun.file(join(directory, "response.json"));
+  const response: unknown = await responseFile.exists() ? await responseFile.json() : undefined;
   const evidence: WorkflowReportEvidence = { response };
   for (const [key, name] of [
     ["policy", "workflow-policy.json"],
@@ -78,11 +86,12 @@ export async function readExecutionEvidence(directory: string, root?: string): P
     const file = Bun.file(join(directory, name));
     if (await file.exists()) evidence[key] = await file.json();
   }
-  const saved = PlannerSavedResponseSchema.parse(response);
-  if (!("planning_complete" in saved)) return evidence;
   evidence.failures = await readReportFailureEvidence({
-    directory, ...(root === undefined ? {} : { root }), response: saved,
+    directory, ...(root === undefined ? {} : { root }), response,
+    ...options,
   });
+  const saved = response === undefined ? undefined : PlannerSavedResponseSchema.parse(response);
+  if (saved === undefined || !("planning_complete" in saved)) return evidence;
   const selected = saved.files.selected_articles;
   if (selected !== undefined) {
     try {
@@ -114,28 +123,26 @@ export async function writeWorkflowReport(input: {
   if (!config.workflow_reporting.enabled) return { status: "disabled" as const };
   if (!input.summaryPath) throw new Error("Enabled reporting requires a summary output path");
   await mkdir(input.directory, { recursive: true });
-  let report: PlannerMarkdown;
+  const servers = await readMachineServerEvidence(input.directory);
+  const evidence = await readExecutionEvidence(input.directory, input.root, {
+    execution: {
+      ...(input.runId === undefined ? {} : { run_id: input.runId }),
+      ...(input.attempt === undefined ? {} : { attempt: input.attempt }),
+    }, servers,
+  });
+  const report = renderWorkflowPlanMarkdown(evidence);
   let diagnostics = "";
-  if (await Bun.file(join(input.directory, "response.json")).exists()) {
-    const evidence = await readExecutionEvidence(input.directory, input.root);
-    report = renderWorkflowPlanMarkdown(evidence);
-    const saved = PlannerSavedResponseSchema.parse(evidence.response);
-    if ("planning_complete" in saved && saved.health?.status === "summarized") {
-      diagnostics = renderExclusionDiagnostics(saved.health.rows);
-    }
-  } else {
-    const hostFile = Bun.file(join(input.directory, "host-fingerprint.json"));
-    const host = formatHostFingerprintSummary(await hostFile.exists() ? await hostFile.json() : undefined);
-    report = renderUnavailablePlanMarkdown({ host: { markdown: host.cells, notice: host.notice } });
+  const response = evidence.response === undefined ? undefined : PlannerSavedResponseSchema.parse(evidence.response);
+  if (response !== undefined && "planning_complete" in response && response.health?.status === "summarized") {
+    diagnostics = renderExclusionDiagnostics(response.health.rows);
   }
   let entityEvidence = "Entity output could not be checked because execution identity was not recorded.";
-  const responseFile = Bun.file(join(input.directory, "response.json"));
-  const response = await responseFile.exists() ? PlannerSavedResponseSchema.parse(await responseFile.json()) : undefined;
   const runId = input.runId ?? (response !== undefined && "planning_complete" in response
     ? response.run_id : response?.failure?.execution.run_id ?? undefined);
   if (runId !== undefined) {
     const settingsFile = Bun.file(join(input.root, "config", "feed-ingest-plan-service.json"));
-    const attempt = response !== undefined && "planning_complete" in response ? response.attempt : response?.failure?.execution.attempt;
+    const attempt = input.attempt ?? (response !== undefined && "planning_complete" in response
+      ? response.attempt : response?.failure?.execution.attempt);
     if (!await settingsFile.exists()) {
       entityEvidence = "Entity output could not be checked because service settings were not recorded.";
     } else if (attempt != null) {
@@ -147,7 +154,6 @@ export async function writeWorkflowReport(input: {
       }
     }
   }
-  const servers = await readMachineServerEvidence(input.directory);
   const expectedAttempt = input.attempt ?? (response !== undefined && "planning_complete" in response
     ? response.attempt : response?.failure?.execution.attempt);
   if (servers.some(server => server.run_id !== input.runNumber

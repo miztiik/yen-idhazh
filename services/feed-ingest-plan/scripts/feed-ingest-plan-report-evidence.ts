@@ -1,18 +1,42 @@
-/** Which existing native files supply article responses and earlier paused-feed checks to one report? */
+/** Which named native files supply terminal article details and earlier paused-feed checks to one report? */
 import { join } from "node:path";
-import { RejectedArticleRowSchema } from "@idhazh/common-contracts";
-import { PlanResponseSchema } from "../src/api/plan-response.schema";
+import { PlannerSavedResponseSchema, RejectedArticleRowSchema } from "@idhazh/common-contracts";
 import type { ReportFailureEvidence } from "../src/reporting/failure-evidence-markdown";
+import type { ReportDiagnosticIdentity } from "../src/reporting/article-failure-evidence";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { readPlanningHistory } from "../src/read-ledger-history/read-run-history";
 import { verifyParquetFiles } from "./feed-ingest-plan-verification";
+import { readArticleFailureDiagnostics } from "./read-article-failure-diagnostics";
+import { readMachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
+import type { MachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 
 export async function readReportFailureEvidence(input: {
-  directory: string; root?: string; response: unknown;
+  directory: string; root?: string; response?: unknown;
+  execution?: ReportDiagnosticIdentity; servers?: readonly MachineServerEvidence[];
 }): Promise<ReportFailureEvidence> {
-  const response = PlanResponseSchema.parse(input.response);
+  const saved = input.response === undefined ? undefined : PlannerSavedResponseSchema.parse(input.response);
+  const captured = saved === undefined ? undefined : "planning_complete" in saved ? saved : saved.failure?.execution;
+  const expected: { run_id?: string; attempt?: number; traceId?: string } = {};
+  for (const field of ["run_id", "attempt", "traceId"] as const) {
+    const explicit = input.execution?.[field];
+    const recorded = captured?.[field];
+    if (explicit !== undefined && recorded != null && explicit !== recorded) {
+      throw new Error("Report inputs belong to another execution");
+    }
+  }
+  const run_id = input.execution?.run_id ?? captured?.run_id;
+  const attempt = input.execution?.attempt ?? captured?.attempt;
+  const traceId = input.execution?.traceId ?? captured?.traceId;
+  if (run_id != null) expected.run_id = run_id;
+  if (attempt != null) expected.attempt = attempt;
+  if (traceId != null) expected.traceId = traceId;
+  const diagnostics = await readArticleFailureDiagnostics({
+    directory: input.directory, expected, servers: input.servers ?? await readMachineServerEvidence(input.directory),
+  });
+  if (saved === undefined || !("planning_complete" in saved)) return diagnostics;
+  const response = saved;
   const health = response.health?.status === "summarized" ? response.health : null;
-  const gaps: [string, string, string][] = [];
+  const gaps = [...diagnostics.gaps];
   let articles: ReportFailureEvidence["articles"];
   const receipt = response.files.rejected_articles;
   if (receipt !== undefined) {
@@ -48,6 +72,7 @@ export async function readReportFailureEvidence(input: {
     ]);
   }
   return {
+    article_diagnostics: diagnostics.article_diagnostics,
     ...(articles === undefined ? {} : { articles }),
     ...(earlier_checks === undefined ? {} : { earlier_checks }), gaps,
   };

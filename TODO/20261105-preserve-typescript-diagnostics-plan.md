@@ -1,7 +1,8 @@
 # Preserve TypeScript article and delivery diagnostics
 
 **Last Updated**: 2026-11-05
-**Level**: 5 - versioned diagnostic contracts; authoring only.
+**Level**: 5 - versioned diagnostic contracts.
+**Status**: Both review PRs are open. The combined candidate includes the main service rename and is under verification.
 
 ## 0. Operating contract
 
@@ -15,9 +16,9 @@ Table A - Plan scope and execution
 | A4 | Chosen strategy | Reuse the existing `HarvestDiagnosticsSchema`; typed stderr plus same-run report capture, previously called B2; no ledger extension. Architecture: two focused PRs, with both delivery faults in the same PR. |
 | A5 | Reviewed evidence | Main revision `656ee8d60d4898b388e0b2206218c70c8b571bac`; the diagnostic writer, evidence contracts and supervision logic are unchanged after the service moved to `services/serve-pipeline-apis/`. The supplied parent brief identifies article detail loss, delivery fact loss and wrong delivery request context. The full parent transcript was not directly accessible. |
 | A6 | Historical evidence limit | The supplied historical article reached quality rejection; the enabled minimum was 60 extracted source words. Its exact count was not saved, so whether the page was short or extraction missed content remains unknown. No historical facts will be invented. |
-| A7 | Execution | Execute per docs/how-to/execute-a-plan.md after a separate execution instruction; parallel N = 1 because both rows share the writer, tests and docs; one maintainer, no delegation; no automatic PR creation, commits, merge or live workflow dispatch; honor the escalation triggers below; AUTHOR-AND-STOP. |
+| A7 | Execution | Execute per docs/how-to/execute-a-plan.md; parallel N = 1 because both rows share the writer, tests and docs; one dedicated worktree and ordinary review PR per row; no delegated investigation or live workflow dispatch. Row 2 starts from row 1's verified pushed foundation after its PR opens, without waiting for a merge. One session merges the ordered PR group after its checks pass. Honor the escalation triggers below. |
 | A8 | ESCALATE triggers | 1. A ledger, native HTTP result or receipt must change. 2. A source, event type, server name or tracking identity must change. 3. Article acceptance, reliability scoring, Python or the published frontend must change. 4. New raw content retention, a new model destination or a tracing runtime is required. 5. An older-format reader, migration, backfill or additional defect outside this brief is proposed. |
-| A9 | Repository location | `TODO/20261105-preserve-typescript-diagnostics-plan.md`; both implementation rows below remain proposals, not shipped fixes. |
+| A9 | Repository location | `TODO/20261105-preserve-typescript-diagnostics-plan.md`; the active execution specification. |
 
 Table B - Excluded work and its cost
 
@@ -28,17 +29,17 @@ Table B - Excluded work and its cost
 | B3 | Article acceptance, the 60-word rule and reliability scoring | Diagnostics do not repair source quality or change which articles pass. | A separate acceptance/scoring requirement with its evidence. |
 | B4 | New raw article text/HTML output, refetching the historical page and historical backfills | The original missing count and page-versus-extractor explanation cannot be recovered by this correction. | A separate content-handling investigation; it is not inferred from this plan. |
 | B5 | Python, published frontend, source/type/server renaming, PID logging, tracing runtime and unrelated `code: null` cleanup | Those surfaces and unrelated cleanup remain unchanged. | A separate concrete requirement and its named consumers. |
-| B6 | Implementing or performing Git/PR/workflow operations during authoring | The two rows remain proposals, not shipped fixes. | Separate instructions for execution and the relevant Git/PR actions. |
+| B6 | Live workflow dispatch and publication certification | Merging the code does not prove a live feed or delivery run. | A separate operational task with its verification. |
 | B7 | Claiming coverage beyond the supplied parent brief | Full parent-chat coverage remains unverified; the three supplied faults are covered below. | Access to the parent transcript, not another choice about B2 or the JSON shape. |
 
 ## 1. Status Reckoner
 
-Table C - Proposed PR rows
+Table C - PR rows
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Article failure diagnostics and same-run report | - | A | PENDING | - | - | - |
-| C2 | 2 | Delivery completion facts and request context | 1 | A | PENDING | - | - | - |
+| C1 | 1 | Article failure diagnostics and same-run report | - | A | IN-FLIGHT | jubilant-giggle | #1922 | - |
+| C2 | 2 | Delivery completion facts and request context | 1 | A | IN-FLIGHT | verbose-couscous | #1923 | - |
 
 ## 2. Row #1 - Article failure diagnostics and same-run report
 
@@ -47,6 +48,7 @@ Table C - Proposed PR rows
 **Files touched:**
 
 - `packages/common-contracts/src/schemas/article-failure-diagnostic.schema.ts` - new strict terminal event/detail contract.
+- `packages/common-contracts/src/schemas/event.schema.ts` - share the existing publisher limits without changing the event shape.
 - `packages/common-contracts/src/index.ts` - export the new contract.
 - `packages/common-contracts/test/article-failure-diagnostic.test.ts` - new contract coverage.
 - `services/feed-ingest-plan/src/harvest-feeds/record-rejection.ts` - emit a safe terminal projection after native rejection validation.
@@ -54,10 +56,11 @@ Table C - Proposed PR rows
 - `services/feed-ingest-plan/src/api/fetch-operation.ts` - connect the existing stage logger to final article rejection diagnostics.
 - `services/feed-ingest-plan/src/api/parse-operation.ts` - connect that logger and preserve available native fetch/extraction evidence.
 - `services/feed-ingest-plan/src/logging/structured-logger.ts` - publish the narrowly validated complete diagnostic without generic field loss.
-- `services/serve-pipeline-apis/src/write-server-event.ts` - preserve accepted native terminal article CloudEvents.
+- `services/feed-ingest-plan/scripts/read-feed-api-diagnostic.ts` - validate native terminal article CloudEvents for the shared mirror.
 - `services/feed-ingest-plan/scripts/read-article-failure-diagnostics.ts` - new bounded reader for the existing named log.
 - `services/feed-ingest-plan/scripts/feed-ingest-plan-report-evidence.ts` - collect separate typed diagnostic evidence.
 - `services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts` - retain diagnostics on complete, partial, error and absent-response paths.
+- `services/feed-ingest-plan/src/reporting/article-failure-evidence.ts` - correlate and fold complete safe native diagnostics.
 - `services/feed-ingest-plan/src/reporting/failure-evidence-markdown.ts` - correlate evidence and render specific causes/full safe details.
 - `services/feed-ingest-plan/src/reporting/plan-markdown.ts` - accept diagnostics in both normal and unavailable-result rendering.
 - `services/feed-ingest-plan/test/article-failure-retention.test.ts`
@@ -66,8 +69,10 @@ Table C - Proposed PR rows
 - `services/feed-ingest-plan/test/network-failure-evidence.test.ts`
 - `services/feed-ingest-plan/test/failure-evidence.test.ts`
 - `services/feed-ingest-plan/test/report-native-evidence.test.ts`
-- `services/serve-pipeline-apis/test/server-events.test.ts`
-- `services/serve-pipeline-apis/test/write-server-events.ts`
+- `services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts` - share captured failure evidence between both report modes.
+- `services/feed-ingest-plan/test/write-article-failure-events.ts` - real recorded article work in an stderr-producing child.
+- `services/feed-ingest-plan/test/relay-feed-api-events.test.ts`
+- `services/feed-ingest-plan/test/write-feed-api-events.ts`
 - `tests/fixtures/feed-ingest-plan/article-terminal-failures.json`
 - `docs/architecture/sources/feed-harvesting.md` - work facts and failures.
 - `docs/architecture/sources/feed-operator-api.md` - structured logs and Markdown evidence input.
@@ -141,7 +146,7 @@ Table G - Article implementation sequence
 | G4 | In parse diagnostics, retain available native fetch evidence from the held artifact rather than copying only HTTP/pacing fields. Keep unmeasured duration null and native HTTP response shapes unchanged. | Existing native fetch diagnostic projection. |
 | G5 | Add a narrowly validated publisher branch before generic detail cleaning and ordinary document/quality-subset checks. Do not add `publisher_id` or a second quality object merely to satisfy those checks. Preserve existing bounds and explicit compliance reporting. | Agreed terminal shape; existing publisher controls. |
 | G6 | Safely project available response facts: omit header values and MIME parameters, retain native nulls and safe facts. Exclude body, HTML, title, addresses, secrets, arbitrary exception text and stacks. | Native diagnostics and trust boundary. |
-| G7 | The server writer validates this same terminal subtype and mirrors the original CloudEvent unchanged. `services/feed-ingest-plan/scripts/http-child-lifetime.ts` and `services/serve-pipeline-apis/src/supervise-api-task.ts` already pipe/drain stderr and remain unchanged. Other module stderr does not bypass its current validation. | Existing diagnostic relay. |
+| G7 | The feed diagnostic adapter validates this same terminal subtype and the shared writer mirrors the original CloudEvent unchanged. `services/serve-pipeline-apis/src/supervise-http-child.ts` and `services/serve-pipeline-apis/src/supervise-api-task.ts` pipe/drain stderr. Other module stderr does not bypass its current validation. | Existing diagnostic relay. |
 | G8 | Add separate `article_diagnostics` to the existing in-memory `ReportFailureEvidence`, not to rejected rows, `/plan` or another endpoint. The new reader uses only distinct named log files returned by `readServerEvidence`; no directory walk or latest-file search. | Existing report and same-run evidence path. |
 | G9 | Validate expected run/attempt from explicit report inputs, saved response or saved failure context; use available captured execution metadata to exclude unrelated requests. Missing identity is an explicit correlation gap, not a guessed run. | Existing run/operation meanings. |
 | G10 | Correlate by run, attempt and captured candidate; check feed/address/reason agreement. Identical repetitions count once; conflicting records fail explicitly. Health remains the aggregate authority. Show log-only missing-title evidence without adding it twice to totals or altering reliability. | Existing report evidence semantics. |
@@ -193,13 +198,13 @@ Table H - Evaluated article alternatives
 - `services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts` - new native relay contract derived from existing field authorities.
 - `services/feed-ingest-plan/scripts/safe-persist-http-api.ts` - emit the already allocated request context with completion facts.
 - `services/feed-ingest-plan/package.json` - export that diagnostic contract; no new dependency.
-- `services/serve-pipeline-apis/src/delivery-completion-diagnostic.ts` - new strict completion payload/builder.
-- `services/serve-pipeline-apis/src/write-server-event.ts` - route validated completion separately from lifecycle events.
+- `services/feed-ingest-plan/scripts/delivery-completion-diagnostic.ts` - strict completion payload/builder.
+- `services/feed-ingest-plan/scripts/read-feed-api-diagnostic.ts` - supply validated completion separately from lifecycle events.
 - `services/serve-pipeline-apis/src/server-evidence.ts` - separate lifecycle phase membership/metadata; do not change saved task evidence.
 - `services/feed-ingest-plan/test/safe-persist-http.test.ts`
 - `services/feed-ingest-plan/test/feed-ingest-plan-finalization.test.ts`
-- `services/serve-pipeline-apis/test/server-events.test.ts`
-- `services/serve-pipeline-apis/test/write-server-events.ts`
+- `services/feed-ingest-plan/test/relay-feed-api-events.test.ts`
+- `services/feed-ingest-plan/test/write-feed-api-events.ts`
 - `docs/architecture/sources/feed-operator-api.md` - safe-persist completion log contract.
 - `docs/reference/serve-pipeline-apis.md` - separate payloads, contexts and current-only diagnostics.
 - `TODO/20261105-preserve-typescript-diagnostics-plan.md` - this row's status only.

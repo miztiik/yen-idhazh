@@ -4,15 +4,18 @@ import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRootContext, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { createRootContext, loadEventSources, PLANNER_API_PREFIX, readCloudEvent, writeTraceContext } from "@idhazh/common-contracts";
 import { SafePersistDataCommitterSchema } from "@idhazh/data-delivery";
 import { createSafePersistApp } from "../scripts/safe-persist-http-api";
+import { SafePersistHttpDiagnosticSchema } from "../scripts/safe-persist-http-diagnostic";
+import type { SafePersistHttpDiagnostic } from "../scripts/safe-persist-http-diagnostic";
 import { deliverWorkflowMetadataHttp } from "../scripts/safe-persist-http-client";
 import { finalizeRunOutput } from "../scripts/finalize-run-output";
 import {
-  MetadataDeliveryResultSchema, SafePersistHttpReadySchema,
+  MetadataDeliveryResultSchema, SafePersistHttpReadySchema, SafePersistHttpRequestSchema,
   SafePersistHttpStartupSchema,
 } from "../scripts/feed-ingest-plan-delivery-result";
+import type { SafePersistHttpRequest } from "../scripts/feed-ingest-plan-delivery-result";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { publicationGitRecording, publicationRecording } from "./publication-recordings";
 import { fixtureGit } from "./fixture-git";
@@ -20,6 +23,8 @@ import { writeRecordedHostOutput } from "./host-output-recordings";
 import { ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
 import { FeedApiStartupFailureSchema, FeedApiStartupSchema } from "../scripts/read-feed-api-startup";
 import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
+import { DeliveryCompletionDiagnosticSchema } from "../scripts/delivery-completion-diagnostic";
+import { ServerEventDataSchema, serverLogFilename } from "../../serve-pipeline-apis/src/server-evidence";
 
 type Recording = Awaited<ReturnType<typeof publicationGitRecording>>;
 const serverEntry = fileURLToPath(new URL("../scripts/serve-feed-apis.ts", import.meta.url));
@@ -91,6 +96,32 @@ async function waitForExit(pid: number, signal: AbortSignal) {
   }
 }
 
+test("the strict completion relay reuses native request, result and operation field validation", () => {
+  const request = SafePersistHttpRequestSchema.parse({ runNumber: "700", attempt: 3, paths: ["raw/generated.parquet"] });
+  const result = MetadataDeliveryResultSchema.parse({
+    status: "landed", commit: "a".repeat(40), files: request.paths.length, paths: request.paths,
+  });
+  const context = createRootContext({ traceState: "diagnostics=retained" });
+  const diagnostic = {
+    event: "safe_persist_http_completed", run_number: request.runNumber, attempt: request.attempt,
+    status: result.status, commit: result.commit, files: result.files, context,
+  } satisfies SafePersistHttpDiagnostic;
+  expect(SafePersistHttpDiagnosticSchema.parse(diagnostic)).toEqual(diagnostic);
+  for (const invalid of [
+    { run_number: 700 }, { run_number: "2026-11-05-700" }, { attempt: 0 }, { attempt: 1.5 },
+    { status: "completed" }, { commit: "A".repeat(40) }, { commit: "a".repeat(39) }, { commit: "a".repeat(65) },
+    { files: -1 }, { files: 1.5 }, { context: undefined }, { context: null },
+    { context: { ...context, links: undefined } }, { context: { ...context, spanId: "0".repeat(16) } },
+    { context: { ...context, parentSpanId: context.spanId } }, { context: { ...context, traceState: "invalid" } },
+    { paths: request.paths }, { pid: process.pid }, { headers: { authorization: "PRIVATE_HEADER" } },
+  ]) expect(SafePersistHttpDiagnosticSchema.safeParse({ ...diagnostic, ...invalid }).success).toBe(false);
+  expect(SafePersistHttpDiagnosticSchema.shape.status).toBe(MetadataDeliveryResultSchema.shape.status);
+  expect(SafePersistHttpDiagnosticSchema.shape.commit).toBe(MetadataDeliveryResultSchema.shape.commit);
+  expect(SafePersistHttpDiagnosticSchema.shape.files).toBe(MetadataDeliveryResultSchema.shape.files);
+  expect(SafePersistHttpDiagnosticSchema.shape.run_number).toBe(SafePersistHttpRequestSchema.shape.runNumber);
+  expect(SafePersistHttpDiagnosticSchema.shape.attempt).toBe(SafePersistHttpRequestSchema.shape.attempt);
+});
+
 test("HTTP delivery lands exact remote bytes and repeats without changing completed collection or the caller checkout", async () => {
   const f = await publicationRecording();
   const api = await openApi(f);
@@ -125,6 +156,121 @@ test("HTTP delivery lands exact remote bytes and repeats without changing comple
     expect(await readFile(join(f.repository, f.summary.selected_articles_artifact!))).toEqual(selectedBefore);
     expect((await fetch(`${api.base}/plan`, { method: "POST", body: "{}" })).status).toBe(404);
   } finally { await api.server.stop(true); await f.close(); }
+});
+
+test("two actual delivery request operations survive native stderr, the completion relay and mirror readback", async () => {
+  const f = await hostRecording();
+  const settings = ServiceSettingsSchema.parse(await Bun.file(join(f.repository, "config", "feed-ingest-plan-service.json")).json());
+  const run = {
+    run_id: "999", attempt: 9, started_at: "2026-11-05T00:00:00Z",
+    context: createRootContext({ traceState: "supervision=retained" }),
+  };
+  const startup = FeedApiStartupSchema.parse({
+    group: "delivery", server: await loadHonoSettings(f.repository),
+    directory: relative(f.repository, f.directory).replaceAll("\\", "/"), run,
+    delivery: {
+      nonce: randomUUID(), settings, output_root: relative(f.repository, f.directory).replaceAll("\\", "/"),
+      git_sha: f.identity.git_sha,
+    },
+  });
+  const child = Bun.spawn([process.execPath, serverEntry], {
+    cwd: f.repository, stdin: "pipe", stdout: "pipe", stderr: "pipe",
+  });
+  const outputRead = new Response(child.stdout).text();
+  const errorsRead = new Response(child.stderr).text();
+  try {
+    child.stdin.write(`${JSON.stringify(startup)}\n`);
+    await child.stdin.flush();
+    const ready = await waitForHealth(settings.listener.port, AbortSignal.timeout(startup.server.supervision.readiness_timeout_ms));
+    expect(ready.pid).toBe(child.pid);
+    const callers = [
+      createRootContext({ traceState: "request=first" }), createRootContext({ traceState: "request=second" }),
+    ];
+    async function post(request: SafePersistHttpRequest, caller: typeof callers[number]) {
+      const response = await fetch(`http://127.0.0.1:${ready.port}${PLANNER_API_PREFIX}/safe-persist-data`, {
+        method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) },
+        body: JSON.stringify(request), timeout: false,
+      });
+      expect(response.status).toBe(200);
+      const result = MetadataDeliveryResultSchema.parse(await response.json());
+      expect(result.paths).toEqual(request.paths);
+      expect(await Bun.file(join(f.directory, "delivery-result.json")).json()).toEqual(result);
+      return result;
+    }
+    const firstRequest = requestFor(f, f.paths);
+    const firstResult = await post(firstRequest, callers[0]!);
+    const secondRequest = SafePersistHttpRequestSchema.parse(firstRequest);
+    const secondResult = await post(secondRequest, callers[1]!);
+    expect(firstResult.status).toBe("landed");
+    expect(secondResult).toEqual({ ...firstResult, status: "already-on-main" });
+    expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(secondResult.commit!);
+    child.stdin.end();
+    expect(await child.exited).toBe(0);
+    ApiReadySchema.parse(JSON.parse(await outputRead));
+    const nativeText = await errorsRead;
+    const nativeLines = nativeText.trim().split("\n");
+    const diagnostics = nativeLines.map(line => SafePersistHttpDiagnosticSchema.parse(JSON.parse(line)));
+    expect(diagnostics).toHaveLength(2);
+    expect(diagnostics[0]!.context.spanId).not.toBe(diagnostics[1]!.context.spanId);
+    const sources = await loadEventSources(join(f.repository, "config", "typescript-event-sources.json"));
+    const mirror = Bun.spawn([process.execPath, fileURLToPath(new URL(
+      "./write-feed-api-events.ts", import.meta.url,
+    ))], {
+      stdin: new Blob([JSON.stringify({ directory: f.directory, run, source: sources.typescript_api,
+        group: "delivery", module_lines: nativeLines })]), stdout: "pipe", stderr: "pipe",
+    });
+    const [output, emittedText, code] = await Promise.all([
+      new Response(mirror.stdout).text(), new Response(mirror.stderr).text(), mirror.exited,
+    ]);
+    expect(code, emittedText).toBe(0);
+    expect(JSON.parse(output)).toEqual({ available: true, filename: serverLogFilename(run) });
+    const readbackText = await readFile(join(f.directory, serverLogFilename(run)), "utf8");
+    expect(readbackText).toBe(emittedText);
+    const events = readbackText.trim().split("\n").map(line => JSON.parse(line));
+    const completions = events.filter(event => event.type === "safe_persist_http_completed")
+      .map(event => readCloudEvent(event, value => DeliveryCompletionDiagnosticSchema.parse(value)));
+    expect(completions).toHaveLength(2);
+    const requests = [firstRequest, secondRequest];
+    const results = [firstResult, secondResult];
+    for (const [index, diagnostic] of diagnostics.entries()) {
+      const request = requests[index]!;
+      const result = results[index]!;
+      const caller = callers[index]!;
+      expect(diagnostic).toEqual({
+        event: "safe_persist_http_completed", run_number: request.runNumber, attempt: request.attempt,
+        status: result.status, commit: result.commit, files: result.files, context: diagnostic.context,
+      });
+      expect(diagnostic.context).toEqual({
+        traceId: caller.traceId, spanId: diagnostic.context.spanId, parentSpanId: caller.spanId,
+        links: [], traceState: caller.traceState,
+      });
+      expect(diagnostic.context.spanId).not.toBe(caller.spanId);
+      expect(diagnostic.context.spanId).not.toBe(run.context.spanId);
+      expect(completions[index]!.data).toEqual({
+        server_name: "hono-server", group: "delivery", phase: "operation_completed",
+        run_id: diagnostic.run_number, attempt: diagnostic.attempt,
+        status: diagnostic.status, commit: diagnostic.commit, files: diagnostic.files, context: diagnostic.context,
+        severity: "info", duration_ms: null, exit_code: null, code: null,
+      });
+      expect(completions[index]).toMatchObject({ source: sources.typescript_api, ...writeTraceContext(diagnostic.context) });
+    }
+    const lifecycle = events.filter(event => event.type === "hono.server")
+      .map(event => readCloudEvent(event, value => ServerEventDataSchema.parse(value)));
+    expect(lifecycle.map(event => event.data.phase)).toEqual(["starting", "ready", "stopped"]);
+    for (const event of lifecycle) {
+      expect(event.traceparent).toBe(lifecycle[0]!.traceparent);
+      expect(event.traceparent).toContain(`-${run.context.traceId}-`);
+      expect(event.tracestate).toBe(run.context.traceState);
+      expect(completions.every(completion => completion.traceparent !== event.traceparent)).toBe(true);
+    }
+    expect(emittedText).not.toContain('"paths"');
+    expect(emittedText).not.toContain('"pid"');
+    await assertReleased(settings.listener.port);
+  } finally {
+    if (child.exitCode === null) { child.kill("SIGKILL"); await child.exited; }
+    await Promise.all([outputRead, errorsRead]);
+    await f.close();
+  }
 });
 
 test("HTTP rejects malformed controls and retains the adapter's existing identity and completed-path checks", async () => {
@@ -216,7 +362,7 @@ test("cancelled HTTP startup creates no Git delivery and leaves no listener", as
 });
 
 test("cancellation during a real refused Git push reaps the delivery child and preserves finalization recovery", async () => {
-  const f = await publicationRecording();
+  const f = await hostRecording();
   const cancellation = new AbortController();
   let pending: ReturnType<typeof finalizeRunOutput> | undefined;
   let gitPid: number | undefined;

@@ -2,6 +2,7 @@
 import {
   createCloudEvent, ExtractionQualitySchema, ExtractionSignalSchema, FEED_INGEST_EVENT_VERSION,
   FeedIngestEventDataSchema, FeedIngestEventSchema, NetworkFailureDetailsSchema,
+  ArticleFailureDiagnosticSchema, isArticleFailureDiagnostic, PLANNER_PROGRESS_DETAIL_LIMITS,
 } from "@idhazh/common-contracts";
 import { z } from "zod";
 import type { FeedIngestEvent, FeedIngestEventData, NetworkFailureDetails, OperationMetadata } from "@idhazh/common-contracts";
@@ -10,7 +11,7 @@ import type { RunContext } from "../resolve-run-context";
 import { operationMetadata } from "../api/operation-context";
 
 export function writeJsonLine(record: unknown): void { console.error(JSON.stringify(record)); }
-const DETAIL_LIMITS = { depth: 6, entries: 128, stringLength: 512, bytes: 4096 } as const;
+const DETAIL_LIMITS = PLANNER_PROGRESS_DETAIL_LIMITS;
 const SENSITIVE_DETAIL_KEY = /^(?:article_text|body|policy|headers?|authorization|cookie|secret|token|url|.*_(?:body|text|policy|headers?|authorization|cookie|secret|token|url))$/i;
 const QualityRejectionSchema = z.strictObject({
   failure_code: ExtractionSignalSchema,
@@ -43,15 +44,21 @@ export function prepareProgressEvent(
   const carrier = FeedIngestEventSchema.parse({ ...envelope, data: { ...base, details: {} } });
   const violations = new Map<string, ComplianceViolation>();
   const addViolation = (code: string, path: string) => violations.set(`${code}:${path}`, { code, path });
+  const terminal = isArticleFailureDiagnostic(raw);
+  if (terminal) {
+    const diagnostic = ArticleFailureDiagnosticSchema.safeParse(raw);
+    if (diagnostic.success) return diagnostic.data;
+    addViolation("invalid_article_diagnostic", "details");
+  }
   const ancestors = new WeakSet<object>();
   let entries = 0;
   const qualityEvent = base.operation === "quality" && base.phase === "failed";
   const hasQualityPayload = isRecord(rawDetails) && Object.hasOwn(rawDetails, "quality_rejection");
   const qualityPayload = isRecord(rawDetails) && hasQualityPayload
     ? QualityRejectionSchema.safeParse(rawDetails.quality_rejection) : null;
-  let detailsInput = rawDetails;
-  if ((qualityEvent && qualityPayload?.success !== true)
-    || (!qualityEvent && hasQualityPayload)) {
+  let detailsInput = terminal ? { stage: "harvest-feeds" } : rawDetails;
+  if (!terminal && ((qualityEvent && qualityPayload?.success !== true)
+    || (!qualityEvent && hasQualityPayload))) {
     addViolation("invalid_quality_rejection", "details.quality_rejection");
     if (isRecord(rawDetails)) {
       const cleanable = { ...rawDetails };
@@ -130,7 +137,7 @@ export function prepareProgressEvent(
   for (const key of requiredDetails) {
     if (!Object.hasOwn(details, key)) addViolation("required_detail_missing", `details.${key}`);
   }
-  if (failureArticleUrl !== undefined) {
+  if (!terminal && failureArticleUrl !== undefined) {
     const url = diagnosticUrl(failureArticleUrl);
     const qualityRejection = qualityEvent && hasQualityRejection(rawDetails);
     if (((base.phase === "failed" && (base.operation === "fetch" || base.operation === "parse")) || qualityRejection)
@@ -138,7 +145,7 @@ export function prepareProgressEvent(
       details.article_url = url;
     } else addViolation("unsafe_article_url", "details.article_url");
   }
-  if (failureFeedUrls !== undefined) {
+  if (!terminal && failureFeedUrls !== undefined) {
     const requested = diagnosticUrl(failureFeedUrls.requested);
     if (base.phase === "failed" && (base.operation === "fetch" || base.operation === "parse")
       && rawDetails !== null && isRecord(rawDetails) && rawDetails.document_kind === "feed" && requested !== undefined) {
@@ -166,7 +173,7 @@ export function prepareProgressEvent(
       ] } };
     }
   }
-  if (failureEvidence !== undefined) {
+  if (!terminal && failureEvidence !== undefined) {
     if (base.phase !== "failed" || !["fetch", "parse", "request-attempt"].includes(base.operation)) {
       throw new TypeError("Network failure evidence requires a failed document or request attempt");
     }

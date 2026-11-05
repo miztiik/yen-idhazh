@@ -132,6 +132,25 @@ cannot resolve a document do not log caller-supplied addresses.
 The [runner](feed-plan-runner.md#first-sight-and-retained-output) owns event
 fields, failure-only article addresses and elapsed-time meaning.
 
+Terminal article diagnostics use
+[`ArticleFailureDiagnosticSchema`](../../../packages/common-contracts/src/schemas/article-failure-diagnostic.schema.ts).
+The existing `planner.progress` envelope retains its event version and configured
+source. Failed `fetch`, `parse` or `quality` data contains the actual run;
+details contain its positive attempt, feed, captured candidate, address hash,
+`harvest-feeds` stage, native reason and complete `HarvestDiagnosticsSchema`.
+The publisher validates this subtype before generic detail cleaning and quality
+subset checks. It adds neither a publisher identity nor a duplicate quality
+object.
+
+The diagnostic retains native failure codes, extraction warnings and versions,
+timings, pacing, byte-limit facts and all measured quality fields. Unmeasured
+facts stay null; measured zero stays zero. Available response evidence keeps
+only the MIME type without parameters, byte counts and request profile.
+Selected headers and truncated-header names are empty. No article text, HTML,
+title, address, header value, arbitrary exception message or stack enters this
+projection. Standalone parse retains these available fetch facts from its held
+document without inventing a fetch duration. Native HTTP results are unchanged.
+
 ## Live document lifetime
 
 The listener holds current fetched documents under their producing
@@ -282,9 +301,24 @@ checks owned-child readiness through `/health`, and closes and reaps that child
 after success, failure or cancellation. Cancellation known before finalization
 skips new Git delivery.
 
-`safe_persist_http_completed` records the run number, attempt, confirmed status,
-commit and file count in the workflow log. The API and client use the existing
-`writeJsonLine` helper to write one JSON object per stderr line.
+After native result validation, `safe_persist_http_completed` records the
+request's run number, attempt, native status, nullable commit and file count,
+plus its complete receiving-operation `context`. The handler emits the same
+context it allocated from the incoming trace headers; it does not allocate
+another operation for logging or use the server's supervision operation.
+The [shared identity contract](../contracts/identity.md#4-native-typescript-event-and-operation-metadata)
+defines that context and its carrier.
+
+[`SafePersistHttpDiagnosticSchema`](../../../services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts)
+owns this strict current-only relay shape and derives request/result field
+validators from their native authorities. Paths, process IDs and arbitrary
+fields are not diagnostic fields. The
+[server writer](../../reference/serve-pipeline-apis.md#diagnostics-and-current-task-evidence)
+retains these facts and context in a separate completion event, not a lifecycle
+payload. The native HTTP result and saved `delivery-result.json`, including
+their exact paths, remain unchanged and remain the delivery authority.
+The API and client use the existing `writeJsonLine` helper to write one JSON
+object per stderr line.
 `safe_persist_http_failed` and
 `safe_persist_http_client_failed` identify server and transport failures without
 article bodies. An unconfirmed response or failed child shutdown records a failed
@@ -302,6 +336,9 @@ and host table rows, then returns Markdown and actionable warning notices.
 Run outcome and Needs attention remain visible; detailed evidence is folded.
 It performs no network or file access and is a
 package API, not an HTTP route.
+Callers supply captured failure evidence explicitly. Only the file-reading
+adapter can establish whether a named log is missing; a pure renderer cannot
+infer log availability from the HTTP result.
 
 The manual workflow uses an adapter to write that Markdown to its job summary
 and turn warnings into workflow annotations. Its finalization task first calls
@@ -316,6 +353,21 @@ Rendering, exclusion diagnostics and earlier paused-feed evidence all use the
 successful report in `response.health`. A missing or unwritable separate
 `health.json` does not replace that saved report. Failed health and unavailable
 health remain distinct from a successful empty report.
+
+The adapter also reads terminal article diagnostics from only the distinct
+filenames returned by the existing named server-evidence reader. It checks the
+explicit or saved run and attempt, plus the captured execution trace when
+available. Captured candidate, feed, address hash and reason must agree with
+saved rejection evidence. Identical repeated records count once; conflicting
+records fail explicitly.
+
+Needs attention names each available typed cause. A folded detail block retains
+the complete safe events. Missing identity, missing or partial mirrors and
+malformed lines produce evidence-gap notices; complete valid records from a
+partial log remain usable. Evidence is collected before error-response returns
+and also with explicit run and attempt when no response was saved. Missing
+planning or health is never presented as success. Health remains the aggregate
+authority; log-only missing-title evidence is not an extra health failure.
 
 Planner transport tests may open an
 ephemeral loopback-only listener and call its HTTP APIs. This proves actual
@@ -428,6 +480,9 @@ remain separate ledger records.
 The Markdown renderer is a pure package function, not another HTTP route:
 formatting needs no service call, workflow annotations stay in the workflow
 adapter, and production can choose a separate reader-facing presentation.
+Current-only diagnostic readers and writers change together. Same-run logs
+explain a saved failure without extending native responses, retained ledgers
+or the population eligible for publication.
 A single complete response keeps report capture and live input release inside
 the request that owns them. Saved operation metadata explains where output
 came from; it cannot reopen input or require a later client continuation.

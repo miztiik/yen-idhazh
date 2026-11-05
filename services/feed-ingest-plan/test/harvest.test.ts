@@ -4,9 +4,10 @@ import { createHash } from "node:crypto";
 import { parseHTML } from "linkedom";
 import {
   CandidateRejectionRecordSchema, DocumentWorkFactSchema, ExtractionQualitySchema,
-  CandidateIdSchema, FeedIngestCandidateSchema, FeedOutcomePayloadSchema, deriveUrlKey,
+  ArticleFailureDiagnosticDetailsSchema, ArticleFailureDiagnosticSchema, CandidateIdSchema,
+  FeedIngestCandidateSchema, FeedOutcomePayloadSchema, deriveUrlKey, loadEventSources, writeTraceContext,
 } from "@idhazh/common-contracts";
-import type { DocumentWorkFact } from "@idhazh/common-contracts";
+import type { DocumentWorkFact, FeedIngestEvent, OperationMetadata } from "@idhazh/common-contracts";
 import { harvestFeeds, loadHarvestInputs } from "@idhazh/feed-ingest-plan/harvest-feeds";
 import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
 import { parseFeed } from "../src/harvest-feeds/feed-client";
@@ -22,6 +23,8 @@ import { RecordedTransport, contentFilterPage, context, inputs, readContentFilte
 import { recordHarvestObservations } from "./observation-recordings";
 import { excludeArticleContent } from "../src/screen-article-candidates/content-filters";
 import { PublisherDefinitionSchema, validatePublisherReferences } from "../src/publisher-catalog";
+import { createStageLogger } from "../src/logging/structured-logger";
+import { operationMetadata } from "../src/api/operation-context";
 
 function expectFeedParseObservations(facts: readonly DocumentWorkFact[], parsedSources: readonly string[]) {
   const parsed = facts.filter(fact => fact.document_kind === "feed" && fact.operation === "parse" && fact.outcome !== "not_attempted");
@@ -292,6 +295,10 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
     source({ id: "inward", url: "https://127.0.0.1/feed.xml" }),
   ]);
   const runContext = context();
+  const articleDiagnostics: unknown[] = [];
+  runContext.document_activity = (_operation, _phase, details) => {
+    if (details.stage === "harvest-feeds") articleDiagnostics.push(details);
+  };
   const facts = recordHarvestObservations(runContext);
   const result = await harvestFeeds(loaded, runContext, { transport });
   const attributionCases = await Bun.file(new URL(
@@ -314,6 +321,7 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
     .reduce((count, row) => count + row.dispatched_request_count!, 0)).toBe(transport.requests.length);
   expectFeedParseObservations(facts, ["empty", "malformed"]);
   expect(result.candidates).toEqual([]);
+  expect(articleDiagnostics).toEqual([]);
   expect(result.rejections.map(row => row.drop_reason)).toEqual([
     "SOURCE_INACTIVE", "FEED_EMPTY", "FEED_PARSE_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT", "FETCH_FAILED",
   ]);
@@ -543,8 +551,19 @@ test("rootless extraction, empty content and article request failures do not kil
   const transport = new RecordedTransport(await readRecordings());
   const loaded = await inputs([source({ url: "https://news.example/article-failures.xml" })]);
   const runContext = context();
+  const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
+  const events: FeedIngestEvent[] = [];
+  const emit = createStageLogger({ ...runContext, run_id: runContext.writer.run_id }, sources.planner,
+    event => events.push(event));
+  runContext.document_activity = (operation, phase, details, url, feedUrls, evidence, operationContext) =>
+    emit(operation, phase, details, [], url, feedUrls, evidence, operationContext);
   const facts = recordHarvestObservations(runContext);
   const result = await harvestFeeds(loaded, runContext, { transport });
+  const diagnostics = events.flatMap(event => {
+    const parsed = ArticleFailureDiagnosticSchema.safeParse(event);
+    return parsed.success ? [parsed.data] : [];
+  });
+  expect(diagnostics).toHaveLength(5);
   expect(result.articles).toHaveLength(9);
   expect(result.candidates.map(candidate => candidate.entry_ordinal)).toEqual([4, 5, 6, 7]);
   expect(result.feed_outcomes).toHaveLength(1);
@@ -583,10 +602,52 @@ test("rootless extraction, empty content and article request failures do not kil
   expect(metadataResult.candidates.map(candidate => candidate.entry_ordinal)).toEqual([4, 5, 6, 7]);
   expect(metadataResult.articles[4]?.observation.diagnostics?.quality?.corroborated_word_count).toBe(recordedBody.split(/\s+/u).length);
   for (const article of result.articles) {
-    if (article.rejection !== null) expect(article.rejection.details.diagnostics).toEqual(article.observation.diagnostics);
+    if (article.rejection !== null) {
+      expect(article.rejection.details.diagnostics).toEqual(article.observation.diagnostics);
+      const event = diagnostics.find(event => event.data.details.candidate_id === article.rejection!.candidate_id)!;
+      const native = article.rejection.details.diagnostics!;
+      expect(event.data.details).toMatchObject({
+        reason_code: article.rejection.drop_reason, candidate_id: article.rejection.candidate_id,
+        url_key: article.rejection.url_key, attempt: runContext.writer.attempt,
+      });
+      expect(event.data.details.diagnostics).toEqual({ ...native, response_evidence: native.response_evidence === null
+        ? null : { ...native.response_evidence, selected_headers: {}, headers_truncated: [],
+          content_type: native.response_evidence.content_type?.split(";")[0] ?? null } });
+      const actual = events.find(value => value.data.operation === event.data.operation
+        && value.data.phase === "started" && value.data.details.candidate_id === event.data.details.candidate_id)!;
+      expect(event.traceparent).toBe(actual.traceparent);
+      expect(event.tracestate).toBe(actual.tracestate);
+      expect(event.traceparent).not.toBe(writeTraceContext(operationMetadata(runContext)).traceparent);
+    }
     if (article.observation.extraction !== "not-attempted") expect(article.observation.diagnostics?.extract_ms).toBeGreaterThanOrEqual(0);
   }
   expect(result.feed_outcomes[0]).toMatchObject({ parsed_count: 9, harvested_count: 4 });
+});
+
+test("captured preflight refusals keep their native outcomes without terminal article diagnostics", async () => {
+  const fixture = await Bun.file(new URL(
+    "../../../tests/fixtures/feed-ingest-plan/article-terminal-failures.json", import.meta.url,
+  )).json();
+  const recordings = await readRecordings();
+  const feed = source();
+  recordings.responses[feed.url] = [{ status: 200, body: `<rss version="2.0"><channel><title>Preflight</title>${
+    fixture.preflight_inputs.map((entry: { url: string | null }) => `<item><title>Recorded offer</title>${
+      entry.url === null ? "" : `<link>${entry.url}</link>`}</item>`).join("")
+  }</channel></rss>` }];
+  const transport = new RecordedTransport(recordings);
+  const runContext = context();
+  const diagnostics: unknown[] = [];
+  runContext.document_activity = (_operation, _phase, details) => {
+    if (details.stage === "harvest-feeds") diagnostics.push(details);
+  };
+  const result = await harvestFeeds(await inputs([feed]), runContext, { transport });
+  expect(result.rejections.map(row => row.drop_reason)).toEqual(fixture.preflight_inputs.map(
+    (entry: { reason_code: string }) => entry.reason_code,
+  ));
+  expect(result.rejections.every(row => CandidateIdSchema.safeParse(row.candidate_id).success)).toBe(true);
+  expect(result.rejections[0]?.details.diagnostics?.fetch_failure).toBe("unsafe-target");
+  expect(transport.requests.map(request => request.url.href)).toEqual([feed.url]);
+  expect(diagnostics).toEqual([]);
 });
 
 test("configured quality rejection keeps parsing complete and reports measured rejection evidence", async () => {
@@ -604,10 +665,11 @@ test("configured quality rejection keeps parsing complete and reports measured r
   const transport = new RecordedTransport(recordings);
   const runContext = context();
   const activities: {
-    operation: string; phase: string; details: Record<string, unknown>; url?: string;
+    operation: string; phase: string; details: Record<string, unknown>; url?: string; context?: OperationMetadata;
   }[] = [];
-  runContext.document_activity = (operation, phase, details, url) => {
-    activities.push({ operation, phase, details, ...(url === undefined ? {} : { url }) });
+  runContext.document_activity = (operation, phase, details, url, _feedUrls, _evidence, operationContext) => {
+    activities.push({ operation, phase, details, ...(url === undefined ? {} : { url }),
+      ...(operationContext === undefined ? {} : { context: operationContext }) });
   };
   const facts = recordHarvestObservations(runContext);
   const result = await harvestFeeds(loaded, runContext, { transport });
@@ -638,6 +700,19 @@ test("configured quality rejection keeps parsing complete and reports measured r
     } },
   });
   expect(qualityActivities[0]?.url).toBe("https://news.example/story/?utm_source=feed&b=2&a=1#section");
+  const terminal = activities.filter(item => item.details.stage === "harvest-feeds"
+    && item.details.candidate_id === rejected?.rejection?.candidate_id);
+  expect(terminal).toHaveLength(1);
+  expect(terminal[0]?.operation).toBe("quality");
+  expect(terminal[0]?.context).toEqual(parseActivity?.context);
+  expect(terminal[0]?.context?.spanId).not.toBe(runContext.spanId);
+  expect(terminal[0]?.url).toBeUndefined();
+  const detail = ArticleFailureDiagnosticDetailsSchema.parse(terminal[0]!.details);
+  const native = rejected!.observation.diagnostics!;
+  expect(detail.diagnostics).toEqual({ ...native, response_evidence: native.response_evidence === null ? null : {
+    ...native.response_evidence, selected_headers: {}, headers_truncated: [],
+    content_type: native.response_evidence.content_type?.split(";")[0] ?? null,
+  } });
 });
 
 test("report settings remain available without changing the planning fingerprint", async () => {

@@ -14,12 +14,12 @@ import { createServerEventWriter } from "./write-server-event";
 import type { ApiDiagnostic } from "./write-server-event";
 import type { ApiGroup } from "./server-evidence";
 
-export async function superviseApiTask<T, Profile, Failure extends HttpChildFailure>(input: {
+export async function superviseApiTask<T, Profile, Failure extends HttpChildFailure, NativeData = never>(input: {
   root: string; startup: ApiHostStartup & { group: ApiGroup }; kind: HttpChildKind;
   failure: HttpChildFailurePolicy<Failure>; serverEntry: string; signal?: AbortSignal;
   supervision: SupervisionSettings; maxControlBytes: number;
   evidenceSchema: z.ZodType<ServerEvidence<Profile>>;
-  decodeDiagnostic: (raw: unknown) => ApiDiagnostic<Profile>;
+  decodeDiagnostic: (raw: unknown) => ApiDiagnostic<Profile, NativeData>;
   ready: (message: unknown, pid: number, signal: AbortSignal) => Promise<string>;
   request: (origin: string, signal: AbortSignal) => Promise<T>;
 }): Promise<T> {

@@ -233,7 +233,7 @@ test("caller cancellation aborts the real request and drains diagnostics before 
     const closed = HostClosedSchema.parse(await Bun.file(join(fixture.root, "evidence", HOST_CLOSED_FILENAME)).json());
     expect(closed).toMatchObject({ parent_cancelled: true, application_cancelled: true, request_cancelled: true, close_calls: 1 });
     expect(observations.every(event => event.pid === closed.pid)).toBe(true);
-    expect(JSON.parse(diagnostics.at(-1)!)).toEqual({ phase: "operation_completed", severity: "info", code: "HOST_CLOSED" });
+    expect(JSON.parse(diagnostics.at(-1)!)).toEqual({ phase: "stopping", severity: "info", code: "HOST_CLOSED" });
     expect(diagnostics.join("\n")).not.toContain("PRIVATE_CANCEL_REASON");
     await assertReleased(fixture, closed.pid);
   });

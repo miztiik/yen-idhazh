@@ -22,6 +22,7 @@ import { fetchRejection, recordRejection } from "../harvest-feeds/record-rejecti
 import { fetchDiagnostics } from "../harvest-feeds/fetch-diagnostics";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { HarvestArticleResultSchema, utcTimestamp } from "../harvest-feeds/harvest-types";
+import type { HarvestContext } from "../harvest-feeds/harvest-types";
 import { resolveArticleSourceOutcome } from "../article-source-outcome";
 import type { SourceArticleOutcome } from "@idhazh/common-contracts";
 import { createStageLogger } from "../logging/structured-logger";
@@ -80,10 +81,11 @@ export async function fetchDocument(
   }
   const attemptObservations: ReturnType<typeof observeDocument>[] = [];
   const emit = createStageLogger(record.context, inputs.event_source, runtime.log);
+  const document_activity: NonNullable<HarvestContext["document_activity"]> = (operation, phase, details, url, feedUrls, evidence, context) =>
+    emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls, evidence, context);
   const work = documentWork({
     ...operationMetadata(record.context),
-    document_activity: (operation, phase, details, url, feedUrls, evidence, context) =>
-      emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls, evidence, context),
+    document_activity,
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
     on_attempt: observation => { attemptObservations.push(observation); },
   }, { run_id: record.context.run_id, document_id: identity.url_key, feed_id: source.id, candidate_id: candidateId },
@@ -151,7 +153,7 @@ export async function fetchDocument(
   if (request.fetch_item_type === "article" && candidateId !== null && fetched.body === null) {
     const refusal = fetchRejection(fetched, inputs.harvest.config.harvest.fetch_timeout_ms, fetchDiagnostics(fetched, null));
     const rejection = recordRejection({ feed_id: source.id, feed_url: source.url }, {
-      ...operationMetadata(record.context), writer: state.context.writer,
+      ...operationMetadata(record.context), writer: state.context.writer, document_activity,
       max_future_hours: inputs.clock_config.collect.max_future_hours,
       observation_clock: runtime.observation_clock ?? (() => new Date()),
     }, refusal.reason, refusal.details, {

@@ -57,14 +57,15 @@ export const ServerEventDataSchema = z.strictObject({
   run_id: ServerRunSchema.shape.run_id,
   attempt: PositiveCountSchema,
   severity: z.enum(["info", "warning", "error"]),
-  phase: z.enum(["starting", "ready", "stopping", "stopped", "forced", "failed", "log_unavailable", "module_failed", "operation_completed"]),
+  phase: z.enum(["starting", "ready", "stopping", "stopped", "forced", "failed", "log_unavailable", "module_failed"]),
   duration_ms: z.number().finite().nonnegative().nullable(),
   exit_code: z.int().nullable(),
   code: z.string().regex(/^[A-Z][A-Z0-9_]*$/).nullable(),
 }).meta({
-  version: "2026-11-04",
-  readCompatibility: "current_only; diagnostic payloads omit process IDs",
+  version: "2026-11-05",
+  readCompatibility: "current_only; delivery completion uses its own request-context payload",
   changelog: [
+    { version: "2026-11-05", change: "Separate delivery completion from server lifecycle diagnostics." },
     { version: "2026-11-04", change: "Omit process IDs from server diagnostic payloads." },
   ],
 });

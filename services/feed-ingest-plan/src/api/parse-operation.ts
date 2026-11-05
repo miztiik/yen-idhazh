@@ -15,11 +15,13 @@ import { createIngestObservations } from "../ingest-observations";
 import { ArticleParserPool } from "../harvest-feeds/article-parser-pool";
 import { parseDocument } from "../harvest-feeds/parse-document";
 import { fetchEvidence, recordRejection } from "../harvest-feeds/record-rejection";
+import { fetchDiagnostics } from "../harvest-feeds/fetch-diagnostics";
 import { resolveArticleTitle } from "../harvest-feeds/prepare-article";
 import { stageStore } from "./stage-store";
 import { createParsedFeedBatch, publicFeedOffers } from "./feed-offers";
 import { readFeedOffer, updateFeedOffer } from "./feed-offer-state";
 import { HarvestArticleResultSchema, utcTimestamp } from "../harvest-feeds/harvest-types";
+import type { HarvestContext } from "../harvest-feeds/harvest-types";
 import { foldDiscoveryHistory, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
 import { requiredUtcDays } from "../utc-instant";
 import { resolveArticleEvidence } from "../website-group";
@@ -83,10 +85,11 @@ export async function parseFetchedDocument(
     feed.state = "parsing";
   }
   const emit = createStageLogger(context, inputs.event_source, runtime.log);
+  const document_activity: NonNullable<HarvestContext["document_activity"]> = (operation, phase, details, url, feedUrls, evidence, metadata) =>
+    emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls, evidence, metadata);
   const work = documentWork({
     ...operationMetadata(context),
-    document_activity: (operation, phase, details, url, feedUrls, evidence, metadata) =>
-      emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls, evidence, metadata),
+    document_activity,
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
   }, { run_id: fetched.context.run_id, document_id: artifact.document_id, feed_id: source.id, candidate_id: artifact.candidate_id },
   operationMetadata(fetched.context), {
@@ -156,7 +159,7 @@ export async function parseFetchedDocument(
     ?? (parsed.parsed?.article_text ? title ? null : "missing-title" : "empty-content");
   const qualityFailure = parsed.parsed?.quality?.failure_code ?? null;
   const diagnostics = HarvestDiagnosticsSchema.parse({
-    ...fetchEvidence(artifact), extract_ms: extractionMs,
+    ...fetchDiagnostics(artifact, null), extract_ms: extractionMs,
     extraction_failure: extractionFailure,
     stopped_stage: extractionFailure !== null || parsed.parsed?.quality?.rejected ? "extract" : null,
     detail: parsed.failure ?? extractionFailure ?? (parsed.parsed?.quality?.rejected ? qualityFailure : null),
@@ -175,7 +178,7 @@ export async function parseFetchedDocument(
   const rejected = parsed.failure !== null || parsed.parsed?.quality?.rejected ? "EXTRACT_FAILED"
     : !parsed.parsed?.article_text ? "EXTRACT_EMPTY" : !title ? "MISSING_REQUIRED_FIELDS" : null;
   const rejection = rejected === null ? null : recordRejection({ feed_id: source.id, feed_url: source.url }, {
-    ...operationMetadata(context), writer: state.context.writer, max_future_hours: inputs.clock_config.collect.max_future_hours,
+    ...operationMetadata(context), writer: state.context.writer, document_activity, max_future_hours: inputs.clock_config.collect.max_future_hours,
     observation_clock: runtime.observation_clock ?? (() => new Date()),
   }, rejected, { ...fetchEvidence(artifact), diagnostics }, {
     candidate_id: candidateId, canonical_url: artifact.canonical_url, url_key: artifact.document_id,

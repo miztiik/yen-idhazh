@@ -5,18 +5,29 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseHTML } from "linkedom";
 import {
-  createCandidateId, createRootContext, FeedHealthStateRowContract, FeedHealthStateRowSchema, RejectedArticleRowContract, RejectedArticleRowSchema,
+  ArticleFailureDiagnosticDataSchema, ArticleFailureDiagnosticSchema, createCandidateId, createCloudEvent,
+  createRootContext, FEED_INGEST_EVENT_VERSION, FeedHealthStateRowContract, FeedHealthStateRowSchema,
+  HarvestDiagnosticsSchema, loadEventSources, RejectedArticleRowContract, RejectedArticleRowSchema, writeTraceContext,
 } from "@idhazh/common-contracts";
+import type { RejectedArticleRow } from "@idhazh/common-contracts";
 import { readExecutionEvidence, renderWorkflowPlanMarkdown, writeWorkflowReport } from "../scripts/feed-ingest-plan-report";
 import { readReportFailureEvidence } from "../scripts/feed-ingest-plan-report-evidence";
 import { renderPlanMarkdown } from "../src/reporting";
 import { plannerOutputRecording } from "./planner-output-recordings";
 import { writeRows } from "./partition-fixtures";
 import { operationLink } from "../src/api/operation-context";
+import { readArticleFailureDiagnostics } from "../scripts/read-article-failure-diagnostics";
+import {
+  readMachineServerEvidence as readServerEvidence, MachineServerEvidenceSchema as ServerEvidenceSchema,
+} from "@idhazh/host-probes/machine-evidence";
+import { serverLogFilename } from "@idhazh/serve-pipeline-apis/evidence";
+import { describePlanError } from "../src/api/plan-failure";
 
 function attention(markdown: string) {
   const { document } = parseHTML(Bun.markdown.html(markdown));
-  return [...document.querySelectorAll("table")[1]!.querySelectorAll("tbody tr")]
+  const table = [...document.querySelectorAll("table")].find(node =>
+    [...node.querySelectorAll("th")].some(header => header.textContent === "Feed or scope"))!;
+  return [...table.querySelectorAll("tbody tr")]
     .map(row => [...row.querySelectorAll("td")].map(cell => cell.textContent!));
 }
 
@@ -34,6 +45,38 @@ async function terminalRows(f: Awaited<ReturnType<typeof plannerOutputRecording>
     freshness_cutoff_at: null,
     ...recorded.cases.find((entry: { name: string }) => entry.name === name).expected,
   }));
+}
+
+async function terminalDiagnostic(f: Awaited<ReturnType<typeof plannerOutputRecording>>, article: RejectedArticleRow) {
+  const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
+  return ArticleFailureDiagnosticSchema.parse(createCloudEvent({
+    source: sources.planner, type: "planner.progress", context: { ...createRootContext(), traceId: f.response.traceId },
+    data: {
+      version: FEED_INGEST_EVENT_VERSION, run_id: article.run_id, operation: "fetch", phase: "failed",
+      details: {
+        attempt: article.attempt, feed_id: article.feed_id, candidate_id: article.candidate_id,
+        url_key: article.url_key, stage: "harvest-feeds", reason_code: article.reason_code,
+        diagnostics: HarvestDiagnosticsSchema.parse({
+          http_status: article.http_status, fetch_failure: article.fetch_failure, error_code: article.error_code,
+          pacing_time_ms: article.pacing_time_ms, pacing_settings: article.pacing_settings,
+          stopped_stage: "fetch", detail: article.fetch_failure,
+        }),
+      },
+    }, parseData: value => ArticleFailureDiagnosticDataSchema.parse(value),
+  }));
+}
+
+async function writeDiagnosticMirror(f: Awaited<ReturnType<typeof plannerOutputRecording>>, records: readonly unknown[],
+  available = true) {
+  const run = { run_id: f.response.run_id.slice(11), attempt: f.response.attempt, started_at: f.response.started_at };
+  const server = ServerEvidenceSchema.parse({
+    version: "2026-11-04", server_name: "hono-server", group: "planning", ...run,
+    pid: null, startup: "not_started", startup_ms: null, shutdown: "not_started", exit_code: null,
+    log_filename: serverLogFilename(run), log_available: available, error_code: null, cleanup_error_code: null,
+  });
+  await writeFile(join(f.directory, "hono-server-planning.json"), JSON.stringify(server));
+  await writeFile(join(f.directory, server.log_filename), records.map(record => JSON.stringify(record)).join("\n") + "\n");
+  return server;
 }
 
 test("workflow report reads terminal article 403 once and keeps DNS failure separate from unavailable status", async () => {
@@ -176,5 +219,112 @@ test("foreign execution and conflicting terminal copies are refused rather than 
     await writeFile(path, "damaged native file");
     await expect(readReportFailureEvidence({ directory: f.directory,
       response: { ...f.response, files: { ...f.response.files, rejected_articles: written } } })).rejects.toThrow();
+  } finally { await f.close(); }
+});
+
+test("the named-mirror reader deduplicates records, excludes unrelated work and keeps valid partial evidence with explicit gaps", async () => {
+  const f = await plannerOutputRecording();
+  try {
+    const event = await terminalDiagnostic(f, (await terminalRows(f))[0]!);
+    const expected = { run_id: f.response.run_id, attempt: f.response.attempt, traceId: f.response.traceId };
+    const read = async (identity = expected) => readArticleFailureDiagnostics({
+      directory: f.directory, servers: await readServerEvidence(f.directory), expected: identity,
+    });
+    const server = await writeDiagnosticMirror(f, [event, event]);
+    expect((await read()).article_diagnostics).toEqual([event]);
+    expect((await read()).gaps).toEqual([]);
+    await writeDiagnosticMirror(f, [event,
+      { ...event, data: { ...event.data, run_id: "2026-10-21-999" } },
+      { ...event, data: { ...event.data, details: { ...event.data.details, attempt: expected.attempt + 1 } } },
+      { ...event, ...writeTraceContext(createRootContext()) },
+    ]);
+    const filtered = await read();
+    expect(filtered.article_diagnostics).toEqual([event]);
+    expect(filtered.gaps.map(row => row[1])).toContain("Unrelated article diagnostic excluded");
+    for (const conflict of [
+      { ...event, id: createCandidateId() },
+      { ...event, data: { ...event.data, details: { ...event.data.details, candidate_id: createCandidateId() } } },
+    ]) {
+      await writeDiagnosticMirror(f, [event, conflict]);
+      await expect(read()).rejects.toThrow("Conflicting terminal article diagnostics");
+    }
+    await writeDiagnosticMirror(f, [event], false);
+    await writeFile(join(f.directory, server.log_filename), [
+      JSON.stringify(event),
+      JSON.stringify({ ...event, data: { ...event.data, details: { ...event.data.details, attempt: 0,
+        diagnostics: { title: "PRIVATE_TITLE", error_code: "PRIVATE_EXCEPTION includes arbitrary exception text" } } } }),
+      JSON.stringify({ data: { code: "CHILD_DIAGNOSTIC_INVALID" } }), '{"data":',
+    ].join("\n"));
+    const partial = await read();
+    expect(partial.article_diagnostics).toEqual([event]);
+    expect(partial.gaps.map(row => row[1])).toEqual(expect.arrayContaining([
+      "Article diagnostic mirror is partial or unavailable", "Article diagnostic log is incomplete",
+      "Malformed terminal article diagnostic", "A child diagnostic was rejected",
+      "Article diagnostic log contains an unreadable line",
+    ]));
+    expect(JSON.stringify(partial)).not.toContain("PRIVATE_");
+    const noIdentity = await readArticleFailureDiagnostics({
+      directory: f.directory, servers: await readServerEvidence(f.directory), expected: {},
+    });
+    expect(noIdentity.article_diagnostics).toEqual([]);
+    expect(noIdentity.gaps.map(row => row[1])).toContain("Article diagnostic identity unavailable");
+    const noExecution = await readArticleFailureDiagnostics({
+      directory: f.directory, servers: await readServerEvidence(f.directory),
+      expected: { run_id: expected.run_id, attempt: expected.attempt },
+    });
+    expect(noExecution.article_diagnostics).toEqual([event]);
+    expect(noExecution.gaps.map(row => row[1])).toContain("Article diagnostic execution identity unavailable");
+    await expect(read({ ...expected, attempt: expected.attempt + 1 })).rejects.toThrow("another run or attempt");
+    await expect(readReportFailureEvidence({ directory: f.directory, response: f.response,
+      execution: { attempt: expected.attempt + 1 } })).rejects.toThrow("another execution");
+    await rm(join(f.directory, server.log_filename));
+    expect((await read()).gaps.map(row => row[1])).toContain("Article diagnostic log missing");
+    await rm(join(f.directory, "hono-server-planning.json"));
+    const missing = await read();
+    expect(missing.article_diagnostics).toEqual([]);
+    expect(missing.gaps.map(row => row[1])).toContain("Article diagnostic mirror unavailable");
+  } finally { await f.close(); }
+});
+
+test("complete, partial, error and absent response reports keep diagnostics without inventing planning or health success", async () => {
+  const f = await plannerOutputRecording();
+  try {
+    const event = await terminalDiagnostic(f, (await terminalRows(f))[0]!);
+    await writeDiagnosticMirror(f, [event]);
+    const execution = { run_id: f.response.run_id, attempt: f.response.attempt, traceId: f.response.traceId };
+    const health = structuredClone(f.health);
+    const error = describePlanError(new Error("PRIVATE_EXCEPTION includes source content"), undefined, {
+      operation: "plan", execution: { ...execution, spanId: createRootContext().spanId, git_sha: "a".repeat(40) },
+    });
+    const responses = [f.response, { ...f.response, status: "partial", failure_code: "PERSIST_FAILED",
+      planning_complete: false, selected_articles_artifact: null }, error, undefined];
+    for (const response of responses) {
+      const path = join(f.directory, "response.json");
+      if (response === undefined) await rm(path, { force: true });
+      else await writeFile(path, JSON.stringify(response));
+      const evidence = await readExecutionEvidence(f.directory, undefined, { execution });
+      expect(evidence.failures?.article_diagnostics).toEqual([event]);
+      const report = renderWorkflowPlanMarkdown(evidence);
+      expect(attention(report.markdown).some(row => row[2]!.includes("article HTTP 403"))).toBe(true);
+      expect(report.markdown).not.toContain("PRIVATE_");
+      if (response === undefined || !("planning_complete" in response)) {
+        expect(report.markdown).toContain("**Planning result unavailable.**");
+        expect(report.markdown).toContain("Feed work evidence unavailable");
+        expect(report.markdown).toContain("Feed availability evidence unavailable");
+      } else if (!response.planning_complete) {
+        expect(report.markdown).toContain("completion not established");
+      }
+    }
+    await mkdir(join(f.directory, "config"));
+    await writeFile(join(f.directory, "config", "feed-ingest-plan.json"), JSON.stringify(f.inputs.harvest.config));
+    await writeFile(join(f.directory, "config", "feed-ingest-plan-service.json"), JSON.stringify(f.inputs.settings));
+    const report = await writeWorkflowReport({ root: f.directory, directory: f.directory,
+      summaryPath: join(f.directory, "summary.md"), runId: execution.run_id,
+      runNumber: execution.run_id.slice(11), attempt: execution.attempt });
+    if (report.status !== "written") throw new Error("Recorded workflow reporting must be enabled");
+    expect(report.markdown).toContain("**Planning result unavailable.**");
+    expect(report.markdown).toContain("Terminal article diagnostic details");
+    expect(report.markdown).toContain("Article diagnostic execution identity unavailable");
+    expect(f.health).toEqual(health);
   } finally { await f.close(); }
 });

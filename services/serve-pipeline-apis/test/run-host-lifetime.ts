@@ -92,7 +92,7 @@ if (import.meta.main) {
                 request_cancelled: pendingSignal?.aborted ?? false, close_calls: closeCalls,
               });
               await Bun.write(join(startup.directory, HOST_CLOSED_FILENAME), JSON.stringify(closed));
-              process.stderr.write(JSON.stringify({ phase: "operation_completed", severity: "info", code: "HOST_CLOSED" }));
+              process.stderr.write(JSON.stringify({ phase: "stopping", severity: "info", code: "HOST_CLOSED" }));
             },
           }) });
           const server = await serveApiApp(startup.server, app);

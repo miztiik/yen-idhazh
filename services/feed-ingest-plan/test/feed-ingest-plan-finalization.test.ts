@@ -10,7 +10,11 @@ import { MetadataDeliveryResultSchema } from "../scripts/feed-ingest-plan-delive
 import { publicationRecording } from "./publication-recordings";
 import { fixtureGit } from "./fixture-git";
 import { publishUploadInventory } from "../scripts/feed-ingest-plan-upload-inventory";
+import { readCloudEvent, writeTraceContext } from "@idhazh/common-contracts";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
+import { DeliveryCompletionDiagnosticSchema } from "../scripts/delivery-completion-diagnostic";
+import { readMachineServerEvidence as readServerEvidence } from "@idhazh/host-probes/machine-evidence";
+import { ServerEventDataSchema } from "../../serve-pipeline-apis/src/server-evidence";
 
 async function recording(failCollection = false) {
   const fixture = await publicationRecording(failCollection);
@@ -61,21 +65,40 @@ test("one Git delivery precedes the report and prepares only the selected handof
       GITHUB_STEP_SUMMARY: f.finalize.summaryPath, GITHUB_OUTPUT: f.finalize.outputPath,
       DUMP_RAW_DOCUMENT_CONTENTS: "false", RUN_ID: f.identity.run_id,
     };
-    for (const operation of ["commit-ledgers", "write-report", "prepare-artifacts"]) {
-      const finalized = await runScript("finalize-run-output.ts", f.repository, {
-        ...controls, FINALIZATION_OPERATION: operation,
-        REPORT_FILENAME: "feed-ingest-report-2026-10-21-700.md",
-      });
-      expect(finalized.code, finalized.errors).toBe(0);
-      if (operation === "commit-ledgers") {
-        expect(finalized.errors).toContain('"type":"safe_persist_http_completed"');
-        expect(await Bun.file(join(f.directory, "feed-ingest-report-2026-10-21-700.md")).exists()).toBe(false);
-      } else expect(finalized.errors).not.toContain('"type":"safe_persist_http_completed"');
-      expect(finalized.errors).not.toContain('"event":"safe_persist_http_failed"');
-      expect(finalized.errors).not.toMatch(/[A-Za-z]:[\\/]/);
-      expect(finalized.errors).not.toContain("article_text");
-    }
+    const finalized = await runScript("finalize-run-output.ts", f.repository, {
+      ...controls, FINALIZATION_OPERATION: "commit-ledgers",
+    });
+    expect(finalized.code, finalized.errors).toBe(0);
+    const events = finalized.errors.trim().split("\n").map(line => JSON.parse(line));
+    const completions = events.filter(event => event.type === "safe_persist_http_completed")
+      .map(event => readCloudEvent(event, value => DeliveryCompletionDiagnosticSchema.parse(value)));
+    expect(completions).toHaveLength(1);
+    const completion = completions[0]!;
     const receipt = MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json());
+    expect(completion.data).toMatchObject({
+      run_id: "700", attempt: 3, status: receipt.status, commit: receipt.commit, files: receipt.files,
+    });
+    expect(receipt.paths).toEqual(f.paths);
+    expect(completion).toMatchObject(writeTraceContext(completion.data.context));
+    const [evidence] = await readServerEvidence(f.directory, { run_id: "700", attempt: 3 });
+    if (evidence === undefined) throw new Error("Delivery must save its actual server evidence");
+    const mirrored = (await readFile(join(f.directory, evidence.log_filename), "utf8")).trim().split("\n")
+      .map(line => JSON.parse(line));
+    expect(mirrored.filter(event => event.type === "safe_persist_http_completed")).toEqual(completions);
+    const lifecycle = events.filter(event => event.type === "hono.server")
+      .map(event => readCloudEvent(event, value => ServerEventDataSchema.parse(value)));
+    expect(lifecycle.map(event => event.data.phase)).toEqual(["starting", "ready", "stopping", "stopped"]);
+    expect(lifecycle.every(event => event.traceparent === lifecycle[0]!.traceparent)).toBe(true);
+    expect(lifecycle[0]!.traceparent).not.toBe(completion.traceparent);
+    expect(await Bun.file(join(f.directory, "feed-ingest-report-2026-10-21-700.md")).exists()).toBe(false);
+    expect(finalized.errors).not.toContain('"event":"safe_persist_http_failed"');
+    expect(finalized.errors).not.toMatch(/[A-Za-z]:[\\/]/);
+    expect(finalized.errors).not.toContain("article_text");
+    await finalizeRunOutput({ ...f.finalize, operation: "write-report" });
+    await finalizeRunOutput({ ...f.finalize, operation: "prepare-artifacts",
+      reportFilename: "feed-ingest-report-2026-10-21-700.md" });
+    expect(await Bun.file(join(f.directory, "delivery-result.json")).json()).toEqual(receipt);
+    expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(receipt.commit!);
     expect(receipt).toMatchObject({ status: "landed", files: f.paths.length, paths: f.paths });
     const committed = await fixtureGit(f.origin, [
       "--git-dir", f.origin, "diff-tree", "--no-commit-id", "--name-only", "-r", "main",
