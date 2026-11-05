@@ -10,9 +10,9 @@ import {
   isMetadataDeliveryConfirmed, MetadataDeliveryResultSchema,
   SafePersistHttpRequestSchema, SafePersistHttpStartupSchema,
 } from "./feed-ingest-plan-delivery-result";
-import { superviseApiTask } from "../../typescript-api/src/supervise-api-task";
-import { loadHonoSettings } from "../../typescript-api/src/load-settings";
-import { readServerEvidence } from "../../typescript-api/src/read-server-evidence";
+import { superviseApiTask } from "../../serve-pipeline-apis/src/supervise-api-task";
+import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
+import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
 import { readPlannerResponseError, withPlannerFailure } from "../src/api/plan-failure";
 import { retainFailureThroughCleanup } from "../src/api/retain-failure-through-cleanup";
 

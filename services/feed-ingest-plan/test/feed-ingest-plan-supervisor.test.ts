@@ -11,10 +11,10 @@ import { metadataRegistrations } from "./host-recordings";
 import { source } from "./harvest-recordings";
 import { writePlannerOutputRecording } from "./planner-output-recordings";
 import { PLANNER_API_PREFIX, PlannerFailureSchema } from "@idhazh/common-contracts";
-import { readServerEvidence } from "../../typescript-api/src/read-server-evidence";
+import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
 import { writeWorkflowReport } from "../scripts/feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
-import { HonoServerSettingsSchema, loadHonoSettings } from "../../typescript-api/src/load-settings";
+import { HonoServerSettingsSchema, loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
 
 function assertReleased(port: number) {
   const probe = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response() });

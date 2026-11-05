@@ -1,5 +1,5 @@
 /** Run the production child lifecycle against recorded feed bytes and UTC clocks, without network access. */
-import { runApiServer } from "../../typescript-api/src/index";
+import { runApiServer } from "../../serve-pipeline-apis/src/index";
 import { restorePlannerStartup } from "../scripts/restore-planner-startup";
 import { readRecordings, RecordedTransport } from "./harvest-recordings";
 import { appendFileSync, writeFileSync } from "node:fs";

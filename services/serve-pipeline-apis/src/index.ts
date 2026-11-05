@@ -75,7 +75,7 @@ export async function runApiServer(options: { restorePlanner?: typeof restorePla
           return { server, ready: { ...modules.identity, port: server.port } };
         } catch (error) {
           const kind = startup.group === "delivery" ? "SAFE_PERSIST" : startup.group === "planning" ? "PLANNER" : "TYPESCRIPT_API";
-          throw new PlanError(`${kind}_BIND_FAILED`, "Shared TypeScript loopback listener could not start", null, { cause: error });
+          throw new PlanError(`${kind}_BIND_FAILED`, "Pipeline API loopback listener could not start", null, { cause: error });
         }
       },
     };

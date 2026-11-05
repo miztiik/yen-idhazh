@@ -17,11 +17,11 @@ import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { publicationGitRecording, publicationRecording } from "./publication-recordings";
 import { fixtureGit } from "./fixture-git";
 import { writeRecordedHostOutput } from "./host-output-recordings";
-import { ApiReadySchema, ApiStartupFailureSchema, ApiStartupSchema } from "../../typescript-api/src/api-startup";
-import { loadHonoSettings } from "../../typescript-api/src/load-settings";
+import { ApiReadySchema, ApiStartupFailureSchema, ApiStartupSchema } from "../../serve-pipeline-apis/src/api-startup";
+import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
 
 type Recording = Awaited<ReturnType<typeof publicationGitRecording>>;
-const serverEntry = fileURLToPath(new URL("../../typescript-api/src/index.ts", import.meta.url));
+const serverEntry = fileURLToPath(new URL("../../serve-pipeline-apis/src/index.ts", import.meta.url));
 const requestFor = (f: Recording, paths = f.commit.paths) => ({ runNumber: "700", attempt: 3, paths });
 const inputFor = (f: Recording) => ({
   root: f.repository, directory: f.directory, currentRunFiles: JSON.stringify(f.commit.paths), runNumber: "700", attempt: 3,

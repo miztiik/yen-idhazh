@@ -1,6 +1,6 @@
 # Start and stop a task resource profile
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 Which local HTTP commands measure one process for an operator-owned task?
 The Bun host probe includes PID CPU and optional process and machine RAM.
@@ -20,7 +20,7 @@ The listener accepts only configured loopback addresses, `127.0.0.1` or
 backend. Requests with a browser `Origin` header are refused.
 
 The feed workflow uses the same native handlers through the
-[shared TypeScript application](typescript-api-server.md), alongside
+[shared pipeline API server](serve-pipeline-apis.md), alongside
 fingerprint and planning routes. Its single loopback address comes from
 `config/hono-server.json`. The standalone command above retains its own
 listener controls.
@@ -205,4 +205,4 @@ they add no tracing provider, exporter or published-site bytes.
 - [Host measurements](host-metrics.md)
 - [Fetch and parse operator API](../architecture/sources/feed-operator-api.md)
 - [Native instrument checks](../how-to/run-the-gates.md#independent-typescript-packages-and-services)
-- [Shared TypeScript API server](typescript-api-server.md)
+- [Serve pipeline APIs](serve-pipeline-apis.md)

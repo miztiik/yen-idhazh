@@ -10,8 +10,8 @@ import { options, selection } from '../run-checks.ts';
 import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-test('composed TypeScript APIs select the native gate and all named module dependants', () => {
-	for (const path of ['services/typescript-api/src/create-api-app.ts',
+test('pipeline APIs select the native gate and all named module dependants', () => {
+	for (const path of ['services/serve-pipeline-apis/src/create-api-app.ts',
 		'services/feed-ingest-plan/scripts/http-child-lifetime.ts',
 		'services/host-fingerprints/src/api/server.ts', 'services/host-probes/src/api/server.ts',
 		'config/hono-server.json', '.github/workflows/feed-ingest-plan-test.yml']) {

@@ -1,11 +1,13 @@
-# Shared TypeScript API server
+# Serve pipeline APIs
 
 **Last Updated**: 2026-11-05
 
-Which listener, routes and task outcomes do TypeScript workflow callers use?
-`services/typescript-api` composes the existing native handlers on one Hono
-application served by Bun. It is build-time operator tooling, not a backend
-for the published site.
+Which local listener serves planning, article fetching/parsing, machine
+measurements and output delivery?
+`services/serve-pipeline-apis` serves existing pipeline operations through one
+local HTTP server per task. The native handlers run in one Hono application
+served by Bun. It is build-time operator tooling, not a backend for the
+published site.
 
 ## Listener authority
 
@@ -143,6 +145,10 @@ bytes. Existing standalone tools and older workflows are not migrated.
 
 Process ownership is established by private control data, not a copied ID in
 a diagnostic line.
+
+Event producer URIs and private control identifiers identify the existing
+protocol, not a source directory. Their names stay unchanged when the source
+moves so current readers and recorded observations retain their meaning.
 
 ## See also
 

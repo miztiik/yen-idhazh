@@ -1,4 +1,4 @@
-/** Which committed listener serves the enabled TypeScript APIs? */
+/** Which committed listener serves the pipeline APIs? */
 import { join } from "node:path";
 import { z } from "zod";
 

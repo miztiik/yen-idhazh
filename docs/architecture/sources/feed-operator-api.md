@@ -6,7 +6,7 @@ How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
 The sections below define each operation and its current request and response.
 The feed workflow serves them with machine routes through the
-[shared TypeScript application](../../reference/typescript-api-server.md);
+[shared pipeline API server](../../reference/serve-pipeline-apis.md);
 the delivery task restarts that application with its private delivery group.
 
 ## Independent fetch and parse endpoints

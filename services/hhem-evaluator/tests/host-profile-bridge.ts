@@ -3,7 +3,7 @@ import { z } from "../../host-probes/node_modules/zod";
 import { createInterface } from "node:readline";
 import { loadConfig, ProbeConfigSchema } from "../../host-probes/src/config";
 import { START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../host-probes/src/api/server";
-import { createApiApp } from "../../typescript-api/src/create-api-app";
+import { createApiApp } from "../../serve-pipeline-apis/src/create-api-app";
 import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../../host-probes/src/api/task-command-schema";
 import { startTaskProfile } from "../../host-probes/src/task-profile/task-profiler";
 import type { TaskProfileSession } from "../../host-probes/src/task-profile/task-profiler";
@@ -18,7 +18,7 @@ import { fixture } from "../../host-fingerprints/test/fixture";
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { projectMachineProfile, HardwareSchema } from "../../../.github/scripts/summary-eval-tests/machine-results";
-import { ServerEvidenceSchema } from "../../typescript-api/src/server-evidence";
+import { ServerEvidenceSchema } from "../../serve-pipeline-apis/src/server-evidence";
 
 function emit(value: unknown): void { process.stdout.write(JSON.stringify(value) + "\n"); }
 

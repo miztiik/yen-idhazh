@@ -83,13 +83,13 @@ export function createApiApp(input: ApiModuleInputs) {
     close(): Promise<void> {
       if (closing !== undefined) return closing;
       closed = true;
-      cancellation.abort(new Error("TypeScript API task stopped"));
+      cancellation.abort(new Error("Pipeline API task stopped"));
       closing = (async () => {
         const results = await Promise.allSettled([
           planner?.close(), probe?.close(), ...pending,
         ]);
         const failures = results.filter(result => result.status === "rejected").map(result => result.reason);
-        if (failures.length) throw new AggregateError(failures, "TypeScript API module cleanup failed");
+        if (failures.length) throw new AggregateError(failures, "Pipeline API module cleanup failed");
       })();
       return closing;
     },
@@ -132,7 +132,7 @@ export async function serveApiApp(settings: HonoServerSettings, input: ApiModule
       stopping ??= (async () => {
         const results = await Promise.allSettled([app.close(), server.stop(force)]);
         const failures = results.filter(result => result.status === "rejected").map(result => result.reason);
-        if (failures.length) throw new AggregateError(failures, "TypeScript API shutdown failed");
+        if (failures.length) throw new AggregateError(failures, "Pipeline API shutdown failed");
       })();
       return stopping;
     },

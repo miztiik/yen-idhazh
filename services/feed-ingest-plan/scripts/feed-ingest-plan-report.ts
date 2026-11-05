@@ -16,7 +16,7 @@ import type { ReportFailureEvidence } from "../src/reporting/failure-evidence-ma
 import { verifyParquetFiles } from "./feed-ingest-plan-verification";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { articleEntitiesFilename, articleEntitiesPath } from "../src/selected-artifact-path";
-import { readServerEvidence } from "../../typescript-api/src/read-server-evidence";
+import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
 import { renderServerEvidence } from "./feed-ingest-plan-server-report";
 
 export type WorkflowReportEvidence = {

@@ -75,9 +75,9 @@ jobs:
             /services/host-probes/package.json
             /services/host-probes/bun.lock
             /services/host-probes/src/
-            /services/typescript-api/package.json
-            /services/typescript-api/bun.lock
-            /services/typescript-api/src/
+            /services/serve-pipeline-apis/package.json
+            /services/serve-pipeline-apis/bun.lock
+            /services/serve-pipeline-apis/src/
             /state/raw/feed-ingest-plan/
             /state/compact/feed-ingest-plan/
             /state/raw/published/
@@ -98,7 +98,7 @@ jobs:
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/host-probes
-          bun install --frozen-lockfile --cwd services/typescript-api
+          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
 
       # This one step owns the child server, readiness, HTTP client and shutdown.
       - name: Collect and select articles
