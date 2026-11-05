@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
-from pydantic import Field, TypeAdapter, model_validator
+from pydantic import TypeAdapter
 
 from idhazh import event_lines
-from idhazh.contracts.base import DateStamp, Model, Slug
+from idhazh.contracts.base import Model
 from idhazh.contracts.council_events import (
     CouncilExit,
     CouncilProgram,
@@ -24,6 +24,8 @@ from idhazh.contracts.council_events import (
     RunIdentified,
     UnitFinished,
 )
+from idhazh.contracts.council_invocation import Cell as Cell
+from idhazh.contracts.council_invocation import Selection, ShardReport, ShardReportState
 from idhazh.contracts.council_run_record import EvaluationStep, ShardOutcome
 
 # These are the existing transient event vocabulary and workflow matrix, not a ledger.
@@ -41,26 +43,6 @@ _EVENTS = {
     )
 }
 _STAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
-
-
-class Cell(Model):
-    """One planner-selected job whose report must not be inferred from output bytes."""
-
-    tenant: Slug
-    date: DateStamp
-    shard: int = Field(ge=0, strict=True)
-    shards: int = Field(ge=1, strict=True)
-    runs_model: bool = Field(strict=True)
-
-    @model_validator(mode="after")
-    def valid_cell(self) -> Cell:
-        date.fromisoformat(self.date)
-        if self.shard >= self.shards:
-            raise ValueError("shard must be below shards")
-        return self
-
-    def event_path(self, root: Path) -> Path:
-        return root / self.tenant / self.date / f"{self.shard}.jsonl"
 
 
 def cells(matrix: str) -> tuple[Cell, ...]:
@@ -110,22 +92,52 @@ class ReportedCell:
     cell: Cell
     unit: UnitFinished | None = None
     program: ProgramFinished | None = None
+    verification: ProgramFinished | None = None
     invalid: bool = False
+    dispatched: bool = True
+
+    def normalized(self, *, dispatched: bool | None = None) -> ShardReport:
+        dispatched = self.dispatched if dispatched is None else dispatched
+        exit_report = self.program if self.program is not None else self.verification
+        state: ShardReportState = (
+            "not_dispatched"
+            if not dispatched
+            else "invalid"
+            if self.invalid
+            else "refused"
+            if exit_report is not None and exit_report.code is CouncilExit.REFUSED
+            else "missing"
+            if self.unit is None or self.program is None
+            else "reported"
+        )
+        return ShardReport(
+            shard=self.cell.shard,
+            shards=self.cell.shards,
+            report_state=state,
+            outcome=self.unit.outcome if state == "reported" and self.unit is not None else None,
+            code=exit_report.code if exit_report is not None else None,
+        )
 
     @property
     def failed(self) -> bool:
         return (
             self.invalid
+            or not self.dispatched
             or self.unit is None
             or self.program is None
             or self.program.code is not CouncilExit.OK
+            or (self.verification is not None and self.verification.code is not CouncilExit.OK)
             or self.unit.outcome in ("failed", ShardOutcome.STOPPED_ON_DEADLINE)
         )
 
     def ended(self) -> str:
+        if not self.dispatched:
+            return "**not dispatched**"
         if self.invalid:
             return "**invalid report**"
         if self.unit is None or self.program is None:
+            if self.verification is not None and self.verification.code is not CouncilExit.OK:
+                return f"not attempted; verification {_exit(self.verification)}"
             if self.program is not None and self.program.code is CouncilExit.REFUSED:
                 return f"not attempted; {_exit(self.program)}"
             word = "**no report**"
@@ -155,11 +167,22 @@ def reported(cell: Cell, root: Path, run_id: str) -> ReportedCell:
                     raise ValueError("unit does not match its planned cell")
                 result.unit = event
             elif isinstance(event, ProgramFinished):
-                if result.program is not None or event.program is not CouncilProgram.SHARD:
+                if event.program is CouncilProgram.VERIFY_WORK:
+                    if result.verification is not None:
+                        raise ValueError("duplicate verification result")
+                    result.verification = event
+                elif event.program is CouncilProgram.SHARD and result.program is None:
+                    result.program = event
+                else:
                     raise ValueError("unexpected program result")
-                result.program = event
             elif not isinstance(event, Diagnostic):
                 raise ValueError("unexpected judging event")
+        if (
+            result.verification is not None
+            and result.verification.code is not CouncilExit.OK
+            and (result.unit is not None or result.program is not None)
+        ):
+            raise ValueError("work followed rejected verification")
         if (
             result.unit is not None
             and result.program is not None
@@ -171,6 +194,7 @@ def reported(cell: Cell, root: Path, run_id: str) -> ReportedCell:
         result.invalid = True
         result.unit = None
         result.program = None
+        result.verification = None
     return result
 
 
@@ -180,11 +204,15 @@ class Report:
     planning: tuple[Model, ...] = ()
     invalid_plan: bool = False
     events: list[Model] = field(default_factory=list)
+    selection: Selection | None = None
+    expected_preparations: tuple[tuple[str, str], ...] = ()
+    missing_preparations: tuple[tuple[str, str], ...] = ()
 
     @property
     def failed(self) -> bool:
         return (
             self.invalid_plan
+            or bool(self.missing_preparations)
             or any(unit.failed for unit in self.units)
             or any(
                 (
@@ -196,15 +224,79 @@ class Report:
             )
         )
 
-    def load(self, matrix: str, root: Path, run_id: str) -> None:
+    def load(
+        self,
+        matrix: str,
+        root: Path,
+        run_id: str,
+        *,
+        selection: Selection | None = None,
+    ) -> None:
+        self.selection = selection
         try:
             selected = cells(matrix)
         except ValueError:
             self.invalid_plan = True
             raise
         self.units = tuple(reported(cell, root, run_id) for cell in selected)
+        if selection is not None:
+            from idhazh.council import work_files
+
+            expected: list[Cell] = []
+            unknown: list[tuple[str, str]] = []
+            for judge in selection.judges:
+                for day in judge.dates:
+                    prepared = work_files.read_preparation(
+                        root.parent, selection, judge.tenant, day
+                    )
+                    if prepared is None:
+                        unknown.append((judge.tenant, day))
+                    elif prepared.state == "ready":
+                        expected.extend(
+                            Cell(
+                                tenant=judge.tenant,
+                                date=day,
+                                shard=part,
+                                shards=prepared.shards,
+                                runs_model=False,
+                            )
+                            for part in range(prepared.shards)
+                        )
+            admitted = {(cell.tenant, cell.date, cell.shard, cell.shards) for cell in selected}
+            authorized = {(cell.tenant, cell.date, cell.shard, cell.shards) for cell in expected}
+            if not admitted <= authorized:
+                self.invalid_plan = True
+                raise ValueError("matrix contains work not authorized by ready preparation")
+            self.units = tuple(
+                ReportedCell(cell, dispatched=False)
+                if (cell.tenant, cell.date, cell.shard, cell.shards) not in admitted
+                else reported(cell, root, run_id)
+                for cell in expected
+            )
+            self.missing_preparations = tuple(unknown)
         try:
             self.planning = read_events(root / "planner.jsonl")
+            if selection is not None:
+                self.expected_preparations = tuple(
+                    (judge.tenant, day) for judge in selection.judges for day in judge.dates
+                )
+                actual = [
+                    (event.judge_id, event.date)
+                    for event in self.planning
+                    if isinstance(event, UnitFinished)
+                ]
+                if len(actual) != len(set(actual)) or not set(actual) <= set(
+                    self.expected_preparations
+                ):
+                    raise ValueError("unexpected planning unit")
+                self.missing_preparations = tuple(
+                    dict.fromkeys(
+                        (
+                            *self.missing_preparations,
+                            *(pair for pair in self.expected_preparations if pair not in actual),
+                        )
+                    )
+                )
             for event in self.planning:
                 if isinstance(event, UnitFinished) and (
                     event.run_id != run_id
@@ -260,8 +352,16 @@ class Report:
             "| --- | --- | --- | --- | --- |",
         ]
         index = 0
+        for judge, day in self.missing_preparations:
+            index += 1
+            rows.append(f"| A{index} | `{judge}` | {day} | prepare | **unknown; no report** |")
         for event in (*self.planning, *self.events):
             if isinstance(event, UnitFinished):
+                if (
+                    event.evaluation_step is EvaluationStep.SELECT_JUDGE_WORK
+                    and (event.judge_id, event.date) in self.missing_preparations
+                ):
+                    continue
                 index += 1
                 word = str(event.outcome).replace("_", " ")
                 if event.outcome in ("failed", ShardOutcome.STOPPED_ON_DEADLINE):

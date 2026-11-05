@@ -12,9 +12,9 @@ import { fixtureGit } from "./fixture-git";
 import { publishUploadInventory } from "../scripts/feed-ingest-plan-upload-inventory";
 import { readCloudEvent, writeTraceContext } from "@idhazh/common-contracts";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
-import { DeliveryCompletionDiagnosticSchema } from "../../typescript-api/src/delivery-completion-diagnostic";
-import { readServerEvidence } from "../../typescript-api/src/read-server-evidence";
-import { ServerEventDataSchema } from "../../typescript-api/src/server-evidence";
+import { DeliveryCompletionDiagnosticSchema } from "../../serve-pipeline-apis/src/delivery-completion-diagnostic";
+import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
+import { ServerEventDataSchema } from "../../serve-pipeline-apis/src/server-evidence";
 
 async function recording(failCollection = false) {
   const fixture = await publicationRecording(failCollection);

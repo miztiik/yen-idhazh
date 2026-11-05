@@ -1,5 +1,5 @@
 /** Show observed server readiness and cleanup without treating diagnostic lines as execution proof. */
-import type { ServerEvidence } from "../../typescript-api/src/server-evidence";
+import type { ServerEvidence } from "../../serve-pipeline-apis/src/server-evidence";
 import { formatDuration } from "../src/reporting/aggregate-feed-results";
 import { escapeMarkdown } from "../src/reporting/markdown-format";
 

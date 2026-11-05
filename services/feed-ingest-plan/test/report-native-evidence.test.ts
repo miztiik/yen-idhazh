@@ -17,8 +17,8 @@ import { plannerOutputRecording } from "./planner-output-recordings";
 import { writeRows } from "./partition-fixtures";
 import { operationLink } from "../src/api/operation-context";
 import { readArticleFailureDiagnostics } from "../scripts/read-article-failure-diagnostics";
-import { readServerEvidence } from "../../typescript-api/src/read-server-evidence";
-import { ServerEvidenceSchema, serverLogFilename } from "../../typescript-api/src/server-evidence";
+import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
+import { ServerEvidenceSchema, serverLogFilename } from "../../serve-pipeline-apis/src/server-evidence";
 import { describePlanError } from "../src/api/plan-failure";
 
 function attention(markdown: string) {

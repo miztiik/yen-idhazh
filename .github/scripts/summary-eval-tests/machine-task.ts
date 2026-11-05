@@ -1,13 +1,13 @@
 /** How does one phase call the real shared machine APIs and close their owned server? */
-import { z } from "../../../services/typescript-api/node_modules/zod";
+import { z } from "../../../services/serve-pipeline-apis/node_modules/zod";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import type { Readable } from "node:stream";
 import { createRootContext, OperationMetadataSchema, writeTraceContext } from "../../../packages/common-contracts/src";
-import { superviseApiTask } from "../../../services/typescript-api/src/supervise-api-task";
-import { HonoServerSettingsSchema } from "../../../services/typescript-api/src/load-settings";
-import { ServerEvidenceSchema } from "../../../services/typescript-api/src/server-evidence";
+import { superviseApiTask } from "../../../services/serve-pipeline-apis/src/supervise-api-task";
+import { HonoServerSettingsSchema } from "../../../services/serve-pipeline-apis/src/load-settings";
+import { ServerEvidenceSchema } from "../../../services/serve-pipeline-apis/src/server-evidence";
 import { ServiceSettingsSchema } from "../../../services/feed-ingest-plan/src/config/service-settings";
 import { loadConfig } from "../../../services/host-probes/src/config";
 import { readProcessIdentity } from "../../../services/host-probes/src/task-profile/process-stat";

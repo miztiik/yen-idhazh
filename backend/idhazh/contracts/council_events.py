@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import IntEnum, StrEnum
 from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints, computed_field
+from pydantic import Field, StringConstraints, computed_field, model_validator
 
 from idhazh.contracts.base import DateStamp, Model, RunId, Slug
 from idhazh.contracts.council_run_record import EvaluationStep, ShardOutcome
@@ -53,6 +53,7 @@ class CouncilProgram(StrEnum):
     MATRIX = "matrix"
     PREPARE = "prepare"
     SHARD = "shard"
+    VERIFY_WORK = "verify-work"
     SETTLE = "settle"
     PUBLISH = "publish"
 
@@ -87,10 +88,20 @@ class UnitFinished(Model):
     judge_id: Slug
     evaluation_step: EvaluationStep
     work_part_index: int | None = Field(default=None, ge=0)
-    work_part_count: int = Field(ge=1)
+    work_part_count: int = Field(ge=0)
     outcome: ShardOutcome
     error: ErrorName | None = None
     where: CodePlace | None = None
+
+    @model_validator(mode="after")
+    def valid_part(self) -> UnitFinished:
+        if (self.evaluation_step is EvaluationStep.EVALUATE_WORK_PART) != (
+            self.work_part_index is not None
+        ):
+            raise ValueError("only shard events have a part index")
+        if self.work_part_index is not None and self.work_part_index >= self.work_part_count:
+            raise ValueError("part index must be below its positive width")
+        return self
 
 
 class RowsCollected(Model):

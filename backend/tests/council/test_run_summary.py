@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 from pathlib import Path
 
 import pytest
 
-from idhazh import cli, event_lines
+from idhazh import cli, config, event_lines
 from idhazh.contracts.base import Model
 from idhazh.contracts.council_events import (
     CouncilExit,
@@ -19,16 +20,48 @@ from idhazh.contracts.council_events import (
     ProgramFinished,
     UnitFinished,
 )
+from idhazh.contracts.council_invocation import Selection
 from idhazh.contracts.council_run_record import EvaluationStep, ShardOutcome
-from idhazh.council import event_log, outcome, registry, run_summary, session
+from idhazh.council import event_log, outcome, registry, run_summary, session, work_files
 from utilities import council_publish
 
-from ._tenants import TENANT_SOURCE, a_venue, forget
+from ._tenants import a_venue, forget
 from .test_events import HOSTILE
 from .test_publication import configuration
+from .test_selected_runs import INDEPENDENT_SOURCE, _deliver_document
 
 DATE = "2026-10-10"
 RUN = "2026-10-11-123"
+
+
+def authorize(
+    tmp_path: Path,
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    source: str = INDEPENDENT_SOURCE,
+) -> Path:
+    package = "report_file_plugins"
+    a_venue(tmp_path, package=package, slugs={"one-judge": (1, ())}, source=source)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(registry, "TENANT_PACKAGE", package)
+    forget(package)
+    root = configuration(repo, ("one-judge",))
+    selected = Selection.model_validate(
+        {
+            "run_id": RUN,
+            "attempt": 1,
+            "git_sha": "a" * 40,
+            "mode": "manual",
+            "anchor_date": DATE,
+            "window": (DATE,),
+            "judges": ({"tenant": "one-judge", "status": "active", "dates": (DATE,), "shards": 1},),
+        }
+    )
+    monkeypatch.setattr(session, "COUNCIL_ROOT", repo / "backend" / "var" / "council")
+    monkeypatch.setenv("COUNCIL_SELECTION", selected.to_json())
+    session.prepare(config.load_council(root), run_id=RUN, selection=selected)
+    return root
 
 
 def unit(
@@ -256,7 +289,9 @@ def test_hidden_progress_still_rides_the_bundle(
 
 
 def test_bundle_writer_is_isolated_from_registered_logger_handlers(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     path = tmp_path / "events.jsonl"
     monkeypatch.setenv("COUNCIL_EVENT_FILE", str(path))
@@ -294,6 +329,165 @@ def test_event_transport_write_failure_is_not_silently_ignored(tmp_path: Path) -
             handler.close()
 
 
+def test_ready_work_without_a_matrix_cell_is_not_dispatched(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    target = authorize(tmp_path, repo, monkeypatch)
+    selected = Selection.model_validate_json(
+        os.environ["COUNCIL_SELECTION"],
+    ).check(config.load_council(target))
+    report = run_summary.Report()
+    report.load("[]", session.COUNCIL_ROOT / "events", RUN, selection=selected)
+    assert len(report.units) == 1
+    assert report.units[0].normalized().report_state == "not_dispatched"
+    assert report.failed
+    assert "not dispatched" in report.markdown()
+
+
+def test_missing_preparation_is_unknown_not_no_work(
+    tmp_path: Path,
+) -> None:
+    selected = Selection.model_validate(
+        {
+            "run_id": RUN,
+            "attempt": 1,
+            "git_sha": "a" * 40,
+            "mode": "manual",
+            "anchor_date": DATE,
+            "window": (DATE,),
+            "judges": ({"tenant": "one-judge", "status": "active", "dates": (DATE,), "shards": 1},),
+        }
+    )
+    report = run_summary.Report()
+    report.load("[]", tmp_path / "events", RUN, selection=selected)
+    assert report.missing_preparations == (("one-judge", DATE),)
+    assert report.failed and report.units == ()
+    assert "unknown; no report" in report.markdown()
+
+
+@pytest.mark.parametrize("layout", ["flat", "named"])
+def test_actual_verification_and_execution_share_one_report(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    layout: str,
+) -> None:
+    repo = tmp_path / "repo"
+    planner = repo / "backend" / "var" / "council"
+    monkeypatch.setenv(
+        "COUNCIL_EVENT_FILE",
+        str(planner / "outgoing" / "planner" / "events" / "planner.jsonl"),
+    )
+    event_log.install()
+    target = authorize(tmp_path, repo, monkeypatch)
+    selected = Selection.model_validate_json(os.environ["COUNCIL_SELECTION"])
+    receipt = work_files.read_preparation(planner, selected, "one-judge", DATE)
+    assert receipt is not None
+    worker = tmp_path / "worker"
+    download = worker / "incoming"
+    if layout == "named":
+        download /= f"council-selection-{DATE}"
+    _deliver_document(
+        planner / "outgoing" / "planner",
+        download,
+        selected,
+        receipt,
+        event="planner.jsonl",
+    )
+    monkeypatch.setattr(session, "COUNCIL_ROOT", worker)
+    root = worker / "outgoing" / f"shard-one-judge-{DATE}-0" / "events"
+    (cell,) = run_summary.cells(matrix("one-judge"))
+    monkeypatch.setenv("COUNCIL_EVENT_FILE", str(cell.event_path(root)))
+    args = [
+        "council-shard",
+        "--config",
+        str(target),
+        "--tenant",
+        cell.tenant,
+        "--date",
+        DATE,
+        "--run-id",
+        RUN,
+        "--commit",
+        selected.git_sha,
+        "--shard",
+        "0",
+        "--shards",
+        "1",
+    ]
+    assert cli.main([*args, "--verify-only"]) == 0
+    assert cli.main(args) == 0
+    exits = [
+        event.program
+        for event in run_summary.read_events(cell.event_path(root))
+        if isinstance(event, ProgramFinished)
+    ]
+    assert exits == [CouncilProgram.VERIFY_WORK, CouncilProgram.SHARD]
+    result = run_summary.reported(cell, root, RUN)
+    assert not result.failed and not result.invalid
+    assert result.normalized().report_state == "reported"
+    assert result.program is not None and result.program.program is CouncilProgram.SHARD
+
+
+@pytest.mark.parametrize("code", list(CouncilExit))
+def test_verification_never_substitutes_for_the_actual_shard_exit(
+    tmp_path: Path,
+    code: CouncilExit,
+) -> None:
+    root = tmp_path / "events"
+    (cell,) = run_summary.cells(matrix("one-judge"))
+    write_events(
+        cell.event_path(root),
+        ProgramFinished(program=CouncilProgram.VERIFY_WORK, code=code),
+    )
+    result = run_summary.reported(cell, root, RUN)
+    assert not result.invalid and result.failed
+    assert result.unit is None and result.program is None
+    normalized = result.normalized()
+    assert normalized.report_state == ("refused" if code is CouncilExit.REFUSED else "missing")
+    assert normalized.code is code
+
+
+@pytest.mark.parametrize(
+    "programs",
+    [
+        (CouncilProgram.VERIFY_WORK, CouncilProgram.VERIFY_WORK),
+        (CouncilProgram.SHARD, CouncilProgram.SHARD),
+        (CouncilProgram.PREPARE,),
+    ],
+)
+def test_duplicate_or_unrelated_program_exits_are_invalid(
+    tmp_path: Path,
+    programs: tuple[CouncilProgram, ...],
+) -> None:
+    root = tmp_path / "events"
+    (cell,) = run_summary.cells(matrix("one-judge"))
+    write_events(
+        cell.event_path(root),
+        *(ProgramFinished(program=program, code=CouncilExit.OK) for program in programs),
+    )
+    result = run_summary.reported(cell, root, RUN)
+    assert result.invalid and result.failed
+
+
+@pytest.mark.parametrize("code", [CouncilExit.FAILED, CouncilExit.REFUSED])
+def test_work_after_rejected_verification_cannot_report_success(
+    tmp_path: Path,
+    code: CouncilExit,
+) -> None:
+    root = tmp_path / "events"
+    (cell,) = run_summary.cells(matrix("one-judge"))
+    write_events(
+        cell.event_path(root),
+        ProgramFinished(program=CouncilProgram.VERIFY_WORK, code=code),
+        unit(),
+        ProgramFinished(program=CouncilProgram.SHARD, code=CouncilExit.OK),
+    )
+    result = run_summary.reported(cell, root, RUN)
+    assert result.invalid and result.failed
+
+
 @pytest.mark.parametrize("defect", ["wrong-run", "duplicate", "contradictory", "truncated"])
 def test_corrupt_or_mismatched_reports_are_rejected(defect: str, tmp_path: Path) -> None:
     root = tmp_path / "events"
@@ -321,6 +515,7 @@ def test_upstream_failure_is_preserved_even_with_a_complete_success_report(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo = tmp_path / "repo"
+    config_root = authorize(tmp_path, repo, monkeypatch)
     root = repo / "backend" / "var" / "council" / "events"
     (cell,) = run_summary.cells(matrix("one-judge"))
     write_events(
@@ -340,7 +535,7 @@ def test_upstream_failure_is_preserved_even_with_a_complete_success_report(
         "--repo-root",
         str(repo),
         "--config-root",
-        str(configuration(repo, ())),
+        str(config_root),
         "--matrix",
         matrix("one-judge"),
         "--units-result",
@@ -350,7 +545,8 @@ def test_upstream_failure_is_preserved_even_with_a_complete_success_report(
     assert code == 1
     text = summary.read_text("utf-8")
     assert "Council night: exit 1 `failed`" in text
-    assert "completed; exit 0 `ok`" in text
+    if upstream != "cancelled":
+        assert "completed; exit 0 `ok`" in text
 
 
 def test_collector_failure_still_appends_one_safe_summary(
@@ -359,6 +555,7 @@ def test_collector_failure_still_appends_one_safe_summary(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     repo = tmp_path / "repo"
+    config_root = authorize(tmp_path, repo, monkeypatch)
     root = repo / "backend" / "var" / "council" / "events"
     (cell,) = run_summary.cells(matrix("one-judge"))
     write_events(
@@ -368,11 +565,7 @@ def test_collector_failure_still_appends_one_safe_summary(
     )
     summary = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
-    package = "collector_failure_tenants"
-    a_venue(tmp_path, package=package, slugs={"one-judge": (1, ())})
-    monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.setattr(registry, "TENANT_PACKAGE", package)
-    monkeypatch.setattr(session, "COUNCIL_ROOT", repo / "backend" / "var" / "council")
+    package = "report_file_plugins"
     args = [
         "--date",
         DATE,
@@ -383,11 +576,10 @@ def test_collector_failure_still_appends_one_safe_summary(
         "--repo-root",
         str(repo),
         "--config-root",
-        str(configuration(repo, ("one-judge",))),
+        str(config_root),
         "--matrix",
         matrix("one-judge"),
     ]
-    forget(package)
     try:
         code = council_publish.main(args)
         captured = capsys.readouterr()
@@ -406,12 +598,13 @@ def test_real_shard_bundle_is_read_by_the_real_collector_when_a_shard_raises(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     package = "summary_tenants"
-    source = TENANT_SOURCE.replace(
-        "        self.ran.append((date, run_id, shard, shards))",
+    source = INDEPENDENT_SOURCE.replace(
+        '        values = json.loads(task.read_text(encoding="utf-8"))',
         f"        raise RuntimeError({HOSTILE!r})",
     )
-    a_venue(tmp_path, package=package, slugs={"one-judge": (1, ())}, source=source)
-    config_root = configuration(tmp_path, ("one-judge",))
+    repo = tmp_path / "collector"
+    config_root = authorize(tmp_path, repo, monkeypatch, source=source)
+    package = "report_file_plugins"
     uploaded = tmp_path / "uploaded" / "events" / "one-judge" / DATE / "0.jsonl"
     monkeypatch.setenv("COUNCIL_EVENT_FILE", str(uploaded))
     argv = [
@@ -422,13 +615,11 @@ def test_real_shard_bundle_is_read_by_the_real_collector_when_a_shard_raises(
         DATE,
         "--run-id",
         RUN,
+        "--commit",
+        "a" * 40,
         "--config",
         str(config_root),
     ]
-    monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.setattr(registry, "TENANT_PACKAGE", package)
-    monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "scratch")
-    forget(package)
     try:
         shard_code = cli.main(argv)
         shard_output = capsys.readouterr()
@@ -436,12 +627,10 @@ def test_real_shard_bundle_is_read_by_the_real_collector_when_a_shard_raises(
         forget(package)
     assert shard_code == 1
     assert b"\r" not in uploaded.read_bytes() and "SOURCE-TEXT" not in uploaded.read_text("utf-8")
-    repo = tmp_path / "collector"
     received = repo / "backend" / "var" / "council" / "events" / "one-judge" / DATE / "0.jsonl"
     received.parent.mkdir(parents=True)
     shutil.copy2(uploaded, received)
     monkeypatch.delenv("COUNCIL_EVENT_FILE")
-    monkeypatch.setattr(registry, "TENANT_PACKAGE", "idhazh")
     monkeypatch.setattr(session, "COUNCIL_ROOT", repo / "backend" / "var" / "council")
     summary = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
@@ -455,7 +644,7 @@ def test_real_shard_bundle_is_read_by_the_real_collector_when_a_shard_raises(
         "--repo-root",
         str(repo),
         "--config-root",
-        str(configuration(repo, ())),
+        str(config_root),
         "--matrix",
         matrix("one-judge"),
         "--units-result",

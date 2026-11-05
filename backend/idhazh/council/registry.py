@@ -20,8 +20,11 @@ from pathlib import Path
 from types import ModuleType
 from typing import Final, cast
 
+from pydantic import TypeAdapter
+
 from idhazh import config
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.base import RelPath
 from idhazh.contracts.knobs.council import (
     CouncilConfig,
     JudgeLifecycleStatus,
@@ -134,6 +137,14 @@ def tenant(
             f"judge_names in config/llm_council.json names '{slug}', but "
             f"{module_name} declares judge_id '{found.judge_id}'."
         )
+    if type(found.shard_count) is not int or found.shard_count < 1:
+        raise JudgeRefusalError(slug, "judge width must be a positive strict integer")
+    for member in ("schedule", "prepare", "run_shard", "settle", "publication_inputs"):
+        if not callable(getattr(found, member, None)):
+            raise JudgeRefusalError(slug, "judge is missing a required member")
+    TypeAdapter(tuple[RelPath, ...]).validate_python(found.committed_paths, strict=True)
+    if any(path in ("state", "state/raw", "state/compact") for path in found.committed_paths):
+        raise JudgeRefusalError(slug, "judge cannot declare a blanket state root")
     _refuse_a_night_this_tenant_cannot_finish(module, app, council)
     committed = (
         *(staging.staged_path(which) for which in VENUE_LEDGERS),

@@ -20,14 +20,14 @@ import pytest
 from _host_placement import refuse_external_placement
 from support.paths import REPO_ROOT, read_text
 
-from idhazh import cli, config, ledger
+from idhazh import cli, config, ledger, run_context
 from idhazh.contracts.council_run_record import CouncilRunRecord, EvaluationStep, ShardOutcome
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
 
-from ._config import copy_config, set_host_fingerprint_placement, write_declarations
+from ._config import copy_config, selection, set_host_fingerprint_placement, write_declarations
 from ._tenants import a_scripted_venue, a_venue, forget, written
 
 A_VENUE = "a_paper_venue"
@@ -69,6 +69,7 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(registry, "TENANT_PACKAGE", A_VENUE)
     monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "var" / "council")
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
     forget(A_VENUE)
     yield tmp_path
     forget(A_VENUE)
@@ -109,7 +110,46 @@ def _a_whole_night(
     commit_sha: str = A_SHA,
 ) -> None:
     """Pick the work, run every unit, then settle - all through the command line."""
-    common = ["--date", A_DATE, "--run-id", A_RUN, "--config", str(config_root)]
+    selected = selection(
+        config.load_council(config_root),
+        date=A_DATE,
+        run_id=A_RUN,
+        commit_sha=commit_sha,
+        attempt=run_context.run_attempt(),
+    )
+    with pytest.MonkeyPatch.context() as environment:
+        environment.setenv("COUNCIL_SELECTION", selected.model_dump_json())
+        _run_whole_night(
+            config_root,
+            state_root,
+            slugs=slugs,
+            shards=shards,
+            dead=dead,
+            stopped=stopped,
+            commit_sha=commit_sha,
+        )
+
+
+def _run_whole_night(
+    config_root: Path,
+    state_root: Path,
+    *,
+    slugs: tuple[str, ...],
+    shards: int,
+    dead: tuple[int, ...],
+    stopped: bool,
+    commit_sha: str,
+) -> None:
+    common = [
+        "--date",
+        A_DATE,
+        "--run-id",
+        A_RUN,
+        "--config",
+        str(config_root),
+        "--commit",
+        commit_sha,
+    ]
     assert cli.main(["council-prepare", *common]) == 0
     for slug in slugs:
         for shard in range(shards):
@@ -134,8 +174,6 @@ def _a_whole_night(
                 *common,
                 "--state-root",
                 str(state_root),
-                "--commit",
-                commit_sha,
             ]
         )
         == 0
@@ -167,7 +205,11 @@ def _judge_modules_reached(module: str, prefixes: tuple[str, ...]) -> list[str]:
 
 
 @pytest.mark.parametrize("verb", COUNCIL_VERBS)
-def test_a_council_verb_runs_a_night_that_hosts_nobody(verb: str, tmp_path: Path) -> None:
+def test_a_council_verb_runs_a_night_that_hosts_nobody(
+    verb: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The zero-tenant check, against a config that registers nobody.
 
     A venue with no tenants judges nothing, and that is correct. What it must
@@ -180,8 +222,15 @@ def test_a_council_verb_runs_a_night_that_hosts_nobody(verb: str, tmp_path: Path
     real night's work over the checkout's own ledgers on the way.
     """
     empty = _config_registering(tmp_path)
+    selected = selection(config.load_council(empty), date=A_DATE, run_id=A_RUN, commit_sha=A_SHA)
+    monkeypatch.setenv("COUNCIL_SELECTION", selected.model_dump_json())
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
 
-    assert cli.main([verb, "--date", A_DATE, "--run-id", A_RUN, "--config", str(empty)]) == 0
+    date_args = [] if verb == "council-prepare" else ["--date", A_DATE]
+    assert (
+        cli.main([verb, *date_args, "--run-id", A_RUN, "--config", str(empty), "--commit", A_SHA])
+        == 0
+    )
     from idhazh.stages import common
 
     assert not ledger.list_raw_files(
@@ -189,7 +238,10 @@ def test_a_council_verb_runs_a_night_that_hosts_nobody(verb: str, tmp_path: Path
     )
 
 
-def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(venue: Path) -> None:
+def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(
+    venue: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     a_venue(venue, package=A_VENUE, slugs={A_SLUG: (1, ())})
     config_root = _config_registering(venue, A_SLUG)
     set_host_fingerprint_placement(config_root, False)
@@ -199,14 +251,21 @@ def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(venue
         str(config_root),
         "--run-id",
         A_RUN,
-        "--state-root",
-        str(state),
         "--commit",
         A_SHA,
+        "--state-root",
+        str(state),
     ]
 
     with refuse_external_placement():
         for judged in (A_DATE, "2026-09-19"):
+            selected = selection(
+                config.load_council(config_root), date=judged, run_id=A_RUN, commit_sha=A_SHA
+            )
+            monkeypatch.setenv("COUNCIL_SELECTION", selected.model_dump_json())
+            session.prepare(
+                config.load_council(config_root), date=judged, run_id=A_RUN, selection=selected
+            )
             assert cli.main(["council-settle", "--date", judged, *address]) == 0
 
     rows = ledger.load_days(
@@ -241,7 +300,10 @@ def test_a_shard_with_no_tenant_stops_at_the_command_line() -> None:
     assert cli.main(["council-shard", "--date", A_DATE, "--run-id", A_RUN]) == 2
 
 
-def test_the_command_line_hands_the_tenant_the_councils_own_clock(venue: Path) -> None:
+def test_the_command_line_hands_the_tenant_the_councils_own_clock(
+    venue: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A bound nothing computes is a bound that never fires on a real night.
 
     Driven through the entry point rather than the session module, because the
@@ -252,6 +314,9 @@ def test_the_command_line_hands_the_tenant_the_councils_own_clock(venue: Path) -
     a_venue(venue, package=A_VENUE, slugs={A_SLUG: (2, ())})
     config_root = _config_registering(venue, A_SLUG)
     council = config.load_council(config_root)
+    selected = selection(council, date=A_DATE, run_id=A_RUN, commit_sha=A_SHA)
+    monkeypatch.setenv("COUNCIL_SELECTION", selected.model_dump_json())
+    session.prepare(council, date=A_DATE, run_id=A_RUN, selection=selected)
     window = (
         council.shard_timeout_minutes
         - council.shard_preamble_minutes
@@ -268,6 +333,8 @@ def test_the_command_line_hands_the_tenant_the_councils_own_clock(venue: Path) -
             A_DATE,
             "--run-id",
             A_RUN,
+            "--commit",
+            A_SHA,
             "--shard",
             "1",
             "--shards",
@@ -293,8 +360,16 @@ def test_the_night_runs_every_hosted_tenant_for_the_date_it_was_given(venue: Pat
     config_root = _config_registering(venue, A_SLUG)
     council = config.load_council(config_root)
 
-    session.prepare(council, date=A_DATE, run_id=A_RUN)
-    session.settle(council, date=A_DATE, run_id=A_RUN, state_dir=venue / "state", commit_sha=A_SHA)
+    selected = selection(council, date=A_DATE, run_id=A_RUN, commit_sha=A_SHA)
+    session.prepare(council, date=A_DATE, run_id=A_RUN, selection=selected)
+    session.settle(
+        council,
+        date=A_DATE,
+        run_id=A_RUN,
+        state_dir=venue / "state",
+        commit_sha=A_SHA,
+        selection=selected,
+    )
 
     tenant = written(A_VENUE, A_SLUG).TENANT
     assert tenant.prepared == [A_DATE]
@@ -373,15 +448,19 @@ def test_a_unit_that_raised_files_one_failed_row_beside_its_completed_siblings(
 
     _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=4, dead=(2,))
 
-    shipped = session.outcomes_dir(A_DATE) / A_SLUG
-    assert {path.name for path in shipped.glob("*.csv")} == {
+    selected = selection(
+        config.load_council(config_root), date=A_DATE, run_id=A_RUN, commit_sha=A_SHA
+    )
+    shipped = session.invocation_root(selected, A_SLUG) / A_DATE / "outcomes" / A_SLUG
+    for name in (
         "0.csv",
         "1.csv",
         "2.csv",
         "3.csv",
         "select-judge-work.csv",
         "combine-judge-results.csv",
-    }
+    ):
+        assert (shipped / name).is_file()
 
     recorded = _the_councils_record(state_root)
     ran = [row for row in recorded if row.evaluation_step is EvaluationStep.EVALUATE_WORK_PART]
@@ -501,7 +580,10 @@ def test_two_tenants_of_one_night_both_keep_their_own_first_unit(
     }
 
 
-def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(tmp_path: Path) -> None:
+def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A header with no rows under it is a real day to the partition walker.
 
     Written once, it is a phantom day in the prune target and the day inventory
@@ -510,6 +592,9 @@ def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(tmp_path: Path) -> 
     """
     state_root = tmp_path / "state"
     empty = _config_registering(tmp_path)
+    selected = selection(config.load_council(empty), date=A_DATE, run_id=A_RUN, commit_sha=A_SHA)
+    monkeypatch.setenv("COUNCIL_SELECTION", selected.model_dump_json())
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
 
     assert (
         cli.main(
@@ -521,6 +606,8 @@ def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(tmp_path: Path) -> 
                 A_RUN,
                 "--config",
                 str(empty),
+                "--commit",
+                A_SHA,
                 "--state-root",
                 str(state_root),
             ]

@@ -20,13 +20,13 @@ import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { publicationGitRecording, publicationRecording } from "./publication-recordings";
 import { fixtureGit } from "./fixture-git";
 import { writeRecordedHostOutput } from "./host-output-recordings";
-import { ApiReadySchema, ApiStartupFailureSchema, ApiStartupSchema } from "../../typescript-api/src/api-startup";
-import { loadHonoSettings } from "../../typescript-api/src/load-settings";
-import { DeliveryCompletionDiagnosticSchema } from "../../typescript-api/src/delivery-completion-diagnostic";
-import { ServerEventDataSchema, serverLogFilename } from "../../typescript-api/src/server-evidence";
+import { ApiReadySchema, ApiStartupFailureSchema, ApiStartupSchema } from "../../serve-pipeline-apis/src/api-startup";
+import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
+import { DeliveryCompletionDiagnosticSchema } from "../../serve-pipeline-apis/src/delivery-completion-diagnostic";
+import { ServerEventDataSchema, serverLogFilename } from "../../serve-pipeline-apis/src/server-evidence";
 
 type Recording = Awaited<ReturnType<typeof publicationGitRecording>>;
-const serverEntry = fileURLToPath(new URL("../../typescript-api/src/index.ts", import.meta.url));
+const serverEntry = fileURLToPath(new URL("../../serve-pipeline-apis/src/index.ts", import.meta.url));
 const requestFor = (f: Recording, paths = f.commit.paths) => ({ runNumber: "700", attempt: 3, paths });
 const inputFor = (f: Recording) => ({
   root: f.repository, directory: f.directory, currentRunFiles: JSON.stringify(f.commit.paths), runNumber: "700", attempt: 3,
@@ -213,7 +213,7 @@ test("two actual delivery request operations survive native stderr, the completi
     expect(diagnostics[0]!.context.spanId).not.toBe(diagnostics[1]!.context.spanId);
     const sources = await loadEventSources(join(f.repository, "config", "typescript-event-sources.json"));
     const mirror = Bun.spawn([process.execPath, fileURLToPath(new URL(
-      "../../typescript-api/test/write-server-events.ts", import.meta.url,
+      "../../serve-pipeline-apis/test/write-server-events.ts", import.meta.url,
     ))], {
       stdin: new Blob([JSON.stringify({ directory: f.directory, run, source: sources.typescript_api,
         group: "delivery", module_lines: nativeLines })]), stdout: "pipe", stderr: "pipe",

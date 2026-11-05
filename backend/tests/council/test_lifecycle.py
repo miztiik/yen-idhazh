@@ -18,7 +18,7 @@ from idhazh.ledger import paths, staging
 from utilities import council_matrix
 from utilities.council_publish import settle_and_publish
 
-from ._config import copy_config
+from ._config import copy_config, selection
 from ._tenants import a_venue, forget, written
 
 PACKAGE = "lifecycle_tenants"
@@ -91,10 +91,17 @@ def test_only_active_judges_get_cells_work_and_publication_paths(
         shards=3,
     )
     council = config.load_council(target)
-    assert night_plan.main(["--config-root", str(target), "--tonight", DATE]) == 0
+    selected = selection(council, date=DATE, run_id=RUN, commit_sha=SHA)
+    assert (
+        night_plan.main(
+            ["--config-root", str(target), "--tonight", DATE, "--run-id", RUN, "--commit", SHA]
+        )
+        == 0
+    )
     output = dict(line.split("=", 1) for line in capsys.readouterr().out.splitlines())
     assert json.loads(output["dates"])[0] == DATE
-    cells = council_matrix.cells(target, dates=(DATE,))
+    assert len(session.prepare(council, date=DATE, run_id=RUN, selection=selected)) == 1
+    cells = council_matrix.cells(target, selection=selected)
     assert cells == [
         {
             "tenant": "active-judge",
@@ -109,7 +116,6 @@ def test_only_active_judges_get_cells_work_and_publication_paths(
         *(staging.staged_path(which) for which in session.VENUE_LEDGERS),
         "state/paper",
     )
-    assert len(session.prepare(council, date=DATE, run_id=RUN)) == 1
     for cell in cells:
         session.run_shard(
             council,
@@ -119,11 +125,17 @@ def test_only_active_judges_get_cells_work_and_publication_paths(
             shard=int(str(cell["shard"])),
             shards=2,
             started=time.monotonic(),
+            selection=selected,
         )
     assert (
         len(
             session.settle(
-                council, date=DATE, run_id=RUN, state_dir=venue / "state", commit_sha=SHA
+                council,
+                date=DATE,
+                run_id=RUN,
+                state_dir=venue / "state",
+                commit_sha=SHA,
+                selection=selected,
             )
         )
         == 1
@@ -138,7 +150,7 @@ def test_only_active_judges_get_cells_work_and_publication_paths(
     assert f"{PACKAGE}.paused_judge.tenant" not in sys.modules
     assert f"{PACKAGE}.retired_judge.tenant" not in sys.modules
     for inactive in ("paused-judge", "retired-judge", "unregistered-judge"):
-        with pytest.raises(ValueError, match=inactive):
+        with pytest.raises(ValueError, match="not authorized"):
             session.run_shard(
                 council,
                 slug=inactive,
@@ -147,6 +159,7 @@ def test_only_active_judges_get_cells_work_and_publication_paths(
                 shard=0,
                 shards=1,
                 started=time.monotonic(),
+                selection=selected,
             )
 
 
@@ -157,23 +170,36 @@ def test_an_inactive_only_room_runs_every_step_without_import_or_output(
     a_venue(venue, package=PACKAGE, slugs={}, poisoned_neighbour="unavailable-judge")
     target = room(venue, {"unavailable-judge": (status, True)})
     council = config.load_council(target)
-    assert night_plan.main(["--config-root", str(target), "--tonight", DATE]) == 0
+    selected = selection(council, date=DATE, run_id=RUN, commit_sha=SHA)
+    assert (
+        night_plan.main(
+            ["--config-root", str(target), "--tonight", DATE, "--run-id", RUN, "--commit", SHA]
+        )
+        == 0
+    )
     output = dict(line.split("=", 1) for line in capsys.readouterr().out.splitlines())
     assert json.loads(output["dates"]) == [DATE]
-    assert council_matrix.cells(target, dates=(DATE,)) == []
+    assert council_matrix.cells(target, selection=selected) == []
     assert council_matrix.committed_paths(target) == ()
-    assert session.prepare(council, date=DATE, run_id=RUN) == ()
+    assert session.prepare(council, date=None, run_id=RUN, selection=selected) == ()
     assert (
-        session.settle(council, date=DATE, run_id=RUN, state_dir=venue / "state", commit_sha=SHA)
+        session.settle(
+            council,
+            date=DATE,
+            run_id=RUN,
+            state_dir=venue / "state",
+            commit_sha=SHA,
+            selection=selected,
+        )
         == ()
     )
     assert (
         settle_and_publish(
             repo=venue / "not-a-git-repository",
-            dates=(DATE,),
             run_id=RUN,
             commit_sha=SHA,
             config_root=target,
+            selection=selected,
         )
         == 0
     )
@@ -207,7 +233,9 @@ def test_any_inactive_committed_family_refuses_the_active_judge_by_name(
     registry_file.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
     monkeypatch.setattr(paths, "_CONFIG", paths._load(target))
     with pytest.raises(ValueError) as refused:
-        council_matrix.cells(target, dates=(DATE,))
+        council_matrix.cells(
+            target, selection=selection(config.load_council(target), date=DATE, run_id=RUN)
+        )
     assert all(
         word in str(refused.value) for word in ("active-judge", which.value, family_name, status)
     )

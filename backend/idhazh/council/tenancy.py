@@ -21,6 +21,12 @@ from pathlib import Path
 from typing import Protocol
 
 from idhazh.contracts.base import DateStamp, RunId
+from idhazh.contracts.council_invocation import (
+    JudgeSchedule,
+    PreparationReceipt,
+    ScheduleRequest,
+    ShardReport,
+)
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.ledger import CsvContract, CsvRecord
@@ -78,6 +84,7 @@ class ShardResult:
     #: The tenant's own row, or nothing at all from a tenant with nothing to
     #: report.
     metrics: JudgeRow | None = None
+    files: tuple[str, ...] = ()
 
 
 class Tenant(Protocol):
@@ -117,7 +124,7 @@ class Tenant(Protocol):
         """
         ...
 
-    def nights_outstanding(self, *, window: tuple[DateStamp, ...]) -> tuple[DateStamp, ...]:
+    def schedule(self, *, request: ScheduleRequest) -> JudgeSchedule:
         """Which dates inside the council's window this tenant has not counted.
 
         The council owns the window - its floor, its length and its per-night cap.
@@ -131,7 +138,11 @@ class Tenant(Protocol):
         """
         ...
 
-    def prepare(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+    def publication_inputs(self, *, date: DateStamp) -> tuple[str, ...]:
+        """Named committed inputs required for settlement; empty is valid."""
+        ...
+
+    def prepare(self, *, date: DateStamp, run_id: RunId, shards: int) -> ShardResult:
         """Pick the work, once a date, before any shard runs."""
         ...
 
@@ -143,6 +154,7 @@ class Tenant(Protocol):
         shard: int,
         shards: int,
         deadline: float,
+        prepared: PreparationReceipt,
     ) -> ShardResult:
         """One shard of the work, stopped before `deadline`.
 
@@ -160,6 +172,8 @@ class Tenant(Protocol):
         run_id: RunId,
         state_dir: Path,
         identity: WriterIdentity,
+        prepared: PreparationReceipt,
+        reports: tuple[ShardReport, ...],
     ) -> ShardResult:
         """Count, fit, or do nothing, once a date after every shard has reported.
 

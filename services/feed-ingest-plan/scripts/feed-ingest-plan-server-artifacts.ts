@@ -1,8 +1,8 @@
 /** Preserve available server evidence and logs independently of planner or metadata success. */
 import { copyFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { readServerEvidence } from "../../typescript-api/src/read-server-evidence";
-import { serverEvidenceFilename } from "../../typescript-api/src/server-evidence";
+import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
+import { serverEvidenceFilename } from "../../serve-pipeline-apis/src/server-evidence";
 import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 
 // This fixed directory is a workflow artifact boundary, not a retention policy.

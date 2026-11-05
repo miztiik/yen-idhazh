@@ -6,7 +6,7 @@ How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
 The sections below define each operation and its current request and response.
 The feed workflow serves them with machine routes through the
-[shared TypeScript application](../../reference/typescript-api-server.md);
+[shared pipeline API server](../../reference/serve-pipeline-apis.md);
 the delivery task restarts that application with its private delivery group.
 
 ## Independent fetch and parse endpoints
@@ -311,7 +311,7 @@ defines that context and its carrier.
 owns this strict current-only relay shape and derives request/result field
 validators from their native authorities. Paths, process IDs and arbitrary
 fields are not diagnostic fields. The
-[server writer](../../reference/typescript-api-server.md#diagnostics-and-current-task-evidence)
+[server writer](../../reference/serve-pipeline-apis.md#diagnostics-and-current-task-evidence)
 retains these facts and context in a separate completion event, not a lifecycle
 payload. The native HTTP result and saved `delivery-result.json`, including
 their exact paths, remain unchanged and remain the delivery authority.

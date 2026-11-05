@@ -21,10 +21,10 @@ from typing import Final
 
 from idhazh import config
 from idhazh.contracts.council_events import CouncilProgram, JudgeDeclared, NightPlanned
-from idhazh.council import event_log, outcome
+from idhazh.council import event_log, outcome, session, work_files
 from idhazh.council.night_plan import a_date
 from idhazh.council.registry import tenants
-from idhazh.council.selection import Selection, for_dates, from_environment
+from idhazh.council.selection import Selection, from_environment
 from idhazh.council.session import VENUE_LEDGERS as VENUE_LEDGER_NAMES
 from idhazh.council.session import publication_paths, shard_width
 from idhazh.ledger import staging
@@ -47,7 +47,7 @@ def cells(
     config_dir: Path,
     *,
     dates: tuple[str, ...] = (),
-    selection: Selection | None = None,
+    selection: Selection,
 ) -> list[dict[str, object]]:
     """Every unit of work the night fans out to, tenant by tenant, date by date.
 
@@ -55,7 +55,9 @@ def cells(
     so a tenant that runs no model takes one job rather than four.
     """
     council = config.load_council(config_dir)
-    selected = for_dates(council, dates) if selection is None else selection.check(council)
+    selected = selection.check(council)
+    if dates and dates != selected.dates:
+        raise ValueError("matrix dates differ from the explicit selection")
     found: list[dict[str, object]] = []
     for name in council.judge_names:
         declaration = council.declaration(name)
@@ -70,6 +72,13 @@ def cells(
         width = shard_width(council, host)
         own_dates = next(judge.dates for judge in selected.judges if judge.tenant == host.judge_id)
         for date in own_dates:
+            prepared = work_files.read_preparation(
+                session.COUNCIL_ROOT, selected, host.judge_id, date
+            )
+            if prepared is None or prepared.state != "ready":
+                continue
+            if prepared.shards != width:
+                raise work_files.FileIntegrityError("prepared width differs from selected width")
             found += [
                 {
                     "tenant": host.judge_id,
@@ -124,9 +133,8 @@ def _main(argv: list[str] | None = None) -> int:
         default=[],
         metavar="YYYY-MM-DD",
         help=(
-            "A date this night covers, repeatable. Required and never defaulted: the "
-            "planning job decides which day it judges, and a second answer here could "
-            "send the cells to one date while the artifacts were named for another."
+            "Optional dates, repeatable, which must exactly match the explicit selection. "
+            "Only matching ready preparation receipts authorize matrix cells."
         ),
     )
     args = parser.parse_args(argv)
@@ -135,11 +143,7 @@ def _main(argv: list[str] | None = None) -> int:
     council = config.load_council(args.config_root)
     selected = from_environment(council)
     dates = tuple(dict.fromkeys(a_date(str(date), what="--date") for date in args.date))
-    if selected is None:
-        if not dates:
-            raise SystemExit(outcome.CouncilExit.REFUSED)
-        selected = for_dates(council, dates)
-    elif dates and dates != selected.dates:
+    if dates and dates != selected.dates:
         raise SystemExit(outcome.CouncilExit.REFUSED)
     else:
         dates = selected.dates

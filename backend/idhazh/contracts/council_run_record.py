@@ -66,6 +66,11 @@ class CouncilRunRecord(Contract):
     __schema_stem__: ClassVar[str] = "council-run-record"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-05",
+            change="Allow zero parts on preparation and settlement records.",
+            why="No-work preparation does not create shard jobs.",
+        ),
+        ChangelogEntry(
             version="2026-10-11",
             change="Failed outcome and raised fault added; older rows read with no fault.",
             why="A raised unit and a missing report need different repairs.",
@@ -113,7 +118,7 @@ class CouncilRunRecord(Contract):
         ),
     )
     work_part_count: int = Field(
-        ge=1,
+        ge=0,
         description=(
             "How many parts the date's work was split into. Every row of a date carries "
             "it, so fewer part rows than this is a part that never reported."

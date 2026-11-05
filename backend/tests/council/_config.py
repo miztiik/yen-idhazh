@@ -9,7 +9,76 @@ from pathlib import Path
 from support.paths import CONFIG_DIR
 
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.council_invocation import SelectedJudge, Selection
 from idhazh.contracts.knobs.council import CouncilConfig
+from idhazh.council import night_plan, registry
+
+RUN_ID = "2026-09-21-456"
+COMMIT = "a" * 40
+
+
+def selection(
+    council: CouncilConfig,
+    *,
+    date: str,
+    run_id: str = RUN_ID,
+    commit_sha: str = COMMIT,
+    attempt: int = 1,
+) -> Selection:
+    """Authorize the test's explicit date and actual registered plugin widths."""
+    return Selection(
+        version=Selection.schema_version(),
+        run_id=run_id,
+        attempt=attempt,
+        git_sha=commit_sha,
+        mode="manual" if council.running() else "scheduled",
+        anchor_date=date,
+        window=(date,)
+        if council.running()
+        else (
+            date,
+            *night_plan.window_before(council, tonight=date),
+        ),
+        judges=tuple(
+            SelectedJudge(
+                tenant=host.judge_id,
+                status=council.declaration(host.judge_id).lifecycle_status,
+                dates=(date,),
+                shards=min(council.shards, host.shard_count),
+            )
+            for host in registry.tenants(council.running(), council=council)
+        ),
+    )
+
+
+def prepared_selection(
+    config_root: Path, *, dates: tuple[str, ...], run_id: str, commit_sha: str
+) -> Selection:
+    """Prepare a bounded batch before a publication test collects its actual files."""
+    from idhazh import config, run_context
+    from idhazh.council import session
+
+    council = config.load_council(config_root)
+    anchor = max(dates)
+    selected = selection(
+        council,
+        date=anchor,
+        run_id=run_id,
+        commit_sha=commit_sha,
+        attempt=run_context.run_attempt(),
+    )
+    selected = Selection(
+        version=Selection.schema_version(),
+        run_id=run_id,
+        attempt=selected.attempt,
+        git_sha=commit_sha,
+        mode="scheduled",
+        anchor_date=anchor,
+        window=(anchor, *night_plan.window_before(council, tonight=anchor)),
+        judges=tuple(judge.model_copy(update={"dates": dates}) for judge in selected.judges),
+    )
+    session.prepare(council, date=None, run_id=run_id, selection=selected)
+    return selected
 
 
 def copy_config(root: Path) -> Path:

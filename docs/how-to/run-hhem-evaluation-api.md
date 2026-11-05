@@ -1,6 +1,6 @@
 # Generate and evaluate one summary
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 How to dispatch `summary-eval-tests.yml` and inspect the generated answer,
 actual HHEM and four UniEval scores, machine readings and owned-process cleanup. This procedure
@@ -107,8 +107,8 @@ Linux ASGI coverage on Windows.
 
 The visible tasks prepare named native assets, generate once through FastAPI,
 stop the native model, evaluate through FastAPI and create the report.
-The [Python](../reference/fastapi-server.md) and
-[TypeScript](../reference/typescript-api-server.md) references own listener,
+The [evaluator](../reference/fastapi-server.md) and
+[pipeline API](../reference/serve-pipeline-apis.md) references own listener,
 readiness and process controls. The published site needs neither server.
 
 ## See also

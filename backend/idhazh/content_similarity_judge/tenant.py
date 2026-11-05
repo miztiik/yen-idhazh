@@ -13,6 +13,7 @@ and a file out (CLAUDE.md section 1a).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
@@ -20,6 +21,13 @@ from typing import Final
 
 from idhazh import config, ledger
 from idhazh.contracts.base import DateStamp, RunId
+from idhazh.contracts.council_events import CouncilExit
+from idhazh.contracts.council_invocation import (
+    JudgeSchedule,
+    PreparationReceipt,
+    ScheduleRequest,
+    ShardReport,
+)
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
@@ -159,7 +167,21 @@ class ContentSimilarityJudge:
         read = set(record.judged_dates)
         return tuple(night for night in window if night not in read)
 
-    def prepare(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+    def schedule(self, *, request: ScheduleRequest) -> JudgeSchedule:
+        """Choose the anchor, then the newest unread dates within both budgets."""
+        dates = [request.anchor_date]
+        older = sorted(
+            (
+                night
+                for night in self.nights_outstanding(window=request.window)
+                if night < request.anchor_date
+            ),
+            reverse=True,
+        )
+        dates.extend(older[: min(request.max_older_dates, max(0, request.max_dates - len(dates)))])
+        return JudgeSchedule(dates=tuple(dates))
+
+    def prepare(self, *, date: DateStamp, run_id: RunId, shards: int) -> ShardResult:
         """Score the day's cross-source pairs again and deal the draw.
 
         No model and no socket, so the venue's cost cells stay empty: this judge
@@ -168,15 +190,18 @@ class ContentSimilarityJudge:
         """
         from idhazh.stages import common, pick_item_pairs
 
+        settings = config.load()
+        settings = replace(settings, council=settings.council.model_copy(update={"shards": shards}))
         drawn = pick_item_pairs.stage_pick_item_pairs(
             date,
             run_id=run_id,
-            settings=config.load(),
+            settings=settings,
             draw_path=_draw_path(date),
             digest_root=common.PUBLIC_ROOT,
         )
         return ShardResult(
-            outcome=ShardOutcome.COMPLETED if drawn.taken else ShardOutcome.NOTHING_TO_DO
+            outcome=ShardOutcome.COMPLETED if drawn.taken else ShardOutcome.NOTHING_TO_DO,
+            files=(session.artifact_path(_draw_path(date)),),
         )
 
     def run_shard(
@@ -187,6 +212,7 @@ class ContentSimilarityJudge:
         shard: int,
         shards: int,
         deadline: float,
+        prepared: PreparationReceipt,
     ) -> ShardResult:
         """Judge the pairs this unit owns, then ship what the instrument read.
 
@@ -224,6 +250,10 @@ class ContentSimilarityJudge:
             tokens_in=report.tokens_in,
             tokens_out=report.tokens_out,
             model_seconds=report.model_seconds,
+            files=(
+                session.artifact_path(_verdict_path(date, shard=shard)),
+                session.artifact_path(shipped),
+            ),
         )
 
     def settle(
@@ -233,6 +263,8 @@ class ContentSimilarityJudge:
         run_id: RunId,
         state_dir: Path,
         identity: WriterIdentity,
+        prepared: PreparationReceipt,
+        reports: tuple[ShardReport, ...],
     ) -> ShardResult:
         """Count what the units judged, collect what they measured, fit the line.
 
@@ -258,6 +290,18 @@ class ContentSimilarityJudge:
             settings=settings,
             identity=identity,
             state_dir=state_dir,
+            expected_shards=prepared.shards,
+            reports_complete=(
+                len(reports) == prepared.shards
+                and {report.shard for report in reports} == set(range(prepared.shards))
+                and all(
+                    report.shards == prepared.shards
+                    and report.report_state == "reported"
+                    and report.code == CouncilExit.OK
+                    and report.outcome in (ShardOutcome.COMPLETED, ShardOutcome.NOTHING_TO_DO)
+                    for report in reports
+                )
+            ),
         )
         set_merge_line.stage_set_merge_line(
             date,

@@ -25,6 +25,7 @@ from idhazh.contracts.council_events import (
 from idhazh.contracts.council_run_record import CouncilRunRecord, ShardOutcome
 from idhazh.council import event_log, metrics_sink, outcome, registry, session
 
+from ._config import selection
 from ._tenants import TENANT_SOURCE, a_scripted_venue, a_venue, forget
 from .test_publication import configuration
 
@@ -69,7 +70,8 @@ def test_code_label_and_sentence_are_declared_and_printed_together(
 
 @pytest.mark.parametrize("logger_name", ["idhazh.library", HOSTILE])
 def test_unstructured_library_logs_cannot_carry_source_or_exception_text(
-    caplog: pytest.LogCaptureFixture, logger_name: str,
+    caplog: pytest.LogCaptureFixture,
+    logger_name: str,
 ) -> None:
     with caplog.at_level(logging.INFO):
         try:
@@ -99,6 +101,9 @@ def test_a_raised_unit_has_one_failure_event_and_one_failed_record(
     council = config.load_council(configuration(tmp_path, ("one-judge",)))
     forget(PACKAGE)
     try:
+        selected = selection(council, date=DATE, run_id=RUN)
+        session.prepare(council, date=DATE, run_id=RUN, selection=selected)
+        caplog.clear()
         with caplog.at_level(logging.INFO), pytest.raises(RuntimeError):
             session.run_shard(
                 council,
@@ -108,6 +113,7 @@ def test_a_raised_unit_has_one_failure_event_and_one_failed_record(
                 shard=0,
                 shards=1,
                 started=time.monotonic(),
+                selection=selected,
             )
         (said,) = lines(caplog)
         assert (said["event"], said["outcome"], said["error"]) == (
@@ -117,8 +123,14 @@ def test_a_raised_unit_has_one_failure_event_and_one_failed_record(
         )
         assert str(said["where"]).startswith("idhazh.council.deadline:")
         assert "SOURCE-TEXT" not in json.dumps(said)
-        (row,) = metrics_sink.shipped_rows(
-            session.outcomes_dir(DATE), judge_id="one-judge", contract=CouncilRunRecord
+        row = next(
+            row
+            for row in metrics_sink.shipped_rows(
+                session.invocation_root(selected, "one-judge") / DATE / "outcomes",
+                judge_id="one-judge",
+                contract=CouncilRunRecord,
+            )
+            if row.work_part_index == 0
         )
         assert (row.outcome, row.fault) == (ShardOutcome.FAILED, "raised")
         assert row.seconds_spent >= 0
@@ -137,8 +149,13 @@ def test_row_filing_failure_does_not_emit_a_successful_unit(
     monkeypatch.setattr(registry, "TENANT_PACKAGE", PACKAGE)
     monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "scratch")
     council = config.load_council(configuration(tmp_path, ("one-judge",)))
-    blocked = session.outcomes_dir(DATE)
-    blocked.parent.mkdir(parents=True)
+    selected = selection(council, date=DATE, run_id=RUN)
+    session.prepare(council, date=DATE, run_id=RUN, selection=selected)
+    caplog.clear()
+    blocked = session.invocation_root(selected, "one-judge") / DATE / "outcomes"
+    (blocked / "one-judge" / "select-judge-work.csv").unlink()
+    (blocked / "one-judge").rmdir()
+    blocked.rmdir()
     blocked.write_text("not a directory\n", encoding="utf-8", newline="\n")
     forget(PACKAGE)
     try:
@@ -151,6 +168,7 @@ def test_row_filing_failure_does_not_emit_a_successful_unit(
                 shard=0,
                 shards=1,
                 started=time.monotonic(),
+                selection=selected,
             )
         events = [said for said in lines(caplog) if said["event"] == "unit-finished"]
         assert len(events) == 1 and events[0]["outcome"] == "failed"
@@ -225,15 +243,22 @@ def test_actual_shard_entrypoint_prints_only_json_and_earns_its_real_code(
         str(target),
     ]
     process = completed_process(
-        "from pathlib import Path; from idhazh import cli; "
+        "import os; from pathlib import Path; from idhazh import cli, config; "
+        "from idhazh.council.selection import manual; "
         "from idhazh.council import registry, session; "
         f"registry.TENANT_PACKAGE={PACKAGE!r}; session.COUNCIL_ROOT=Path({str(tmp_path / 'scratch')!r});"
-        f"raise SystemExit(cli.main({argv!r}))",
+        f"selected=manual(config.load_council(Path({str(target)!r})), day={DATE!r}, run_id={RUN!r},"
+        " judges='[\"one-judge\"]', attempt=1, git_sha='a'*40);"
+        "os.environ['COUNCIL_SELECTION']=selected.model_dump_json();"
+        "os.environ['GITHUB_RUN_ATTEMPT']='1';"
+        f"session.prepare(config.load_council(Path({str(target)!r})), date={DATE!r},"
+        f" run_id={RUN!r}, selection=selected);"
+        f"raise SystemExit(cli.main({[*argv, '--commit', 'a' * 40]!r}))",
         root=tmp_path,
     )
     expected = 0 if result == "completed" else 1
     assert process.returncode == expected
-    assert process.stdout == ""
+    assert process.stdout == "preparation_finished=true\n"
     said = [json.loads(line) for line in process.stderr.splitlines()]
     assert all(str(event["at"]).endswith("Z") for event in said)
     assert [event["event"] for event in said].count("unit-finished") == 1

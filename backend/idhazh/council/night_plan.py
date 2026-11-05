@@ -1,7 +1,7 @@
 """Which judges and own dates does this scheduled or manual invocation select?
 
-Scheduled work asks each active judge about one bounded window and caps each
-answer separately. Manual work validates the entire judge set and one date
+Scheduled work gives each active judge a bounded window and validates its
+complete answer. Manual work validates the entire judge set and one date
 before any selected package is imported, and asks about no outstanding dates.
 """
 
@@ -15,11 +15,13 @@ from typing import Final
 
 from pydantic import TypeAdapter, ValidationError
 
-from idhazh import config
+from idhazh import config, run_context
 from idhazh.contracts.base import DateStamp
 from idhazh.contracts.council_events import CouncilProgram, NightPlanned
+from idhazh.contracts.council_invocation import ScheduleRequest
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council import event_log, outcome
+from idhazh.council.deadline import compute_shard_deadline
 from idhazh.council.registry import tenants
 from idhazh.council.selection import SelectedJudge, Selection, manual
 from idhazh.council.tenancy import Tenant
@@ -75,41 +77,50 @@ def window_before(council: CouncilConfig, *, tonight: DateStamp) -> tuple[DateSt
 
 
 def plan_the_night(
-    council: CouncilConfig, *, tonight: DateStamp, hosted: Sequence[Tenant]
+    council: CouncilConfig,
+    *,
+    tonight: DateStamp,
+    hosted: Sequence[Tenant],
+    run_id: str,
+    attempt: int,
+    git_sha: str,
 ) -> Selection:
-    """Tonight and each judge's own newest outstanding nights, capped separately.
+    """Validate each plugin's complete schedule against committed bounds.
 
-    Cut to `repair_dates_a_night`, newest first. A date that can never succeed
-    then holds the ones behind it out only until the window slides past it;
-    oldest first, that one date would keep every newer date waiting for as long
-    as it stayed in the window.
-
-    A tenant that names a date the council did not ask about is refused by name.
-    The council is what prices a window, so a date from outside one is a job
-    nobody budgeted for - and it would reach a runner as silently as a date that
-    was asked for.
+    The plugin chooses its dates. The platform never inserts, sorts or truncates
+    the answer, and refuses any date or width outside the supplied budget.
     """
-    window = window_before(council, tonight=tonight)
-    asked = set(window)
+    window = (tonight, *window_before(council, tonight=tonight))
     selected: list[SelectedJudge] = []
     for host in hosted:
-        behind: set[str] = set()
-        for night in host.nights_outstanding(window=window):
-            if night not in asked:
-                raise SystemExit(
-                    f"'{host.judge_id}' named a date outside "
-                    f"the {len(window)} nights the council asked it about. A tenant answers "
-                    "inside the window it was handed."
-                )
-            behind.add(night)
+        width = min(host.shard_count, council.shards)
+        request = ScheduleRequest(
+            anchor_date=tonight,
+            window=window,
+            max_dates=1 + council.repair_dates_a_night,
+            max_older_dates=council.repair_dates_a_night,
+            shards=width,
+            shard_seconds=compute_shard_deadline(council, started=0),
+        )
+        answer = host.schedule(request=request).check(request)
         selected.append(
             SelectedJudge(
                 tenant=host.judge_id,
                 status=council.declaration(host.judge_id).lifecycle_status,
-                dates=(tonight, *sorted(behind, reverse=True)[: council.repair_dates_a_night]),
+                dates=answer.dates,
+                shards=width,
             )
         )
-    return Selection(mode="scheduled", judges=tuple(selected)).check(council)
+    return Selection(
+        version=Selection.schema_version(),
+        run_id=run_id,
+        attempt=attempt,
+        git_sha=git_sha,
+        mode="scheduled",
+        anchor_date=tonight,
+        window=window,
+        judges=tuple(selected),
+    ).check(council)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -119,6 +130,9 @@ def main(argv: list[str] | None = None) -> int:
 def _main(argv: list[str] | None = None) -> int:
     parser = outcome.Parser(description=__doc__)
     parser.add_argument("--config-root", type=Path, default=Path("config"))
+    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--commit", required=True)
+    parser.add_argument("--attempt", type=int, default=run_context.run_attempt())
     parser.add_argument(
         "--tonight",
         default=None,
@@ -139,7 +153,14 @@ def _main(argv: list[str] | None = None) -> int:
     event_log.install(settings.app.logging.level.value)
     if args.mode == "manual":
         tonight = a_date(str(args.dispatched), what="the dispatched date")
-        selected = manual(settings.council, judges=args.judges, day=tonight)
+        selected = manual(
+            settings.council,
+            judges=args.judges,
+            day=tonight,
+            run_id=args.run_id,
+            git_sha=args.commit,
+            attempt=args.attempt,
+        )
         tenants(
             selected.names(),
             app=settings.app,
@@ -157,6 +178,9 @@ def _main(argv: list[str] | None = None) -> int:
             settings.council,
             tonight=tonight,
             hosted=tenants(settings.council.running(), app=settings.app, council=settings.council),
+            run_id=args.run_id,
+            git_sha=args.commit,
+            attempt=args.attempt,
         )
     planned = selected.dates or (tonight,)
     event_log.emit(NightPlanned(dates=planned, judges=len(selected.judges)))

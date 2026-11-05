@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-05
 
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
@@ -59,7 +59,7 @@ stops placement reads in both collectors when false. A Python caller's
 fingerprint collection or its ledger write.
 
 The manual feed planner workflow starts the
-[shared TypeScript API application](typescript-api-server.md) on the same
+[shared pipeline API server](serve-pipeline-apis.md) on the same
 runner, verifies that exact child through HTTP, and posts only date and
 writer identity to its fingerprint route before planning. The caller is pipeline `feed-ingest-plan`, task
 `isolated-plan`, shard 0. It uses the committed instrument, placement and
