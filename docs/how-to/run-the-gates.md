@@ -361,6 +361,8 @@ new Bun scripts with that package's compiler; it still installs no model.
 Its sparse source check includes the shared package's inherited common-contracts
 compiler settings, first runs shared hosting with native services absent, then
 adds only named machine inputs and executes the real Linux child.
+The checkout's file-pattern mode is set once; `git sparse-checkout add`
+inherits it.
 Feed source and feed configuration stay absent through both stages; dependency
 metadata also checks the actual summary helper. Ordinary evaluator preparation
 installs neither feed-ingest-plan nor data-delivery.

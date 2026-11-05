@@ -224,7 +224,7 @@ jobs:
         working-directory: backend/var/checks/api-host-isolation
         run: |
           set -euo pipefail
-          git sparse-checkout add --no-cone --stdin <<'INPUTS'
+          git sparse-checkout add --stdin <<'INPUTS'
           /packages/ledger-file-writer/package.json
           /packages/ledger-file-writer/bun.lock
           /packages/ledger-file-writer/src/

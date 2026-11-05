@@ -112,6 +112,8 @@ def test_native_ci_retains_resources_and_prepares_the_actual_shared_api() -> Non
     assert "bun install --frozen-lockfile --cwd packages/data-delivery" not in selected
     assert "path: backend/var/checks/api-host-isolation" in selected
     assert "/packages/common-contracts/tsconfig.json" in selected
+    assert "sparse-checkout-cone-mode: false" in selected
+    assert "git sparse-checkout add --stdin <<'INPUTS'" in selected
     assert "test ! -e services/feed-ingest-plan" in selected
     assert "test ! -e config/feed-ingest-plan-service.json" in selected
     assert (
