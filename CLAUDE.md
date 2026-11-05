@@ -17,16 +17,29 @@ You are a news feed summarize, publish, autotune agent.
 
 ## 0b. Voice
 
-This is the canonical writing rule. It binds every agent, every persona under `.github/agents/`, **every answer an agent gives a user**, every doc, every commit message, and every reader-facing string. Cite it as "section 0b".
+This canonical standard applies to all agent responses, docs, pull requests, commit messages, and UI copy.
 
-- Write in plain ASD-STE100, direct language. Keep answers short unless asked for depth.
-- Lead with the core answer. Skip all introductory fluff.
-- **A term from a subsystem is not a term for a user.**  When explaining an existing system: answer in plain English first, and name a file or a rule only after the idea is already clear. Never use a line number, a function name, or a guardrail number as the explanation itself — they are receipts, not reasoning. Define every term the moment it is first used, including terms this repo invented. When describing where data comes from, say which file on disk and who wrote it, in words. 
-- **Say what a number means, next to the number.** `1.055x` is not an answer; "5.5 percent faster, and we needed 40 percent" is. This is the one clause of this section that can be checked mechanically, so it is the one that catches a drift the others cannot.
-- **A word earns a name only when its ordinary English meaning is what the thing does.** Where a reader has to know which field the word was borrowed from - racing, functional programming, benchmarking - it is a second name for something that already has one, and it is deleted rather than replaced.
-- **A third-party product name is not a design vocabulary.** Name the artefact and the property - "a reliability scorecard", "a tinted status card", "a target marker on a bar" - never the vendor whose screenshot it came from. This binds a design doc, a plan-doc, a code comment, a commit message, a branch name and a filename equally. Naming the artefact is also the more useful sentence: it says what to look at, where the product name only said where somebody once saw it.
+1. **Bottom Line Up Front:**
+   - State the core conclusion or answer in the first sentence. Zero conversational filler or introductory preamble.
+   - Default to brief responses; expand only when explicitly asked for depth.
 
-Everywhere else restates this section rather than inventing its own style rule (Guardrail #4)
+2. **Reasoning First, Receipts Second:**
+   - Explain the concept in plain English before citing filenames, line numbers, or rule IDs.
+   - Never use a code symbol, guardrail number, or file path as the explanation itself. They are supporting citations, not reasoning.
+   - When identifying data provenance, state the source file and the producer process clearly.
+
+3. **Contextualize Every Number:**
+   - Never output naked metrics. Always state the baseline, delta, and target/threshold next to the number.
+   - *Bad:* `1.055x`
+   - *Good:* `5.5% faster (target was 40%)`
+
+4. **Kill Borrowed Jargon:**
+   - Use direct, standard English. Do not borrow buzzwords or metaphors from racing, finance, or specialized niches when a simple word exists.
+   - Define custom repository terms briefly inline on first use.
+
+5. **Describe Artifacts, Not Third-Party Products:**
+   - Never use a vendor name as a design specification (e.g., do not say "Stripe-like modal" or "Datadog widget").
+   - Name the actual visual or architectural component and its properties (e.g., "a reliability scorecard", "a tinted status card", "a slide-over modal").
 
 ## 0c. Decision Requests and Tables
 
@@ -80,8 +93,7 @@ Routine progress updates do not need this structure.
    - **20 concurrent jobs.** Past it a job waits its turn. A queue is not a failure.
    - **10 GB cache.** GitHub manages this one, not us. 
    Boundary: the 6 h job and the 1 GB site are GitHub's and they fail a run, so an agent surfaces those two and never overrules them. That clause covers those two and nothing else on this list.
-3. **Contracts before logic**. Every **persisted payload a later run reads** is declared once in `backend\idhazh\contracts\` - before any logic reads or writes it - using whatever validation library is native to its own language. A downstream artifact is derived from that model at the moment it is needed. Where a copy must cross into another language, it is small, hand-written, and held in step by a named test. A shape nobody declared is a shape nobody can validate or migrate, so it survives instead as a hand-written copy that drifts quietly out of sync. **A configuration file this project authors needs no declared shape.** Nothing but this repository writes one and nothing but this repository reads one, so a schema of it restates a model that is already its only reader, and a typed field for a value this project hands straight to another program is a second spelling somebody has to keep in step. Declare what the file's own readers compute on, and refuse a missing one by name at load. (Maintainer ruling 2026-09-21.)
-   **Planner TypeScript contract exception (2026-10-27; extended by user approval 2026-10-31):** TypeScript schemas in `packages/common-contracts/src/schemas/` own feed-planner configuration, events, requests, private receipts, stage payloads and the five planner ledgers. Availability is a saved calculation in the existing health ledger, not another JSON state store. Independent runs use captured input without shared feed reservations; only final `safe_persist_data` delivery commits planner output. TypeScript owns validation, versions, changelogs and tests; Python does not read planner row or stage payloads, and no Python planner model or cross-language comparison copy is kept. Python retains the gardener scheduler and delegates planner validation and compaction to the TypeScript writer. Generic compact indexes and shared non-planner ledgers retain Pydantic authority.
+3. **Contracts before logic**. Every **persisted payload a later run reads** is declared once in code - before any logic reads or writes it - using whatever validation library is native to its own language. A downstream artifact is derived from that model at the moment it is needed. Where a copy must cross into another language, it is small, hand-written, and held in step by a named test. A shape nobody declared is a shape nobody can validate or migrate, so it survives instead as a hand-written copy that drifts quietly out of sync.
 4. **docs/ is the memory, and a decision lives on the page it impacts**. Pipeline rules, published shapes, tuning knobs and current subsystem contracts live under `docs\`; a choice that clears the bar is recorded IN the living doc it impacts as a `## Design rationale` section, never as a standalone record. There is no ADR file and no `decisions/` directory - a decision written beside the thing it governs is read by the person about to change it, and one filed in a register is read by nobody. **A private note store is a cache of** `docs\`, **never the only copy**: a fact learned with no page to hold it gets a page, or goes to `docs\reference\agent-notes.md`, in the same session.
 5. **Structural fixes only.** No band-aids, no monkey patches, no "temporary" hacks. This one does not bend: a temporary fix is a permanent fix with a note attached, and the note is what gets lost. When the structural fix is out of scope, escalate the correction level and say so - that is the adapt path, and it is the only one. Escalation is a person's decision under section 6, not a label an agent applies to itself to keep going.
 6. **No hard coding, anywhere in the codebase**. Every layer - frontend included - reads tunable behavior from schema-validated `config\` with sane defaults; a theme token is a knob, not a literal. The substitution test: change the config and behavior changes, no source edit required - anything else is hard coded. A feature in development ships behind a config flag: default agreed and documented at build time; removal condition on the declaring line, or the flag is a permanent second implementation. A value that truly belongs in source - a protocol constant, a format literal - is named as one by someone who states why it can never vary.
@@ -111,7 +123,7 @@ These operationalize the guardrails and shape every subsystem.
 
 ## 1b. Logging
 
-- **Backend.** Structured records to stderr through the standard library `logging` module, configured once at the entry point. Level from `config/`; default `INFO`..
+- **Backend.** Structured records to stderr through the standard library module, configured once at the entry point.
 - **Frontend.** The browser console, and only the browser console. A published page logs what a reader would need to hand back when something looks wrong. No SDK, no beacon, no `fetch` to a collector.
 - **Every log record is the event payload.** A stage logs the same structured envelope it emits (section 1a), so a log line and a persisted payload never disagree about what happened.
 - **Secrets never reach a log record.** Not a token, not a signed URL, not a request header.
@@ -185,12 +197,7 @@ The tiers, the depth limit, the elements every page carries, the three tests tha
 
 When in doubt, choose the higher level. Counting files is not the test: four files that cannot break a reader are a Level 1, and one line that changes a shape an earlier run already wrote is a Level 5.
 
-## 7. Debug Logging
-
-- Temporary logs MUST be prefixed `[DEBUG]`.
-- Before finalizing: grep for `[DEBUG]` and remove every match. Re-run tests after cleanup.
-
-## 8. Git Hygiene
+## 7. Git Hygiene
 
 `finish`, `ship` or `merge` authorizes the normal Git workflow below, not destructive or history-rewriting operations.
 
@@ -211,9 +218,7 @@ Only the `history` job in [.github/workflows/idhazh-gardener.yml](.github/workfl
 - On exhaustion, write no success stamp; retry at the next daily wake.
 - This permission does not extend to other jobs or manual force pushes.
 
-Rewriting affects whole commits, including code and docs. History available to blame and bisect spans `window` to `window + every_days`; older commit IDs stop resolving. Existing clones must re-fetch.
-
-## 9. Definition of Done
+## 8. Definition of Done
 
 The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md).
 
@@ -231,7 +236,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - [ ] Any guardrail adapted or excepted in this change carries a person's name and a dated line in the living doc it impacts (section 1).
 - [ ] Lockfiles in sync with manifests.
 
-## 10. Anti-Patterns (Do NOT)
+## 9. Anti-Patterns (Do NOT)
 
 - Reinterpret, downgrade, substitute or narrow an explicitly named source or instruction without reporting the proposed scope change as STOP-AND-SURFACE and getting user approval. A limitation is not a refusal: do it, price a change or name what measurement would settle it (section 0d).
 - Assume a runtime backend, or ship features requiring one, an account or push notifications.
@@ -255,14 +260,14 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - Create empty modules for later.
 - Skip the documentation update.
 
-## 11. Schema Versioning
+## 10. Schema Versioning
 
 - `version` is a `YYYY-MM-DD` date-stamp - never an integer, never an epoch. It answers the question a reader of an old payload actually has: how old is this shape?
 - Every change appends a `changelog` entry, newest first, `{ version, change }`, and sets `version` if necessary.
 - **A changelog entry is one line. Five entries at most: the four newest changes, then one pointer saying the rest is in git.** `change` says what moved. Neither carries a measurement, a date, an incident, a plan row or a person's name - a reading belongs in the instrument log (Guardrail #10) and a rationale belongs in the living doc it impacts (Guardrail #4). **An entry that will not fit one line is the test:** either the reason is worth a `## Design rationale` section in `docs/`, and goes there with one line left here pointing at it, or it was never worth keeping. Older entries are deleted, not archived - git is the archive, and a pointer to the file's history beats a hash that rots.
 - A breaking change - a removed field, a retype, a shifted meaning - ships its read-side migration in the same commit. **A payload written by yesterday's run that today's build cannot read is a contract break and a release blocker.**
 
-## 12. Published-Site Verification (Browser Smoke)
+## 11. Published-Site Verification (Browser Smoke)
 
 Any change to the published site MUST be verified by the agent using integrated browser tools, not deferred to the human. 
 
@@ -277,28 +282,40 @@ Minimum loop:
 
 Does not apply to backend-only, tooling, docs, or schema-only changes.
 
-## 13. Test Coverage Policy
 
-Four tiers - **Unit / Contract / Integration / End-to-end**. Change without an appropriate-tier test in the same commit is a Definition-of-Done failure. No test touches the network; fixtures live in `tests/fixtures/`. Mock carve-outs require an explicit user request.
+## 12. Test Coverage Policy
 
-1. **Keep test cost bounded.** Use bounded fixtures for per-item rules, preferably the canary day. Do not scan collections that pipeline runs grow or repeatedly validate frozen output. Every test read has a fixed-size input under Guardrail #12. A workflow test reads only named workflow lists, config files, contract fixtures, or data it generates. A test may walk a directory it just built, such as one under `tmp_path`, but not a committed tree whose size grows with the repository. Check whole-tree properties once over a bounded fixture or generated tree, not per item.
+Goal: Test functional software logic, boundaries, and build integrity. Do NOT test data quality, dataset contents, or snapshot accidental historical quirks.
 
-2. **Test behavior, not current production data.** Before writing a test, name the repository edit that would make it fail. If a pipeline run alone could make it fail, move the check into the producer or an operator utility outside pytest. Delete it only when fixture tests already cover the rule.
+### 1. In-Memory Payloads Over Disk Fixtures
+- NEVER create a new file in `tests/fixtures/` to reproduce a bug or patch an edge case. 
+- Reproduce bugs in-memory using the smallest possible literal input (e.g., a dictionary with only the offending key, not a 200-line recorded payload).
+- Existing fixtures in `tests/fixtures/` are strictly for schema/contract verification. If a test can run using an in-memory literal or `io.StringIO`, using a disk fixture is a policy violation.
 
-3. **Load fixtures inside tests.** Read fixture files inside the test or a helper it calls, never at module import. A bad fixture must fail the test using it, not prevent unrelated tests from running. Report what was expected and how to produce the fixture.
+### 2. No Mock Hallucinations (Fakes > Mocks)
+- Do NOT use `unittest.mock.patch` to mock internal business logic. If you mock the system under test, the test is invalid.
+- Allowed doubles are strictly limited to boundary interfaces: in-memory streams (`io.BytesIO`), ephemeral in-memory databases (SQLite/DuckDB `:memory:`), or lightweight in-memory fake repositories.
+- Test real code execution against minimal concrete inputs.
 
-4. **Browser coverage is a very narrow representative set.** One real journey proves shared layout and integration; one representative interaction proves a shared control. Do not multiply browser cases by page, panel, width, theme, state or chart, and do not enumerate chart-to-chart transitions. A new browser case must name a distinct failure mechanism that the representative journey and lower-tier tests cannot detect. A different caller or presentation is not such a mechanism. Keep data semantics, boundary values and deterministic failure rules at the unit, contract or integration tier. Preserve real browser coverage of independent safety, worker, transport and offline boundaries, without repeating their presentation combinations.
+### 3. Targeted Assertions, Zero Directory Walking
+- Never recursively walk, scan, or glob directories (`os.walk`, `Path.glob`, `rglob`) in tests, including under `tmp_path`.
+- If an operation writes an artifact: assert the direct existence of the *specific target path* (`assert (tmp_path / "expected.json").is_file()`). Do NOT iterate over the folder tree to verify incidental files or file counts.
 
-5. **Delete redundant coverage before optimising execution.** Remove duplicate cases, assertions about incidental words, markup, imports or exact geometry, and helpers made dead by their removal. Do not move the same minutiae wholesale into unit tests, park them behind skips, or retain an exhaustive suite as a scheduled job. A representative layout check protects usable content and controls, not every box through every action. Judgement has no special browser treatment: its evidence semantics use real reader/render integration tests, and its packaging uses the ordinary site build. Additional private builds need a distinct build-time failure, not another evidence presentation. This deliberately gives up exhaustive cosmetic and interaction-permutation coverage, not meaningful software rules. Maintainer approval: 2026-10-11.
+### 4. Test Invariants, Not Flukes
+- A regression test must assert a software rule, not a historical payload anomaly. Name the repository code edit that would make the test fail.
+- If upstream data is malformed, test your *sanitizer/validator logic* at the intake boundary. Do not write an integration test that drags bad data through the entire engine.
 
-Per tier:
+### 5. Browser & E2E are Strictly Bounded
+- Exactly ONE happy-path journey verifies layout and pipeline-to-browser integration. 
+- Never multiply browser cases across themes, viewports, or data states. Boundary values and error branches belong strictly in Unit or Contract tests.
 
-- **Unit** - pure functions (sanitization, sharding, scoring maths, serialization round-trip).
-- **Contract** - the model against its readers and its writers, plus the two tests binding the frontend copy.
-- **Integration** - two or more stages composed against real fixtures, with the model boundary driven by a recorded response where the model itself is not under test.
-- **End-to-end** - the pipeline run start-to-finish on a fixture corpus, producing a digest; and the published site rendered in a real browser against that output.
+### Tier Definitions
+- **Unit:** Pure functions and isolated transforms. Executed in-memory, zero disk I/O, zero network. (< 5ms).
+- **Contract:** Verifies external boundaries and model schemas against minimal frozen specification files.
+- **Integration:** Two or more stages composed in-memory or targeting isolated `tmp_path` files. Target specific output files directly—no directory crawling.
+- **End-to-End:** The single canonical smoke test running the build pipeline from start to finish producing the digest/site, verified once.
 
-## 14. Agent Roster
+## 13. Agent Roster
 
 Use these responsibilities to resolve disagreements, not as a checklist of approvals. Add an advisor only for a distinct responsibility not already covered. All follow section 0b.
 
