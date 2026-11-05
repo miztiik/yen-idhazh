@@ -3,21 +3,19 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from idhazh.contracts.run_manifest import RunManifest
 
 LOG = logging.getLogger("idhazh")
 
 
-def read_published_line(date: str, *, manifest_path: Path, floor_min: float) -> float:
-    """Validate one manifest; use the configured floor only for absent legacy evidence."""
-    try:
-        text = manifest_path.read_text(encoding="utf-8")
-    except FileNotFoundError:
+def read_published_line(
+    date: str, *, manifest: RunManifest | None, floor_min: float
+) -> float:
+    """Choose from a compatible validated manifest, falling back only for absent evidence."""
+    if manifest is None:
         reason = "missing_manifest"
     else:
-        manifest = RunManifest.from_json(text)
         _, latest = max(
             enumerate(manifest.runs),
             key=lambda entry: (entry[1].completed_at or "", entry[0]),

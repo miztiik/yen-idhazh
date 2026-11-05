@@ -24,7 +24,7 @@ from idhazh.similarity import selection
 from idhazh.similarity.published_line import read_published_line
 from idhazh.similarity.stamps import ScorerStamp, scorer_inputs
 from idhazh.stages.assemble import _earlier_days
-from idhazh.stages.common import LOG, _load_day
+from idhazh.stages.common import LOG, _load_day, _load_manifest
 
 
 def _drawn_row(
@@ -167,7 +167,7 @@ def stage_pick_item_pairs(
     )
     line = read_published_line(
         date,
-        manifest_path=assemble.day_dir(digest_root, date) / "run.json",
+        manifest=_load_manifest(assemble.day_dir(digest_root, date) / "run.json", day=day),
         floor_min=same_story.floor_min,
     )
     drawn = selection.select(

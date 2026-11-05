@@ -148,12 +148,15 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 **The run writes down which number grouped it.** `same_story_floor_applied` on the run record, because without it a reader of a committed `run.json` cannot tell a day grouped at 0.94 from a day grouped at 0.937 - and the grouping is the thing this whole block moves. A run that published before the column existed carries no value, which is every run before that date. The console's Judgement page reads it: its empty merge-chart rule, verdict split and holdout margin name the line the newest published day's last build wrote down, and work the line out from the fitted rows only where that record holds none. The solid merge-chart series instead shows the nightly fit's final values, with the proposal and step band from that same fit. Its calculated history is not build history; [console design](../../concepts/console-design.md#design-rationale) rules the words. Worked out alone, the line could be one no build used, because the nightly fit below files its row after most of that day's builds ran.
 
 **The judge protects the line that build actually used, not today's configured
-floor.** Its draw validates the named day's `run.json` with `RunManifest` and
-selects the greatest `completed_at`; missing completion is oldest and a later
-list entry wins a tie. Only that record's `same_story_floor_applied` is read.
+floor.** Its draw uses the existing day-aware manifest reader for the named
+day's `run.json`. Supported legacy cumulative vertical counts are derived from
+the already-loaded day before native validation; no retained file is rewritten.
+The line selector receives that validated manifest and selects the greatest
+`completed_at`; missing completion is oldest and a later list entry wins a tie.
+Only that record's `same_story_floor_applied` is read.
 An absent manifest or null legacy value falls back to configured `floor_min`
-with an explicit `legacy-fallback` log. Malformed present input fails native
-validation; it never becomes a fallback or a search through older builds.
+with an explicit `legacy-fallback` log. Malformed present input fails parsing
+or native validation; it never becomes a fallback or a search through older builds.
 The recorded line protects mandatory at-or-above-line pairs against the budget.
 The sampling band's configured edges do not move with it.
 

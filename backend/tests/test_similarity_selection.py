@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import math
 from collections import Counter
 from dataclasses import replace
@@ -43,7 +44,7 @@ from idhazh.contracts.digest_day import (
 )
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.knobs.placement import SameStoryConfig
-from idhazh.contracts.run_manifest import RunManifest, RunRecord, RunStatus
+from idhazh.contracts.run_manifest import RunManifest, RunRecord, RunStatus, VerticalCount
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, to_base64
 from idhazh.similarity.selection import (
@@ -515,6 +516,67 @@ def test_a_written_judge_budget_changes_the_real_draw_without_cutting_merged_pai
     assert len(limited.taken) < len(full.taken) == full.pairs_in_band
     assert limited.pairs_in_band == full.pairs_in_band
     assert limited.taken == merged
+
+
+def test_the_draw_reads_legacy_cumulative_counts_without_changing_the_recorded_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    items = [
+        item("world-01", outlet="Left"),
+        item("world-02", outlet="Right").model_copy(update={"introduced_by_run": 2}),
+    ]
+    manifest = RunManifest(
+        version=RunManifest.schema_version(), date=DATE,
+        runs=[
+            RunRecord(
+                run_id=f"{DATE}-{n}", n=n, started_at=f"{DATE}T{started}:00:00Z",
+                completed_at=f"{DATE}T{completed}:00:00Z", status=RunStatus.COMPLETED,
+                commit_sha=SEED_COMMIT, runner="test", items_planned=1,
+                items_succeeded=1, items_failed=0, site_bytes=0, site_files=0,
+                verticals=[VerticalCount(id="world", planned=1, published=1)],
+                same_story_floor_applied=line,
+            )
+            for n, started, completed, line in (
+                (1, "06", "08", 0.94), (2, "12", "18", 0.90),
+            )
+        ],
+    )
+    day = DigestDay(
+        version=DigestDay.schema_version(), date=DATE,
+        generated_at=f"{DATE}T18:00:00Z", partial=False,
+        items_planned=2, items_failed=0, items=items,
+        runs=[
+            DigestRunRef(n=run.n, at=run.started_at, items_added=1)
+            for run in manifest.runs
+        ],
+        verticals=[DigestVerticalRef(id="world", display_name="World", count=2)],
+        embeddings=block({"world-01": unit(0), "world-02": unit(22)}),
+    )
+    payload = manifest.model_dump(mode="json") | {"version": "2026-08-21T02:00"}
+    payload["runs"][1]["verticals"][0]["published"] = 2
+    digest_root = tmp_path / "digest"
+    target = assemble.day_dir(digest_root, DATE)
+    atomic_write.write_atomic(target / "digest.json", day.to_json())
+    atomic_write.write_atomic(target / "run.json", json.dumps(payload))
+    previous_bytes = (target / "run.json").read_bytes()
+    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
+    draw_path = tmp_path / "selection" / "draw.csv"
+
+    with caplog.at_level(logging.INFO, logger="idhazh"):
+        drawn = stage_pick_item_pairs(
+            DATE, run_id=COUNCIL_RUN, settings=config.load(CONFIG_DIR),
+            digest_root=digest_root, draw_path=draw_path,
+        )
+
+    assert drawn.pairs_in_band == len(drawn.taken) == 1
+    assert 0.90 <= drawn.taken[0].score < 0.94
+    migrated = common._load_manifest(target / "run.json", day=day)
+    assert migrated is not None
+    assert migrated.runs[-1].verticals[0].published == 1
+    assert migrated.runs[-1].same_story_floor_applied == 0.90
+    assert draw_path.is_file()
+    assert "legacy-fallback" not in caplog.text
+    assert (target / "run.json").read_bytes() == previous_bytes
 
 
 def test_the_draw_samples_the_config_band_and_never_the_published_line(
