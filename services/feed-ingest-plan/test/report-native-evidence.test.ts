@@ -253,7 +253,7 @@ test("the named-mirror reader deduplicates records, excludes unrelated work and 
       JSON.stringify(event),
       JSON.stringify({ ...event, data: { ...event.data, details: { ...event.data.details, attempt: 0,
         diagnostics: { title: "PRIVATE_TITLE", error_code: "PRIVATE_EXCEPTION includes arbitrary exception text" } } } }),
-      JSON.stringify({ data: { code: "CHILD_DIAGNOSTIC_INVALID" } }), '{"data":',
+      JSON.stringify({ type: "hono.server", data: { code: "CHILD_DIAGNOSTIC_INVALID" } }), '{"data":',
     ].join("\n"));
     const partial = await read();
     expect(partial.article_diagnostics).toEqual([event]);

@@ -318,7 +318,12 @@ validators from their native authorities. The same native module declares
 `DeliveryCompletionDiagnosticSchema` and constructs its completion CloudEvent
 from the native run number, attempt, result and receiving context, without
 importing a server lifecycle contract. Paths, process IDs and arbitrary
-fields are not diagnostic fields. The
+fields are not diagnostic fields. `DeliveryEventSchema` accepts native
+completion and failure envelopes. A completion carrier must exactly match
+`writeTraceContext(data.context)`; failure data contains only the native
+planner error code. Accepted native envelopes retain their original
+occurrence and source. The current private completion packet is also read
+by the feed decoder. The
 [server writer](../../reference/serve-pipeline-apis.md#diagnostics-and-current-task-evidence)
 retains these facts and context in a separate completion event, not a lifecycle
 payload. The native HTTP result and saved `delivery-result.json`, including

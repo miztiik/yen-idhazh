@@ -2,6 +2,9 @@
 import { z } from "zod";
 import { DateStampSchema, OperationMetadataSchema, PositiveCountSchema } from "@idhazh/common-contracts";
 
+// Saved lifecycle envelopes retain this protocol type across listener changes.
+export const SERVER_LIFECYCLE_EVENT_TYPE = "hono.server";
+
 export const ApiGroupSchema = z.enum(["planning", "machine", "delivery"]);
 export type ApiGroup = z.infer<typeof ApiGroupSchema>;
 export const ServerRunSchema = z.strictObject({

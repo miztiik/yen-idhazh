@@ -79,7 +79,7 @@ Table F - PR sequence
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | F1 | 1 | Remove the registry and localize existing producer identities | - | A | DONE | urban-goggles | - | - |
-| F2 | 2 | Move native diagnostic contracts to producers and expand relay readers | 1 | B | IN-FLIGHT | urban-goggles | - | - |
+| F2 | 2 | Move native diagnostic contracts to producers and expand relay readers | 1 | B | DONE | urban-goggles | - | - |
 | F3 | 3 | Emit native events across every API and retire legacy translation | 2 | C | PENDING | - | - | - |
 
 ## 2. Row #1 - Remove the registry and localize existing producer identities
@@ -170,9 +170,11 @@ Table H - Row 1 rejected alternatives
   - `services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts`
   - `services/feed-ingest-plan/scripts/delivery-completion-diagnostic.ts` - delete after consolidation.
   - `services/feed-ingest-plan/scripts/read-feed-api-diagnostic.ts`
+  - `services/feed-ingest-plan/scripts/read-article-failure-diagnostics.ts`
   - `services/feed-ingest-plan/test/safe-persist-http.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-finalization.test.ts`
   - `services/feed-ingest-plan/test/relay-feed-api-events.test.ts`
+  - `services/feed-ingest-plan/test/report-native-evidence.test.ts`
   - `services/feed-ingest-plan/test/write-feed-api-events.ts`
   - `services/host-fingerprints/src/declare-event-source.ts` - add.
   - `services/host-fingerprints/src/api/create-fingerprint-event.ts` - add.
@@ -187,6 +189,7 @@ Table H - Row 1 rejected alternatives
   - `services/host-probes/test/write-machine-api-events.ts`
   - `services/serve-pipeline-apis/src/create-request-failure-event.ts` - add.
   - `services/serve-pipeline-apis/src/write-server-event.ts`
+  - `services/serve-pipeline-apis/src/server-evidence.ts` - name the unchanged lifecycle type for report routing.
   - `services/serve-pipeline-apis/test/server-events.test.ts`
   - `docs/architecture/sources/feed-operator-api.md`
   - `docs/reference/serve-pipeline-apis.md`
@@ -194,10 +197,11 @@ Table H - Row 1 rejected alternatives
   - `TODO/20261105-remove-typescript-event-registry-plan.md`
 - **Acceptance gates - local:**
   - Inspect the shared selector, then run declared checks for planner, fingerprint, probes and composition.
-  - Run the new `native-events.test.ts` files, shared `server-events.test.ts`, machine `record-machine-api-events.test.ts`, and planner `relay-feed-api-events.test.ts`, `safe-persist-http.test.ts` plus `feed-ingest-plan-finalization.test.ts`.
+  - Run the new `native-events.test.ts` files, shared `server-events.test.ts`, machine `record-machine-api-events.test.ts`, and planner `relay-feed-api-events.test.ts`, `report-native-evidence.test.ts`, `safe-persist-http.test.ts` plus `feed-ingest-plan-finalization.test.ts`.
   - Cover strict type/payload validation, malformed source/carrier rejection, new occurrence creation and unchanged replay with minimal in-memory values.
   - Use the existing real stderr/mirror helpers in `services/feed-ingest-plan/test/write-feed-api-events.ts` and `services/host-probes/test/write-machine-api-events.ts` for native events, and the shared `test/write-server-events.ts` for the host's own request-failure events. Accepted events survive unchanged; invalid/unknown types or unsafe extra fields yield safe warnings. Shared tests do not import native packages.
   - Keep existing article forwarding, log-unavailable behavior, private-profile exclusion and completion context/default assertions green.
+  - A valid native delivery error code cannot impersonate a server lifecycle rejection marker or create an article-evidence gap.
   - Search the authored tree for the removed delivery schema module and update every import/link found, including the named older plan. No compatibility re-export at the old location.
 - **Acceptance gates - CI:** Existing full native suites and merge-candidate CI pass; locked installs remain valid without dependency or workspace changes.
 - **Oracle:** Events constructed by the owner factories pass through the real relay subprocess and mirror with identical source, ID, time, carrier and data, while malformed inputs cannot cross that boundary. This proves native contracts/readers, not that every HTTP handler emits them yet.

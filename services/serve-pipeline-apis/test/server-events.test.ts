@@ -7,6 +7,9 @@ import { fileURLToPath } from "node:url";
 import { createRootContext, readCloudEvent } from "@idhazh/common-contracts";
 import { ServerEventDataSchema, serverLogFilename } from "../src/server-evidence";
 import type { ServerRun } from "../src/server-evidence";
+import {
+  createRequestFailureEvent, readRequestFailureEvent, REQUEST_FAILURE_EVENT_VERSION, RequestFailureEventSchema,
+} from "../src/create-request-failure-event";
 
 async function writeEvents(directory: string, run: ServerRun, moduleLine?: string) {
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL("./write-server-events.ts", import.meta.url))], {
@@ -66,5 +69,37 @@ test("invalid diagnostic JSON remains a safe warning", async () => {
     expect(events.find(event => event.data.phase === "module_failed")?.data)
       .toMatchObject({ severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
     expect(error).not.toContain("PRIVATE_INVALID_JSON");
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("native request failures retain their occurrence and carrier through the real relay", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "api-native-failure-"));
+  const run = { run_id: "700", attempt: 3, started_at: "2026-11-05T00:00:00Z", context: createRootContext() };
+  const context = createRootContext({ traceState: "request=retained" });
+  const event = createRequestFailureEvent({ context });
+  expect(createRequestFailureEvent({ context }).id).not.toBe(event.id);
+  expect(event.data).toEqual({ code: "API_OPERATION_FAILED" });
+  expect(event.source).toBe("/services/typescript-api");
+  expect(readRequestFailureEvent(JSON.parse(JSON.stringify(event)))).toEqual(event);
+  expect(RequestFailureEventSchema.meta()).toMatchObject({
+    version: REQUEST_FAILURE_EVENT_VERSION,
+    readCompatibility: "current_only; diagnostic readers and writers change together",
+  });
+  for (const fields of [
+    { source: "has spaces" }, { source: "/another-producer" }, { traceparent: "invalid" },
+    { type: "unknown" }, { data: { code: "PRIVATE_EXCEPTION" } },
+  ]) expect(() => readRequestFailureEvent({ ...event, ...fields })).toThrow();
+  try {
+    const accepted = await writeEvents(directory, run, JSON.stringify(event));
+    const lines = accepted.error.trim().split("\n").map(line => JSON.parse(line));
+    expect(lines[1]).toEqual(event);
+    expect(lines).toHaveLength(3);
+    const rejected = await writeEvents(directory, run, JSON.stringify({
+      ...event, data: { ...event.data, body: "PRIVATE_BODY" },
+    }));
+    expect(rejected.error).toContain("CHILD_DIAGNOSTIC_INVALID");
+    expect(rejected.error).not.toContain("PRIVATE_BODY");
+    expect(await readFile(join(directory, serverLogFilename(run)), "utf8"))
+      .toBe(accepted.error + rejected.error);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
