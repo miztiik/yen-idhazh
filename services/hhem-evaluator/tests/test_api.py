@@ -36,7 +36,7 @@ def test_event_overflow_is_refused_before_any_truncated_record_is_written() -> N
 def test_disabled_service_and_native_openapi_do_not_start_or_read_input() -> None:
     async def check() -> None:
         settings = load_settings(SETTINGS_FILE)
-        async with running_service(settings, wait_ready=False) as service:
+        async with running_service(settings, routes=(), wait_ready=False) as service:
             response = await service.client.get("/health")
             assert response.status_code == 503
             assert response.json()["status"] == "disabled"
