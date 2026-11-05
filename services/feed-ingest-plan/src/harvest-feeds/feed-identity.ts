@@ -1,37 +1,8 @@
-/** Retain the configured feed capture identity independently of article cleanup. */
-import { UrlSchema, deriveUrlKey } from "@idhazh/common-contracts";
-import { InvalidArticleUrlError } from "./article-url";
-
-// These fixed feed identity keys cannot vary without changing completed capture identities.
-const trackingKeys = new Set([
-  "cmpid", "fbclid", "gclid", "igshid", "mc_cid", "mc_eid", "mkt_tok",
-  "msclkid", "ref", "referrer", "s", "src",
-]);
-
-function validateUrl(value: string): string {
-  const parsed = UrlSchema.safeParse(value);
-  if (!parsed.success) throw new InvalidArticleUrlError("invalid article address", { cause: parsed.error });
-  return parsed.data;
-}
+/** Hash one feed document with the same conservative resource URL protocol as articles. */
+import { deriveUrlKey } from "@idhazh/common-contracts";
+import { normalizeResourceUrl } from "./normalize-resource-url";
 
 export function deriveFeedIdentity(raw: string): { canonical_url: string; url_key: string } {
-  const original = validateUrl(raw.trim().replace(/^https?:/i, scheme => scheme.toLowerCase()));
-  let url: URL;
-  try { url = new URL(original); }
-  catch (error) {
-    if (!(error instanceof TypeError) || !("code" in error) || error.code !== "ERR_INVALID_URL") throw error;
-    throw new InvalidArticleUrlError("invalid article address", { cause: error });
-  }
-  if (url.username || url.password) throw new InvalidArticleUrlError("article address must not contain credentials");
-  url.hostname = url.hostname.replace(/^www\./, "");
-  url.hash = "";
-  // URL validates the authority; discovery preserves the offered path's spelling.
-  const path = /^https?:\/\/[^/?#]+([^?#]*)/.exec(original)?.[1]?.replace(/\/+$/, "") || "/";
-  const kept = [...url.searchParams.entries()]
-    .filter(([key]) => !trackingKeys.has(key.toLowerCase()) && !key.toLowerCase().startsWith("utm_"))
-    .sort(([keyA, valueA], [keyB, valueB]) => keyA < keyB ? -1 : keyA > keyB ? 1 : valueA < valueB ? -1 : valueA > valueB ? 1 : 0);
-  // Python discovery deliberately preserves decoded query text rather than URLSearchParams encoding.
-  const query = kept.map(([key, value]) => `${key}=${value}`).join("&");
-  const canonical_url = validateUrl(`${url.protocol}//${url.host}${path}${query ? `?${query}` : ""}`);
+  const canonical_url = normalizeResourceUrl(raw);
   return { canonical_url, url_key: deriveUrlKey(canonical_url) };
 }

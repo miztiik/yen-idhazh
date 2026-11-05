@@ -7,14 +7,14 @@ import { createSourceFetcher } from "../src/harvest-feeds/fetch-source";
 import { mapPool } from "../src/harvest-feeds/harvest-pool";
 import { matchUrlExclusion } from "../src/harvest-feeds/url-exclusions";
 import { fetchDiagnostics } from "../src/harvest-feeds/fetch-diagnostics";
-import { RecordedTransport, context, inputs, readHeaderRecovery, readRecordings, readSafety, source } from "./harvest-recordings";
+import { RecordedTransport, context, inputs, readHeaderRecovery, readRecordings, readSafety, readUrlProtocol, source } from "./harvest-recordings";
 import { harvestFeeds } from "../src/harvest-feeds/harvest-pool";
 import { recordHarvestObservations } from "./observation-recordings";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { z } from "zod";
 import { deriveArticleIdentity } from "../src/harvest-feeds/article-identity";
+import { deriveFeedIdentity } from "../src/harvest-feeds/feed-identity";
 import { matchMediaArticle, matchMediaOffer } from "../src/harvest-feeds/media-filter";
 import { harvestArticle } from "../src/harvest-feeds/harvest-article";
 import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
@@ -41,37 +41,41 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
     expect((await fetcher.fetch(target)).failure).toBe("unsafe-target");
   }
   expect(unsafeTransport.requests).toEqual([]);
-  const fixture = z.object({
-    allowed: z.array(z.object({ offered: z.string(), target: z.string(), canonical_url: z.string() })),
-    refused: z.array(z.object({
-      offered: z.string(), failure: z.literal("unsafe-target"),
-      requests: z.array(z.string()),
-    })),
-    media: z.array(z.object({ offered: z.string(), canonical_url: z.string(), excluded: z.boolean() })),
-  }).parse(await Bun.file(new URL(
-    "../../../tests/fixtures/feed-ingest-plan/harvest-url-cleanup.json", import.meta.url,
-  )).json());
-  for (const vector of fixture.allowed) {
+  const fixture = await readUrlProtocol();
+  for (const kind of ["article", "feed"] as const) for (const vector of fixture.allowed) {
     const transport = new RecordedTransport(await readRecordings());
-    const identity = deriveArticleIdentity(vector.offered, loaded.config.harvest);
-    const result = await createSourceFetcher(loaded.config.harvest, loaded.extraction,
-      { transport }).fetch(vector.offered);
-    expect(result.failure, vector.offered).toBeNull();
-    expect(transport.requests.at(-1)?.url.href).toBe(vector.target);
-    expect(identity.canonical_url).toBe(vector.canonical_url);
-    expect(deriveArticleIdentity(vector.offered, loaded.config.harvest)).toEqual(identity);
-    expect(transport.requests.some(request => request.url.hostname === "www.google.com")).toBe(false);
+    const derive = kind === "article" ? deriveArticleIdentity : deriveFeedIdentity;
+    const identity = derive(vector.offered);
+    const fetcher = createSourceFetcher(loaded.config.harvest, loaded.extraction, { transport });
+    try {
+      const result = await fetcher.fetch(vector.offered, undefined, kind);
+      expect(result.failure, vector.offered).toBeNull();
+      expect(transport.requests[0]?.url.href).toBe(identity.canonical_url);
+      expect(transport.requests.at(-1)?.url.href).toBe(vector.target);
+      expect(identity.canonical_url).toBe(vector.canonical_url);
+      expect(derive(vector.offered)).toEqual(identity);
+      expect(transport.requests.some(request => request.url.hostname === "127.0.0.1")).toBe(false);
+    } finally { await fetcher.close(); }
   }
   for (const vector of fixture.refused) {
     const transport = new RecordedTransport(await readRecordings());
-    const result = await createSourceFetcher(loaded.config.harvest, loaded.extraction,
-      { transport }).fetch(vector.offered);
-    expect(result.failure, vector.offered).toBe(vector.failure);
-    expect(transport.requests.map(request => request.url.href)).toEqual(vector.requests);
+    const identity = deriveArticleIdentity(vector.offered);
+    const fetcher = createSourceFetcher(loaded.config.harvest, loaded.extraction, { transport });
+    try {
+      const result = await harvestArticle({
+        source: sourceSnapshot(loaded.sources[0]!),
+        entry: { entry_ordinal: 0, title: "Refused target", link: vector.offered, categories: [], author: null, published_at: null },
+      }, loaded, fetcher, context());
+      expect(result.rejection).toMatchObject({
+        drop_reason: "FETCH_FAILED", canonical_url: identity.canonical_url, url_key: identity.url_key,
+      });
+      expect(result.observation.fetch_failure, vector.offered).toBe(vector.failure);
+      expect(transport.requests.map(request => request.url.href)).toEqual(vector.requests);
+    } finally { await fetcher.close(); }
   }
   for (const vector of fixture.media) {
     const transport = new RecordedTransport(await readRecordings());
-    const identity = deriveArticleIdentity(vector.offered, loaded.config.harvest);
+    const identity = deriveArticleIdentity(vector.offered);
     expect(identity.canonical_url).toBe(vector.canonical_url);
     const matched = matchMediaArticle(vector.offered, identity.canonical_url, [], loaded.config);
     expect(matched !== null).toBe(vector.excluded);
@@ -86,16 +90,27 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
       expect(transport.requests).toEqual([]);
     } else {
       expect(article.candidate).toMatchObject({ canonical_url: vector.canonical_url, url_key: identity.url_key });
-      expect(transport.requests.at(-1)?.url.href).toBe("https://news.example/second");
+      expect(transport.requests.at(-1)?.url.href).toBe(vector.canonical_url);
     }
   }
-  const vector = fixture.allowed[0]!;
-  const recordings = await readRecordings();
-  recordings.responses[vector.offered] = [{ status: 200, fixture: "article" }];
-  const transport = new RecordedTransport(recordings);
-  expect((await createSourceFetcher({ ...loaded.config.harvest, tidy_urls: false }, loaded.extraction,
-    { transport }).fetch(vector.offered)).failure).toBeNull();
-  expect(transport.requests.at(-1)?.url.href).toBe("https://news.example/second");
+});
+
+test("malformed article inputs have no invented address or hash and make no request", async () => {
+  const loaded = await inputs();
+  const transport = new RecordedTransport(await readRecordings());
+  const fetcher = createSourceFetcher(loaded.config.harvest, loaded.extraction, { transport });
+  try {
+    for (const link of ["not-a-url", "https://[invalid-host/"]) {
+      const result = await harvestArticle({
+        source: sourceSnapshot(loaded.sources[0]!),
+        entry: { entry_ordinal: 0, title: "Malformed address", link, categories: [], author: null, published_at: null },
+      }, loaded, fetcher, context());
+      expect(result.rejection).toMatchObject({
+        drop_reason: "MISSING_REQUIRED_FIELDS", canonical_url: null, url_key: null,
+      });
+    }
+    expect(transport.requests).toEqual([]);
+  } finally { await fetcher.close(); }
 });
 
 test("structured URL and media exclusions bind configured policy", async () => {

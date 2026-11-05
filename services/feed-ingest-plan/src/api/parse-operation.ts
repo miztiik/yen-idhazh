@@ -121,7 +121,7 @@ export async function parseFetchedDocument(
     return { response_json: JSON.stringify({
       ...operationMetadata(batch), run_id: fetched.context.run_id, fetch_item_type: "feed",
       parsed_count: entries.length, failure: parsed.failure,
-      offers: publicFeedOffers(batch, inputs.harvest.config.harvest, source.id, state.plan_owned === true),
+      offers: publicFeedOffers(batch, source.id, state.plan_owned === true),
     }) };
   }
   const pool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);

@@ -18,7 +18,6 @@
         "ipaddr.js": "2.5.0",
         "linkedom": "0.18.13",
         "parquet-wasm": "^0.9.0",
-        "tidy-url": "1.18.3",
         "tldts": "^7.4.19",
         "turndown": "7.2.4",
         "zod": "^4.1.12",
@@ -142,8 +141,6 @@
     "suffix-thumb": ["suffix-thumb@6.0.0", "", {}, "sha512-HsCTMLaupbob5ZG//ZW6PSj446tHT5kSJ1qXS5F/qO2Nt13uAn6ZLPhJQ/H6bN/jVQCb+pcqe2psEwy4Mp5+Vw=="],
 
     "temml": ["temml@0.13.5", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/temml/-/temml-0.13.5.tgz", {}, "sha1-lsU8Ts5ZrnGYWeKlB0ttQlHO5CM="],
-
-    "tidy-url": ["tidy-url@1.18.3", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/tidy-url/-/tidy-url-1.18.3.tgz", {}, "sha512-NnbmullqE/3loiDoopNltfLb/v6EhX5GYNUVU4EuZjnDjh/NIBzy5dHnhvH3EfIAnZZZMf3cW0HgNw9E+easyg=="],
 
     "tldts": ["tldts@7.4.19", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/tldts/-/tldts-7.4.19.tgz", { "dependencies": { "tldts-core": "^7.4.19" }, "bin": { "tldts": "bin/cli.js" } }, "sha512-48dH6aSpQnpbzDUc4vIQZ1VjB8tkK+e8c1yx05/SZK+rkssgjEOlxDd/yU8/a4vGYQ9vRgJr9dwMq9TJ0b3X2Q=="],
 

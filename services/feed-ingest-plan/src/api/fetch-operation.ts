@@ -70,10 +70,10 @@ export async function fetchDocument(
   let identity: ReturnType<typeof deriveArticleIdentity>;
   try {
     identity = request.fetch_item_type === "feed" ? deriveFeedIdentity(url)
-      : deriveArticleIdentity(url, inputs.harvest.config.harvest);
+      : deriveArticleIdentity(url);
   } catch (error) {
     if (!(error instanceof InvalidArticleUrlError || error instanceof UnsafeTargetError)) throw error;
-    throw new PlanError("INVALID_REQUEST", "Cleaned fetch address is invalid or unsafe", "url");
+    throw new PlanError("INVALID_REQUEST", "Normalized fetch address is invalid or unsafe", "url");
   }
   const attemptObservations: ReturnType<typeof observeDocument>[] = [];
   const emit = createStageLogger(record.context, inputs.event_source, runtime.log);
@@ -121,7 +121,7 @@ export async function fetchDocument(
   try {
     result = await bounded(() => {
       runtime.signal?.throwIfAborted();
-      return work.fetch(state.fetcher, url, runtime.signal);
+      return work.fetch(state.fetcher, identity.canonical_url, runtime.signal);
     });
   } catch (error) {
     if (request.fetch_item_type === "feed") {

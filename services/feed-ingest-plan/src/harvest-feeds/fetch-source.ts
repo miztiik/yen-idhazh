@@ -11,7 +11,7 @@ import { validateTargetName } from "./safe-target";
 import { diagnosticUrl } from "../logging/diagnostic-url";
 import type { FetchAttempt } from "../api/operation-contracts";
 import { utcTimestamp } from "./harvest-types";
-import { cleanArticleUrl } from "./article-url";
+import { normalizeResourceUrl } from "./normalize-resource-url";
 import { createRequestPacing } from "./request-pacing";
 import type { RequestPacing } from "./request-pacing";
 
@@ -258,7 +258,7 @@ export function createSourceFetcher(
       // URL validation has no source dispatch and no DNS lookup.
       const started = performance.now();
       try {
-        url = kind === "article" ? validateTargetName(cleanArticleUrl(target, config)) : validateTargetName(target);
+        url = validateTargetName(normalizeResourceUrl(target));
         target = url.href;
       }
       catch (error) {

@@ -83,6 +83,22 @@ test("selected unknown timing has no recency but still requires the global polic
   }).timing_basis).toBe("first_seen");
 });
 
+test("every selected projection preserves resource queries and refuses canonical fragments", () => {
+  const canonical_url = "https://article.example/story?a=x%26b%3Dy&a=two&empty=&plus=a+b";
+  const article = { ...selectedArticle(), canonical_url, url_key: deriveUrlKey(canonical_url) };
+  const metadata = selectedArticleMetadata(article);
+  const row = { ...metadata, run_id: "2026-11-02-1", attempt: 1, date: "2026-11-02" };
+  for (const [schema, value] of [
+    [SelectedArticleMetadataSchema, metadata], [SelectedArtifactArticleSchema, article],
+    [SelectedArticleRowSchema, row],
+  ] as const) {
+    expect(schema.parse(JSON.parse(JSON.stringify(value)))).toEqual(value);
+    expect(schema.safeParse({ ...value, url_key: deriveUrlKey("https://article.example/story") }).success).toBe(false);
+    const fragment = `${canonical_url}#section`;
+    expect(schema.safeParse({ ...value, canonical_url: fragment, url_key: deriveUrlKey(fragment) }).success).toBe(false);
+  }
+});
+
 test("score components use exact native arithmetic and survive JSON round trips without rounding", () => {
   const article = selectedArticle();
   expect(SelectedArticleRatingsSchema.parse(JSON.parse(JSON.stringify(article.ratings)))).toEqual(article.ratings);

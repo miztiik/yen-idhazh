@@ -1,22 +1,90 @@
 {
   "description": "Which article URL checks run before a request is dispatched?",
+  "normalization": [
+    {
+      "offered": " HTTPS://www.News.Example:443/a///?b=2&utm_campaign=x&a=2&a=1&ref=feed#fragment ",
+      "canonical_url": "https://www.news.example/a///?b=2&utm_campaign=x&a=2&a=1&ref=feed"
+    },
+    {
+      "offered": "hTtP://News.Example:80/Story/?empty=&flag&=value&&plus=a+b&encoded_plus=a%2Bb#part",
+      "canonical_url": "http://news.example/Story/?empty=&flag&=value&&plus=a+b&encoded_plus=a%2Bb"
+    },
+    {
+      "offered": "https://news.example/a/../caf\u00e9/?a=x%26b%3Dy",
+      "canonical_url": "https://news.example/caf%C3%A9/?a=x%26b%3Dy"
+    },
+    {
+      "offered": "https://news.example/story?#part",
+      "canonical_url": "https://news.example/story?"
+    },
+    {
+      "offered": "https://redirect.example/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Fid%3Done#part",
+      "canonical_url": "https://redirect.example/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Fid%3Done"
+    }
+  ],
+  "distinct": [
+    ["https://news.example/story?id=one", "https://news.example/story?id=two"],
+    ["https://news.example/story?a=x%26b%3Dy", "https://news.example/story?a=x&b=y"],
+    ["https://news.example/story?b=2&a=1", "https://news.example/story?a=1&b=2"],
+    ["https://news.example/story?a=1&a=2", "https://news.example/story?a=2&a=1"],
+    ["https://news.example/story?value=a+b", "https://news.example/story?value=a%2Bb", "https://news.example/story?value=a%20b"],
+    ["https://news.example/story", "https://news.example/story?", "https://news.example/story?empty=", "https://news.example/story?flag"],
+    ["https://news.example/story", "https://www.news.example/story"],
+    ["https://news.example/story", "http://news.example/story"],
+    ["https://news.example/story", "https://news.example/story/", "https://news.example/Story"]
+  ],
   "allowed": [
     {
       "offered": "https://news.example/second?utm_source=feed&oly_enc_id=tracking",
-      "target": "https://news.example/second",
-      "canonical_url": "https://news.example/second"
+      "target": "https://news.example/second?utm_source=feed&oly_enc_id=tracking",
+      "canonical_url": "https://news.example/second?utm_source=feed&oly_enc_id=tracking"
     },
     {
-      "offered": "https://www.google.com/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Futm_source%3Dfeed",
-      "target": "https://news.example/second",
-      "canonical_url": "https://news.example/second"
+      "offered": "https://redirect.example/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Futm_source%3Dfeed",
+      "target": "https://redirect.example/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Futm_source%3Dfeed",
+      "canonical_url": "https://redirect.example/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Futm_source%3Dfeed"
+    },
+    {
+      "offered": "https://redirect.example/url?url=http%3A%2F%2F127.0.0.1%2Fsecret",
+      "target": "https://redirect.example/url?url=http%3A%2F%2F127.0.0.1%2Fsecret",
+      "canonical_url": "https://redirect.example/url?url=http%3A%2F%2F127.0.0.1%2Fsecret"
+    },
+    {
+      "offered": "https://news.example/story?id=one#part",
+      "target": "https://news.example/story?id=one",
+      "canonical_url": "https://news.example/story?id=one"
+    },
+    {
+      "offered": "https://news.example/story?id=two",
+      "target": "https://news.example/story?id=two",
+      "canonical_url": "https://news.example/story?id=two"
+    },
+    {
+      "offered": "https://news.example/story?a=x%26b%3Dy",
+      "target": "https://news.example/story?a=x%26b%3Dy",
+      "canonical_url": "https://news.example/story?a=x%26b%3Dy"
+    },
+    {
+      "offered": "https://news.example/story?a=x&b=y",
+      "target": "https://news.example/story?a=x&b=y",
+      "canonical_url": "https://news.example/story?a=x&b=y"
+    },
+    {
+      "offered": "hTtPs://news.example/story?empty=&flag&=value&&plus=a+b&encoded_plus=a%2Bb#part",
+      "target": "https://news.example/story?empty=&flag&=value&&plus=a+b&encoded_plus=a%2Bb",
+      "canonical_url": "https://news.example/story?empty=&flag&=value&&plus=a+b&encoded_plus=a%2Bb"
+    },
+    {
+      "offered": "https://redirect.example/safe?source=feed",
+      "target": "https://news.example/second?edition=redirect",
+      "canonical_url": "https://redirect.example/safe?source=feed"
     }
   ],
   "media": [
     {
-      "offered": "https://www.google.com/url?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Drecorded",
-      "canonical_url": "https://www.youtube.com/watch",
-      "excluded": true
+      "offered": "https://redirect.example/url?url=https%3A%2F%2Fvideo.example%2Fwatch%3Fv%3Drecorded",
+      "canonical_url": "https://redirect.example/url?url=https%3A%2F%2Fvideo.example%2Fwatch%3Fv%3Drecorded",
+      "excluded": false
     },
     {
       "offered": "https://www.businesstoday.in/bt-tv/market-today/short-video/bhutan-glacial-lake-burst-triggers-flood-alerts-in-assam-bengal-thousands-evacuated-as-water-564789-2026-10-30",
@@ -34,21 +102,26 @@
       "excluded": true
     },
     {
-      "offered": "https://www.google.com/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Futm_source%3Dfeed",
-      "canonical_url": "https://news.example/second",
+      "offered": "https://redirect.example/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Futm_source%3Dfeed",
+      "canonical_url": "https://redirect.example/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Futm_source%3Dfeed",
       "excluded": false
     }
   ],
   "refused": [
     {
-      "offered": "https://www.google.com/url?url=http%3A%2F%2F127.0.0.1%2Fsecret",
+      "offered": "http://127.0.0.1/secret?resource=one#part",
       "failure": "unsafe-target",
       "requests": []
     },
     {
-      "offered": "https://www.google.com/url?url=http%3A%2F%2F10.0.0.7%2Fstory",
+      "offered": "http://10.0.0.7/story?resource=two",
       "failure": "unsafe-target",
       "requests": []
+    },
+    {
+      "offered": "https://redirect.example/private?resource=one",
+      "failure": "unsafe-target",
+      "requests": ["https://redirect.example/private?resource=one"]
     }
   ]
 }

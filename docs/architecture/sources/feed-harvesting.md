@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-04
 
 How do configured feeds become sanitized article candidates?
 This build-time path leaves production Python discovery and extraction
@@ -40,31 +40,28 @@ is not an input. Reporting configuration does not change content identity.
 Missing feed fields do not renumber later entries. Page canonical tags,
 scripts and prose never grant a new fetch destination.
 
-Every article loses its entire query string and fragment. This includes
-required article identifiers: a query-dependent article can stop working.
-`harvest.tidy_urls` enables additional cleanup before that removal, including
-unwrapping supported redirect addresses. Setting it to false does not preserve
-article queries. Feeds bypass this cleanup and retain
-their request parameters. Feed identity and Python discovery remain unchanged.
+Articles and feed documents use the shared
+[resource address rule](../contracts/identity.md#typescript-resource-addresses).
+Queries remain part of the address and hash; only the fragment is removed.
+`normalize-resource-url.ts` implements the native parser rule.
+`article-identity.ts` and `feed-identity.ts` hash its exact serialized result.
+The source fetcher initially dispatches that same address and applies the
+same normalization before validating every redirect hop. Redirects do not
+change the initial identity. No optional cleaner or tracking classifier remains.
 
-`article-url.ts` exports `cleanArticleUrl`, the shared article cleanup policy.
-`article-identity.ts` hashes its exact serialized result as `url_key` and retains
-that result as `canonical_url`. The source fetcher uses the same policy for
-each dispatched article hop. Redirects do not change
-the initial identity. The lower-level `http-request-target.ts` applies the
-optional cleaner; it does not hash addresses.
-
-Cleanup and address safety remain separate responsibilities. Invalid
-article addresses retain `InvalidArticleUrlError`. Feed offers normalize only
+Normalization and address safety remain separate responsibilities. Invalid
+addresses retain `InvalidArticleUrlError`. Feed offers normalize only
 the HTTP scheme spelling before storage, retaining their original query and
-fragment as historical evidence. The final serialized article address must
+fragment as captured evidence. A valid forbidden target retains its normalized
+address and hash in its preflight refusal; malformed input has neither.
+The final serialized resource address must
 pass the same URL format and length contract as downstream payloads before
-hashing or dispatch; percent-encoding cannot bypass that bound. Each transformed address
+hashing or dispatch; percent-encoding cannot bypass that bound. Each actual address
 passes URL, hostname and explicit-address checks before dispatch.
 Impit resolves hostnames; this TypeScript path does not resolve or pin their
 addresses and does not protect against DNS rebinding.
-No TypeScript entry point retrieves or evaluates robots files. An unsafe
-transformed address is never dispatched.
+No TypeScript entry point retrieves or evaluates robots files. A forbidden
+address is never dispatched.
 
 Feedsmith normalizes RSS, Atom, RDF and JSON Feed entries. They retain
 categories, authors, offered ordinals and entry-level UTC dates. A feed's
@@ -81,10 +78,10 @@ path or query is not a match. Excluded offers retain their original ordinal,
 actual title or null, first sight and ordinary article-exclusion accounting.
 Public offer fetches and `/plan` share this preflight; standalone article
 fetches use the same address checks. A valid supplying feed remains successful.
-Both the offered address and the configured cleaned request target are checked,
-so a known URL wrapper cannot hide a media destination. This adds no request
-and never adds a second identity policy. Unsafe cleaned targets remain
-typed fetch refusals, not media exclusions.
+Media checks use the offered and normalized addresses. A URL embedded in a
+query is data, not another target; only an actual HTTP redirect can supply
+another destination. The source fetcher checks each such hop before dispatch.
+Unsafe targets remain typed fetch refusals, not media exclusions.
 
 ## Request and extraction controls
 
@@ -306,8 +303,8 @@ and its compression/dispatcher machinery; the address library
 retains URL/literal checks. The robots parser dependency is removed.
 These dependencies run in the
 build-time Bun process and workers, not the published browser bundle.
-TidyURL 1.18.3 adds its bundled URL-cleaning rules and no runtime dependencies
-for request-target cleanup. Its installed bytes remain build-time only.
+Resource URL normalization uses the existing runtime parser and adds no
+dependency or browser bytes.
 Impit's beneficiary is native browser TLS and HTTP fingerprints with bounded
 decoded response reads. Its Linux x64 native binary occupies 10,581,792 bytes
 (about 10.1 MiB). Service and probe installation took 2 seconds on a GitHub
@@ -343,11 +340,13 @@ reject later. Shared production parsing and bounded native workers preserve
 the trust checks while allowing independent requests to make real progress.
 Article limits constrain output only; they are not an input truncation policy.
 
-Only the current cleaned article address is used to match discovery,
+Only the current normalized article address is used to match discovery,
 publication and settled-failure keys.
-Older recorded keys remain unchanged and do not link to the current address;
-this avoids extra history reads and alternate-policy checks, but can repeat
-processing for an address whose older key differs.
+Historical files and keys are not rehashed or rewritten. The
+[native history rules](planner-feed-history.md#raw-and-compact-copies)
+keep current full-row reads separate from usable historical health fields.
+No alternate-policy key lookup is added, so changed address keys can cause
+repeat processing without claiming an earlier sighting.
 
 Configured `/short-video` route prefixes identify media offers and reject them
 before article requests. Host/path boundaries keep other story routes eligible

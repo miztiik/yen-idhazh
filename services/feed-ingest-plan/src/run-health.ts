@@ -8,7 +8,7 @@ import type { RunContext } from "./resolve-run-context";
 import type { SourceHistoryEvidence } from "./read-ledger-history/read-feed-history";
 import type { FeedEntry, HarvestArticleResult } from "./harvest-feeds/harvest-types";
 import { deriveArticleIdentity, InvalidArticleUrlError } from "./harvest-feeds/article-identity";
-import { UnsafeTargetError } from "./harvest-feeds/safe-target";
+import { UnsafeTargetError, validateTargetName } from "./harvest-feeds/safe-target";
 import { retryableStatus } from "./harvest-feeds/fetch-source";
 import { createFeedHealthRow } from "./health-row";
 import { classifyFeedFetchFailure, classifyParserResult } from "./availability/feed-lifecycle";
@@ -19,7 +19,7 @@ import { operationLink } from "./api/operation-context";
 
 export function createRunHealth(context: RunContext, sources: readonly SourceSnapshot[],
   history: ReadonlyMap<string, SourceHistoryEvidence>,
-  admission: { min_words: number; blocked_http_statuses: readonly number[]; tidy_urls: boolean; clock?: () => Date }) {
+  admission: { min_words: number; blocked_http_statuses: readonly number[]; clock?: () => Date }) {
   const rows = new Map<string, FeedHealthStateRow>();
   const exclusions = new Map<string, PlannerRejectionCount>();
   const pendingReads = new Map<string, FeedHealthStateRow>();
@@ -194,7 +194,11 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       target.status = status;
       target.items = new Set(entries.flatMap(entry => {
         if (entry.link === null) return [];
-        try { return [deriveArticleIdentity(entry.link, admission).url_key]; }
+        try {
+          const identity = deriveArticleIdentity(entry.link);
+          validateTargetName(identity.canonical_url);
+          return [identity.url_key];
+        }
         catch (error) {
           if (error instanceof InvalidArticleUrlError || error instanceof UnsafeTargetError) return [];
           throw error;

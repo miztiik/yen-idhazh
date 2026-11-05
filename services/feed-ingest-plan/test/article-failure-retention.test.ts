@@ -81,7 +81,7 @@ test("terminal HTTP, DNS, TLS, timeout and extraction failures retain their nati
     expect(new Set(rows.map(row => row.url_key)).size).toBe(cases.length);
     for (const entry of cases) {
       const row = rows.find(row =>
-        row.url_key === deriveArticleIdentity(entry.url, recorded.inputs.harvest.config.harvest).url_key);
+        row.url_key === deriveArticleIdentity(entry.url).url_key);
       expect(row, entry.name).toMatchObject({
         stage: "harvest-feeds", ...entry.expected,
         pacing_settings: recorded.inputs.harvest.config.harvest.request_pacing,
@@ -118,7 +118,7 @@ test("a successful retry retains captured identity and text without a stale nati
     const batch = stageStore(recorded.inputs).read("parsed", id!, ParsedFeedBatchSchema);
     expect(batch.candidates).toHaveLength(1);
     expect(batch.candidates[0]!.article_text.length).toBeGreaterThan(0);
-    expect(batch.candidates[0]!.url_key).toBe(deriveArticleIdentity("https://news.example/second", recorded.inputs.harvest.config.harvest).url_key);
+    expect(batch.candidates[0]!.url_key).toBe(deriveArticleIdentity("https://news.example/second").url_key);
     expect(await rejectedRows(recorded)).toEqual([]);
     expect(recorded.transport.requests.filter(request => request.url.pathname === "/second")).toHaveLength(2);
   } finally { await recorded.close(); }

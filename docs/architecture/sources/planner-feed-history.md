@@ -1,6 +1,6 @@
 # Feed history used by the TypeScript planner
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-04
 
 Which saved observations can change feed rest and measured reliability?
 The isolated planner reads required `feed-health-state` fields from intact
@@ -92,7 +92,7 @@ can save numeric `0.5`. JSON numbers do not retain trailing zeros.
 Both values come from the original integer counts; article-pass rates,
 selection scores and semantic similarity retain their own precision.
 No general precision setting is introduced. Current health writers use
-`2026-11-02`. Historical raw and compact files with other valid row-version dates
+`2026-11-03`. Historical raw and compact files with other valid row-version dates
 remain usable when their required fields validate. Readers verify the supported
 file envelope, registered ledger, named membership, raw filename identity and
 canonical digest over every stored column before projection. Extra columns
@@ -100,6 +100,12 @@ do not affect a calculation, but remain part of that integrity check.
 Required-field gaps are partial evidence, not a migration or a failed planning
 request. Full-row reads, new writes, compaction, publication and current-run
 delivery still require the complete current row schema and stamp.
+Discovery and selected output use the `2026-11-04` resource-address identity
+format, which retains queries under the
+[native URL rule](../contracts/identity.md#typescript-resource-addresses).
+Older discovery and selected formats are refused under the existing current-only
+full-row rule. They are not rehashed, aliased or rewritten. This identity change
+does not restrict independently usable historical health fields.
 Retired outcome or check-result values are gaps for those fields only.
 Valid request counters and supported saved calculations remain independently
 usable; removed robots counters are not required for request completeness.

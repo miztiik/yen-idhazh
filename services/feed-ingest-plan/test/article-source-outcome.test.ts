@@ -60,7 +60,7 @@ test("retries and redirects count once on their dispatch UTC day, not the later 
     ...loaded.config.harvest, request_headers: { ...loaded.config.harvest.request_headers, secondary: null },
   }, loaded.extraction, { transport }, clock);
   const health = createRunHealth(context, [source], new Map(), {
-    min_words: 10, blocked_http_statuses: [], tidy_urls: true,
+    min_words: 10, blocked_http_statuses: [],
   });
   const work = documentWork({
     ...operationMetadata(context),
@@ -134,7 +134,7 @@ test("measured quality rejection stays unresolved and is counted once without a 
   })).toBe("unresolved");
   expect(resolveArticleSourceOutcome(rejected, 10, [], at)).toBeNull();
   const work = createRunHealth(plannerContext, [source], new Map(), {
-    min_words: 10, blocked_http_statuses: [], tidy_urls: true,
+    min_words: 10, blocked_http_statuses: [],
   });
   work.article(rejected);
   const row = work.rows()[0]!;
@@ -155,7 +155,7 @@ test("the source rate stays eight out of ten when only three articles are select
       ? { disposition: "admitted", reason_code: null, settled_at: at }
       : { disposition: "source_refused", reason_code: "REJECTED_SCREENING_MIN_WORDS", settled_at: at }),
   }));
-  const work = createRunHealth(context, [source], new Map(), { min_words: 10, blocked_http_statuses: [401, 403], tidy_urls: true });
+  const work = createRunHealth(context, [source], new Map(), { min_words: 10, blocked_http_statuses: [401, 403] });
   for (const capture of captures) {
     work.captureArticle(capture.id, source.feed_id, at, capture.outcome);
     work.captureArticle(capture.id, source.feed_id, at, capture.outcome);

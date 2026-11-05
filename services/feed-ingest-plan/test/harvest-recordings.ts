@@ -40,6 +40,18 @@ export async function readRecordings() {
 }
 export type Recordings = Awaited<ReturnType<typeof readRecordings>>;
 
+export async function readUrlProtocol() {
+  return z.object({
+    normalization: z.array(z.object({ offered: z.string(), canonical_url: z.string() })),
+    distinct: z.array(z.array(z.string()).min(2)),
+    allowed: z.array(z.object({ offered: z.string(), target: z.string(), canonical_url: z.string() })),
+    refused: z.array(z.object({
+      offered: z.string(), failure: z.literal("unsafe-target"), requests: z.array(z.string()),
+    })),
+    media: z.array(z.object({ offered: z.string(), canonical_url: z.string(), excluded: z.boolean() })),
+  }).parse(await Bun.file(new URL("harvest-url-cleanup.json", fixtures)).json());
+}
+
 export async function readContentFilters() {
   return z.object({
     density_cases: z.array(z.object({

@@ -228,6 +228,8 @@ if (Bun.argv.includes("--emit-schemas")) {
       { partition: { ...config.partition, min_shards: config.partition.max_shards + 1 } },
       { partition: { ...config.partition, default_shards: config.partition.max_shards + 1 } },
       { harvest: { ...config.harvest, concurrency: "24" } },
+      { harvest: { ...config.harvest, tidy_urls: true } },
+      { harvest: { ...config.harvest, tidy_urls: false } },
       { harvest: { ...config.harvest, tidy_urls: "true" } },
       { harvest: { ...config.harvest, semantic_fallback: {
         ...config.harvest.semantic_fallback, content_roots: [],

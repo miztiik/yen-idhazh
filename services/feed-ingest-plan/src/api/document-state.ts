@@ -84,7 +84,7 @@ export function executionHasArtifact(inputs: PlanInputs, context: Pick<RunContex
 export function checkFetchedDocument(record: FetchedDocumentReference, inputs: PlanInputs) {
   const artifact = FetchedDocumentSchema.parse(record.document);
   const identity = artifact.fetch_item_type === "feed" ? deriveFeedIdentity(artifact.canonical_url)
-    : deriveArticleIdentity(artifact.canonical_url, inputs.harvest.config.harvest);
+    : deriveArticleIdentity(artifact.canonical_url);
   if (artifact.article_id !== identity.url_key || artifact.observation.run_id !== record.context.run_id
     || operationKey(artifact.observation) !== operationKey(record.context)
     || artifact.body_sha256 !== (artifact.body === null ? null : hashText(artifact.body))
@@ -106,7 +106,7 @@ export async function documentState(record: DocumentOperationContext, inputs: Pl
       return {
         kind: "document", context, history, work: createRunHealth(context,
           inputs.harvest.sources.map(source => sourceSnapshot(source)), history.sources,
-          { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls,
+          { ...inputs.harvest.config.triage,
             clock: runtime.observation_clock ?? (() => new Date()) }),
         fetcher: createSourceFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),
         config_sha256: record.config_sha256, fetches: new Set<string>(), baseline, discovered_rows: [], started,
