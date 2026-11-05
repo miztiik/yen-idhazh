@@ -16,8 +16,8 @@ count, so it survives that reset. It is what the council's outstanding-nights
 question is answered from, and it is why moving the model does not send every
 night in the window back to a runner.
 
-Six stamp fields say what a count here means - which encoder, at which weights,
-judged by which model, under which prompt and grammar. Change any of them and
+Instrument fields say what a count means - which encoder, weights, model,
+prompt, grammar, sampler, reasoning mode and interpretation. Change any and
 the counts describe a different question, so the record is archived rather than
 reinterpreted.
 """
@@ -90,6 +90,11 @@ class StorySimilarityDistribution(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-distribution"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-05",
+            change="Judge policy separates counts taken under different evidence rules.",
+            why="Counts cannot be reinterpreted when reading validity changes.",
+        ),
+        ChangelogEntry(
             version="2026-10-24T19:49",
             change="Scorer and judge model identities accept any valid slug.",
             why="Recorded identities must remain readable after the selected models change.",
@@ -103,11 +108,6 @@ class StorySimilarityDistribution(Contract):
             version="2026-09-24",
             change="key_point_weight is gone. A record that still carries the key loads.",
             why="The term shipped at a weight of zero and never moved a score.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T20:00",
-            change="Added judged_dates. An older record reads its counted dates as its memory.",
-            why="A reset archives the counts, and which nights were read is not a count.",
         ),
         ChangelogEntry(
             version="2026-09-18",
@@ -211,6 +211,12 @@ class StorySimilarityDistribution(Contract):
             "the archive does, which is why the fit reads it and never the day tree "
             "(Guardrail #12)."
         )
+    )
+    judge_policy_version: DateStamp | None = Field(
+        default=None,
+        description=(
+            "UTC date identifying counted judge interpretation; null on historical records."
+        ),
     )
 
     @model_validator(mode="before")
@@ -325,6 +331,10 @@ class StorySimilarityDistribution(Contract):
     def record_stamp(self) -> str:
         """Everything that decides what a count in this record means.
 
+        **An interpretation policy changes the identity without changing the ask.**
+        Older records retain a null policy and archive before current-policy
+        counts replace them. The remembered dates survive that reset.
+
         **The read-side migration for the two decode values is this method.**
         A record written before they existed carries them null, loads under this
         build, and stamps to a value it never stamped to - so the first day
@@ -348,6 +358,7 @@ class StorySimilarityDistribution(Contract):
             "judge_model": self.judge_model,
             "judge_temperature": self.judge_temperature,
             "judge_thinks": self.judge_thinks,
+            "judge_policy_version": self.judge_policy_version,
             "prompt_digest": self.prompt_digest,
             "scorer_model": self.scorer_model,
         }

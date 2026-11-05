@@ -133,6 +133,66 @@ test('an unavailable gate count cannot discard a valid bad judge reading', async
 	expect(words(incomplete)).not.toContain('Both rates are inside the marks.');
 });
 
+test('unavailable rates retain a valid fitted line and its historical interpretation', async ({}, info) => {
+	const root = info.outputPath('rate-gaps');
+	const common = {
+		previous: 0.95, proposed: null, after_damping: null, applied: 0.95,
+		clamp_kind: 'none', clamp_movement: 0, held_reason: 'sheet_too_small',
+		max_down_step: 0.01, max_up_step: 0.01, pairs_in_band: 2, pairs_judged: 0,
+		pairs_usable: 0, negatives_on_record: 0, above_line_on_record: 0, days_on_record: 1,
+		cosine_weight: 1, disagreement_rate: null, unclear_rate: null
+	};
+	await buildRows(root, 'fitted-thresholds', [
+		{ covers: '2030-06-14', rows: [{ ...common, date: '2030-06-14', run_id: '2030-06-14-1' }] },
+		{ covers: '2030-06-15', rows: [{ ...common, date: '2030-06-15', run_id: '2030-06-15-1', pairs_refused: 2, judge_policy_version: '2026-11-05' }] }
+	]);
+	const reading = await fittedLines(WINDOW, root);
+	expect(reading.rows).toHaveLength(2);
+	expect(reading.rejected).toEqual([]);
+	expect(reading.rows.map((row) => [row.applied, row.disagreementRate, row.unclearRate])).toEqual([
+		[0.95, null, null], [0.95, null, null]
+	]);
+	expect(reading.rows.map((row) => [row.judgePolicyVersion, row.pairsRefused])).toEqual([
+		[null, null], ['2026-11-05', 2]
+	]);
+	expect(reading.rates.map((row) => row.disagreementRate)).toEqual([null, null]);
+	const malformed = info.outputPath('invalid-rate');
+	await buildRows(malformed, 'fitted-thresholds', [{
+		covers: WINDOW.end,
+		rows: [{ ...common, date: WINDOW.end, run_id: `${WINDOW.end}-1`, disagreement_rate: 'invalid' }]
+	}]);
+	const invalid = await fittedLines(WINDOW, malformed);
+	expect(invalid.rows[0].applied).toBe(0.95);
+	expect(invalid.rows[0].disagreementRate).toBeNull();
+	expect(invalid.rejected).toEqual([{ date: WINDOW.end, rates: true }]);
+});
+
+test('rate gaps and method boundaries retain dots without manufacturing a combined rate', async ({}, info) => {
+	const { drawn } = await serverPanels(info.outputPath('panels'), [['src/routes/console/judgement/JudgeAgreement.svelte', 'JudgeAgreement']]);
+	const days = [
+		judgeDay('2030-06-11', { pairsJudged: 10, pairsUsable: 10, disagreementRate: 0, unclearRate: 0 }),
+		judgeDay('2030-06-12', { pairsJudged: 10, pairsUsable: 10, disagreementRate: 0, unclearRate: 0 }),
+		judgeDay('2030-06-13', { pairsJudged: 10, pairsUsable: 10, disagreementRate: 0.1, unclearRate: 0, judgePolicyVersion: '2026-11-05' }),
+		judgeDay('2030-06-14', { pairsJudged: 10, pairsUsable: 10, disagreementRate: 0.1, unclearRate: 0, judgePolicyVersion: '2026-11-05' }),
+		judgeDay('2030-06-15', { pairsJudged: 0, pairsUsable: 0, disagreementRate: null, unclearRate: null, judgePolicyVersion: '2026-11-05' })
+	];
+	const html = drawn.JudgeAgreement(propsOf({ surface: 'judge-agreement', preset: 7, days, state: '', words: '' }));
+	expect(words(html)).toContain('10% of 20 pairs');
+	expect(words(html)).toContain('The reading method changed on 13 Jun. Lines stop there; totals cover only the latest method.');
+	expect(words(html)).toContain('An unavailable rate has no dot.');
+	expect((html.match(/<circle\b/g) ?? []).length).toBe(8);
+	expect((html.match(/data-agreement-series="disagreement"/g) ?? []).length).toBe(2);
+	expect(html).not.toContain('NaN');
+	const unavailable = drawn.JudgeAgreement(propsOf({
+		surface: 'judge-agreement', preset: 7, state: '', words: '',
+		days: [judgeDay(WINDOW.end, {
+			pairsJudged: 8, pairsUsable: 8, disagreementRate: null, unclearRate: 0,
+		})]
+	}));
+	expect((unavailable.match(/<circle\b/g) ?? []).length).toBe(1);
+	expect(words(unavailable)).not.toContain('Both rates are inside the marks.');
+	expect(unavailable).toContain('rate unavailable over 8 pairs');
+});
 test('unscorable hand marks keep their total, skipped reason and the same mark read', async ({}, info) => {
 	const root = info.outputPath('marks');
 	await buildRows(root, 'holdout-pairs', [{

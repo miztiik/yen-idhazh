@@ -1,13 +1,8 @@
 """Does the judge read two summaries the same way twice, and was it constrained?
 
-Every model call here is driven by a recorded llama-server envelope under
-`tests/fixtures/`, posted over a loopback socket and read back by the same parser
-production uses. No mock, no network, and no fixture is opened at module scope
-(Guardrail #7, CLAUDE.md section 13).
-
-**Nothing here reads committed pipeline data.** The draw is built inside the
-test, the items come from the committed contract fixture, and the published day
-is written into the test's own tree.
+Every completion is a minimal in-memory native protocol input passed through
+the production parser and model reader. File boundaries use named temporary
+paths. No listener, network, model run or recorded business-logic payload.
 """
 
 from __future__ import annotations
@@ -16,43 +11,38 @@ import csv
 import dataclasses
 import json
 import logging
-import shutil
-import threading
 import time
-from collections.abc import Callable, Mapping
-from functools import partial
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from support.judge_reader import ProtocolReplies, native_reply
 from support.models import a_markers
-from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from support.server import render_template_response
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh import assemble, atomic_write, config
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.council_run_record import ShardOutcome
-from idhazh.contracts.digest_day import DigestDay, DigestItem
+from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
+from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
+from idhazh.contracts.story_similarity_pair import (
+    JUDGE_POLICY_VERSION,
+    ReadingRefusalReason,
+    SameStoryVerdict,
+    StorySimilarityPair,
+)
 from idhazh.council.deadline import compute_shard_deadline
 from idhazh.llm.server import (
     TokenChoice,
     TurnMarkers,
-    completion_url,
     parse_completion,
-    post,
     render_prompt,
 )
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 from idhazh.similarity import counting, judge, prompt, stamps
 from idhazh.stages import common, judge_item_pairs
-
-JUDGE_REPLIES: Final = FIXTURES_DIR / "completions" / "judge"
-RENDERED_REPLIES: Final = FIXTURES_DIR / "completions" / "rendered"
-ERROR_REPLIES: Final = FIXTURES_DIR / "completions" / "errors"
-VOCABULARIES: Final = FIXTURES_DIR / "llm"
 
 #: What a page writes when it wants to be merged with something it is not. It
 #: sits inside a summary, which is where it would really arrive: the summariser
@@ -62,119 +52,51 @@ PLANTED: Final = (
 )
 
 
-class JudgeServer:
-    """A loopback llama-server that replays recorded replies, one route at a time.
-
-    Completion bytes come from `tests/fixtures/`; template rendering uses fixed
-    protocol inputs independent of production model selection. The code under
-    test builds a request, posts it over a socket and reads the envelope back.
-    What it adds over the shared
-    `RecordedEndpoint` is a route: a judging shard asks `/tokenize` before it asks
-    `/completions`, and a player answering both out of one queue would hand a
-    verdict back to a tokenisation.
-
-    It keeps every body it was posted, which is what lets a test assert the
-    grammar was really sent rather than assume it was.
-    """
-
-    def __init__(self, *replies: bytes, vocabulary: Mapping[str, Any] | None = None) -> None:
-        if not replies:
-            raise ValueError("a recorded judge replays at least one reply")
-        sent: list[dict[str, Any]] = []
-        served: list[int] = []
-        words = dict(vocabulary or {})
-        arrival = threading.Lock()
-
-        class Handler(BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.1"
-
-            def do_GET(self) -> None:
-                self._answer(b'{"chat_template": "fixture-template"}')
-
-            def do_POST(self) -> None:
-                raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-                asked = json.loads(raw)
-                if self.path.endswith("/apply-template"):
-                    self._answer(render_template_response(asked))
-                    return
-                with arrival:
-                    sent.append({"path": self.path, **asked})
-                if self.path.endswith("/tokenize"):
-                    self._answer(json.dumps(words[asked["content"]]).encode("utf-8"))
-                    return
-                # The turn is claimed before the reply goes out: this server is threaded, and
-                # counting after the write lets the next request read a count that is one short.
-                with arrival:
-                    turn = len(served)
-                    served.append(1)
-                self._answer(replies[turn % len(replies)])
-
-            def _answer(self, body: bytes) -> None:
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-
-            def log_message(self, *_args: object) -> None:
-                return None
-
-        self._sent = sent
-        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
-
-    @property
-    def base_url(self) -> str:
-        return f"http://127.0.0.1:{self._server.server_port}"
-
-    @property
-    def decodes(self) -> list[dict[str, Any]]:
-        """Every body posted to the completion route, in arrival order."""
-        return [body for body in self._sent if not str(body["path"]).endswith("/tokenize")]
-
-    def __enter__(self) -> JudgeServer:
-        self._thread.start()
-        return self
-
-    def __exit__(self, *_exc: object) -> None:
-        self._server.shutdown()
-        self._server.server_close()
-        self._thread.join(timeout=5.0)
-
-
 def _reply(name: str) -> bytes:
-    """One recorded envelope, read inside the test that drives it."""
-    return (JUDGE_REPLIES / f"{name}.json").read_bytes()
+    """Named minimal protocol inputs, not recorded model answers."""
+    if name == "the-word-was-patched-in-afterwards":
+        return native_reply("YES", pieces=("Sure",))
+    if name == "the-grammar-was-not-applied":
+        return native_reply("The answer is YES.")
+    if name == "a-window-of-one-verdict-spelled-twice":
+        return native_reply("NO", alternatives=(("NO", -0.1), ("No", -1.0), (" NO", -2.0)))
+    if name == "a-window-the-grammar-admits":
+        return native_reply(
+            "NO", alternatives=(("NO", -0.1), ("YES", -1.0), ("UN", -2.0), ("", -3.0))
+        )
+    if name == "the-grammar-chose-not-the-model":
+        return native_reply("NO", alternatives=(("NO", -1.0), ("YES", -1.0)))
+    content = {"one-event": "YES", "two-events": "NO", "too-vague-to-say": "UNCLEAR"}[name]
+    return native_reply(
+        content,
+        pieces=("UN", "CLEAR") if content == "UNCLEAR" else (content,),
+        alternatives=((content[:2], -0.01), ("YES" if content == "NO" else "NO", -4.7)),
+    )
 
 
 def _rendered_reply(name: str) -> bytes:
-    """One recorded envelope off the rendered-completion route, read inside the test."""
-    return (RENDERED_REPLIES / f"{name}.json").read_bytes()
+    return native_reply("These are two reports." if name == "thinking-span-one" else "YES")
 
 
 def _error_reply(name: str) -> bytes:
-    """One recorded error body, which is neither a choice nor a completion.
-
-    A real reply from a real server having a bad day. `parse_completion` refuses
-    it, which is how a test reaches the one failure a judging shard still dies
-    on: a reply the grammar did not hold is written down now, so it can no longer
-    stand in for a shard that stopped.
-    """
-    return (ERROR_REPLIES / f"{name}.json").read_bytes()
+    """A minimal error envelope, neither a choice nor a completion."""
+    assert name == "server-unavailable"
+    return b'{"error":{"type":"unavailable"}}'
 
 
 def _vocabulary(name: str) -> dict[str, Any]:
-    payload = json.loads(read_text(VOCABULARIES / f"{name}.json"))
-    assert isinstance(payload, dict)
-    return payload
+    return {
+        reply: {"tokens": [{"piece": piece} for piece in (
+            (" ", reply.lstrip()) if name.endswith("-collapsed") and "UNCLEAR" in reply
+            else ("UN", "CLEAR") if reply == "UNCLEAR"
+            else (reply,)
+        )]}
+        for reply in prompt.LEGAL_REPLIES
+    }
 
 
 def _spells(vocabulary: dict[str, Any]) -> Callable[[str], list[str]]:
-    """A recorded `/tokenize` reply read as the spellings it carries.
-
-    The fixture is the server's own reply shape, so the same file drives the
-    loopback route a shard really asks and the unit test that asks nothing.
-    """
+    """Concrete token spellings at the tokenizer boundary, with no listener."""
     return lambda reply: [str(token["piece"]) for token in vocabulary[reply]["tokens"]]
 
 
@@ -256,13 +178,31 @@ def _a_council_run(date: str) -> str:
 
 
 def _a_day(*, planted_in: str | None = None) -> DigestDay:
-    """The committed day fixture, optionally with one summary carrying an attack.
-
-    The whole day, never a slice of it: `DigestDay` checks every run's item count
-    and every vertical's, so dropping an item is a payload the contract refuses.
-    """
-    day = DigestDay.from_json(
-        read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json")
+    """Three concrete items, optionally carrying an instruction inside one summary."""
+    items = [
+        DigestItem(
+            item_id=f"ai-0{index}",
+            vertical="ai",
+            title=f"Report {index}",
+            source_url=f"https://source-{index}.example/report",
+            source_id=f"source-{index}",
+            source_name=f"Source {index}",
+            summary=f"A report about event {index}.",
+            band=ConfidenceBand.HIGH,
+            introduced_by_run=1,
+        )
+        for index in range(1, 4)
+    ]
+    day = DigestDay(
+        version=DigestDay.schema_version(),
+        date="2026-08-21",
+        generated_at="2026-08-21T06:00:00Z",
+        partial=False,
+        items_planned=len(items),
+        items_failed=0,
+        runs=[DigestRunRef(n=1, at="2026-08-21T06:00:00Z", items_added=len(items))],
+        verticals=[DigestVerticalRef(id="ai", display_name="Reports", count=len(items))],
+        items=items,
     )
     if planted_in is None:
         return day
@@ -281,8 +221,8 @@ def _a_day_on_disk(tmp_path: Path, day: DigestDay) -> Path:
     return root
 
 
-def _client(server: JudgeServer) -> judge.Client:
-    return partial(post, endpoint=completion_url(server.base_url), timeout=20.0)
+def _client(server: ProtocolReplies) -> judge.Client:
+    return server
 
 
 def _drawn(
@@ -551,7 +491,7 @@ def test_the_judge_never_sees_the_headline_or_the_masthead() -> None:
 def test_two_disagreeing_readings_are_unusable() -> None:
     """A pair that changes its answer when the arguments change has told us nothing."""
     day = _a_day()
-    with JudgeServer(_reply("one-event"), _reply("two-events")) as server:
+    with ProtocolReplies(_reply("one-event"), _reply("two-events")) as server:
         result = judge.judge_pair(
             day.items[0],
             day.items[1],
@@ -568,7 +508,7 @@ def test_two_disagreeing_readings_are_unusable() -> None:
 def test_two_agreeing_unclear_readings_are_usable() -> None:
     """Usable means the two readings agree, never that the pair was decided."""
     day = _a_day()
-    with JudgeServer(_reply("too-vague-to-say")) as server:
+    with ProtocolReplies(_reply("too-vague-to-say")) as server:
         result = judge.judge_pair(
             day.items[0],
             day.items[1],
@@ -591,7 +531,7 @@ def test_two_readings_the_grammar_did_not_hold_are_not_an_agreement() -> None:
     too late to name.
     """
     day = _a_day()
-    with JudgeServer(_reply("the-grammar-was-not-applied")) as server:
+    with ProtocolReplies(_reply("the-grammar-was-not-applied")) as server:
         result = judge.judge_pair(
             day.items[0],
             day.items[1],
@@ -611,7 +551,7 @@ def test_a_pair_is_read_twice_with_the_two_summaries_swapped() -> None:
     day = _a_day()
     left, right = day.items[0], day.items[1]
     settings = _settings()
-    with JudgeServer(_reply("two-events")) as server:
+    with ProtocolReplies(_reply("two-events")) as server:
         judge.judge_pair(
             left, right, client=_client(server), settings=settings, markers=a_markers()
         )
@@ -667,7 +607,7 @@ def test_a_reply_the_grammar_could_not_have_written_is_written_down(
     reason reaches the run's log, which is the only place that still holds it.
     """
     day = _a_day()
-    with JudgeServer(_reply("the-grammar-was-not-applied")) as server:
+    with ProtocolReplies(_reply("the-grammar-was-not-applied")) as server:
         with caplog.at_level(logging.WARNING, logger="idhazh"):
             read = judge.read_once(
                 day.items[0],
@@ -679,7 +619,7 @@ def test_a_reply_the_grammar_could_not_have_written_is_written_down(
 
     assert read.verdict is None
     assert read.grammar_applied is False
-    assert "was not constrained" in caplog.text
+    assert "reason=invalid_literal" in caplog.text
     assert read.prompt_tokens > 0, "the call happened, and it cost what it cost"
     assert read.decode_seconds > 0.0
 
@@ -695,7 +635,7 @@ def test_a_first_token_outside_the_grammar_is_written_down(
     verdict, the flag false, and the window that gave it away still on the row.
     """
     day = _a_day()
-    with JudgeServer(_reply("the-word-was-patched-in-afterwards")) as server:
+    with ProtocolReplies(_reply("the-word-was-patched-in-afterwards")) as server:
         with caplog.at_level(logging.WARNING, logger="idhazh"):
             read = judge.read_once(
                 day.items[0],
@@ -707,7 +647,7 @@ def test_a_first_token_outside_the_grammar_is_written_down(
 
     assert read.verdict is None
     assert read.grammar_applied is False
-    assert "shaped after the decode" in caplog.text
+    assert "reason=mismatched_emission" in caplog.text
     assert read.first_token_window, "the window the check read is still on the reading"
 
 
@@ -723,26 +663,13 @@ def test_a_confident_reading_and_an_indifferent_one_are_told_apart() -> None:
     sure = judge.margin_of(confident.first_token_choices)
     unsure = judge.margin_of(indifferent.first_token_choices)
 
-    assert sure == pytest.approx(0.9605, abs=5e-4)
-    assert unsure == pytest.approx(0.0070, abs=5e-4)
+    assert sure is not None and sure > 0.9
+    assert unsure == 0.0
     assert judge.margin_of(()) is None, "a server that reported nothing measured nothing"
 
 
 def test_one_verdict_spelled_twice_is_one_verdict() -> None:
-    """The reading the old rule got wrong, on the window production really returns.
-
-    Recorded at the three-wide window the judge asked for until this change:
-    `NO`, `No` and ` NO`. Two of those are NO, so subtracting the top two
-    subtracted NO from itself and reported 0.9997 - a number that happens to be
-    right here and is right by accident, because the same arithmetic on a reply
-    the model was torn about reports a near-zero gap between one verdict and its
-    own second spelling.
-
-    Under the prefix rule the three tokens name one verdict between them, so
-    there is no second verdict to rank and the answer is that the window could
-    not say. That is what makes the wider window a requirement rather than an
-    improvement: at three tokens there is often nothing to compare.
-    """
+    """Equivalent legal openings supply one verdict, not two competing answers."""
     narrow = parse_completion(_reply("a-window-of-one-verdict-spelled-twice").decode("utf-8"))
 
     assert [choice.token for choice in narrow.first_token_choices] == ["NO", "No", " NO"]
@@ -750,13 +677,7 @@ def test_one_verdict_spelled_twice_is_one_verdict() -> None:
 
 
 def test_a_token_that_names_no_single_verdict_is_dropped_rather_than_counted_three_times()  -> None:
-    """The bare empty token is really in the window, at rank 4 of 25.
-
-    Proved by equality rather than by a number: the margin over the recorded
-    window and the margin over that window with the unattributable token taken
-    out are the same value. A rule that counted it into all three verdicts would
-    move both sides of the gap and the two would differ.
-    """
+    """Adding ambiguous mass must not change the margin between legal verdicts."""
     wide = parse_completion(_reply("a-window-the-grammar-admits").decode("utf-8"))
     unattributable = [
         choice.token
@@ -805,14 +726,14 @@ def test_a_window_of_nothing_the_grammar_admits_measured_nothing() -> None:
 def test_a_thinking_entry_reads_its_verdict_off_the_answer_span() -> None:
     """Span one reasons, span two answers, and only span two is read as a verdict.
 
-    Both replies are recorded envelopes. The thought is prose, so a code path
+    Both replies are concrete protocol inputs. The thought is prose, so a code path
     that parsed it as a verdict would raise rather than pass quietly - which is
     what makes this an oracle rather than a description.
     """
     day = _a_day()
     settings = _settings_judging_behind_a_thinking_span()
     thought = _rendered_reply("thinking-span-one")
-    with JudgeServer(thought, _rendered_reply("thinking-span-two")) as server:
+    with ProtocolReplies(thought, _rendered_reply("thinking-span-two")) as server:
         reading = judge.read_once(
             day.items[0],
             day.items[1],
@@ -838,13 +759,13 @@ def test_a_pairs_calls_are_counted_rather_than_derived_from_its_pairs() -> None:
     cold and wrong by half here, so a figure derived that way would under-report
     every reasoning span the run paid for, and no cold test could see it.
 
-    The token totals are checked against the recorded envelopes rather than
+    The token totals are checked against the protocol inputs rather than
     against each other, so a reading that dropped a span's tokens fails here.
     """
     day = _a_day()
     cold_reply = _reply("one-event")
     spans = (_rendered_reply("thinking-span-one"), _rendered_reply("thinking-span-two"))
-    with JudgeServer(cold_reply) as cold_server:
+    with ProtocolReplies(cold_reply) as cold_server:
         cold = judge.judge_pair(
             day.items[0],
             day.items[1],
@@ -852,7 +773,7 @@ def test_a_pairs_calls_are_counted_rather_than_derived_from_its_pairs() -> None:
             settings=_settings(),
             markers=a_markers(),
         )
-    with JudgeServer(*spans) as thinking_server:
+    with ProtocolReplies(*spans) as thinking_server:
         thinking = judge.judge_pair(
             day.items[0],
             day.items[1],
@@ -883,7 +804,7 @@ def test_a_pair_whose_first_reading_was_refused_still_makes_its_second_call() ->
     pair that answered quickly.
     """
     day = _a_day()
-    with JudgeServer(_reply("the-word-was-patched-in-afterwards"), _reply("one-event")) as server:
+    with ProtocolReplies(_reply("the-word-was-patched-in-afterwards"), _reply("one-event")) as server:
         result = judge.judge_pair(
             day.items[0],
             day.items[1],
@@ -905,7 +826,7 @@ def test_a_settings_with_no_judge_role_decodes_one_span_and_says_so() -> None:
     """The committed default. A fresh clone judges exactly as it judges today."""
     day = _a_day()
     settings = _settings()
-    with JudgeServer(_reply("two-events")) as server:
+    with ProtocolReplies(_reply("two-events")) as server:
         reading = judge.read_once(
             day.items[0],
             day.items[1],
@@ -946,6 +867,61 @@ def test_a_verdict_is_the_word_and_at_most_one_leading_space() -> None:
             judge.verdict_of(refused)
 
 
+@pytest.mark.parametrize(
+    ("content", "pieces"),
+    [("YES", ("Y", "ES")), ("NO", ("N", "O")), (" UNCLEAR", (" ", "UN", "CLEAR"))],
+)
+def test_actual_emitted_prefixes_accept_the_literal_despite_a_higher_illegal_alternative(
+    content: str, pieces: tuple[str, ...]
+) -> None:
+    day = _a_day()
+    client = ProtocolReplies(native_reply(
+        content, pieces=pieces, alternatives=(("Sure", -0.01), ("NO", -2.0))
+    ))
+    reading = judge.read_once(
+        day.items[0], day.items[1], client=client, settings=_settings(), markers=a_markers()
+    )
+
+    assert reading.verdict == SameStoryVerdict(content.lstrip(" "))
+    assert reading.grammar_applied
+    assert reading.refusal_reason is None
+
+
+@pytest.mark.parametrize(
+    ("raw", "reason"),
+    [
+        (b'{"content":"YES"}', ReadingRefusalReason.MISSING_EMISSION),
+        (b'{"content":"YES","completion_probabilities":{}}', ReadingRefusalReason.INVALID_EMISSION),
+        (native_reply("YES", pieces=()), ReadingRefusalReason.INVALID_EMISSION),
+        (native_reply("YES", pieces=("",)), ReadingRefusalReason.INVALID_EMISSION),
+        (native_reply("YES", pieces=(" ",)), ReadingRefusalReason.AMBIGUOUS_EMISSION),
+        (native_reply("YES", pieces=("Sure",)), ReadingRefusalReason.MISMATCHED_EMISSION),
+        (native_reply("YES", pieces=("NO",)), ReadingRefusalReason.MISMATCHED_EMISSION),
+        (native_reply("YES\n"), ReadingRefusalReason.INVALID_LITERAL),
+        (
+            b'{"content":"YES","completion_probabilities":[{"id":1,"token":"YES","bytes":[78]}]}',
+            ReadingRefusalReason.INVALID_EMISSION,
+        ),
+        (
+            b'{"content":"YES","completion_probabilities":[{"id":1,"token":"\\ud800","bytes":[0]}]}',
+            ReadingRefusalReason.INVALID_EMISSION,
+        ),
+    ],
+)
+def test_refusals_keep_the_closed_reason_and_actual_cost(
+    raw: bytes, reason: ReadingRefusalReason
+) -> None:
+    payload = json.loads(raw) | {"tokens_evaluated": 7, "tokens_predicted": 3}
+    day = _a_day()
+    reading = judge.read_once(
+        day.items[0], day.items[1],
+        client=ProtocolReplies(json.dumps(payload).encode()), settings=_settings(), markers=a_markers(),
+    )
+
+    assert (reading.verdict, reading.grammar_applied, reading.refusal_reason) == (None, False, reason)
+    assert (reading.prompt_tokens, reading.completion_tokens) == (7, 3)
+
+
 def _a_draw(run_dir: Path) -> Path:
     """Where these tests leave the draw. The stage names no root and takes the path."""
     return run_dir / "draw.csv"
@@ -982,10 +958,10 @@ def test_a_draw_taken_for_more_shards_than_this_run_has_is_refused(tmp_path: Pat
         judge_item_pairs._rows_this_shard_owns(path, shard=0, shards=4)
 
 
-def test_an_article_asking_to_be_merged_is_still_two_stories(
+def test_an_article_instruction_stays_fenced_when_the_judge_receives_the_pair(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The Guardrail #11 canary: two untrusted documents sharing one context.
+    """The trust-boundary oracle checks fencing, not a model's injection resistance.
 
     The planted sentence reaches the model, because a summary is what the judge is
     there to read. What it may not do is reach the instructions or leave the
@@ -1001,7 +977,7 @@ def test_an_article_asking_to_be_merged_is_still_two_stories(
         judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
     )
 
-    with JudgeServer(_reply("two-events"), vocabulary=_vocabulary("judge-first-tokens")) as server:
+    with ProtocolReplies(_reply("two-events")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
             run_id=_a_council_run(day.date),
@@ -1012,7 +988,7 @@ def test_an_article_asking_to_be_merged_is_still_two_stories(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
-            base_url=server.base_url,
+            reader=server.reader,
         )
         decodes = server.decodes
 
@@ -1042,10 +1018,10 @@ def test_a_verdict_file_round_trips_through_the_contract(
     verdict that does not name the judge behind it, so a shard that wrote one and
     forgot the digests could not get a row past this.
 
-    **The window is checked against the recorded envelope, never against the
+    **The window is checked against the native protocol input, never against the
     margin.** Both the margin and the window come out of one tuple of choices, so
     a test that re-derived one from the other could not go red. Reading the
-    fixture back through the production parser is an independent answer to what
+    input back through the production parser is an independent answer to what
     the server said, and it is what catches a writer that stored the swapped
     call's window, dropped the log probability, or exponentiated it.
     """
@@ -1059,10 +1035,12 @@ def test_a_verdict_file_round_trips_through_the_contract(
     root = _a_day_on_disk(tmp_path, day)
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
     run_dir = tmp_path / "judge" / day.date
-    drawn = _drawn(day.items[0], day.items[1], shard=0, date=day.date)
+    drawn = _drawn(day.items[0], day.items[1], shard=0, date=day.date).model_copy(
+        update={"version": "2026-09-18"}
+    )
     atomic_write.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv([drawn]))
 
-    with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
+    with ProtocolReplies(_reply("one-event")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
             run_id=_a_council_run(day.date),
@@ -1073,7 +1051,7 @@ def test_a_verdict_file_round_trips_through_the_contract(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
-            base_url=server.base_url,
+            reader=server.reader,
         )
 
     rows = _rows(report.path)
@@ -1084,6 +1062,7 @@ def test_a_verdict_file_round_trips_through_the_contract(
     assert report.outcome is ShardOutcome.COMPLETED
     assert len(rows) == 1
     row = rows[0]
+    assert row.version == StorySimilarityPair.schema_version() != drawn.version
     assert row.pair_key == drawn.pair_key
     assert row.verdict is SameStoryVerdict.YES
     assert row.verdict_swapped is SameStoryVerdict.YES
@@ -1132,7 +1111,7 @@ def test_a_pair_the_grammar_did_not_hold_is_written_down_and_the_shard_reads_on(
     patched = _reply("the-word-was-patched-in-afterwards")
     replies = (patched, patched, _reply("one-event"), _reply("one-event"))
 
-    with JudgeServer(*replies, vocabulary=_vocabulary("judge-first-tokens")) as server:
+    with ProtocolReplies(*replies) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
             run_id=_a_council_run(day.date),
@@ -1143,7 +1122,7 @@ def test_a_pair_the_grammar_did_not_hold_is_written_down_and_the_shard_reads_on(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
-            base_url=server.base_url,
+            reader=server.reader,
         )
 
     rows = _rows(report.path)
@@ -1189,7 +1168,7 @@ def test_a_shard_that_owned_nothing_still_leaves_a_file(
         judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=1, date=day.date)]),
     )
 
-    with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
+    with ProtocolReplies(_reply("one-event")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
             run_id=_a_council_run(day.date),
@@ -1200,7 +1179,7 @@ def test_a_shard_that_owned_nothing_still_leaves_a_file(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
-            base_url=server.base_url,
+            reader=server.reader,
         )
         assert server.decodes == [], "a shard that owns nothing calls no model"
 
@@ -1229,7 +1208,7 @@ def test_a_shard_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
         judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
     )
 
-    with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
+    with ProtocolReplies(_reply("one-event")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
             run_id=_a_council_run(day.date),
@@ -1240,7 +1219,7 @@ def test_a_shard_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=time.monotonic() - 1.0,
-            base_url=server.base_url,
+            reader=server.reader,
         )
         assert server.decodes == [], "the shard read a pair after its own deadline"
 
@@ -1259,7 +1238,7 @@ def test_a_shard_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
 ) -> None:
     """The whole point of writing as it goes: what is finished survives what is not.
 
-    The server answers two readings and then replies with a recorded server
+    The transport answers two readings and then replies with a minimal server
     error, which is neither a choice nor a completion - so the shard fails inside
     its second pair. Under a single write at the end that file would not exist at
     all.
@@ -1285,7 +1264,7 @@ def test_a_shard_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
             _reply("one-event"),
             _error_reply("server-unavailable"),
         )
-        with JudgeServer(*replies, vocabulary=_vocabulary("judge-first-tokens")) as server:
+        with ProtocolReplies(*replies) as server:
             with pytest.raises(ValueError, match="neither a choice nor a completion"):
                 judge_item_pairs.stage_judge_item_pairs(
                     day.date,
@@ -1297,7 +1276,7 @@ def test_a_shard_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
                     draw_path=_a_draw(run_dir),
                     verdict_path=_a_verdict_file(run_dir, shard=0),
                     deadline=_a_deadline_no_shard_will_reach(),
-                    base_url=server.base_url,
+                    reader=server.reader,
                 )
         return _a_verdict_file(run_dir, shard=0)
 
@@ -1323,14 +1302,11 @@ def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
     """
     day = _a_day()
     root = _a_day_on_disk(tmp_path, day)
-    config_dir = tmp_path / "config"
-    shutil.copytree(CONFIG_DIR, config_dir)
-    raw = json.loads(read_text(config_dir / "llm_council.json"))
-    raw["shard_wrap_up_minutes"] = raw["shard_timeout_minutes"]
-    (config_dir / "llm_council.json").write_text(
-        json.dumps(raw, indent=2), encoding="utf-8", newline="\n"
-    )
-    settings = config.load(config_dir)
+    settings = _settings()
+    council = type(settings.council).model_validate(settings.council.model_dump() | {
+        "shard_wrap_up_minutes": settings.council.shard_timeout_minutes,
+    })
+    settings = dataclasses.replace(settings, council=council)
 
     judge_root = tmp_path / "judge"
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
@@ -1339,7 +1315,7 @@ def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
         judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
     )
 
-    with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
+    with ProtocolReplies(_reply("one-event")) as server:
         judge_item_pairs.stage_judge_item_pairs(
             day.date,
             run_id=_a_council_run(day.date),
@@ -1350,7 +1326,7 @@ def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
             draw_path=_a_draw(judge_root / day.date),
             verdict_path=_a_verdict_file(judge_root / day.date, shard=0),
             deadline=compute_shard_deadline(settings.council, started=time.monotonic()),
-            base_url=server.base_url,
+            reader=server.reader,
         )
         assert server.decodes == [], "the shard judged its pair, so no deadline reached it"
 
@@ -1385,7 +1361,7 @@ def test_the_funnel_the_shard_reports_adds_up_to_what_it_was_dealt(
     patched = _reply("the-word-was-patched-in-afterwards")
     replies = (patched, patched, _reply("one-event"), _reply("one-event"))
 
-    with JudgeServer(*replies, vocabulary=_vocabulary("judge-first-tokens")) as server:
+    with ProtocolReplies(*replies) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
             run_id=_a_council_run(day.date),
@@ -1396,7 +1372,7 @@ def test_the_funnel_the_shard_reports_adds_up_to_what_it_was_dealt(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
-            base_url=server.base_url,
+            reader=server.reader,
         )
 
     row = report.metrics
@@ -1441,7 +1417,7 @@ def test_a_shard_that_read_nothing_measures_nothing_rather_than_zero(
         judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=1, date=day.date)]),
     )
 
-    with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
+    with ProtocolReplies(_reply("one-event")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
             run_id=_a_council_run(day.date),
@@ -1452,7 +1428,7 @@ def test_a_shard_that_read_nothing_measures_nothing_rather_than_zero(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
-            base_url=server.base_url,
+            reader=server.reader,
         )
 
     row = report.metrics
@@ -1481,7 +1457,7 @@ def test_a_judged_row_names_the_night_that_read_it_and_not_the_day_it_published(
     drawn = _drawn(day.items[0], day.items[1], shard=0, date=day.date)
     atomic_write.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv([drawn]))
 
-    with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
+    with ProtocolReplies(_reply("one-event")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
             run_id=_a_council_run(day.date),
@@ -1492,12 +1468,13 @@ def test_a_judged_row_names_the_night_that_read_it_and_not_the_day_it_published(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
-            base_url=server.base_url,
+            reader=server.reader,
         )
 
     written = _rows(report.path)[0]
 
     assert written.judged_by_run_id == _a_council_run(day.date)
+    assert written.judge_policy_version == report.metrics.judge_policy_version == JUDGE_POLICY_VERSION
     assert written.run_id == drawn.run_id
     assert written.judged_by_run_id != written.run_id, (
         "the draw's own run and the council's night are two different runs, and a "

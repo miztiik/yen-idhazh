@@ -20,6 +20,7 @@ CLAUDE.md section 1a lifted the ban on a model verdict deciding what publishes.
 from __future__ import annotations
 
 from enum import StrEnum
+from math import isclose
 from typing import Any, ClassVar, Final, Self
 
 from pydantic import Field, model_validator
@@ -32,7 +33,7 @@ from idhazh.contracts.base import (
     Sha256,
     without_retired_keys,
 )
-from idhazh.contracts.story_similarity_pair import JudgeModelId, ScorerModelId
+from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION, JudgeModelId, ScorerModelId
 
 #: Headings an earlier row carried that this row no longer names and that
 #: nothing replaced. `key_point_weight` went with the key points themselves:
@@ -93,6 +94,11 @@ class FittedSimilarityThreshold(Contract):
     __schema_stem__: ClassVar[str] = "fitted-similarity-threshold"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-05",
+            change="Judge policy, refused pairs and nullable valid-reading rates are recorded.",
+            why="Historical denominators are not reconstructable and remain unchanged.",
+        ),
+        ChangelogEntry(
             version="2026-10-24T19:49",
             change="Scorer and judge model identities accept any valid slug.",
             why="Recorded identities must remain readable after the selected models change.",
@@ -106,11 +112,6 @@ class FittedSimilarityThreshold(Contract):
             version="2026-09-24",
             change="key_point_weight is gone. Its heading is carried and dropped on read.",
             why="The term shipped at a weight of zero and never moved a score.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21",
-            change="held_reason `legs_missing` is now `shards_missing`. The old value still reads.",
-            why="`leg` was a second name for the shard the rest of this feature already names.",
         ),
         ChangelogEntry(
             version="2026-09-18",
@@ -271,7 +272,7 @@ class FittedSimilarityThreshold(Contract):
         ),
     )
     pairs_judged: int = Field(
-        ge=0, description="How many pairs a judging shard actually read."
+        ge=0, description="How many completed pairs had two valid readings."
     )
     pairs_usable: int = Field(
         ge=0,
@@ -279,20 +280,22 @@ class FittedSimilarityThreshold(Contract):
             "How many of those got two agreeing readings. Only these were counted."
         ),
     )
-    disagreement_rate: float = Field(
+    disagreement_rate: float | None = Field(
+        default=None,
         ge=0.0,
         le=1.0,
         description=(
             "What share of the judged pairs the two readings disagreed about. One of the "
-            "three gates, and the one that reads the judge rather than the record."
+            "three gates. Null when no pair had two valid readings."
         ),
     )
-    unclear_rate: float = Field(
+    unclear_rate: float | None = Field(
+        default=None,
         ge=0.0,
         le=1.0,
         description=(
             "What share of the agreed readings were UNCLEAR. A judge that cannot tell is "
-            "not a judge the line should move on."
+            "not a judge the line should move on. Null when no pair agreed."
         ),
     )
     negatives_on_record: int = Field(
@@ -342,6 +345,15 @@ class FittedSimilarityThreshold(Contract):
         default=None,
         description="sha256 of the grammar those verdicts were produced under.",
     )
+    pairs_refused: int | None = Field(
+        default=None,
+        ge=0,
+        description="Completed pairs with a refused reading; unknown on historical rows.",
+    )
+    judge_policy_version: DateStamp | None = Field(
+        default=None,
+        description="UTC date identifying judge interpretation; null on historical fits.",
+    )
 
     @model_validator(mode="after")
     def _the_counts_nest(self) -> Self:
@@ -357,6 +369,24 @@ class FittedSimilarityThreshold(Contract):
                 f"the counts do not nest: {self.pairs_usable} usable of "
                 f"{self.pairs_judged} judged of {self.pairs_in_band} in the band"
             )
+        if self.judge_policy_version == JUDGE_POLICY_VERSION:
+            if (
+                self.pairs_refused is None
+                or self.pairs_judged + self.pairs_refused > self.pairs_in_band
+            ):
+                raise ValueError("valid and refused pairs must fit inside pairs_in_band")
+            expected = (
+                (self.pairs_judged - self.pairs_usable) / self.pairs_judged
+                if self.pairs_judged else None
+            )
+            if (
+                (self.disagreement_rate is None) != (expected is None)
+                or (expected is not None
+                and not isclose(self.disagreement_rate or 0.0, expected))
+            ):
+                raise ValueError("disagreement_rate must describe valid disagreeing pairs")
+            if (self.unclear_rate is None) != (self.pairs_usable == 0):
+                raise ValueError("unclear_rate is unavailable exactly when no pair agreed")
         return self
 
     @model_validator(mode="after")

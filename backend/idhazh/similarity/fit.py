@@ -276,8 +276,8 @@ def gates(
     knobs: SimilarityThresholdConfig,
     above_line: int,
     days: int,
-    disagreement_rate: float,
-    unclear_rate: float,
+    disagreement_rate: float | None,
+    unclear_rate: float | None,
     collect_held: HeldReason | None = None,
 ) -> HeldReason | None:
     """The first gate that fails, or `None` when the fit may run.
@@ -297,9 +297,9 @@ def gates(
         or days < knobs.minimum_days
     ):
         return HeldReason.SHEET_TOO_SMALL
-    if disagreement_rate > knobs.disagreement_max:
+    if disagreement_rate is not None and disagreement_rate > knobs.disagreement_max:
         return HeldReason.JUDGE_UNSTABLE
-    if unclear_rate > knobs.unclear_max:
+    if unclear_rate is not None and unclear_rate > knobs.unclear_max:
         return HeldReason.JUDGE_UNCERTAIN
     return None
 

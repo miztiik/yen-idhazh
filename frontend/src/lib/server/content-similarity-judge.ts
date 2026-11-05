@@ -52,12 +52,13 @@ export interface FittedLine {
 	maxDownStep: number;
 	maxUpStep: number;
 	/** What share of the judged pairs the two readings disagreed about. */
-	disagreementRate: number;
+	disagreementRate: number | null;
 	/** What share of the agreed readings were UNCLEAR. */
-	unclearRate: number;
+	unclearRate: number | null;
 	/** How many distinct pairs the day file holds - what the draw dealt. */
 	pairsInBand: number | null;
-	/** How many pairs a judging shard read: what the disagreement rate is a share
+	/** Current-method pairs with two valid readings; history keeps its stored denominator.
+	 * What the disagreement rate is a share
 	 * of, so a panel can print it in the same sentence as that share. Null where
 	 * the row carries no answer, which is a different fact from a day that judged
 	 * none. */
@@ -75,6 +76,8 @@ export interface FittedLine {
 	 * written before the column existed, so the caller falls back to the
 	 * committed config rather than scoring at a zero nothing chose. */
 	cosineWeight: number | null;
+	pairsRefused: number | null;
+	judgePolicyVersion: string | null;
 }
 
 /** The columns of `FittedSimilarityThreshold` this reader reads, in the contract's own order.
@@ -103,7 +106,9 @@ export const FITTED_LINE_COLUMNS = [
 	'negatives_on_record',
 	'above_line_on_record',
 	'days_on_record',
-	'cosine_weight'
+	'cosine_weight',
+	'pairs_refused',
+	'judge_policy_version'
 ] as const;
 
 function text(cell: string | undefined): string | null {
@@ -134,7 +139,7 @@ function figure(cell: string | undefined): number | null {
 export interface FittedReading {
 	rows: FittedLine[];
 	read: RecordRead;
-	rates: (Pick<JudgeDay, 'date' | 'disagreementRate' | 'unclearRate' | 'pairsJudged' | 'pairsUsable' | 'heldReason'> & { runId: string })[];
+	rates: (Pick<JudgeDay, 'date' | 'disagreementRate' | 'unclearRate' | 'pairsJudged' | 'pairsUsable' | 'heldReason' | 'judgePolicyVersion'> & { runId: string })[];
 	rejected: { date: string; rates: boolean }[];
 }
 
@@ -166,23 +171,22 @@ export async function fittedLines(window: TimeWindow, root: string = STATE_ROOT)
 		const previous = figure(row.previous);
 		const disagreementRate = figure(row.disagreement_rate);
 		const unclearRate = figure(row.unclear_rate);
-		if (disagreementRate !== null && unclearRate !== null) {
-			rates.push({
-				date, runId, disagreementRate, unclearRate,
-				pairsJudged: figure(row.pairs_judged),
-				pairsUsable: figure(row.pairs_usable),
-				heldReason: text(row.held_reason) ?? 'none'
-			});
-		} else {
+		if ((text(row.disagreement_rate) !== null && disagreementRate === null) ||
+			(text(row.unclear_rate) !== null && unclearRate === null)) {
 			rejected.push({ date, rates: true });
-			console.warn(`The fitted judge record has unavailable rate measurements on ${date}.`);
+			console.warn(`The fitted judge record has an invalid rate on ${date}; the fitted line is retained.`);
 		}
+		const judgePolicyVersion = text(row.judge_policy_version);
+		rates.push({
+			date, runId, disagreementRate, unclearRate, judgePolicyVersion,
+			pairsJudged: figure(row.pairs_judged),
+			pairsUsable: figure(row.pairs_usable),
+			heldReason: text(row.held_reason) ?? 'none'
+		});
 		const required = {
 			clampMovement: figure(row.clamp_movement),
 			maxDownStep: figure(row.max_down_step),
 			maxUpStep: figure(row.max_up_step),
-			disagreementRate,
-			unclearRate,
 			negativesOnRecord: figure(row.negatives_on_record),
 			aboveLineOnRecord: figure(row.above_line_on_record),
 			daysOnRecord: figure(row.days_on_record)
@@ -205,15 +209,17 @@ export async function fittedLines(window: TimeWindow, root: string = STATE_ROOT)
 			heldReason: text(row.held_reason) ?? 'none',
 			maxDownStep: required.maxDownStep!,
 			maxUpStep: required.maxUpStep!,
-			disagreementRate: required.disagreementRate!,
-			unclearRate: required.unclearRate!,
+			disagreementRate,
+			unclearRate,
 			pairsInBand: figure(row.pairs_in_band),
 			pairsJudged: figure(row.pairs_judged),
 			pairsUsable: figure(row.pairs_usable),
 			negativesOnRecord: required.negativesOnRecord!,
 			aboveLineOnRecord: required.aboveLineOnRecord!,
 			daysOnRecord: required.daysOnRecord!,
-			cosineWeight: figure(row.cosine_weight)
+			cosineWeight: figure(row.cosine_weight),
+			pairsRefused: figure(row.pairs_refused),
+			judgePolicyVersion
 		});
 	}
 	return {

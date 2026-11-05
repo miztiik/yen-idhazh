@@ -262,6 +262,26 @@ us about itself rather than about the pair. The row is still committed, so the
 disagreement is a fact somebody can count rather than a row that vanished, and
 the day's disagreement rate is what `disagreement_max` gates on.
 
+**A valid reading needs the literal answer and the decoder's actual emission.**
+The literal is exactly YES, NO or UNCLEAR, optionally preceded by one space.
+Selected token IDs, text and bytes come from each native probability position,
+not its ranked `top_logprobs` alternatives. Selected prefixes are consumed until
+they identify the literal verdict. Missing, malformed, empty, ambiguous or
+contradictory emission evidence refuses that reading. The in-memory reading and
+log carry one closed reason: `invalid_literal`, `missing_emission`,
+`invalid_emission`, `ambiguous_emission` or `mismatched_emission`. There is no
+alternative-ranking fallback, retokenization or retry. Both orders still run
+and retain their actual costs, even if the first is refused.
+
+**Shard and fitted rates use the same completed-pair calculation.** First select
+the current instrument, then the newest row for each pair. A valid pair has two
+valid readings; an agreed pair has two equal valid verdicts, including UNCLEAR.
+Refused pairs are completed attempts minus valid pairs. Disagreement is valid
+disagreeing pairs divided by valid pairs; unclear share is agreed UNCLEAR pairs
+divided by agreed pairs. Combine counts before dividing, never shard rates.
+An empty denominator leaves a rate null, skips only its existing rate comparison
+and adds no new health gate.
+
 **The record is a fixed row of slots, rewritten whole and never appended to.**
 It covers `band_low` up to `band_high` in slices `bin_width` wide, which on the
 committed block is 120 slots. That record is the whole input to the fit, so the
@@ -283,7 +303,7 @@ sixth value the column can carry and it is not a hold: it says a fit ran.
 
 | Reason | What it says |
 | --- | --- |
-| `inputs_changed` | The encoder, a scoring weight, a band edge or the slot width no longer matches what the counts were filed under. The old record is archived, an empty one starts, and the line freezes until that one fills. A config edit is a person acting on purpose, so the run records it rather than vetoing it. |
+| `inputs_changed` | The scoring or judging instrument, interpretation policy, band or slot width no longer matches the counts. The old bytes must be archived before replacement; if that cannot happen the old aggregate stays and the input-change hold remains. A successful reset starts empty counts and keeps date memory. |
 | `shards_missing` | A judging shard returned nothing. Its siblings' rows are still committed, but the day is not counted into the record at all, because the record counts a date once and a partial day would put the missing shard's verdicts out of reach for ever. A re-dispatch of that date counts it cleanly. |
 | `sheet_too_small` | Too few NO readings, too few merges looked at, or too few days. `minimum_negatives`, `minimum_above_line` and `minimum_days` are the three, and this reason comes before the judge's own health because on a young record every later gate is being asked of a sample too small to answer it. |
 | `judge_unstable` | Too many pairs came back with two different answers in the two orders. `disagreement_max` is the bar. |
@@ -410,18 +430,9 @@ discarded row from the old instrument is the more recent one, so filtering
 second would let it take the pair on recency and then be thrown away, losing the
 fresh reading standing behind it.
 
-**One caller has the two in the other order, and it is safe today for a reason
-worth writing down.** `set_merge_line` hands the counting step rows it has
-already de-duplicated, so on that path the stamp filter runs second. It cannot
-bite on a run: the counting verb moves the record to tonight's stamp before
-`set_merge_line` reads the day, so tonight's rows are both the admitted ones and
-the newest ones, and either order gives the same answer. What makes it worth a
-sentence is that the safety is a property of the order the two verbs run in,
-not of either one - change which verb moves the stamp, or read a day the record
-has not been moved to, and the path starts counting a row the stamp refuses.
-Correcting it moves what `pairs_in_band`, `pairs_judged`, `pairs_usable` and the
-two rates mean on rows already committed, so it is a schema change rather than a
-tidy-up (`CLAUDE.md` section 11).
+The fit uses that same order for daily health readings and today's subtractable
+slot contribution. A later historical-policy row cannot hide a valid current
+reading by winning recency before being discarded.
 
 ## How the line moves: down fast, up slow
 
@@ -692,17 +703,31 @@ change**: at three tokens the list is usually one verdict spelled twice and the
 new rule has nothing to compare - measured, and the reading is in
 [../../reference/benchmarks/what-the-margin-rule-changes.md](../../reference/benchmarks/what-the-margin-rule-changes.md).
 
-**A reply the grammar could not have written is recorded on the row rather than
-thrown - 2026-09-21.** It used to end the shard, and every pair behind it then
-went missing. Absence on this ledger already means the draw never took the pair,
-so the two states an operator most needs to tell apart - a decoder that came
-loose, and a day nothing judged - wrote the same thing to disk. The pair is now
-read in both orders, written with `grammar_applied` false and no verdict at all,
-and the shard reads the next pair. Nothing counts it: both verdict cells are
-empty, `usable` is false, and the night's count skips it exactly as it skips two
-readings that disagreed. The reason - prose where a verdict was due, or a first
-token that did not open the word that arrived - reaches the run's log, because
-the row records that the decode came loose and not which check caught it.
+**A refused reading is evidence, not an absent pair.** The shard records each
+order's verdict independently, leaves a refused order null, sets
+`grammar_applied` and `usable` false for the pair, and reads the next pair. One
+valid order survives beside a refusal in the other; two refusals never become
+agreement. The shared [model reader](../../../backend/idhazh/content_similarity_judge/model_reader.py)
+retains production endpoint resolution, template checks and tokenizer checks,
+while replay supplies concrete responses at that same boundary.
+
+**Interpretation has its own identity, separate from the prompt.**
+`JUDGE_POLICY_VERSION` is a protocol date beside the pair contract. New judged
+pairs, distributions, metrics and fitted rows carry `judge_policy_version`;
+unjudged draws and historical rows retain null. It participates in instrument
+filtering, input-change detection and aggregate identity. The first transition
+archives the old aggregate before replacing it and retains every `judged_dates`
+entry. No old rows are relabelled, old denominators are not reconstructed and
+no prompt edit is used to reset counts.
+
+The previous applied line survives a method change. Shift and settled-history
+comparisons use only the current record identity. The operator console retains
+a valid fitted line when either rate is unavailable, draws unavailable rates
+as gaps, and breaks rate series at policy changes. Window totals cover only the
+latest contiguous method; earlier readings remain visible under their own
+identity. Malformed rates are flagged as partial evidence without discarding
+the line. These rules correct evidence interpretation, not verdict accuracy or
+the calibration population.
 
 **It is a change rather than a repair, and the record pays for it once.** The 82
 rows written before 2026-09-21 carry the old quantity in the same column, and

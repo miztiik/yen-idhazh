@@ -120,7 +120,8 @@ export async function load() {
 				negativesOnRecord: row.negativesOnRecord,
 				aboveLineOnRecord: row.aboveLineOnRecord,
 				daysOnRecord: row.daysOnRecord,
-				heldReason: row.heldReason
+				heldReason: row.heldReason,
+				judgePolicyVersion: row.judgePolicyVersion
 			})
 		),
 		// Every date the widest preset spans, so the squares strip draws the days

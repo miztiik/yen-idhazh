@@ -195,6 +195,9 @@ def test_the_fitted_line_asks_only_for_columns_the_contract_declares_in_its_orde
     declared = list(FittedSimilarityThreshold.csv_columns())
 
     assert asked, "FITTED_LINE_COLUMNS in content-similarity-judge.ts names no column"
+    assert {
+        "judge_policy_version", "pairs_refused", "disagreement_rate", "unclear_rate"
+    } <= set(asked)
     assert [name for name in declared if name in asked] == asked, (
         "FITTED_LINE_COLUMNS in content-similarity-judge.ts is not part of "
         "FittedSimilarityThreshold's columns in order. Not declared: "

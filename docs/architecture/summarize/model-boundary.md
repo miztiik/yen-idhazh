@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-11-05
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -377,6 +377,17 @@ token and another's is the distribution, so a single shared margin would be two
 instruments in one column. Which decoded position the answer opens at is handed
 in for the same reason: where a caller's answer starts is a fact about that
 caller's spans, not about this layer.
+
+Selected emission is a separate optional reading. `Completion.emitted_tokens`
+retains native selected positions in order as frozen `EmittedToken` values:
+nonnegative token ID, text and byte-range values. `top_logprobs` remains only
+an alternatives window. Missing or malformed optional evidence does not fail
+unrelated completion consumers; the judge decides whether that absence refuses
+its reading. `raw_response` retains the exact response text for the lifetime of
+the completion. Both fields default to null for existing callers.
+`one_reply` keeps the answer span's evidence and raw response, while summing
+both spans' costs. Judge-specific validity and reasons belong to
+[the judge](../publishing/autotune-content-similarity.md), not this transport.
 
 **The probability mode is sent rather than left to the build.** Whether the
 numbers beside the word are the model's own or the distribution after the

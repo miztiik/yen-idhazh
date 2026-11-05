@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import csv
 import io
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -23,6 +24,8 @@ from pydantic import ValidationError
 from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import derive_text_digest, derive_url_key
+from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
+from idhazh.contracts.file_envelope import Compression
 from idhazh.contracts.fitted_similarity_threshold import (
     ClampKind,
     FittedSimilarityThreshold,
@@ -32,10 +35,13 @@ from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS,
+    JUDGE_POLICY_VERSION,
     RENAMED_CELLS,
     SameStoryVerdict,
     StorySimilarityPair,
 )
+from idhazh.ledger import parquet
+from idhazh.ledger.arrow_schema import columns_of
 
 pytestmark = pytest.mark.contract
 
@@ -308,6 +314,7 @@ def test_the_judge_call_stamp_sits_at_the_tail_of_the_pair_header() -> None:
         "first_token_probabilities",
         "thinking_spans",
         "judged_by_run_id",
+        "judge_policy_version",
     )
 
 
@@ -345,6 +352,7 @@ def test_a_row_written_before_the_stamp_reads_back_with_its_own_version() -> Non
     assert narrow.scorer_model == "all-minilm-l6-v2-quantized"
     assert narrow.judge_model == "qwen3-5-9b-q4-k-m"
     assert narrow.judged_by_run_id is None
+    assert narrow.judge_policy_version is None
     assert narrow.grammar_applied is None
     assert narrow.first_token_probabilities is None
 
@@ -366,6 +374,84 @@ def test_a_widened_row_round_trips_through_the_csv_cells() -> None:
     assert read_back == stamped
     assert stamped.csv_row()["grammar_applied"] == "True"
     assert stamped.csv_row()["thinking_spans"] == "0"
+
+
+@pytest.mark.parametrize(
+    ("forward", "reverse", "grammar", "usable"),
+    [("YES", "YES", False, True), ("YES", "YES", True, False), (None, "NO", True, False)],
+)
+def test_current_policy_pairs_require_valid_readings_and_exact_usability(
+    forward: str | None, reverse: str | None, grammar: bool, usable: bool
+) -> None:
+    with pytest.raises(ValidationError, match=r"policy|usable"):
+        StorySimilarityPair.model_validate(a_pair(
+            verdict=forward, verdict_swapped=reverse, grammar_applied=grammar,
+            usable=usable, judge_policy_version=JUDGE_POLICY_VERSION,
+            judge_model="a-judge", prompt_digest="a" * 64, grammar_digest="b" * 64,
+        ))
+
+
+def test_current_fits_record_refusals_and_leave_unmeasured_rates_null() -> None:
+    row = FittedSimilarityThreshold.model_validate(a_fit(
+        pairs_judged=0, pairs_usable=0, pairs_refused=3,
+        disagreement_rate=None, unclear_rate=None, judge_policy_version=JUDGE_POLICY_VERSION,
+    ))
+    assert FittedSimilarityThreshold.from_csv_row(row.csv_row()) == row
+    for changed in (
+        {"disagreement_rate": 0.0}, {"unclear_rate": 0.0}, {"pairs_refused": None},
+    ):
+        with pytest.raises(ValidationError):
+            FittedSimilarityThreshold.model_validate(row.model_dump() | changed)
+
+
+@pytest.mark.parametrize(
+    ("contract", "fixture"),
+    [
+        (StorySimilarityPair, "story-similarity-pair/judged-the-same-in-both-orders.json"),
+        (
+            StorySimilarityDistribution,
+            "story-similarity-distribution/a-narrow-band-with-one-day-counted.json",
+        ),
+        (
+            ContentSimilarityJudgeMetrics,
+            "content-similarity-judge-metrics/a-shard-that-read-its-pairs.json",
+        ),
+        (
+            FittedSimilarityThreshold,
+            "fitted-similarity-threshold/the-clamp-held-a-fall-back-to-the-step.json",
+        ),
+    ],
+)
+def test_historical_native_and_parquet_readings_retain_unknown_policy(
+    contract: type[
+        StorySimilarityPair | StorySimilarityDistribution
+        | ContentSimilarityJudgeMetrics | FittedSimilarityThreshold
+    ],
+    fixture: str,
+) -> None:
+    original = contract.from_json(read_text(CONTRACT_FIXTURES_DIR / fixture))
+    added = {"judge_policy_version"}
+    if contract is FittedSimilarityThreshold:
+        added.add("pairs_refused")
+    historical = original.model_dump(mode="json", exclude=added)
+    columns = [
+        replace(column, nullable=False)
+        if contract is FittedSimilarityThreshold
+        and column.name in {"disagreement_rate", "unclear_rate"}
+        else column
+        for column in columns_of(contract)
+        if column.name not in added
+    ]
+    data = parquet.render(columns, [historical], envelope={}, compression=Compression.NONE)
+    _, rows = parquet.read(data)
+    read_back = contract.model_validate(rows[0])
+
+    assert read_back == original
+    assert read_back.judge_policy_version is None
+    assert read_back.version == historical["version"]
+    if isinstance(read_back, FittedSimilarityThreshold):
+        assert read_back.pairs_refused is None
+        assert read_back.disagreement_rate == historical["disagreement_rate"]
 
 
 def test_a_pair_row_refuses_a_first_token_window_that_would_split_the_row() -> None:

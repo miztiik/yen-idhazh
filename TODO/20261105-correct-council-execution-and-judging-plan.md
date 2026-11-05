@@ -135,7 +135,7 @@ Table I - Delivery rows
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | I1 | 1 | Reject same-article comparisons in shared scoring | - | A | DONE | sturdy-sniffle | #1925 | Article identity fix |
 | I2 | 2 | Run independent prepared plugin work through the council | - | A | DONE | symmetrical-potato | #1927 | Council plugin execution |
-| I3 | 3 | Correct emitted evidence and judge statistics | 1, 2 | B | IN-FLIGHT | - | - | Judge evidence correction |
+| I3 | 3 | Correct emitted evidence and judge statistics | 1, 2 | B | DONE | friendly-system | - | Judge evidence correction |
 | I4 | 4 | Fit only adjustable comparisons and protect published decisions | 3 | C | PENDING | - | - | - |
 | I5 | 5 | Deliver a frozen offline judge evaluator | 4 | D | PENDING | - | - | - |
 | I6 | 6 | Establish the independently labelled current-judge baseline | 5 | M | PENDING | - | - | - |

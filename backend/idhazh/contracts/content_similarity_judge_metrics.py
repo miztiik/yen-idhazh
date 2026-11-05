@@ -37,6 +37,7 @@ may not import (CLAUDE.md section 4).
 
 from __future__ import annotations
 
+from math import isclose
 from typing import Any, ClassVar, Self
 
 from pydantic import Field, model_validator
@@ -52,6 +53,7 @@ from idhazh.contracts.base import (
 from idhazh.contracts.judge_call import JudgeConfigStamp
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS,
+    JUDGE_POLICY_VERSION,
     RENAMED_CELLS,
     ContentSimilarityJudgeId,
     JudgeModelId,
@@ -63,6 +65,11 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
 
     __schema_stem__: ClassVar[str] = "content-similarity-judge-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-05",
+            change="Judge policy identifies valid-reading counts and unavailable rates.",
+            why="Refusals must not become disagreements or zero measurements.",
+        ),
         ChangelogEntry(
             version="2026-10-24T19:49",
             change="Judge model identities accept any valid slug.",
@@ -77,11 +84,6 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
             version="2026-10-08",
             change="shard is renamed work_part_index. An old shard heading is read under it.",
             why="The ledger door writes its own shard cell on every row it files.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T14:00",
-            change="decode_digest is gone from the inherited judge-call stamp.",
-            why="It proved two runs asked alike, and this project does not claim that.",
         ),
         ChangelogEntry(
             version="2026-09-21",
@@ -115,7 +117,7 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
         ge=0, description="How many pairs the selection gave this shard."
     )
     pairs_read: int = Field(
-        ge=0, description="How many of them got a reading inside the grammar."
+        ge=0, description="How many completed pairs got two valid readings."
     )
     pairs_agreed: int = Field(
         ge=0,
@@ -134,7 +136,7 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
     pairs_refused: int = Field(
         ge=0,
         description=(
-            "How many pairs came back outside the grammar. Pairs rather than calls: a "
+            "How many completed pairs had at least one refused reading. Pairs rather than calls: a "
             "pair is two calls, so counting calls would count a pair that failed twice "
             "twice and put the funnel out on a real event rather than on a defect."
         ),
@@ -153,9 +155,7 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
         le=1,
         description=(
             "What share of the pairs read answered differently in the two orders. Empty "
-            "when nothing was read, because a rate over no rows is not zero. Per shard "
-            "over pairs read, where the line-setting gate is per day over pairs agreed - "
-            "two different quantities."
+            "when no pair had two valid readings, because a rate over no rows is not zero."
         ),
     )
     unclear_rate: float | None = Field(
@@ -192,6 +192,10 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
             "The longest single call. A shard with an ordinary total and a bad worst "
             "call is the one that runs out of clock next, and the total alone hides it."
         ),
+    )
+    judge_policy_version: DateStamp | None = Field(
+        default=None,
+        description="UTC date identifying judge interpretation; null on historical measurements.",
     )
 
     @model_validator(mode="before")
@@ -230,6 +234,19 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
                 f"pairs_agreed is {self.pairs_agreed} over {self.pairs_read} read. A pair "
                 "agrees only if both of its readings arrived."
             )
+        if self.judge_policy_version == JUDGE_POLICY_VERSION:
+            expected = (
+                (self.pairs_read - self.pairs_agreed) / self.pairs_read
+                if self.pairs_read else None
+            )
+            if (
+                (self.disagreement_rate is None) != (expected is None)
+                or (expected is not None
+                and not isclose(self.disagreement_rate or 0.0, expected))
+            ):
+                raise ValueError("disagreement_rate must describe valid disagreeing pairs")
+            if (self.unclear_rate is None) != (self.pairs_agreed == 0):
+                raise ValueError("unclear_rate is unavailable exactly when no pair agreed")
         return self
 
     @classmethod
