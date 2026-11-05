@@ -26,10 +26,7 @@ class ApiSettings(ServerContract):
     version: ServerSchemaVersion
     listener: ListenerSettings
     enabled_routes: tuple[ApiComponent, ...] = Field(
-        description=(
-            "Development selection; remove the default-off restriction after the "
-            "registered summary workflow proves real generation and evaluation."
-        )
+        description="Enabled API components for this invocation; phases may select a subset."
     )
     logging: LoggingSettings
     log_directory: RelativePath
