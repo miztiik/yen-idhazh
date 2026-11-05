@@ -35,11 +35,11 @@ def test_workflow_environment_resolves_memory_for_every_settings_loader(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, choice: str
 ) -> None:
     root = copy_config(tmp_path)
-    gardener_path = root / "idhazh_gardener.json"
-    shutil.copyfile(CONFIG_DIR / gardener_path.name, gardener_path)
+    gardener_path = root / "gardener/config/idhazh_gardener.json"
+    gardener_path.parent.mkdir(parents=True)
+    shutil.copyfile(CONFIG_DIR / "gardener/config/idhazh_gardener.json", gardener_path)
     gardener = GardenerConfig.model_validate_json(gardener_path.read_text(encoding="utf-8"))
     declarations = root / "gardener"
-    declarations.mkdir()
     for name in gardener.task_names:
         declaration = f"{name}.json"
         shutil.copyfile(

@@ -64,8 +64,8 @@ def declared() -> dict[str, TaskPolicy]:
 
 
 def first_ledger_year() -> str:
-    """The first UTC year a ledger can hold, as the committed `config/idhazh_gardener.json` says."""
-    knobs = (CONFIG_DIR / "idhazh_gardener.json").read_text(encoding="utf-8")
+    """The first UTC year a ledger can hold, as the committed gardener config says."""
+    knobs = (CONFIG_DIR / "gardener/config/idhazh_gardener.json").read_text(encoding="utf-8")
     return GardenerConfig.model_validate_json(knobs).first_ledger_year
 
 

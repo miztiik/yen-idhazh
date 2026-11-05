@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-05
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -22,14 +22,14 @@ The gardener runs **tasks**. A task is two things that land together:
   names: `KIND`, the kind it serves, and `run`, which takes a `TaskContext` and
   returns a `Pass`.
 
-`config/idhazh_gardener.json` names the complete task list. For each listed
+`config/gardener/config/idhazh_gardener.json` names the complete task list. For each listed
 task, `registry.discover()` imports only its named module and the shared module
 for its kind as a fallback. `registry.bind()` selects the named module first.
 A config value never names a module, so text in a file cannot choose which
 code runs (Guardrail #11).
 
 **The named list is the task set.** The loader opens only the declaration files
-named in `config/idhazh_gardener.json`. An unrelated file in `config/gardener/`
+named in `config/gardener/config/idhazh_gardener.json`. An unrelated file in `config/gardener/`
 cannot change which tasks a wake plans.
 
 ## A wake, in order
