@@ -21,6 +21,7 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.similarity import selection
+from idhazh.similarity.published_line import read_published_line
 from idhazh.similarity.stamps import ScorerStamp, scorer_inputs
 from idhazh.stages.assemble import _earlier_days
 from idhazh.stages.common import LOG, _load_day
@@ -164,10 +165,13 @@ def stage_pick_item_pairs(
         band_low=tuning.band_low,
         band_high=tuning.band_high,
     )
-    # The line the day was actually grouped at, so a pair the day never merged is
-    # never counted as one. A fitted line replaces this floor once a run writes one.
+    line = read_published_line(
+        date,
+        manifest_path=assemble.day_dir(digest_root, date) / "run.json",
+        floor_min=same_story.floor_min,
+    )
     drawn = selection.select(
-        banded, line=same_story.floor_min, budget=execution.pair_budget, date=date, stamp=stamp
+        banded, line=line, budget=execution.pair_budget, date=date, stamp=stamp
     )
     rows = [
         _drawn_row(pair, shard=shard, date=date, run_id=run_id, by_id=by_id, stamp=stamp)

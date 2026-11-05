@@ -28,7 +28,10 @@ from idhazh.contracts.fitted_similarity_threshold import (
     HeldReason,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
+from idhazh.contracts.story_similarity_distribution import (
+    CALIBRATION_POLICY_VERSION,
+    StorySimilarityDistribution,
+)
 from idhazh.contracts.story_similarity_pair import ScorerModelId
 from idhazh.similarity import counting, fit
 from idhazh.similarity.stamps import ScorerStamp, judge_inputs, scorer_inputs
@@ -139,6 +142,7 @@ def stage_set_merge_line(
         row for row in earlier
         if row.record_stamp == current.record_stamp()
         and row.judge_policy_version == judge.judge_policy_version
+        and row.calibration_policy_version == CALIBRATION_POLICY_VERSION
     ]
 
     # `inputs_changed` first: a record taken under a different encoder, weight or
@@ -164,8 +168,13 @@ def stage_set_merge_line(
         collect_held=collect_held,
     )
     proposal = fit.fit_line(record, discard_share=knobs.discard_share)
-    shift = fit.daily_shift(
-        record, counting.day_counts(day_rows, record=record), discard_share=knobs.discard_share
+    # A refused collection never added today's rows to the current aggregate.
+    shift = (
+        fit.daily_shift(
+            record, counting.day_counts(day_rows, record=record), discard_share=knobs.discard_share
+        )
+        if collect_held is None
+        else None
     )
     typical = fit.typical_shift(history, window_rows=knobs.step_change_window_rows)
 
@@ -248,6 +257,7 @@ def stage_set_merge_line(
         grammar_digest=record.grammar_digest,
         pairs_refused=counts.refused,
         judge_policy_version=judge.judge_policy_version,
+        calibration_policy_version=CALIBRATION_POLICY_VERSION,
     )
     ledger.persist(
         state,

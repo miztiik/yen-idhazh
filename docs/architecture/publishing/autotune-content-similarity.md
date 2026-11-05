@@ -147,6 +147,16 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **The run writes down which number grouped it.** `same_story_floor_applied` on the run record, because without it a reader of a committed `run.json` cannot tell a day grouped at 0.94 from a day grouped at 0.937 - and the grouping is the thing this whole block moves. A run that published before the column existed carries no value, which is every run before that date. The console's Judgement page reads it: its empty merge-chart rule, verdict split and holdout margin name the line the newest published day's last build wrote down, and work the line out from the fitted rows only where that record holds none. The solid merge-chart series instead shows the nightly fit's final values, with the proposal and step band from that same fit. Its calculated history is not build history; [console design](../../concepts/console-design.md#design-rationale) rules the words. Worked out alone, the line could be one no build used, because the nightly fit below files its row after most of that day's builds ran.
 
+**The judge protects the line that build actually used, not today's configured
+floor.** Its draw validates the named day's `run.json` with `RunManifest` and
+selects the greatest `completed_at`; missing completion is oldest and a later
+list entry wins a tie. Only that record's `same_story_floor_applied` is read.
+An absent manifest or null legacy value falls back to configured `floor_min`
+with an explicit `legacy-fallback` log. Malformed present input fails native
+validation; it never becomes a fallback or a search through older builds.
+The recorded line protects mandatory at-or-above-line pairs against the budget.
+The sampling band's configured edges do not move with it.
+
 ## The line fits itself, once a night
 
 **A second workflow reads yesterday's published day and asks a model where the
@@ -181,9 +191,11 @@ flowchart TD
   subgraph collectjob["llm-council.yml - the collect job"]
     rows[("Every reading the shards returned,<br/>one committed row a pair")]
     reported{"Did every shard<br/>report?"}
-    inputs{"Do the band, the slot width and<br/>both model stamps still<br/>match the config?"}
+    inputs{"Do the band, slot width,<br/>instruments and policies<br/>still match?"}
     archive["Archive the record.<br/>Start an empty one"]
-    agree{"Did this pair's two<br/>readings agree?"}
+    agree{"Did this pair have two<br/>valid agreeing readings?"}
+    adjustable{"Does the adjustable line<br/>decide this pair?"}
+    audit["Headline override: audit retained,<br/>not fitted"]
     drop["Counted nowhere. Two answers to one<br/>pair is a reading about the judge,<br/>not about the pair"]
     count["Add the verdict to the slot<br/>its score falls in"]
     record[("The record: one fixed row<br/>of slots, rewritten whole")]
@@ -206,7 +218,9 @@ flowchart TD
   archive --> hold
   inputs -- "yes" --> agree
   agree -- "no" --> drop
-  agree -- "yes" --> count
+  agree -- "yes" --> adjustable
+  adjustable -- "headline override" --> audit
+  adjustable -- "score comparison" --> count
   count --> record
   record --> sheet
   sheet -- "no, sheet_too_small" --> hold
@@ -231,8 +245,8 @@ flowchart TD
   classDef sysPublish fill:#f1f5f9,stroke:#0e7490,stroke-width:1.5px,color:#0e7490;
   classDef sysModel fill:#f1f5f9,stroke:#6b21a8,stroke-width:1.5px,color:#6b21a8;
   classDef sysEval fill:#f1f5f9,stroke:#92400e,stroke-width:1.5px,color:#92400e;
-  class draw,shards,archive,count,walk,damp,clamped,usefit,usefloor stage;
-  class pick,agree,reported,inputs,sheet,steady,shape decision;
+  class draw,shards,archive,audit,count,walk,damp,clamped,usefit,usefloor stage;
+  class pick,agree,adjustable,reported,inputs,sheet,steady,shape decision;
   class drop,hold warn;
   class day,rows,record,fitrow ledger;
   class pub sysPublish;
@@ -282,6 +296,13 @@ divided by agreed pairs. Combine counts before dividing, never shard rates.
 An empty denominator leaves a rate null, skips only its existing rate comparison
 and adds no new health gate.
 
+**Only adjustable comparisons enter calibration.** For both cumulative slots
+and today's subtractable contribution, select the matching instrument first,
+then the newest row for each pair, then usable rows, then `headline is False`,
+then the score slot. A headline override groups outright, so moving a score
+threshold cannot correct it. Every such pair is still judged and retained;
+daily health and refusal statistics continue to describe all audit pairs.
+
 **The record is a fixed row of slots, rewritten whole and never appended to.**
 It covers `band_low` up to `band_high` in slices `bin_width` wide, which on the
 committed block is 120 slots. That record is the whole input to the fit, so the
@@ -303,7 +324,7 @@ sixth value the column can carry and it is not a hold: it says a fit ran.
 
 | Reason | What it says |
 | --- | --- |
-| `inputs_changed` | The scoring or judging instrument, interpretation policy, band or slot width no longer matches the counts. The old bytes must be archived before replacement; if that cannot happen the old aggregate stays and the input-change hold remains. A successful reset starts empty counts and keeps date memory. |
+| `inputs_changed` | The scoring or judging instrument, interpretation or calibration policy, band or slot width no longer matches the counts. The old bytes must be archived before replacement; if that cannot happen the old aggregate stays and the input-change hold remains. A successful reset starts empty counts and keeps date memory. |
 | `shards_missing` | A judging shard returned nothing. Its siblings' rows are still committed, but the day is not counted into the record at all, because the record counts a date once and a partial day would put the missing shard's verdicts out of reach for ever. A re-dispatch of that date counts it cleanly. |
 | `sheet_too_small` | Too few NO readings, too few merges looked at, or too few days. `minimum_negatives`, `minimum_above_line` and `minimum_days` are the three, and this reason comes before the judge's own health because on a young record every later gate is being asked of a sample too small to answer it. |
 | `judge_unstable` | Too many pairs came back with two different answers in the two orders. `disagreement_max` is the bar. |
@@ -403,8 +424,8 @@ record has ever read, and it is what an instrument move leaves behind.
 | `judged_dates` | every day this judge has ever counted | kept |
 
 **The reset is why there are two lists rather than one.** Move the model, the
-prompt, a weight or the sampler and the counts are archived, because they answer
-a different question afterwards. Which nights were read is not a count, so it
+prompt, a weight, sampler or policy and the counts are archived, because they
+answer a different question afterwards. Which nights were read is not a count, so it
 comes across. Without that, retuning the scorer on a Monday would have the
 council dispatch every night of its window that week - and every one of those
 jobs would file its rows and then be refused, because the record still counts
@@ -431,8 +452,11 @@ second would let it take the pair on recency and then be thrown away, losing the
 fresh reading standing behind it.
 
 The fit uses that same order for daily health readings and today's subtractable
-slot contribution. A later historical-policy row cannot hide a valid current
-reading by winning recency before being discarded.
+slot contribution. Calibration then excludes unusable rows and headline
+overrides, while daily health retains those audit attempts. A later
+historical-policy row cannot hide a valid current reading by winning recency
+before being discarded. A held collection contributes no subtractable daily
+shift: its rows have not entered the current aggregate.
 
 ## How the line moves: down fast, up slow
 
@@ -726,8 +750,23 @@ a valid fitted line when either rate is unavailable, draws unavailable rates
 as gaps, and breaks rate series at policy changes. Window totals cover only the
 latest contiguous method; earlier readings remain visible under their own
 identity. Malformed rates are flagged as partial evidence without discarding
-the line. These rules correct evidence interpretation, not verdict accuracy or
-the calibration population.
+the line. These rules correct evidence interpretation, not verdict accuracy.
+
+**Calibration has its own identity because its population can change without
+changing the judge.** `CALIBRATION_POLICY_VERSION` is a protocol date beside the
+distribution contract, not an operator setting. New distributions and fits
+record `calibration_policy_version`; historical values remain null. It
+participates in aggregate identity and input-change detection independently of
+the judge policy. Shift and settled history require the current record identity
+and both current policies; the previous applied line still survives.
+
+Old slot totals cannot identify headline overrides. They are never repaired
+by subtraction or a backfill. The existing archive-before-reset transition
+keeps the exact old bytes and all judged-date memory; changes deployed together
+cause one reset, and unchanged later input causes none. An unavailable archive
+retains the old aggregate and the input-change hold instead of claiming fresh
+counts. Neither corrected counts nor recorded build protection enables adaptive
+thresholds or establishes that a proposed line is safe to activate.
 
 **It is a change rather than a repair, and the record pays for it once.** The 82
 rows written before 2026-09-21 carry the old quantity in the same column, and
