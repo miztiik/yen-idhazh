@@ -14,6 +14,7 @@ from idhazh import atomic_write
 from idhazh.contracts.base import RelPath
 from idhazh.contracts.council_invocation import (
     ArtifactFile,
+    Cell,
     PreparationReceipt,
     Selection,
     ShardFiles,
@@ -60,6 +61,54 @@ def shard_path(
     shard: int,
 ) -> Path:
     return invocation_root(root, selected, judge_id) / day / "reports" / judge_id / f"{shard}.json"
+
+
+def downloaded_bundles(
+    incoming: Path,
+    selected: Selection,
+    cells: tuple[Cell, ...] = (),
+) -> dict[str, Path]:
+    """Resolve flat singleton or named downloads using only expected invocation files."""
+    if incoming.is_symlink() or (incoming.exists() and not incoming.is_dir()):
+        raise FileIntegrityError("invalid artifact download root")
+    expected = {
+        f"council-selection-{selected.anchor_date}": (
+            "events/planner.jsonl",
+            *(
+                preparation_path(Path(), selected, judge.tenant, day).as_posix()
+                for judge in selected.judges
+                for day in judge.dates
+            ),
+        ),
+    }
+    for cell in cells:
+        expected[f"council-metrics-{cell.tenant}-{cell.date}-{cell.shard}"] = (
+            shard_path(Path(), selected, cell.tenant, cell.date, cell.shard).as_posix(),
+            record_path(Path(), selected, cell.tenant, cell.date, cell.shard).as_posix(),
+            f"events/{cell.tenant}/{cell.date}/{cell.shard}.jsonl",
+        )
+    named: dict[str, Path] = {}
+    flat: list[str] = []
+    for name, markers in expected.items():
+        target = incoming / name
+        if target.exists() or target.is_symlink():
+            if target.is_symlink() or not target.is_dir():
+                raise FileIntegrityError("invalid named artifact directory")
+            named[name] = target
+        present = tuple(
+            marker
+            for marker in markers
+            if (incoming / marker).exists() or (incoming / marker).is_symlink()
+        )
+        for marker in present:
+            checked_file(incoming, marker)
+        if present:
+            flat.append(name)
+    if flat:
+        if named or len(flat) != 1:
+            raise FileIntegrityError("mixed or colliding artifact download layouts")
+        return {flat[0]: incoming}
+    return named
 
 
 def checked_file(root: Path, relative: str) -> Path:

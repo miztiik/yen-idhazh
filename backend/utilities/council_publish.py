@@ -309,21 +309,24 @@ def _import_work(selected: Selection, matrix: str | None) -> None:
     """Admit only named planner and dispatched worker bundles, never merge trees."""
     root = session.COUNCIL_ROOT
     incoming = root / "incoming"
-    planner = incoming / f"council-selection-{selected.anchor_date}"
-    if planner.exists():
+    cells = () if matrix is None else run_summary.cells(matrix)
+    for cell in cells:
+        judge = selected.judge(cell.tenant, cell.date)
+        if cell.shards != judge.shards:
+            raise work_files.FileIntegrityError("matrix width differs from selected cell")
+    downloads = work_files.downloaded_bundles(incoming, selected, cells)
+    planner = downloads.get(f"council-selection-{selected.anchor_date}")
+    if planner is not None:
         for judge in selected.judges:
             for day in judge.dates:
                 work_files.import_preparation(root, planner, selected, judge.tenant, day)
         work_files.copy_events(root, planner, "planner.jsonl")
-    for cell in () if matrix is None else run_summary.cells(matrix):
-        judge = selected.judge(cell.tenant, cell.date)
-        if cell.shards != judge.shards:
-            raise work_files.FileIntegrityError("matrix width differs from selected cell")
+    for cell in cells:
         prepared = work_files.read_preparation(root, selected, cell.tenant, cell.date)
         if prepared is None or prepared.state != "ready":
             raise work_files.FileIntegrityError("matrix cell has no ready receipt")
-        bundle = incoming / f"council-metrics-{cell.tenant}-{cell.date}-{cell.shard}"
-        if bundle.exists():
+        bundle = downloads.get(f"council-metrics-{cell.tenant}-{cell.date}-{cell.shard}")
+        if bundle is not None:
             arrived = work_files.import_shard(
                 root,
                 bundle,

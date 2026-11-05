@@ -22,13 +22,13 @@ from idhazh.contracts.council_events import (
 )
 from idhazh.contracts.council_invocation import Selection
 from idhazh.contracts.council_run_record import EvaluationStep, ShardOutcome
-from idhazh.council import event_log, outcome, registry, run_summary, session
+from idhazh.council import event_log, outcome, registry, run_summary, session, work_files
 from utilities import council_publish
 
 from ._tenants import a_venue, forget
 from .test_events import HOSTILE
 from .test_publication import configuration
-from .test_selected_runs import INDEPENDENT_SOURCE
+from .test_selected_runs import INDEPENDENT_SOURCE, _deliver_document
 
 DATE = "2026-10-10"
 RUN = "2026-10-11-123"
@@ -365,6 +365,127 @@ def test_missing_preparation_is_unknown_not_no_work(
     assert report.missing_preparations == (("one-judge", DATE),)
     assert report.failed and report.units == ()
     assert "unknown; no report" in report.markdown()
+
+
+@pytest.mark.parametrize("layout", ["flat", "named"])
+def test_actual_verification_and_execution_share_one_report(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    layout: str,
+) -> None:
+    repo = tmp_path / "repo"
+    planner = repo / "backend" / "var" / "council"
+    monkeypatch.setenv(
+        "COUNCIL_EVENT_FILE",
+        str(planner / "outgoing" / "planner" / "events" / "planner.jsonl"),
+    )
+    event_log.install()
+    target = authorize(tmp_path, repo, monkeypatch)
+    selected = Selection.model_validate_json(os.environ["COUNCIL_SELECTION"])
+    receipt = work_files.read_preparation(planner, selected, "one-judge", DATE)
+    assert receipt is not None
+    worker = tmp_path / "worker"
+    download = worker / "incoming"
+    if layout == "named":
+        download /= f"council-selection-{DATE}"
+    _deliver_document(
+        planner / "outgoing" / "planner",
+        download,
+        selected,
+        receipt,
+        event="planner.jsonl",
+    )
+    monkeypatch.setattr(session, "COUNCIL_ROOT", worker)
+    root = worker / "outgoing" / f"shard-one-judge-{DATE}-0" / "events"
+    (cell,) = run_summary.cells(matrix("one-judge"))
+    monkeypatch.setenv("COUNCIL_EVENT_FILE", str(cell.event_path(root)))
+    args = [
+        "council-shard",
+        "--config",
+        str(target),
+        "--tenant",
+        cell.tenant,
+        "--date",
+        DATE,
+        "--run-id",
+        RUN,
+        "--commit",
+        selected.git_sha,
+        "--shard",
+        "0",
+        "--shards",
+        "1",
+    ]
+    assert cli.main([*args, "--verify-only"]) == 0
+    assert cli.main(args) == 0
+    exits = [
+        event.program
+        for event in run_summary.read_events(cell.event_path(root))
+        if isinstance(event, ProgramFinished)
+    ]
+    assert exits == [CouncilProgram.VERIFY_WORK, CouncilProgram.SHARD]
+    result = run_summary.reported(cell, root, RUN)
+    assert not result.failed and not result.invalid
+    assert result.normalized().report_state == "reported"
+    assert result.program is not None and result.program.program is CouncilProgram.SHARD
+
+
+@pytest.mark.parametrize("code", list(CouncilExit))
+def test_verification_never_substitutes_for_the_actual_shard_exit(
+    tmp_path: Path,
+    code: CouncilExit,
+) -> None:
+    root = tmp_path / "events"
+    (cell,) = run_summary.cells(matrix("one-judge"))
+    write_events(
+        cell.event_path(root),
+        ProgramFinished(program=CouncilProgram.VERIFY_WORK, code=code),
+    )
+    result = run_summary.reported(cell, root, RUN)
+    assert not result.invalid and result.failed
+    assert result.unit is None and result.program is None
+    normalized = result.normalized()
+    assert normalized.report_state == ("refused" if code is CouncilExit.REFUSED else "missing")
+    assert normalized.code is code
+
+
+@pytest.mark.parametrize(
+    "programs",
+    [
+        (CouncilProgram.VERIFY_WORK, CouncilProgram.VERIFY_WORK),
+        (CouncilProgram.SHARD, CouncilProgram.SHARD),
+        (CouncilProgram.PREPARE,),
+    ],
+)
+def test_duplicate_or_unrelated_program_exits_are_invalid(
+    tmp_path: Path,
+    programs: tuple[CouncilProgram, ...],
+) -> None:
+    root = tmp_path / "events"
+    (cell,) = run_summary.cells(matrix("one-judge"))
+    write_events(
+        cell.event_path(root),
+        *(ProgramFinished(program=program, code=CouncilExit.OK) for program in programs),
+    )
+    result = run_summary.reported(cell, root, RUN)
+    assert result.invalid and result.failed
+
+
+@pytest.mark.parametrize("code", [CouncilExit.FAILED, CouncilExit.REFUSED])
+def test_work_after_rejected_verification_cannot_report_success(
+    tmp_path: Path,
+    code: CouncilExit,
+) -> None:
+    root = tmp_path / "events"
+    (cell,) = run_summary.cells(matrix("one-judge"))
+    write_events(
+        cell.event_path(root),
+        ProgramFinished(program=CouncilProgram.VERIFY_WORK, code=code),
+        unit(),
+        ProgramFinished(program=CouncilProgram.SHARD, code=CouncilExit.OK),
+    )
+    result = run_summary.reported(cell, root, RUN)
+    assert result.invalid and result.failed
 
 
 @pytest.mark.parametrize("defect", ["wrong-run", "duplicate", "contradictory", "truncated"])

@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from idhazh.contracts.council_invocation import (
+    Cell,
     PreparationReceipt,
     SelectedJudge,
     Selection,
@@ -187,3 +188,49 @@ def test_present_local_shard_files_are_rechecked_before_collection(tmp_path: Pat
     result.write_text('{"changed":true}', encoding="ascii")
     with pytest.raises(work_files.FileIntegrityError):
         work_files.read_shard(root, selected, NAME, DAY, 0)
+
+
+@pytest.mark.parametrize("collision", ["same-bundle", "different-bundle"])
+def test_flat_download_cannot_merge_with_another_artifact(
+    tmp_path: Path,
+    collision: str,
+) -> None:
+    selected = selection()
+    planner = tmp_path / "planner"
+    receipt = prepared(planner, selected)
+    incoming = tmp_path / "incoming"
+    work_files.export(planner, incoming, selected, receipt)
+    cell = Cell(tenant=NAME, date=DAY, shard=0, shards=1, runs_model=False)
+    if collision == "same-bundle":
+        work_files.export(
+            planner,
+            incoming / f"council-selection-{DAY}",
+            selected,
+            receipt,
+        )
+    else:
+        document = ShardFiles(
+            version=ShardFiles.schema_version(),
+            run_id=selected.run_id,
+            attempt=selected.attempt,
+            git_sha=selected.git_sha,
+            judge_id=NAME,
+            date=DAY,
+            shard=0,
+            shards=1,
+            files=(),
+        )
+        work_files.write_document(
+            work_files.shard_path(incoming, selected, NAME, DAY, 0),
+            document,
+        )
+    with pytest.raises(work_files.FileIntegrityError, match="colliding"):
+        work_files.downloaded_bundles(incoming, selected, (cell,))
+
+
+def test_unexpected_download_directory_cannot_supply_prepared_work(tmp_path: Path) -> None:
+    selected = selection()
+    incoming = tmp_path / "incoming"
+    prepared(incoming / "not-the-selected-artifact", selected)
+    assert work_files.downloaded_bundles(incoming, selected) == {}
+    assert work_files.read_preparation(incoming, selected, NAME, DAY) is None

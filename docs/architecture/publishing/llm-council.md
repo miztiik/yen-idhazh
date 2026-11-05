@@ -223,10 +223,19 @@ The planner uploads only `backend/var/council/outgoing/planner` as
 `council-selection-<anchor-date>`. It contains prepared manifests, their declared
 files, platform records and `events/planner.jsonl`, not a scratch-tree copy.
 Workers download `council-selection-*` into `backend/var/council/incoming` with
-`merge-multiple: false`, preserving one directory per artifact. Before model
-setup, `council-shard --verify-only` receives exactly the execution cell's
+`merge-multiple: false`. A singleton download extracts directly into that path;
+multiple downloads retain artifact-name directories. The transport adapter
+recognizes these layouts using only selection- and matrix-derived manifest
+and event addresses. It refuses mixed layouts and collisions, never scans for
+bundles or merges unvalidated files. Missing expected files remain missing
+reports, not empty work. Before model setup,
+`council-shard --verify-only` receives exactly the execution cell's
 arguments, including commit, and verifies its prepared work. Its closed
-`verify-work` event is not a shard exit report.
+`verify-work` event is not a shard exit report. Verification and execution
+append to the same event file. The collector validates their exits separately:
+successful verification still requires the actual shard's unit and exit,
+rejected verification cannot be followed by successful work, and duplicate
+verification/shard exits or unrelated programs invalidate the report.
 
 Each worker exports only its own
 `backend/var/council/outgoing/shard-<judge>-<date>-<shard>` as the existing

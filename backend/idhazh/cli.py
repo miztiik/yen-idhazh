@@ -745,11 +745,6 @@ def _dispatch(
             )
         from idhazh.council import work_files
 
-        incoming = (
-            council_session.COUNCIL_ROOT
-            / "incoming"
-            / (f"council-selection-{council_selection.anchor_date}")
-        )
         canonical = work_files.preparation_path(
             council_session.COUNCIL_ROOT,
             council_selection,
@@ -757,6 +752,13 @@ def _dispatch(
             args.date,
         )
         if not canonical.exists():
+            downloads = work_files.downloaded_bundles(
+                council_session.COUNCIL_ROOT / "incoming",
+                council_selection,
+            )
+            incoming = downloads.get(f"council-selection-{council_selection.anchor_date}")
+            if incoming is None:
+                raise work_files.FileIntegrityError("prepared download was not reported")
             work_files.import_preparation(
                 council_session.COUNCIL_ROOT,
                 incoming,

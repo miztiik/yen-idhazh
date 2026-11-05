@@ -92,18 +92,20 @@ class ReportedCell:
     cell: Cell
     unit: UnitFinished | None = None
     program: ProgramFinished | None = None
+    verification: ProgramFinished | None = None
     invalid: bool = False
     dispatched: bool = True
 
     def normalized(self, *, dispatched: bool | None = None) -> ShardReport:
         dispatched = self.dispatched if dispatched is None else dispatched
+        exit_report = self.program if self.program is not None else self.verification
         state: ShardReportState = (
             "not_dispatched"
             if not dispatched
             else "invalid"
             if self.invalid
             else "refused"
-            if self.program is not None and self.program.code is CouncilExit.REFUSED
+            if exit_report is not None and exit_report.code is CouncilExit.REFUSED
             else "missing"
             if self.unit is None or self.program is None
             else "reported"
@@ -113,7 +115,7 @@ class ReportedCell:
             shards=self.cell.shards,
             report_state=state,
             outcome=self.unit.outcome if state == "reported" and self.unit is not None else None,
-            code=self.program.code if self.program is not None else None,
+            code=exit_report.code if exit_report is not None else None,
         )
 
     @property
@@ -124,6 +126,7 @@ class ReportedCell:
             or self.unit is None
             or self.program is None
             or self.program.code is not CouncilExit.OK
+            or (self.verification is not None and self.verification.code is not CouncilExit.OK)
             or self.unit.outcome in ("failed", ShardOutcome.STOPPED_ON_DEADLINE)
         )
 
@@ -133,6 +136,8 @@ class ReportedCell:
         if self.invalid:
             return "**invalid report**"
         if self.unit is None or self.program is None:
+            if self.verification is not None and self.verification.code is not CouncilExit.OK:
+                return f"not attempted; verification {_exit(self.verification)}"
             if self.program is not None and self.program.code is CouncilExit.REFUSED:
                 return f"not attempted; {_exit(self.program)}"
             word = "**no report**"
@@ -162,11 +167,22 @@ def reported(cell: Cell, root: Path, run_id: str) -> ReportedCell:
                     raise ValueError("unit does not match its planned cell")
                 result.unit = event
             elif isinstance(event, ProgramFinished):
-                if result.program is not None or event.program is not CouncilProgram.SHARD:
+                if event.program is CouncilProgram.VERIFY_WORK:
+                    if result.verification is not None:
+                        raise ValueError("duplicate verification result")
+                    result.verification = event
+                elif event.program is CouncilProgram.SHARD and result.program is None:
+                    result.program = event
+                else:
                     raise ValueError("unexpected program result")
-                result.program = event
             elif not isinstance(event, Diagnostic):
                 raise ValueError("unexpected judging event")
+        if (
+            result.verification is not None
+            and result.verification.code is not CouncilExit.OK
+            and (result.unit is not None or result.program is not None)
+        ):
+            raise ValueError("work followed rejected verification")
         if (
             result.unit is not None
             and result.program is not None
@@ -178,6 +194,7 @@ def reported(cell: Cell, root: Path, run_id: str) -> ReportedCell:
         result.invalid = True
         result.unit = None
         result.program = None
+        result.verification = None
     return result
 
 

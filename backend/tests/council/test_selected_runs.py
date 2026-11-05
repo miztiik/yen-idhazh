@@ -680,6 +680,96 @@ def test_matrix_date_arguments_cannot_override_the_selection(tmp_path: Path) -> 
         council_matrix.cells(target, dates=(OLD,), selection=selected)
 
 
+def test_flat_single_planner_download_settles_no_work_without_shards(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ._tenants import a_venue
+
+    package = "flat_empty_file_plugin"
+    name = "empty-judge"
+    a_venue(
+        tmp_path,
+        package=package,
+        slugs={name: (1, (f"state/experiments/{name}",))},
+        source=INDEPENDENT_SOURCE,
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(registry, "TENANT_PACKAGE", package)
+    forget(package)
+    origin, repo = repository(tmp_path, monkeypatch)
+    sha = git(repo, "rev-parse", "HEAD").strip()
+    target = room(tmp_path, {name: ("active", False)})
+    council = config.load_council(target)
+    selected = night_plan.plan_the_night(
+        council,
+        tonight=DAY,
+        hosted=registry.tenants((name,), council=council),
+        run_id=RUN,
+        attempt=1,
+        git_sha=sha,
+    )
+    planner = tmp_path / "planner"
+    monkeypatch.setattr(session, "COUNCIL_ROOT", planner)
+    monkeypatch.setenv(
+        "COUNCIL_EVENT_FILE",
+        str(planner / "outgoing" / "planner" / "events" / "planner.jsonl"),
+    )
+    assert (
+        outcome.run(
+            CouncilProgram.PREPARE,
+            lambda: outcome.of_results(session.prepare(council, run_id=RUN, selection=selected)),
+        )
+        == 0
+    )
+    receipt = work_files.read_preparation(planner, selected, name, DAY)
+    assert receipt is not None and receipt.state == "no_work"
+    collector = repo / "backend" / "var" / "council"
+    _deliver_document(
+        planner / "outgoing" / "planner",
+        collector / "incoming",
+        selected,
+        receipt,
+        event="planner.jsonl",
+    )
+    monkeypatch.setattr(session, "COUNCIL_ROOT", collector)
+    monkeypatch.setenv("COUNCIL_SELECTION", selected.to_json())
+    monkeypatch.delenv("COUNCIL_EVENT_FILE")
+    try:
+        assert (
+            council_publish.main(
+                [
+                    "--config-root",
+                    str(target),
+                    "--repo-root",
+                    str(repo),
+                    "--run-id",
+                    RUN,
+                    "--commit",
+                    sha,
+                    "--matrix",
+                    "[]",
+                ]
+            )
+            == 0
+        )
+        assert json.loads(on_origin(origin, f"state/experiments/{name}/{DAY}.json") or "null") == []
+        rows = ledger.load_days(
+            repo / "state",
+            LedgerName.COUNCIL_RUN_RECORDS,
+            (DAY,),
+            model=CouncilRunRecord,
+        )
+        assert {row.evaluation_step for row in rows} == {
+            "select_judge_work",
+            "combine_judge_results",
+        }
+        assert all(row.work_part_count == 0 for row in rows)
+        assert not work_files.shard_path(collector, selected, name, DAY, 0).exists()
+    finally:
+        forget(package)
+
+
 def test_preparation_isolated_by_judge_and_date_and_only_ready_work_runs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
