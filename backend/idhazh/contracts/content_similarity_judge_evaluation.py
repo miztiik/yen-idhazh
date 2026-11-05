@@ -24,6 +24,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityEvaluationConfig
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.story_similarity_pair import ReadingRefusalReason, SameStoryVerdict
 
@@ -444,7 +445,8 @@ class EvaluationReport(Contract):
     __schema_stem__: ClassVar[str] = "content-similarity-judge-evaluation-report"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-11-05", change="Declare coverage-aware offline judge reports.",
+            version="2026-11-05",
+            change="Declare coverage-aware reports and actual scoring settings.",
             why="Missing labels and failed captures must remain visible as unknown metrics.",
         ),
     )
@@ -452,6 +454,7 @@ class EvaluationReport(Contract):
     set_sha256: Sha256
     labels_sha256: Sha256
     run_sha256: Sha256
+    report_settings: ContentSimilarityEvaluationConfig
     state: Literal["blocked", "measured"]
     blockers: tuple[EvaluationBlocker, ...]
     streams: tuple[EvaluationStreamReport, ...]

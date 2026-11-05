@@ -15,9 +15,10 @@ from numpy.typing import NDArray
 from scipy.stats import bootstrap
 from sklearn.metrics import precision_recall_fscore_support
 
-from idhazh import config
+from idhazh import config, event_lines
 from idhazh.atomic_write import write_atomic
 from idhazh.content_similarity_judge import settings as judge_settings
+from idhazh.content_similarity_judge.evaluation_events import EvaluationEvidenceRefused
 from idhazh.content_similarity_judge.freeze_evaluation import private_output, validate_inputs
 from idhazh.content_similarity_judge.run_evaluation import config_sha256
 from idhazh.contracts.base import canonical_json, derive_text_digest
@@ -203,7 +204,10 @@ def _predictions(
         except (ValueError, KeyError, TypeError):
             matches = False
         if not matches:
-            LOG.warning("evaluation capture refused reason=provenance_mismatch")
+            event_lines.emit(
+                EvaluationEvidenceRefused(scope="capture", case_id=case.case_id),
+                logger=LOG, level=logging.WARNING,
+            )
             blockers.add("provenance_mismatch")
             continue
         if row.forward.verdict is None or row.reverse.verdict is None:
@@ -340,11 +344,14 @@ def score(
     settings: config.Settings, tuning: ContentSimilarityEvaluationConfig,
 ) -> EvaluationReport:
     """Account for every selected case without opening a socket or inferring absent labels."""
+    report_settings = ContentSimilarityEvaluationConfig.model_validate(tuning.model_dump())
     blockers: set[EvaluationBlocker] = set()
     try:
-        validate_inputs(evaluation, max_cases=tuning.max_cases)
+        validate_inputs(evaluation, max_cases=report_settings.max_cases)
     except ValueError:
-        LOG.warning("evaluation set refused reason=provenance_mismatch")
+        event_lines.emit(
+            EvaluationEvidenceRefused(scope="set"), logger=LOG, level=logging.WARNING,
+        )
         blockers.add("provenance_mismatch")
     qualified, label_errors = _qualified_labels(evaluation, labels)
     predictions, margins, capture_errors = _predictions(evaluation, run, settings=settings)
@@ -360,13 +367,14 @@ def score(
             else derive_text_digest(canonical_json(None))
         ),
         run_sha256=document_sha256(run),
+        report_settings=report_settings,
         state="blocked" if blockers else "measured",
         blockers=tuple(sorted(blockers)),
         streams=tuple(
             _stream_report(
                 tuple(case for case in selected if case.stream == stream), stream=stream,
                 labels=qualified, predictions=predictions, margins=margins,
-                tuning=tuning, blocked=bool(blockers),
+                tuning=report_settings, blocked=bool(blockers),
             )
             for stream in STREAMS
         ),

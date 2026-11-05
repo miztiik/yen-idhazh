@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 
 from idhazh import config, crash_trace
+from idhazh.content_similarity_judge.evaluation_events import configure_logging
 from idhazh.content_similarity_judge.freeze_evaluation import freeze_files
 from idhazh.content_similarity_judge.run_evaluation import capture_file
 from idhazh.content_similarity_judge.score_evaluation import score_files
@@ -63,5 +64,5 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     crash_trace.install()
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    configure_logging(logging.getLogger())
     raise SystemExit(main())

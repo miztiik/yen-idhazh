@@ -90,6 +90,11 @@ recompute these identities and the named sanitizer implementation hash.
 Labels bind the canonical set and exact rubric; reports bind the canonical set,
 labels and run, including their recorded versions. Omitted labels are identified
 by the canonical JSON null hash and an explicit `missing_labels` blocker.
+Every report requires `report_settings`, using the native
+`ContentSimilarityEvaluationConfig` for the actual scoring values, including
+the input ceiling. These values participate in canonical report identity even
+when interval bounds coincide. Readers never reconstruct them from inference
+configuration or current defaults.
 A stable capture filename hashes immutable run-header fields; the complete run
 hash also covers its readings and final state.
 

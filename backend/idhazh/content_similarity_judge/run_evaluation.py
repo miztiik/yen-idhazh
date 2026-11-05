@@ -9,9 +9,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from idhazh import config
+from idhazh import config, event_lines
 from idhazh.atomic_write import write_atomic
 from idhazh.content_similarity_judge import settings as judge_settings
+from idhazh.content_similarity_judge.evaluation_events import (
+    EvaluationCaptureStarted,
+    EvaluationReadingRefused,
+)
 from idhazh.content_similarity_judge.freeze_evaluation import (
     private_output,
     validate_inputs,
@@ -116,6 +120,14 @@ def capture_reading(
     reading = judge.read_once(
         left, right, client=trace, settings=settings, markers=reader.markers,
     )
+    if reading.refusal_reason is not None:
+        event_lines.emit(
+            EvaluationReadingRefused(
+                case_id=case.case_id, order="reverse" if reverse else "forward",
+                reason=reading.refusal_reason,
+            ),
+            logger=LOG, level=logging.WARNING,
+        )
     return EvaluationReading(
         verdict=reading.verdict,
         grammar_applied=reading.grammar_applied,
@@ -145,7 +157,7 @@ def capture(
     if output.exists():
         raise ValueError("this capture identity already exists; no automatic retry or overwrite")
     write_atomic(output, run.to_json())
-    LOG.info("evaluation capture started file=%s", output.name)
+    event_lines.emit(EvaluationCaptureStarted(file=output.name), logger=LOG)
     run = EvaluationRun.model_validate(run.model_dump() | {"state": "incomplete"})
     write_atomic(output, run.to_json())
     cases = {case.case_id: case for case in evaluation.cases}

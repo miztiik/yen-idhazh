@@ -17,6 +17,7 @@ from idhazh.contracts.content_similarity_judge_evaluation import (
     EvaluationRun,
     EvaluationSet,
 )
+from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityEvaluationConfig
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict
 
 pytestmark = pytest.mark.contract
@@ -54,6 +55,17 @@ def test_annotations_bind_reviewer_identity_and_exact_rubric() -> None:
         EvaluationLabels.model_validate(base.model_dump() | {
             "annotations": [row, row.model_copy(update={"role": "independent"})],
         })
+
+
+def test_reports_require_the_native_scoring_settings() -> None:
+    path = CONTRACT_FIXTURES_DIR / EvaluationReport.__schema_stem__ / "example.json"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw.pop("report_settings", None)
+    with pytest.raises(ValueError, match="report_settings"):
+        EvaluationReport.model_validate(raw)
+    assert EvaluationReport.model_fields["report_settings"].annotation is (
+        ContentSimilarityEvaluationConfig
+    )
 
 
 def test_refusal_and_completed_span_evidence_cannot_disagree() -> None:

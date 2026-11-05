@@ -110,6 +110,13 @@ the unfinished reading absent. There is no manufactured refusal, retry or
 automatic resume. A new explicit capture is a separate observation; preserve
 the incomplete one rather than merging responses from different attempts.
 
+The entrypoint writes shared JSON event lines to stderr with UTC stamps.
+Capture progress retains only its safe artifact filename; reading and evidence
+refusals retain closed reasons and case identities. Unstructured library
+records become fixed evaluator diagnostics with exception type and package
+location when available, never raw library, article or model text. The stdout
+result fields are unchanged.
+
 ## Score saved evidence
 
 Scoring opens only the named set, labels and run, plus the selected config.
@@ -150,6 +157,10 @@ reader. Any strict integer seed is accepted; negative seeds are SHA-256 mapped
 to NumPy's nonnegative seed domain. These settings bound input and reporting
 work; none is an accuracy acceptance threshold or an inference-determinism
 promise. Record the report settings with any real benchmark.
+Each saved report snapshots all actual settings in its required
+`report_settings` field. Read interval coverage, resampling count, seed and
+input ceiling from that snapshot, not today's configuration. Different settings
+produce different report identities even when the interval bounds coincide.
 
 ## Design rationale
 

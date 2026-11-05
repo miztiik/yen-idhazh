@@ -9,6 +9,10 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import logging
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +24,7 @@ from support.judge_reader import ProtocolReplies, native_reply
 from support.models import a_markers
 from support.paths import CONFIG_DIR
 
-from idhazh import config
+from idhazh import config, event_lines
 from idhazh.content_similarity_judge.freeze_evaluation import (
     blinded_view,
     freeze,
@@ -299,8 +303,10 @@ def test_exact_production_request_bytes_and_both_orders(settings: config.Setting
 
 
 def test_capture_preserves_forward_when_reverse_transport_fails(
-    tmp_path: Path, settings: config.Settings,
+    tmp_path: Path, settings: config.Settings, caplog: pytest.LogCaptureFixture,
 ) -> None:
+    from idhazh.content_similarity_judge.evaluation_events import EvaluationCaptureStarted
+
     frozen = evaluation()
 
     class Transport:
@@ -319,12 +325,17 @@ def test_capture_preserves_forward_when_reverse_transport_fails(
         host=host(), git_sha="a" * 40, started_at=NOW,
     )
     expected_path = capture_path(declared, tmp_path)
-    with pytest.raises(ConnectionError):
+    with caplog.at_level(logging.INFO, logger="idhazh"), pytest.raises(ConnectionError):
         capture(
             frozen, split="confirmation", settings=settings, reader=reader,
             host=host(), git_sha="a" * 40, output_root=tmp_path, now=lambda: NOW,
         )
     assert expected_path.is_file()
+    progress = [
+        event for record in caplog.records
+        if isinstance(event := event_lines.payload(record), EvaluationCaptureStarted)
+    ]
+    assert len(progress) == 1 and progress[0].file == expected_path.name
     kept = EvaluationRun.read(expected_path)
     assert boundary.calls == 2
     assert kept.state == "incomplete" and kept.finished_at is None
@@ -512,6 +523,30 @@ def test_changed_input_hash_and_case_identity_are_recomputed() -> None:
         EvaluationSet.model_validate(frozen.model_dump() | {"corpus_sha256": "b" * 64})
 
 
+def test_actual_report_settings_are_snapshotted_and_identify_equal_intervals(
+    settings: config.Settings,
+) -> None:
+    frozen = evaluation(2)
+    run, _ = memory_run(frozen, settings)
+    marks = labels(frozen)
+    supplied = tuning(max_cases=17, confidence_level=0.5, resamples=13, resample_seed=-4)
+    expected = supplied.model_dump()
+    report = score(frozen, marks, run, settings=settings, tuning=supplied)
+    other_options = tuning(max_cases=18, confidence_level=0.99, resamples=99, resample_seed=2)
+    other = score(frozen, marks, run, settings=settings, tuning=other_options)
+    assert report.state == other.state == "measured"
+    assert report.report_settings.model_dump() == expected
+    assert other.report_settings == other_options
+    metric = report.streams[0].class_metrics[SameStoryVerdict.YES]
+    assert (metric.precision_lower, metric.precision_upper) == (1.0, 1.0)
+    assert (metric.recall_lower, metric.recall_upper) == (1.0, 1.0)
+    assert report.streams == other.streams
+    assert document_sha256(report) != document_sha256(other)
+    supplied.max_cases = 1
+    supplied.confidence_level = 0.8
+    assert report.report_settings.model_dump() == expected
+
+
 def test_event_group_intervals_use_scipy_and_reporting_settings(settings: config.Settings) -> None:
     frozen = evaluation(4)
     run, _ = memory_run(
@@ -522,6 +557,7 @@ def test_event_group_intervals_use_scipy_and_reporting_settings(settings: config
     marks = labels(frozen)
     options = tuning(confidence_level=0.5, resamples=99, resample_seed=4)
     report = score(frozen, marks, run, settings=settings, tuning=options)
+    assert report.report_settings == options
     metric = report.streams[0].class_metrics[SameStoryVerdict.YES]
     groups = sorted(case.group_id for case in frozen.cases)
     positive = {
@@ -582,6 +618,46 @@ def test_only_named_file_boundaries_are_read_and_written(
         "score", "--set", str(frozen_path), "--run", str(run_path),
         "--config-dir", str(CONFIG_DIR), "--output-root", str(output),
     ]) == 2
+
+
+def test_score_cli_json_logs_redact_model_text_and_preserve_stdout(
+    tmp_path: Path, settings: config.Settings,
+) -> None:
+    frozen = evaluation()
+    run, _ = memory_run(frozen, settings)
+    row = run.cases[0]
+    reading = row.forward
+    assert reading is not None
+    secret = "PRIVATE_MODEL_TEXT https://invalid.test/?token=do-not-log"
+    run = run.model_copy(update={"cases": (
+        row.model_copy(update={"forward": reading.model_copy(update={"raw_response": (secret,)})}),
+    )})
+    set_path, run_path = tmp_path / "set.json", tmp_path / "run.json"
+    set_path.write_text(frozen.to_json(), encoding="utf-8")
+    run_path.write_text(run.to_json(), encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "utilities.evaluate_content_similarity_judge", "score",
+            "--set", str(set_path), "--run", str(run_path),
+            "--config-dir", str(CONFIG_DIR), "--output-root", str(tmp_path / "reports"),
+        ],
+        cwd=config.REPO_ROOT,
+        env=dict(os.environ) | {"PYTHONPATH": str(config.REPO_ROOT / "backend")},
+        check=False, capture_output=True, text=True,
+    )
+    assert result.returncode == 2
+    assert result.stdout.startswith("state=blocked\nreport=report-")
+    assert "blockers=missing_labels,provenance_mismatch\n" in result.stdout
+    records = [json.loads(line) for line in result.stderr.splitlines()]
+    assert records
+    assert all(record["at"].endswith("Z") for record in records)
+    assert any(
+        record["event"] == "evaluation-evidence-refused"
+        and record["scope"] == "capture"
+        and record["case_id"] == row.case_id
+        for record in records
+    )
+    assert secret not in result.stderr and "do-not-log" not in result.stderr
 
 
 def test_capture_rejects_an_empty_selected_split_before_host_or_model_access(tmp_path: Path) -> None:
