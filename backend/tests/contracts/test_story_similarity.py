@@ -226,6 +226,19 @@ def test_a_pair_whose_score_is_not_its_weighted_terms_is_refused() -> None:
     assert split.composite_score == 0.72
 
 
+def test_a_pair_of_equal_article_address_keys_is_refused() -> None:
+    """Replacing strict address ordering with non-strict ordering admits self-pairs."""
+    key = derive_url_key(LEFT)
+    with pytest.raises(ValidationError, match="sorted order"):
+        StorySimilarityPair.model_validate(
+            a_pair(
+                left_url_key=key,
+                right_url_key=key,
+                pair_key=derive_text_digest(key + key),
+            )
+        )
+
+
 def test_a_headline_matched_pair_scores_one_and_is_accepted() -> None:
     """The second of the two rules, which a weighted-sum-only check would refuse.
 

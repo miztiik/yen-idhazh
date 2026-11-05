@@ -16,6 +16,8 @@ import dataclasses
 import io
 import json
 import logging
+from collections.abc import Iterator
+from hashlib import sha256
 from pathlib import Path
 from typing import Final
 
@@ -28,7 +30,18 @@ from idhazh.content_similarity_judge import tenant
 from idhazh.content_similarity_judge.tenant import JUDGE_ID, VERDICTS_DIRNAME
 from idhazh.contracts.base import ServerJob, derive_text_digest, derive_url_key
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
+from idhazh.contracts.council_events import CouncilExit
+from idhazh.contracts.council_invocation import (
+    ArtifactFile,
+    PreparationReceipt,
+    ScheduleRequest,
+    SelectedJudge,
+    Selection,
+    ShardReport,
+)
+from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.knobs.council import JudgeLifecycleStatus
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgersConfig
@@ -58,8 +71,13 @@ def a_scorer() -> ScorerStamp:
 
 
 def a_judge() -> JudgeStamp:
-    return JudgeStamp(judge_model="qwen3-5-9b-q4-k-m", prompt_digest="a" * 64,
-                      grammar_digest="b" * 64, judge_temperature=0.0, thinks=False)
+    return JudgeStamp(
+        judge_model="qwen3-5-9b-q4-k-m",
+        prompt_digest="a" * 64,
+        grammar_digest="b" * 64,
+        judge_temperature=0.0,
+        thinks=False,
+    )
 
 
 def a_record() -> StorySimilarityDistribution:
@@ -174,9 +192,7 @@ def test_an_exact_slot_edge_on_the_shipped_band_is_that_slot() -> None:
     merge line off a slot edge, so filing one slot low is a whole bin of error on
     the one number this feature exists to set.
     """
-    record = counting.empty_record(
-        SimilarityThresholdConfig(), scorer=a_scorer(), judge=a_judge()
-    )
+    record = counting.empty_record(SimilarityThresholdConfig(), scorer=a_scorer(), judge=a_judge())
 
     for score in (0.900, 0.930, 0.950, 0.970, 0.990):
         index = counting.slot_index(score, record=record)
@@ -222,7 +238,10 @@ def test_a_changed_scorer_stamp_archives_and_starts_empty() -> None:
     moved = ScorerStamp(scorer_model="all-minilm-l6-v2-quantized", cosine_weight=0.8)
 
     assert counting.inputs_changed(record, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) is None
-    assert counting.inputs_changed(record, knobs=KNOBS, scorer=moved, judge=a_judge()) == ("1.0", "0.8")
+    assert counting.inputs_changed(record, knobs=KNOBS, scorer=moved, judge=a_judge()) == (
+        "1.0",
+        "0.8",
+    )
     assert counting.archive_stem(record) != counting.archive_stem(
         counting.empty_record(KNOBS, scorer=moved, judge=a_judge())
     )
@@ -308,9 +327,7 @@ def test_a_stamped_re_judge_beats_the_unstamped_rows_it_replaces() -> None:
     assert [row.run_id for row in counting.one_row_a_pair(rows[::2])] == [f"{DATE}-2"]
 
 
-def a_metrics_row(
-    *, shard: int, dealt: int = 2, date: str = DATE
-) -> ContentSimilarityJudgeMetrics:
+def a_metrics_row(*, shard: int, dealt: int = 2, date: str = DATE) -> ContentSimilarityJudgeMetrics:
     """One unit's instrument reading, with a funnel that closes."""
     return ContentSimilarityJudgeMetrics.model_validate(
         {
@@ -359,9 +376,7 @@ def a_night(
         metrics_sink.ship_judge_metrics(row, judge_id=JUDGE_ID, name=str(unit), out_dir=shipped)
         atomic_write.write_atomic(
             verdicts
-            / session.unit_file(
-                date, slot=VERDICTS_DIRNAME, judge_id=JUDGE_ID, shard=unit
-            ).name,
+            / session.unit_file(date, slot=VERDICTS_DIRNAME, judge_id=JUDGE_ID, shard=unit).name,
             a_verdict_file(
                 [
                     a_row(score=0.55, pair=unit * 16 + index, date=date)
@@ -404,6 +419,8 @@ def test_the_row_the_collecting_job_lands_is_the_row_the_unit_shipped(tmp_path: 
         verdicts_dir=verdicts,
         settings=settings,
         identity=a_saver(),
+        expected_shards=settings.council.shards,
+        reports_complete=True,
         state_dir=state,
     )
 
@@ -436,6 +453,8 @@ def test_the_readings_land_on_a_night_the_record_refused_to_count(tmp_path: Path
         verdicts_dir=verdicts,
         settings=settings,
         identity=a_saver(),
+        expected_shards=settings.council.shards,
+        reports_complete=True,
         state_dir=state,
     )
 
@@ -458,6 +477,8 @@ def test_a_night_whose_units_shipped_nothing_appends_nothing(tmp_path: Path) -> 
         verdicts_dir=tmp_path / "nothing-was-judged",
         settings=settings,
         identity=a_saver(),
+        expected_shards=settings.council.shards,
+        reports_complete=False,
         state_dir=state,
     )
 
@@ -466,19 +487,281 @@ def test_a_night_whose_units_shipped_nothing_appends_nothing(tmp_path: Path) -> 
     assert not ledger.raw_root(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS).exists()
 
 
+@pytest.mark.parametrize("reports_complete", [False, True])
+def test_counting_uses_admitted_width_and_requires_complete_reports(
+    tmp_path: Path, reports_complete: bool
+) -> None:
+    """Files alone cannot turn failed or refused units into a completed date."""
+    settings = config.load(CONFIG_DIR)
+    state = tmp_path / "state"
+    shipped, verdicts, _ = a_night(tmp_path, units=1, verdicts_a_unit=1)
+    report = count_verdicts.stage_count_verdicts(
+        DATE,
+        run_id=A_COUNCIL_RUN,
+        judge_id=JUDGE_ID,
+        shipped_root=shipped,
+        verdicts_dir=verdicts,
+        settings=settings,
+        identity=a_saver(),
+        expected_shards=1,
+        reports_complete=reports_complete,
+        state_dir=state,
+    )
+
+    assert report.shards_expected == report.shards_present == 1
+    assert report.counted is reports_complete
+    assert report.held_reason == (None if reports_complete else "reports_incomplete")
+    assert report.rows_appended == report.metrics_appended == 1
+    assert len(ledger.load_story_similarity_pairs(state, DATE)) == 1
+    if not reports_complete:
+        assert not ledger.path(
+            state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION
+        ).exists()
+
+
+def test_zero_work_counts_without_creating_shard_evidence(tmp_path: Path) -> None:
+    """A no-work receipt completes its date without fabricated verdicts or readings."""
+    state = tmp_path / "state"
+    shipped, verdicts = tmp_path / "shipped", tmp_path / "verdicts"
+    report = count_verdicts.stage_count_verdicts(
+        DATE,
+        run_id=A_COUNCIL_RUN,
+        judge_id=JUDGE_ID,
+        shipped_root=shipped,
+        verdicts_dir=verdicts,
+        settings=config.load(CONFIG_DIR),
+        identity=a_saver(),
+        expected_shards=0,
+        reports_complete=True,
+        state_dir=state,
+    )
+
+    assert report.counted
+    assert report.shards_expected == report.shards_present == 0
+    assert report.rows_appended == report.metrics_appended == 0
+    assert not shipped.exists()
+    assert not verdicts.exists()
+    assert not ledger.raw_root(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).exists()
+    assert not ledger.raw_root(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS).exists()
+    record = StorySimilarityDistribution.from_json(
+        ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert record.judged_dates == (DATE,)
+
+
+@pytest.mark.parametrize(
+    ("max_dates", "max_older_dates", "expected"),
+    [
+        (1, 1, (DATE,)),
+        (3, 0, (DATE,)),
+        (2, 1, (DATE, "2026-09-16")),
+        (3, 2, (DATE, "2026-09-16", "2026-09-15")),
+    ],
+)
+def test_schedule_chooses_anchor_then_newest_outstanding_within_budgets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    max_dates: int,
+    max_older_dates: int,
+    expected: tuple[str, ...],
+) -> None:
+    """The judge, not its host, selects actual dates from its own date memory."""
+    settings = config.load(CONFIG_DIR)
+    counted_by(
+        AN_EARLIER_DATE,
+        root=tmp_path / "finished",
+        state=tmp_path / "state",
+        settings=settings,
+        units=settings.council.shards,
+    )
+    monkeypatch.setattr(config, "REPO_ROOT", tmp_path)
+    request = ScheduleRequest(
+        anchor_date=DATE,
+        window=("2026-09-15", AN_EARLIER_DATE, DATE, "2026-09-16"),
+        max_dates=max_dates,
+        max_older_dates=max_older_dates,
+        shards=1,
+        shard_seconds=1.0,
+    )
+
+    assert tenant.TENANT.schedule(request=request).dates == expected
+
+
 #: The commit the save job's command line names, and the attempt the platform
 #: says it is on. Both have to reach every file the night files.
 A_COMMIT: Final = "0735031c2a9e4b8f1d6c3a5e7b9d0f2a4c6e8b1d"
 AN_ATTEMPT: Final = 2
 
 
+@pytest.fixture
+def admitted_invocation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "var" / "council")
+    selection = Selection(
+        version=Selection.schema_version(),
+        run_id=A_COUNCIL_RUN,
+        attempt=AN_ATTEMPT,
+        git_sha=A_COMMIT,
+        mode="scheduled",
+        anchor_date=DATE,
+        window=(DATE, AN_EARLIER_DATE),
+        judges=(
+            SelectedJudge(
+                tenant=JUDGE_ID,
+                status=JudgeLifecycleStatus.ACTIVE,
+                dates=(DATE, AN_EARLIER_DATE),
+                shards=config.load_council(CONFIG_DIR).shards,
+            ),
+        ),
+    )
+    with session._route(selection, JUDGE_ID):
+        yield
+
+
+@pytest.mark.usefixtures("admitted_invocation")
+@pytest.mark.parametrize(
+    ("report_state", "outcome", "code", "counted"),
+    [
+        ("reported", ShardOutcome.COMPLETED, CouncilExit.OK, True),
+        ("reported", ShardOutcome.FAILED, CouncilExit.FAILED, False),
+        ("reported", ShardOutcome.STOPPED_ON_DEADLINE, CouncilExit.FAILED, False),
+        ("reported", ShardOutcome.COMPLETED, CouncilExit.REFUSED, False),
+        ("missing", None, None, False),
+        ("refused", None, CouncilExit.REFUSED, False),
+        ("invalid", None, None, False),
+        ("not_dispatched", None, None, False),
+        (None, None, None, False),
+    ],
+)
+def test_adapter_preserves_arrived_evidence_but_holds_unsuccessful_reports(
+    tmp_path: Path,
+    report_state: str | None,
+    outcome: ShardOutcome | None,
+    code: CouncilExit | None,
+    counted: bool,
+) -> None:
+    """Only complete successful reports may add a date to count memory."""
+    state = tmp_path / "state"
+    draw = tenant._draw_path(DATE)
+    document = a_verdict_file([]).encode("utf-8")
+    atomic_write.write_atomic(draw, document.decode("utf-8"))
+    prepared = PreparationReceipt(
+        version=PreparationReceipt.schema_version(),
+        run_id=A_COUNCIL_RUN,
+        attempt=AN_ATTEMPT,
+        git_sha=A_COMMIT,
+        judge_id=JUDGE_ID,
+        date=DATE,
+        state="ready",
+        shards=1,
+        files=(
+            ArtifactFile(
+                path=session.artifact_path(draw),
+                size_bytes=len(document),
+                sha256=sha256(document).hexdigest(),
+            ),
+        ),
+    )
+    atomic_write.write_atomic(
+        tenant._verdict_path(DATE, shard=0), a_verdict_file([a_row(score=0.55)])
+    )
+    metrics_sink.ship_judge_metrics(
+        a_metrics_row(shard=0),
+        judge_id=JUDGE_ID,
+        name="0",
+        out_dir=tenant._shipping_dir(DATE),
+    )
+    reports = (
+        ()
+        if report_state is None
+        else (
+            ShardReport.model_validate(
+                {
+                    "shard": 0,
+                    "shards": 1,
+                    "report_state": report_state,
+                    "outcome": outcome,
+                    "code": code,
+                }
+            ),
+        )
+    )
+
+    tenant.TENANT.settle(
+        date=DATE,
+        run_id=A_COUNCIL_RUN,
+        state_dir=state,
+        identity=a_saver(),
+        prepared=prepared,
+        reports=reports,
+    )
+
+    assert len(ledger.load_story_similarity_pairs(state, DATE)) == 1
+    assert (
+        len(
+            ledger.load_days(
+                state,
+                LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
+                [DATE],
+                model=ContentSimilarityJudgeMetrics,
+            )
+        )
+        == 1
+    )
+    record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
+    if counted:
+        assert StorySimilarityDistribution.from_json(
+            record_path.read_text(encoding="utf-8")
+        ).judged_dates == (DATE,)
+    else:
+        assert not record_path.exists()
+
+
+@pytest.mark.usefixtures("admitted_invocation")
+def test_adapter_settles_no_work_without_synthetic_shard_outputs(tmp_path: Path) -> None:
+    prepared = PreparationReceipt(
+        version=PreparationReceipt.schema_version(),
+        run_id=A_COUNCIL_RUN,
+        attempt=AN_ATTEMPT,
+        git_sha=A_COMMIT,
+        judge_id=JUDGE_ID,
+        date=DATE,
+        state="no_work",
+        shards=0,
+        files=(),
+    )
+    state = tmp_path / "state"
+
+    tenant.TENANT.settle(
+        date=DATE,
+        run_id=A_COUNCIL_RUN,
+        state_dir=state,
+        identity=a_saver(),
+        prepared=prepared,
+        reports=(),
+    )
+
+    assert not tenant._verdicts_dir(DATE).exists()
+    assert not tenant._shipping_dir(DATE).exists()
+    assert not ledger.raw_root(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS).exists()
+    assert not ledger.raw_root(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).exists()
+    record = StorySimilarityDistribution.from_json(
+        ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert record.judged_dates == (DATE,)
+
+
+@pytest.mark.usefixtures("admitted_invocation")
 def test_a_settled_night_files_each_judged_date_through_the_door_and_the_fit_reads_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The oracle for the move: `council-settle --commit` over a fixture night.
+    """The adapter files each admitted date under the supplied writer identity.
 
-    Two judged dates, each settled from the command line the way the save job
-    settles it, over every unit's verdicts and readings. Each date leaves one
+    Two judged dates, each settled through the adapter over every unit's
+    verdicts and readings. Each date leaves one
     raw file of judged pairs and one of readings under the judge's own folder of
     the door's raw root, each filed under the council's writer identity with the
     counting stage as its producer, and nothing under the folders the two
@@ -488,7 +771,6 @@ def test_a_settled_night_files_each_judged_date_through_the_door_and_the_fit_rea
     """
     from test_similarity_fit import a_published_day
 
-    from idhazh import cli
     from idhazh.stages import common
 
     monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "var" / "council")
@@ -517,8 +799,53 @@ def test_a_settled_night_files_each_judged_date_through_the_door_and_the_fit_rea
                 session.unit_file(date, slot=VERDICTS_DIRNAME, judge_id=JUDGE_ID, shard=unit),
                 a_verdict_file([judged]),
             )
-        argv = ["council-settle", "--date", date, "--run-id", A_COUNCIL_RUN]
-        assert cli.main([*argv, "--state-root", str(state), "--commit", A_COMMIT]) == 0
+        draw_path = tenant._draw_path(date)
+        document = a_verdict_file([]).encode("utf-8")
+        atomic_write.write_atomic(draw_path, document.decode("utf-8"))
+        prepared = PreparationReceipt(
+            version=PreparationReceipt.schema_version(),
+            run_id=A_COUNCIL_RUN,
+            attempt=AN_ATTEMPT,
+            git_sha=A_COMMIT,
+            judge_id=JUDGE_ID,
+            date=date,
+            state="ready",
+            shards=units,
+            files=(
+                ArtifactFile(
+                    path=session.artifact_path(draw_path),
+                    size_bytes=len(document),
+                    sha256=sha256(document).hexdigest(),
+                ),
+            ),
+        )
+        reports = tuple(
+            ShardReport(
+                shard=unit,
+                shards=units,
+                report_state="reported",
+                outcome=ShardOutcome.COMPLETED,
+                code=CouncilExit.OK,
+            )
+            for unit in range(units)
+        )
+        identity = a_saver().model_copy(
+            update={
+                "attempt": AN_ATTEMPT,
+                "git_sha": A_COMMIT,
+            }
+        )
+        assert (
+            tenant.TENANT.settle(
+                date=date,
+                run_id=A_COUNCIL_RUN,
+                state_dir=state,
+                identity=identity,
+                prepared=prepared,
+                reports=reports,
+            ).outcome
+            is ShardOutcome.COMPLETED
+        )
 
     writer = WriterIdentity(
         run_id=A_COUNCIL_RUN,
@@ -579,6 +906,8 @@ def counted_by(
         verdicts_dir=verdicts,
         settings=settings,
         identity=a_saver(f"{date}-9"),
+        expected_shards=settings.council.shards,
+        reports_complete=units == settings.council.shards,
         state_dir=state,
     )
 
@@ -602,9 +931,7 @@ def test_the_night_that_lost_a_unit_is_the_night_this_judge_asks_for_again(
     state = tmp_path / "state"
     shards = settings.council.shards
 
-    whole = counted_by(
-        DATE, root=tmp_path / "whole", state=state, settings=settings, units=shards
-    )
+    whole = counted_by(DATE, root=tmp_path / "whole", state=state, settings=settings, units=shards)
     short = counted_by(
         AN_EARLIER_DATE,
         root=tmp_path / "short",
@@ -613,9 +940,7 @@ def test_the_night_that_lost_a_unit_is_the_night_this_judge_asks_for_again(
         units=shards - 1,
     )
 
-    answered = tenant.TENANT.nights_outstanding(
-        window=(AN_EARLIER_DATE, DATE), state_dir=state
-    )
+    answered = tenant.TENANT.nights_outstanding(window=(AN_EARLIER_DATE, DATE), state_dir=state)
 
     assert (whole.counted, short.counted) == (True, False)
     assert len(ledger.load_story_similarity_pairs(state, AN_EARLIER_DATE)) == shards - 1, (
@@ -652,9 +977,7 @@ def test_the_date_memory_survives_the_reset_that_empties_the_counts(tmp_path: Pa
     assert after.archived is not None, "the weights moved, so the counts were archived"
     assert record.counted_dates == (AN_EARLIER_DATE,), "the counts start again from this night"
     assert record.judged_dates == (AN_EARLIER_DATE, DATE), "and both nights are remembered"
-    assert (
-        tenant.TENANT.nights_outstanding(window=(AN_EARLIER_DATE, DATE), state_dir=state) == ()
-    )
+    assert tenant.TENANT.nights_outstanding(window=(AN_EARLIER_DATE, DATE), state_dir=state) == ()
 
 
 def test_a_paused_judge_family_takes_no_verdict_reading_archive_or_count(

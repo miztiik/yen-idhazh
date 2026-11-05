@@ -21,7 +21,7 @@ from support.paths import read_text
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council import night_plan, registry
 
-from ._config import copy_config, write_declarations
+from ._config import COMMIT, RUN_ID, copy_config, write_declarations
 from ._tenants import a_belated_venue, forget
 
 A_VENUE = "a_belated_venue_package"
@@ -60,7 +60,7 @@ def _config_registering(root: Path, *, slugs: tuple[str, ...], **council: object
 
 def _planned(capsys: pytest.CaptureFixture[str], argv: list[str]) -> list[str]:
     """The dates the planner prints, read back off its one key-value line."""
-    assert night_plan.main(argv) == 0
+    assert night_plan.main([*argv, "--run-id", RUN_ID, "--commit", COMMIT]) == 0
     printed = dict(line.split("=", 1) for line in capsys.readouterr().out.splitlines() if line)
     return list(json.loads(printed["dates"]))
 
@@ -181,7 +181,21 @@ def test_a_tenant_that_names_a_night_nobody_asked_about_is_refused_by_name(
     )
     config_root = _config_registering(venue, slugs=("one-judge",))
 
-    assert night_plan.main(["--config-root", str(config_root), "--tonight", TONIGHT]) == 2
+    assert (
+        night_plan.main(
+            [
+                "--config-root",
+                str(config_root),
+                "--tonight",
+                TONIGHT,
+                "--run-id",
+                RUN_ID,
+                "--commit",
+                COMMIT,
+            ]
+        )
+        == 2
+    )
 
 
 def test_a_dispatched_date_replaces_the_plan_and_asks_nobody(

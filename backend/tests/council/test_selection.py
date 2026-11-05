@@ -41,13 +41,18 @@ def test_each_judge_has_its_own_repair_cap(tmp_path: Path, monkeypatch: pytest.M
             council,
             tonight="2026-10-10",
             hosted=registry.tenants(council.running(), council=council),
+            run_id="2026-10-11-123",
+            attempt=1,
+            git_sha="a" * 40,
         )
         assert {judge.tenant: judge.dates for judge in selected.judges} == {
             "first": ("2026-10-10", "2026-10-09"),
             "second": ("2026-10-10", "2026-10-07"),
         }
+        monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "scratch")
+        session.prepare(council, date=None, run_id=selected.run_id, selection=selected)
         cells = council_matrix.cells(target, selection=selected)
-        assert [cell["runs_model"] for cell in cells] == [False, False, True, True]
+        assert cells == [], "each plugin explicitly reports no work during preparation"
     finally:
         forget(package)
 
@@ -77,6 +82,18 @@ def test_every_consumer_refuses_invalid_selection_before_any_import_or_write(
     monkeypatch.setattr(registry, "TENANT_PACKAGE", package)
     monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "scratch")
     target = room(tmp_path, {"named-judge": ("active", False)})
+    if payload:
+        raw = json.loads(payload)
+        raw.update(
+            run_id="2026-10-11-123",
+            attempt=1,
+            git_sha="a" * 40,
+            anchor_date="2026-10-10",
+            window=["2026-10-10", "2026-10-09"],
+        )
+        for judge in raw.get("judges", []):
+            judge["shards"] = 1
+        payload = json.dumps(raw)
     monkeypatch.setenv("COUNCIL_SELECTION", payload)
     if command == "matrix":
         code = council_matrix.main(["--config-root", str(target)])
@@ -105,6 +122,8 @@ def test_every_consumer_refuses_invalid_selection_before_any_import_or_write(
                 "2026-10-11-123",
                 "--tenant",
                 "named-judge",
+                "--commit",
+                "a" * 40,
             ]
         )
     assert code == 2
@@ -119,9 +138,14 @@ def test_manual_selection_refuses_multiple_judges_with_different_dates() -> None
         Selection.model_validate(
             {
                 "mode": "manual",
+                "run_id": "2026-10-11-123",
+                "attempt": 1,
+                "git_sha": "a" * 40,
+                "anchor_date": "2026-10-10",
+                "window": ["2026-10-10", "2026-10-09"],
                 "judges": [
-                    {"tenant": "first", "status": "active", "dates": ["2026-10-10"]},
-                    {"tenant": "second", "status": "paused", "dates": ["2026-10-09"]},
+                    {"tenant": "first", "status": "active", "dates": ["2026-10-10"], "shards": 1},
+                    {"tenant": "second", "status": "paused", "dates": ["2026-10-09"], "shards": 1},
                 ],
             }
         )
@@ -136,7 +160,19 @@ def test_a_selected_shard_cannot_run_another_date(
         json.dumps(
             {
                 "mode": "manual",
-                "judges": [{"tenant": "named-judge", "status": "active", "dates": ["2026-10-10"]}],
+                "run_id": "2026-10-11-123",
+                "attempt": 1,
+                "git_sha": "a" * 40,
+                "anchor_date": "2026-10-10",
+                "window": ["2026-10-10"],
+                "judges": [
+                    {
+                        "tenant": "named-judge",
+                        "status": "active",
+                        "dates": ["2026-10-10"],
+                        "shards": 1,
+                    }
+                ],
             }
         )
     )

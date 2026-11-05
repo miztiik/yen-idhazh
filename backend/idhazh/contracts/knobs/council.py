@@ -154,7 +154,7 @@ class CouncilConfig(Model):
         le=30,
         description=(
             "How many nights back the council asks its tenants about, ending the night "
-            "before tonight. This tuple of dates is the whole of what a tenant is handed, "
+            "before the anchor. The scheduling request includes this window and the anchor, "
             "so it bounds the tenant's read as well as the council's own (CLAUDE.md "
             "Guardrail #12). 7, because a night that died on a Friday is still repairable "
             "the following Thursday, and a date still unjudged after a week is one a "
@@ -166,7 +166,9 @@ class CouncilConfig(Model):
         ge=0,
         le=4,
         description=(
-            "How many older dates one night may repair, on top of tonight. Dates are a "
+            "How many older dates each plugin may choose, in addition to the optional anchor. "
+            "The council validates the complete answer without inserting or truncating dates. "
+            "Dates are a "
             "parallel axis - one job a date a shard a tenant, each under its own "
             "shard_timeout_minutes - so this buys matrix width rather than wall clock. At "
             "4 shards and 2 tenants, 1 repair is 16 jobs against the platform's 20-job "

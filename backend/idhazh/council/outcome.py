@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from idhazh.contracts.council_events import CouncilExit as CouncilExit
 from idhazh.contracts.council_events import CouncilProgram, ProgramFinished
 from idhazh.contracts.council_run_record import ShardOutcome
+from idhazh.contracts.knobs.council import JudgeRefusalError
 from idhazh.council.tenancy import ShardResult
 
 # Approved precedence and sentences are protocol constants, not tunable policy.
@@ -73,7 +74,7 @@ def run(program: CouncilProgram, work: Callable[[], int]) -> int:
                 refused = not _STARTED.get() and (
                     program not in (CouncilProgram.SETTLE, CouncilProgram.PUBLISH)
                     or (isinstance(error, SystemExit) and error.code == CouncilExit.REFUSED)
-                    or isinstance(error, ValidationError)
+                    or isinstance(error, (ValidationError, JudgeRefusalError))
                 )
                 event_log.failed(error, refused=refused)
                 code = CouncilExit.REFUSED if refused else CouncilExit.FAILED

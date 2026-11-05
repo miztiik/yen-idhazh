@@ -18,7 +18,7 @@ from idhazh.contracts.council_events import CouncilProgram, Diagnostic
 from idhazh.council import event_log, night_plan, outcome, registry, session
 from utilities import council_matrix
 
-from ._config import copy_config, write_declarations
+from ._config import COMMIT, RUN_ID, copy_config, selection, write_declarations
 from ._tenants import a_venue, forget, written
 
 PACKAGE = "preflight_tenants"
@@ -49,12 +49,27 @@ def configuration(root: Path, slugs: tuple[str, ...]) -> Path:
 
 def invoke(command: str, target: Path) -> int:
     if command == "night":
-        return night_plan.main(["--config-root", str(target), "--tonight", DATE])
-    if command == "matrix":
-        return council_matrix.main(["--config-root", str(target), "--date", DATE])
+        return night_plan.main(
+            [
+                "--config-root",
+                str(target),
+                "--tonight",
+                DATE,
+                "--run-id",
+                RUN_ID,
+                "--commit",
+                COMMIT,
+            ]
+        )
 
     def prepare() -> int:
-        session.prepare(config.load_council(target), date=DATE, run_id="2026-10-11-123")
+        council = config.load_council(target)
+        selected = selection(council, date=DATE, run_id=RUN_ID)
+        session.prepare(council, date=DATE, run_id=RUN_ID, selection=selected)
+        if command == "matrix":
+            with pytest.MonkeyPatch.context() as environment:
+                environment.setenv("COUNCIL_SELECTION", selected.model_dump_json())
+                return council_matrix.main(["--config-root", str(target)])
         return 0
 
     return outcome.run(CouncilProgram.PREPARE, prepare)
@@ -94,9 +109,7 @@ def test_bad_sets_refuse_by_safe_name_before_any_work(
     assert output.out == ""
     formatter = event_log.OneJsonLine()
     events = [json.loads(formatter.format(record)) for record in caplog.records]
-    assert any(
-        event.get("kind") == "refusal" and event.get("judge_id") == BAD for event in events
-    )
+    assert any(event.get("kind") == "refusal" and event.get("judge_id") == BAD for event in events)
     assert events[-1]["code"] == 2 and events[-1]["label"] == "refused"
     assert "SOURCE-TEXT" not in json.dumps(events) + output.out + output.err
     assert "::error::untrusted" not in json.dumps(events) + output.err

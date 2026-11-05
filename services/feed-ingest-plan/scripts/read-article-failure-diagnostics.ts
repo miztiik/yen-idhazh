@@ -6,7 +6,7 @@ import {
   TraceIdSchema, readTraceContext,
 } from "@idhazh/common-contracts";
 import type { ArticleFailureDiagnostic } from "@idhazh/common-contracts";
-import type { ServerEvidence } from "../../typescript-api/src/server-evidence";
+import type { ServerEvidence } from "../../serve-pipeline-apis/src/server-evidence";
 import { distinctArticleDiagnostics } from "../src/reporting/article-failure-evidence";
 import type { ReportDiagnosticIdentity } from "../src/reporting/article-failure-evidence";
 

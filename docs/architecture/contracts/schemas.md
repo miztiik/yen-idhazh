@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-05
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -50,6 +50,27 @@ live outside that API, under
 [workflow reference](../../reference/summary-evaluation-workflow.md) owns
 their fields and the narrow reader held against native TypeScript host
 schemas. The evaluator package does not import these workflow contracts.
+
+## Council invocation and retained-record compatibility
+
+`backend/idhazh/contracts/council_invocation.py` owns the versioned
+`Selection`, `PreparationReceipt` and `ShardFiles` documents. Each is bound
+to one run ID, positive attempt and Git revision; consumers require exact
+same-invocation identity, current schema and selected cell/width agreement.
+Old invocation artifacts are not resumed or migrated. Opaque file declarations
+carry relative paths, strict nonnegative sizes and SHA-256 digests, not
+publication permission. The [execution page](../publishing/llm-council.md#preparation-authorizes-work-not-selection-alone)
+owns receipt states and safe transport; the
+[selection page](../publishing/llm-council-dates.md) owns date authorization.
+
+Retained council evidence has a different compatibility rule.
+`CouncilRunRecord` and `UnitFinished` permit zero parts for preparation and
+settlement; shard evidence still requires a positive count and an index below
+that count. Ready work records its admitted width; no-work and failed
+preparation record zero. Historical positive-count no-work records remain
+readable without rewriting their bytes, and older council records without
+`fault` still read with no recorded fault. Unknown preparation or a missing
+shard report never becomes successful no work.
 
 ## Recursive ledger types
 

@@ -167,7 +167,7 @@ Table I - Delivery rows
 - `packages/common-contracts/test/selected-article.test.ts`
 - `services/feed-ingest-plan/package.json`
 - `services/feed-ingest-plan/bun.lock`
-- `services/typescript-api/bun.lock`
+- `services/serve-pipeline-apis/bun.lock`
 - `packages/feed-probe/bun.lock`
 - `services/feed-ingest-plan/src/harvest-feeds/normalize-resource-url.ts` (new)
 - `services/feed-ingest-plan/src/harvest-feeds/article-url.ts`
@@ -209,7 +209,7 @@ Table I - Delivery rows
 - `docs/how-to/run-feed-ingest-plan-test.md`
 
 **Acceptance gates:**
-- **Local:** H6; `bun run check` in common-contracts, ledger-file-writer, feed-ingest-plan, typescript-api and feed-probe after their affected local dependency graphs are current. In common-contracts, run `config.test.ts`, `article-identity-compatibility.test.ts` and `selected-article.test.ts`; in the planner run `article-url-cleanup.test.ts`, `harvest.test.ts`, `harvest-safety.test.ts`, `article-source-outcome.test.ts`, `file-baseline.test.ts` and `plan-entry-points.test.ts` in one native test invocation. Add the actual affected caller cases selected by H6, not an unconditional local full suite.
+- **Local:** H6; `bun run check` in common-contracts, ledger-file-writer, feed-ingest-plan, serve-pipeline-apis and feed-probe after their affected local dependency graphs are current. In common-contracts, run `config.test.ts`, `article-identity-compatibility.test.ts` and `selected-article.test.ts`; in the planner run `article-url-cleanup.test.ts`, `harvest.test.ts`, `harvest-safety.test.ts`, `article-source-outcome.test.ts`, `file-baseline.test.ts` and `plan-entry-points.test.ts` in one native test invocation. Add the actual affected caller cases selected by H6, not an unconditional local full suite.
 - **Behavior:** Named vectors cover meaningful queries, encoded ampersands/equal signs, duplicate keys, order, blank values, plus signs, fragments, mixed scheme spelling and serialized URL bounds. The recorder supplies exact query-bearing request URLs; a missing recording fails instead of contacting the web.
 - **CI:** H7, including ordinary current-format round trips, native file integrity and composed-listener checks.
 
@@ -418,7 +418,7 @@ Table M - Row 2 alternatives
 - `services/feed-ingest-plan/test/collection-http.test.ts`
 - `services/feed-ingest-plan/test/collection-recordings.ts`
 - `services/feed-ingest-plan/test/file-baseline-recording.ts`
-- `services/typescript-api/test/api-composition.test.ts`
+- `services/serve-pipeline-apis/test/api-composition.test.ts`
 - `tests/fixtures/contracts/fetched-document/refused.json`
 - `tests/fixtures/feed-ingest-plan/report-events.json`
 - `tests/fixtures/feed-ingest-plan/entry-points/response.json`
@@ -435,11 +435,11 @@ Table M - Row 2 alternatives
 - `docs/architecture/sources/feed-partitioning.md`
 - `docs/architecture/sources/planner-run-diagnostics.md`
 - `docs/reference/feed-planner-ledgers.md`
-- `docs/reference/typescript-api-server.md`
+- `docs/reference/serve-pipeline-apis.md`
 - `docs/how-to/run-feed-ingest-plan-test.md`
 
 **Acceptance gates:**
-- **Local:** H6; native checks in common-contracts, feed-ingest-plan and typescript-api. In common-contracts run `config.test.ts`, `planner-diagnostics.test.ts`, `metadata-flow.test.ts` and `article-identity-compatibility.test.ts`; in the planner run `plan-api.test.ts`, `plan-entry-points.test.ts`, `plan-cli.test.ts`, `collection-http.test.ts`, `plan-engine.test.ts`, `file-baseline.test.ts`, `feed-ingest-plan-outputs.test.ts` and `operation-logging.test.ts` together; in the composed server run `api-composition.test.ts`. Include other actually changed caller cases from H6.
+- **Local:** H6; native checks in common-contracts, feed-ingest-plan and serve-pipeline-apis. In common-contracts run `config.test.ts`, `planner-diagnostics.test.ts`, `metadata-flow.test.ts` and `article-identity-compatibility.test.ts`; in the planner run `plan-api.test.ts`, `plan-entry-points.test.ts`, `plan-cli.test.ts`, `collection-http.test.ts`, `plan-engine.test.ts`, `file-baseline.test.ts`, `feed-ingest-plan-outputs.test.ts` and `operation-logging.test.ts` together; in the composed server run `api-composition.test.ts`. Include other actually changed caller cases from H6.
 - **Contract:** Check each Table E branch. Reject retired public keys and ambiguous feed/article combinations. D18 accepts typed API booleans only; test missing, explicit true/false, config override, CLI bare/value forms and invalid/repeated controls. D19 validates all-or-none URL presence, exact URL/hash agreement, partial and empty outcomes. Toggle the option over the same captured native result in lower-tier tests: chosen rows, ranks, assignments and ledger data must not change.
 - **Bounded integration:** Reuse the existing successful API entry-point journey with D18 enabled and the existing CLI journey with its default disabled; assert the actual saved JSON output as well as the response. Do not add a second whole-planner run for every flag/state combination. Preserve existing reference claims, body privacy and foreign publication fixture reads.
 - **CI:** H7; API/CLI responses, requested URLs, actual Parquet and selected text reconcile through H3. URL inclusion introduces no source fetch, Parquet lookup or routine progress/log output.

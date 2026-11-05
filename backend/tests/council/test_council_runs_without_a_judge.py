@@ -278,10 +278,17 @@ def test_a_whole_night_runs_with_nobody_registered(venue: Path) -> None:
 
     run_id = run_identity.council_run_id(opened_on=TONIGHT, platform_run_id=A_PLATFORM_RUN)
     hosted = registry.tenants(council.running())
-    planned = night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)
-    prepared = session.prepare(council, date=TONIGHT, run_id=run_id)
+    planned = night_plan.plan_the_night(
+        council, tonight=TONIGHT, hosted=hosted, run_id=run_id, attempt=1, git_sha=A_SHA
+    )
+    prepared = session.prepare(council, date=None, run_id=run_id, selection=planned)
     settled = session.settle(
-        council, date=TONIGHT, run_id=run_id, state_dir=state_root, commit_sha=A_SHA
+        council,
+        date=TONIGHT,
+        run_id=run_id,
+        state_dir=state_root,
+        commit_sha=A_SHA,
+        selection=planned,
     )
 
     assert run_id == f"{TONIGHT}-{A_PLATFORM_RUN}"
@@ -300,9 +307,7 @@ def test_two_tenants_union_their_nights_and_keep_their_own_width(venue: Path) ->
     reads newest first, and that each tenant is sized by its own `shard_count`
     rather than by whichever one the venue asked first.
     """
-    a_belated_venue(
-        venue, package=A_VENUE, slug=A_SLUG, behind_on=("2026-09-25",), shard_count=2
-    )
+    a_belated_venue(venue, package=A_VENUE, slug=A_SLUG, behind_on=("2026-09-25",), shard_count=2)
     a_belated_venue(
         venue,
         package=A_VENUE,
@@ -326,7 +331,14 @@ def test_two_tenants_union_their_nights_and_keep_their_own_width(venue: Path) ->
     )
 
     hosted = registry.tenants(council.running())
-    planned = night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)
+    planned = night_plan.plan_the_night(
+        council,
+        tonight=TONIGHT,
+        hosted=hosted,
+        run_id=f"{TONIGHT}-{A_PLATFORM_RUN}",
+        attempt=1,
+        git_sha=A_SHA,
+    )
 
     assert [host.judge_id for host in hosted] == [A_SLUG, ANOTHER_SLUG]
     assert {judge.tenant: judge.dates for judge in planned.judges} == {
@@ -356,11 +368,11 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
     opened = time.monotonic()
 
     hosted = registry.tenants(council.running())
-    assert (
-        night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted).judges[0].dates[0]
-        == TONIGHT
+    planned = night_plan.plan_the_night(
+        council, tonight=TONIGHT, hosted=hosted, run_id=run_id, attempt=1, git_sha=A_SHA
     )
-    session.prepare(council, date=TONIGHT, run_id=run_id)
+    assert planned.judges[0].dates[0] == TONIGHT
+    session.prepare(council, date=TONIGHT, run_id=run_id, selection=planned)
     for shard in range(2):
         result = session.run_shard(
             council,
@@ -370,9 +382,17 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
             shard=shard,
             shards=2,
             started=opened,
+            selection=planned,
         )
         assert result.outcome is ShardOutcome.COMPLETED
-    session.settle(council, date=TONIGHT, run_id=run_id, state_dir=state_root, commit_sha=A_SHA)
+    session.settle(
+        council,
+        date=TONIGHT,
+        run_id=run_id,
+        state_dir=state_root,
+        commit_sha=A_SHA,
+        selection=planned,
+    )
 
     handed = written(A_VENUE, A_SLUG).TENANT.handed
     filed = _the_nights_record(state_root, TONIGHT)

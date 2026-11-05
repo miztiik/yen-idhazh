@@ -202,12 +202,12 @@ export function selectPaths(paths: readonly string[]): Selection {
 		} else if (/^frontend\//.test(path)) {
 			selected = [...FRONTEND_GROUPS];
 			reason = 'shared or unmapped frontend input';
-		} else if (/^services\/(?:typescript-api|feed-ingest-plan|host-fingerprints|host-probes)\//.test(path)
+		} else if (/^services\/(?:serve-pipeline-apis|feed-ingest-plan|host-fingerprints|host-probes)\//.test(path)
 			|| path === 'config/hono-server.json'
 			|| path === '.github/workflows/feed-ingest-plan-test.yml') {
 			selected = ['backend'];
 			fullBackend = true;
-			reason = 'native TypeScript APIs; CI checks composition, planner, fingerprints and probes';
+			reason = 'pipeline APIs; CI checks composition, planner, fingerprints and probes';
 		} else if (Object.hasOwn(MODULE_TESTS, path.match(/^backend\/idhazh\/([^/]+)\.py$/)?.[1] ?? '')) {
 			const module = path.split('/').at(-1)!.replace(/\.py$/, '');
 			for (const name of MODULE_TESTS[module]) backendFiles.add(name);

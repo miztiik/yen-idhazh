@@ -11,12 +11,21 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from gardener._garden import a_bare_origin, a_partial_clone, git, lazy_fetches, quiet_git, write
+from gardener._garden import a_bare_origin, a_partial_clone, git, lazy_fetches, quiet_git
 from support.paths import FIXTURES_DIR
 
-from idhazh.contracts.council_events import Diagnostic, NightPublished
+from idhazh import config
+from idhazh.contracts.council_events import (
+    CouncilExit,
+    CouncilProgram,
+    Diagnostic,
+    NightPublished,
+    ProgramFinished,
+)
+from idhazh.contracts.council_invocation import SelectedJudge, Selection
+from idhazh.contracts.knobs.council import JudgeLifecycleStatus
 from idhazh.contracts.publication_receipt import PublicationReceipt
-from idhazh.council import registry, session
+from idhazh.council import event_log, outcome, registry, session
 from idhazh.event_lines import payload
 from utilities.council_publish import main
 from utilities.publication_git import Repository
@@ -48,16 +57,31 @@ def seed(root: Path) -> tuple[Path, dict[str, str]]:
         slugs={slug: (1, ("state/results/" + slug,)) for slug in SLUGS},
         source=(FIXTURES_DIR / "council" / "named_input_tenant.py").read_text(encoding="utf-8"),
     )
-    files = {
-        "config/" + path.relative_to(target).as_posix(): path.read_text(encoding="utf-8")
-        for path in target.rglob("*.json")
-    }
+    app = config.load(target).app
+    names = (
+        "idhazh.json",
+        "llm_council.json",
+        "sources.json",
+        "taxonomy.json",
+        "watchlist.json",
+        "appearance.json",
+        "ledgers.json",
+        app.models_file,
+        *(f"judges/{slug}.json" for slug in SLUGS),
+    )
+    files = {"config/" + name: (target / name).read_text(encoding="utf-8") for name in names}
+    sources = (
+        f"{PACKAGE}/__init__.py",
+        *(
+            f"{PACKAGE}/{slug.replace('-', '_')}/{name}"
+            for slug in SLUGS
+            for name in ("__init__.py", "tenant.py")
+        ),
+    )
     files.update(
         {
-            "backend/" + path.relative_to(root / "modules").as_posix(): path.read_text(
-                encoding="utf-8"
-            )
-            for path in (root / "modules").rglob("*.py")
+            "backend/" + name: (root / "modules" / name).read_text(encoding="utf-8")
+            for name in sources
         }
     )
     files["config/push-retry.json"] = RETRY
@@ -90,17 +114,36 @@ def blob_available(repo: Path, oid: str) -> bool:
     )
 
 
-def collect(repo: Path, monkeypatch: pytest.MonkeyPatch) -> int:
+def collect(repo: Path, monkeypatch: pytest.MonkeyPatch, *, prepare: bool = True) -> int:
     monkeypatch.syspath_prepend(str(repo / "backend"))
     monkeypatch.setattr(registry, "TENANT_PACKAGE", PACKAGE)
     monkeypatch.setattr(session, "COUNCIL_ROOT", repo / "backend" / "var" / "council")
-    for slug in SLUGS:
-        write(
-            repo / "backend" / "var" / "council" / DATE / "verdicts" / slug / "completed.txt",
-            slug + " completed unit\n",
-        )
+    commit = git(repo, "rev-parse", "HEAD").strip()
+    selected = Selection(
+        version=Selection.schema_version(),
+        run_id="2026-10-11-123",
+        attempt=1,
+        git_sha=commit,
+        mode="manual",
+        anchor_date=DATE,
+        window=(DATE,),
+        judges=tuple(
+            SelectedJudge(tenant=slug, status=JudgeLifecycleStatus.ACTIVE, dates=(DATE,), shards=1)
+            for slug in SLUGS
+        ),
+    )
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+    monkeypatch.setenv("COUNCIL_SELECTION", selected.model_dump_json())
     forget(PACKAGE)
     try:
+        if prepare:
+            monkeypatch.setenv(
+                "COUNCIL_EVENT_FILE", str(session.COUNCIL_ROOT / "events" / "planner.jsonl")
+            )
+            event_log.install()
+            outcome.run(CouncilProgram.PREPARE, lambda: _prepare(repo, selected))
+            monkeypatch.delenv("COUNCIL_EVENT_FILE")
+            event_log.install()
         return main(
             [
                 "--repo-root",
@@ -119,6 +162,17 @@ def collect(repo: Path, monkeypatch: pytest.MonkeyPatch) -> int:
         )
     finally:
         forget(PACKAGE)
+
+
+def _prepare(repo: Path, selected: Selection) -> int:
+    return outcome.of_results(
+        session.prepare(
+            config.load_council(repo / "config"),
+            date=DATE,
+            run_id=selected.run_id,
+            selection=selected,
+        )
+    )
 
 
 def test_partial_collector_fetches_only_named_inputs_and_publishes_expected_output(
@@ -182,7 +236,11 @@ def test_partial_collector_fetches_only_named_inputs_and_publishes_expected_outp
         assert entry is not None and remote.blob(entry.oid) == content
     receipts = [
         PublicationReceipt.read(path)
-        for path in (sparse / "backend" / "var" / "council" / "publication").iterdir()
+        for path in (
+            sparse / "backend" / "var" / "council" / "publication" / f"{index:04}.json"
+            for index in range(3)
+        )
+        if path.is_file()
     ]
     confirmed = {path for receipt in receipts for path in receipt.writes}
     assert set(sparse_outputs) <= confirmed
@@ -205,16 +263,14 @@ def test_unavailable_declared_blob_fails_without_publishing(
         assert collect(sparse, monkeypatch) == 1
     events = tuple(payload(record) for record in caplog.records)
     assert any(
-        isinstance(event, Diagnostic)
-        and event.error == "ExceptionGroup"
-        for event in events
+        isinstance(event, Diagnostic) and event.error == "ExceptionGroup" for event in events
     ), "the unavailable declared inputs must fail settlement"
     published = [event for event in events if isinstance(event, NightPublished)]
     assert len(published) == 1
     assert (published[0].landing, published[0].pushes, published[0].writes) == (
-        "no-changes",
+        "preparation-failure",
         0,
-        0,
+        1,
     )
     assert git(offline, "rev-parse", "main").strip() == base
     for slug in SLUGS:
@@ -241,19 +297,18 @@ def test_sparse_judge_without_input_declaration_is_refused(
     trace = tmp_path / "git.trace"
     monkeypatch.setenv("GIT_TRACE", str(trace))
     with caplog.at_level(logging.INFO):
-        assert collect(sparse, monkeypatch) == 1
+        assert collect(sparse, monkeypatch, prepare=False) == 2
     events = tuple(payload(record) for record in caplog.records)
     assert any(
-        isinstance(event, Diagnostic)
-        and event.error == "IntegrityError"
-        for event in events
+        isinstance(event, Diagnostic) and event.error == "JudgeRefusalError" for event in events
     ), "missing input declaration must cause the refusal"
     published = [event for event in events if isinstance(event, NightPublished)]
-    assert len(published) == 1
-    assert (published[0].landing, published[0].pushes, published[0].writes) == (
-        "integrity-refused",
-        0,
-        0,
+    assert published == [], "pre-work refusal never reaches publication"
+    finished = [event for event in events if isinstance(event, ProgramFinished)]
+    assert len(finished) == 1
+    assert (finished[0].program, finished[0].code) == (
+        CouncilProgram.PUBLISH,
+        CouncilExit.REFUSED,
     )
     assert git(origin, "rev-parse", "main").strip() == base
     assert lazy_fetches(trace) == 0

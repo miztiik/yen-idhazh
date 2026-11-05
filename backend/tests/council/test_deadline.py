@@ -15,6 +15,13 @@ from support.paths import CONFIG_DIR
 
 from idhazh import config
 from idhazh.contracts.base import DateStamp, RunId
+from idhazh.contracts.council_invocation import (
+    ArtifactFile,
+    JudgeSchedule,
+    PreparationReceipt,
+    ScheduleRequest,
+    ShardReport,
+)
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.council import CouncilConfig
@@ -48,11 +55,14 @@ class StopwatchTenant:
     shard_count: int = 1
     committed_paths: tuple[str, ...] = ()
 
-    def nights_outstanding(self, *, window: tuple[DateStamp, ...]) -> tuple[DateStamp, ...]:
+    def schedule(self, *, request: ScheduleRequest) -> JudgeSchedule:
         """It is behind on nothing: it counts nothing."""
+        return JudgeSchedule(dates=())
+
+    def publication_inputs(self, *, date: DateStamp) -> tuple[str, ...]:
         return ()
 
-    def prepare(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+    def prepare(self, *, date: DateStamp, run_id: RunId, shards: int) -> ShardResult:
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
 
     def run_shard(
@@ -63,6 +73,7 @@ class StopwatchTenant:
         shard: int,
         shards: int,
         deadline: float,
+        prepared: PreparationReceipt,
     ) -> ShardResult:
         self.handed.append(deadline)
         return ShardResult(outcome=self.outcome)
@@ -74,6 +85,8 @@ class StopwatchTenant:
         run_id: RunId,
         state_dir: Path,
         identity: WriterIdentity,
+        prepared: PreparationReceipt,
+        reports: tuple[ShardReport, ...],
     ) -> ShardResult:
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
 
@@ -81,6 +94,24 @@ class StopwatchTenant:
 def _committed_clocks() -> CouncilConfig:
     """The council block as the repository commits it, read inside each test."""
     return config.load_council(CONFIG_DIR)
+
+
+def _prepared(width: int) -> PreparationReceipt:
+    return PreparationReceipt(
+        version=PreparationReceipt.schema_version(),
+        run_id=A_RUN,
+        attempt=1,
+        git_sha="a" * 40,
+        judge_id="stopwatch-tenant",
+        date=A_DATE,
+        state="ready",
+        shards=width,
+        files=(
+            ArtifactFile(
+                path=f"{A_DATE}/tasks/stopwatch-tenant/task.json", size_bytes=0, sha256="0" * 64
+            ),
+        ),
+    )
 
 
 def test_the_deadline_leaves_the_margin_the_council_asked_for() -> None:
@@ -164,6 +195,7 @@ def test_the_tenant_is_handed_the_instant_the_council_computed() -> None:
         shards=4,
         council=council,
         started=started,
+        prepared=_prepared(4),
     )
 
     assert tenant.handed == [compute_shard_deadline(council, started=started)]
@@ -192,6 +224,7 @@ def test_the_council_files_the_outcome_the_tenant_reported(reported: ShardOutcom
         shards=1,
         council=_committed_clocks(),
         started=-1_000_000.0,
+        prepared=_prepared(1),
     )
 
     assert result.outcome is reported
@@ -207,4 +240,16 @@ def test_the_stopwatch_tenant_is_a_tenant() -> None:
     tenant: Tenant = StopwatchTenant()
 
     assert tenant.judge_id == "stopwatch-tenant"
-    assert tenant.nights_outstanding(window=(A_DATE,)) == ()
+    assert (
+        tenant.schedule(
+            request=ScheduleRequest(
+                anchor_date=A_DATE,
+                window=(A_DATE,),
+                max_dates=1,
+                max_older_dates=0,
+                shards=1,
+                shard_seconds=0,
+            )
+        ).dates
+        == ()
+    )

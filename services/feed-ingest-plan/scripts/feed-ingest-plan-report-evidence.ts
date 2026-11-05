@@ -7,8 +7,8 @@ import { loadPlanInputs } from "../src/load-plan-inputs";
 import { readPlanningHistory } from "../src/read-ledger-history/read-run-history";
 import { verifyParquetFiles } from "./feed-ingest-plan-verification";
 import { readArticleFailureDiagnostics } from "./read-article-failure-diagnostics";
-import { readServerEvidence } from "../../typescript-api/src/read-server-evidence";
-import type { ServerEvidence } from "../../typescript-api/src/server-evidence";
+import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
+import type { ServerEvidence } from "../../serve-pipeline-apis/src/server-evidence";
 
 export async function readReportFailureEvidence(input: {
   directory: string; root?: string; response?: unknown;

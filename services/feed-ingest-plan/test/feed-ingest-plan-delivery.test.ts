@@ -4,8 +4,8 @@ import { deliverPlannerFiles, metadataWritePermissions } from "../scripts/feed-i
 import type { MetadataLedger, MetadataRegistrations } from "../scripts/feed-ingest-plan-metadata";
 import { MetadataDeliveryResultSchema, SafePersistHttpRequestSchema, SafePersistHttpStartupSchema } from "../scripts/feed-ingest-plan-delivery-result";
 import { readPlannerStartupRecording } from "./planner-process-recordings";
-import { ApiStartupSchema } from "../../typescript-api/src/api-startup";
-import { loadHonoSettings } from "../../typescript-api/src/load-settings";
+import { ApiStartupSchema } from "../../serve-pipeline-apis/src/api-startup";
+import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
 import { operationMetadata } from "../src/api/operation-context";
 
 function registration(name: MetadataLedger, prefix: string[]) {

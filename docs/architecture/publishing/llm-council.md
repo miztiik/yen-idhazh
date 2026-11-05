@@ -1,11 +1,12 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-11-05
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
-that runs at 22:00 UTC and reads yesterday, plus any older night its tenants say
-they are behind on. This page says what the venue is and what it obliges; what
+that runs at 22:00 UTC and offers each active plugin a bounded UTC date window
+and resource budgets. Plugins choose their own dates, including declining.
+This page says what the venue is and what it obliges; what
 each judge decides is on the page that owns that judge.
 
 **This page does not hold a verdict rule.** The same-story fold, its slots, its
@@ -53,11 +54,8 @@ The prerequisite has no custom timeout and inherits the Actions 6-hour ceiling,
 at which GitHub kills the job. This costs one additional runner startup and
 checkout on the path before planning, with no new CI job or dependency.
 
-This is the structural production follow-on authorized by the maintainer on
-2026-10-24 while completing the behavior-test review: the two existing
-30-minute job deadlines become independently configurable without weakening
-them to step deadlines. The page stays whole because these settings govern the
-same workflow clock described here.
+The page stays whole because these settings govern the same workflow clock
+described here.
 
 ## Three verbs, and all three are the council's own
 
@@ -71,15 +69,62 @@ the command router imported that judge's four stage modules at the top of the
 file - so deleting the judge broke every council verb, and the venue's whole
 runtime was one tenant's vocabulary.
 
-| The verb | What it does | When |
-| --- | --- | --- |
-| `council-prepare` | every tenant picks its own work | once a date, in the planning job, before any unit runs |
-| `council-shard` | one tenant runs one unit of that work, under the venue's clock | one job a cell of the matrix |
-| `council-settle` | every tenant counts, fits, or does nothing | once a date, in the collecting job, after every unit has reported |
+Table A - execution verbs
 
-There is a fourth member of the tenancy protocol and no verb behind it:
-`nights_outstanding` is a question, asked once in the planning job, and the
-section below says what the council does with the answers.
+| Id | The verb | What it does | When |
+| --- | --- | --- | --- |
+| A1 | `council-prepare` | Each selected plugin prepares its own work and the council validates its declared files. | One Python batch visits the whole selection before fanout. |
+| A2 | `council-shard` | One plugin runs one admitted unit under the venue's clock. | One job per ready matrix cell; `--verify-only` checks admission before model setup. |
+| A3 | `council-settle` | Each ready or no-work plugin/date settles with its own preparation and normalized reports. | In the collecting job; failed or unknown preparation skips domain settlement. |
+
+Scheduling is a separate `schedule(request=...)` member with no execution verb.
+[Judge and date selection](llm-council-dates.md) owns the offered window and
+the plugin's answer. Every execution command receives `--run-id` and the
+checked-out `--commit`; the selection must agree with the current attempt.
+
+## Preparation authorizes work, not selection alone
+
+The planner mints identity before producing a selection. `council-prepare`
+without `--date` visits every selected judge/date once in Python, rather than
+looping dates in shell. Ordinary plugin errors record the actual failed step
+and sanitized fault metadata, then permit independent preparations to continue.
+The step still exits nonzero. Cancellation, phase timeout, invalid ownership
+or file integrity, including a fatal exception-group member, aborts the phase
+rather than becoming an ordinary plugin failure.
+
+The native versioned `PreparationReceipt` in
+`backend/idhazh/contracts/council_invocation.py` binds the run, attempt,
+revision, judge and date. Its state distinguishes:
+
+- `ready`: the selected positive width and at least one validated task file.
+  Only this state produces judging cells.
+- `no_work`: zero width, optional bookkeeping files, and settlement with no
+  shard reports. No model job, empty shard file or synthetic shard record is
+  created.
+- `failed`: zero width, no admitted task files and sanitized fault metadata.
+  Domain settlement is skipped.
+
+An absent expected receipt is unknown preparation, not no work. Collection
+skips that judge/date's domain settlement, retains valid platform records and
+keeps the invocation unsuccessful. A plugin that declined scheduling has no
+selected date and needs no preparation receipt.
+
+Python prints `preparation_finished=true` only after every selected unit has
+been visited, including an empty selection. Its stdout is teed into
+`GITHUB_OUTPUT`. Fanout explicitly uses `always() && !cancelled()` and requires
+that marker, so ordinary preparation failures can leave the planning job red
+while ready siblings still run. An aborted batch has no completion marker and
+cannot dispatch. The matrix reads ready receipts, not selection alone.
+
+At collection, a ready or no-work plugin receives its own preparation and
+normalized shard reports. Report states distinguish `reported`, `refused`,
+`missing`, `invalid` and `not_dispatched`. A complete failed or deadline-stopped
+report is still a report, never a successful date. If the phase aborts before
+dispatch, ready cells are not dispatched; the collector does not invent a
+cause for a missing individual report. Valid independent work remains eligible
+for publication after ordinary judge/date failures, with unsuccessful overall
+status. Integrity failures refuse the whole publication; cancellation remains
+unsuccessful and cannot authorize publication.
 
 **Removing the imports was not the whole cut.** The four verb names also sat in
 the router's own tuple of what it accepts, in a flag's help text, and in four
@@ -131,7 +176,8 @@ landed. `backend/idhazh/council/outcome.py` combines actual outcomes, worst firs
 printed even when the configured log level hides routine progress.
 
 The collector retains completed work from earlier and later judges and dates
-after a failure. It also receives the judging job's result, so a failed or
+after an ordinary failure. It receives both `--planning-result` from the draw
+job and `--units-result` from the judging job, so a failed or
 cancelled cell stays red even when its siblings' bytes land. Publication never
 reruns a judge. An integrity failure found after work earns 1 and publishes
 nothing; it cannot claim that no unit ran. A raised unit emits one failure
@@ -155,14 +201,58 @@ fixed sentences. It never repeats an article, a verdict or an exception message.
 transient JSON-lines file, even when the configured log level hides progress.
 Its file writer is private, outside the process-wide logger registry, so log
 capture or configuration cannot propagate its copy as a second console event.
-The planner's `events/planner.jsonl` rides its existing selection bundle, which
-uploads even after preparation fails.
-Each judging cell writes `events/<judge>/<date>/<shard>.jsonl` in the existing
-always-uploaded metrics bundle. A cell excludes the planner's downloaded event
-file from its upload, so siblings cannot overwrite it. The collector reads only
-the files named by the planner's matrix and the one planner event file, not an
-archive or a directory census. These files are not committed and no later run
-uses them.
+The planner writes
+`backend/var/council/outgoing/planner/events/planner.jsonl`.
+Each judging cell writes
+`backend/var/council/outgoing/shard-<judge>-<date>-<shard>/events/<judge>/<date>/<shard>.jsonl`.
+These files ride the corresponding always-uploaded bundles. A worker never
+re-uploads incoming planner events. The collector reads only the expected
+matrix-named files and one planner event file, not an archive or directory
+census. They are not committed and no later run uses them.
+
+### Declared bundles keep transport outside canonical scratch
+
+Active scratch lives under `backend/var/council/runs/<run-id>/<attempt>/`;
+paused trials retain their invocation/judge-isolated roots described on the
+[selection page](llm-council-dates.md#a-paused-trial-cannot-enter-publication).
+Date/slot/judge helper addresses remain inside those roots. Reads compute
+receipt and shard-file addresses from validated identities, never prior-run
+discovery.
+
+The planner uploads only `backend/var/council/outgoing/planner` as
+`council-selection-<anchor-date>`. It contains prepared manifests, their declared
+files, platform records and `events/planner.jsonl`, not a scratch-tree copy.
+Workers download `council-selection-*` into `backend/var/council/incoming` with
+`merge-multiple: false`. A singleton download extracts directly into that path;
+multiple downloads retain artifact-name directories. The transport adapter
+recognizes these layouts using only selection- and matrix-derived manifest
+and event addresses. It refuses mixed layouts and collisions, never scans for
+bundles or merges unvalidated files. Missing expected files remain missing
+reports, not empty work. Before model setup,
+`council-shard --verify-only` receives exactly the execution cell's
+arguments, including commit, and verifies its prepared work. Its closed
+`verify-work` event is not a shard exit report. Verification and execution
+append to the same event file. The collector validates their exits separately:
+successful verification still requires the actual shard's unit and exit,
+rejected verification cannot be followed by successful work, and duplicate
+verification/shard exits or unrelated programs invalidate the report.
+
+Each worker exports only its own
+`backend/var/council/outgoing/shard-<judge>-<date>-<shard>` as the existing
+`council-metrics-<judge>-<date>-<shard>` artifact. No upload exclusions or
+whole-scratch worker uploads remain. `ShardFiles` declares the cell identity,
+part index, width and opaque file evidence, not the unit outcome. Each declared
+file carries a relative path, measured byte size and SHA-256 digest.
+
+The collector likewise downloads `council-*` separately into `incoming`.
+It imports only named expected bundles: preparation expectations come from the
+selection, shard expectations from the emitted matrix. Identity, width,
+ownership and hashes are validated before declared files enter canonical
+scratch. Absolute paths, traversal, backslashes, globs, symlinks, non-regular
+files, duplicate destinations and judge/date namespace escapes are refused.
+File declarations transport evidence; they do not grant publication permission.
+The final downloadable results still include trial settlement and publication
+receipts, even when collection fails.
 
 No complete unit and exit report means **no report**, not success. A platform
 kill may cause it, but the summary does not claim that cause. An explicit
@@ -214,13 +304,13 @@ Every name has a file at `config/judges/<slug>.json`. The council validates only
 validates the other keys. Registration order is preserved, and a repeated name
 is refused by name.
 
-Table A - judge status
+Table B - judge status
 
 | Id | Status | Council work | Existing rows |
 | --- | --- | --- | --- |
-| A1 | `active` | Import, ask about outstanding nights, build cells, prepare, run shards, settle and publish. Start a model server only where `runs_model` is true. | Families must accept every committed ledger. |
-| A2 | `paused` | No scheduled work or import. Explicit manual selection runs an isolated downloadable trial, with no committed output or production council record. Keep its name and file. | Readers, other writers, packing and ageing keep their own rules. |
-| A3 | `retired` | As paused, for good. Keep the name and file; its package may stay. Never reuse its slug. | Keep row contracts while retained rows need them. |
+| B1 | `active` | Import, ask for a schedule, prepare selected dates, run ready shards, settle admitted work and publish. Start a model server only where `runs_model` is true. | Families must accept every committed ledger. |
+| B2 | `paused` | No scheduled work or import. Explicit manual selection runs an isolated downloadable trial, with no committed output or production council record. Keep its name and file. | Readers, other writers, packing and ageing keep their own rules. |
+| B3 | `retired` | As paused, for good. Keep the name and file; its package may stay. Never reuse its slug. | Keep row contracts while retained rows need them. |
 
 Every scheduled step uses `CouncilConfig.running()` before resolving code.
 The planning job logs each registered name and status to stderr, never to its
@@ -228,7 +318,7 @@ key-value outputs. A paused judge may have an unavailable or broken package;
 the scheduled night never imports or checks it.
 
 Scheduled planning validates the whole declaration set and resolves every active package
-before asking about outstanding nights or preparing any work. A missing judge
+before asking for schedules or preparing any work. A missing judge
 file, duplicate name, missing active package or raising active import earns
 `2 refused`, with the configured judge's validated slug in the diagnostic.
 Dependency failures retain their cause; they are not called missing judges.
@@ -359,14 +449,15 @@ not a venue.
 
 ## Tonight, and the older nights it repairs
 
-A scheduled night selects tonight plus each active judge's own outstanding
-dates. Cells, prepare and settle use that judge's list, not a cross-judge union.
+A scheduled night offers a window; each active plugin selects its own dates
+or declines. Prepare and settle use that judge's list, not a cross-judge union,
+and only ready preparation creates cells.
 A manual run selects one or more judges and exactly one date; active judges
 publish, paused judges run isolated downloadable trials, and retired judges
 are refused before work.
 
 [Which judges and dates the council runs](llm-council-dates.md) owns the bounded
-window, per-judge cap, manual inputs, transient selection and trial isolation.
+window, per-judge cap, manual inputs, identity-bound selection and trial isolation.
 Those rules answer a separate question from the venue's clocks and publication.
 
 ### Design rationale: nobody has to notice a dead night
@@ -405,9 +496,9 @@ repaired by judging its date again.
 
 ## The matrix is a flat list of cells
 
-The planning job asks
+After preparation finishes, the planning job asks
 [../../../backend/utilities/council_matrix.py](../../../backend/utilities/council_matrix.py)
-what the night fans out to, and publishes the answer as job outputs. A cell
+which ready receipts authorize work, and publishes the answer as job outputs. A cell
 carries five values - `tenant`, `date`, `shard`, `shards` (that tenant's own
 width), and `runs_model` (whether this cell needs a model server).
 
@@ -422,11 +513,12 @@ sixteen cells in four waves - about 5.4 hours of wall clock for 81 minutes of
 work, finishing after the next digest cron and across the scheduled prune. Bound
 to the cell count it is one wave.
 
-**An empty matrix reds the run rather than skipping quietly**, so the judging
-job carries `if: needs.draw.outputs.matrix != '[]'`. No workflow here had ever
-built a zero-width matrix, so there was no pattern to copy: Actions refuses to
-evaluate a strategy with no values, and without the guard the legal night above
-would fail on an error nobody could read. The collecting job keeps `always()`.
+Actions refuses an empty strategy. The judging job explicitly overrides
+dependency success with `always()`, refuses cancellation, requires
+`needs.draw.outputs.preparation_finished == 'true'`, and requires a matrix
+that is neither absent nor `[]`. Thus ready work can run after ordinary draw
+failure, while no-work-only selections skip model jobs legally. Collection
+still runs and receives both upstream results and the exact matrix.
 
 ## Units judge, and only the collecting job writes
 
@@ -440,8 +532,9 @@ and wrap-up reserve. Its process starts earlier, so its unchanged work window
 ends earlier against the job clock; there is no second clock or larger budget.
 The planning job still prints the pinned llama.cpp build on every night.
 
-`fail-fast` is off. **A unit that dies costs its own work and nothing else** -
-the settle runs anyway and keeps everything the surviving units produced.
+`fail-fast` is off. An ordinary unit failure does not cancel its siblings;
+collection retains valid completed bytes. Integrity and cancellation retain
+their whole-publication refusal.
 
 **Writers declare their paths beside themselves.** Tenant paths come back from
 `committed_paths` on the protocol. The venue declares `COUNCIL_RUN_RECORDS` and
@@ -627,7 +720,7 @@ executed it.
 | Layer | Owns | Stored |
 | --- | --- | --- |
 | Council pipeline observability | Did the pipeline work - which steps started, which finished, which stopped on their own clock, what each cost | `state/raw/council-run-records/`, later packed under `state/compact/council-run-records/` |
-| The tenancy protocol | The shape a judge presents: its slug, how many ways its work splits, the ledger paths it commits, the nights it is behind on, and its three steps of work. Declared by the council, implemented by each judge, and it names no judge | code, not data |
+| The tenancy protocol | The shape a judge presents: its slug, width, publication paths and named inputs, schedule, preparation, execution and settlement. Declared by the council, implemented by each judge, and it names no judge | code, not data |
 | The shipping capability | The plumbing only. Takes a validated row a judge hands it and gets it committed. Declares nothing about what is in it | code, not data |
 | Judge metrics | Entirely the judge's - its units, its funnel, its own contract | under that judge's own slug |
 
@@ -649,10 +742,10 @@ judge although the council is what runs it, is
 
 ## A unit uploads what it measured, and the collecting job commits it
 
-Each unit writes one file on its own runner, the workflow uploads that
-directory, and the collecting job downloads every one of them and files each
-row through the ledger door, into the ledger the tenant named, under the date
-it judged.
+Each unit declares its own output files on its runner. The council exports a
+validated outgoing bundle, and the collecting job imports its named files
+before filing permitted completed rows through the ledger door, into the
+ledger the tenant named, under the date it judged.
 
 **An artifact rather than a commit, and the reason is that a commit would not
 reach the reader.** Every checkout in this workflow names no ref, so each job is
@@ -665,51 +758,21 @@ them unreachable.
 The tenant's own slug is a directory level inside each upload, so two tenants'
 first unit land beside each other rather than on top of each other.
 
-### Design rationale: one carried root, and every tenant writes inside it
+### Design rationale: declared files, not a carried scratch tree
 
-**`backend/var/council/` is the whole of what a night carries between its jobs.**
-The planning job uploads that directory, each unit downloads it, each unit
-uploads it again, and the collecting job downloads every copy merged into one
-tree. Nothing else crosses. Every job runs on a runner that is thrown away when
-the job ends, so **a file a tenant writes anywhere else is not slow or wasteful -
-it is gone**, and the job that needed it fails on a file nobody ever uploaded.
+A runner disappears after its job, so a file that a later job needs must be
+declared and transported. Copying all scratch would also copy unrelated,
+downloaded or stale files and could let an artifact overwrite a sibling's
+authorization. Separate incoming, canonical and outgoing roots make validation
+precede installation; the
+[bundle rules above](#declared-bundles-keep-transport-outside-canonical-scratch)
+define the only files that cross.
 
-That is not a hypothetical. Every scheduled night from 2026-09-22 lost all eight
-of its units at once. The unit that picks the work wrote the draw to
-`backend/var/judge/`, so the file existed on the runner that made it and on no
-other runner ever; the verdicts had the same address one job further on. The
-planning job passed, the collecting job passed - the instrument rows did travel,
-because the shipping path already wrote inside the carried root - and the eight
-jobs in between all died on a missing file.
-
-**So a tenant spells no path of its own.** It asks
-[../../../backend/idhazh/council/session.py](../../../backend/idhazh/council/session.py)
-for a directory and a filename, and the venue answers with something under the
-root it carries. A tenant that spells its own is a tenant that can spell one the
-workflow does not upload, and nothing about that failure is visible until the
-night runs.
-
-**A unit's filename carries its writer's identity**, the way every committed
-writer file does: `<date>-<tenant>-<unit>`, the unit two digits wide. Eight units
-writing eight names cannot land on one path, and a file merged out of eight
-artifacts still says which night, which tenant and which unit produced it. The
-grammar is spelled in the council rather than taken from
-[../../../backend/idhazh/ledger/filenames.py](../../../backend/idhazh/ledger/filenames.py)'s
-`segment_name`, which asks for a run attempt the council never reads and a job
-name none of this workflow's jobs is a member of - a name carrying an invented
-cell names nothing.
-
-**The selection slot is the one exception to "upload everything".** A unit
-downloads the draw and would otherwise upload it again, once a shard, so the
-unit's upload excludes `*/selection`. That exclusion is why the draw needs a slot
-of its own and cannot simply sit at the top of the date's directory.
-
-**What holds it shut.** `backend/tests/test_similarity_handoff.py` runs the
-selection unit against a bare directory standing in for a runner, then reads back
-every file that directory holds afterwards - so a tenant that finds a second way
-to spell a path fails there as readily as one that never asked the venue. It then
-copies only the carried root to a second bare directory and reads the draw the
-way a unit reads it.
+Plugins use `council.session` helpers for their date/slot/judge paths inside
+the current invocation root, then return the exact files they produced.
+`<date>-<tenant>-<unit>` filenames retain the existing two-digit unit suffix;
+the invocation root supplies run/attempt isolation. The selection slot remains
+a task namespace, not an upload-exclusion rule.
 
 ### Design rationale: the upload, and what would make a commit the better answer
 
@@ -751,11 +814,15 @@ which tenant, how it ended, how long it took, and what the work inside it cost
 the model. It says nothing that needs a name for the unit of work, so it reads
 the same whether the tenant made four hundred model calls or none.
 
-Each tenant has two steps that run once a date and one evaluation step for each
-part of the split. The row names one of `select_judge_work`,
+Each selected date attempts preparation, then only admitted ready/no-work
+preparation reaches domain settlement. Ready work has one evaluation step per
+part of its split. The row names one of `select_judge_work`,
 `evaluate_work_part` or `combine_judge_results`. Only an evaluation row carries
-`work_part_index`; every row carries `work_part_count`, so a missing part row
-shows which report did not arrive.
+`work_part_index`; every row carries `work_part_count`. Ready work uses the
+admitted positive width, while no-work/failed preparation and zero-work
+settlement use zero. A shard row always requires positive width and a valid
+index. Retained positive-count no-work rows and rows without `fault` stay
+readable under the [schema compatibility rule](../contracts/schemas.md#council-invocation-and-retained-record-compatibility).
 
 **The cost cells come off what the tenant handed back, and out of nothing else.**
 The council opens no ledger of a tenant's and reads no field of a tenant's own

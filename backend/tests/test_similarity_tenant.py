@@ -19,6 +19,7 @@ from support.paths import CONFIG_DIR
 from idhazh import config, ledger
 from idhazh.content_similarity_judge import tenant
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
+from idhazh.contracts.council_invocation import ScheduleRequest
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry
 from idhazh.council.tenancy import Tenant
@@ -30,9 +31,7 @@ A_NIGHT: Final = "2026-09-20"
 
 #: The seven members the venue calls, read off the protocol rather than listed,
 #: so an eighth is checked here the day it is declared.
-PROTOCOL_MEMBERS: Final = tuple(
-    sorted(name for name in vars(Tenant) if not name.startswith("_"))
-)
+PROTOCOL_MEMBERS: Final = tuple(sorted(name for name in vars(Tenant) if not name.startswith("_")))
 
 
 def test_the_committed_config_registers_this_judge() -> None:
@@ -164,3 +163,20 @@ def test_this_judge_names_no_night_the_council_did_not_ask_about(tmp_path: Path)
     )
 
     assert set(answered) <= {A_NIGHT}
+
+
+def test_a_new_judge_schedules_only_the_anchor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without date memory there is no older work to request."""
+    monkeypatch.setattr(config, "REPO_ROOT", tmp_path)
+    request = ScheduleRequest(
+        anchor_date=A_NIGHT,
+        window=("2026-09-19", A_NIGHT),
+        max_dates=2,
+        max_older_dates=1,
+        shards=1,
+        shard_seconds=1.0,
+    )
+
+    assert tenant.TENANT.schedule(request=request).dates == (A_NIGHT,)

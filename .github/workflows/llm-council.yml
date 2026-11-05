@@ -99,7 +99,7 @@ jobs:
   draw:
     needs: job_bounds
     env:
-      COUNCIL_EVENT_FILE: backend/var/council/events/planner.jsonl
+      COUNCIL_EVENT_FILE: backend/var/council/outgoing/planner/events/planner.jsonl
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -108,6 +108,7 @@ jobs:
       date: ${{ steps.plan.outputs.date }}
       selection: ${{ steps.plan.outputs.selection }}
       run_id: ${{ steps.identity.outputs.run_id }}
+      preparation_finished: ${{ steps.prepare.outputs.preparation_finished }}
       matrix: ${{ steps.fanout.outputs.matrix }}
       max_parallel: ${{ steps.fanout.outputs.max_parallel }}
       dates: ${{ steps.fanout.outputs.dates }}
@@ -125,28 +126,6 @@ jobs:
 
       - name: Install
         run: pip install -e .
-
-      # The planner validates the whole selection before work starts. Scheduled
-      # runs give each active judge yesterday UTC and its own bounded repairs.
-      # Manual runs require one date and selected active or paused judges.
-      - id: plan
-        name: Say which dates tonight judges
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          DISPATCH_DATE: ${{ inputs.date }}
-          DISPATCH_JUDGES: ${{ inputs.judges }}
-        run: |
-          set -euo pipefail
-          case "$EVENT_NAME" in
-            schedule) MODE=scheduled ;;
-            workflow_dispatch) MODE=manual ;;
-            *) exit 2 ;;
-          esac
-          python -m idhazh.council.night_plan \
-            --mode "$MODE" \
-            --dispatched "${DISPATCH_DATE:-}" \
-            --judges "${DISPATCH_JUDGES:-}" \
-            | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # The name every row this night writes is filed under, minted once here.
       # A job output for the same reason the bound is: the later jobs read it
@@ -168,6 +147,31 @@ jobs:
         run: |
           set -euo pipefail
           python -m idhazh.council.run_identity --platform-run-id "$PLATFORM_RUN_ID" \
+            | tee /dev/stderr >> "$GITHUB_OUTPUT"
+
+      # The identity binds the selection before any preparation is authorized.
+      # Scheduled judges choose dates inside the offered window and budgets.
+      - id: plan
+        name: Say which dates tonight judges
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_DATE: ${{ inputs.date }}
+          DISPATCH_JUDGES: ${{ inputs.judges }}
+          COUNCIL_RUN_ID: ${{ steps.identity.outputs.run_id }}
+          COUNCIL_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            schedule) MODE=scheduled ;;
+            workflow_dispatch) MODE=manual ;;
+            *) exit 2 ;;
+          esac
+          python -m idhazh.council.night_plan \
+            --run-id "$COUNCIL_RUN_ID" --commit "$COUNCIL_COMMIT" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --mode "$MODE" \
+            --dispatched "${DISPATCH_DATE:-}" \
+            --judges "${DISPATCH_JUDGES:-}" \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # The build every unit is about to install, asked once of the file that
@@ -199,7 +203,21 @@ jobs:
           python3 backend/utilities/shard_bound.py --key shard_timeout_minutes --config-file llm_council.json \
             >> "$GITHUB_OUTPUT"
 
-      # What tonight fans out to, asked of the tenants rather than computed
+      # Python visits the entire selection, retaining independent preparations
+      # after ordinary failures. Only a fully visited batch emits the marker.
+      - id: prepare
+        name: Pick the work for each date
+        env:
+          COUNCIL_SELECTION: ${{ steps.plan.outputs.selection }}
+          COUNCIL_RUN_ID: ${{ steps.identity.outputs.run_id }}
+          COUNCIL_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python -m idhazh council-prepare \
+            --run-id "$COUNCIL_RUN_ID" --commit "$COUNCIL_COMMIT" \
+            | tee /dev/stderr >> "$GITHUB_OUTPUT"
+
+      # What tonight fans out to, asked of ready receipts rather than computed
       # here. A cell is flat - tenant, date, shard, shards and runs_model -
       # because a per-tenant width is not a third axis: a cross product
       # would hand every tenant the widest tenant's width and pay a weights
@@ -209,6 +227,7 @@ jobs:
       # the shard width. Bound to the width, two tenants over two dates would
       # run sixteen cells in four waves and finish across two other schedules.
       - id: fanout
+        if: always() && !cancelled() && steps.prepare.outputs.preparation_finished == 'true'
         name: Say what tonight fans out to and what it will commit
         env:
           COUNCIL_SELECTION: ${{ steps.plan.outputs.selection }}
@@ -217,32 +236,13 @@ jobs:
           python3 backend/utilities/council_matrix.py \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # Every tenant picks its own work, once a date, before any unit runs. It
-      # reads committed files and scores what they already carry - no model, no
-      # socket, no fetcher.
-      - name: Pick the work for each date
-        env:
-          COUNCIL_SELECTION: ${{ steps.plan.outputs.selection }}
-          COUNCIL_DATES: ${{ steps.fanout.outputs.dates }}
-          COUNCIL_RUN_ID: ${{ steps.identity.outputs.run_id }}
-        run: |
-          set -euo pipefail
-          echo "$COUNCIL_DATES" | jq -r '.[]' | while read -r judged; do
-            python -m idhazh council-prepare --date "$judged" --run-id "$COUNCIL_RUN_ID"
-          done
-
-      # The whole council scratch root rather than one file inside it, so the
-      # date and the tenant survive as directory levels. Two tenants' selections
-      # then land beside each other in the merged download rather than on top of
-      # each other, which an artifact named for neither could not prevent.
-      #
-      # The planner's safe event lines also travel here, even if preparation
-      # failed or no tenant ran.
+      # Only declared prepared files, manifests, platform records and planner
+      # events leave this job. Incoming bytes never share canonical scratch.
       - if: always()
         uses: actions/upload-artifact@v7
         with:
           name: council-selection-${{ steps.plan.outputs.date }}
-          path: backend/var/council
+          path: backend/var/council/outgoing/planner
           if-no-files-found: warn
           # Three nights, so what a night wrote is still reachable while the
           # plan can still name that night's date. One day expired before the
@@ -254,16 +254,14 @@ jobs:
   judge:
     env:
       COUNCIL_SELECTION: ${{ needs.draw.outputs.selection }}
-      COUNCIL_EVENT_FILE: backend/var/council/events/${{ matrix.tenant }}/${{ matrix.date }}/${{ matrix.shard }}.jsonl
+      COUNCIL_EVENT_FILE: backend/var/council/outgoing/shard-${{ matrix.tenant }}-${{ matrix.date }}-${{ matrix.shard }}/events/${{ matrix.tenant }}/${{ matrix.date }}/${{ matrix.shard }}.jsonl
     permissions:
       contents: read
       actions: read
     needs: draw
-    # An empty matrix is a strategy-evaluation failure, and the run reds on it
-    # rather than skipping quietly. No tenant registered is a legal night, and
-    # the guard is what makes it one; a tenant registered whose cells did not
-    # build is not, and the difference has to be visible from the run list.
-    if: needs.draw.outputs.matrix != '[]'
+    # Ordinary preparation failures keep draw red without suppressing ready
+    # siblings. Cancellation or an unfinished batch authorizes no dispatch.
+    if: always() && !cancelled() && needs.draw.outputs.preparation_finished == 'true' && needs.draw.outputs.matrix != '' && needs.draw.outputs.matrix != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ fromJSON(needs.draw.outputs.shard_timeout_minutes) }}
     strategy:
@@ -288,18 +286,35 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      # Before the unit reads it. Without the selection a unit has nothing to
-      # work on. By pattern rather than by name, and every date at once: the
-      # artifact carries its own date as a directory level, so a merged download
-      # reassembles the tree and this unit reads the one date it was given.
+      # Preserve each artifact directory until its identity, ownership and
+      # declared bytes have been checked, before paying for model setup.
       - uses: actions/download-artifact@v8
         with:
           pattern: council-selection-*
-          merge-multiple: true
-          path: backend/var/council
+          merge-multiple: false
+          path: backend/var/council/incoming
           # Passed rather than inherited. This job's permissions block names
           # what this credential may do, and an artifact read is one of them.
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify this unit's prepared work
+        env:
+          COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
+          COUNCIL_COMMIT: ${{ github.sha }}
+          COUNCIL_TENANT: ${{ matrix.tenant }}
+          COUNCIL_DATE: ${{ matrix.date }}
+          COUNCIL_SHARD: ${{ matrix.shard }}
+          COUNCIL_SHARDS: ${{ matrix.shards }}
+        run: |
+          set -euo pipefail
+          python -m idhazh council-shard \
+            --verify-only \
+            --tenant "$COUNCIL_TENANT" \
+            --date "$COUNCIL_DATE" \
+            --run-id "$COUNCIL_RUN_ID" \
+            --commit "$COUNCIL_COMMIT" \
+            --shard "$COUNCIL_SHARD" \
+            --shards "$COUNCIL_SHARDS"
 
       # The cache, the fetch, the digest check, the server and the health probe.
       # One action, shared with `digest.yml`, which ran the same five steps as a
@@ -324,6 +339,7 @@ jobs:
       - name: Run this unit of the tenant's work
         env:
           COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
+          COUNCIL_COMMIT: ${{ github.sha }}
           COUNCIL_TENANT: ${{ matrix.tenant }}
           COUNCIL_DATE: ${{ matrix.date }}
           COUNCIL_SHARD: ${{ matrix.shard }}
@@ -334,6 +350,7 @@ jobs:
             --tenant "$COUNCIL_TENANT" \
             --date "$COUNCIL_DATE" \
             --run-id "$COUNCIL_RUN_ID" \
+            --commit "$COUNCIL_COMMIT" \
             --shard "$COUNCIL_SHARD" \
             --shards "$COUNCIL_SHARDS"
 
@@ -347,17 +364,12 @@ jobs:
       # is a unit dying. A unit that stopped on its own clock, or was killed on
       # the platform's, has still done every piece of work it reached, and
       # without this that work goes in the bin however much of the bound it
-      # cost. The selection is excluded because this job downloaded it rather
-      # than wrote it.
+      # cost. Only this cell's declared outgoing bundle is uploaded.
       - if: always()
         uses: actions/upload-artifact@v7
         with:
           name: council-metrics-${{ matrix.tenant }}-${{ matrix.date }}-${{ matrix.shard }}
-          path: |
-            backend/var/council
-            !backend/var/council/*/selection
-            !backend/var/council/trials/*/*/*/scratch/*/selection
-            !backend/var/council/events/planner.jsonl
+          path: backend/var/council/outgoing/shard-${{ matrix.tenant }}-${{ matrix.date }}-${{ matrix.shard }}
           if-no-files-found: warn
           # The same three nights the selection keeps, and for the same reason:
           # a unit's verdicts outlive the run that produced them.
@@ -410,19 +422,13 @@ jobs:
           echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
-      # Every unit's output, merged into one tree. Each upload carries the date
-      # and the tenant as directory levels, so two tenants' first unit land
-      # beside each other rather than on top of each other.
-      #
-      # Every council artifact and not only the units': the planning job records
-      # its own selection unit the same way a judging unit records a shard, and
-      # that row travels in the selection artifact. Collecting only the units'
-      # uploads would leave the night's record short by one row a tenant.
+      # Keep unvalidated artifacts separate. The collector imports only named
+      # expected bundles, including planner records and no-work bookkeeping.
       - uses: actions/download-artifact@v8
         with:
           pattern: council-*
-          merge-multiple: true
-          path: backend/var/council
+          merge-multiple: false
+          path: backend/var/council/incoming
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # One job looping the dates rather than one job a date. Two jobs of one
@@ -435,6 +441,7 @@ jobs:
           COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
           COUNCIL_COMMIT: ${{ github.sha }}
           COUNCIL_UNITS_RESULT: ${{ needs.judge.result }}
+          COUNCIL_PLANNING_RESULT: ${{ needs.draw.result }}
           COUNCIL_MATRIX: ${{ needs.draw.outputs.matrix }}
           MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
@@ -442,6 +449,7 @@ jobs:
           python backend/utilities/council_publish.py \
             --run-id "$COUNCIL_RUN_ID" --commit "$COUNCIL_COMMIT" \
             --job-started-at "$JOB_STARTED_AT" --units-result "$COUNCIL_UNITS_RESULT" \
+            --planning-result "$COUNCIL_PLANNING_RESULT" \
             --matrix "$COUNCIL_MATRIX"
 
 

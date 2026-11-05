@@ -308,6 +308,80 @@ def test_the_shards_are_even_to_within_one(count: int) -> None:
 # --- the stage ---------------------------------------------------------------
 
 
+@pytest.mark.parametrize("earlier_count", [0, 1, 2], ids=["same-day", "cross-day", "earlier-day"])
+def test_the_picker_excludes_self_pairs_before_population_budget_and_sharding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, earlier_count: int
+) -> None:
+    """Removing the shared URL guard must fail before an invalid draw is written."""
+    first = item("world-01", outlet="The Wire", title="Floods reach the delta")
+    duplicate = item("business-02", outlet="The Paper", title=first.title).model_copy(
+        update={"source_url": first.source_url, "desk": "business"}
+    )
+    distinct = item("science-03", outlet="The Herald", title=first.title)
+    placements = [
+        one.model_copy(update={"published_at": "2026-08-20T23:00:00Z"})
+        for one in (first, duplicate, distinct)
+    ]
+    digest_root = tmp_path / "digest"
+    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
+
+    def publish(date: str, items: list[DigestItem]) -> None:
+        day = DigestDay(
+            version=DigestDay.schema_version(),
+            date=date,
+            generated_at=f"{date}T23:00:00Z",
+            partial=False,
+            items_planned=len(items),
+            items_failed=0,
+            runs=[DigestRunRef(n=1, at=f"{date}T23:00:00Z", items_added=len(items))],
+            verticals=[
+                DigestVerticalRef(id=name, display_name=name.title(), count=count)
+                for name, count in sorted(Counter(one.vertical for one in items).items())
+            ],
+            items=items,
+            embeddings=block({one.item_id: unit(0) for one in items}),
+        )
+        atomic_write.write_atomic(assemble.day_dir(digest_root, date) / "digest.json", day.to_json())
+
+    publish(DATE, placements[earlier_count:])
+    if earlier_count:
+        publish("2026-08-20", placements[:earlier_count])
+    judge_config = tmp_path / "config" / "judges" / "content-similarity-judge.json"
+    raw = json.loads((CONFIG_DIR / "judges" / judge_config.name).read_text(encoding="utf-8"))
+    raw["pair_budget"] = 1
+    atomic_write.write_atomic(judge_config, json.dumps(raw))
+    settings = replace(config.load(CONFIG_DIR), config_dir=judge_config.parent.parent)
+    draw_path = tmp_path / "selection" / "draw.csv"
+
+    drawn = stage_pick_item_pairs(
+        DATE,
+        run_id=COUNCIL_RUN,
+        settings=settings,
+        digest_root=digest_root,
+        draw_path=draw_path,
+    )
+
+    assert draw_path.is_file()
+    rows = [
+        StorySimilarityPair.from_csv_row(row)
+        for row in csv.DictReader(draw_path.read_text(encoding="utf-8").splitlines())
+    ]
+    assert drawn.pairs_in_band == len(drawn.taken) == len(rows) == 2, (
+        "only the two valid above-line comparisons overspend the budget of one"
+    )
+    assert {(pair.left, pair.right) for pair in drawn.taken} == {
+        tuple(sorted((first.item_id, distinct.item_id))),
+        tuple(sorted((duplicate.item_id, distinct.item_id))),
+    }
+    keys = sorted((derive_url_key(first.source_url), derive_url_key(distinct.source_url)))
+    assert all([row.left_url_key, row.right_url_key] == keys for row in rows)
+    assert [row.work_part_index for row in rows] == [
+        index % settings.council.shards for index in range(len(rows))
+    ]
+    assert all(row.date == DATE and row.run_id == COUNCIL_RUN for row in rows)
+    assert all(row.headline and row.composite_score == 1.0 and not row.usable for row in rows)
+
+
 def a_published_day(root: Path) -> None:
     """One day on disk with its manifest: six stories, five mastheads, one shared headline.
 

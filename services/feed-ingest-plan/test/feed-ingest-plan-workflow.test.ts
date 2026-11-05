@@ -236,7 +236,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(optional).toHaveLength(0);
   expect(text).not.toContain("profile_machine_memory");
   expect(text).toContain("/services/host-probes/src/");
-  expect(text).toContain("/services/typescript-api/src/");
+  expect(text).toContain("/services/serve-pipeline-apis/src/");
   expect(text).not.toContain("runtime.log");
   expect(text).not.toContain("delivery.log");
   expect(text).not.toContain("audited_complete");
@@ -403,17 +403,17 @@ test("the initial workflow checkout includes runtime code and every registered s
     "services/host-probes/bun.lock",
     "services/host-probes/src/api/server.ts",
     "services/host-probes/src/task-profile/collector.worker.ts",
-    "services/typescript-api/package.json",
-    "services/typescript-api/bun.lock",
-    "services/typescript-api/src/index.ts",
-    "services/typescript-api/src/create-api-app.ts",
-    "services/typescript-api/src/api-startup.ts",
-    "services/typescript-api/src/load-settings.ts",
-    "services/typescript-api/src/read-api-readiness.ts",
-    "services/typescript-api/src/read-server-evidence.ts",
-    "services/typescript-api/src/supervise-api-task.ts",
-    "services/typescript-api/src/write-server-event.ts",
-    "services/typescript-api/src/server-evidence.ts",
+    "services/serve-pipeline-apis/package.json",
+    "services/serve-pipeline-apis/bun.lock",
+    "services/serve-pipeline-apis/src/index.ts",
+    "services/serve-pipeline-apis/src/create-api-app.ts",
+    "services/serve-pipeline-apis/src/api-startup.ts",
+    "services/serve-pipeline-apis/src/load-settings.ts",
+    "services/serve-pipeline-apis/src/read-api-readiness.ts",
+    "services/serve-pipeline-apis/src/read-server-evidence.ts",
+    "services/serve-pipeline-apis/src/supervise-api-task.ts",
+    "services/serve-pipeline-apis/src/write-server-event.ts",
+    "services/serve-pipeline-apis/src/server-evidence.ts",
     "config/hono-server.json",
     "config/host-probes.json",
     "config/feed-ingest-plan-service.json",

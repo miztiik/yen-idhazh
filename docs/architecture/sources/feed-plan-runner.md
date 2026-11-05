@@ -40,7 +40,7 @@ or sparse expansion changes that input. Git is used again only for actual
 final data delivery.
 `scripts/feed-ingest-plan-http-client.ts` calls an existing listener
 and verifies retained output; it does not start or stop the listener. The entry
-supervises `services/typescript-api/src/index.ts` as a separate child process in
+supervises `services/serve-pipeline-apis/src/index.ts` as a separate child process in
 one workflow step. Its address comes only from `config/hono-server.json`;
 standalone listener settings above do not select it.
 It verifies private-pipe readiness against the child's
@@ -57,7 +57,7 @@ Always-run finalization then restarts the same application with its
 It reuses the existing metadata adapter and the same process-lifetime code,
 without loading collection inputs or reopening in-memory planner batches.
 This keeps completed partial metadata available after the planner exits.
-The [shared server contract](../../reference/typescript-api-server.md) owns
+The [shared server contract](../../reference/serve-pipeline-apis.md) owns
 route groups, lifecycle evidence and failure-log filenames.
 
 The private startup pipe carries validated effective settings and planning

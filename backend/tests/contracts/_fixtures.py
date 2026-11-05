@@ -63,6 +63,9 @@ FIXTURE_FILES: Final = (
     "council-run-record/a-part-that-ran-the-model.json",
     "council-run-record/a-part-that-raised.json",
     "council-run-record/a-selection-that-ran-no-model.json",
+    "council-selection/scheduled.json",
+    "council-preparation/ready.json",
+    "council-shard-files/completed.json",
     "counterfactual-score-row/a-refused-candidate-a-heavier-lens-would-lift.json",
     "counterfactual-score-row/no-lens-matched-so-both-scores-agree.json",
     "day-metrics/full.json",
@@ -218,6 +221,7 @@ def paragraph_after(text: str, lead: str) -> str:
     assert found, f"the page no longer says {lead!r}"
     return rest.split("\n\n", 2)[1]
 
+
 # The one `app-config` fixture. Its name is its invariant: every knob in it holds
 # a value the committed `config/idhazh.json` does not, so a reader that ignored
 # the file and fell back to a default would fail rather than pass.
@@ -228,6 +232,7 @@ def paragraph_after(text: str, lead: str) -> str:
 APP_CONFIG_EVERY_KNOB_DIFFERS: Final = (
     CONTRACT_FIXTURES_DIR / "app-config" / "every-knob-differs-from-the-committed-config.json"
 )
+
 
 def committed_models_raw() -> dict[str, Any]:
     """The active model's file as bytes on disk, found by following the pointer.

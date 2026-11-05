@@ -1,0 +1,30 @@
+{
+  "name": "@idhazh/serve-pipeline-apis",
+  "version": "2026.11.04",
+  "private": true,
+  "type": "module",
+  "description": "Serve existing pipeline operations through one local API server per task. Native modules retain planning, delivery and machine measurements. No published-site backend.",
+  "exports": {
+    "./app": "./src/create-api-app.ts",
+    "./settings": "./src/load-settings.ts",
+    "./startup": "./src/api-startup.ts",
+    "./supervisor": "./src/supervise-api-task.ts",
+    "./evidence": "./src/server-evidence.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "bun test --timeout 30000"
+  },
+  "dependencies": {
+    "@idhazh/common-contracts": "file:../../packages/common-contracts",
+    "@idhazh/feed-ingest-plan": "file:../../services/feed-ingest-plan",
+    "@idhazh/host-fingerprints": "file:../../services/host-fingerprints",
+    "@idhazh/host-probes": "file:../../services/host-probes",
+    "hono": "^4.10.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "typescript": "^5.9.3"
+  }
+}
