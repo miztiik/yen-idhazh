@@ -261,7 +261,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 ## 10. Schema Versioning
 
 - `version` is a `YYYY-MM-DD` date-stamp - never an integer, never an epoch. It answers the question a reader of an old payload actually has: how old is this shape?
-- Every change appends a `changelog` entry, newest first, `{ version, change }`, and sets `version` if necessary.
+- New changelog entries use unique date-only versions, newest first, `{ version, change }`. Changes on the same UTC day may share one entry.
 - **A changelog entry is one line. Five entries at most: the four newest changes, then one pointer saying the rest is in git.** `change` says what moved. Neither carries a measurement, a date, an incident, a plan row or a person's name - a reading belongs in the instrument log (Guardrail #10) and a rationale belongs in the living doc it impacts (Guardrail #4). **An entry that will not fit one line is the test:** either the reason is worth a `## Design rationale` section in `docs/`, and goes there with one line left here pointing at it, or it was never worth keeping. Older entries are deleted, not archived - git is the archive, and a pointer to the file's history beats a hash that rots.
 - A breaking change - a removed field, a retype, a shifted meaning - ships its read-side migration in the same commit. **A payload written by yesterday's run that today's build cannot read is a contract break and a release blocker.**
 
