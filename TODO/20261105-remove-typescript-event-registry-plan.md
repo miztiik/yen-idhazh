@@ -130,7 +130,6 @@ Table F - PR sequence
   - `docs/reference/workflow-pipeline-events.md`
   - `docs/how-to/run-the-gates.md`
   - `TODO/20261103-standardize-typescript-metadata-plan.md`
-  - `TODO/20261105-serve-pipeline-apis-plan.md`
   - `TODO/20261105-remove-typescript-event-registry-plan.md`
 - **Acceptance gates - local:**
   - Inspect `npm --prefix frontend run test:changed -- --list`; use the independent-package bindings in `docs/how-to/run-the-gates.md`. Do not run its Python-backed groups as a planner-development prerequisite.
