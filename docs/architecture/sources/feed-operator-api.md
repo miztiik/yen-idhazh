@@ -334,6 +334,9 @@ and host table rows, then returns Markdown and actionable warning notices.
 Run outcome and Needs attention remain visible; detailed evidence is folded.
 It performs no network or file access and is a
 package API, not an HTTP route.
+Callers supply captured failure evidence explicitly. Only the file-reading
+adapter can establish whether a named log is missing; a pure renderer cannot
+infer log availability from the HTTP result.
 
 The manual workflow uses an adapter to write that Markdown to its job summary
 and turn warnings into workflow annotations. Its finalization task first calls
