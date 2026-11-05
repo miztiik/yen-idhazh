@@ -100,6 +100,14 @@ denominators. Fitted rows append nullable `pairs_refused`, unknown for history,
 and permit null disagreement/unclear rates when their denominator is empty.
 Native and frontend readers accept those values before new writers emit them.
 No historical row or aggregate archive is rewritten.
+The distribution and fitted contracts also append nullable
+`calibration_policy_version`, a date-valued protocol identity distinct from
+judge interpretation. New records identify the adjustable, non-headline
+population; historical JSON, CSV and Parquet values remain null. The field
+participates in aggregate identity and the one-time archive/reset transition,
+without changing the meaning of daily judge-health rates. Existing named
+historical fixtures remain the compatibility inputs; missing fields are not
+relabelled as current and old slot totals are not reconstructed.
 The [judge page](../publishing/autotune-content-similarity.md) owns the meaning
 of these counts and the archive-before-reset rule.
 
