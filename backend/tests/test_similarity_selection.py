@@ -7,8 +7,8 @@ every verdict column empty.
 Unit tier for the four rules - across mastheads, the band's edges, what the
 budget may cut, and how the shards are dealt - and integration tier for the stage
 writing a file the contract can read back. Real quantised vectors through the
-encoder's own wire format and the committed run-manifest fixture throughout. No
-mocks, no network.
+encoder's own wire format and generated native manifests throughout. No mocks,
+no network.
 
 **No test here walks committed data** (CLAUDE.md section 13). The day the
 integration test reads is built into the test's own tree, which is fixed in size
@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import math
 from collections import Counter
 from dataclasses import replace
@@ -28,7 +29,8 @@ from typing import Final
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
-from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from support.ledger import SEED_COMMIT
+from support.paths import CONFIG_DIR
 
 from idhazh import assemble, atomic_write, config
 from idhazh.assemble import ScoredPair, cross_source_pairs
@@ -42,7 +44,7 @@ from idhazh.contracts.digest_day import (
 )
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.knobs.placement import SameStoryConfig
-from idhazh.contracts.run_manifest import RunManifest
+from idhazh.contracts.run_manifest import RunManifest, RunRecord, RunStatus, VerticalCount
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, to_base64
 from idhazh.similarity.selection import (
@@ -57,10 +59,7 @@ from idhazh.similarity.stamps import ScorerStamp, scorer_inputs
 from idhazh.stages import common
 from idhazh.stages.pick_item_pairs import stage_pick_item_pairs
 
-#: The date the committed run-manifest fixture is addressed by. The manifest is
-#: what makes the day a real published one; the run a drawn row names is the
-#: council's own and no longer comes off it.
-MANIFEST_FIXTURE: Final = CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"
+#: The generated published day; drawn rows still name the council's own run.
 DATE: Final = "2026-08-21"
 
 #: What the council calls itself on the night it judges `DATE`. The day after the
@@ -382,7 +381,7 @@ def test_the_picker_excludes_self_pairs_before_population_budget_and_sharding(
     assert all(row.headline and row.composite_score == 1.0 and not row.usable for row in rows)
 
 
-def a_published_day(root: Path) -> None:
+def a_published_day(root: Path, *, line: float | None = None) -> None:
     """One day on disk with its manifest: six stories, five mastheads, one shared headline.
 
     Built rather than read off the archive, because the case that matters most
@@ -398,9 +397,17 @@ def a_published_day(root: Path) -> None:
         item("business-01", outlet="The Ledger"),
         item("business-02", outlet="The Wire"),
     ]
-    angles = [0.0, 0.6, 1.2, 4.0, 12.0, 30.0]
+    angles = [0.0, 0.6, 1.2, 4.0, 12.0, 32.0]
     vectors = block({one.item_id: unit(angle) for one, angle in zip(items, angles, strict=True)})
-    manifest = RunManifest.from_json(read_text(MANIFEST_FIXTURE))
+    manifest = RunManifest(version=RunManifest.schema_version(), date=DATE, runs=[
+        RunRecord(
+            run_id=f"{DATE}-1", n=1, started_at=f"{DATE}T06:00:00Z",
+            completed_at=f"{DATE}T06:01:00Z", status=RunStatus.COMPLETED,
+            commit_sha=SEED_COMMIT, runner="test", items_planned=len(items),
+            items_succeeded=len(items), items_failed=0, site_bytes=0, site_files=0,
+            same_story_floor_applied=line,
+        ),
+    ])
     day = DigestDay(
         version=DigestDay.schema_version(),
         date=DATE,
@@ -479,7 +486,8 @@ def test_a_written_judge_budget_changes_the_real_draw_without_cutting_merged_pai
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     digest_root = tmp_path / "digest"
-    a_published_day(digest_root)
+    line = 0.90
+    a_published_day(digest_root, line=line)
     monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
     settings = config.load(CONFIG_DIR)
     path = tmp_path / "config" / "judges" / "content-similarity-judge.json"
@@ -500,26 +508,84 @@ def test_a_written_judge_budget_changes_the_real_draw_without_cutting_merged_pai
 
     full = draw(200)
     limited = draw(1)
-    line = settings.app.assemble.same_story.floor_min
     merged = [pair for pair in full.taken if pair.score >= line]
+    floor = settings.app.assemble.same_story.floor_min
+    assert line < floor
+    assert any(line <= pair.score < floor for pair in merged)
+    assert any(pair.score < line for pair in full.taken)
     assert len(limited.taken) < len(full.taken) == full.pairs_in_band
+    assert limited.pairs_in_band == full.pairs_in_band
     assert limited.taken == merged
 
 
-def test_the_draw_samples_the_config_band_and_never_the_line_a_fit_applied(
+def test_the_draw_reads_legacy_cumulative_counts_without_changing_the_recorded_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    items = [
+        item("world-01", outlet="Left"),
+        item("world-02", outlet="Right").model_copy(update={"introduced_by_run": 2}),
+    ]
+    manifest = RunManifest(
+        version=RunManifest.schema_version(), date=DATE,
+        runs=[
+            RunRecord(
+                run_id=f"{DATE}-{n}", n=n, started_at=f"{DATE}T{started}:00:00Z",
+                completed_at=f"{DATE}T{completed}:00:00Z", status=RunStatus.COMPLETED,
+                commit_sha=SEED_COMMIT, runner="test", items_planned=1,
+                items_succeeded=1, items_failed=0, site_bytes=0, site_files=0,
+                verticals=[VerticalCount(id="world", planned=1, published=1)],
+                same_story_floor_applied=line,
+            )
+            for n, started, completed, line in (
+                (1, "06", "08", 0.94), (2, "12", "18", 0.90),
+            )
+        ],
+    )
+    day = DigestDay(
+        version=DigestDay.schema_version(), date=DATE,
+        generated_at=f"{DATE}T18:00:00Z", partial=False,
+        items_planned=2, items_failed=0, items=items,
+        runs=[
+            DigestRunRef(n=run.n, at=run.started_at, items_added=1)
+            for run in manifest.runs
+        ],
+        verticals=[DigestVerticalRef(id="world", display_name="World", count=2)],
+        embeddings=block({"world-01": unit(0), "world-02": unit(22)}),
+    )
+    payload = manifest.model_dump(mode="json") | {"version": "2026-08-21T02:00"}
+    payload["runs"][1]["verticals"][0]["published"] = 2
+    digest_root = tmp_path / "digest"
+    target = assemble.day_dir(digest_root, DATE)
+    atomic_write.write_atomic(target / "digest.json", day.to_json())
+    atomic_write.write_atomic(target / "run.json", json.dumps(payload))
+    previous_bytes = (target / "run.json").read_bytes()
+    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
+    draw_path = tmp_path / "selection" / "draw.csv"
+
+    with caplog.at_level(logging.INFO, logger="idhazh"):
+        drawn = stage_pick_item_pairs(
+            DATE, run_id=COUNCIL_RUN, settings=config.load(CONFIG_DIR),
+            digest_root=digest_root, draw_path=draw_path,
+        )
+
+    assert drawn.pairs_in_band == len(drawn.taken) == 1
+    assert 0.90 <= drawn.taken[0].score < 0.94
+    migrated = common._load_manifest(target / "run.json", day=day)
+    assert migrated is not None
+    assert migrated.runs[-1].verticals[0].published == 1
+    assert migrated.runs[-1].same_story_floor_applied == 0.90
+    assert draw_path.is_file()
+    assert "legacy-fallback" not in caplog.text
+    assert (target / "run.json").read_bytes() == previous_bytes
+
+
+def test_the_draw_samples_the_config_band_and_never_the_published_line(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The population the record counts from is the config band, whatever the line.
 
-    Verified in the stage as it stands: `in_band` is handed `tuning.band_low` and
-    `tuning.band_high` off the config file, and no fitted value reaches it. This
-    is the regression guard against the tidy-up that creates the feedback loop -
-    wiring `applied.effective_same_story` into the draw the way `assemble` reads
-    it. A band that opened at the applied line would narrow every time the line
-    rose, and the next fit would then be reading a record it had shaped itself.
-
-    Driven by moving the committed floor the whole width of the band, which is
-    the furthest a fit could ever carry it.
+    Moving the recorded build line must change only the mandatory/budget split.
+    A band that opened at that line would let the fit shape its own evidence.
     """
     digest_root = tmp_path / "digest"
     a_published_day(digest_root)
@@ -528,15 +594,21 @@ def test_the_draw_samples_the_config_band_and_never_the_line_a_fit_applied(
     same_story = settings.app.assemble.same_story
     tuning = same_story.judging_knobs()
 
-    def drawn_with(floor: float, out: str) -> Draw:
-        assemble_block = settings.app.assemble.model_copy(
-            update={"same_story": same_story.model_copy(update={"floor_min": floor})}
-        )
-        driven = replace(settings, app=settings.app.model_copy(update={"assemble": assemble_block}))
+    manifest_path = assemble.day_dir(digest_root, DATE) / "run.json"
+    manifest = RunManifest.from_json(manifest_path.read_text(encoding="utf-8"))
+
+    def drawn_with(line: float, out: str) -> Draw:
+        changed = manifest.model_copy(update={
+            "runs": [
+                run.model_copy(update={"same_story_floor_applied": line})
+                for run in manifest.runs
+            ],
+        })
+        atomic_write.write_atomic(manifest_path, changed.to_json())
         return stage_pick_item_pairs(
             DATE,
             run_id=COUNCIL_RUN,
-            settings=driven,
+            settings=settings,
             digest_root=digest_root,
             draw_path=tmp_path / out / "draw.csv",
         )

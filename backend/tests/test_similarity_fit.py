@@ -26,6 +26,7 @@ from support.ledger import SEED_COMMIT
 from test_same_story import at, block, item, unit
 
 from idhazh import assemble, atomic_write, cli, config, ledger
+from idhazh.content_similarity_judge.tenant import JUDGE_ID
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.digest_day import DigestDay, DigestRunRef, DigestVerticalRef
@@ -38,13 +39,16 @@ from idhazh.contracts.fitted_similarity_threshold import (
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest, RunRecord, RunStatus
-from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
-from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION
+from idhazh.contracts.story_similarity_distribution import (
+    CALIBRATION_POLICY_VERSION,
+    StorySimilarityDistribution,
+)
+from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION, SameStoryVerdict
 from idhazh.council.event_log import OneJsonLine
 from idhazh.council.run_identity import council_run_id
 from idhazh.similarity import applied, counting, fit
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp, judge_inputs, scorer_inputs
-from idhazh.stages import common
+from idhazh.stages import common, count_verdicts
 from idhazh.stages.common import _load_day
 from idhazh.stages.set_merge_line import PRODUCER, merge_count, stage_set_merge_line
 
@@ -727,9 +731,17 @@ def test_fit_uses_both_valid_readings_and_filters_policy_before_recency(tmp_path
     assert fitted.judge_policy_version == JUDGE_POLICY_VERSION
 
 
-@pytest.mark.parametrize("matching_identity", [False, True])
+@pytest.mark.parametrize(
+    "changed_policies",
+    [
+        (),
+        ("judge_policy_version",),
+        ("calibration_policy_version",),
+        ("judge_policy_version", "calibration_policy_version"),
+    ],
+)
 def test_fit_history_keeps_the_applied_line_but_separates_method_changes(
-    tmp_path: Path, matching_identity: bool
+    tmp_path: Path, changed_policies: tuple[str, ...]
 ) -> None:
     settings = config.load(config.REPO_ROOT / "config")
     knobs = settings.app.assemble.same_story.judging_knobs()
@@ -738,14 +750,15 @@ def test_fit_history_keeps_the_applied_line_but_separates_method_changes(
     record = counting.empty_record(
         knobs, scorer=scorer_inputs(settings), judge=judge_inputs(settings)
     )
+    historical = record.model_copy(update=dict.fromkeys(changed_policies))
     for date in _days_back(knobs.step_change_window_rows + 1)[:-1]:
         row = a_written_row(date=date, previous=0.93, daily_shift=0.001)
-        if matching_identity:
-            row = FittedSimilarityThreshold.model_validate(row.model_dump() | {
-                "record_stamp": record.record_stamp(),
-                "judge_policy_version": JUDGE_POLICY_VERSION, "pairs_refused": 0,
-                "disagreement_rate": None, "unclear_rate": None,
-            })
+        row = FittedSimilarityThreshold.model_validate(row.model_dump() | {
+            "record_stamp": historical.record_stamp(),
+            "judge_policy_version": historical.judge_policy_version,
+            "calibration_policy_version": historical.calibration_policy_version,
+            "pairs_refused": 0, "disagreement_rate": None, "unclear_rate": None,
+        })
         a_filed_line(state, row)
     fitted = stage_set_merge_line(
         DATE, run_id=COUNCIL_RUN, settings=settings, identity=a_council_writer(),
@@ -753,7 +766,106 @@ def test_fit_history_keeps_the_applied_line_but_separates_method_changes(
     )
 
     assert fitted is not None and fitted.previous == fitted.applied == 0.93
-    assert fitted.typical_shift == (0.001 if matching_identity else None)
+    assert fitted.typical_shift == (None if changed_policies else 0.001)
+    assert fitted.calibration_policy_version == CALIBRATION_POLICY_VERSION
+
+
+def test_headline_audits_are_retained_in_health_but_not_calibration(tmp_path: Path) -> None:
+    from test_similarity_counting import a_row, a_verdict_file
+
+    settings = config.load(config.REPO_ROOT / "config")
+    judge = judge_inputs(settings)
+    rows = [
+        a_row(score=0.95, pair=0, judge=judge),
+        *(
+            a_row(score=1.0, headline=True, verdict=verdict, pair=index, judge=judge)
+            for index, verdict in enumerate(SameStoryVerdict, start=1)
+        ),
+        a_row(score=1.0, headline=True, usable=False, pair=4, judge=judge),
+    ]
+    refused = a_row(score=1.0, headline=True, pair=5, judge=judge)
+    rows.append(type(refused).model_validate(refused.model_dump() | {
+        "verdict": None, "usable": False, "grammar_applied": False,
+    }))
+    state, digest_root = tmp_path / "state", tmp_path / "digest"
+    a_published_day(digest_root)
+    verdicts = tmp_path / "verdicts"
+    atomic_write.write_atomic(verdicts / "0.csv", a_verdict_file(rows))
+
+    counted = count_verdicts.stage_count_verdicts(
+        DATE, run_id=COUNCIL_RUN, judge_id=JUDGE_ID,
+        shipped_root=tmp_path / "no-metrics", verdicts_dir=verdicts,
+        settings=settings, identity=a_council_writer(),
+        expected_shards=1, reports_complete=True, state_dir=state,
+    )
+    assert counted.counted and counted.rows_appended == len(rows)
+    assert {row.pair_key for row in ledger.load_story_similarity_pairs(state, DATE)} == {
+        row.pair_key for row in rows
+    }
+    record = StorySimilarityDistribution.from_json(
+        ledger.path(
+            state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION
+        ).read_text(encoding="utf-8")
+    )
+    assert sum(slot.different_count for slot in record.slots) == 1
+    assert sum(slot.same_count + slot.unclear_count for slot in record.slots) == 0
+    fitted = stage_set_merge_line(
+        DATE, run_id=COUNCIL_RUN, settings=settings, identity=a_council_writer(),
+        state_dir=state, digest_root=digest_root,
+    )
+
+    assert fitted is not None
+    assert (fitted.pairs_in_band, fitted.pairs_judged, fitted.pairs_usable) == (6, 5, 4)
+    assert fitted.pairs_refused == 1
+    assert (fitted.disagreement_rate, fitted.unclear_rate) == (0.2, 0.25)
+    assert fitted.calibration_policy_version == CALIBRATION_POLICY_VERSION
+
+
+def test_failed_calibration_archive_keeps_the_applied_line_without_subtracting_today(
+    tmp_path: Path,
+) -> None:
+    from test_similarity_counting import AN_EARLIER_DATE, a_row, a_verdict_file
+
+    settings = config.load(config.REPO_ROOT / "config")
+    judge = judge_inputs(settings)
+    record = counting.count_day(
+        counting.empty_record(
+            settings.app.assemble.same_story.judging_knobs(),
+            scorer=scorer_inputs(settings), judge=judge,
+        ),
+        [a_row(score=0.93, judge=judge, date=AN_EARLIER_DATE)],
+        date=AN_EARLIER_DATE,
+    ).model_copy(update={"calibration_policy_version": None})
+    state, digest_root = tmp_path / "state", tmp_path / "digest"
+    a_published_day(digest_root)
+    record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
+    previous_bytes = record.to_json().encode()
+    atomic_write.write_atomic_bytes(record_path, previous_bytes)
+    ledger.path(
+        state, LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE, record.record_stamp()
+    ).mkdir(parents=True)
+    a_filed_line(state, a_written_row(date=AN_EARLIER_DATE, previous=0.91))
+    verdicts = tmp_path / "verdicts"
+    atomic_write.write_atomic(
+        verdicts / "0.csv", a_verdict_file([a_row(score=0.96, judge=judge)])
+    )
+
+    counted = count_verdicts.stage_count_verdicts(
+        DATE, run_id=COUNCIL_RUN, judge_id=JUDGE_ID,
+        shipped_root=tmp_path / "no-metrics", verdicts_dir=verdicts,
+        settings=settings, identity=a_council_writer(),
+        expected_shards=1, reports_complete=True, state_dir=state,
+    )
+    fitted = stage_set_merge_line(
+        DATE, run_id=COUNCIL_RUN, settings=settings, identity=a_council_writer(),
+        state_dir=state, digest_root=digest_root,
+    )
+
+    assert not counted.counted and counted.held_reason == "inputs_changed"
+    assert record_path.read_bytes() == previous_bytes
+    assert fitted is not None and fitted.held_reason is HeldReason.INPUTS_CHANGED
+    assert fitted.previous == fitted.applied == 0.91
+    assert fitted.daily_shift is None and fitted.typical_shift is None
 
 
 def test_the_row_is_written_from_a_date_and_a_run_id_the_council_minted(
