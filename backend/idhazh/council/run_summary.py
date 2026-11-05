@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
-from pydantic import Field, TypeAdapter, model_validator
+from pydantic import TypeAdapter
 
 from idhazh import event_lines
-from idhazh.contracts.base import DateStamp, Model, Slug
+from idhazh.contracts.base import Model
 from idhazh.contracts.council_events import (
     CouncilExit,
     CouncilProgram,
@@ -24,6 +24,7 @@ from idhazh.contracts.council_events import (
     RunIdentified,
     UnitFinished,
 )
+from idhazh.contracts.council_invocation import Cell as Cell
 from idhazh.contracts.council_run_record import EvaluationStep, ShardOutcome
 
 # These are the existing transient event vocabulary and workflow matrix, not a ledger.
@@ -41,26 +42,6 @@ _EVENTS = {
     )
 }
 _STAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
-
-
-class Cell(Model):
-    """One planner-selected job whose report must not be inferred from output bytes."""
-
-    tenant: Slug
-    date: DateStamp
-    shard: int = Field(ge=0, strict=True)
-    shards: int = Field(ge=1, strict=True)
-    runs_model: bool = Field(strict=True)
-
-    @model_validator(mode="after")
-    def valid_cell(self) -> Cell:
-        date.fromisoformat(self.date)
-        if self.shard >= self.shards:
-            raise ValueError("shard must be below shards")
-        return self
-
-    def event_path(self, root: Path) -> Path:
-        return root / self.tenant / self.date / f"{self.shard}.jsonl"
 
 
 def cells(matrix: str) -> tuple[Cell, ...]:

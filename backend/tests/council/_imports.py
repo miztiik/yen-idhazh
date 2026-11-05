@@ -21,6 +21,7 @@ MODULE_NAMES = (
     "idhazh.contracts.collection_prune",
     "idhazh.contracts.council_run_record",
     "idhazh.contracts.council_events",
+    "idhazh.contracts.council_invocation",
     "idhazh.contracts.counterfactual_score",
     "idhazh.contracts.element",
     "idhazh.contracts.eval_row",
