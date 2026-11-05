@@ -3,9 +3,10 @@ import { expect, test } from "bun:test";
 import { parseHTML } from "linkedom";
 import {
   ArticleFailureDiagnosticDataSchema, ArticleFailureDiagnosticSchema, createCandidateId, createCloudEvent,
-  createRootContext, FEED_INGEST_EVENT_VERSION, HarvestDiagnosticsSchema, loadEventSources,
+  createRootContext, FEED_INGEST_EVENT_VERSION, HarvestDiagnosticsSchema,
   RejectedArticleRowSchema, writeTraceContext,
 } from "@idhazh/common-contracts";
+import { PLANNER_EVENT_SOURCE } from "../src/declare-event-source";
 import { renderFailureEvidence } from "../src/reporting/failure-evidence-markdown";
 import { renderPlanMarkdown } from "../src/reporting/plan-markdown";
 import { readPlannerOutputRecording } from "./planner-output-recordings";
@@ -68,7 +69,6 @@ test("full typed detail explains native causes once and missing title never beco
   const fixture = await Bun.file(new URL(
     "../../../tests/fixtures/feed-ingest-plan/article-terminal-failures.json", import.meta.url,
   )).json();
-  const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
   const diagnostic = HarvestDiagnosticsSchema.parse(fixture.quality_diagnostic);
   const base = RejectedArticleRowSchema.array().parse(await Bun.file(new URL(
     "../../../tests/fixtures/feed-ingest-plan/entry-points/rejected-articles.rows.json", import.meta.url,
@@ -80,7 +80,7 @@ test("full typed detail explains native causes once and missing title never beco
     error_code: diagnostic.error_code, pacing_time_ms: diagnostic.pacing_time_ms, pacing_settings: diagnostic.pacing_settings,
   });
   const event = ArticleFailureDiagnosticSchema.parse(createCloudEvent({
-    source: sources.planner, type: "planner.progress", context: { ...createRootContext(), traceId: response.traceId },
+    source: PLANNER_EVENT_SOURCE, type: "planner.progress", context: { ...createRootContext(), traceId: response.traceId },
     data: {
       version: FEED_INGEST_EVENT_VERSION, run_id: response.run_id, operation: "quality", phase: "failed",
       details: {

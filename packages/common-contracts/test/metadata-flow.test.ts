@@ -1,25 +1,21 @@
 /** Do real event producers and consumers retain application values and operation relationships? */
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { createCloudEvent } from "@idhazh/common-contracts/create-cloud-event";
 import { readCloudEvent } from "@idhazh/common-contracts/read-cloud-event";
 import { createChildContext, createRootContext } from "@idhazh/common-contracts/create-operation-context";
-import { loadEventSources } from "@idhazh/common-contracts/load-event-sources";
 import { readTraceContext, writeTraceContext } from "@idhazh/common-contracts/propagate-trace-context";
 import { OperationMetadataSchema } from "@idhazh/common-contracts/schemas/operation-metadata";
+import { EventSourceSchema } from "@idhazh/common-contracts/schemas/cloud-event";
 import { readSelectedArticlesArtifact } from "../src/schemas/selected-article.schema";
 
-const sourcePath = new URL("../../../config/typescript-event-sources.json", import.meta.url);
+const EVENT_SOURCE = "/fixtures/common-contracts";
 const recordingPath = new URL("../../../tests/fixtures/feed-ingest-plan/entry-points/selected-articles.json", import.meta.url);
 
 test("distinct occurrences replay unchanged and a consumer recovers the recorded selected articles", async () => {
-  const sources = await loadEventSources(sourcePath);
   const data = readSelectedArticlesArtifact(await Bun.file(recordingPath).json());
   const context = createRootContext({ traceState: "reader=value" });
   const input = {
-    source: sources.planner, type: "planner.selected", context, data,
+    source: EVENT_SOURCE, type: "planner.selected", context, data,
     parseData: readSelectedArticlesArtifact,
   };
   const first = createCloudEvent(input);
@@ -129,10 +125,9 @@ test("invalid identity and self-parentage cannot leave the native boundary", () 
 });
 
 test("both producers and replay consumers use the real application validator", async () => {
-  const sources = await loadEventSources(sourcePath);
   const data = readSelectedArticlesArtifact(await Bun.file(recordingPath).json());
   const input = {
-    source: sources.planner, type: "planner.selected", context: createRootContext(),
+    source: EVENT_SOURCE, type: "planner.selected", context: createRootContext(),
     data, parseData: readSelectedArticlesArtifact,
   };
   const event = createCloudEvent(input);
@@ -143,28 +138,12 @@ test("both producers and replay consumers use the real application validator", a
     .toThrow("traceparent");
 });
 
-test("explicit source loading changes producer identity and refuses missing or invalid settings", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "event-sources-"));
-  const path = join(directory, "sources.json");
-  try {
-    const configured = await loadEventSources(sourcePath);
-    const changed = { ...configured, planner: "/operators/planner" };
-    await writeFile(path, JSON.stringify(changed));
-    const sources = await loadEventSources(path);
-    const data = readSelectedArticlesArtifact(await Bun.file(recordingPath).json());
-    const event = createCloudEvent({
-      source: sources.planner, type: "planner.selected", context: createRootContext(),
-      data, parseData: readSelectedArticlesArtifact,
-    });
-    expect(event.source).toBe(changed.planner);
-    const { planner: _planner, ...missing } = changed;
-    await writeFile(path, JSON.stringify(missing));
-    await expect(loadEventSources(path)).rejects.toThrow("planner");
-    for (const planner of ["has spaces", "/bad%escape", "https://[invalid", ""]) {
-      await writeFile(path, JSON.stringify({ ...changed, planner }));
-      await expect(loadEventSources(path)).rejects.toThrow("planner");
-    }
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
+test.each(["has spaces", "/bad%escape", "https://[invalid", ""])(
+  "producer URI validation rejects malformed identities: %s", source => {
+    expect(EventSourceSchema.safeParse(source).success).toBe(false);
+    expect(() => createCloudEvent({
+      source, type: "fixture.checked", context: createRootContext(),
+      data: {}, parseData: value => value,
+    })).toThrow();
+  },
+);

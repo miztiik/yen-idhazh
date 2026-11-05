@@ -15,9 +15,9 @@ Table A - Operating contract
 | A4 | Chosen construction | Producer-local protocol constants, existing shared envelope/context helpers, service-owned diagnostic contracts and strict identity-preserving relay. Architecture authority: Fowler. |
 | A5 | Compatibility | Preserve existing source URIs, event types, saved application payloads, HTTP routes/results, resource identities, private readiness/stdout protocols and private profile transport. Table E declares the additions and the live transport being retired. |
 | A6 | Contract movement | Delete the authored configuration contract. Move the delivery event contract to its producer without changing its saved shape. Add the native diagnostic contracts in Table E before their writers. No historical event, receipt, ledger or server-evidence migration. |
-| A7 | Execution boundary | Authoring ends with this plan. Execution pauses before the first behavioral change until explicitly instructed to execute this Level-5 design. No instruction-file change or exception is implied. |
+| A7 | Execution boundary | Execute the three rows in order. No instruction-file change or exception is implied. |
 | A8 | ESCALATE triggers | 1. An additional authored HTTP API or registry consumer changes this inventory. 2. A declared URI, response, saved shape or operation relationship cannot be preserved. 3. A named consumer still requires the retired transport. 4. Work requires a dependency, workspace, source-selection knob, instruction-file change or another persisted-family migration. |
-| A9 | Execution | Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 1 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes. Parallel N is one because the source cutover, reader expansion and writer cutover share contracts and must land in order. |
+| A9 | Execution | Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan; keep parallel N = 1 rows in flight; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. Parallel N is one because the source cutover, reader expansion and writer cutover share contracts and must land in order. |
 
 Table B - Scope boundaries
 
@@ -78,7 +78,7 @@ Table F - PR sequence
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| F1 | 1 | Remove the registry and localize existing producer identities | - | A | PENDING | - | - | - |
+| F1 | 1 | Remove the registry and localize existing producer identities | - | A | DONE | urban-goggles | - | - |
 | F2 | 2 | Move native diagnostic contracts to producers and expand relay readers | 1 | B | PENDING | - | - | - |
 | F3 | 3 | Emit native events across every API and retire legacy translation | 2 | C | PENDING | - | - | - |
 

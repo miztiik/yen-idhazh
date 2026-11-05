@@ -2,7 +2,7 @@
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadEventSources } from "@idhazh/common-contracts";
+import { PIPELINE_API_EVENT_SOURCE } from "./declare-event-source";
 import { superviseHttpChild } from "@idhazh/feed-ingest-plan/http-child-lifetime";
 import { withPlannerFailure } from "@idhazh/feed-ingest-plan/plan-failure";
 import { loadConfig as loadProbeConfig } from "@idhazh/host-probes/config";
@@ -22,12 +22,11 @@ export async function superviseApiTask<T>(input: {
   const startup = ApiStartupSchema.parse(input.startup);
   const directory = resolve(input.root, startup.directory);
   await mkdir(directory, { recursive: true });
-  const sources = await loadEventSources(join(input.root, "config", "typescript-event-sources.json"));
   const maxControlBytes = startup.group === "machine"
     ? (await loadProbeConfig(join(input.root, "config", "host-probes.json"))).max_request_body_bytes
     : startup.group === "planning" ? startup.planner.settings.listener.max_body_bytes
     : startup.delivery.settings.listener.max_body_bytes;
-  const logger = createServerEventWriter({ directory, source: sources.typescript_api, group: startup.group, run: startup.run });
+  const logger = createServerEventWriter({ directory, source: PIPELINE_API_EVENT_SOURCE, group: startup.group, run: startup.run });
   const started = performance.now();
   const evidence: ServerEvidence = {
     version: "2026-11-04", server_name: "hono-server", group: startup.group,

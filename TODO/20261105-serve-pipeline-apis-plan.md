@@ -42,7 +42,7 @@ Table D - Compatibility retained
 | Id | Surface | Required invariant |
 | --- | --- | --- |
 | D1 | HTTP and private control | Keep route paths, request/response shapes, startup and readiness packets, group names, exports, error codes, enablement and cancellation behavior unchanged. Retain the `typescript_api` and `TYPESCRIPT_API` protocol identifiers and their existing derived event/error values. |
-| D2 | Event provenance | Keep `config/typescript-event-sources.json` unchanged, including its `/services/typescript-api` producer URI. It identifies the same producer; it is not a source-file lookup or fetch destination. Existing `/fixtures/typescript-api` test producer URIs are also identifiers, not stale imports. |
+| D2 | Event provenance | Keep the `/services/typescript-api` producer URI unchanged as a local protocol declaration. It identifies the same producer; it is not a source-file lookup or fetch destination. Existing `/fixtures/typescript-api` test producer URIs are also identifiers, not stale imports. |
 | D3 | Configuration and task evidence | Keep `config/hono-server.json`, listener settings, log/evidence filenames, contract versions and saved meanings unchanged. |
 | D4 | Dependency graph | Keep dependency declarations, locked versions, integrity data and package export entry points unchanged; refresh only the moved package identity in its lockfile with the existing package manager. |
 | D5 | Existing work | Update only rename-related paths and labels in the other active plan; do not change its row status, scope or design. |

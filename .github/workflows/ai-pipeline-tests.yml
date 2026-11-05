@@ -9,7 +9,7 @@ on:
       - '.github/scripts/test/workflow-handoff.test.ts'
       - '.github/workflows/ai-pipeline-tests.yml'
       - 'packages/common-contracts/**'
-      - 'config/typescript-event-sources.json'
+      - '.github/scripts/declare-workflow-event-source.ts'
       - 'tests/fixtures/typescript-metadata/workflow-output-event.json'
       - 'tests/fixtures/typescript-metadata/evaluator-request.json'
       - 'tests/fixtures/typescript-metadata/evaluator-response.json'

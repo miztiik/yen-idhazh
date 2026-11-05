@@ -18,7 +18,7 @@ Table A - distinct identities
 | A1 | Ledger `unit_id` | UUIDv5 from the fixed namespace and work seed | Repeatable work, unchanged across retries. |
 | A2 | Ledger `file_id` | UUIDv8 under the writer's file contract | One physical file, not an event or operation. |
 | A3 | Article and URL keys | Their declared SHA-256 encodings | An address or foreign domain item, not a captured input. |
-| A4 | Native TypeScript event `source + id` | Configured producer URI reference and a fresh lowercase UUIDv4 | One event occurrence; replay retains the saved envelope. |
+| A4 | Native TypeScript event `source + id` | Producer-local protocol URI reference and a fresh lowercase UUIDv4 | One event occurrence; replay retains the saved envelope. |
 | A5 | Native TypeScript `traceId` | Nonzero 16 random bytes, encoded as 32 lowercase hexadecimal characters | One execution. |
 | A6 | Native TypeScript `spanId` | Nonzero 8 random bytes, encoded as 16 lowercase hexadecimal characters | One operation within that execution. |
 | A7 | Python protocol identifiers | The owning Python contract's UUID rules | Foreign caller, execution and operation identities; see section 6. |
@@ -135,13 +135,15 @@ the codec; native `traceState` is its serialized form. Locally emitted carriers
 use version `00` and unsampled flags `00`. Callers derive a child or start a root
 explicitly; these identifiers grant no authorization or request replay promise.
 
-`loadEventSources(path)` explicitly reads
-`config/typescript-event-sources.json`, written by this repository. It validates
-the named pipeline API server, planner, summarizer and workflow producer URI references. These
-identify producers, not fetch destinations. Importing the package reads no
-configuration. Schema, creation, reading, source-loading and codec entry points
-are exported separately; the browser's framework-free observation-order path
-remains independent.
+Each producer declares its fixed logical URI in its own `declare-event-source.ts`
+module; the independent workflow uses `declare-workflow-event-source.ts`.
+The planner, summarizer, API host and workflow retain `/services/feed-ingest-plan`,
+`/services/summarizer`, `/services/typescript-api` and `/workflows/ai-pipeline`.
+These protocol identities are not configuration, deployment addresses or fetch
+destinations. Shared `EventSourceSchema` validates URI references when events
+are constructed or read, without enumerating applications or reading files.
+Schema, creation, reading and codec entry points remain separately exported;
+the browser's framework-free observation-order path stays independent.
 
 ---
 
@@ -272,6 +274,11 @@ The reference-summary digest identifies the exact UTF-8 reference bytes,
 not the source, generated answer or an event occurrence.
 
 ## Design rationale
+
+An event source identifies a logical producer across deployments and file
+moves. Keeping that protocol literal beside its producer preserves existing
+recordings without a runtime registry, environment override or missing-file
+fallback. Shared helpers validate the protocol rather than select applications.
 
 An event occurrence, an execution, an operation and a domain item answer
 different questions. Shared metadata removes duplicate identity machinery

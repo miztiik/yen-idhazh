@@ -27,7 +27,7 @@ export async function recordedPlannerProcess(
     const configRoot = new URL("../../../config/", import.meta.url);
     await mkdir(join(fixture.directory, "config"));
     for (const name of [
-      "idhazh.json", "ledgers.json", "data-delivery.json", "typescript-event-sources.json",
+      "idhazh.json", "ledgers.json", "data-delivery.json",
       "host-fingerprints.json", "host-probes.json",
     ]) {
       await writeFile(join(fixture.directory, "config", name), await Bun.file(new URL(name, configRoot)).text());

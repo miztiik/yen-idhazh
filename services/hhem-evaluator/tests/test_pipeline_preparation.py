@@ -78,7 +78,6 @@ def test_real_preparation_failure_is_saved_and_reported_with_both_model_phases_n
                 "host-fingerprints.json",
                 "host-probes.json",
                 "ledgers.json",
-                "typescript-event-sources.json",
                 "feed-ingest-plan-service.json",
             ):
                 (tmp_path / "config" / name).write_bytes(

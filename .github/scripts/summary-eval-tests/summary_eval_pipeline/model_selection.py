@@ -65,7 +65,6 @@ def stage_configuration(root: Path, directory: Path, selected: SelectedModel) ->
         "host-fingerprints.json",
         "host-probes.json",
         "ledgers.json",
-        "typescript-event-sources.json",
         "feed-ingest-plan-service.json",
     )
     destination = directory / "config"

@@ -47,4 +47,3 @@ export * from "./create-cloud-event";
 export * from "./create-candidate-id";
 export * from "./read-cloud-event";
 export * from "./propagate-trace-context";
-export * from "./load-event-sources";

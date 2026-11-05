@@ -2,7 +2,8 @@
 import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ArticleFailureDiagnosticSchema, createRootContext, deriveUrlKey, loadEventSources, RawDocumentFailureSchema, NetworkFailureDetailsSchema, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
+import { ArticleFailureDiagnosticSchema, createRootContext, deriveUrlKey, RawDocumentFailureSchema, NetworkFailureDetailsSchema, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
+import { PLANNER_EVENT_SOURCE } from "../src/declare-event-source";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import { rawDocumentContentsFilename, rawDocumentContentsPath, ArtifactRootSchema } from "../src/selected-artifact-path";
 import { createStageLogger, prepareProgressEvent } from "../src/logging/structured-logger";
@@ -160,9 +161,8 @@ test("required network evidence survives clean and rejected flexible details wit
     response_evidence: null, attempt: null,
   });
   const events: FeedIngestEvent[] = [];
-  const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
   createStageLogger({ run_id: "2026-10-21-700", ...createRootContext() },
-    sources.planner, event => events.push(event))("request-attempt", "failed");
+    PLANNER_EVENT_SOURCE, event => events.push(event))("request-attempt", "failed");
   const base = events[0]!;
   for (const details of [{}, { body: "private", token: "private" }]) {
     const event = prepareProgressEvent({ ...base, data: { ...base.data, details } }, [], undefined, undefined, evidence);
