@@ -91,6 +91,18 @@ Fixed judge software identities and verdict vocabularies remain closed.
 The maintainer-directed reversal of the former closed model lists is recorded in
 [similarity's design rationale](../publishing/autotune-content-similarity.md#design-rationale).
 
+The four judge-evidence contracts advance to `2026-11-05` with an appended
+nullable `judge_policy_version`. Historical JSON, CSV and Parquet rows retain
+their stored version, rates and unknown policy. Unjudged pair draws also leave
+the policy null. New-policy pairs require exact agreement/usability and valid
+two-order evidence; new metrics and fits validate their valid-reading
+denominators. Fitted rows append nullable `pairs_refused`, unknown for history,
+and permit null disagreement/unclear rates when their denominator is empty.
+Native and frontend readers accept those values before new writers emit them.
+No historical row or aggregate archive is rewritten.
+The [judge page](../publishing/autotune-content-similarity.md) owns the meaning
+of these counts and the archive-before-reset rule.
+
 The ledger layer reads a field annotation as a recursive tree: scalar (`string`, `int64`, `float64`, `bool`), list (`list[T]` and `tuple[T, ...]`), or struct (nested Pydantic model). A closed set of unions and wrapped aliases is reduced before the conversion, and unsupported shapes fail with the full nested field path. `backend/idhazh/ledger/arrow_schema.py` is the single entry point; `backend/idhazh/ledger/parquet.py` renders that tree to Arrow; `backend/idhazh/ledger/json_lines.py` stays format-generic and never adds contract-specific branches.
 
 The published-column gate compares current files exactly. For older file

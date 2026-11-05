@@ -248,11 +248,12 @@ export function heldNote(days: readonly LineDay[], windowDays: number): string |
 export interface JudgeDay {
 	date: string;
 	/** What share of the judged pairs the two readings disagreed about. */
-	disagreementRate: number;
+	disagreementRate: number | null;
 	/** What share of the agreed readings were UNCLEAR: a share of `pairsUsable`,
 	 * never of `pairsJudged`. */
-	unclearRate: number;
-	/** How many pairs a judging shard actually read. The denominator of
+	unclearRate: number | null;
+	/** Current-method pairs with two valid readings; historical counts keep their meaning.
+	 * The denominator of
 	 * `disagreementRate`, so a panel can print it in the same sentence. */
 	pairsJudged: number | null;
 	/** How many of those got two readings that agreed: the denominator of
@@ -263,6 +264,27 @@ export interface JudgeDay {
 	aboveLineOnRecord: number;
 	daysOnRecord: number;
 	heldReason: string;
+	/** Null or absent identifies historical readings, not today's method. */
+	judgePolicyVersion?: string | null;
+}
+
+/** Adjacent measured points, never joined across a change of interpretation. */
+export function agreementRuns(
+	points: readonly { x: number; y: number | null; judgePolicyVersion?: string | null }[]
+): string[] {
+	const runs: string[] = [];
+	let current: string[] = [];
+	for (let index = 0; index < points.length; index += 1) {
+		const point = points[index];
+		if (point.y === null || (index > 0 &&
+			(point.judgePolicyVersion ?? null) !== (points[index - 1].judgePolicyVersion ?? null))) {
+			if (current.length > 1) runs.push(current.join(' '));
+			current = [];
+		}
+		if (point.y !== null) current.push(`${point.x},${point.y}`);
+	}
+	if (current.length > 1) runs.push(current.join(' '));
+	return runs;
 }
 
 /** The two limits that hold a run, as the chart draws them. */

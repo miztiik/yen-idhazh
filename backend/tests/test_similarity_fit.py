@@ -11,6 +11,7 @@ once could go red without saying which of the four moved.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from collections import Counter
 from collections.abc import Mapping
@@ -22,9 +23,7 @@ from typing import Final
 import pytest
 from gardener.tasks._task import run_task
 from support.ledger import SEED_COMMIT
-from support.paths import read_text
 from test_same_story import at, block, item, unit
-from test_similarity_selection import MANIFEST_FIXTURE
 
 from idhazh import assemble, atomic_write, cli, config, ledger
 from idhazh.contracts.base import ServerJob
@@ -38,12 +37,13 @@ from idhazh.contracts.fitted_similarity_threshold import (
 )
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.run_manifest import RunManifest
+from idhazh.contracts.run_manifest import RunManifest, RunRecord, RunStatus
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
+from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION
 from idhazh.council.event_log import OneJsonLine
 from idhazh.council.run_identity import council_run_id
 from idhazh.similarity import applied, counting, fit
-from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
+from idhazh.similarity.stamps import JudgeStamp, ScorerStamp, judge_inputs, scorer_inputs
 from idhazh.stages import common
 from idhazh.stages.common import _load_day
 from idhazh.stages.set_merge_line import PRODUCER, merge_count, stage_set_merge_line
@@ -555,7 +555,16 @@ def a_published_day(root: Path, *, date: str = DATE) -> None:
         item("world-02", source="paper", outlet="The Paper"),
         item("world-03", source="herald", outlet="The Herald"),
     ]
-    manifest = RunManifest.from_json(read_text(MANIFEST_FIXTURE))
+    manifest = RunManifest(
+        version=RunManifest.schema_version(),
+        date=date,
+        runs=[RunRecord(
+            run_id=f"{date}-1", n=1, started_at=f"{date}T06:00:00Z",
+            completed_at=f"{date}T06:01:00Z", status=RunStatus.COMPLETED,
+            commit_sha=SEED_COMMIT, runner="test", items_planned=len(items),
+            items_succeeded=len(items), items_failed=0, site_bytes=0, site_files=0,
+        )],
+    )
     day = DigestDay(
         version=DigestDay.schema_version(),
         date=date,
@@ -662,6 +671,89 @@ def test_a_day_that_never_published_is_not_a_run_to_fail(
         is None
     )
     assert not ledger.raw_root(state, FITTED).exists()
+
+
+def test_unavailable_rates_skip_only_the_existing_rate_gates() -> None:
+    record = a_record(negatives={0.95: 1000})
+    assert fit.gates(
+        record, knobs=KNOBS, above_line=1000, days=100,
+        disagreement_rate=None, unclear_rate=None,
+    ) is None
+
+
+def test_fit_uses_both_valid_readings_and_filters_policy_before_recency(tmp_path: Path) -> None:
+    from test_similarity_counting import a_row
+    from test_similarity_statistics import pair
+
+    settings = config.load(config.REPO_ROOT / "config")
+    current = judge_inputs(settings)
+    state, digest_root = tmp_path / "state", tmp_path / "digest"
+    a_published_day(digest_root)
+    rows = []
+    for index, (forward, reverse) in enumerate((
+        (None, "YES"), ("YES", None), ("YES", "NO"), ("UNCLEAR", "UNCLEAR"), (None, None),
+    )):
+        readings = pair(forward, reverse)
+        row = a_row(score=0.95, pair=index, judge=current, judged_by_run_id=f"{DATE}-1")
+        rows.append(type(row).model_validate(row.model_dump() | {
+            "verdict": readings.verdict, "verdict_swapped": readings.verdict_swapped,
+            "usable": readings.usable, "grammar_applied": readings.grammar_applied,
+        }))
+    rows.append(a_row(
+        score=0.95, pair=2, judge=dataclasses.replace(current, judge_policy_version=None),
+        judged_by_run_id=f"{DATE}-9",
+    ))
+    ledger.persist(
+        state, rows, ledger=LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
+        covers=DATE, identity=a_council_writer(),
+    )
+    record = counting.empty_record(
+        settings.app.assemble.same_story.judging_knobs(),
+        scorer=scorer_inputs(settings), judge=current,
+    )
+    atomic_write.write_atomic(
+        ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION),
+        counting.count_day(record, rows, date=DATE).to_json(),
+    )
+    fitted = stage_set_merge_line(
+        DATE, run_id=COUNCIL_RUN, settings=settings, identity=a_council_writer(),
+        state_dir=state, digest_root=digest_root,
+    )
+
+    assert fitted is not None
+    assert (fitted.pairs_in_band, fitted.pairs_judged, fitted.pairs_usable) == (5, 2, 1)
+    assert fitted.pairs_refused == 3
+    assert (fitted.disagreement_rate, fitted.unclear_rate) == (0.5, 1.0)
+    assert fitted.judge_policy_version == JUDGE_POLICY_VERSION
+
+
+@pytest.mark.parametrize("matching_identity", [False, True])
+def test_fit_history_keeps_the_applied_line_but_separates_method_changes(
+    tmp_path: Path, matching_identity: bool
+) -> None:
+    settings = config.load(config.REPO_ROOT / "config")
+    knobs = settings.app.assemble.same_story.judging_knobs()
+    state, digest_root = tmp_path / "state", tmp_path / "digest"
+    a_published_day(digest_root)
+    record = counting.empty_record(
+        knobs, scorer=scorer_inputs(settings), judge=judge_inputs(settings)
+    )
+    for date in _days_back(knobs.step_change_window_rows + 1)[:-1]:
+        row = a_written_row(date=date, previous=0.93, daily_shift=0.001)
+        if matching_identity:
+            row = FittedSimilarityThreshold.model_validate(row.model_dump() | {
+                "record_stamp": record.record_stamp(),
+                "judge_policy_version": JUDGE_POLICY_VERSION, "pairs_refused": 0,
+                "disagreement_rate": None, "unclear_rate": None,
+            })
+        a_filed_line(state, row)
+    fitted = stage_set_merge_line(
+        DATE, run_id=COUNCIL_RUN, settings=settings, identity=a_council_writer(),
+        state_dir=state, digest_root=digest_root,
+    )
+
+    assert fitted is not None and fitted.previous == fitted.applied == 0.93
+    assert fitted.typical_shift == (0.001 if matching_identity else None)
 
 
 def test_the_row_is_written_from_a_date_and_a_run_id_the_council_minted(

@@ -102,15 +102,17 @@ function asLine(row: FiledRow): FittedLine {
 		heldReason: row.held_reason as string,
 		maxDownStep: row.max_down_step as number,
 		maxUpStep: row.max_up_step as number,
-		disagreementRate: row.disagreement_rate as number,
-		unclearRate: row.unclear_rate as number,
+		disagreementRate: row.disagreement_rate as number | null,
+		unclearRate: row.unclear_rate as number | null,
 		pairsInBand: row.pairs_in_band as number,
 		pairsJudged: row.pairs_judged as number,
 		pairsUsable: row.pairs_usable as number,
 		negativesOnRecord: row.negatives_on_record as number,
 		aboveLineOnRecord: row.above_line_on_record as number,
 		daysOnRecord: row.days_on_record as number,
-		cosineWeight: row.cosine_weight as number | null
+		cosineWeight: row.cosine_weight as number | null,
+		pairsRefused: row.pairs_refused as number | null,
+		judgePolicyVersion: row.judge_policy_version as string | null
 	};
 }
 
@@ -152,12 +154,12 @@ test('THE ORACLE: the page reads the fitted line the council files and the garde
 });
 
 /** Every column the reader asks for, each with one value, as the contracts' moved fixture holds it. */
-function aMovedLine(): Record<string, string | number> {
+function aMovedLine(): Record<string, string | number | null> {
 	const row = JSON.parse(
 		readFileSync(path.join(FIXTURES, 'fitted-similarity-threshold', 'the-clamp-held-a-fall-back-to-the-step.json'), 'utf8')
 	) as Record<string, string | number>;
 	return Object.fromEntries(
-		FITTED_LINE_COLUMNS.filter((name) => name !== 'date').map((name) => [name, row[name]!])
+		FITTED_LINE_COLUMNS.filter((name) => name !== 'date').map((name) => [name, row[name] ?? null])
 	);
 }
 

@@ -22,26 +22,19 @@ import statistics
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import partial
 from pathlib import Path
 from typing import Any
 
 from idhazh import assemble, atomic_write, config
 from idhazh.content_similarity_judge import settings as judge_settings
+from idhazh.content_similarity_judge.model_reader import ModelReader
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
-from idhazh.llm.server import (
-    completion_url,
-    derive_turn_markers,
-    post,
-    request_timeout_seconds,
-    resolve_endpoint,
-    token_pieces,
-)
-from idhazh.similarity import judge, prompt, stamps
+from idhazh.similarity import judge, stamps
+from idhazh.similarity.statistics import reading_statistics
 from idhazh.stages.assemble import _earlier_days
 from idhazh.stages.common import LOG, _load_day
 
@@ -104,6 +97,7 @@ def stage_judge_item_pairs(
     verdict_path: Path,
     deadline: float,
     base_url: str | None = None,
+    reader: ModelReader | None = None,
 ) -> ShardReport:
     """Judge the rows this shard owns and write them as they are judged.
 
@@ -132,29 +126,12 @@ def stage_judge_item_pairs(
     the job that counts them, so where each one sits is the council's answer
     rather than this stage's.
     """
-    # Resolved here rather than deeper: the client below binds a derived route
-    # inside a `partial`, so an unresolved address would raise there instead.
-    base_url = base_url or resolve_endpoint(settings.app.model_server.base_url)
-    entry = judge.entry_of(settings)
-    timeout = request_timeout_seconds(entry)
     stamp = stamps.judge_inputs(settings)
     execution = judge_settings.load(settings.config_dir)
     flush_every = execution.flush_every_pairs
     drawn = _rows_this_shard_owns(draw_path, shard=shard, shards=shards)
-    # Asked once a shard, before any pair is judged. A verdict every returned token
-    # could belong to another verdict too can never take any of the window's
-    # mass, so `first_token_margin` reports a gap between the other two as though
-    # that one had been weighed - which costs nothing visible and makes the
-    # column wrong for the whole day. It is a precondition rather than a
-    # per-call check.
-    prompt.first_token_openings(partial(token_pieces, base_url, timeout=timeout))
-    markers = derive_turn_markers(base_url, entry=entry, timeout=timeout)
-    client = partial(
-        post,
-        endpoint=completion_url(base_url),
-        timeout=timeout,
-        reasoning_delimiters=entry.reasoning_delimiters,
-    )
+    if reader is None:
+        reader = ModelReader.from_settings(settings, base_url=base_url)
     items = _items_by_url_key(
         date,
         digest_root=digest_root,
@@ -183,9 +160,7 @@ def stage_judge_item_pairs(
         if left is None or right is None:
             unreadable += 1
             continue
-        verdicts = judge.judge_pair(
-            left, right, client=client, settings=settings, markers=markers
-        )
+        verdicts = reader.read_pair(left, right, settings=settings)
         readings.append(verdicts)
         judged.append(_with_the_verdict(row, verdicts, stamp=stamp, run_id=run_id))
         if len(judged) % flush_every == 0:
@@ -205,7 +180,7 @@ def stage_judge_item_pairs(
     # shard is the only place that sees them arriving one after another: a
     # decoder that came loose refuses every pair after it, and that is worth
     # reading in the run's log rather than only in the file afterwards.
-    refused = sum(1 for one in readings if not one.grammar_applied)
+    refused = reading_statistics(readings).refused
     if refused:
         LOG.warning(
             "judge-item-pairs shard=%s date=%s recorded %s of %s judged pair(s) whose "
@@ -285,9 +260,7 @@ def _instrument_reading(
     member this judge's tenant module narrows its slug to. Naming it here would
     make this module import the tenant that imports it.
     """
-    read = [one for one in readings if one.grammar_applied]
-    agreed = [one for one in read if one.usable]
-    unclear = sum(1 for one in agreed if one.verdict is SameStoryVerdict.UNCLEAR)
+    counts = reading_statistics(readings)
     margins = [one.first_token_margin for one in readings if one.first_token_margin is not None]
     payload: dict[str, Any] = {
         "judge_model": stamp.judge_model if readings else None,
@@ -295,17 +268,18 @@ def _instrument_reading(
         "thinking_spans": 1 if stamp.thinks else 0,
         "prompt_digest": stamp.prompt_digest,
         "grammar_digest": stamp.grammar_digest,
+        "judge_policy_version": stamp.judge_policy_version,
         "date": date,
         "run_id": run_id,
         "work_part_index": shard,
         "pairs_dealt": dealt,
-        "pairs_read": len(read),
-        "pairs_agreed": len(agreed),
+        "pairs_read": counts.valid,
+        "pairs_agreed": counts.agreed,
         "pairs_unreadable": unreadable,
-        "pairs_refused": len(readings) - len(read),
+        "pairs_refused": counts.refused,
         "pairs_abandoned": dealt - len(readings) - unreadable,
-        "disagreement_rate": (len(read) - len(agreed)) / len(read) if read else None,
-        "unclear_rate": unclear / len(agreed) if agreed else None,
+        "disagreement_rate": counts.disagreement_rate,
+        "unclear_rate": counts.unclear_rate,
         "first_token_margin_median": statistics.median(margins) if margins else None,
         "decode_seconds_total": sum(one.decode_seconds for one in readings) if readings else None,
         "decode_seconds_max": max(
@@ -398,6 +372,7 @@ def _with_the_verdict(
     return StorySimilarityPair.model_validate(
         drawn.model_dump(mode="json")
         | {
+            "version": StorySimilarityPair.schema_version(),
             "verdict": _word(verdicts.verdict),
             "verdict_swapped": _word(verdicts.verdict_swapped),
             "usable": verdicts.usable,
@@ -411,6 +386,7 @@ def _with_the_verdict(
             "first_token_probabilities": verdicts.first_token_window or None,
             "thinking_spans": verdicts.thinking_spans,
             "judged_by_run_id": run_id,
+            "judge_policy_version": stamp.judge_policy_version,
         }
     )
 

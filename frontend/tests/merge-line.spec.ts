@@ -15,6 +15,7 @@ import { shortDate } from '../src/lib/format';
 import { numberFormat } from './support/number-format';
 import {
 	agreementCorridor,
+	agreementRuns,
 	clampEnvelope,
 	clampNote,
 	corridorOf,
@@ -64,6 +65,16 @@ const describeUnclear = (
 	floor: number,
 	mark?: number
 ) => describeUnclearWithFormat(unclear, agreed, floor, numberFormat, mark);
+
+test('agreement history keeps both methods but never draws a line between them or over null rates', () => {
+	expect(agreementRuns([
+		{ x: 1, y: 0.1 }, { x: 2, y: 0.2, judgePolicyVersion: null },
+		{ x: 3, y: 0.3, judgePolicyVersion: '2026-11-05' },
+		{ x: 4, y: 0.4, judgePolicyVersion: '2026-11-05' },
+		{ x: 5, y: null, judgePolicyVersion: '2026-11-05' },
+		{ x: 6, y: 0, judgePolicyVersion: '2026-11-05' }
+	])).toEqual(['1,0.1 2,0.2', '3,0.3 4,0.4']);
+});
 
 function day(date: string, items: MergeItem[]): MergeDay {
 	return { date, ...mergeCountsOf(items) };

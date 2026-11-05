@@ -74,6 +74,19 @@ RENAMED_CELLS: Final[Mapping[str, str]] = MappingProxyType({"shard": "work_part_
 #: A millionth is far below the resolution any fitted line is read at.
 SCORE_TOLERANCE: Final = 1e-6
 
+# This date identifies emitted-evidence semantics, not an operator setting.
+JUDGE_POLICY_VERSION: Final[DateStamp] = "2026-11-05"
+
+
+class ReadingRefusalReason(StrEnum):
+    """Why a completed model response is not a valid judge reading."""
+
+    INVALID_LITERAL = "invalid_literal"
+    MISSING_EMISSION = "missing_emission"
+    INVALID_EMISSION = "invalid_emission"
+    AMBIGUOUS_EMISSION = "ambiguous_emission"
+    MISMATCHED_EMISSION = "mismatched_emission"
+
 
 class SameStoryVerdict(StrEnum):
     """The three words a judge may answer with, and nothing else.
@@ -131,6 +144,7 @@ def judge_stamp(
     judge_model: JudgeModelId,
     prompt_digest: str,
     grammar_digest: str,
+    judge_policy_version: DateStamp | None = None,
 ) -> str:
     """The three judge columns as one value, for the places that need one."""
     return derive_text_digest(
@@ -139,6 +153,7 @@ def judge_stamp(
                 "grammar_digest": grammar_digest,
                 "judge_model": judge_model,
                 "prompt_digest": prompt_digest,
+                "judge_policy_version": judge_policy_version,
             }
         )
     )
@@ -149,6 +164,11 @@ class StorySimilarityPair(Contract):
 
     __schema_stem__: ClassVar[str] = "story-similarity-pair"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-05",
+            change="Judge policy identifies emitted-evidence validity and exact usability.",
+            why="Historical readings retain their original interpretation.",
+        ),
         ChangelogEntry(
             version="2026-10-24T19:49",
             change="Scorer and judge model identities accept any valid slug.",
@@ -163,11 +183,6 @@ class StorySimilarityPair(Contract):
             version="2026-10-08",
             change="shard is renamed work_part_index. An old shard heading is read under it.",
             why="The ledger door writes its own shard cell on every row it files.",
-        ),
-        ChangelogEntry(
-            version="2026-09-24",
-            change="key_point and key_point_weight go. Both headings are carried and dropped.",
-            why="The term shipped at a weight of zero and never moved a score.",
         ),
         ChangelogEntry(
             version="2026-09-21T12:00",
@@ -264,7 +279,7 @@ class StorySimilarityPair(Contract):
     usable: bool = Field(
         default=False,
         description=(
-            "Whether the two readings agree. Only an agreed pair is counted into the "
+            "Whether two valid readings agree. Only an agreed pair is counted into the "
             "record; a disagreement is a reading about the judge rather than about the "
             "pair."
         ),
@@ -374,6 +389,12 @@ class StorySimilarityPair(Contract):
             "repeat. Empty on every row written before this column existed."
         ),
     )
+    judge_policy_version: DateStamp | None = Field(
+        default=None,
+        description=(
+            "UTC date identifying judge interpretation; null on historical or unjudged rows."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -469,6 +490,12 @@ class StorySimilarityPair(Contract):
                 "usable says the two readings agree, and this row carries "
                 f"{self.verdict} and {self.verdict_swapped}"
             )
+        if self.judge_policy_version == JUDGE_POLICY_VERSION:
+            valid = self.verdict is not None and self.verdict_swapped is not None
+            if self.judge_model is None or self.grammar_applied is not valid:
+                raise ValueError("the judge policy requires named, valid readings or a refusal")
+            if self.usable != agreed:
+                raise ValueError("usable must equal agreement between two valid readings")
         return self
 
     @classmethod

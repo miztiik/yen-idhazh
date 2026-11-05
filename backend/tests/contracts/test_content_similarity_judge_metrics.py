@@ -31,6 +31,7 @@ from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.judge_call import JudgeConfigStamp
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
+from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION
 
 pytestmark = pytest.mark.contract
 
@@ -109,6 +110,23 @@ def test_a_rate_over_no_pairs_is_empty_rather_than_zero() -> None:
     cells = row.csv_row()
     assert [cells[name] for name in ("disagreement_rate", "unclear_rate")] == ["", ""]
     assert ContentSimilarityJudgeMetrics.from_csv_row(cells) == row
+
+
+def test_current_measurements_validate_the_valid_reading_denominator() -> None:
+    payload = {
+        "date": A_NIGHT, "run_id": f"{A_NIGHT}-1", "work_part_index": 0,
+        "pairs_dealt": 4, "pairs_read": 2, "pairs_agreed": 1,
+        "pairs_unreadable": 0, "pairs_refused": 2, "pairs_abandoned": 0,
+        "disagreement_rate": 0.5, "unclear_rate": 1.0,
+        "judge_policy_version": JUDGE_POLICY_VERSION,
+    }
+    row = ContentSimilarityJudgeMetrics.model_validate(payload)
+    assert ContentSimilarityJudgeMetrics.from_csv_row(row.csv_row()) == row
+    for rate in (None, 0.0, 0.25):
+        with pytest.raises(ValidationError, match="disagreement_rate"):
+            ContentSimilarityJudgeMetrics.model_validate(payload | {"disagreement_rate": rate})
+    with pytest.raises(ValidationError, match="unclear_rate"):
+        ContentSimilarityJudgeMetrics.model_validate(payload | {"unclear_rate": None})
 
 
 def test_the_shared_stamp_keeps_the_software_identity_closed_and_weights_open() -> None:

@@ -29,9 +29,10 @@ from idhazh.contracts.fitted_similarity_threshold import (
 )
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict, ScorerModelId
+from idhazh.contracts.story_similarity_pair import ScorerModelId
 from idhazh.similarity import counting, fit
 from idhazh.similarity.stamps import ScorerStamp, judge_inputs, scorer_inputs
+from idhazh.similarity.statistics import reading_statistics
 from idhazh.stages import common
 from idhazh.stages.common import LOG, _load_day
 
@@ -129,19 +130,16 @@ def stage_set_merge_line(
     ]
     previous = earlier[-1].applied if earlier else same_story.floor_min
 
-    day_rows = counting.one_row_a_pair(ledger.load_story_similarity_pairs(state, date))
-    judged = [row for row in day_rows if row.verdict is not None]
-    usable = [row for row in judged if row.usable]
-    disagreement = (
-        sum(row.verdict is not row.verdict_swapped for row in judged) / len(judged)
-        if judged
-        else 0.0
-    )
-    unclear = (
-        sum(row.verdict is SameStoryVerdict.UNCLEAR for row in usable) / len(usable)
-        if usable
-        else 0.0
-    )
+    current = counting.empty_record(knobs, scorer=scorer, judge=judge)
+    day_rows = counting.one_row_a_pair(counting.rows_the_record_admits(
+        ledger.load_story_similarity_pairs(state, date), record=current
+    ))
+    counts = reading_statistics(day_rows)
+    history = [
+        row for row in earlier
+        if row.record_stamp == current.record_stamp()
+        and row.judge_policy_version == judge.judge_policy_version
+    ]
 
     # `inputs_changed` first: a record taken under a different encoder, weight or
     # ask is not evidence about the question today is asking, whoever counted it.
@@ -161,15 +159,15 @@ def stage_set_merge_line(
         knobs=knobs,
         above_line=fit.judged_at_or_above(record, previous),
         days=len(record.counted_dates),
-        disagreement_rate=disagreement,
-        unclear_rate=unclear,
+        disagreement_rate=counts.disagreement_rate,
+        unclear_rate=counts.unclear_rate,
         collect_held=collect_held,
     )
     proposal = fit.fit_line(record, discard_share=knobs.discard_share)
     shift = fit.daily_shift(
         record, counting.day_counts(day_rows, record=record), discard_share=knobs.discard_share
     )
-    typical = fit.typical_shift(earlier, window_rows=knobs.step_change_window_rows)
+    typical = fit.typical_shift(history, window_rows=knobs.step_change_window_rows)
 
     if held is not None or proposal is None:
         shaped = fit.Clamped(applied=previous, kind=ClampKind.NONE, movement=0.0)
@@ -205,7 +203,7 @@ def stage_set_merge_line(
             )
         )
         is_settled = fit.settled(
-            earlier,
+            history,
             proposed=proposal,
             date=date,
             window_days=knobs.settled_window_days,
@@ -235,10 +233,10 @@ def stage_set_merge_line(
         daily_shift=shift,
         typical_shift=typical,
         pairs_in_band=len(day_rows),
-        pairs_judged=len(judged),
-        pairs_usable=len(usable),
-        disagreement_rate=disagreement,
-        unclear_rate=unclear,
+        pairs_judged=counts.valid,
+        pairs_usable=counts.agreed,
+        disagreement_rate=counts.disagreement_rate,
+        unclear_rate=counts.unclear_rate,
         negatives_on_record=fit.negatives_on(record),
         above_line_on_record=fit.judged_at_or_above(record, shaped.applied),
         days_on_record=len(record.counted_dates),
@@ -248,6 +246,8 @@ def stage_set_merge_line(
         judge_model=record.judge_model,
         prompt_digest=record.prompt_digest,
         grammar_digest=record.grammar_digest,
+        pairs_refused=counts.refused,
+        judge_policy_version=judge.judge_policy_version,
     )
     ledger.persist(
         state,

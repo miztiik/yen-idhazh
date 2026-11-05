@@ -341,6 +341,25 @@ class TokenChoice:
 
 
 @dataclass(frozen=True, slots=True)
+class EmittedToken:
+    """One selected native decoder position, separate from its alternatives."""
+
+    token_id: int
+    text: str
+    bytes: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.token_id) is not int or self.token_id < 0:
+            raise ValueError("an emitted token ID must be a nonnegative integer")
+        if not isinstance(self.text, str):
+            raise ValueError("emitted token text must be a string")
+        if not isinstance(self.bytes, tuple):
+            raise ValueError("emitted token bytes must be a tuple")
+        if any(type(value) is not int or not 0 <= value <= 255 for value in self.bytes):
+            raise ValueError("emitted token bytes must be integers in the byte range")
+
+
+@dataclass(frozen=True, slots=True)
 class Completion:
     """What came back, before anything has been believed about it."""
 
@@ -374,6 +393,8 @@ class Completion:
     #: carried none, which is a server that did not say rather than a position
     #: with one candidate.
     first_token_choices: tuple[TokenChoice, ...] = ()
+    emitted_tokens: tuple[EmittedToken, ...] | None = None
+    raw_response: str | None = None
 
     @property
     def hit_the_budget(self) -> bool:
@@ -955,6 +976,27 @@ def _first_token_choices(payload: Mapping[str, Any], *, at: int) -> tuple[TokenC
     return tuple(sorted(choices, key=lambda choice: choice.logprob, reverse=True))
 
 
+def _emitted_tokens(
+    payload: Mapping[str, Any], *, at: int
+) -> tuple[EmittedToken, ...] | None:
+    """Read selected positions without making optional evidence a response failure."""
+    positions = payload.get("completion_probabilities")
+    if not isinstance(positions, list) or not 0 <= at <= len(positions):
+        return None
+    emitted = []
+    for position in positions[at:]:
+        if not isinstance(position, Mapping) or not {"id", "token", "bytes"} <= position.keys():
+            return None
+        raw_bytes = position["bytes"]
+        if not isinstance(raw_bytes, list):
+            return None
+        try:
+            emitted.append(EmittedToken(position["id"], position["token"], tuple(raw_bytes)))
+        except ValueError:
+            return None
+    return tuple(emitted)
+
+
 def _response_text(value: object, *, name: str) -> str:
     """A missing text channel is empty; a channel of another type is invalid."""
     if value is None:
@@ -1011,6 +1053,7 @@ def parse_completion(
     slot_tokens_held = _reported(payload.get("tokens_cached"))
     prefix_reused = cached_tokens > 0 if "cache_n" in timings else None
     first_token_choices = _first_token_choices(payload, at=answer_at)
+    emitted_tokens = _emitted_tokens(payload, at=answer_at)
     if "choices" in payload:
         choices = payload.get("choices") or []
         if not choices:
@@ -1037,6 +1080,8 @@ def parse_completion(
             slot_tokens_held=slot_tokens_held,
             prefix_reused=prefix_reused,
             first_token_choices=first_token_choices,
+            emitted_tokens=emitted_tokens,
+            raw_response=body,
         )
     if "content" not in payload:
         raise ValueError("the runtime returned neither a choice nor a completion")
@@ -1058,6 +1103,8 @@ def parse_completion(
         slot_tokens_held=slot_tokens_held,
         prefix_reused=prefix_reused,
         first_token_choices=first_token_choices,
+        emitted_tokens=emitted_tokens,
+        raw_response=body,
     )
 
 

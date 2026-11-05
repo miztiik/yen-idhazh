@@ -17,7 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from idhazh import config
-from idhazh.contracts.story_similarity_pair import JudgeModelId, ScorerModelId
+from idhazh.contracts.base import DateStamp
+from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION, JudgeModelId, ScorerModelId
 from idhazh.embed import EMBEDDER_ID
 from idhazh.similarity import judge, prompt
 
@@ -32,13 +33,14 @@ class ScorerStamp:
 
 @dataclass(frozen=True, slots=True)
 class JudgeStamp:
-    """The five values that decide what a verdict means.
+    """The values that decide what a verdict means.
 
     Both model identities record what ran. Their contracts check slug spelling,
     not whether today's config still names those weights.
 
-    **The last two say how the verdict was decoded, and the first three say
-    what was asked.** Two runs can read the identical ask under two samplers and
+    Temperature and reasoning say how the verdict was decoded; the model,
+    prompt and grammar say what was asked; policy identifies interpretation.
+    Two runs can read the identical ask under two samplers and
     two envelopes, and before these were here the record counted both as one
     population with nothing able to separate them afterwards.
     """
@@ -48,6 +50,7 @@ class JudgeStamp:
     grammar_digest: str
     judge_temperature: float
     thinks: bool
+    judge_policy_version: DateStamp | None = JUDGE_POLICY_VERSION
 
 
 def scorer_inputs(settings: config.Settings) -> ScorerStamp:

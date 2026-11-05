@@ -23,7 +23,7 @@ from typing import Final
 
 import pytest
 from support.ledger import SEED_COMMIT
-from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh import atomic_write, config, ledger
 from idhazh.content_similarity_judge import tenant
@@ -46,10 +46,14 @@ from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
+from idhazh.contracts.story_similarity_pair import (
+    JUDGE_POLICY_VERSION,
+    SameStoryVerdict,
+    StorySimilarityPair,
+)
 from idhazh.council import metrics_sink, session
 from idhazh.similarity import counting
-from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
+from idhazh.similarity.stamps import JudgeStamp, ScorerStamp, judge_inputs, scorer_inputs
 from idhazh.stages import count_verdicts
 
 DATE: Final = "2026-09-18"
@@ -111,39 +115,23 @@ def a_row(
     judge: JudgeStamp | None = None,
     date: str = DATE,
 ) -> StorySimilarityPair:
-    """One judged pair, re-cast from the committed contract fixture.
-
-    Read inside the helper rather than at module scope, so a fixture that stops
-    parsing fails the test that asked for a row instead of every test here.
-
-    **Every stamp column is written from the instrument the record is born
-    under**, because the count step admits only rows whose stamp is the record's
-    own. The fixture carries its own digests and a null sampler, so a row taken
-    from it unchanged is a row from a different instrument - a real case, and the
-    `judge` argument is how a test asks for it rather than getting it by default.
-    """
-    raw = json.loads(
-        read_text(
-            CONTRACT_FIXTURES_DIR / "story-similarity-pair" / "judged-the-same-in-both-orders.json"
-        )
-    )
+    """One concrete pair under the named instrument, without a recorded payload."""
     scorer, stamped = a_scorer(), judge if judge is not None else a_judge()
-    left, right, key = (
-        (raw["left_url_key"], raw["right_url_key"], raw["pair_key"])
-        if pair is None
-        else a_pair(pair)
-    )
+    left, right, key = a_pair(0 if pair is None else pair)
     return StorySimilarityPair.model_validate(
-        raw
-        | {
+        {
             "version": StorySimilarityPair.schema_version(),
             "date": date,
             "run_id": run_id if run_id is not None else f"{date}-1",
             "judged_by_run_id": judged_by_run_id,
             "composite_score": score,
             "cosine": score,
+            "headline": False,
+            "work_part_index": 0,
             "verdict": verdict.value,
-            "verdict_swapped": verdict.value,
+            "verdict_swapped": verdict.value if usable else (
+                "YES" if verdict is not SameStoryVerdict.YES else "NO"
+            ),
             "usable": usable,
             "left_url_key": left,
             "right_url_key": right,
@@ -155,6 +143,8 @@ def a_row(
             "grammar_digest": stamped.grammar_digest,
             "judge_temperature": stamped.judge_temperature,
             "thinking_spans": int(stamped.thinks),
+            "grammar_applied": True,
+            "judge_policy_version": stamped.judge_policy_version,
         }
     )
 
@@ -379,7 +369,10 @@ def a_night(
             / session.unit_file(date, slot=VERDICTS_DIRNAME, judge_id=JUDGE_ID, shard=unit).name,
             a_verdict_file(
                 [
-                    a_row(score=0.55, pair=unit * 16 + index, date=date)
+                    a_row(
+                        score=0.55, pair=unit * 16 + index, date=date,
+                        judge=judge_inputs(config.load(CONFIG_DIR)),
+                    )
                     for index in range(verdicts_a_unit)
                 ]
             ),
@@ -792,7 +785,10 @@ def test_a_settled_night_files_each_judged_date_through_the_door_and_the_fit_rea
                 out_dir=session.scratch_root(date) / session.METRICS_DIRNAME,
             )
             judged = StorySimilarityPair.model_validate(
-                a_row(score=0.55, pair=unit, date=date, run_id=A_COUNCIL_RUN).model_dump()
+                a_row(
+                    score=0.55, pair=unit, date=date, run_id=A_COUNCIL_RUN,
+                    judge=judge_inputs(config.load(CONFIG_DIR)),
+                ).model_dump()
                 | {"work_part_index": unit}
             )
             atomic_write.write_atomic(
@@ -995,7 +991,8 @@ def test_a_paused_judge_family_takes_no_verdict_reading_archive_or_count(
     state = tmp_path / "state"
     shards = settings.council.shards
     counted_by(DATE, root=tmp_path / "first", state=state, settings=settings, units=shards)
-    before = sorted(path.relative_to(state).as_posix() for path in state.rglob("*.*"))
+    record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
+    before = record_path.read_bytes()
     registry = json.loads(read_text(CONFIG_DIR / ledger.paths.REGISTRY_FILENAME))
     for family in registry["families"]:
         if family["name"] == "content-similarity-judge":
@@ -1021,7 +1018,14 @@ def test_a_paused_judge_family_takes_no_verdict_reading_archive_or_count(
         "family_not_active",
         None,
     )
-    assert sorted(path.relative_to(state).as_posix() for path in state.rglob("*.*")) == before
+    assert record_path.read_bytes() == before
+    assert not ledger.path(
+        state, LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE,
+        StorySimilarityDistribution.from_json(before.decode()).record_stamp(),
+    ).exists()
+    assert not ledger.raw_root(
+        state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
+    ).joinpath(*AN_EARLIER_DATE.split("-")).exists()
     assert skipped == [
         "ledger=archive",
         "ledger=metrics",
@@ -1045,6 +1049,85 @@ def test_a_judge_with_no_record_yet_names_no_night(tmp_path: Path) -> None:
     )
 
     assert answered == ()
+
+
+def test_policy_filtering_precedes_pair_recency() -> None:
+    record = a_record()
+    current = a_row(score=0.55, judged_by_run_id=f"{DATE}-1")
+    historical = a_row(
+        score=0.55, judged_by_run_id=f"{DATE}-9",
+        judge=dataclasses.replace(a_judge(), judge_policy_version=None),
+        verdict=SameStoryVerdict.YES,
+    )
+
+    counts = counting.day_counts([current, historical], record=record)
+
+    assert sum(slot.different for slot in counts.values()) == 1
+    assert sum(slot.same for slot in counts.values()) == 0
+    assert record.record_stamp() != record.model_copy(
+        update={"judge_policy_version": None}
+    ).record_stamp()
+    assert counting.inputs_changed(
+        record.model_copy(update={"judge_policy_version": None}),
+        knobs=KNOBS, scorer=a_scorer(), judge=a_judge(),
+    ) == ("None", JUDGE_POLICY_VERSION)
+
+
+@pytest.mark.parametrize("archive_available", [True, False])
+def test_policy_reset_requires_an_archive_preserves_memory_and_happens_once(
+    tmp_path: Path, archive_available: bool
+) -> None:
+    settings = config.load(CONFIG_DIR)
+    state = tmp_path / "state"
+    old = counting.empty_record(
+        settings.app.assemble.same_story.judging_knobs(),
+        scorer=scorer_inputs(settings),
+        judge=dataclasses.replace(judge_inputs(settings), judge_policy_version=None),
+        judged_dates=(DATE,),
+    ).model_copy(update={"counted_dates": (DATE,)})
+    old = old.model_copy(update={"slots": (
+        old.slots[0].model_copy(update={"different_count": 3}), *old.slots[1:],
+    )})
+    payload = old.model_dump(mode="json") | {"version": "2026-10-24"}
+    del payload["judge_policy_version"]
+    old_bytes = json.dumps(payload, indent=2).encode()
+    record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
+    archive_path = ledger.path(
+        state, LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE, old.record_stamp()
+    )
+    atomic_write.write_atomic_bytes(record_path, old_bytes)
+    if not archive_available:
+        archive_path.mkdir(parents=True)
+
+    def count(date: str) -> count_verdicts.CountReport:
+        return count_verdicts.stage_count_verdicts(
+            date, run_id=f"{date}-9", judge_id=JUDGE_ID,
+            shipped_root=tmp_path / "no-shipped-work", verdicts_dir=tmp_path / "no-verdicts",
+            settings=settings, identity=a_saver(f"{date}-9"),
+            expected_shards=0, reports_complete=True, state_dir=state,
+        )
+
+    report = count(AN_EARLIER_DATE)
+    if not archive_available:
+        assert not report.counted and report.archived is None
+        assert report.held_reason == "inputs_changed"
+        assert record_path.read_bytes() == old_bytes
+        assert archive_path.is_dir()
+        return
+
+    assert report.counted and report.archived == old.record_stamp()
+    assert archive_path.read_bytes() == old_bytes
+    current = StorySimilarityDistribution.from_json(record_path.read_text(encoding="utf-8"))
+    assert current.judge_policy_version == JUDGE_POLICY_VERSION
+    assert current.counted_dates == (AN_EARLIER_DATE,)
+    assert current.judged_dates == (AN_EARLIER_DATE, DATE)
+    assert all(
+        (slot.same_count, slot.different_count, slot.unclear_count) == (0, 0, 0)
+        for slot in current.slots
+    )
+    again = count("2026-09-16")
+    assert again.counted and again.archived is None and again.held_reason is None
+    assert archive_path.read_bytes() == old_bytes
 
 
 def test_a_row_from_another_instrument_is_counted_nowhere() -> None:

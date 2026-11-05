@@ -148,9 +148,10 @@ def stage_count_verdicts(
 
     scorer, judge = scorer_inputs(settings), judge_inputs(settings)
     record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
+    previous_bytes = record_path.read_bytes() if record_path.exists() else None
     record = (
-        StorySimilarityDistribution.from_json(record_path.read_text(encoding="utf-8"))
-        if record_path.exists()
+        StorySimilarityDistribution.from_json(previous_bytes.decode("utf-8"))
+        if previous_bytes is not None
         else counting.empty_record(knobs, scorer=scorer, judge=judge)
     )
 
@@ -159,22 +160,32 @@ def stage_count_verdicts(
     if moved is not None:
         stem = counting.archive_stem(record)
         if ledger.accepts_new_rows(LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE, 1):
-            atomic_write.write_atomic(
-                ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE, stem),
-                record.to_json(),
-            )
-            archived = stem
-        record = counting.empty_record(
-            knobs, scorer=scorer, judge=judge, judged_dates=record.judged_dates
-        )
+            try:
+                assert previous_bytes is not None
+                atomic_write.write_atomic_bytes(
+                    ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE, stem),
+                    previous_bytes,
+                )
+            except OSError as error:
+                LOG.error(
+                    "count-verdicts date=%s archive unavailable errno=%s; aggregate retained",
+                    date, error.errno,
+                )
+            else:
+                archived = stem
+                record = counting.empty_record(
+                    knobs, scorer=scorer, judge=judge, judged_dates=record.judged_dates
+                )
         LOG.info("count-verdicts date=%s archived=%s was=%s now=%s", date, archived, *moved)
 
+    active = ledger.accepts_new_rows(
+        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION, len(rows)
+    )
     counts = (
         len(present) >= shards
         and reports_complete
-        and ledger.accepts_new_rows(
-            LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION, len(rows)
-        )
+        and active
+        and (moved is None or archived is not None)
     )
     if not counts:
         report = CountReport(
@@ -191,6 +202,8 @@ def stage_count_verdicts(
                 else "reports_incomplete"
                 if not reports_complete
                 else "family_not_active"
+                if not active
+                else "inputs_changed"
             ),
             archived=archived,
         )

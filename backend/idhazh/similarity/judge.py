@@ -34,7 +34,11 @@ from idhazh import config
 from idhazh.contracts.base import fit_field
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.knobs.models import ModelEntry
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
+from idhazh.contracts.story_similarity_pair import (
+    ReadingRefusalReason,
+    SameStoryVerdict,
+    StorySimilarityPair,
+)
 from idhazh.llm.server import (
     Completion,
     TokenChoice,
@@ -64,6 +68,12 @@ class GrammarNotAppliedError(RuntimeError):
     mixture of two measurements with nothing on the row to separate them.
     """
 
+    def __init__(
+        self, message: str, reason: ReadingRefusalReason = ReadingRefusalReason.INVALID_LITERAL
+    ) -> None:
+        super().__init__(message)
+        self.reason = reason
+
 
 @dataclass(frozen=True, slots=True)
 class Reading:
@@ -81,8 +91,8 @@ class Reading:
     #: for here rather than disappearing between the spans.
     completion_tokens: int
     #: Whether THIS call opened inside the grammar. Both checks have to pass: the
-    #: word that arrived has to be one the grammar admits, and the likeliest
-    #: first token has to be an opening of that word.
+    #: word that arrived has to be one the grammar admits, and actual emitted
+    #: prefixes must identify that word.
     grammar_applied: bool = True
     #: The decoder's own alternatives at the answer's opening, already fitted to
     #: the column that holds them. Empty where the server reported none.
@@ -97,6 +107,7 @@ class Reading:
     #: pages, so it is trusted no further than a fetched page: it reaches no
     #: reader, no row and no second prompt of ours (Guardrail #11).
     thinking: str = ""
+    refusal_reason: ReadingRefusalReason | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -348,12 +359,14 @@ def read_once(
         thinking, spans = "", 0
     elapsed = time.perf_counter() - started
     verdict: SameStoryVerdict | None
+    refusal_reason: ReadingRefusalReason | None = None
     try:
         verdict = verdict_of(reply.content)
-        _the_first_token_opened_the_word_that_came_back(reply.first_token_choices, verdict)
+        _the_emission_opened_the_word_that_came_back(reply, verdict)
         held = True
     except GrammarNotAppliedError as refused:
-        LOG.warning("judge reading recorded outside the grammar: %s", refused)
+        refusal_reason = refused.reason
+        LOG.warning("judge reading refused reason=%s", refusal_reason.value)
         verdict, held = None, False
     return Reading(
         verdict=verdict,
@@ -365,6 +378,7 @@ def read_once(
         first_token_window=first_token_window(reply.first_token_choices),
         thinking_spans=spans,
         thinking=thinking,
+        refusal_reason=refusal_reason,
     )
 
 
@@ -444,32 +458,46 @@ def judge_pair(
     )
 
 
-def _the_first_token_opened_the_word_that_came_back(
-    choices: Sequence[TokenChoice], verdict: SameStoryVerdict
+def _the_emission_opened_the_word_that_came_back(
+    reply: Completion, verdict: SameStoryVerdict
 ) -> None:
-    """The likeliest first token has to be the opening of the word that arrived.
-
-    Under the grammar those two cannot disagree: it binds the decode from the
-    first token, so whatever won position one is what the reply starts with. A
-    reply where they differ is a reply something rewrote after the decoder, which
-    is the failure a content check alone cannot see.
-
-    A server that reported no alternatives says nothing here and is not refused
-    for it - `first_token_margin` is nullable for the same reason. A first token
-    that opens more than one verdict says nothing either: a lone space and a lone
-    empty token are prefixes of every legal reply, so the word starts at the next
-    position and that position is not the one being read.
-
-    Asked through the same rule the margin buckets on, so a token the margin
-    credits to a verdict and a token this check accepts for it are one answer.
-    """
-    if not choices:
-        return
-    written = choices[0].token
-    if verdict in prompt.verdicts_opened_by(written):
-        return
+    """Consume selected prefixes until they identify the literal answer."""
+    emitted = reply.emitted_tokens
+    if emitted is None:
+        reason = ReadingRefusalReason.MISSING_EMISSION
+        if reply.raw_response is not None:
+            try:
+                payload = json.loads(reply.raw_response)
+            except json.JSONDecodeError:
+                payload = None
+            if not isinstance(payload, dict) or payload.get("completion_probabilities") is not None:
+                reason = ReadingRefusalReason.INVALID_EMISSION
+        raise GrammarNotAppliedError("selected emission evidence is unavailable", reason)
+    if not emitted:
+        raise GrammarNotAppliedError(
+            "selected emission evidence is empty", ReadingRefusalReason.INVALID_EMISSION
+        )
+    prefix = ""
+    for token in emitted:
+        try:
+            matches_bytes = bool(token.text) and token.bytes == tuple(token.text.encode("utf-8"))
+        except UnicodeEncodeError:
+            matches_bytes = False
+        if not matches_bytes:
+            raise GrammarNotAppliedError(
+                "selected token text and bytes are invalid",
+                ReadingRefusalReason.INVALID_EMISSION,
+            )
+        prefix += token.text
+        opened = prompt.verdicts_opened_by(prefix)
+        if not opened or verdict not in opened:
+            raise GrammarNotAppliedError(
+                "selected emission contradicts the literal answer",
+                ReadingRefusalReason.MISMATCHED_EMISSION,
+            )
+        if len(opened) == 1:
+            return
     raise GrammarNotAppliedError(
-        f"the judge answered {verdict.value} and its likeliest first token was "
-        f"{written!r}. Under the grammar those cannot differ, so the reply was shaped "
-        "after the decode rather than by it"
+        "selected emission does not identify a verdict",
+        ReadingRefusalReason.AMBIGUOUS_EMISSION,
     )
