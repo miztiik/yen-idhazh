@@ -38,6 +38,7 @@ requires_node: Final = pytest.mark.skipif(
 #: would keep agreeing with itself after the workflow moved.
 SELECTOR: Final = REPO_ROOT / "frontend" / "scripts" / "test-scope.ts"
 
+
 def test_the_selection_step_runs_what_this_module_drives() -> None:
     """The step and the harness below have to name the same program, or the
     tests drive something the run does not.
@@ -62,13 +63,18 @@ def test_state_csv_integrity_runs_before_selection_without_a_skip_or_fallback() 
     assert not guard.get("continue-on-error")
     assert steps.index(guard) < steps.index(decide)
     assert shlex.split(_script(guard, "state CSV check")) == [
-        "node", "frontend/scripts/state-csv-guard.ts",
+        "node",
+        "frontend/scripts/state-csv-guard.ts",
     ]
-    assert guard["env"] == decide["env"] == {
-        "EVENT": "${{ github.event_name }}",
-        "BASE": "${{ github.event.pull_request.base.sha || github.event.before }}",
-        "HEAD": "${{ github.event.pull_request.head.sha || github.sha }}",
-    }
+    assert (
+        guard["env"]
+        == decide["env"]
+        == {
+            "EVENT": "${{ github.event_name }}",
+            "BASE": "${{ github.event.pull_request.base.sha || github.event.before }}",
+            "HEAD": "${{ github.event.pull_request.head.sha || github.sha }}",
+        }
+    )
     checkout = _step(workflow, "scope", "uses", "actions/checkout@v6")
     assert steps.index(checkout) < steps.index(guard)
     assert _mapping(checkout.get("with"), "scope checkout")["fetch-depth"] == "0"
@@ -92,9 +98,6 @@ def test_documentation_only_changes_run_whitespace_not_application_gates() -> No
 def test_ci_leaves_summary_evaluation_to_its_manual_workflow() -> None:
     ci = _load_workflows()["ci.yml"]
     for name in _mapping(ci["jobs"], "CI jobs"):
-        if name == "summary-evaluator-checks":
-            assert _job(ci, name)["if"] == "github.event_name == 'workflow_dispatch'"
-            continue
         for step in _steps(ci, name):
             if "run" in step:
                 command = _script(step, "ordinary CI step")
@@ -110,7 +113,10 @@ def test_ci_leaves_summary_evaluation_to_its_manual_workflow() -> None:
 
 def test_model_free_summary_checks_are_manual_read_only_and_complete() -> None:
     workflow = _load_workflows()["summary-evaluator-checks.yml"]
-    assert set(_mapping(workflow["on"], "model-free triggers")) == {"workflow_dispatch"}
+    assert set(_mapping(workflow["on"], "model-free triggers")) == {
+        "workflow_dispatch",
+        "pull_request",
+    }
     assert _mapping(workflow["permissions"], "model-free permissions") == {"contents": "read"}
     assert set(_mapping(workflow["jobs"], "model-free jobs")) == {"model-free"}
     job = _job(workflow, "model-free")
@@ -133,14 +139,12 @@ def test_model_free_summary_checks_are_manual_read_only_and_complete() -> None:
         "--disable-socket=",
     ):
         assert forbidden not in commands
-    assert all("GITHUB_TOKEN" not in _mapping(step.get("env", {}), "model-free env") for step in steps)
-    bootstrap = _job(_load_workflows()["ci.yml"], "summary-evaluator-checks")
-    assert bootstrap["if"] == "github.event_name == 'workflow_dispatch'"
-    call = _step(
-        _load_workflows()["ci.yml"], "summary-evaluator-checks", "name",
-        "Verify the complete model-free suites",
+    assert all(
+        "GITHUB_TOKEN" not in _mapping(step.get("env", {}), "model-free env") for step in steps
     )
-    assert call["uses"] == "./.github/actions/check-summary-evaluator"
+    assert "summary-evaluator-checks" not in _mapping(
+        _load_workflows()["ci.yml"]["jobs"], "CI jobs"
+    )
 
 
 def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs() -> None:
@@ -159,10 +163,13 @@ def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs(
     assert not job.get("continue-on-error")
     checkout = _step(workflow, "planner-recordings", "uses", "actions/checkout@v6")
     assert _mapping(checkout["with"], "recorder checkout") == {
-        "ref": "${{ github.sha }}", "persist-credentials": "false",
+        "ref": "${{ github.sha }}",
+        "persist-credentials": "false",
     }
     capture = _step(
-        workflow, "planner-recordings", "name",
+        workflow,
+        "planner-recordings",
+        "name",
         "Capture current planner recordings from the real offline API",
     )
     command = _script(capture, "offline planner recorder").splitlines()
@@ -185,10 +192,16 @@ def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs(
     assert isinstance(paths, str)
     prefix = "tests/fixtures/feed-ingest-plan/entry-points/"
     assert paths.splitlines() == [
-        prefix + name for name in (
-            "response.json", "health.json", "selected-articles.json",
-            "discovered-articles.rows.json", "selected-articles.rows.json",
-            "rejected-articles.rows.json", "feed-health-state.rows.json", "plan-runs.rows.json",
+        prefix + name
+        for name in (
+            "response.json",
+            "health.json",
+            "selected-articles.json",
+            "discovered-articles.rows.json",
+            "selected-articles.rows.json",
+            "rejected-articles.rows.json",
+            "feed-health-state.rows.json",
+            "plan-runs.rows.json",
         )
     ] + ["tests/fixtures/feed-ingest-plan/report-events.json"]
     gates = _job(workflow, "gates")
@@ -202,18 +215,22 @@ def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs(
     ]
     planner = _step(workflow, "gates", "name", "TypeScript feed planner and native audit evidence")
     assert _script(planner, "ordinary planner gates").splitlines() == [
-        "bun run check", "bun run test",
+        "bun run check",
+        "bun run test",
     ]
     composition = _step(workflow, "gates", "name", "Pipeline APIs and owned server lifetime")
     assert composition["working-directory"] == "services/serve-pipeline-apis"
     assert _script(composition, "ordinary composed API gates").splitlines() == [
-        "bun run check", "bun run test",
+        "bun run check",
+        "bun run test",
     ]
     steps = _steps(workflow, "gates")
     assert steps.index(prepare) < steps.index(planner) < steps.index(composition)
     probe = _step(workflow, "gates", "name", "TypeScript feed probe")
     assert _script(probe, "ordinary probe gates").splitlines() == [
-        "bun install --frozen-lockfile", "bun run check", "bun run test",
+        "bun install --frozen-lockfile",
+        "bun run check",
+        "bun run test",
     ]
 
 
@@ -224,7 +241,9 @@ def test_the_robots_job_runs_the_module_the_selector_keys_on() -> None:
     assert _job(workflow, "robots")["if"] == "needs.scope.outputs.robots == 'true'"
     outputs = _mapping(_job(workflow, "scope").get("outputs"), "ci.yml scope outputs")
     assert outputs["robots"] == "${{ steps.decide.outputs.robots }}"
-    run = _step(workflow, "robots", "name", "The robots fixtures, on the newest supported interpreter")
+    run = _step(
+        workflow, "robots", "name", "The robots fixtures, on the newest supported interpreter"
+    )
     module = str(run["run"]).split()[-1]
     assert f"const ROBOTS_TESTS = '{module}';" in SELECTOR.read_text(encoding="utf-8")
 
@@ -246,14 +265,14 @@ BROWSER_SCOPE_CASES: Final = (
     ("docs/reference/pipeline-cost.md", False, False, False, False, False, False),
 )
 
+
 def test_the_selector_tests_use_the_same_node_as_the_ci_selector() -> None:
     workflow = _load_workflows()["ci.yml"]
     versions: dict[str, object] = {}
     for job in ("scope", "gates"):
         steps = _steps(workflow, job)
         node_steps = [
-            step for step in steps
-            if str(step.get("uses", "")).startswith("actions/setup-node@")
+            step for step in steps if str(step.get("uses", "")).startswith("actions/setup-node@")
         ]
         assert len(node_steps) == 1, f"{job} must declare the selector's Node runtime"
         settings = node_steps[0].get("with")
@@ -277,10 +296,12 @@ def test_the_normal_backend_suite_keeps_its_complete_report() -> None:
     parallel_args = shlex.split(_script(parallel, "parallel tests"))
     report = "test-results/backend/pytest-junit.xml"
     assert parallel_args == [
-        "pytest", f"--junitxml={report}",
+        "pytest",
+        f"--junitxml={report}",
     ]
     uploads = [
-        step for step in steps
+        step
+        for step in steps
         if str(step.get("uses", "")).startswith("actions/upload-artifact@")
         and _mapping(step.get("with"), "artifact settings").get("name") == "pytest-junit"
     ]
@@ -301,14 +322,13 @@ def test_shared_contract_runtime_precedes_python_binding_tests() -> None:
     assert setup["if"] == binding["if"] == tests["if"]
     assert binding["working-directory"] == "packages/common-contracts"
     assert _script(binding, "shared contract bindings").splitlines() == [
-        "bun run check", "bun test",
+        "bun run check",
+        "bun test",
     ]
     assert not binding.get("continue-on-error")
 
 
-def _two_commits(
-    tmp_path: Path, changed: Sequence[str]
-) -> tuple[Path, dict[str, str], str, str]:
+def _two_commits(tmp_path: Path, changed: Sequence[str]) -> tuple[Path, dict[str, str], str, str]:
     """A real repository, a seed commit and a commit changing each named path."""
     env = _isolated_env(tmp_path)
     root = tmp_path / "repo"
@@ -328,9 +348,7 @@ def _two_commits(
 def _outputs(completed: subprocess.CompletedProcess[str]) -> dict[str, str]:
     """The `KEY=value` lines a step would append to `$GITHUB_OUTPUT`."""
     assert completed.returncode == 0, completed.stderr
-    return dict(
-        line.split("=", 1) for line in completed.stdout.strip().splitlines() if "=" in line
-    )
+    return dict(line.split("=", 1) for line in completed.stdout.strip().splitlines() if "=" in line)
 
 
 def _browser_scope(
@@ -405,9 +423,7 @@ def test_a_push_carrying_code_still_never_consults_the_list(tmp_path: Path) -> N
     buys everything - a pull request the list was wrong about reddens `main`
     within minutes instead of reaching a reader.
     """
-    assert _browser_scope(
-        tmp_path, ["docs/x.md", "backend/idhazh/discover.py"], event="push"
-    ) == {
+    assert _browser_scope(tmp_path, ["docs/x.md", "backend/idhazh/discover.py"], event="push") == {
         "browser": "true",
         "code": "true",
         "model_absent": "true",
@@ -466,7 +482,13 @@ def test_console_deferral_is_wired_without_the_retired_panel_capture_branch() ->
     outputs = _mapping(_job(workflow, "scope").get("outputs"), "ci.yml scope outputs")
     assert outputs["console"] == "${{ steps.decide.outputs.console }}"
     assert set(outputs) == {
-        "browser", "code", "console", "model_absent", "robots", "validate_all", "playwright"
+        "browser",
+        "code",
+        "console",
+        "model_absent",
+        "robots",
+        "validate_all",
+        "playwright",
     }
 
     suite = _step(workflow, "browser", "name", "Browser suite - canaries and retrieval")
@@ -487,7 +509,8 @@ def test_console_deferral_is_wired_without_the_retired_panel_capture_branch() ->
         _artifact_upload(workflow, "browser", "playwright-traces").get("with"), "the traces upload"
     )
     assert str(traces["path"]).split() == [
-        "frontend/test-results/", "!frontend/test-results/browser/results.json"
+        "frontend/test-results/",
+        "!frontend/test-results/browser/results.json",
     ]
 
 
@@ -495,7 +518,9 @@ def test_model_absent_build_and_browser_timings_are_wired_to_their_inputs() -> N
     workflow = _load_workflows()["ci.yml"]
     outputs = _mapping(_job(workflow, "scope").get("outputs"), "ci.yml scope outputs")
     assert outputs["model_absent"] == "${{ steps.decide.outputs.model_absent }}"
-    absent = _step(workflow, "site", "name", "Model-absent gate - the digest does not depend on any of it")
+    absent = _step(
+        workflow, "site", "name", "Model-absent gate - the digest does not depend on any of it"
+    )
     assert absent["if"] == "needs.scope.outputs.model_absent == 'true'"
     suite = _step(workflow, "browser", "name", "Browser suite - canaries and retrieval")
     assert "--reporter=github,json" in str(suite["run"])

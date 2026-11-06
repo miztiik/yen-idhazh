@@ -2,6 +2,16 @@ name: Summary evaluator checks
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'services/**'
+      - 'packages/**'
+      - 'backend/**'
+      - 'config/**'
+      - 'tests/fixtures/**'
+      - '.github/scripts/summary-eval-tests/**'
+      - '.github/actions/check-summary-evaluator/**'
+      - '.github/workflows/summary-evaluator-checks.yml'
 
 permissions:
   contents: read

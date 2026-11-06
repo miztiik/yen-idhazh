@@ -18,7 +18,7 @@
 | A7 | Execution | Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 1 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. |
 | A8 | Why parallel N is lower | The PRs share CI and the gate guide. The evaluator PRs also change the same callers and test helpers. Serial writing avoids conflicting cutovers; it does not add a dependency between independent APIs. |
 | A9 | Canonical pages | The composition page follows move K11. Other authorities: [HHEM](../docs/reference/hhem-evaluation-api.md), [UniEval](../docs/reference/unieval-api.md), [workflow](../docs/reference/summary-evaluation-workflow.md), [summarizer](../docs/reference/summarizer-api.md), [saved experiment events](../docs/reference/workflow-pipeline-events.md). |
-| A10 | Verification record | Record the source revision, selected tests, result and platform for each PR. Follow [the gate guide](../docs/how-to/run-the-gates.md): complete model-free evaluator/workflow suites run through the manual, read-only `summary-evaluator-checks.yml` Linux gate, separate from ordinary `ci.yml`. Reuse passed evidence while its tested inputs are unchanged. Ordinary CI retains its backend, native TypeScript and saved-handoff gates. Do not dispatch a live production workflow as a merge gate. Windows results do not replace Linux evidence. |
+| A10 | Verification record | Record the source revision, selected tests, result and platform for each PR. Follow [the gate guide](../docs/how-to/run-the-gates.md): complete model-free evaluator/workflow suites run through the read-only `summary-evaluator-checks.yml` Linux gate on relevant pull requests, with manual reruns, separate from ordinary `ci.yml`. Reuse passed evidence while its tested inputs are unchanged. Ordinary CI retains its backend, native TypeScript and saved-handoff gates. Do not dispatch a live production workflow as a merge gate. Windows results do not replace Linux evidence. |
 | A11 | Native request boundary | Do not introduce a Pydantic or Zod model of llama-server's request fields. Forward its configured JSON fields and server flags without an enumerated field list. Validate only the settings this repository computes on, its own API products, the committed destination, transport bounds and protected decoding controls. Adding a supported native setting outside those protected controls must not require source or test-fixture edits. |
 | A12 | Repeated generation calls | The generator accepts repeated independent requests. Each builds a fresh system/user request; it carries no earlier answer, conversation history or server session. Keeping the model process or its prefix cache alive is not conversation continuation. The production digest's existing two-call continuation is a separate flow and stays unchanged. |
 | A13 | Prompt control | The configured generator prompt is a default, not a restriction. A nonblank request-level `system_prompt` replaces that default without a restart or config edit. Record the effective prompt's digest and origin; never append hidden classification instructions to the override. Table W declares the prompt sources and destinations. |
@@ -186,12 +186,11 @@ config/
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/services.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/settings.py`
   - `.github/workflows/summary-eval-tests.yml`
-  - `.github/workflows/summary-evaluator-checks.yml` - manual model-free Linux verification.
+  - `.github/workflows/summary-evaluator-checks.yml` - PR-triggered model-free Linux verification with manual reruns.
   - `.github/actions/check-summary-evaluator/action.yml` - one shared verification implementation.
-  - `.github/workflows/ci.yml` - temporary manual-only bootstrap until the checker is registered on the default branch.
   - `config/summary-eval-tests.json`
   - `backend/tests/workflows/_harness.py` - bind artifact expressions to the named workflow settings.
-  - `backend/tests/workflows/test_ci_selection.py` - keep the manual verification separate from ordinary CI.
+  - `backend/tests/workflows/test_ci_selection.py` - keep the model-free verification separate from ordinary CI.
   - `services/hhem-evaluator/src/hhem_evaluator/contracts/server_event.py`
   - `services/hhem-evaluator/src/hhem_evaluator/contracts/lifecycle_fields.py` - new extraction of the existing safe lifecycle fields.
   - `services/hhem-evaluator/src/hhem_evaluator/emit_events.py`
@@ -226,7 +225,7 @@ config/
   - Report: render a representative successful run and a cleanup-failure run through the production report function. Require real native and host outcomes, absent unstarted evaluator outcomes, escaped source text and explicit failures. Review the changed report against the design requirements before merge.
   - Observation, not a merge gate: on the next intended manual workflow run, read `generation-phase.json`, `generation.json`, native logs and the published job report. An evaluator row or readiness wait during generation is a failed cutover; fix this PR's implementation, not the evidence.
 - **Oracle:** Run the real generation phase with recorded native responses, evaluator configuration files absent, and no evaluator child; require the bound answer receipt and truthful native/host shutdown evidence. This does not prove live model quality, weight loading or runner speed.
-- **Execution status:** Implementation and Windows-compatible checks are complete. The manual Linux verifier runs the remaining complete evaluator/workflow suites before delivery; Windows results do not satisfy that gate.
+- **Execution status:** Implementation and Windows-compatible checks are complete. The read-only Linux verifier and ordinary CI check the PR candidate before merge; Windows results do not satisfy the Linux gate.
 
 **Table F - PR 1 decisions**
 
@@ -558,7 +557,7 @@ config/
   - Local parity: compare generated scoring schemas and existing recorded outputs before/after. Cover HHEM primary/full reuse, complete windows, partial retention, all native UniEval dimensions, incomplete dimensions, fixed errors and deterministic HHEM event IDs.
   - Local behavior: run actual installed-package imports and spawned workers, not merely source-tree imports. Verify single-scorer settings isolation and the distinct HHEM replacement/UniEval failure policies.
   - Linux execution gate: run complete service and moved workflow suites with the explicit service pytest configuration. Update the manual workflow's project directory, compiler target and resource preparation, plus the gate guide's lint/type/test commands.
-  - CI: update the named workflow-selection test's directory assertion and carry the manual model-free Linux verifier across the moves. Retain the prohibition on evaluator setup in ordinary `ci.yml`, its backend/native coverage and required-check names.
+  - CI: update the named workflow-selection test's directory assertion and carry the model-free Linux verifier across the moves. Retain the prohibition on evaluator setup in ordinary `ci.yml`, its backend/native coverage and required-check names.
   - Documentation: verify inbound links to moved pages, live launch commands, configured cache/log locations, report config links and fixture provenance. Keep any required historical check/event identifier documented as such, not as a current package path.
 - **Oracle:** The complete named recording set produces the same scoring schemas, accepted values, errors and event IDs through the installed renamed application and real workers, with all baseline files assigned to one move or retirement. This does not prove a new model run or remove the shared application's restart boundary.
 
