@@ -1,6 +1,6 @@
 # Evaluate the content-similarity judge offline
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 Freeze explicit published comparisons, collect independent annotations, capture
 the unchanged production judge, then score its saved replies without inference.
@@ -167,7 +167,11 @@ produce different report identities even when the interval bounds coincide.
 Independent annotations and actual inference are external evidence, not outputs
 that a passing harness can invent. A working evaluator can therefore report
 blocked honestly. Schema examples and generated protocol tests verify software
-only; they are neither human gold nor model recordings. A measured result
+only; they are neither human gold nor model recordings. Two-order agreement
+measures consistency, and decoder margins describe recorded readings; neither
+substitutes for independent annotations. Without qualified annotations and a
+complete actual capture, leave the accuracy measurement explicitly unfinished,
+not replaced by a replay score or a placeholder benchmark. A measured result
 describes the declared finite set, not population-wide accuracy or permission
 to change production behavior.
 
