@@ -2,7 +2,7 @@
 
 from starlette.responses import Response
 
-from .contracts.api_error_detail import ApiErrorDetail, ApiErrorResult
+from hhem_evaluator.contracts.api_error_detail import ApiErrorDetail, ApiErrorResult
 
 
 def refuse_request(code: str, message: str, status: int) -> Response:

@@ -5,9 +5,8 @@ from email.message import Message
 
 from starlette.requests import ClientDisconnect, Request
 
-from .contracts.error_detail import ErrorDetail
-from .contracts.service_settings import ListenerSettings
-from .fail_evaluation import EvaluationFailure
+from hhem_evaluator.shared.contracts.service_settings import ListenerSettings
+from hhem_evaluator.shared.fail_runtime import RuntimeFailure
 
 
 class ClientDisconnected(Exception):
@@ -24,7 +23,7 @@ async def read_request_body(request: Request, settings: ListenerSettings) -> byt
         or media.get_content_charset("utf-8").lower() != "utf-8"
         or request.headers.get("content-encoding", "identity").lower() != "identity"
     ):
-        raise EvaluationFailure(ErrorDetail.from_code("UNSUPPORTED_MEDIA", "request"))
+        raise RuntimeFailure("UNSUPPORTED_MEDIA")
     length = request.headers.get("content-length")
     if length is not None:
         if (
@@ -32,28 +31,28 @@ async def read_request_body(request: Request, settings: ListenerSettings) -> byt
             or not length.isascii()
             or not length.isdecimal()
         ):
-            raise EvaluationFailure(ErrorDetail.from_code("INVALID_REQUEST", "request"))
+            raise RuntimeFailure("INVALID_REQUEST")
         normalized = length.lstrip("0") or "0"
         if (
             len(normalized) > len(str(settings.max_body_bytes))
             or int(normalized) > settings.max_body_bytes
         ):
-            raise EvaluationFailure(ErrorDetail.from_code("BODY_TOO_LARGE", "request"))
+            raise RuntimeFailure("BODY_TOO_LARGE")
     body = bytearray()
     try:
         async with asyncio.timeout(settings.body_read_timeout_ms / 1000):
             async for chunk in request.stream():
                 if len(body) + len(chunk) > settings.max_body_bytes:
-                    raise EvaluationFailure(ErrorDetail.from_code("BODY_TOO_LARGE", "request"))
+                    raise RuntimeFailure("BODY_TOO_LARGE")
                 body.extend(chunk)
     except TimeoutError:
-        raise EvaluationFailure(ErrorDetail.from_code("INPUT_TIMEOUT", "request")) from None
+        raise RuntimeFailure("INPUT_TIMEOUT") from None
     except ClientDisconnect:
         raise ClientDisconnected from None
     try:
         body.decode("utf-8")
     except UnicodeDecodeError:
-        raise EvaluationFailure(ErrorDetail.from_code("UNSUPPORTED_MEDIA", "request")) from None
+        raise RuntimeFailure("UNSUPPORTED_MEDIA") from None
     return bytes(body)
 
 

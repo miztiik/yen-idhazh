@@ -7,8 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from hhem_evaluator.contracts.base import API_HEALTH_PATH, EVALUATE_PATH, HHEM_HEALTH_PATH
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
+from hhem_evaluator.shared.contracts.api_paths import (
+    API_HEALTH_PATH,
+    EVALUATE_PATH,
+    HHEM_HEALTH_PATH,
+)
 
 from .contract_examples import REPOSITORY
 from .replay_predictions import Scenario, read_recordings

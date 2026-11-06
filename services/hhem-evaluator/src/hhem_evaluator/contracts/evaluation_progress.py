@@ -4,7 +4,13 @@ from typing import Self
 
 from pydantic import StrictBool, field_validator, model_validator
 
-from .base import Count, Milliseconds, NativeContract, PositiveCount, Score
+from hhem_evaluator.shared.contracts.base import (
+    Count,
+    Milliseconds,
+    NativeContract,
+    PositiveCount,
+    Score,
+)
 
 
 class WindowCounts(NativeContract):

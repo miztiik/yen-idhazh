@@ -6,12 +6,12 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
-from .contracts.unieval_contract import UNIEVAL_VERSION
-from .contracts.unieval_error import UnievalError
-from .contracts.unieval_request import EffectiveUnievalControls
-from .contracts.unieval_result import UnievalWork
-from .contracts.unieval_settings import UnievalSettings
-from .contracts.unieval_worker_message import (
+from hhem_evaluator.contracts.unieval_contract import UNIEVAL_VERSION
+from hhem_evaluator.contracts.unieval_error import UnievalError
+from hhem_evaluator.contracts.unieval_request import EffectiveUnievalControls
+from hhem_evaluator.contracts.unieval_result import UnievalWork
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from hhem_evaluator.contracts.unieval_worker_message import (
     RequestPacket,
     UnievalBootstrap,
     UnievalCommand,
@@ -21,13 +21,13 @@ from .contracts.unieval_worker_message import (
     UnievalReady,
     UnievalStartupFailed,
 )
-from .exchange_packets import ByteChannel
-from .fail_unieval import UnievalFailure
-from .load_model import quiet_model_output
-from .load_unieval import UnievalPredictor, load_unieval
-from .read_process_identity import read_process_identity
-from .score_unieval import UnievalComparison, prepare_unieval
-from .watch_worker_parent import arm_parent_exit, watch_parent
+from hhem_evaluator.fail_unieval import UnievalFailure
+from hhem_evaluator.load_unieval import UnievalPredictor, load_unieval
+from hhem_evaluator.read_process_identity import read_process_identity
+from hhem_evaluator.score_unieval import UnievalComparison, prepare_unieval
+from hhem_evaluator.shared.exchange_packets import ByteChannel
+from hhem_evaluator.shared.quiet_model_output import quiet_model_output
+from hhem_evaluator.watch_worker_parent import arm_parent_exit, watch_parent
 
 
 class UnievalLoader(Protocol):

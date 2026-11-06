@@ -6,17 +6,21 @@ from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from .contracts.server_event import ApiDiagnosticData
-from .contracts.unieval_contract import DIMENSIONS
-from .contracts.unieval_error import POLICIES, UnievalError, UnievalErrorCode
-from .contracts.unieval_request import UnievalRequest
-from .control_unieval import UnievalController
-from .dispatch_evaluation import DisconnectedResponse
-from .fail_evaluation import EvaluationFailure
-from .fail_unieval import UnievalFailure
-from .queue_evaluations import Reservation
-from .read_request_body import ClientDisconnected, read_request_body, wait_for_disconnect
-from .reduce_unieval import UnievalState
+from hhem_evaluator.contracts.lifecycle_fields import LifecycleFields
+from hhem_evaluator.contracts.unieval_contract import DIMENSIONS
+from hhem_evaluator.contracts.unieval_error import POLICIES, UnievalError, UnievalErrorCode
+from hhem_evaluator.contracts.unieval_request import UnievalRequest
+from hhem_evaluator.control_unieval import UnievalController
+from hhem_evaluator.fail_unieval import UnievalFailure
+from hhem_evaluator.queue_evaluations import Reservation
+from hhem_evaluator.read_request_body import (
+    ClientDisconnected,
+    read_request_body,
+    wait_for_disconnect,
+)
+from hhem_evaluator.reduce_unieval import UnievalState
+from hhem_evaluator.shared.disconnected_response import DisconnectedResponse
+from hhem_evaluator.shared.fail_runtime import RuntimeFailure
 
 
 async def dispatch_unieval(
@@ -44,9 +48,8 @@ async def dispatch_unieval(
                 )
                 raise UnievalFailure(UnievalError.from_code(code)) from None
             del encoded
-            controller.writer.diagnostic(
-                ApiDiagnosticData(
-                    component="unieval",
+            controller.diagnostic(
+                LifecycleFields(
                     action="started",
                     level="INFO",
                     execution_id=state.execution_id,
@@ -63,8 +66,8 @@ async def dispatch_unieval(
             gone = True
         except UnievalFailure as failure:
             state.errors.append(failure.error)
-        except EvaluationFailure as failure:
-            state.errors.append(UnievalError.from_code(failure.error.code))
+        except RuntimeFailure as failure:
+            state.errors.append(UnievalError.from_code(failure.code))
         except asyncio.CancelledError:
             if work is not None and not work.done():
                 work.cancel()
@@ -85,9 +88,8 @@ async def dispatch_unieval(
                 disconnect.cancel()
                 await asyncio.gather(disconnect, return_exceptions=True)
         if gone:
-            controller.writer.diagnostic(
-                ApiDiagnosticData(
-                    component="unieval",
+            controller.diagnostic(
+                LifecycleFields(
                     action="cancelled",
                     level="ERROR",
                     execution_id=state.execution_id,
@@ -100,17 +102,16 @@ async def dispatch_unieval(
         ):
             state.errors.append(UnievalError.from_code("INTERNAL_ERROR"))
         try:
-            controller.writer.diagnostic(
-                ApiDiagnosticData(
-                    component="unieval",
+            controller.diagnostic(
+                LifecycleFields(
                     action="failed" if state.errors else "completed",
                     level="ERROR" if state.errors else "INFO",
                     execution_id=state.execution_id,
                     code=state.errors[0].code if state.errors else None,
                 )
             )
-        except EvaluationFailure as failure:
-            state.errors.append(UnievalError.from_code(failure.error.code))
+        except RuntimeFailure as failure:
+            state.errors.append(UnievalError.from_code(failure.code))
         result = state.result()
         status = POLICIES[result.errors[0].code].http_status if result.errors else 200
         headers = (

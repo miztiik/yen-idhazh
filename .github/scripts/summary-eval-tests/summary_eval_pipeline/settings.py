@@ -2,13 +2,13 @@
 
 from pathlib import Path
 
-from hhem_evaluator.contracts.base import (
+from hhem_evaluator.shared.contracts.base import (
     ContextIdentity,
     NonblankText,
     PositiveCount,
     RelativePath,
 )
-from hhem_evaluator.contracts.service_settings import LoggingSettings
+from hhem_evaluator.shared.contracts.service_settings import LoggingSettings
 from pydantic import ValidationError
 
 from .contracts import WorkflowContract

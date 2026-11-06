@@ -12,9 +12,10 @@ from hhem_evaluator.contracts.evaluation_event import EventDetails
 from hhem_evaluator.contracts.lifecycle_fields import LifecycleFields
 from hhem_evaluator.contracts.server_contract import SERVER_SCHEMA_VERSION
 from hhem_evaluator.contracts.server_event import ApiDiagnosticData, ServerEvent
-from hhem_evaluator.contracts.service_settings import StartupContext
-from hhem_evaluator.emit_events import EventEmitter, EventWriter
+from hhem_evaluator.emit_events import EventEmitter
 from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.serve_http.emit_events import EventWriter
+from hhem_evaluator.shared.contracts.service_settings import StartupContext
 
 from .contract_examples import SETTINGS_FILE, example_event
 
@@ -81,7 +82,7 @@ def test_an_unopenable_diagnostic_mirror_warns_without_failing_native_events(
     occupied.write_text("A real file cannot also be a log directory.", encoding="ascii")
     stream = io.StringIO()
     writer = EventWriter(load_settings(SETTINGS_FILE).logging, stream, directory=occupied)
-    emitter = EventEmitter(writer, StartupContext())
+    emitter = EventEmitter(writer.write, StartupContext(), writer.settings)
     event_id = emitter.emit("service", "started", EventDetails(status="disabled"))
     assert event_id == emitter.last_event_id and not emitter.logging_failed
     assert not writer.log_available

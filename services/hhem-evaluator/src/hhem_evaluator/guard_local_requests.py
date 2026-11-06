@@ -3,16 +3,16 @@
 from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from .contracts.api_settings import ApiSettings
-from .contracts.base import EVALUATE_PATH
-from .contracts.error_detail import ErrorDetail
-from .contracts.unieval_error import UnievalError
-from .control_service import EvaluationController
-from .control_unieval import UnievalController
-from .dispatch_evaluation import dispatch_evaluation
-from .dispatch_unieval import dispatch_unieval
-from .refuse_request import refuse_request
-from .unieval_router import UNIEVAL_PATH
+from hhem_evaluator.contracts.api_settings import ApiSettings
+from hhem_evaluator.contracts.error_detail import ErrorDetail
+from hhem_evaluator.contracts.unieval_error import UnievalError
+from hhem_evaluator.control_service import EvaluationController
+from hhem_evaluator.control_unieval import UnievalController
+from hhem_evaluator.dispatch_evaluation import dispatch_evaluation
+from hhem_evaluator.dispatch_unieval import dispatch_unieval
+from hhem_evaluator.refuse_request import refuse_request
+from hhem_evaluator.shared.contracts.api_paths import EVALUATE_PATH
+from hhem_evaluator.unieval_router import UNIEVAL_PATH
 
 
 class GuardLocalRequests:

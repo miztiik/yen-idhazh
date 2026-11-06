@@ -17,17 +17,18 @@ from starlette.types import Message, Scope
 
 from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.contracts.api_settings import ApiComponent, ApiSettings
-from hhem_evaluator.contracts.base import EVALUATE_PATH
 from hhem_evaluator.contracts.evaluation_event import EvaluationEvent
 from hhem_evaluator.contracts.server_event import ServerEvent
-from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
+from hhem_evaluator.contracts.service_settings import ServiceSettings
 from hhem_evaluator.contracts.unieval_settings import UnievalSettings
-from hhem_evaluator.emit_events import EventWriter
-from hhem_evaluator.exchange_packets import ByteChannel
 from hhem_evaluator.load_settings import load_settings
 from hhem_evaluator.maintain_unieval_worker import UnievalSupervisor
 from hhem_evaluator.maintain_worker import WorkerSupervisor
 from hhem_evaluator.serve_api import create_app
+from hhem_evaluator.serve_http.emit_events import EventWriter
+from hhem_evaluator.shared.contracts.api_paths import EVALUATE_PATH
+from hhem_evaluator.shared.contracts.service_settings import StartupContext
+from hhem_evaluator.shared.exchange_packets import ByteChannel
 
 from .contract_examples import REPOSITORY, SETTINGS_FILE
 from .replay_predictions import Scenario, run_recorded_worker

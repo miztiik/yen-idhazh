@@ -8,11 +8,11 @@ from typing import Protocol, cast
 
 from pydantic import TypeAdapter
 
-from .contracts.unieval_error import UnievalError
-from .contracts.unieval_settings import UnievalSettings
-from .fail_unieval import UnievalFailure
-from .load_model import quiet_model_output
-from .load_model_assets import resolve_snapshot
+from hhem_evaluator.contracts.unieval_error import UnievalError
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from hhem_evaluator.fail_unieval import UnievalFailure
+from hhem_evaluator.load_model_assets import resolve_snapshot
+from hhem_evaluator.shared.quiet_model_output import quiet_model_output
 
 
 class PromptTokenizer(Protocol):

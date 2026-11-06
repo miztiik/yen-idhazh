@@ -2,11 +2,15 @@
 
 from pydantic import AwareDatetime
 
-from .base import ContextIdentity, Count, Score, Sha256
-from .unieval_contract import Dimension, UnievalContract, UnievalVersion
-from .unieval_error import UnievalError
-from .unieval_request import EffectiveUnievalControls, UnievalControls, UnievalRequest
-from .unieval_result import UnievalWork
+from hhem_evaluator.contracts.unieval_contract import Dimension, UnievalContract, UnievalVersion
+from hhem_evaluator.contracts.unieval_error import UnievalError
+from hhem_evaluator.contracts.unieval_request import (
+    EffectiveUnievalControls,
+    UnievalControls,
+    UnievalRequest,
+)
+from hhem_evaluator.contracts.unieval_result import UnievalWork
+from hhem_evaluator.shared.contracts.base import ContextIdentity, Count, Score, Sha256
 
 
 class UnievalRecordingInput(UnievalContract):

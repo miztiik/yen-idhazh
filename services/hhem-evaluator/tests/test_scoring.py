@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from hhem_evaluator.contracts.base import EVALUATE_PATH
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
+from hhem_evaluator.shared.contracts.api_paths import EVALUATE_PATH
 
 from .contract_examples import REPOSITORY
 from .replay_predictions import Action, Scenario, read_recordings

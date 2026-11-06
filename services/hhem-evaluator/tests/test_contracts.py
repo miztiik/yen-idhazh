@@ -14,20 +14,8 @@ from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.contracts.api_error_detail import ApiErrorDetail, ApiErrorResult
 from hhem_evaluator.contracts.api_health import ApiHealth, DisabledEvaluatorHealth
 from hhem_evaluator.contracts.api_settings import ApiSettings
-from hhem_evaluator.contracts.base import (
-    API_HEALTH_PATH,
-    API_SCHEMA_PATH,
-    EVALUATE_PATH,
-    HHEM_HEALTH_PATH,
-    SCHEMA_VERSION,
-    NativeContract,
-)
-from hhem_evaluator.contracts.error_detail import (
-    ERROR_POLICIES,
-    ErrorCode,
-    ErrorDetail,
-    project_request_error,
-)
+from hhem_evaluator.contracts.base import SCHEMA_VERSION
+from hhem_evaluator.contracts.error_detail import ErrorDetail, project_request_error
 from hhem_evaluator.contracts.evaluate_request import EffectiveSettings, EvaluateRequest
 from hhem_evaluator.contracts.evaluation_event import EvaluationEvent, EventDetails
 from hhem_evaluator.contracts.evaluation_progress import (
@@ -42,7 +30,7 @@ from hhem_evaluator.contracts.model_identity import ModelIdentity
 from hhem_evaluator.contracts.server_contract import SERVER_SCHEMA_VERSION, ServerContract
 from hhem_evaluator.contracts.server_event import ApiDiagnosticData, ServerEvent
 from hhem_evaluator.contracts.service_health import ServiceHealth
-from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
+from hhem_evaluator.contracts.service_settings import ServiceSettings
 from hhem_evaluator.contracts.worker_identity import WorkerIdentity
 from hhem_evaluator.contracts.worker_message import (
     FrozenAssets,
@@ -56,11 +44,20 @@ from hhem_evaluator.contracts.worker_message import (
     WorkerStarted,
     validate_window_reply,
 )
-from hhem_evaluator.emit_events import EventWriter
 from hhem_evaluator.load_settings import load_settings
 from hhem_evaluator.refuse_request import refuse_request
 from hhem_evaluator.resolve_ids import create_event_id
 from hhem_evaluator.serve_api import create_app
+from hhem_evaluator.serve_http.emit_events import EventWriter
+from hhem_evaluator.shared.contracts.api_paths import (
+    API_HEALTH_PATH,
+    API_SCHEMA_PATH,
+    EVALUATE_PATH,
+    HHEM_HEALTH_PATH,
+)
+from hhem_evaluator.shared.contracts.base import NativeContract
+from hhem_evaluator.shared.contracts.error_policy import ERROR_POLICIES, ErrorCode
+from hhem_evaluator.shared.contracts.service_settings import StartupContext
 from hhem_evaluator.unieval_router import UNIEVAL_HEALTH_PATH, UNIEVAL_PATH
 
 from .contract_examples import (

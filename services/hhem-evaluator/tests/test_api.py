@@ -9,23 +9,25 @@ import pytest
 
 from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.contracts.api_error_detail import ApiErrorResult
-from hhem_evaluator.contracts.base import (
+from hhem_evaluator.contracts.error_detail import ErrorDetail
+from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
+from hhem_evaluator.contracts.evaluation_event import EventDetails
+from hhem_evaluator.contracts.evaluation_result import EvaluationResult
+from hhem_evaluator.contracts.unieval_result import UnievalResult
+from hhem_evaluator.emit_events import EventEmitter
+from hhem_evaluator.fail_evaluation import EvaluationFailure
+from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.serve_api import create_app
+from hhem_evaluator.serve_http.emit_events import EventWriter
+from hhem_evaluator.shared.contracts.api_paths import (
     API_HEALTH_PATH,
     API_PREFIX,
     API_SCHEMA_PATH,
     EVALUATE_PATH,
     HHEM_HEALTH_PATH,
 )
-from hhem_evaluator.contracts.error_detail import ErrorCode, ErrorDetail
-from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
-from hhem_evaluator.contracts.evaluation_event import EventDetails
-from hhem_evaluator.contracts.evaluation_result import EvaluationResult
-from hhem_evaluator.contracts.service_settings import StartupContext
-from hhem_evaluator.contracts.unieval_result import UnievalResult
-from hhem_evaluator.emit_events import EventEmitter, EventWriter
-from hhem_evaluator.fail_evaluation import EvaluationFailure
-from hhem_evaluator.load_settings import load_settings
-from hhem_evaluator.serve_api import create_app
+from hhem_evaluator.shared.contracts.error_policy import ErrorCode
+from hhem_evaluator.shared.contracts.service_settings import StartupContext
 from hhem_evaluator.unieval_router import UNIEVAL_HEALTH_PATH, UNIEVAL_PATH
 
 from .contract_examples import API_SETTINGS_FILE, REPOSITORY, SETTINGS_FILE
@@ -41,7 +43,9 @@ from .unieval_cases import (
 def test_event_overflow_is_refused_before_any_truncated_record_is_written() -> None:
     settings = service_settings(logging={"max_event_bytes": 64})
     log = EventLog()
-    emitter = EventEmitter(EventWriter(settings.logging, log), StartupContext())
+    emitter = EventEmitter(
+        EventWriter(settings.logging, log).write, StartupContext(), settings.logging
+    )
     with pytest.raises(EvaluationFailure) as failure:
         emitter.emit("request", "started", EventDetails())
     assert failure.value.error.code == "LOGGING_FAILED"

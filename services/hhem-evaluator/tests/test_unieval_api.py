@@ -9,11 +9,15 @@ import httpx
 import pytest
 
 from hhem_evaluator.contracts.api_settings import ApiSettings
-from hhem_evaluator.contracts.base import API_HEALTH_PATH, EVALUATE_PATH, HHEM_HEALTH_PATH
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.unieval_result import UnievalResult
-from hhem_evaluator.emit_events import EventWriter
 from hhem_evaluator.serve_api import create_app
+from hhem_evaluator.serve_http.emit_events import EventWriter
+from hhem_evaluator.shared.contracts.api_paths import (
+    API_HEALTH_PATH,
+    EVALUATE_PATH,
+    HHEM_HEALTH_PATH,
+)
 from hhem_evaluator.unieval_router import UNIEVAL_HEALTH_PATH, UNIEVAL_PATH
 
 from .contract_examples import REPOSITORY

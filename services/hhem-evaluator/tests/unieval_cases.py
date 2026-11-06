@@ -21,12 +21,12 @@ from hhem_evaluator.contracts.unieval_recording import (
 )
 from hhem_evaluator.contracts.unieval_result import UnievalModelIdentity
 from hhem_evaluator.contracts.unieval_settings import UnievalSettings
-from hhem_evaluator.emit_events import EventWriter
-from hhem_evaluator.exchange_packets import ByteChannel
 from hhem_evaluator.load_unieval_resources import UnievalResources, load_unieval_resources
 from hhem_evaluator.load_unieval_settings import load_unieval_settings
 from hhem_evaluator.maintain_unieval_worker import UnievalSupervisor
 from hhem_evaluator.serve_api import create_app
+from hhem_evaluator.serve_http.emit_events import EventWriter
+from hhem_evaluator.shared.exchange_packets import ByteChannel
 from hhem_evaluator.unieval_worker import run_unieval_worker
 from scripts.recording_json import canonical_bytes
 

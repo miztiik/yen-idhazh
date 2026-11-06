@@ -8,21 +8,21 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .contracts.unieval_contract import UNIEVAL_VERSION
-from .contracts.unieval_error import UnievalError
-from .contracts.unieval_result import UnievalModelIdentity
-from .contracts.unieval_settings import UnievalSettings
-from .contracts.unieval_worker_message import (
+from hhem_evaluator.contracts.unieval_contract import UNIEVAL_VERSION
+from hhem_evaluator.contracts.unieval_error import UnievalError
+from hhem_evaluator.contracts.unieval_result import UnievalModelIdentity
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from hhem_evaluator.contracts.unieval_worker_message import (
     UnievalBootstrap,
     UnievalCommand,
     UnievalReady,
     UnievalReply,
     UnievalStartupFailed,
 )
-from .contracts.worker_identity import WorkerIdentity
-from .exchange_packets import JSON_ESCAPE_MAX_BYTES, ByteChannel
-from .fail_unieval import UnievalFailure
-from .unieval_worker import run_unieval_worker
+from hhem_evaluator.contracts.worker_identity import WorkerIdentity
+from hhem_evaluator.fail_unieval import UnievalFailure
+from hhem_evaluator.shared.exchange_packets import JSON_ESCAPE_MAX_BYTES, ByteChannel
+from hhem_evaluator.unieval_worker import run_unieval_worker
 
 
 class UnievalSupervisor:

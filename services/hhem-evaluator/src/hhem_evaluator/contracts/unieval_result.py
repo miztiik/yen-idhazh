@@ -4,7 +4,11 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from .base import (
+from hhem_evaluator.contracts.unieval_contract import DIMENSIONS, UnievalContract, UnievalVersion
+from hhem_evaluator.contracts.unieval_error import UnievalError, UnievalErrorCode
+from hhem_evaluator.contracts.unieval_request import EffectiveUnievalControls
+from hhem_evaluator.contracts.worker_identity import WorkerIdentity
+from hhem_evaluator.shared.contracts.base import (
     CommitId,
     Count,
     Milliseconds,
@@ -15,10 +19,6 @@ from .base import (
     Sha256,
     Uuid4,
 )
-from .unieval_contract import DIMENSIONS, UnievalContract, UnievalVersion
-from .unieval_error import UnievalError, UnievalErrorCode
-from .unieval_request import EffectiveUnievalControls
-from .worker_identity import WorkerIdentity
 
 
 class UnievalRuntimeVersions(UnievalContract):

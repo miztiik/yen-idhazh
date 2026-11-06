@@ -13,7 +13,7 @@ from summary_eval_pipeline.services import CONTROL_PACKET_CAPACITY, OwnedService
 from summary_eval_pipeline.settings import load_pipeline_settings
 
 from hhem_evaluator.api_settings import load_api_settings
-from hhem_evaluator.contracts.service_settings import StartupContext
+from hhem_evaluator.shared.contracts.service_settings import StartupContext
 
 from .contract_examples import REPOSITORY, REQUEST_ID
 from .generation_cases import example_run

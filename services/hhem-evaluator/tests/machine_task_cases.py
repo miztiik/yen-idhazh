@@ -14,8 +14,8 @@ from summary_eval_pipeline.control import StartupPacket
 from summary_eval_pipeline.model_selection import select_model, stage_configuration
 from summary_eval_pipeline.settings import PipelineSettings, load_pipeline_settings
 
-from hhem_evaluator.contracts.service_settings import StartupContext
-from hhem_evaluator.resolve_ids import create_execution_id
+from hhem_evaluator.shared.contracts.service_settings import StartupContext
+from hhem_evaluator.shared.create_execution_id import create_execution_id
 
 from .contract_examples import REPOSITORY
 from .test_host_profile_reader_parity import required_bun

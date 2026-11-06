@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from hhem_evaluator.contracts.base import Count, Milliseconds, NativeContract
+from hhem_evaluator.shared.contracts.base import Count, Milliseconds, NativeContract
 from pydantic import AwareDatetime, ConfigDict, Field, RootModel
 
 UnavailableReason = Literal[

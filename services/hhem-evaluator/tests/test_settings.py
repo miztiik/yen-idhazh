@@ -13,9 +13,10 @@ from hhem_evaluator.api_settings import ApiSettingsLoadError, load_api_settings
 from hhem_evaluator.contracts.api_settings import ApiSettings
 from hhem_evaluator.contracts.error_detail import project_request_error
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
-from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
+from hhem_evaluator.contracts.service_settings import ServiceSettings
 from hhem_evaluator.load_settings import SettingsLoadError, load_settings
 from hhem_evaluator.resolve_request import RequestResolutionError, resolve_request
+from hhem_evaluator.shared.contracts.service_settings import StartupContext
 
 from .contract_examples import API_SETTINGS_FILE, REPOSITORY, SETTINGS_FILE, read_contract
 
@@ -70,7 +71,7 @@ def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model
             "import importlib.util; import io; import sys; "
             "from pathlib import Path; "
             "from hhem_evaluator.api_settings import load_api_settings; "
-            "from hhem_evaluator.emit_events import EventWriter; "
+            "from hhem_evaluator.serve_http.emit_events import EventWriter; "
             "from hhem_evaluator.load_settings import load_settings; "
             "from hhem_evaluator.serve_api import create_app; "
             "assert importlib.util.find_spec('idhazh') is None; "

@@ -5,9 +5,9 @@ from typing import Self
 from pydantic import Field, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
-from .base import Count, NonblankText, PositiveCount, Uuid4
-from .evaluate_request import is_absent, omit_default
-from .unieval_contract import SourceMode, UnievalContract
+from hhem_evaluator.contracts.unieval_contract import SourceMode, UnievalContract
+from hhem_evaluator.shared.contracts.base import Count, NonblankText, PositiveCount, Uuid4
+from hhem_evaluator.shared.contracts.optional_fields import is_absent, omit_default
 
 
 class UnievalRequest(UnievalContract):

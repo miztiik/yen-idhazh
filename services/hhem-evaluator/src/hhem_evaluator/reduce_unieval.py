@@ -4,11 +4,11 @@ import hashlib
 import time
 from dataclasses import dataclass, field
 
-from .contracts.base import OutcomeStatus
-from .contracts.unieval_contract import DIMENSIONS, UNIEVAL_VERSION, Dimension
-from .contracts.unieval_error import UnievalError
-from .contracts.unieval_request import EffectiveUnievalControls, UnievalRequest
-from .contracts.unieval_result import (
+from hhem_evaluator.contracts.base import OutcomeStatus
+from hhem_evaluator.contracts.unieval_contract import DIMENSIONS, UNIEVAL_VERSION, Dimension
+from hhem_evaluator.contracts.unieval_error import UnievalError
+from hhem_evaluator.contracts.unieval_request import EffectiveUnievalControls, UnievalRequest
+from hhem_evaluator.contracts.unieval_result import (
     DimensionWork,
     UnievalModelIdentity,
     UnievalResult,
@@ -16,11 +16,11 @@ from .contracts.unieval_result import (
     UnievalTimings,
     UnievalWork,
 )
-from .contracts.unieval_settings import UnievalSettings
-from .contracts.unieval_worker_message import UnievalPrediction, UnievalPrepared
-from .contracts.worker_identity import WorkerIdentity
-from .fail_unieval import UnievalFailure
-from .resolve_ids import create_execution_id
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from hhem_evaluator.contracts.unieval_worker_message import UnievalPrediction, UnievalPrepared
+from hhem_evaluator.contracts.worker_identity import WorkerIdentity
+from hhem_evaluator.fail_unieval import UnievalFailure
+from hhem_evaluator.shared.create_execution_id import create_execution_id
 
 
 @dataclass

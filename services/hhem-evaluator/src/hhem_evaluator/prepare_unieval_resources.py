@@ -8,8 +8,8 @@ from pathlib import Path
 
 import httpx
 
-from .contracts.unieval_settings import UnievalSettings
-from .load_model_assets import resolve_snapshot
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from hhem_evaluator.load_model_assets import resolve_snapshot
 
 
 def atomic_write(path: Path, data: bytes) -> None:

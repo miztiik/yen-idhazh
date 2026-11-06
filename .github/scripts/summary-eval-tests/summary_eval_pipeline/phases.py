@@ -12,12 +12,13 @@ import httpx
 from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.contracts.api_settings import ApiSettings
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
-from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
+from hhem_evaluator.contracts.service_settings import ServiceSettings
 from hhem_evaluator.contracts.unieval_request import UnievalRequest
 from hhem_evaluator.contracts.unieval_settings import UnievalSettings
 from hhem_evaluator.load_settings import load_settings
 from hhem_evaluator.load_unieval_settings import load_unieval_settings
-from hhem_evaluator.resolve_ids import create_execution_id
+from hhem_evaluator.shared.contracts.service_settings import StartupContext
+from hhem_evaluator.shared.create_execution_id import create_execution_id
 
 from .contracts import (
     WORKFLOW_VERSION,

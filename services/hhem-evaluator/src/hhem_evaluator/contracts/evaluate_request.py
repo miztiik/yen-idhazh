@@ -3,19 +3,16 @@
 from typing import Self
 
 from pydantic import Field, StrictBool, field_validator, model_validator
-from pydantic.json_schema import JsonSchemaValue, SkipJsonSchema
+from pydantic.json_schema import SkipJsonSchema
 
-from .base import Count, NativeContract, NonblankText, PositiveCount, Uuid4
-
-
-def is_absent(value: object) -> bool:
-    """Omit the internal marker for a field the caller did not supply."""
-    return value is None
-
-
-def omit_default(schema: JsonSchemaValue) -> None:
-    """Do not advertise the internal omission marker as a valid input default."""
-    schema.pop("default", None)
+from hhem_evaluator.shared.contracts.base import (
+    Count,
+    NativeContract,
+    NonblankText,
+    PositiveCount,
+    Uuid4,
+)
+from hhem_evaluator.shared.contracts.optional_fields import is_absent, omit_default
 
 
 class EvaluateRequest(NativeContract):

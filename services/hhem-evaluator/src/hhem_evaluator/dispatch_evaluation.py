@@ -6,32 +6,31 @@ import time
 from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
-from starlette.types import Receive, Scope, Send
 
-from .contracts.error_detail import ERROR_POLICIES, ErrorDetail, project_request_error
-from .contracts.evaluate_request import EvaluateRequest
-from .contracts.evaluation_event import EventDetails
-from .control_service import EvaluationController
-from .emit_events import EventEmitter
-from .fail_evaluation import EvaluationFailure
-from .plan_windows import plan_windows
-from .queue_evaluations import Reservation
-from .read_request_body import ClientDisconnected, read_request_body, wait_for_disconnect
-from .resolve_ids import resolve_ids
-from .resolve_request import RequestResolutionError, resolve_request
-from .score_windows import EvaluationState
-
-
-class DisconnectedResponse(Response):
-    """Send no HTTP status or body after an observed ASGI disconnect."""
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        return
+from hhem_evaluator.contracts.error_detail import ErrorDetail, project_request_error
+from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
+from hhem_evaluator.contracts.evaluation_event import EventDetails
+from hhem_evaluator.control_service import EvaluationController
+from hhem_evaluator.emit_events import EventEmitter
+from hhem_evaluator.fail_evaluation import EvaluationFailure
+from hhem_evaluator.plan_windows import plan_windows
+from hhem_evaluator.queue_evaluations import Reservation
+from hhem_evaluator.read_request_body import (
+    ClientDisconnected,
+    read_request_body,
+    wait_for_disconnect,
+)
+from hhem_evaluator.resolve_ids import resolve_ids
+from hhem_evaluator.resolve_request import RequestResolutionError, resolve_request
+from hhem_evaluator.score_windows import EvaluationState
+from hhem_evaluator.shared.contracts.error_policy import ERROR_POLICIES
+from hhem_evaluator.shared.disconnected_response import DisconnectedResponse
+from hhem_evaluator.shared.fail_runtime import RuntimeFailure
 
 
 def new_attempt(controller: EvaluationController) -> EvaluationState:
     return EvaluationState(
-        emitter=EventEmitter(controller.writer, controller.context),
+        emitter=EventEmitter(controller.writer, controller.context, controller.settings.logging),
         received_at=time.monotonic(),
     )
 
@@ -138,6 +137,8 @@ async def dispatch_evaluation(
             gone = True
         except EvaluationFailure as failure:
             state.errors.append(failure.error)
+        except RuntimeFailure as failure:
+            state.errors.append(ErrorDetail.from_code(failure.code, "request"))
         except asyncio.CancelledError:
             if work is not None:
                 await cancel_work(controller, state, reservation, work)

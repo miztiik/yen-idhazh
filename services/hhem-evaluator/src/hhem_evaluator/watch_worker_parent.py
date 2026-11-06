@@ -6,9 +6,8 @@ import signal
 import sys
 from typing import Final
 
-from .contracts.error_detail import ErrorDetail
-from .exchange_packets import ByteChannel
-from .fail_evaluation import EvaluationFailure
+from hhem_evaluator.shared.exchange_packets import ByteChannel
+from hhem_evaluator.shared.fail_runtime import RuntimeFailure
 
 # Linux assigns this operation in its process-control ABI.
 PR_SET_PDEATHSIG: Final = 1
@@ -21,7 +20,7 @@ def arm_parent_exit() -> None:
 
     parent = multiprocessing.parent_process()
     if parent is None:
-        raise EvaluationFailure(ErrorDetail.from_code("INTERNAL_ERROR", "worker"))
+        raise RuntimeFailure("INTERNAL_ERROR")
     library = ctypes.CDLL(None, use_errno=True)
     library.prctl.argtypes = [
         ctypes.c_int,
@@ -32,7 +31,7 @@ def arm_parent_exit() -> None:
     ]
     library.prctl.restype = ctypes.c_int
     if library.prctl(PR_SET_PDEATHSIG, signal.SIGKILL, 0, 0, 0) != 0:
-        raise EvaluationFailure(ErrorDetail.from_code("INTERNAL_ERROR", "worker"))
+        raise RuntimeFailure("INTERNAL_ERROR")
     if os.getppid() != parent.pid:
         os._exit(0)
 

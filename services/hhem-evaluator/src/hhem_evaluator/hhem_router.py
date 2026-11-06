@@ -4,12 +4,12 @@ from fastapi import APIRouter
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from .contracts.base import EVALUATE_PATH, HHEM_HEALTH_PATH
-from .contracts.evaluate_request import EvaluateRequest
-from .contracts.evaluation_result import EvaluationResult
-from .contracts.service_health import ServiceHealth
-from .control_service import EvaluationController
-from .dispatch_evaluation import dispatch_evaluation
+from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
+from hhem_evaluator.contracts.evaluation_result import EvaluationResult
+from hhem_evaluator.contracts.service_health import ServiceHealth
+from hhem_evaluator.control_service import EvaluationController
+from hhem_evaluator.dispatch_evaluation import dispatch_evaluation
+from hhem_evaluator.shared.contracts.api_paths import EVALUATE_PATH, HHEM_HEALTH_PATH
 
 
 def create_hhem_router(controller: EvaluationController) -> APIRouter:

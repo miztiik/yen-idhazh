@@ -18,8 +18,8 @@ from summary_eval_pipeline.phase_result import build_evidence
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_eval_pipeline.storage import read_result, write_result
 
-from hhem_evaluator.contracts.base import EVALUATE_PATH
 from hhem_evaluator.load_unieval_resources import load_unieval_resources
+from hhem_evaluator.shared.contracts.api_paths import EVALUATE_PATH
 from hhem_evaluator.unieval_router import UNIEVAL_PATH
 
 from .contract_examples import REPOSITORY

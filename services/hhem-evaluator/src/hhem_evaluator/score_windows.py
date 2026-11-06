@@ -4,25 +4,25 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 
-from .contracts.base import SCHEMA_VERSION, Comparison, OutcomeStatus
-from .contracts.error_detail import ErrorDetail
-from .contracts.evaluate_request import EffectiveSettings, EvaluateRequest
-from .contracts.evaluation_event import EventDetails
-from .contracts.evaluation_progress import (
+from hhem_evaluator.contracts.base import SCHEMA_VERSION, Comparison, OutcomeStatus
+from hhem_evaluator.contracts.error_detail import ErrorDetail
+from hhem_evaluator.contracts.evaluate_request import EffectiveSettings, EvaluateRequest
+from hhem_evaluator.contracts.evaluation_event import EventDetails
+from hhem_evaluator.contracts.evaluation_progress import (
     EvaluationTimings,
     EvaluationWindows,
     WindowCounts,
     WindowDetail,
     WindowDetails,
 )
-from .contracts.evaluation_result import EvaluationResult
-from .contracts.model_identity import ModelIdentity
-from .contracts.worker_identity import WorkerIdentity
-from .contracts.worker_message import ScoreWindow
-from .emit_events import EventEmitter
-from .fail_evaluation import EvaluationFailure
-from .maintain_worker import WorkerSupervisor
-from .plan_windows import WordWindow
+from hhem_evaluator.contracts.evaluation_result import EvaluationResult
+from hhem_evaluator.contracts.model_identity import ModelIdentity
+from hhem_evaluator.contracts.worker_identity import WorkerIdentity
+from hhem_evaluator.contracts.worker_message import ScoreWindow
+from hhem_evaluator.emit_events import EventEmitter
+from hhem_evaluator.fail_evaluation import EvaluationFailure
+from hhem_evaluator.maintain_worker import WorkerSupervisor
+from hhem_evaluator.plan_windows import WordWindow
 
 
 @dataclass

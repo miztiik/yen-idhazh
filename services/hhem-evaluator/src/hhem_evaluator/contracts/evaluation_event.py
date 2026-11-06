@@ -6,25 +6,23 @@ from typing import Literal, Self
 from pydantic import AwareDatetime, Field, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
-from ..resolve_ids import create_event_id
-from .base import (
+from hhem_evaluator.contracts.base import Operation, OutcomeStatus, SchemaVersion
+from hhem_evaluator.contracts.error_detail import ErrorDetail
+from hhem_evaluator.contracts.model_identity import ModelIdentity
+from hhem_evaluator.contracts.worker_identity import WorkerIdentity
+from hhem_evaluator.resolve_ids import create_event_id
+from hhem_evaluator.shared.contracts.base import (
     ContextIdentity,
     Count,
     Milliseconds,
     NativeContract,
-    Operation,
-    OutcomeStatus,
     PositiveCount,
-    SchemaVersion,
     Score,
     ServiceStatus,
     Uuid4,
     Uuid5,
 )
-from .error_detail import ErrorDetail
-from .evaluate_request import is_absent, omit_default
-from .model_identity import ModelIdentity
-from .worker_identity import WorkerIdentity
+from hhem_evaluator.shared.contracts.optional_fields import is_absent, omit_default
 
 
 class EventDetails(NativeContract):

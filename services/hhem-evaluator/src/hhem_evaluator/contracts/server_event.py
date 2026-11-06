@@ -5,11 +5,11 @@ from typing import Literal, Self
 
 from pydantic import AwareDatetime, Field, model_validator
 
-from ..resolve_ids import create_execution_id
-from .base import Uuid4, Uuid5
-from .evaluation_event import EvaluationEvent
-from .lifecycle_fields import LifecycleFields
-from .server_contract import ServerContract
+from hhem_evaluator.contracts.evaluation_event import EvaluationEvent
+from hhem_evaluator.contracts.lifecycle_fields import LifecycleFields
+from hhem_evaluator.contracts.server_contract import ServerContract
+from hhem_evaluator.shared.contracts.base import Uuid4, Uuid5
+from hhem_evaluator.shared.create_execution_id import create_execution_id
 
 DiagnosticComponent = Literal["api", "unieval", "log"]
 

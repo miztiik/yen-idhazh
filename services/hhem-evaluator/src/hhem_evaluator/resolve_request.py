@@ -2,9 +2,9 @@
 
 from pydantic import ValidationError
 
-from .contracts.error_detail import ErrorDetail, ErrorField
-from .contracts.evaluate_request import EffectiveSettings, EvaluateRequest
-from .contracts.service_settings import ServiceSettings
+from hhem_evaluator.contracts.error_detail import ErrorDetail, ErrorField
+from hhem_evaluator.contracts.evaluate_request import EffectiveSettings, EvaluateRequest
+from hhem_evaluator.contracts.service_settings import ServiceSettings
 
 
 class RequestResolutionError(ValueError):

@@ -1,6 +1,6 @@
 """How does a UniEval failure retain only its declared body-free error?"""
 
-from .contracts.unieval_error import UnievalError
+from hhem_evaluator.contracts.unieval_error import UnievalError
 
 
 class UnievalFailure(Exception):

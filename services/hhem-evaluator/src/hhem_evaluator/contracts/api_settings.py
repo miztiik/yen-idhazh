@@ -4,9 +4,9 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from .base import PositiveCount, RelativePath
-from .server_contract import ServerContract, ServerSchemaVersion
-from .service_settings import ListenerSettings, LoggingSettings
+from hhem_evaluator.contracts.server_contract import ServerContract, ServerSchemaVersion
+from hhem_evaluator.shared.contracts.base import PositiveCount, RelativePath
+from hhem_evaluator.shared.contracts.service_settings import ListenerSettings, LoggingSettings
 
 ApiComponent = Literal["hhem", "unieval"]
 

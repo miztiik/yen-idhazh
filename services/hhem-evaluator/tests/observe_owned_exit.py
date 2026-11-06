@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from hhem_evaluator.contracts.base import SCHEMA_VERSION
 from hhem_evaluator.contracts.service_settings import ServiceSettings
 from hhem_evaluator.contracts.worker_message import ScoreWindow
-from hhem_evaluator.exchange_packets import ByteChannel
-from hhem_evaluator.resolve_ids import create_execution_id
+from hhem_evaluator.shared.create_execution_id import create_execution_id
+from hhem_evaluator.shared.exchange_packets import ByteChannel
 
 from .contract_examples import REPOSITORY
 from .replay_predictions import Scenario, read_recordings

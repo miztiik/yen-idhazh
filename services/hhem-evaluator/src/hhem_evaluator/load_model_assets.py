@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from .contracts.service_settings import ModelAssetSettings
+from hhem_evaluator.shared.contracts.service_settings import ModelAssetSettings
 
 
 def resolve_snapshot(selection: ModelAssetSettings, cache: Path, *, local_only: bool) -> Path:

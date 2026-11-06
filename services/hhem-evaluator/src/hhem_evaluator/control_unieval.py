@@ -2,25 +2,25 @@
 
 import asyncio
 import time
+from collections.abc import Callable
 from pathlib import Path
 
-from .contracts.server_event import ApiDiagnosticData
-from .contracts.unieval_contract import UNIEVAL_VERSION
-from .contracts.unieval_error import UnievalError, UnievalErrorCode
-from .contracts.unieval_result import UnievalHealth
-from .contracts.unieval_settings import UnievalSettings
-from .contracts.unieval_worker_message import (
+from hhem_evaluator.contracts.lifecycle_fields import LifecycleFields
+from hhem_evaluator.contracts.unieval_contract import UNIEVAL_VERSION
+from hhem_evaluator.contracts.unieval_error import UnievalError, UnievalErrorCode
+from hhem_evaluator.contracts.unieval_result import UnievalHealth
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from hhem_evaluator.contracts.unieval_worker_message import (
     UnievalCommand,
     UnievalFinished,
     UnievalPrediction,
     UnievalPrepared,
 )
-from .emit_events import EventWriter
-from .fail_evaluation import EvaluationFailure
-from .fail_unieval import UnievalFailure
-from .maintain_unieval_worker import UnievalSupervisor
-from .queue_evaluations import EvaluationQueue, Reservation
-from .reduce_unieval import UnievalState
+from hhem_evaluator.fail_unieval import UnievalFailure
+from hhem_evaluator.maintain_unieval_worker import UnievalSupervisor
+from hhem_evaluator.queue_evaluations import EvaluationQueue, Reservation
+from hhem_evaluator.reduce_unieval import UnievalState
+from hhem_evaluator.shared.fail_runtime import RuntimeFailure
 
 
 class UnievalController:
@@ -28,12 +28,12 @@ class UnievalController:
         self,
         settings: UnievalSettings,
         root: Path,
-        writer: EventWriter,
+        writer: Callable[[LifecycleFields], None],
         service_instance_id: str,
         *,
         supervisor: UnievalSupervisor | None = None,
     ) -> None:
-        self.settings, self.writer = settings, writer
+        self.settings, self.diagnostic = settings, writer
         self.worker = supervisor or UnievalSupervisor(settings, root)
         self.queue = EvaluationQueue(settings.queue)
         self.instance_id = service_instance_id
@@ -60,9 +60,7 @@ class UnievalController:
         )
 
     async def start(self) -> None:
-        self.writer.diagnostic(
-            ApiDiagnosticData(component="unieval", action="started", level="INFO")
-        )
+        self.diagnostic(LifecycleFields(action="started", level="INFO"))
         self.loading_task = asyncio.create_task(self._load())
 
     async def _load(self) -> None:
@@ -71,37 +69,34 @@ class UnievalController:
             self.status = "ready"
             self.queue.ready = True
             self.queue.promote()
-            self.writer.diagnostic(
-                ApiDiagnosticData(component="unieval", action="ready", level="INFO")
-            )
-        except (UnievalFailure, EvaluationFailure) as failure:
+            self.diagnostic(LifecycleFields(action="ready", level="INFO"))
+        except (UnievalFailure, RuntimeFailure) as failure:
             self.queue.ready = False
-            self.failure_code, self.status = failure.error.code, "failed"
+            code = failure.error.code if isinstance(failure, UnievalFailure) else failure.code
+            self.failure_code, self.status = code, "failed"
             try:
-                self.writer.diagnostic(
-                    ApiDiagnosticData(
-                        component="unieval",
+                self.diagnostic(
+                    LifecycleFields(
                         action="failed",
                         level="ERROR",
-                        code=failure.error.code,
+                        code=code,
                     )
                 )
-            except EvaluationFailure:
+            except RuntimeFailure:
                 self.failure_code = "LOGGING_FAILED"
             try:
                 await self._stop_worker()
             except UnievalFailure as cleanup:
                 self.failure_code = cleanup.error.code
                 try:
-                    self.writer.diagnostic(
-                        ApiDiagnosticData(
-                            component="unieval",
+                    self.diagnostic(
+                        LifecycleFields(
                             action="failed",
                             level="ERROR",
                             code=cleanup.error.code,
                         )
                     )
-                except EvaluationFailure:
+                except RuntimeFailure:
                     self.failure_code = "LOGGING_FAILED"
 
     async def reserve(self, state: UnievalState) -> Reservation:
@@ -112,7 +107,10 @@ class UnievalController:
             if self.failure_code in ("WORKER_EXITED", "WORKER_STOP_FAILED"):
                 raise UnievalFailure(UnievalError.from_code(self.failure_code))
             raise UnievalFailure(UnievalError.from_code("WORKER_NOT_READY"))
-        return self.queue.reserve(state.execution_id)
+        try:
+            return self.queue.reserve(state.execution_id)
+        except RuntimeFailure as failure:
+            raise UnievalFailure(UnievalError.from_code(failure.code)) from None
 
     async def _observe_worker_exit(self) -> None:
         if self.status != "ready":
@@ -129,12 +127,8 @@ class UnievalController:
         except UnievalFailure as failure:
             self.failure_code = failure.error.code
         try:
-            self.writer.diagnostic(
-                ApiDiagnosticData(
-                    component="unieval", action="failed", level="ERROR", code=self.failure_code
-                )
-            )
-        except EvaluationFailure:
+            self.diagnostic(LifecycleFields(action="failed", level="ERROR", code=self.failure_code))
+        except RuntimeFailure:
             self.failure_code = "LOGGING_FAILED"
 
     async def _stop_worker(self) -> None:
@@ -147,7 +141,10 @@ class UnievalController:
         await asyncio.shield(self.stop_task)
 
     async def process(self, state: UnievalState, reservation: Reservation) -> None:
-        await self.queue.wait(reservation)
+        try:
+            await self.queue.wait(reservation)
+        except RuntimeFailure as failure:
+            raise UnievalFailure(UnievalError.from_code(failure.code)) from None
         if state.request is None or reservation.promoted_at is None:
             raise UnievalFailure(UnievalError.from_code("INTERNAL_ERROR"))
         self.active_task = asyncio.current_task()
@@ -225,6 +222,4 @@ class UnievalController:
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
             await self._stop_worker()
-        self.writer.diagnostic(
-            ApiDiagnosticData(component="unieval", action="stopped", level="INFO")
-        )
+        self.diagnostic(LifecycleFields(action="stopped", level="INFO"))

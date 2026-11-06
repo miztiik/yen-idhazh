@@ -4,8 +4,17 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from .base import CommitId, ContextIdentity, NonblankText, PositiveCount, RelativePath, Sha256
-from .service_settings import (
+from hhem_evaluator.contracts.unieval_contract import UnievalContract, UnievalVersion
+from hhem_evaluator.contracts.unieval_request import UnievalControls
+from hhem_evaluator.shared.contracts.base import (
+    CommitId,
+    ContextIdentity,
+    NonblankText,
+    PositiveCount,
+    RelativePath,
+    Sha256,
+)
+from hhem_evaluator.shared.contracts.service_settings import (
     EvaluationSettings,
     ListenerSettings,
     LoggingSettings,
@@ -13,8 +22,6 @@ from .service_settings import (
     QueueSettings,
     WorkerSettings,
 )
-from .unieval_contract import UnievalContract, UnievalVersion
-from .unieval_request import UnievalControls
 
 
 class SentenceResources(UnievalContract):

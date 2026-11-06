@@ -15,11 +15,11 @@ from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.configure_server import create_server_config, report_startup_failure
 from hhem_evaluator.contracts.api_settings import ApiSettings
 from hhem_evaluator.contracts.server_event import ApiDiagnosticData
-from hhem_evaluator.emit_events import EventWriter
 from hhem_evaluator.load_settings import load_settings
 from hhem_evaluator.load_unieval_settings import load_unieval_settings
 from hhem_evaluator.run_server import has_clean_lifespan
 from hhem_evaluator.serve_api import create_app
+from hhem_evaluator.serve_http.emit_events import EventWriter
 
 from .channels import OwnedChannels, open_owned_channels
 from .contracts import WORKFLOW_VERSION

@@ -4,9 +4,9 @@ import asyncio
 
 import pytest
 
-from hhem_evaluator.contracts.base import API_HEALTH_PATH
 from hhem_evaluator.contracts.unieval_result import UnievalResult
 from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from hhem_evaluator.shared.contracts.api_paths import API_HEALTH_PATH
 from hhem_evaluator.unieval_router import UNIEVAL_PATH
 
 from .unieval_cases import (

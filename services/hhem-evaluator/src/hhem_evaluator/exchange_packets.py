@@ -1,31 +1,23 @@
 """How are native worker packets bounded and encoded without object pickle?"""
 
 import sys
-from typing import Protocol
 
-from .contracts.base import SCHEMA_VERSION
-from .contracts.error_detail import ERROR_POLICIES, ErrorDetail
-from .contracts.model_identity import ModelIdentity, RuntimeVersions
-from .contracts.worker_identity import WorkerIdentity
-from .contracts.worker_message import (
+from hhem_evaluator.contracts.base import SCHEMA_VERSION
+from hhem_evaluator.contracts.error_detail import ErrorDetail
+from hhem_evaluator.contracts.model_identity import ModelIdentity, RuntimeVersions
+from hhem_evaluator.contracts.worker_identity import WorkerIdentity
+from hhem_evaluator.contracts.worker_message import (
     ScoreWindow,
     WindowOutcome,
     WorkerBootstrap,
     WorkerReady,
 )
-
-# These are maximum lengths of the existing wire-format strings, not runtime knobs.
-RUNTIME_VERSION_MAX_CHARS = 128
-JSON_ESCAPE_MAX_BYTES = 6
-UUID4_EXAMPLE = "00000000-0000-4000-8000-000000000000"
-
-
-class ByteChannel(Protocol):
-    """Share only the byte operations implemented by POSIX and Windows pipes."""
-
-    def send_bytes(self, buf: bytes) -> None: ...
-    def recv_bytes(self, maxlength: int | None = None) -> bytes: ...
-    def close(self) -> None: ...
+from hhem_evaluator.shared.contracts.error_policy import ERROR_POLICIES
+from hhem_evaluator.shared.exchange_packets import (
+    JSON_ESCAPE_MAX_BYTES,
+    RUNTIME_VERSION_MAX_CHARS,
+    UUID4_EXAMPLE,
+)
 
 
 def command_byte_limit(bootstrap: WorkerBootstrap, generation: int) -> int:

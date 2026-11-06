@@ -4,9 +4,9 @@ import json
 import os
 from pathlib import Path
 
-from hhem_evaluator.contracts.base import NativeContract, NonblankText
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.unieval_request import UnievalRequest
+from hhem_evaluator.shared.contracts.base import NativeContract, NonblankText
 from pydantic import ValidationError
 
 from .failures import WorkflowError

@@ -7,10 +7,10 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
-from .contracts.base import SCHEMA_VERSION
-from .contracts.error_detail import ErrorDetail
-from .contracts.service_settings import ServiceSettings
-from .contracts.worker_message import (
+from hhem_evaluator.contracts.base import SCHEMA_VERSION
+from hhem_evaluator.contracts.error_detail import ErrorDetail
+from hhem_evaluator.contracts.service_settings import ServiceSettings
+from hhem_evaluator.contracts.worker_message import (
     ScoreWindow,
     WindowOutcome,
     WorkerBootstrap,
@@ -19,11 +19,13 @@ from .contracts.worker_message import (
     WorkerReady,
     WorkerStarted,
 )
-from .exchange_packets import ByteChannel
-from .fail_evaluation import EvaluationFailure
-from .load_model import Predictor, load_model, quiet_model_output
-from .read_process_identity import read_process_identity
-from .watch_worker_parent import arm_parent_exit, watch_parent
+from hhem_evaluator.fail_evaluation import EvaluationFailure
+from hhem_evaluator.load_model import Predictor, load_model
+from hhem_evaluator.read_process_identity import read_process_identity
+from hhem_evaluator.shared.exchange_packets import ByteChannel
+from hhem_evaluator.shared.fail_runtime import RuntimeFailure
+from hhem_evaluator.shared.quiet_model_output import quiet_model_output
+from hhem_evaluator.watch_worker_parent import arm_parent_exit, watch_parent
 
 
 class ModelLoader(Protocol):
@@ -99,13 +101,17 @@ def run_worker(
             try:
                 arm_parent_exit()
                 predictor = loader(bootstrap.settings, root, local_only=generation > 1)
-            except EvaluationFailure as failure:
+            except (EvaluationFailure, RuntimeFailure) as failure:
                 channel.send_bytes(
                     WorkerFailed(
                         version=SCHEMA_VERSION,
                         kind="worker_failed",
                         worker=worker,
-                        error=failure.error,
+                        error=(
+                            failure.error
+                            if isinstance(failure, EvaluationFailure)
+                            else ErrorDetail.from_code(failure.code, "worker")
+                        ),
                     )
                     .model_dump_json()
                     .encode("utf-8")

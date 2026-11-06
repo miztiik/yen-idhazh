@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from hhem_evaluator.contracts.base import SCHEMA_VERSION, NativeContract
+from hhem_evaluator.contracts.base import SCHEMA_VERSION
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.evaluation_event import EvaluationEvent, EventDetails
 from hhem_evaluator.contracts.evaluation_progress import (
@@ -20,6 +20,7 @@ from hhem_evaluator.contracts.worker_message import ScoreWindow, WindowOutcome
 from hhem_evaluator.load_settings import load_settings
 from hhem_evaluator.resolve_ids import create_event_id
 from hhem_evaluator.resolve_request import resolve_request
+from hhem_evaluator.shared.contracts.base import NativeContract
 
 REPOSITORY = Path(__file__).resolve().parents[3]
 SETTINGS_FILE = REPOSITORY / "config" / "hhem-evaluator" / "settings.json"

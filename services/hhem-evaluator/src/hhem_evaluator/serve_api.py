@@ -9,23 +9,24 @@ from pathlib import Path
 from fastapi import FastAPI
 from starlette.responses import JSONResponse
 
-from .contracts.api_health import ApiHealth, DisabledEvaluatorHealth
-from .contracts.api_settings import ApiSettings
-from .contracts.base import API_HEALTH_PATH, API_SCHEMA_PATH
-from .contracts.server_contract import SERVER_SCHEMA_VERSION
-from .contracts.server_event import ApiDiagnosticData
-from .contracts.service_settings import ServiceSettings, StartupContext
-from .contracts.unieval_settings import UnievalSettings
-from .control_service import EvaluationController
-from .control_unieval import UnievalController
-from .emit_events import EventWriter
-from .guard_local_requests import GuardLocalRequests
-from .hhem_router import create_hhem_router
-from .load_unieval_settings import load_unieval_settings
-from .maintain_unieval_worker import UnievalSupervisor
-from .maintain_worker import WorkerSupervisor
-from .resolve_ids import create_execution_id
-from .unieval_router import create_unieval_router
+from hhem_evaluator.contracts.api_health import ApiHealth, DisabledEvaluatorHealth
+from hhem_evaluator.contracts.api_settings import ApiSettings
+from hhem_evaluator.contracts.server_contract import SERVER_SCHEMA_VERSION
+from hhem_evaluator.contracts.server_event import ApiDiagnosticData
+from hhem_evaluator.contracts.service_settings import ServiceSettings
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from hhem_evaluator.control_service import EvaluationController
+from hhem_evaluator.control_unieval import UnievalController
+from hhem_evaluator.guard_local_requests import GuardLocalRequests
+from hhem_evaluator.hhem_router import create_hhem_router
+from hhem_evaluator.load_unieval_settings import load_unieval_settings
+from hhem_evaluator.maintain_unieval_worker import UnievalSupervisor
+from hhem_evaluator.maintain_worker import WorkerSupervisor
+from hhem_evaluator.serve_http.emit_events import EventWriter
+from hhem_evaluator.shared.contracts.api_paths import API_HEALTH_PATH, API_SCHEMA_PATH
+from hhem_evaluator.shared.contracts.service_settings import StartupContext
+from hhem_evaluator.shared.create_execution_id import create_execution_id
+from hhem_evaluator.unieval_router import create_unieval_router
 
 
 def create_app(
@@ -59,7 +60,7 @@ def create_app(
     )
     controller = (
         EvaluationController(
-            settings, context or StartupContext(), root, supervisor=supervisor, writer=events
+            settings, context or StartupContext(), root, supervisor=supervisor, writer=events.write
         )
         if "hhem" in api.enabled_routes and settings is not None
         else None
@@ -75,7 +76,11 @@ def create_app(
         ):
             raise ValueError("UniEval must use the shared listener, logging and shutdown bounds")
         unieval = UnievalController(
-            selected_unieval, root, events, instance_id, supervisor=unieval_supervisor
+            selected_unieval,
+            root,
+            events.unieval_diagnostic,
+            instance_id,
+            supervisor=unieval_supervisor,
         )
     started_at = time.monotonic()
 

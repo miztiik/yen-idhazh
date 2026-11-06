@@ -4,9 +4,9 @@ from typing import Literal, Self
 
 from pydantic import model_validator
 
-from .base import Count
-from .error_detail import ERROR_POLICIES, ErrorCode, ErrorPolicy
-from .unieval_contract import Dimension, UnievalContract
+from hhem_evaluator.contracts.unieval_contract import Dimension, UnievalContract
+from hhem_evaluator.shared.contracts.base import Count
+from hhem_evaluator.shared.contracts.error_policy import ERROR_POLICIES, ErrorCode, ErrorPolicy
 
 UnievalErrorCode = (
     ErrorCode

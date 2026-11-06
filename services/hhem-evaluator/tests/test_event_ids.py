@@ -13,9 +13,9 @@ from hhem_evaluator.resolve_ids import (
     EVENT_NAMESPACE,
     create_event_id,
     create_event_seed,
-    create_execution_id,
     resolve_ids,
 )
+from hhem_evaluator.shared.create_execution_id import create_execution_id
 
 from .contract_examples import CORRELATION_ID, EXECUTION_ID, REPOSITORY, REQUEST_ID
 

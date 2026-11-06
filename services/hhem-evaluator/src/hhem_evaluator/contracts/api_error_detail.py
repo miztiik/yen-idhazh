@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import StrictInt, StrictStr
 
-from .server_contract import ServerContract
+from hhem_evaluator.contracts.server_contract import ServerContract
 
 
 class ApiErrorDetail(ServerContract):

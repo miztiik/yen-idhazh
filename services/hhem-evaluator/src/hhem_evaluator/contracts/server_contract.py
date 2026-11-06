@@ -4,7 +4,7 @@ from typing import Final, Literal
 
 from pydantic import ConfigDict
 
-from .base import NativeContract
+from hhem_evaluator.shared.contracts.base import NativeContract
 
 SERVER_SCHEMA_VERSION: Final = "2026-11-06"
 ServerSchemaVersion = Literal["2026-11-06"]

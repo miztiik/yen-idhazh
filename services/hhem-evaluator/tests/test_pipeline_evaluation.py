@@ -13,9 +13,9 @@ from summary_eval_pipeline.http import call_local_api
 from summary_eval_pipeline.phase_result import build_evidence
 from summary_eval_pipeline.settings import load_pipeline_settings
 
-from hhem_evaluator.contracts.base import EVALUATE_PATH, HHEM_HEALTH_PATH
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.service_health import ServiceHealth
+from hhem_evaluator.shared.contracts.api_paths import EVALUATE_PATH, HHEM_HEALTH_PATH
 
 from .contract_examples import CORRELATION_ID, REPOSITORY, REQUEST_ID
 from .generation_cases import example_run, handoff_case

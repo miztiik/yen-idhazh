@@ -4,9 +4,9 @@ from typing import Literal
 
 from pydantic import Field
 
-from .base import Milliseconds, RelativePath, Uuid4
-from .evaluate_request import is_absent
-from .server_contract import ServerContract
+from hhem_evaluator.contracts.server_contract import ServerContract
+from hhem_evaluator.shared.contracts.base import Milliseconds, RelativePath, Uuid4
+from hhem_evaluator.shared.contracts.optional_fields import is_absent
 
 DiagnosticAction = Literal[
     "started", "ready", "stopped", "failed", "cancelled", "unavailable", "completed"

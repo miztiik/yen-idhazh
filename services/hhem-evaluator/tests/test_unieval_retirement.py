@@ -5,9 +5,9 @@ import asyncio
 import httpx
 import pytest
 
-from hhem_evaluator.contracts.base import API_HEALTH_PATH
 from hhem_evaluator.contracts.unieval_result import UnievalResult
 from hhem_evaluator.fail_unieval import UnievalFailure
+from hhem_evaluator.shared.contracts.api_paths import API_HEALTH_PATH
 from hhem_evaluator.unieval_router import UNIEVAL_HEALTH_PATH, UNIEVAL_PATH
 
 from .unieval_cases import running_unieval

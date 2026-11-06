@@ -8,12 +8,12 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .contracts.base import SCHEMA_VERSION
-from .contracts.error_detail import ErrorDetail
-from .contracts.model_identity import ModelIdentity
-from .contracts.service_settings import ServiceSettings, StartupContext
-from .contracts.worker_identity import WorkerIdentity
-from .contracts.worker_message import (
+from hhem_evaluator.contracts.base import SCHEMA_VERSION
+from hhem_evaluator.contracts.error_detail import ErrorDetail
+from hhem_evaluator.contracts.model_identity import ModelIdentity
+from hhem_evaluator.contracts.service_settings import ServiceSettings
+from hhem_evaluator.contracts.worker_identity import WorkerIdentity
+from hhem_evaluator.contracts.worker_message import (
     FrozenAssets,
     ReplyPacket,
     ScoreWindow,
@@ -25,9 +25,11 @@ from .contracts.worker_message import (
     WorkerStarted,
     validate_window_reply,
 )
-from .exchange_packets import ByteChannel, command_byte_limit, reply_byte_limit
-from .fail_evaluation import EvaluationFailure
-from .run_worker import run_worker
+from hhem_evaluator.exchange_packets import command_byte_limit, reply_byte_limit
+from hhem_evaluator.fail_evaluation import EvaluationFailure
+from hhem_evaluator.run_worker import run_worker
+from hhem_evaluator.shared.contracts.service_settings import StartupContext
+from hhem_evaluator.shared.exchange_packets import ByteChannel
 
 
 class WorkerSupervisor:

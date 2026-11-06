@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass
 
-from .contracts.error_detail import ErrorDetail
-from .fail_evaluation import EvaluationFailure
+from hhem_evaluator.contracts.error_detail import ErrorDetail
+from hhem_evaluator.fail_evaluation import EvaluationFailure
 
 
 @dataclass(frozen=True)

@@ -1,19 +1,18 @@
 """How is the official CPU predictor loaded from named immutable local assets?"""
 
-import contextlib
 import math
 import os
 import platform
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
 
-from .contracts.error_detail import ErrorDetail
-from .contracts.model_identity import ModelIdentity, RuntimeVersions
-from .contracts.service_settings import ServiceSettings
-from .fail_evaluation import EvaluationFailure
-from .load_model_assets import resolve_snapshot
+from hhem_evaluator.contracts.error_detail import ErrorDetail
+from hhem_evaluator.contracts.model_identity import ModelIdentity, RuntimeVersions
+from hhem_evaluator.contracts.service_settings import ServiceSettings
+from hhem_evaluator.fail_evaluation import EvaluationFailure
+from hhem_evaluator.load_model_assets import resolve_snapshot
+from hhem_evaluator.shared.quiet_model_output import quiet_model_output
 
 
 class Prediction(Protocol):
@@ -31,22 +30,6 @@ class Predictor(Protocol):
     identity: ModelIdentity
 
     def score(self, source: str, summary: str) -> float: ...
-
-
-@contextlib.contextmanager
-def quiet_model_output() -> Iterator[None]:
-    """Discard untrusted native and Python diagnostics rather than forwarding them."""
-    with open(os.devnull, "w", encoding="utf-8") as sink:
-        saved = [(descriptor, os.dup(descriptor)) for descriptor in (1, 2)]
-        try:
-            for descriptor, _ in saved:
-                os.dup2(sink.fileno(), descriptor)
-            with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
-                yield
-        finally:
-            for descriptor, original in saved:
-                os.dup2(original, descriptor)
-                os.close(original)
 
 
 @dataclass

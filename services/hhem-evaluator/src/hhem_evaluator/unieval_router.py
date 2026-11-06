@@ -6,11 +6,11 @@ from fastapi import APIRouter
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from .contracts.base import API_PREFIX
-from .contracts.unieval_request import UnievalRequest
-from .contracts.unieval_result import UnievalHealth, UnievalResult
-from .control_unieval import UnievalController
-from .dispatch_unieval import dispatch_unieval
+from hhem_evaluator.contracts.unieval_request import UnievalRequest
+from hhem_evaluator.contracts.unieval_result import UnievalHealth, UnievalResult
+from hhem_evaluator.control_unieval import UnievalController
+from hhem_evaluator.dispatch_unieval import dispatch_unieval
+from hhem_evaluator.shared.contracts.api_paths import API_PREFIX
 
 # These are native protocol paths, not operator destinations.
 UNIEVAL_PATH: Final = f"{API_PREFIX}/evaluate-summary-unieval"

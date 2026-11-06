@@ -4,13 +4,13 @@ from typing import Annotated, Literal
 
 from pydantic import Field, RootModel
 
-from .base import Count, PositiveCount, Score, Uuid4
-from .unieval_contract import Dimension, UnievalContract, UnievalVersion
-from .unieval_error import UnievalError
-from .unieval_request import EffectiveUnievalControls, UnievalRequest
-from .unieval_result import UnievalModelIdentity, UnievalWork
-from .unieval_settings import UnievalSettings
-from .worker_identity import WorkerIdentity
+from hhem_evaluator.contracts.unieval_contract import Dimension, UnievalContract, UnievalVersion
+from hhem_evaluator.contracts.unieval_error import UnievalError
+from hhem_evaluator.contracts.unieval_request import EffectiveUnievalControls, UnievalRequest
+from hhem_evaluator.contracts.unieval_result import UnievalModelIdentity, UnievalWork
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from hhem_evaluator.contracts.worker_identity import WorkerIdentity
+from hhem_evaluator.shared.contracts.base import Count, PositiveCount, Score, Uuid4
 
 
 class UnievalBootstrap(UnievalContract):

@@ -11,9 +11,9 @@ from uvicorn.lifespan.on import LifespanOn
 
 from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.configure_server import create_server_config
-from hhem_evaluator.emit_events import EventWriter
 from hhem_evaluator.run_server import has_clean_lifespan, run_server
 from hhem_evaluator.serve_api import create_app
+from hhem_evaluator.serve_http.emit_events import EventWriter
 
 from .contract_examples import API_SETTINGS_FILE, REPOSITORY
 

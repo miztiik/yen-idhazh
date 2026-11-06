@@ -2,14 +2,14 @@
 
 from dataclasses import dataclass
 
-from .contracts.unieval_contract import DIMENSIONS, Dimension
-from .contracts.unieval_error import UnievalError, UnievalErrorCode
-from .contracts.unieval_request import EffectiveUnievalControls, UnievalRequest
-from .contracts.unieval_result import DimensionWork, SourceSpan, UnievalWork
-from .contracts.unieval_settings import UnievalSettings
-from .fail_unieval import UnievalFailure
-from .load_unieval_resources import UnievalResources
-from .plan_unieval_windows import plan_unieval_windows
+from hhem_evaluator.contracts.unieval_contract import DIMENSIONS, Dimension
+from hhem_evaluator.contracts.unieval_error import UnievalError, UnievalErrorCode
+from hhem_evaluator.contracts.unieval_request import EffectiveUnievalControls, UnievalRequest
+from hhem_evaluator.contracts.unieval_result import DimensionWork, SourceSpan, UnievalWork
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from hhem_evaluator.fail_unieval import UnievalFailure
+from hhem_evaluator.load_unieval_resources import UnievalResources
+from hhem_evaluator.plan_unieval_windows import plan_unieval_windows
 
 
 @dataclass(frozen=True)

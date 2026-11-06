@@ -4,10 +4,7 @@ import pytest
 
 from hhem_evaluator.contracts.unieval_contract import DIMENSIONS, UNIEVAL_VERSION
 from hhem_evaluator.contracts.unieval_result import UnievalScores
-from hhem_evaluator.contracts.unieval_worker_message import (
-    UnievalPrediction,
-    UnievalPrepared,
-)
+from hhem_evaluator.contracts.unieval_worker_message import UnievalPrediction, UnievalPrepared
 from hhem_evaluator.fail_unieval import UnievalFailure
 from hhem_evaluator.read_process_identity import read_process_identity
 from hhem_evaluator.reduce_unieval import UnievalState

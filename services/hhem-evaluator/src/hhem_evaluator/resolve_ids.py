@@ -4,10 +4,9 @@ from dataclasses import dataclass
 from typing import Final
 from uuid import NAMESPACE_DNS, uuid4, uuid5
 
-from .contracts.base import validate_uuid4
-from .contracts.evaluate_request import EvaluateRequest
+from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
+from hhem_evaluator.shared.contracts.base import validate_uuid4
 
-# The DNS namespace and name encoding are the event wire protocol.
 EVENT_NAMESPACE: Final = NAMESPACE_DNS
 
 
@@ -18,11 +17,6 @@ class EvaluationIdentity:
     execution_id: str
     request_id: str
     correlation_id: str
-
-
-def create_execution_id() -> str:
-    """Create an independent lowercase UUIDv4 before reading an HTTP attempt."""
-    return str(uuid4())
 
 
 def resolve_ids(request: EvaluateRequest, execution_id: str) -> EvaluationIdentity:

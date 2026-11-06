@@ -5,12 +5,19 @@ from typing import Self
 from pydantic import Field, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
-from .base import Delta, NativeContract, OutcomeStatus, SchemaVersion, Score, Uuid4, Uuid5
-from .error_detail import ErrorDetail
-from .evaluate_request import EffectiveSettings, is_absent, omit_default
-from .evaluation_progress import EvaluationTimings, EvaluationWindows, WindowCounts, WindowDetails
-from .model_identity import ModelIdentity
-from .worker_identity import WorkerIdentity
+from hhem_evaluator.contracts.base import OutcomeStatus, SchemaVersion
+from hhem_evaluator.contracts.error_detail import ErrorDetail
+from hhem_evaluator.contracts.evaluate_request import EffectiveSettings
+from hhem_evaluator.contracts.evaluation_progress import (
+    EvaluationTimings,
+    EvaluationWindows,
+    WindowCounts,
+    WindowDetails,
+)
+from hhem_evaluator.contracts.model_identity import ModelIdentity
+from hhem_evaluator.contracts.worker_identity import WorkerIdentity
+from hhem_evaluator.shared.contracts.base import Delta, NativeContract, Score, Uuid4, Uuid5
+from hhem_evaluator.shared.contracts.optional_fields import is_absent, omit_default
 
 
 class EvaluationResult(NativeContract):

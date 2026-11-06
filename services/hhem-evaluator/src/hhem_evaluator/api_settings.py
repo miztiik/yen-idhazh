@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .contracts.api_settings import ApiSettings
+from hhem_evaluator.contracts.api_settings import ApiSettings
 
 
 class ApiSettingsLoadError(ValueError):

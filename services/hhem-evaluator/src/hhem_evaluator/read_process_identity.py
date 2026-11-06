@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-from .contracts.worker_identity import PinUnavailableReason, WorkerIdentity
+from hhem_evaluator.contracts.worker_identity import PinUnavailableReason, WorkerIdentity
 
 
 def read_process_identity(generation: int, max_bytes: int) -> WorkerIdentity:

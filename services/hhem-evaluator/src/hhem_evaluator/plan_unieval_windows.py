@@ -2,11 +2,11 @@
 
 from bisect import bisect_right
 
-from .contracts.unieval_error import UnievalError
-from .contracts.unieval_result import SourceSpan
-from .contracts.unieval_settings import UnievalSettings
-from .fail_unieval import UnievalFailure
-from .load_unieval_resources import UnievalResources
+from hhem_evaluator.contracts.unieval_error import UnievalError
+from hhem_evaluator.contracts.unieval_result import SourceSpan
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from hhem_evaluator.fail_unieval import UnievalFailure
+from hhem_evaluator.load_unieval_resources import UnievalResources
 
 
 def plan_unieval_windows(

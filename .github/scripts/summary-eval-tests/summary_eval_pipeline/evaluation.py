@@ -6,14 +6,14 @@ import time
 import httpx
 from hhem_evaluator.contracts.api_health import ApiHealth
 from hhem_evaluator.contracts.api_settings import ApiComponent
-from hhem_evaluator.contracts.base import API_HEALTH_PATH, EVALUATE_PATH
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.service_settings import ServiceSettings
 from hhem_evaluator.contracts.unieval_request import UnievalRequest
 from hhem_evaluator.contracts.unieval_result import UnievalResult
 from hhem_evaluator.contracts.unieval_settings import UnievalSettings
-from hhem_evaluator.resolve_ids import create_execution_id
+from hhem_evaluator.shared.contracts.api_paths import API_HEALTH_PATH, EVALUATE_PATH
+from hhem_evaluator.shared.create_execution_id import create_execution_id
 from hhem_evaluator.unieval_router import UNIEVAL_PATH
 
 from .contracts import GenerationReceipt, PhaseEvidence, PipelineError, PreparedRun, text_sha256

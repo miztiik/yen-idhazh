@@ -2,12 +2,8 @@
 
 from typing import Annotated, Literal
 
-from hhem_evaluator.contracts.base import (
-    CommitId,
-    PositiveCount,
-    Uuid4,
-)
-from hhem_evaluator.contracts.service_settings import StartupContext
+from hhem_evaluator.shared.contracts.base import CommitId, PositiveCount, Uuid4
+from hhem_evaluator.shared.contracts.service_settings import StartupContext
 from pydantic import Field, RootModel
 
 from .contracts import (

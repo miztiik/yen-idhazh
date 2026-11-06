@@ -4,11 +4,11 @@ from typing import Literal, Self
 
 from pydantic import StrictBool, model_validator
 
-from .api_settings import ApiComponent
-from .base import RelativePath, Uuid4
-from .server_contract import ServerContract, ServerSchemaVersion
-from .service_health import ServiceHealth
-from .unieval_result import UnievalHealth
+from hhem_evaluator.contracts.api_settings import ApiComponent
+from hhem_evaluator.contracts.server_contract import ServerContract, ServerSchemaVersion
+from hhem_evaluator.contracts.service_health import ServiceHealth
+from hhem_evaluator.contracts.unieval_result import UnievalHealth
+from hhem_evaluator.shared.contracts.base import RelativePath, Uuid4
 
 
 class DisabledEvaluatorHealth(ServerContract):

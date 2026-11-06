@@ -3,7 +3,7 @@
 import math
 from typing import Annotated, Literal, Self
 
-from hhem_evaluator.contracts.base import Count, NonblankText
+from hhem_evaluator.shared.contracts.base import Count, NonblankText
 from pydantic import (
     AfterValidator,
     BaseModel,

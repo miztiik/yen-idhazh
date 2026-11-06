@@ -4,8 +4,8 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .contracts.api_settings import ApiSettings
-from .contracts.unieval_settings import AuthoredUnievalSettings, UnievalSettings
+from hhem_evaluator.contracts.api_settings import ApiSettings
+from hhem_evaluator.contracts.unieval_settings import AuthoredUnievalSettings, UnievalSettings
 
 
 def load_unieval_settings(root: Path, api: ApiSettings) -> UnievalSettings:

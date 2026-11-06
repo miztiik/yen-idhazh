@@ -4,7 +4,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import StringConstraints, model_validator
 
-from .base import NativeContract, PositiveCount
+from hhem_evaluator.shared.contracts.base import NativeContract, PositiveCount
 
 PinUnavailableReason = Literal[
     "unsupported_platform",

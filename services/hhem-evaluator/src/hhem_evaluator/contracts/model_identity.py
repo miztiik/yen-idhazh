@@ -4,7 +4,8 @@ from typing import Annotated
 
 from pydantic import ConfigDict, StringConstraints
 
-from .base import SCHEMA_VERSION, CommitId, ModelReference, NativeContract
+from hhem_evaluator.contracts.base import SCHEMA_VERSION
+from hhem_evaluator.shared.contracts.base import CommitId, ModelReference, NativeContract
 
 RuntimeVersion = Annotated[
     str, StringConstraints(strict=True, pattern=r"^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$")

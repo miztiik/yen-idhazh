@@ -5,12 +5,13 @@ import json
 
 import pytest
 
-from hhem_evaluator.contracts.base import EVALUATE_PATH, HHEM_HEALTH_PATH, SCHEMA_VERSION
+from hhem_evaluator.contracts.base import SCHEMA_VERSION
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.service_health import ServiceHealth
 from hhem_evaluator.contracts.worker_message import ScoreWindow
 from hhem_evaluator.fail_evaluation import EvaluationFailure
-from hhem_evaluator.resolve_ids import create_execution_id
+from hhem_evaluator.shared.contracts.api_paths import EVALUATE_PATH, HHEM_HEALTH_PATH
+from hhem_evaluator.shared.create_execution_id import create_execution_id
 
 from .contract_examples import REPOSITORY, REQUEST_ID
 from .observe_owned_exit import prove_parent_loss

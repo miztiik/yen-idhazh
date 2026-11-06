@@ -11,12 +11,13 @@ from typing import Literal
 
 from pydantic import AwareDatetime, TypeAdapter
 
-from hhem_evaluator.contracts.base import NativeContract, NonblankText, SchemaVersion, Score, Sha256
+from hhem_evaluator.contracts.base import SchemaVersion
 from hhem_evaluator.contracts.model_identity import ModelIdentity
 from hhem_evaluator.contracts.service_settings import ServiceSettings
-from hhem_evaluator.exchange_packets import ByteChannel
 from hhem_evaluator.load_model import Predictor
 from hhem_evaluator.run_worker import run_worker
+from hhem_evaluator.shared.contracts.base import NativeContract, NonblankText, Score, Sha256
+from hhem_evaluator.shared.exchange_packets import ByteChannel
 from scripts.recording_json import canonical_bytes
 
 type Action = Literal["score", "hold", "block", "crash", "invalid", "raise"]

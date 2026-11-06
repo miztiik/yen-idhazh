@@ -2,19 +2,24 @@
 
 import asyncio
 import time
+from collections.abc import Callable
 from pathlib import Path
 
-from .contracts.base import SCHEMA_VERSION, ServiceStatus
-from .contracts.error_detail import ErrorCode, ErrorDetail
-from .contracts.evaluation_event import EventDetails
-from .contracts.service_health import ServiceHealth
-from .contracts.service_settings import ServiceSettings, StartupContext
-from .emit_events import EventEmitter, EventPhase, EventWriter
-from .fail_evaluation import EvaluationFailure
-from .maintain_worker import WorkerSupervisor
-from .queue_evaluations import EvaluationQueue, Reservation
-from .resolve_ids import create_execution_id
-from .score_windows import EvaluationState, score_windows
+from hhem_evaluator.contracts.base import SCHEMA_VERSION
+from hhem_evaluator.contracts.error_detail import ErrorDetail
+from hhem_evaluator.contracts.evaluation_event import EvaluationEvent, EventDetails
+from hhem_evaluator.contracts.service_health import ServiceHealth
+from hhem_evaluator.contracts.service_settings import ServiceSettings
+from hhem_evaluator.emit_events import EventEmitter, EventPhase
+from hhem_evaluator.fail_evaluation import EvaluationFailure
+from hhem_evaluator.maintain_worker import WorkerSupervisor
+from hhem_evaluator.queue_evaluations import EvaluationQueue, Reservation
+from hhem_evaluator.score_windows import EvaluationState, score_windows
+from hhem_evaluator.shared.contracts.base import ServiceStatus
+from hhem_evaluator.shared.contracts.error_policy import ErrorCode
+from hhem_evaluator.shared.contracts.service_settings import StartupContext
+from hhem_evaluator.shared.create_execution_id import create_execution_id
+from hhem_evaluator.shared.fail_runtime import RuntimeFailure
 
 
 class EvaluationController:
@@ -27,17 +32,17 @@ class EvaluationController:
         root: Path,
         *,
         supervisor: WorkerSupervisor | None = None,
-        writer: EventWriter | None = None,
+        writer: Callable[[EvaluationEvent], None],
     ) -> None:
         self.settings = settings
         self.context = context
         self.worker = supervisor or WorkerSupervisor(settings, context, root)
-        self.writer = writer or EventWriter(settings.logging)
+        self.writer = writer
         self.queue = EvaluationQueue(settings.queue)
         self.instance_id = create_execution_id()
         self.status: ServiceStatus = "loading" if settings.enabled else "disabled"
         self.failure_code: ErrorCode | None = None
-        self.lifecycle = EventEmitter(self.writer, context)
+        self.lifecycle = EventEmitter(self.writer, context, settings.logging)
         self.maintenance_lock = asyncio.Lock()
         self.loading_task: asyncio.Task[None] | None = None
         self.active_task: asyncio.Task[object] | None = None
@@ -118,7 +123,10 @@ class EvaluationController:
             code = "WORKER_NOT_READY"
         if code is not None:
             raise EvaluationFailure(ErrorDetail.from_code(code, "request"))
-        return self.queue.reserve(state.emitter.execution_id)
+        try:
+            return self.queue.reserve(state.emitter.execution_id)
+        except RuntimeFailure as failure:
+            raise EvaluationFailure(ErrorDetail.from_code(failure.code, "queue")) from None
 
     async def process(self, state: EvaluationState, reservation: Reservation) -> None:
         cause = state.emitter.emit(
@@ -129,11 +137,10 @@ class EvaluationController:
         )
         try:
             await self.queue.wait(reservation)
-        except EvaluationFailure as failure:
-            state.emitter.emit(
-                "queue", "failed", EventDetails(errors=(failure.error,)), cause=cause
-            )
-            raise
+        except RuntimeFailure as failure:
+            error = ErrorDetail.from_code(failure.code, "queue")
+            state.emitter.emit("queue", "failed", EventDetails(errors=(error,)), cause=cause)
+            raise EvaluationFailure(error) from None
         except asyncio.CancelledError:
             state.emitter.emit("queue", "cancelled", EventDetails(), cause=cause)
             raise

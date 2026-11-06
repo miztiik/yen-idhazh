@@ -1,6 +1,6 @@
 """How does an operation propagate a closed failure without input diagnostics?"""
 
-from .contracts.error_detail import ErrorDetail
+from hhem_evaluator.contracts.error_detail import ErrorDetail
 
 
 class EvaluationFailure(Exception):

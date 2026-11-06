@@ -4,21 +4,21 @@ from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, RootModel, model_validator
 
-from .base import (
-    Comparison,
+from hhem_evaluator.contracts.base import Comparison, SchemaVersion
+from hhem_evaluator.contracts.error_detail import ErrorDetail
+from hhem_evaluator.contracts.model_identity import ModelIdentity
+from hhem_evaluator.contracts.service_settings import ServiceSettings
+from hhem_evaluator.contracts.worker_identity import WorkerIdentity
+from hhem_evaluator.shared.contracts.base import (
     Count,
     Milliseconds,
     NativeContract,
     NonblankText,
     PositiveCount,
-    SchemaVersion,
     Score,
     Uuid4,
 )
-from .error_detail import ErrorDetail
-from .model_identity import ModelIdentity
-from .service_settings import ModelAssetSettings, ServiceSettings, StartupContext
-from .worker_identity import WorkerIdentity
+from hhem_evaluator.shared.contracts.service_settings import ModelAssetSettings, StartupContext
 
 
 class FrozenAssets(NativeContract):

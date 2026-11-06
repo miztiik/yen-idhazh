@@ -5,9 +5,8 @@ import time
 from collections import deque
 from dataclasses import dataclass
 
-from .contracts.error_detail import ErrorDetail
-from .contracts.service_settings import QueueSettings
-from .fail_evaluation import EvaluationFailure
+from hhem_evaluator.shared.contracts.service_settings import QueueSettings
+from hhem_evaluator.shared.fail_runtime import RuntimeFailure
 
 
 @dataclass
@@ -37,9 +36,9 @@ class EvaluationQueue:
 
     def reserve(self, execution_id: str) -> Reservation:
         if self.closed:
-            raise EvaluationFailure(ErrorDetail.from_code("SERVICE_STOPPED", "queue"))
+            raise RuntimeFailure("SERVICE_STOPPED")
         if self.depth >= self.settings.capacity:
-            raise EvaluationFailure(ErrorDetail.from_code("QUEUE_FULL", "queue"))
+            raise RuntimeFailure("QUEUE_FULL")
         now = time.monotonic()
         reservation = Reservation(
             execution_id=execution_id,
@@ -61,7 +60,7 @@ class EvaluationQueue:
             if self.active is reservation:
                 return
             self.release(reservation)
-            raise EvaluationFailure(ErrorDetail.from_code("QUEUE_TIMEOUT", "queue")) from None
+            raise RuntimeFailure("QUEUE_TIMEOUT") from None
 
     def promote(self) -> None:
         if not self.ready or self.closed or self.active is not None:
@@ -73,9 +72,7 @@ class EvaluationQueue:
                 continue
             if time.monotonic() >= reservation.deadline:
                 del self.reservations[identity]
-                reservation.promoted.set_exception(
-                    EvaluationFailure(ErrorDetail.from_code("QUEUE_TIMEOUT", "queue"))
-                )
+                reservation.promoted.set_exception(RuntimeFailure("QUEUE_TIMEOUT"))
                 continue
             del self.reservations[identity]
             self.active = reservation

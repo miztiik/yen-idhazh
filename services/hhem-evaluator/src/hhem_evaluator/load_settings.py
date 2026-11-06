@@ -5,9 +5,9 @@ from pathlib import Path
 
 from pydantic import JsonValue, TypeAdapter, ValidationError
 
-from .api_settings import ApiSettingsLoadError, load_api_settings
-from .contracts.api_settings import ApiSettings
-from .contracts.service_settings import ServiceSettings
+from hhem_evaluator.api_settings import ApiSettingsLoadError, load_api_settings
+from hhem_evaluator.contracts.api_settings import ApiSettings
+from hhem_evaluator.contracts.service_settings import ServiceSettings
 
 
 class SettingsLoadError(ValueError):

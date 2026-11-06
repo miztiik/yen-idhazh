@@ -18,16 +18,19 @@ from summary_eval_pipeline.control import (
 from summary_eval_pipeline.serve_api import emit_control, watch_parent_lifetime
 
 from hhem_evaluator.contracts.evaluation_event import EventDetails
-from hhem_evaluator.emit_events import EventEmitter, EventWriter
+from hhem_evaluator.emit_events import EventEmitter
 from hhem_evaluator.load_settings import load_settings
-from hhem_evaluator.resolve_ids import create_execution_id
+from hhem_evaluator.serve_http.emit_events import EventWriter
+from hhem_evaluator.shared.create_execution_id import create_execution_id
 
 
 def private_output_case(packet: StartupPacket, mode: str) -> None:
     root = Path(__file__).resolve().parents[3]
     with open_owned_channels() as channels:
         settings = load_settings(root / "config" / "hhem-evaluator" / "settings.json")
-        emitter = EventEmitter(EventWriter(settings.logging, channels.events), packet.context)
+        emitter = EventEmitter(
+            EventWriter(settings.logging, channels.events).write, packet.context, settings.logging
+        )
         cause = emitter.emit("service", "started", EventDetails(status="disabled"))
         emit_control(
             ApiReady(

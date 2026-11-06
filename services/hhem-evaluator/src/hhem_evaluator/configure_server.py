@@ -8,10 +8,10 @@ from typing import TextIO
 import uvicorn
 from fastapi import FastAPI
 
-from .contracts.api_settings import ApiSettings
-from .contracts.server_event import ApiDiagnosticData, ServerEvent
-from .emit_events import JsonEventFormatter
-from .write_event_records import StrictEventHandler
+from hhem_evaluator.contracts.api_settings import ApiSettings
+from hhem_evaluator.contracts.server_event import ApiDiagnosticData, ServerEvent
+from hhem_evaluator.serve_http.emit_events import JsonEventFormatter
+from hhem_evaluator.write_event_records import StrictEventHandler
 
 
 def create_server_config(app: FastAPI, settings: ApiSettings) -> uvicorn.Config:

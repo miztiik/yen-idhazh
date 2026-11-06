@@ -17,8 +17,8 @@ from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_eval_pipeline.storage import read_result, write_result
 
 from hhem_evaluator.contracts.api_health import ApiHealth
-from hhem_evaluator.contracts.base import API_HEALTH_PATH, EVALUATE_PATH
 from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from hhem_evaluator.shared.contracts.api_paths import API_HEALTH_PATH, EVALUATE_PATH
 from hhem_evaluator.unieval_router import UNIEVAL_PATH
 
 from .contract_examples import REPOSITORY

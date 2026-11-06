@@ -4,10 +4,17 @@ from typing import Self
 
 from pydantic import model_validator
 
-from .base import Count, NativeContract, PositiveCount, SchemaVersion, ServiceStatus, Uuid4
-from .error_detail import ErrorCode
-from .model_identity import ModelIdentity
-from .worker_identity import WorkerIdentity
+from hhem_evaluator.contracts.base import SchemaVersion
+from hhem_evaluator.contracts.model_identity import ModelIdentity
+from hhem_evaluator.contracts.worker_identity import WorkerIdentity
+from hhem_evaluator.shared.contracts.base import (
+    Count,
+    NativeContract,
+    PositiveCount,
+    ServiceStatus,
+    Uuid4,
+)
+from hhem_evaluator.shared.contracts.error_policy import ErrorCode
 
 
 class ServiceHealth(NativeContract):
