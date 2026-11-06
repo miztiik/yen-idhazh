@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -64,10 +64,8 @@ nothing else. Each one resolves the names selected from `config/llm_council.json
 matching member of the tenancy protocol on the judges selected for that date,
 and files what comes back. Explicit manual selections can also run a paused
 judge as an isolated trial; [judge and date selection](llm-council-dates.md)
-owns those rules. **Until 2026-09-21 it ran one judge's four commands instead**, and
-the command router imported that judge's four stage modules at the top of the
-file - so deleting the judge broke every council verb, and the venue's whole
-runtime was one tenant's vocabulary.
+owns those rules. Judge-specific stage names and dispatch stay in the plugin
+adapter, not the council's command router.
 
 Table A - execution verbs
 
@@ -125,15 +123,6 @@ cause for a missing individual report. Valid independent work remains eligible
 for publication after ordinary judge/date failures, with unsuccessful overall
 status. Integrity failures refuse the whole publication; cancellation remains
 unsuccessful and cannot authorize publication.
-
-**Removing the imports was not the whole cut.** The four verb names also sat in
-the router's own tuple of what it accepts, in a flag's help text, and in four
-dispatch branches. A check that parses import statements goes green over a verb
-name spelled as a string, so the strings went with the imports. Measured on this
-repository: importing the router used to pull twelve of the judge's modules into
-memory and now pulls two, and both of those arrive through the digest
-pipeline's own use of the applied merge line rather than through anything the
-council runs.
 
 The validated `council-run-records` entry in `config/ledgers.json` consents to
 the Data explorer. The site build copies its three compact indexes and the
@@ -276,8 +265,7 @@ working. These policies do not import gardener or judge code into the council.
 ## The tenant list, and the judge in it
 
 `judge_names` is an ordered list of slugs in `config/llm_council.json`. It is the
-one place a judge is registered, and since 2026-09-21 it names one: the
-content-similarity judge, which declares itself in
+one place a judge is registered. The content-similarity judge declares itself in
 [../../../backend/idhazh/content_similarity_judge/tenant.py](../../../backend/idhazh/content_similarity_judge/tenant.py)
 and routes the three units of work to its own four stages. Its declaration is
 `config/judges/content-similarity-judge.json`: active, and running a model.
@@ -287,8 +275,8 @@ nothing.
 
 The council reads its own file through `CouncilConfig` and `config.load_council`.
 The shared loader also carries it as `Settings.council` and records its digest.
-The file holds the same clocks, width, repair window and floor as before.
-`config/idhazh.json` refuses a `council` block and names the new file.
+The file holds the clocks, width, repair window and date floor.
+`config/idhazh.json` refuses a `council` block and names the council file.
 
 ### Design rationale: the council owns its settings file
 
@@ -331,10 +319,9 @@ legal: the family may still serve readers and other writers.
 
 ### Design rationale: a new judge starts paused
 
-Maintainer decision, 2026-10-11: a new judge lands paused with its file and package.
-A person switches it to active in a commit whose message names the activation
-decision. The commit log is the record; no named-decision test enforces it.
-The existing content-similarity judge remains active, so its nights do not change.
+A new judge lands paused with its file and package. Activation changes its
+committed declaration, not the router or registration. No named-decision test
+enforces the change; the configuration and its history record it.
 
 For example, `summary-fidelity-judge` can be registered after its package lands:
 
@@ -351,9 +338,9 @@ Its own `config/judges/summary-fidelity-judge.json` moves through these edits:
 {"lifecycle_status": "retired", "runs_model": false}
 ```
 
-The activation commit records the person's decision. Pause again if a defect
-is found; keep all rows. On return, only nights inside the repair window can be
-judged, so a pause longer than that window leaves older nights unjudged.
+Pause again if a defect is found; keep all rows. On return, only nights inside
+the repair window can be judged, so a pause longer than that window leaves older
+nights unjudged.
 Retire when replaced; keep both registration and declaration.
 
 A slug names its package with hyphens replaced by underscores. The council
@@ -400,10 +387,9 @@ nothing.
 The content-similarity judge is what declares one today, in
 [../../../backend/idhazh/similarity/budget.py](../../../backend/idhazh/similarity/budget.py):
 its draw of pairs, at its own measured per-pair cost, against the window below.
-The number is that judge's reading, so the check is that judge's too. Until
-2026-09-21 it was a validator on `AppConfig`, which put one judge's measurement
-in the import closure of every module that reads config - the council's own
-included. Maintainer ruling, 2026-09-21.
+The number is that judge's reading, so the check is that judge's too.
+Composed application configuration must not load a judge's runtime budget
+check for callers that do not run it.
 
 ### What holds the seam open, and the three shapes that still cross
 
@@ -428,8 +414,8 @@ read; adding a council module requires adding its name to the test inputs.
 The fresh-interpreter checks in `test_session.py` cover dynamically loaded
 judge code without enumerating source files.
 
-**Three judge CONTRACTS still cross, and the list cannot grow.** Measured by a
-fresh walk on 2026-09-21: `story_similarity_pair` and
+**Three judge contracts still cross, and the list cannot grow.**
+`story_similarity_pair` and
 `fitted_similarity_threshold` arrive through
 [../../../backend/idhazh/ledger/csv_file.py](../../../backend/idhazh/ledger/csv_file.py), the one
 registry of CSV rows and the module the tenancy protocol reads its row types
@@ -437,15 +423,16 @@ from; `story_similarity_distribution` arrives through the placement knob block
 `app_config` composes, which the registry loads to ask a tenant whether it can
 finish the night. **No judge CODE is on that list and none may join it** - these
 are declarations a deleted judge would take with it, which is what makes the
-exception survivable. The maintainer agreed those three on 2026-09-21, and a second
-assertion fails the moment a fourth appears, so the exception limits itself
-rather than inviting the next one. Cutting either carrier means moving a shape
-every stage and the digest pipeline read, and that is a row of its own.
+exception survivable. `JUDGE_CONTRACTS_STILL_CROSSING` in
+`backend/tests/council/test_council_runs_without_a_judge.py` holds the exact
+set; an added or removed contract fails that check. Cutting either carrier means
+moving a shape every stage and the digest pipeline read, and that is a row of
+its own.
 
-**The empty case is the test.** With nobody registered the selection is empty, the
-plan names tonight and every job is a no-op - and every one of those steps still
-runs and is still asserted. A venue that only works once somebody has moved in is
-not a venue.
+**The empty case is the test.** With nobody active, or every active plugin
+declining, preparation finishes an empty batch and the matrix contains no
+cells. Judging jobs are skipped; collection still handles the actual selection
+and upstream results. No synthetic shard or no-work unit is invented.
 
 ## Tonight, and the older nights it repairs
 
@@ -462,16 +449,11 @@ Those rules answer a separate question from the venue's clocks and publication.
 
 ### Design rationale: nobody has to notice a dead night
 
-**Scheduled repair needs no operator action, and there is no alarm to read.** The
-next run finds the gap because finding the gap is how it picks its work. An
-alarm plus a person re-dispatching fails exactly when it is needed - a run that
-dies quietly is one nobody is watching for - and the council cannot re-trigger
-itself either, because the default credential cannot start a run and a stored
-personal token is a secret this repository does not keep.
-
-The house pattern is "the next run finishes the dead run's work". **The
-mechanism here is new**: the digest run's catch-up drains whatever is waiting and
-takes no date at all, so there was no code to copy, only the principle.
+**Scheduled repair belongs to the judge's next schedule answer.** A judge can
+select unfinished dates while they remain inside the offered window; the
+council does not inspect its ledger or add a repair date. This avoids depending
+on an alarm and a manual re-dispatch for every gap. Dates outside the window
+need separate manual work. Artifacts from an older run are not resumed.
 
 **An instrument change is still a person's decision, and it already is one.**
 The model entry, the temperature, the prompt and the grammar all reach a runner

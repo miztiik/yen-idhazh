@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -183,7 +183,7 @@ done in it this month.
 flowchart TD
   subgraph pub["digest.yml - the assemble stage"]
     day[("The published day")]
-    pick{"Is there a fitted line<br/>inside the lookback?"}
+    pick{"Is adaptation enabled<br/>and an eligible fitted line<br/>inside the lookback?"}
     usefit["Group at the fitted line"]
     usefloor["Group at the committed floor"]
   end
@@ -347,11 +347,14 @@ rather than enforced - `step_change_guard_enforced` is off, so the row carries
 `daily_shift` and `typical_shift` for a person to read while nobody has yet
 measured what a normal day looks like.
 
-**Nothing has been judged yet.** The committed record carries no counted dates and
-`enabled` is false, so every published day is still grouped at `floor_min` and
-every number above describes a mechanism rather than a history. The operator
-console is where the loop is watched once it starts
-([console.md](console.md)).
+**Recording a fitted line does not enable it.** With
+`adaptive_dedup_threshold.enabled` false, publication uses the committed
+`floor_min` regardless of the judge's recorded counts or fits. When enabled,
+the applied-line reader still requires an eligible fit inside the lookback.
+The [operator console](console.md) shows the loop's actual evidence, not an
+independent accuracy measurement. The
+[offline evaluation procedure](../../how-to/evaluate-content-similarity-judge.md)
+owns that separate measurement.
 
 **What each committed ledger answers.**
 
@@ -391,9 +394,9 @@ settings loader lives under `content_similarity_judge`, not in the shared
 settings model, so it adds no judge contract to the council's import closure.
 
 **The funnel closes, and the contract is what holds it closed.** Every pair a
-unit was dealt ends exactly one of four ways - read, refused by the grammar,
-unreachable because the day either item ran on has aged out, or never reached
-because the unit stopped on its own clock. The four added together are what the
+unit was dealt ends exactly one of four ways - read, refused for invalid reading
+evidence, unreachable because the day either item ran on has aged out, or never
+reached because the unit stopped on its own clock. The four added together are what the
 unit was dealt, and a row where they do not is refused before it is written. The
 abandoned term is why: without it the identity would go red on exactly the unit
 the deadline exists to let report at all.
@@ -404,17 +407,22 @@ wrong.
 
 **A unit ships its row as it finishes and commits nothing.** The row goes out as
 an artifact, the collecting job files it through the ledger door into the
-ledger above, and the trip belongs to the venue - so a unit the platform killed
-has still handed over every reading it took. Each row names the part that took
-it as `work_part_index`.
+ledger above, and the trip belongs to the venue. A platform kill before upload
+can leave no report; only validated arrived bytes are evidence of completed
+work. Collection retains valid siblings without certifying the unfinished
+date. Each row names the part that took it as `work_part_index`.
 
 ### The nights this judge says it is behind on
 
-The council asks each tenant which nights inside its window are outstanding
-([llm-council.md](llm-council.md#tonight-and-the-older-nights-it-repairs)) and
-this judge answers from the record, which is one file of a fixed size. No day
-file is opened and no directory is listed, so the answer costs the same on the
-thousandth night as on the first (`CLAUDE.md` Guardrail #12).
+This judge's `schedule(request=...)` selects the offered anchor, then the newest
+unread older dates within both supplied date budgets. Choosing the anchor is
+this judge's policy, not a council obligation. The
+[council selection contract](llm-council-dates.md#scheduled-dates-belong-to-each-judge)
+owns the offered window and answer validation.
+
+The judge's `nights_outstanding` helper reads older-date candidates from one
+named record. No day file is opened and no directory is listed, so the read
+does not expand into the archive (`CLAUDE.md` Guardrail #12).
 
 **A night is outstanding when the record has never read it.** The record keeps
 two date lists for that. `counted_dates` is the days whose verdicts are in the
@@ -440,10 +448,9 @@ judged was filed, and the date stayed out of both lists because a partial day
 cannot be counted and cannot be topped up later. That date comes back here, and
 the next council night judges it again from the top.
 
-**A judge with no record yet names nothing.** A tenant raises the council's
-floor for itself by naming no night from before it arrived, and a judge with no
-record has not arrived on any of them. An operator who wants one of those nights
-judged names the date, which replaces the plan outright.
+**A judge with no record names no older repair dates.** Its schedule still
+selects the anchor. A manual run can name an earlier date explicitly; it selects
+that date alone and does not add scheduled repair work.
 
 **The counting step admits only rows the record's own stamp matches**, and that
 filter runs before the one-row-a-pair de-duplication. The ledger keeps each

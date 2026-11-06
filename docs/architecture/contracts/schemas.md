@@ -1,8 +1,8 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
-The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
+The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 10.
 
 Concept-level *why* lives in [../../concepts/principles.md](../../concepts/principles.md) (principle 4). This page is the *shape*.
 
@@ -560,21 +560,15 @@ Authority: Fowler (persisted contracts), 2026-09-21.
 
 ## Every contract carries version and changelog
 
-Inherited from the base model, per `CLAUDE.md` section 11:
+Inherited from the base model, per `CLAUDE.md` section 10:
 
-- `version` is a **date-stamp** (`YYYY-MM-DD`), never an integer and never an epoch. It says *when* the shape last moved, which is the question anyone reading an old payload actually has. When more than one change lands the same day, extend the stamp to the minute or the second - `YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS` - so the value stays ASCII-sortable.
+- New `version` and changelog stamps are **date-only** (`YYYY-MM-DD`), never an integer, epoch or time-bearing release stamp. Changes on the same UTC day share one entry; amend that entry rather than invent a second version or a future date. The stamp says when the shape last moved. Retained legacy stamps remain readable under their existing compatibility rules.
 - `changelog` is newest-first, each entry `{ version, change, why }`. `change` says what moved: a field added, removed or retyped, or a meaning shifted. `why` says what the change was for. A `changelog` entry that only restates the field name tells a later reader nothing they could not read off the diff.
-- The base model **enforces** that `version` equals `changelog[0].version`, so the two cannot fall out of step.
-
-For the citation sweep approved by miztiik on 2026-09-12, `Field(description=...)`
-text could be regenerated without a version bump. `version`, `changelog` and
-emitted provenance were explicitly outside that approval. That bounded decision
-grants no general exemption for annotation edits. Retained changelog citations
-record earlier changes; they are not instructions to an agent.
+- The base model requires distinct changelog versions in newest-first order. A computed schema's `version` is its first changelog entry. Compatible retained payloads keep their recorded older version; readers do not relabel them as the current shape.
 
 ### One line, five entries, and git holds the rest
 
-`CLAUDE.md` section 11 bounds the changelog, and `backend/tests/contracts/test_changelog_shape.py` is the gate.
+`CLAUDE.md` section 10 bounds the changelog, and `backend/tests/contracts/test_changelog_shape.py` is the gate.
 
 **One line per field.** `change` and `why` are each a single sentence on a single source line. A string long enough to wrap is over budget, which is the whole mechanism: the line length is the editor, and it is the same 100 columns ruff already enforces.
 
@@ -590,7 +584,7 @@ record earlier changes; they are not instructions to an agent.
 
 **Moving where rows live stamps nothing either.** A change of address or file format that moves no field - a ledger moving onto the ledger door, say - takes no changelog entry and no version stamp: where rows live is `config/ledgers.json`'s fact, and its git history dates the move. The door writes the stamp into every file and refuses a file stamped newer than the build that reads it, so a stamp that moved with no field moving would tell that reader something false.
 
-Additive change: append the entry, stamp today, drop the oldest if that takes the list past five - older payloads still validate. Breaking change: append, stamp today, **and write the read-side migration in the same commit.** A payload written by yesterday's run that today's build cannot read is a release blocker.
+Additive change: add the newest entry or amend the existing same-day entry, stamp the current UTC date, and drop the oldest if that takes the list past five - older payloads still validate. Breaking change: update the entry and stamp, **and write the read-side migration in the same commit.** A payload written by yesterday's run that today's build cannot read is a release blocker.
 
 A document that arrives without a `version` is stamped with the current one on read, so the schema marks the field optional-with-a-default rather than required. Everything this project writes emits it explicitly; the tolerance exists for a hand-edited config file, not as a licence to omit it.
 
