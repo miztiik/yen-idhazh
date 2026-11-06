@@ -10,9 +10,11 @@ from pathlib import Path
 
 import httpx
 from hhem_evaluator.api_settings import load_api_settings
+from hhem_evaluator.contracts.api_settings import ApiSettings
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
-from hhem_evaluator.contracts.service_settings import StartupContext
+from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
 from hhem_evaluator.contracts.unieval_request import UnievalRequest
+from hhem_evaluator.contracts.unieval_settings import UnievalSettings
 from hhem_evaluator.load_settings import load_settings
 from hhem_evaluator.load_unieval_settings import load_unieval_settings
 from hhem_evaluator.resolve_ids import create_execution_id
@@ -45,15 +47,12 @@ from .storage import read_result, write_result
 
 async def guard_work[Result](
     work: Awaitable[Result],
-    api: OwnedService,
-    native: OwnedLlama | None,
+    service: OwnedService | OwnedLlama,
     pipeline: PipelineSettings,
 ) -> Result:
     async def watch() -> None:
         while True:
-            api.check_alive()
-            if native is not None:
-                native.check_alive()
+            service.check_alive()
             await asyncio.sleep(pipeline.poll_interval_ms / 1000)
 
     task, watcher = asyncio.ensure_future(work), asyncio.create_task(watch())
@@ -71,15 +70,23 @@ async def guard_work[Result](
 
 async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
     pipeline = load_pipeline_settings(root)
-    shared = load_api_settings(root / "config" / "fastapi-server.json")
-    settings = load_settings(root / "config" / "hhem-evaluator" / "settings.json", shared)
+    shared: ApiSettings | None = (
+        load_api_settings(root / "config" / "fastapi-server.json")
+        if phase == "evaluation"
+        else None
+    )
+    settings: ServiceSettings | None = (
+        load_settings(root / "config" / "hhem-evaluator" / "settings.json", shared)
+        if shared is not None
+        else None
+    )
     prepared, selected = read_prepared(root)
     if prepared.status != "complete":
         if prepared.errors:
             error = prepared.errors[0]
             raise WorkflowError(error.code, error.phase, error.service, error.http_status)
         raise WorkflowError("ASSET_FAILED", "preparation")
-    inputs = read_manual_inputs(settings, pipeline)
+    inputs = read_manual_inputs(pipeline)
     directory = root / pipeline.output_directory
     scripts = root / ".github" / "scripts" / "summary-eval-tests"
     destination = directory / (
@@ -91,6 +98,8 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
     receipt: GenerationReceipt | None = None
     hardware: Hardware | None = None
     errors: list[PipelineError] = []
+    unieval_settings: UnievalSettings | None = None
+    origin: str | None = None
 
     def evidence() -> PhaseEvidence:
         return build_evidence(
@@ -111,9 +120,9 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
         )
 
     try:
-        startup_timeout_ms = settings.worker.startup_timeout_ms
-        unieval_settings = None
         if phase == "evaluation":
+            if settings is None or shared is None:
+                raise WorkflowError("RECEIPT_INVALID", "input")
             receipt = read_result(
                 directory / "generation.json", GenerationReceipt, pipeline.max_response_bytes
             )
@@ -124,7 +133,6 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                 prepared, inputs, receipt, previous, settings.listener.max_body_bytes
             )
             unieval_settings = load_unieval_settings(root, shared)
-            startup_timeout_ms = max(startup_timeout_ms, unieval_settings.worker.startup_timeout_ms)
         packet = StartupPacket(
             version=WORKFLOW_VERSION,
             startup_id=create_execution_id(),
@@ -148,49 +156,55 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                 services.native = OwnedLlama(root, prepared, selected, pipeline)
                 services.native.start()
                 await services.native.wait_ready(client)
-            services.api_started = time.monotonic()
-            api = OwnedService(
-                "api",
-                [sys.executable, str(scripts / "serve.py"), "--root", str(root)],
-                root,
-                packet,
-                settings,
-                pipeline,
-            )
-            services.api = api
-            ready = await asyncio.to_thread(api.wait_ready, startup_timeout_ms)
-            if not isinstance(ready, ApiReady):
-                raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", "api")
-            origin = loopback_url(shared.listener.host, shared.listener.port)
-            health = await guard_work(
-                read_owned_health(
-                    client,
-                    origin,
-                    ready.service_instance_id,
+            else:
+                if shared is None or settings is None or unieval_settings is None:
+                    raise WorkflowError("RECEIPT_INVALID", "input")
+                startup_timeout_ms = max(
+                    settings.worker.startup_timeout_ms,
+                    unieval_settings.worker.startup_timeout_ms,
+                )
+                started = time.monotonic()
+                api = OwnedService(
+                    "api",
+                    [sys.executable, str(scripts / "serve.py"), "--root", str(root)],
+                    root,
+                    packet,
                     settings,
                     pipeline,
-                    ("llama",) if phase == "generation" else ("hhem", "unieval"),
-                    startup_timeout_ms,
-                    errors=errors,
-                ),
-                api,
-                services.native,
-                pipeline,
-            )
-            services.health = health
-            services.startup_ms = (time.monotonic() - services.api_started) * 1000
+                )
+                services.api = api
+                services.api_started = started
+                ready = await asyncio.to_thread(api.wait_ready, startup_timeout_ms)
+                if not isinstance(ready, ApiReady):
+                    raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", "api")
+                origin = loopback_url(shared.listener.host, shared.listener.port)
+                services.health = await guard_work(
+                    read_owned_health(
+                        client,
+                        origin,
+                        ready.service_instance_id,
+                        settings,
+                        pipeline,
+                        ("hhem", "unieval"),
+                        startup_timeout_ms,
+                        errors=errors,
+                    ),
+                    api,
+                    pipeline,
+                )
+                services.startup_ms = (time.monotonic() - started) * 1000
             try:
                 host = OwnedService(
                     "host",
                     ["bun", "run", "--no-install", str(scripts / "machine-task.ts"), str(root)],
                     root,
                     packet,
-                    settings,
+                    None,
                     pipeline,
                 )
                 services.host = host
                 host_ready = await asyncio.to_thread(
-                    host.wait_ready, settings.worker.startup_timeout_ms
+                    host.wait_ready, pipeline.host_startup_timeout_ms
                 )
                 if not isinstance(host_ready, HostReady):
                     raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", "host")
@@ -204,35 +218,39 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                 if native is None or native.loaded is None:
                     raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "generation", "llama")
                 markers = await guard_work(
-                    read_turn_markers(client, selected, pipeline), api, native, pipeline
+                    read_turn_markers(client, selected, pipeline), native, pipeline
                 )
                 receipt = await guard_work(
                     generate_summary(
                         client,
-                        origin,
                         inputs,
                         prepared,
                         selected,
                         native.loaded,
                         markers,
                         pipeline,
-                        shared.listener.max_body_bytes,
                     ),
-                    api,
                     native,
                     pipeline,
                 )
                 # Save the accepted answer before any instrument or service cleanup.
                 write_result(directory / "generation.json", receipt)
             else:
-                if requests is None or unieval_settings is None:
+                if (
+                    requests is None
+                    or settings is None
+                    or unieval_settings is None
+                    or services.api is None
+                    or services.health is None
+                    or origin is None
+                ):
                     raise WorkflowError("RECEIPT_INVALID", "input")
                 await guard_work(
                     evaluate_pair(
                         client,
                         origin,
                         requests,
-                        health,
+                        services.health,
                         settings,
                         unieval_settings,
                         pipeline,
@@ -240,8 +258,7 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                         errors,
                         lambda: write_result(destination, evidence()),
                     ),
-                    api,
-                    None,
+                    services.api,
                     pipeline,
                 )
     except WorkflowError as error:
@@ -283,7 +300,13 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
             )
         )
         await asyncio.to_thread(
-            services.close, settings, shared, errors, work_complete, unieval_settings
+            services.close,
+            settings,
+            shared,
+            errors,
+            work_complete,
+            unieval_settings,
+            pipeline=pipeline,
         )
     result = evidence()
     write_result(destination, result)

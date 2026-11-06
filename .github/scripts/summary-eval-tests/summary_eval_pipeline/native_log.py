@@ -9,13 +9,17 @@ from pathlib import Path
 from typing import Literal
 
 from hhem_evaluator.contracts.base import Uuid4
-from hhem_evaluator.contracts.server_event import ApiDiagnosticData
+from hhem_evaluator.contracts.lifecycle_fields import LifecycleFields
 from hhem_evaluator.contracts.service_settings import LoggingSettings
-from hhem_evaluator.emit_events import StrictEventHandler
 from hhem_evaluator.resolve_ids import create_execution_id
+from hhem_evaluator.write_event_records import StrictEventHandler
 from pydantic import AwareDatetime
 
 from .contracts import RunIdentity, WorkflowContract
+
+
+class NativeDiagnosticData(LifecycleFields):
+    component: Literal["llama", "log"]
 
 
 class NativeEvent(WorkflowContract):
@@ -25,14 +29,21 @@ class NativeEvent(WorkflowContract):
     type: str
     time: AwareDatetime
     datacontenttype: Literal["application/json"]
-    data: ApiDiagnosticData
+    data: NativeDiagnosticData
 
 
 class NativeFormatter(logging.Formatter):
+    def __init__(self, max_bytes: int) -> None:
+        super().__init__()
+        self.max_bytes = max_bytes
+
     def format(self, record: logging.LogRecord) -> str:
         if not isinstance(record.msg, NativeEvent):
             raise ValueError("Only validated native lifecycle events may be logged")
-        return record.msg.model_dump_json()
+        encoded = record.msg.model_dump_json()
+        if len((encoded + "\n").encode("utf-8")) > self.max_bytes:
+            raise ValueError("Record exceeds native_logging.max_event_bytes")
+        return encoded
 
 
 class NativeFileHandler(logging.FileHandler):
@@ -56,19 +67,19 @@ class NativeLog:
         self.logger = logging.Logger("summary_eval.native", logging.getLevelName(settings.level))
         self.logger.propagate = False
         self.stderr = StrictEventHandler(sys.stderr)
-        self.stderr.setFormatter(NativeFormatter())
+        self.stderr.setFormatter(NativeFormatter(settings.max_event_bytes))
         self.logger.addHandler(self.stderr)
         self.file: NativeFileHandler | None = None
         try:
             directory.mkdir(parents=True, exist_ok=True)
             self.file = NativeFileHandler(directory / self.filename, self)
-            self.file.setFormatter(NativeFormatter())
+            self.file.setFormatter(NativeFormatter(settings.max_event_bytes))
             self.logger.addHandler(self.file)
             self.available = True
         except (OSError, ValueError):
             self.unavailable()
 
-    def event(self, data: ApiDiagnosticData) -> None:
+    def event(self, data: NativeDiagnosticData) -> None:
         event = NativeEvent(
             specversion="1.0",
             id=create_execution_id(),
@@ -83,7 +94,7 @@ class NativeLog:
     def unavailable(self) -> None:
         self.available = False
         self.event(
-            ApiDiagnosticData(
+            NativeDiagnosticData(
                 component="log",
                 action="unavailable",
                 level="WARNING",

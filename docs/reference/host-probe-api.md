@@ -1,6 +1,6 @@
 # Start and stop a task resource profile
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 Which local HTTP commands measure one process for an operator-owned task?
 The Bun host probe includes PID CPU and optional process and machine RAM.
@@ -179,7 +179,8 @@ GitHub still kills a hosted job at six hours.
 Both task commands return `status: "disabled", reason: "configured_off"`
 with HTTP 200 when the instrument is off. No host read, clock-rate command,
 worker or handle is created. Body validation still applies.
-No profile or operation context is fabricated.
+No profile operation is allocated. The native command event still carries
+its receiving-request operation.
 
 Invalid JSON or controls return 400; oversized bodies return 413.
 Stale process pins return 409, occupied active capacity returns 429,
@@ -190,6 +191,16 @@ stay null with a reason; a real zero PID CPU interval remains zero.
 The owned collector is terminated before a report callback is awaited.
 A callback that never settles fails stop and shutdown at the closing deadline.
 All responses are uncached.
+
+Table B - native probe event payloads
+
+| ID | Event type | Strict data |
+| --- | --- | --- |
+| B1 | `host_probe_completed` | `operation`: `sample`, `start-task-profile`, `stop-task-profile` or `cache-latency`; `outcome`: `handled` or `disabled`. |
+| B2 | `host_probe_failed` | `code: "HOST_PROBE_FAILED"` |
+| B3 | `host_probe_cleanup_failed` | `code: "HOST_PROBE_CLEANUP_FAILED"` |
+| B4 | `host_probe_body_cleanup_failed` | `code: "HOST_PROBE_BODY_CLEANUP_FAILED"` |
+| B5 | `task_profile_failed` | `code: "TASK_PROFILE_FAILED"` |
 
 ## Embedded use
 
@@ -211,6 +222,11 @@ shutdown. The ordinary host-probe service does this through `stop()`;
 its CLI also handles stop signals. Startup reservations, active collectors
 and pending closes are included. There is no feed-planner or GitHub
 dependency in this lifecycle.
+
+`createSampleHandler(config, probeContext, report, diagnostics)` keeps full
+profiles on `report` and safe native events on `diagnostics.writeEvent`.
+The optional `diagnostics.lifetimeContext` identifies service cleanup;
+request and profile operations remain separate and are passed explicitly.
 
 ## Design rationale
 

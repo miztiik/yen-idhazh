@@ -1,10 +1,9 @@
-"""How is one final answer generated through FastAPI and bound to the same-run receipt?"""
+"""How is one native final answer bound to the same-run receipt?"""
 
 import json
 
 import httpx
-from hhem_evaluator.contracts.llama_result import LlamaErrorResult, LlamaResult
-from pydantic import BaseModel, ConfigDict, RootModel
+from pydantic import BaseModel, ConfigDict
 
 from idhazh.llm.server import (
     PROBE_FOLLOW_UP,
@@ -31,16 +30,13 @@ from .failures import WorkflowError
 from .http import call_local_api
 from .inputs import ManualInputs
 from .model_selection import SelectedModel
+from .native_response import NativeCompletion, NativeReply
 from .settings import PipelineSettings
 
 
 class TemplateResult(BaseModel):
     model_config = ConfigDict(extra="ignore", strict=True, hide_input_in_errors=True)
     prompt: str
-
-
-class GenerationReply(RootModel[LlamaResult | LlamaErrorResult]):
-    pass
 
 
 async def read_turn_markers(
@@ -61,6 +57,9 @@ async def read_turn_markers(
         )
         if kwargs:
             body["chat_template_kwargs"] = kwargs
+        encoded = json.dumps(body).encode("utf-8")
+        if len(encoded) > pipeline.max_generation_request_bytes:
+            raise WorkflowError("INPUT_TOO_LARGE", "health", "llama")
         status, result = await call_local_api(
             client,
             "POST",
@@ -70,7 +69,8 @@ async def read_turn_markers(
             pipeline.http_connect_timeout_ms,
             service="llama",
             phase="health",
-            body=json.dumps(body).encode("utf-8"),
+            body=encoded,
+            max_response_bytes=pipeline.native_max_metadata_bytes,
         )
         if status != 200:
             raise WorkflowError("HEALTH_FAILED", "health", "llama", status)
@@ -103,14 +103,12 @@ async def read_turn_markers(
 
 async def generate_summary(
     client: httpx.AsyncClient,
-    api_origin: str,
     inputs: ManualInputs,
     prepared: PreparedRun,
     selected: SelectedModel,
     loaded: LoadedModel,
     markers: TurnMarkers,
     pipeline: PipelineSettings,
-    max_body_bytes: int,
 ) -> GenerationReceipt:
     if (
         prepared.status != "complete"
@@ -134,21 +132,22 @@ async def generate_summary(
         ensure_ascii=False,
         allow_nan=False,
     ).encode("utf-8")
-    if len(body) > max_body_bytes:
+    if len(body) > pipeline.max_generation_request_bytes:
         raise WorkflowError("INPUT_TOO_LARGE", "generation")
     status, reply = await call_local_api(
         client,
         "POST",
-        api_origin + "/v1/chat/completions",
-        GenerationReply,
+        selected.native.base_url + "/v1/chat/completions",
+        NativeReply,
         pipeline,
         selected.native.request_timeout_ms + pipeline.http_connect_timeout_ms,
         service="llama",
         phase="generation",
         body=body,
+        max_response_bytes=pipeline.max_generation_response_bytes,
     )
     result = reply.root
-    if status != 200 or not isinstance(result, LlamaResult):
+    if status != 200 or not isinstance(result, NativeCompletion):
         raise WorkflowError("GENERATION_FAILED", "generation", "llama", status)
     if len(result.choices) != 1 or result.choices[0].index != 0:
         raise WorkflowError("GENERATION_FAILED", "generation", "llama", status)

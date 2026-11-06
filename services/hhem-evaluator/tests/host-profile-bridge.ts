@@ -47,6 +47,8 @@ if (Bun.argv[2] === "schemas") {
   let started = false;
   let profile: TaskProfile | undefined;
   let clean = true;
+  let stage = "input";
+  let httpStatus: number | null = null;
   const f = await fixture();
   const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
   try {
@@ -85,14 +87,19 @@ if (Bun.argv[2] === "schemas") {
           create: () => createMachineApp({
             fingerprint: {
               config: f.config, settings: f.settings,
-              options: { outputRoot: join(f.directory, "state"), inspection: f.inspection },
+              options: {
+                outputRoot: join(f.directory, "state"), inspection: f.inspection,
+                registryPath: new URL("../../../config/ledgers.json", import.meta.url),
+              },
             },
             probes: profiling,
           }),
         });
+        stage = "fingerprint";
         const response = await handler.fetch(new Request(`http://127.0.0.1${FINGERPRINT_PATH}`, {
           method: "POST", body: JSON.stringify(f.apiInput),
         }));
+        httpStatus = response.status;
         const hardware = z.object({
           status: z.literal("written"), row: HostFingerprintRowSchema,
           unavailable: z.record(z.string(), z.string()),
@@ -103,12 +110,15 @@ if (Bun.argv[2] === "schemas") {
           run_id: f.capture.writer.run_id,
         };
         if (input.platform === "linux" || !config.task_profile.enabled) {
+          stage = "profile_start";
+          httpStatus = null;
           const processInput = parseProcessStat(recorded.pid, recorded.stat);
           if (processInput.reason !== null) throw new Error("Recorded profile target has no valid process identity");
           const response = await handler.fetch(new Request(`http://localhost${START_TASK_PROFILE_PATH}`, {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ identity, target: { pid: process.pid, start_ticks: processInput.value.start_ticks } }),
           }));
+          httpStatus = response.status;
           if (response.status !== 200) throw new Error("Native host profile start failed");
           const result = StartTaskProfileResponseSchema.parse(await response.json());
           if (result.status === "started") {
@@ -129,11 +139,14 @@ if (Bun.argv[2] === "schemas") {
         continue;
       }
       const input = command.parse(JSON.parse(line));
+      stage = "profile_stop";
+      httpStatus = null;
       if (handler !== undefined && handle !== undefined) {
         const response = await handler.fetch(new Request(`http://localhost${STOP_TASK_PROFILE_PATH}`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ handle, outcome: input.outcome }),
         }));
+        httpStatus = response.status;
         if (response.status !== 200) throw new Error("Native host profile stop failed");
         const result = StopTaskProfileResponseSchema.parse(await response.json());
         if (result.status !== "stopped" || result.handle !== handle) throw new Error("Native host profile did not retain its handle");
@@ -145,6 +158,9 @@ if (Bun.argv[2] === "schemas") {
     }
   } catch {
     clean = false;
+    process.stderr.write(JSON.stringify({
+      event: "summary_host_fixture_failed", stage, http_status: httpStatus,
+    }) + "\n");
   } finally {
     try {
       await handler?.close();

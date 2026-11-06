@@ -85,6 +85,7 @@ WORKFLOW_FILES: Final = (
     "yen-ai-pipeline.yml",
     "ai-pipeline-tests.yml",
     "summary-eval-tests.yml",
+    "summary-evaluator-checks.yml",
 )
 WORKFLOW_PATHS: Final = tuple(WORKFLOWS_DIR / name for name in WORKFLOW_FILES)
 
@@ -648,7 +649,21 @@ SUBSTITUTED_COUNCIL_RUN: Final = "2026-08-26-35534060762"
 #: the venue never checks it against a list of who may exist.
 SUBSTITUTED_TENANT: Final = "a-paper-tenant"
 
+
+def _read_summary_eval_artifact_paths() -> dict[str, str]:
+    """Resolve the preparation outputs from their named committed configuration."""
+    settings: object = json.loads(read_text(CONFIG_DIR / "summary-eval-tests.json"))
+    assert isinstance(settings, dict), "Summary workflow settings must be a mapping"
+    outputs: dict[str, str] = {}
+    for field in ("output_directory", "native_log_directory"):
+        value = settings.get(field)
+        assert isinstance(value, str), f"Summary workflow {field} must be a path"
+        outputs[f"steps.prepare.outputs.{field}"] = value
+    return outputs
+
+
 EXPRESSION_VALUES: Final = {
+    **_read_summary_eval_artifact_paths(),
     "env.SET_DIRECTORY": "corpus/encoder-comparison-1",
     "matrix.encoder": "fixture-encoder",
     "needs.plan.outputs.date": SUBSTITUTED_DATE,

@@ -1,6 +1,6 @@
 # Serve pipeline APIs
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 Which local listener serves planning, article fetching/parsing, machine
 measurements and output delivery?
@@ -117,6 +117,10 @@ metadata without a tracing provider, exporter or global active context.
 Server diagnostics contain startup, readiness, stop, safe error codes and
 observed lifecycle facts, but no process IDs. Private readiness, supervision,
 profiling and current-task evidence retain their existing process identities.
+The application warning or failure reason is recorded in `data.code`, not an
+HTTP status or process exit value. Null means no reason was supplied; it does
+not prove success. `data.server_name` is the fixed `hono-server` protocol tag,
+not a per-service setting.
 Validated terminal article diagnostics are a narrow exception to the lifecycle
 projection: the writer emits and mirrors the original accepted
 [`ArticleFailureDiagnosticSchema`](../../packages/common-contracts/src/schemas/article-failure-diagnostic.schema.ts)
@@ -166,8 +170,9 @@ Accepted native envelopes are mirrored unchanged, including source, occurrence
 ID, UTC time, carrier and data. Invalid or unknown types produce
 `CHILD_DIAGNOSTIC_INVALID`, not a replacement event. Every API in the
 [native support matrix](../architecture/contracts/identity.md#native-api-support)
-now constructs its own application events. Plain completion/failure translation
-is removed; only the declared private profile/control transports remain separate.
+constructs its own application events. The relay accepts native application
+envelopes, not plain packets that require a new occurrence to be constructed.
+Only the declared private profile/control transports remain separate.
 Article reports recognize rejection markers only in server lifecycle events;
 a native delivery code with the same spelling does not create an evidence gap.
 Ordinary planner failures still use the body-free lifecycle projection.
@@ -228,7 +233,12 @@ Explicit groups keep task resources visible without per-API processes.
 Hono and Zod remain existing tool dependencies. Host-probes adds the shared
 hosting and fingerprint installation closure and the already locked Hono
 version for composition; published-site bytes are unchanged. Existing
-standalone tools and older workflows are not migrated.
+standalone tools retain their own listener controls; workflows select the
+native entrypoint for their task.
+
+Envelope validity alone does not establish payload safety. Normal mirrors
+accept only known event types validated by their producing component; shared
+contracts do not enumerate applications or bypass their strict payload models.
 
 Process ownership is established by private control data, not a copied ID in
 a diagnostic line.

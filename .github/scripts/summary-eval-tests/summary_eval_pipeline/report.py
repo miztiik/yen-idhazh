@@ -244,14 +244,23 @@ def render_report(
                     if machine
                     else "Not available",
                 ),
-                (phase.phase, "HHEM worker exit confirmed", phase.shutdown.worker_exit_confirmed),
-                (
-                    phase.phase,
-                    "UniEval worker exit confirmed",
-                    phase.shutdown.unieval_worker_exit_confirmed,
-                ),
             ]
         )
+        if phase.phase == "evaluation":
+            readings.extend(
+                [
+                    (
+                        phase.phase,
+                        "HHEM worker exit confirmed",
+                        phase.shutdown.worker_exit_confirmed,
+                    ),
+                    (
+                        phase.phase,
+                        "UniEval worker exit confirmed",
+                        phase.shutdown.unieval_worker_exit_confirmed,
+                    ),
+                ]
+            )
         for server in phase.servers:
             if server.error_code is not None:
                 errors.append(f"- {phase.phase} / {server.server_name}: {cell(server.error_code)}")

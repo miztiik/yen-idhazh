@@ -9,9 +9,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
-from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.contracts.base import NonblankText
-from hhem_evaluator.contracts.server_event import ApiDiagnosticData
 from pydantic import BaseModel, ConfigDict
 
 from idhazh.llm.server import server_argv
@@ -22,7 +20,8 @@ from .failures import WorkflowError
 from .http import call_local_api
 from .launch_native import parent_bound_command
 from .model_selection import SelectedModel
-from .native_log import NativeLog
+from .native_log import NativeDiagnosticData, NativeLog
+from .native_response import NativeHealth, NativeHealthReply
 from .settings import PipelineSettings
 
 
@@ -72,9 +71,9 @@ class OwnedLlama:
         self.process: subprocess.Popen[bytes] | None = None
         self.loaded: LoadedModel | None = None
         self.log = NativeLog(
-            root / pipeline.output_directory / "logs",
+            root / pipeline.native_log_directory,
             prepared.run,
-            load_api_settings(root / "config" / "fastapi-server.json").logging,
+            pipeline.native_logging,
         )
         self.started = time.monotonic()
         self.startup: str = "not_started"
@@ -102,7 +101,7 @@ class OwnedLlama:
             )
             # Quiet protocol switches prevent bodies and raw model diagnostics reaching logs.
             argv += ["--host", host, *self.pipeline.native_quiet_flags]
-            self.log.event(ApiDiagnosticData(component="llama", action="started", level="INFO"))
+            self.log.event(NativeDiagnosticData(component="llama", action="started", level="INFO"))
             self.process = subprocess.Popen(
                 parent_bound_command(argv),
                 cwd=self.root,
@@ -127,6 +126,23 @@ class OwnedLlama:
             while time.monotonic() < deadline:
                 self.check_alive()
                 try:
+                    health_status, health = await call_local_api(
+                        client,
+                        "GET",
+                        self.selected.native.base_url + "/health",
+                        NativeHealthReply,
+                        self.pipeline,
+                        self.pipeline.http_connect_timeout_ms,
+                        service="llama",
+                        phase="health",
+                        max_response_bytes=self.pipeline.max_generation_response_bytes,
+                    )
+                    if (
+                        health_status != 200
+                        or not isinstance(health.root, NativeHealth)
+                        or health.root.status != "ok"
+                    ):
+                        raise WorkflowError("HEALTH_FAILED", "health", "llama", health_status)
                     status, props = await call_local_api(
                         client,
                         "GET",
@@ -136,6 +152,7 @@ class OwnedLlama:
                         self.pipeline.http_connect_timeout_ms,
                         service="llama",
                         phase="health",
+                        max_response_bytes=self.pipeline.native_max_metadata_bytes,
                     )
                     if status == 200:
                         self.check_alive()
@@ -163,7 +180,7 @@ class OwnedLlama:
                         self.startup = "ready"
                         self.startup_ms = (time.monotonic() - self.started) * 1000
                         self.log.event(
-                            ApiDiagnosticData(
+                            NativeDiagnosticData(
                                 component="llama",
                                 action="ready",
                                 level="INFO",
@@ -172,7 +189,9 @@ class OwnedLlama:
                         )
                         return self.loaded
                 except WorkflowError as error:
-                    if error.error.code not in ("HTTP_FAILED", "RESPONSE_INVALID"):
+                    if error.error.code not in ("HTTP_FAILED", "RESPONSE_INVALID") and not (
+                        error.error.code == "HEALTH_FAILED" and error.error.http_status == 503
+                    ):
                         raise
                     last = error
                 await asyncio.sleep(
@@ -187,7 +206,7 @@ class OwnedLlama:
             self.startup_ms = (time.monotonic() - self.started) * 1000
             self.error_code = error.error.code
             self.log.event(
-                ApiDiagnosticData(
+                NativeDiagnosticData(
                     component="llama",
                     action="failed",
                     level="ERROR",
@@ -211,7 +230,9 @@ class OwnedLlama:
                 if early or self.shutdown == "forced" or self.process.returncode not in (0, -15):
                     raise WorkflowError("SERVICE_STOP_FAILED", "cleanup", "llama")
                 self.shutdown = "stopped"
-                self.log.event(ApiDiagnosticData(component="llama", action="stopped", level="INFO"))
+                self.log.event(
+                    NativeDiagnosticData(component="llama", action="stopped", level="INFO")
+                )
         except (OSError, subprocess.TimeoutExpired, WorkflowError):
             if self.shutdown != "forced":
                 self.shutdown = "failed"

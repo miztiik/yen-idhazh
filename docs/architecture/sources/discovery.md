@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-10-20
+**Last Updated**: 2026-11-06
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
 ## Three primitives, not one
@@ -126,6 +126,12 @@ Deduplication is the whole point of collecting from many feeds, and it only work
 - Campaign and click identifiers are stripped. They differ per referrer for the same article, so leaving them in means one story arrives as several.
 - The fragment goes; a trailing slash goes from a non-root path.
 - **What remains of the query is kept and sorted.** Stripping every parameter would be simpler and wrong: on plenty of sites the query *is* the article.
+
+Known Python limitation: `backend/idhazh/discover.py` decodes retained query
+pairs and rejoins them without URL encoding. `?a=x%26b%3Dy` and `?a=x&b=y`
+therefore become the same address and `url_key`. Retaining a parameter does not
+preserve encoded delimiters. Native TypeScript follows its separate
+[resource address rule](../contracts/identity.md#typescript-resource-addresses).
 
 Identity is the digest of the canonical address, and it lives in a payload field - never in a path, a filename or a URL. Paths are for humans and for globs.
 

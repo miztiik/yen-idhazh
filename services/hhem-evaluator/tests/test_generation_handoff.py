@@ -4,6 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 from idhazh.llm.server import request_payload, server_argv
 from pydantic import ValidationError
@@ -11,7 +12,6 @@ from summary_eval_pipeline.contracts import (
     WORKFLOW_VERSION,
     GeneratedAnswer,
     GenerationReceipt,
-    LoadedModel,
     PhaseEvidence,
     PreparedRun,
     ServiceShutdown,
@@ -30,13 +30,11 @@ from summary_eval_pipeline.storage import read_result, write_result
 from .contract_examples import REPOSITORY
 from .generation_cases import (
     chat_markers,
-    example_run,
     handoff_case,
-    recorded_selection,
+    native_generation_case,
     selected_root,
 )
-from .llama_cases import RecordedLlama, llama_settings
-from .service_cases import running_service
+from .llama_cases import RecordedLlama
 
 
 def generation_phase() -> tuple[ManualInputs, PreparedRun, GenerationReceipt, PhaseEvidence]:
@@ -46,7 +44,7 @@ def generation_phase() -> tuple[ManualInputs, PreparedRun, GenerationReceipt, Ph
         None,
         None,
         ServiceShutdown(
-            api_stopped=True,
+            api_stopped=None,
             host_stopped=True,
             worker_exit_confirmed=None,
             llama_stopped=True,
@@ -215,6 +213,8 @@ def test_same_run_handoff_is_atomic_and_retains_exact_text(tmp_path: Path) -> No
         "summary",
         "failed",
         "unclosed",
+        "host_unclosed",
+        "invented_api",
         "preparation",
     ],
 )
@@ -251,6 +251,16 @@ def test_stale_changed_failed_or_unclosed_generation_cannot_reach_either_evaluat
         receipt = receipt.model_copy(update={"status": "failed"})
     elif change == "preparation":
         prepared = prepared.model_copy(update={"status": "pending"})
+    elif change in ("host_unclosed", "invented_api"):
+        phase = phase.model_copy(
+            update={
+                "shutdown": phase.shutdown.model_copy(
+                    update={"host_stopped": False}
+                    if change == "host_unclosed"
+                    else {"api_stopped": True}
+                )
+            }
+        )
     else:
         phase = phase.model_copy(
             update={"shutdown": phase.shutdown.model_copy(update={"llama_stopped": False})}
@@ -268,6 +278,35 @@ def test_missing_generation_has_no_manual_answer_fallback(tmp_path: Path) -> Non
     data["summary_text"] = " \n"
     with pytest.raises(ValidationError):
         GenerationReceipt.model_validate_json(json.dumps(data))
+
+
+@pytest.mark.parametrize(
+    "field", ["api_stopped", "worker_exit_confirmed", "unieval_worker_exit_confirmed"]
+)
+def test_generation_evidence_cannot_claim_an_unstarted_evaluator_exit(field: str) -> None:
+    _, _, _, phase = generation_phase()
+    payload = json.loads(phase.model_dump_json())
+    payload["shutdown"][field] = True
+    with pytest.raises(ValidationError):
+        PhaseEvidence.model_validate_json(json.dumps(payload))
+
+
+def test_generation_evidence_cannot_invent_an_evaluation_application_outcome() -> None:
+    _, _, _, phase = generation_phase()
+    payload = json.loads(phase.model_dump_json())
+    payload["servers"] = [
+        {
+            "server_name": "fastapi-server",
+            "startup": "ready",
+            "startup_ms": 0.0,
+            "shutdown": "stopped",
+            "exit_code": 0,
+            "log_filename": None,
+            "log_available": False,
+        }
+    ]
+    with pytest.raises(ValidationError):
+        PhaseEvidence.model_validate_json(json.dumps(payload))
 
 
 @pytest.mark.parametrize(
@@ -344,33 +383,25 @@ def test_independent_reference_can_coincidentally_equal_the_generated_answer() -
 
 
 @pytest.mark.parametrize(
-    "failure", [None, "length", "missing_finish", "empty", "wrong_model", "invalid"]
+    "failure",
+    [
+        None,
+        "length",
+        "missing_finish",
+        "empty",
+        "wrong_model",
+        "invalid",
+        "multiple_choices",
+        "duplicate_choices",
+        "wrong_index",
+    ],
 )
-def test_real_fastapi_generation_uses_selected_request_and_excludes_reasoning(
+def test_direct_native_generation_uses_selected_request_and_excludes_reasoning(
     tmp_path: Path,
     failure: str | None,
 ) -> None:
     async def check() -> None:
-        selected = recorded_selection(tmp_path)
-        inputs = ManualInputs(
-            source_text="  PrivateSourceCanary\nexact source.  ",
-            reference_summary_text="PrivateReferenceCanary: an independent expected summary.",
-        )
-        prepared = PreparedRun(
-            version=WORKFLOW_VERSION,
-            run=example_run(),
-            selected=selected.identity,
-            source_sha256=text_sha256(inputs.source_text),
-            reference_summary_sha256=text_sha256(inputs.reference_summary_text),
-            status="complete",
-            errors=(),
-        )
-        loaded = LoadedModel(
-            model_id=selected.identity.model_id,
-            weights_path=f"backend/models/{selected.identity.filename}",
-            sha256=selected.identity.sha256,
-            pid=123,
-        )
+        inputs, prepared, selected, loaded = native_generation_case(tmp_path)
         recorded = RecordedLlama()
         if failure is not None:
             response = json.loads(recorded.body)
@@ -378,25 +409,36 @@ def test_real_fastapi_generation_uses_selected_request_and_excludes_reasoning(
                 response["choices"][0]["finish_reason"] = "length" if failure == "length" else None
             elif failure == "wrong_model":
                 response["model"] = "another-model"
+            elif failure in ("multiple_choices", "duplicate_choices"):
+                response["choices"].append(
+                    {
+                        **response["choices"][0],
+                        "index": 1 if failure == "multiple_choices" else 0,
+                    }
+                )
+            elif failure == "wrong_index":
+                response["choices"][0]["index"] = 1
             else:
                 response["choices"][0]["message"]["content"] = "" if failure == "empty" else "{}"
             recorded.body = json.dumps(response).encode()
         pipeline = load_pipeline_settings(REPOSITORY)
-        async with running_service(
-            routes=("llama",),
-            llama_settings=llama_settings(),
-            llama_transport=recorded.transport,
-        ) as service:
+        for name in (
+            "fastapi-server.json",
+            "hhem-evaluator/settings.json",
+            "unieval-evaluator.json",
+        ):
+            (tmp_path / "config" / name).unlink()
+        async with httpx.AsyncClient(
+            transport=recorded.transport, trust_env=False, follow_redirects=False
+        ) as client:
             call = generate_summary(
-                service.client,
-                "http://127.0.0.1:3010",
+                client,
                 inputs,
                 prepared,
                 selected,
                 loaded,
                 chat_markers(selected),
                 pipeline,
-                1 << 20,
             )
             if failure is not None:
                 with pytest.raises(WorkflowError):
@@ -421,9 +463,6 @@ def test_real_fastapi_generation_uses_selected_request_and_excludes_reasoning(
             assert body["chat_template_kwargs"]["enable_thinking"] is False
             for key, value in selected.entry.sampling.items():
                 assert body[key] == value
-            assert inputs.source_text not in service.log.getvalue()
             assert inputs.reference_summary_text not in encoded.decode()
-            assert inputs.reference_summary_text not in service.log.getvalue()
-            assert not service.worker.controls
 
     asyncio.run(check())

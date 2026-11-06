@@ -16,7 +16,6 @@ from hhem_evaluator.configure_server import create_server_config, report_startup
 from hhem_evaluator.contracts.api_settings import ApiSettings
 from hhem_evaluator.contracts.server_event import ApiDiagnosticData
 from hhem_evaluator.emit_events import EventWriter
-from hhem_evaluator.load_llama_settings import load_llama_settings
 from hhem_evaluator.load_settings import load_settings
 from hhem_evaluator.load_unieval_settings import load_unieval_settings
 from hhem_evaluator.run_server import has_clean_lifespan
@@ -62,18 +61,14 @@ async def serve_owned_api(
     finished: threading.Event,
     channels: OwnedChannels,
 ) -> None:
+    if packet.phase != "evaluation":
+        raise ValueError("Only evaluation starts the shared evaluation application")
     shared = load_api_settings(root / "config" / "fastapi-server.json")
     api = ApiSettings.model_validate_json(
-        shared.model_copy(
-            update={
-                "enabled_routes": (
-                    ("llama",) if packet.phase == "generation" else ("hhem", "unieval")
-                )
-            }
-        ).model_dump_json()
+        shared.model_copy(update={"enabled_routes": ("hhem", "unieval")}).model_dump_json()
     )
     settings = load_settings(root / "config" / "hhem-evaluator" / "settings.json", api)
-    unieval_settings = load_unieval_settings(root, api) if packet.phase == "evaluation" else None
+    unieval_settings = load_unieval_settings(root, api)
     events = EventWriter(
         api.logging,
         channels.events,
@@ -84,17 +79,10 @@ async def serve_owned_api(
     )
     app = create_app(
         api,
-        settings if packet.phase == "evaluation" else None,
+        settings,
         root,
         packet.context,
         writer=events,
-        llama_settings=(
-            load_llama_settings(
-                root / load_pipeline_settings(root).output_directory / "config" / "idhazh.json"
-            )
-            if packet.phase == "generation"
-            else None
-        ),
         unieval_settings=unieval_settings,
     )
     controller, unieval = app.state.controller, app.state.unieval
@@ -125,12 +113,8 @@ async def serve_owned_api(
             finished,
             max(
                 settings.worker.shutdown_timeout_ms + settings.worker.forced_stop_ms,
-                (
-                    unieval_settings.worker.shutdown_timeout_ms
-                    + unieval_settings.worker.forced_stop_ms
-                )
-                if unieval_settings is not None
-                else 0,
+                unieval_settings.worker.shutdown_timeout_ms
+                + unieval_settings.worker.forced_stop_ms,
             ),
         ),
         daemon=True,

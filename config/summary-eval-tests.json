@@ -1,5 +1,8 @@
 {
   "event_envelope_bytes": 65536,
+  "max_input_bytes": 1048576,
+  "max_generation_request_bytes": 1048576,
+  "max_generation_response_bytes": 1048576,
   "max_response_bytes": 2097152,
   "control_max_bytes": 16384,
   "http_connect_timeout_ms": 5000,
@@ -12,5 +15,14 @@
   "native_shutdown_timeout_ms": 15000,
   "native_forced_stop_ms": 5000,
   "native_max_metadata_bytes": 2097152,
-  "native_quiet_flags": ["--log-disable"]
+  "native_quiet_flags": ["--log-disable"],
+  "native_logging": {
+    "level": "INFO",
+    "max_event_bytes": 4096
+  },
+  "native_log_directory": "backend/var/summary-eval-tests/logs",
+  "host_startup_timeout_ms": 600000,
+  "host_shutdown_timeout_ms": 15000,
+  "host_stop_grace_ms": 5000,
+  "host_forced_stop_ms": 5000
 }

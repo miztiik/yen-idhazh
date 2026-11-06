@@ -6,28 +6,18 @@ from typing import Literal, Self
 from pydantic import AwareDatetime, Field, model_validator
 
 from ..resolve_ids import create_execution_id
-from .base import Milliseconds, RelativePath, Uuid4, Uuid5
-from .evaluate_request import is_absent
+from .base import Uuid4, Uuid5
 from .evaluation_event import EvaluationEvent
+from .lifecycle_fields import LifecycleFields
 from .server_contract import ServerContract
 
 DiagnosticComponent = Literal["api", "llama", "unieval", "log"]
-DiagnosticAction = Literal[
-    "started", "ready", "stopped", "failed", "cancelled", "unavailable", "completed"
-]
 
 
-class ApiDiagnosticData(ServerContract):
+class ApiDiagnosticData(LifecycleFields):
     """Allow safe lifecycle facts and codes, never an exception or model body."""
 
     component: DiagnosticComponent
-    action: DiagnosticAction
-    level: Literal["INFO", "WARNING", "ERROR"]
-    code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$", exclude_if=is_absent)
-    http_status: int | None = Field(default=None, ge=100, le=599, exclude_if=is_absent)
-    duration_ms: Milliseconds | None = Field(default=None, exclude_if=is_absent)
-    log_file: RelativePath | None = Field(default=None, exclude_if=is_absent)
-    execution_id: Uuid4 | None = Field(default=None, exclude_if=is_absent)
 
 
 class ServerEvent(ServerContract):

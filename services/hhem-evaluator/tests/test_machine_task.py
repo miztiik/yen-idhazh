@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -24,7 +25,7 @@ from .test_pipeline_lifetime import CHILD_STARTUP_MS
 def test_serialized_python_packet_starts_stops_and_retains_native_http_machine_results(
     tmp_path: Path,
 ) -> None:
-    packet, settings, pipeline = stage_machine_run(tmp_path)
+    packet, pipeline = stage_machine_run(tmp_path)
     assert packet.run is not None
     assert json.loads(packet.model_dump_json())["run"]["git_sha"] == packet.git_sha
     script = REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "machine-task.ts"
@@ -33,7 +34,7 @@ def test_serialized_python_packet_starts_stops_and_retains_native_http_machine_r
         [required_bun(), "run", "--no-install", str(script), str(tmp_path)],
         tmp_path,
         packet,
-        settings,
+        None,
         pipeline,
     )
     try:
@@ -46,7 +47,7 @@ def test_serialized_python_packet_starts_stops_and_retains_native_http_machine_r
         )
         time.sleep(controls["task_profile"]["cpu_window_ms"] / 1000)
         child.finish_measurement("success")
-        stopped = child.close(ready.lifecycle_timeout_ms + settings.worker.stop_grace_ms)
+        stopped = child.close(ready.lifecycle_timeout_ms + pipeline.host_stop_grace_ms)
         assert stopped.clean and child.process.returncode == 0
         assert measurement_complete(stopped.machine)
         assert stopped.machine is not None and stopped.machine.outcome == "success"
@@ -65,7 +66,7 @@ def test_serialized_python_packet_starts_stops_and_retains_native_http_machine_r
     finally:
         if not child.closed:
             with contextlib.suppress(WorkflowError):
-                child.close(settings.worker.shutdown_timeout_ms)
+                child.close(pipeline.host_shutdown_timeout_ms)
         assert child.process.poll() is not None
 
 
@@ -87,7 +88,7 @@ def test_real_helper_startup_failure_retains_safe_cause_without_adopting_another
     capfd: pytest.CaptureFixture[str],
     failure: str,
 ) -> None:
-    packet, settings, pipeline = stage_machine_run(tmp_path)
+    packet, pipeline = stage_machine_run(tmp_path)
     path = tmp_path / pipeline.output_directory / "config" / "hono-server.json"
     controls = json.loads(path.read_bytes())
     with reserved_loopback_listener() as (port, unrelated):
@@ -99,7 +100,7 @@ def test_real_helper_startup_failure_retains_safe_cause_without_adopting_another
             [required_bun(), "run", "--no-install", str(script), str(tmp_path)],
             tmp_path,
             packet,
-            settings,
+            None,
             pipeline,
         )
         try:
@@ -114,7 +115,7 @@ def test_real_helper_startup_failure_retains_safe_cause_without_adopting_another
         finally:
             if not child.closed:
                 with pytest.raises(WorkflowError):
-                    child.close(settings.worker.shutdown_timeout_ms)
+                    child.close(pipeline.host_shutdown_timeout_ms)
         assert child.process.returncode == 1 and child.stopped is not None
         assert child.stopped.error_code == original.value.error.source_code
         assert unrelated.poll() is None
@@ -133,14 +134,14 @@ def test_invalid_private_close_retains_native_cancelled_measurement_and_safe_fai
     tmp_path: Path,
     capfd: pytest.CaptureFixture[str],
 ) -> None:
-    packet, settings, pipeline = stage_machine_run(tmp_path)
+    packet, pipeline = stage_machine_run(tmp_path)
     script = REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "machine-task.ts"
     child = OwnedService(
         "host",
         [required_bun(), "run", "--no-install", str(script), str(tmp_path)],
         tmp_path,
         packet,
-        settings,
+        None,
         pipeline,
     )
     try:
@@ -149,7 +150,7 @@ def test_invalid_private_close_retains_native_cancelled_measurement_and_safe_fai
         child.process.stdin.write(b'{"kind":"stop","outcome":"PrivateInvalidCloseCanary"}\n')
         child.process.stdin.flush()
         with pytest.raises(WorkflowError) as failure:
-            child.close(settings.worker.shutdown_timeout_ms + settings.worker.forced_stop_ms)
+            child.close(pipeline.host_shutdown_timeout_ms + pipeline.host_forced_stop_ms)
         assert failure.value.error.source_code
         assert child.stopped is not None and child.stopped.error_code
         assert child.stopped.machine is not None
@@ -159,8 +160,26 @@ def test_invalid_private_close_retains_native_cancelled_measurement_and_safe_fai
     finally:
         if not child.closed:
             with contextlib.suppress(WorkflowError):
-                child.close(settings.worker.shutdown_timeout_ms)
+                child.close(pipeline.host_shutdown_timeout_ms)
         assert child.process.poll() is not None
     captured = capfd.readouterr()
     assert captured.out == "" and "summary_machine_failed" in captured.err
     assert "PrivateInvalidCloseCanary" not in captured.err
+
+
+def test_real_machine_bridge_rejects_the_previous_serialized_python_workflow_version(
+    tmp_path: Path,
+) -> None:
+    packet, pipeline = stage_machine_run(tmp_path)
+    previous = packet.model_copy(update={"version": "2026-11-04"})
+    script = REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "machine-task.ts"
+    result = subprocess.run(
+        [required_bun(), "run", "--no-install", str(script), str(tmp_path)],
+        input=(previous.model_dump_json() + "\n").encode("utf-8"),
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 1 and result.stdout == b""
+    assert b"MACHINE_SETUP_FAILED" in result.stderr
+    assert not (tmp_path / pipeline.output_directory / "logs" / "hono-server-machine.json").exists()
