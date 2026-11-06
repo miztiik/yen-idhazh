@@ -1,0 +1,83 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "summary_evaluator"
+version = "2026.11.2"
+description = "Local HHEM and UniEval summary evaluation."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2.12,<3",
+    "fastapi>=0.121,<0.122",
+    "uvicorn>=0.38,<1",
+    "httpx>=0.28,<1",
+]
+
+[project.optional-dependencies]
+model = [
+    "transformers==4.57.6",
+    "torch==2.8.0",
+    "huggingface-hub==0.36.0",
+    "sentencepiece==0.2.1",
+    "nltk==3.9.2",
+]
+
+[dependency-groups]
+resources = [
+    "transformers==4.57.6",
+    "huggingface-hub==0.36.0",
+    "sentencepiece==0.2.1",
+    "nltk==3.9.2",
+]
+dev = [
+    { include-group = "resources" },
+    "mypy>=1.14,<2",
+    "pytest>=8.3,<10",
+    "pytest-socket>=0.7,<1",
+    "ruff>=0.9,<1",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = ["src", "../../backend", "tests", "../../.github/scripts/summary-eval-tests"]
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["idhazh.*", "utilities.*"]
+follow_imports = "silent"
+
+[[tool.mypy.overrides]]
+module = [
+    "torch",
+    "transformers",
+    "huggingface_hub",
+    "huggingface_hub.utils",
+    "nltk",
+    "nltk.*",
+    "tokenizers",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "../../.github/scripts/summary-eval-tests/summary_eval_tests"]
+pythonpath = [".", "tests", "../../.github/scripts/summary-eval-tests", "../../backend"]
+# asyncio uses Unix-domain sockets for local wake-up IPC, not an HTTP listener.
+addopts = "-q --import-mode=importlib --disable-socket --allow-unix-socket"

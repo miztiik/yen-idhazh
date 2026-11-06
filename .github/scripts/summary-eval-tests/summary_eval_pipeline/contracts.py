@@ -4,25 +4,25 @@ import hashlib
 from datetime import timedelta
 from typing import Annotated, Final, Literal, Self
 
-from hhem_evaluator.contracts.api_health import ApiHealth
-from hhem_evaluator.contracts.base import OutcomeStatus
-from hhem_evaluator.contracts.evaluation_result import EvaluationResult
-from hhem_evaluator.contracts.unieval_contract import DIMENSIONS
-from hhem_evaluator.contracts.unieval_result import UnievalResult
-from hhem_evaluator.shared.contracts.base import (
+from idhazh.contracts.app_config import ModelsFile
+from pydantic import AfterValidator, AwareDatetime, ConfigDict, Field, model_validator
+from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
+from summary_evaluator.serve_http.contracts.api_health import ApiHealth
+from summary_evaluator.shared.contracts.base import (
     CommitId,
     ContextIdentity,
     Milliseconds,
     NativeContract,
     NonblankText,
+    OutcomeStatus,
     PositiveCount,
     RelativePath,
     Sha256,
     Uuid4,
     validate_text,
 )
-from idhazh.contracts.app_config import ModelsFile
-from pydantic import AfterValidator, AwareDatetime, ConfigDict, Field, model_validator
+from summary_evaluator.unieval.contracts.unieval_contract import DIMENSIONS
+from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 
 from .host_reader import HardwareRow, MachineUsage, measurement_complete
 

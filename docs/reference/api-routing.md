@@ -31,9 +31,9 @@ Each changed payload family follows its own declared compatibility rule.
 
 The `summary-evaluator` HTTP protocol uses the fixed date `2026-11-05`.
 Its constants live in
-`services/hhem-evaluator/src/hhem_evaluator/contracts/base.py` and
-`unieval_router.py`. The distribution and import package retain their current
-HHEM names independently of the API title.
+`services/summary_evaluator/src/summary_evaluator/shared/contracts/api_paths.py`
+and `unieval/unieval_router.py`. The installed distribution and import package
+are `summary_evaluator`; their release date remains independent of the HTTP date.
 
 Table A - Evaluator operations
 
@@ -48,7 +48,7 @@ Table A - Evaluator operations
 
 The application schema is `2026-11-06`, HHEM's scoring schema remains
 `2026-11-02`, and native UniEval's scoring schema remains `2026-11-04`.
-The [application reference](fastapi-server.md) owns current-only validation,
+The [application reference](summary-evaluator-api.md) owns current-only validation,
 local refusals and listener settings.
 
 ## Upstream native-protocol exception
@@ -66,7 +66,7 @@ implementation.
 
 ## See also
 
-- [fastapi-server.md](fastapi-server.md) - evaluator listener and live application contract.
+- [summary-evaluator-api.md](summary-evaluator-api.md) - evaluator listener and live application contract.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - HHEM scoring contract.
 - [unieval-api.md](unieval-api.md) - native UniEval scoring contract.
 - [summary-evaluation-workflow.md](summary-evaluation-workflow.md) - direct native generation and evaluator clients.

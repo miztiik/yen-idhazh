@@ -141,7 +141,7 @@ config/
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | E1 | 1 | Call native generation without the evaluator | - | A | DONE | curly-lamp | - | - |
 | E2 | 2 | Remove generation from the evaluation API | 1 | A | DONE | curly-lamp | - | adopted worker |
-| E3 | 3 | Rename and divide the evaluator and its tests | 2 | A | PENDING | - | - | - |
+| E3 | 3 | Rename and divide the evaluator and its tests | 2 | A | DONE | curly-lamp | - | - |
 | E4 | 4 | Rename and isolate the summary generator and its caller | 2 | B | PENDING | - | - | - |
 | E5 | 5 | Consolidate source coverage under the summary evaluator | 3, 4 | C | PENDING | - | - | - |
 | E6 | 6 | Centralize production and evaluation prompt files | 3, 4 | D | PENDING | - | - | - |
@@ -454,6 +454,7 @@ config/
 | M10 | `services/hhem-evaluator/src/hhem_evaluator/dispatch_evaluation.py` | `services/summary_evaluator/src/summary_evaluator/shared/disconnected_response.py` - disconnect response; `services/summary_evaluator/src/summary_evaluator/hhem/dispatch_evaluation.py` - HHEM HTTP execution |
 | M11 | No existing module; replace shared mechanisms' HHEM failure dependency | `services/summary_evaluator/src/summary_evaluator/shared/fail_runtime.py` - closed code-only runtime failures; each scorer translates these to its existing public errors |
 | M12 | Package initializers created with real modules | `services/summary_evaluator/src/summary_evaluator/serve_http/__init__.py`; `services/summary_evaluator/src/summary_evaluator/serve_http/contracts/__init__.py`; `services/summary_evaluator/src/summary_evaluator/shared/__init__.py`; `services/summary_evaluator/src/summary_evaluator/shared/contracts/__init__.py`; `services/summary_evaluator/src/summary_evaluator/hhem/__init__.py`; `services/summary_evaluator/src/summary_evaluator/unieval/__init__.py`; `services/summary_evaluator/src/summary_evaluator/unieval/contracts/__init__.py` |
+| M13 | HHEM and UniEval settings composition in `load_settings.py` and `load_unieval_settings.py` | `services/summary_evaluator/src/summary_evaluator/serve_http/load_scorer_settings.py` assembles the named HTTP snapshot; scorer readers receive frozen listener/logging values without importing the serving package. |
 
 - **Files touched - test moves:** Keep basenames except the native generation helper, whose old name describes the removed proxy. Preserve the model recording files under `tests/fixtures/`.
 
@@ -511,6 +512,7 @@ config/
 | N48 | `services/hhem-evaluator/tests/test_workflow_outcomes.py` | `.github/scripts/summary-eval-tests/summary_eval_tests/test_workflow_outcomes.py` |
 | N49 | No existing file | `services/summary_evaluator/tests/summary_evaluator_cases/__init__.py` |
 | N50 | No existing file | `.github/scripts/summary-eval-tests/summary_eval_tests/__init__.py` |
+| N51 | `services/hhem-evaluator/tests/test_native_generation.py` - added by PR 1 | `.github/scripts/summary-eval-tests/summary_eval_tests/test_native_generation.py` |
 
 - **Files touched - every external old-name reference and semantic documentation consumer:**
   - `.github/scripts/summary-eval-tests/machine-task.ts`
@@ -537,6 +539,9 @@ config/
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/settings.py`
   - `.github/workflows/ci.yml` - verify evaluator setup remains excluded; no Python job migration.
   - `.github/workflows/summary-eval-tests.yml`
+  - `.github/workflows/summary-evaluator-checks.yml` - retain the dedicated Linux gate at the renamed project.
+  - `.github/actions/check-summary-evaluator/action.yml` - name both service and workflow test packages.
+  - `backend/tests/workflows/_harness.py` - read the moved named workflow configuration.
   - `.gitignore`
   - `backend/tests/workflows/test_ci_selection.py`
   - `docs/architecture/contracts/identity.md` - update current boundary paths; keep identifier meanings unchanged.

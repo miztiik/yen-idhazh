@@ -13,7 +13,7 @@ publish data, collect resources or retain completed results.
 One HTTP process owns one scoring process. FastAPI's lifespan starts loading
 in the background and owns shutdown. Health reports the observed loading,
 ready, replacing, stopping or failed state without waiting for prediction.
-The [shared application](local-model-api.md) owns the listener and explicit
+The [shared application](summary-evaluator.md) owns the listener and explicit
 component selection. It accepts its configured loopback host only. Browser origins,
 duplicate or unexpected Host headers, redirects and raw access logs are not
 accepted.
@@ -152,6 +152,6 @@ caller does not need report or hardware code to use the evaluator.
 ## See also
 
 - [../../reference/hhem-evaluation-api.md](../../reference/hhem-evaluation-api.md) - native fields, settings and response policy.
-- [../../reference/fastapi-server.md](../../reference/fastapi-server.md) - shared listener, enabled components and diagnostic files.
+- [../../reference/summary-evaluator-api.md](../../reference/summary-evaluator-api.md) - shared listener, enabled components and diagnostic files.
 - [../../how-to/run-the-gates.md#independent-python-service-contracts](../../how-to/run-the-gates.md#independent-python-service-contracts) - offline and real-model checks.
 - [../contracts/identity.md#6-hhem-execution-and-event-identity](../contracts/identity.md#6-hhem-execution-and-event-identity) - execution and event identities.

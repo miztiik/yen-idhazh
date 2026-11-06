@@ -8,12 +8,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from hhem_evaluator.contracts.lifecycle_fields import LifecycleFields
-from hhem_evaluator.shared.contracts.base import Uuid4
-from hhem_evaluator.shared.contracts.service_settings import LoggingSettings
-from hhem_evaluator.shared.create_execution_id import create_execution_id
-from hhem_evaluator.write_event_records import StrictEventHandler
 from pydantic import AwareDatetime
+from summary_evaluator.shared.contracts.base import Uuid4
+from summary_evaluator.shared.contracts.diagnostic_data import LifecycleFields
+from summary_evaluator.shared.contracts.service_settings import LoggingSettings
+from summary_evaluator.shared.create_execution_id import create_execution_id
+from summary_evaluator.shared.write_event_records import StrictEventHandler
 
 from .contracts import RunIdentity, WorkflowContract
 

@@ -8,7 +8,7 @@ meaning, complete-source processing and process ownership.
 
 ## Native ownership and routes
 
-`services/hhem-evaluator/src/hhem_evaluator/contracts/unieval_*.py` owns
+`services/summary_evaluator/src/summary_evaluator/unieval/contracts/` owns
 the native Pydantic contracts and on-demand schemas. Their version is
 `2026-11-04`. They are transient, current-only contracts: producers and
 consumers change together, without old-route aliases or historical readers.
@@ -22,7 +22,7 @@ Table A - Native operations
 | A2 | `GET /api/2026-11-05/get-unieval-health` | Observe this component's actual model, worker, queue and failure state. |
 | A3 | `GET /api/2026-11-05/get-summary-evaluator-health` | Shared application readiness, with independent HHEM and UniEval observations. |
 
-`config/fastapi-server.json` owns the listener, logging and explicit
+`config/summary-evals/api.json` owns the listener, logging and explicit
 `enabled_routes`. Add `unieval` for the invocation that needs it. Disabled
 operation routes return HTTP 404 and no model/configuration is loaded.
 The API prefix is a protocol path, not another listener. The
@@ -71,7 +71,7 @@ result; clients must validate and retain them rather than discard their body.
 
 ## Settings and preparation
 
-`config/unieval-evaluator.json` owns the selected assets, native prompt
+`config/summary-evals/unieval-evaluator/settings.json` owns the selected assets, native prompt
 formats, source-processing defaults, queue, request and worker deadlines.
 The shared listener/logging snapshot is supplied by the app, not duplicated
 in the evaluator file. The named file is loaded once per invocation.
@@ -120,6 +120,6 @@ file failure follows the server's warning-only mirror policy.
 
 - [../architecture/evaluation/unieval-api.md](../architecture/evaluation/unieval-api.md) - complete-source calculation and limitations.
 - [../how-to/run-unieval-evaluation-api.md](../how-to/run-unieval-evaluation-api.md) - preparation, serving and real recording commands.
-- [fastapi-server.md](fastapi-server.md) - listener, component selection and CloudEvents.
+- [summary-evaluator-api.md](summary-evaluator-api.md) - listener, component selection and CloudEvents.
 - [summary-evaluation-workflow.md](summary-evaluation-workflow.md) - separate workflow orchestration.
 - [../architecture/contracts/identity.md](../architecture/contracts/identity.md) - native request and occurrence identity.

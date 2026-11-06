@@ -11,15 +11,18 @@ from pathlib import Path
 from typing import BinaryIO, TextIO
 
 import uvicorn
-from hhem_evaluator.api_settings import load_api_settings
-from hhem_evaluator.configure_server import create_server_config, report_startup_failure
-from hhem_evaluator.contracts.api_settings import ApiSettings
-from hhem_evaluator.contracts.server_event import ApiDiagnosticData
-from hhem_evaluator.load_settings import load_settings
-from hhem_evaluator.load_unieval_settings import load_unieval_settings
-from hhem_evaluator.run_server import has_clean_lifespan
-from hhem_evaluator.serve_api import create_app
-from hhem_evaluator.serve_http.emit_events import EventWriter
+from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.configure_server import (
+    create_server_config,
+    report_startup_failure,
+)
+from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
+from summary_evaluator.serve_http.contracts.server_event import ApiDiagnosticData
+from summary_evaluator.serve_http.emit_events import EventWriter
+from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
+from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
+from summary_evaluator.serve_http.run_server import has_clean_lifespan
+from summary_evaluator.serve_http.serve_api import create_app
 
 from .channels import OwnedChannels, open_owned_channels
 from .contracts import WORKFLOW_VERSION
@@ -63,11 +66,13 @@ async def serve_owned_api(
 ) -> None:
     if packet.phase != "evaluation":
         raise ValueError("Only evaluation starts the shared evaluation application")
-    shared = load_api_settings(root / "config" / "fastapi-server.json")
+    shared = load_api_settings(root / "config" / "summary-evals" / "api.json")
     api = ApiSettings.model_validate_json(
         shared.model_copy(update={"enabled_routes": ("hhem", "unieval")}).model_dump_json()
     )
-    settings = load_settings(root / "config" / "hhem-evaluator" / "settings.json", api)
+    settings = load_settings(
+        root / "config" / "summary-evals" / "hhem-evaluator" / "settings.json", api
+    )
     unieval_settings = load_unieval_settings(root, api)
     events = EventWriter(
         api.logging,

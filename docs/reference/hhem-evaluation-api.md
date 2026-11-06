@@ -10,7 +10,7 @@ owns admission, cancellation, model loading and failure handling.
 
 ## Native ownership and version
 
-`services/hhem-evaluator/src/hhem_evaluator/contracts/` owns the native Pydantic
+`services/summary_evaluator/src/summary_evaluator/hhem/contracts/` owns the native Pydantic
 models and their on-demand JSON Schemas. Every schema has date-stamped
 `version` and `changelog` metadata. The initial version is `2026-11-02`.
 Results, health, events, settings and worker packets require this wire version;
@@ -148,7 +148,7 @@ Table E - Strict event fields
 The shared server wraps each native event in the current CloudEvents
 `ServerEvent` contract, preserving its event ID and UTC occurrence time.
 The old unwrapped event transport is not accepted. The
-[server reference](fastapi-server.md#diagnostics) owns the envelope and file behavior.
+[server reference](summary-evaluator-api.md#diagnostics) owns the envelope and file behavior.
 
 `encode_json_line` counts the complete UTF-8 JSONL record, including its
 newline, against `logging.max_event_bytes` and refuses overflow without
@@ -177,10 +177,11 @@ messages or a broker.
 
 ## Authored startup settings
 
-`config/hhem-evaluator/settings.json` supplies HHEM's assets, scoring, queue,
-response and worker settings. `config/fastapi-server.json` supplies the shared
-listener, logging and explicit component selection. `load_settings` reads
-these two named files, validates the combined snapshot and returns frozen
+`config/summary-evals/hhem-evaluator/settings.json` supplies HHEM's assets, scoring, queue,
+response and worker settings. `config/summary-evals/api.json` supplies the shared
+listener, logging and explicit component selection. The serving adapter reads
+these two named files and passes the resolved listener and logging to HHEM.
+HHEM's reader validates the combined snapshot and returns frozen
 nested models and immutable asset inventories. Missing or invalid settings
 fail by name. There is no environment-selected model destination, source
 fallback, remote lookup or live reload. A replacement must use the same
@@ -190,9 +191,9 @@ Table G - Initial settings and units
 
 | Id | Keys | Authored values |
 | --- | --- | --- |
-| G1 | `enabled` | A private-worker snapshot value derived from [shared route selection](fastapi-server.md#configuration-and-routes), not another authored flag. |
+| G1 | `enabled` | A private-worker snapshot value derived from [shared route selection](summary-evaluator-api.md#configuration-and-routes), not another authored flag. |
 | G2 | `hhem.model`, `hhem.foundation` | Required references, full immutable revisions and finite named file lists in the committed settings. The model revision is `8e4a2e6e96c708cc76c2344f7e4757df2515292c`; the foundation revision is `7bcac572ce56db69c1ea7c8af255c5d7c9672fc2`. Foundation files are tokenizer/config assets, not another model's weights. |
-| G3 | `hhem.cache_directory` | `services/hhem-evaluator/var/model-cache`, a relative POSIX operator path; never a request control. |
+| G3 | `hhem.cache_directory` | `services/summary_evaluator/var/model-cache`, a relative POSIX operator path; never a request control. |
 | G4 | `scoring.chunk_words`, `scoring.chunk_overlap_words`, `scoring.max_windows_per_comparison` | 5000 words per window, 500 words of regular overlap and at most 256 planned windows per comparison. Reject a larger plan; never drop windows. |
 | G5 | `response.hhem_full`, `response.include_window_details` | Both `false`; independent permanent optional API controls. |
 | G6 | `listener.host`, `listener.port` | Read from the shared server configuration: `127.0.0.1`, port 3010. Only configured loopback literals `127.0.0.1` and `::1` validate. |
@@ -228,7 +229,7 @@ their package metadata alone is not evidence that the official model loads.
 
 ## Standalone command and captured evidence
 
-Run `python -m hhem_evaluator` in the independent model environment. `--root`
+Run `python -m summary_evaluator` in the independent model environment. `--root`
 names the repository root and `--settings` names its committed settings file;
 both are required operator paths. `--routes hhem` enables that invocation without editing the shared development
 selection. `--api-settings` can name the shared settings file; otherwise the
@@ -255,7 +256,7 @@ that code belongs to the evaluator package.
 ## See also
 
 - [../how-to/run-the-gates.md#independent-python-service-contracts](../how-to/run-the-gates.md#independent-python-service-contracts) - preparation and model-free checks.
-- [fastapi-server.md](fastapi-server.md) - shared evaluator readiness and diagnostic files.
+- [summary-evaluator-api.md](summary-evaluator-api.md) - shared evaluator readiness and diagnostic files.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - native schema ownership.
 - [../architecture/contracts/identity.md#6-hhem-execution-and-event-identity](../architecture/contracts/identity.md#6-hhem-execution-and-event-identity) - caller, execution and event identities.
 - [repository-layout.md](repository-layout.md) - package, configuration and fixture locations.

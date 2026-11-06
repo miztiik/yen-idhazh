@@ -1,6 +1,6 @@
 """Which selected and observed model identities explain this run's results?"""
 
-from hhem_evaluator.contracts.service_settings import ServiceSettings
+from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
 
 from .contracts import PipelineEvidence
 

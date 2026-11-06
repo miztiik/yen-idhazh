@@ -1,8 +1,8 @@
 """Which status follows from one phase's actual work, instruments and confirmed cleanup?"""
 
-from hhem_evaluator.contracts.api_health import ApiHealth
-from hhem_evaluator.contracts.evaluation_result import EvaluationResult
-from hhem_evaluator.contracts.unieval_result import UnievalResult
+from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
+from summary_evaluator.serve_http.contracts.api_health import ApiHealth
+from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 
 from .contracts import (
     WORKFLOW_VERSION,

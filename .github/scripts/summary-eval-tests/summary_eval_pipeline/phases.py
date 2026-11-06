@@ -9,16 +9,16 @@ from collections.abc import Awaitable
 from pathlib import Path
 
 import httpx
-from hhem_evaluator.api_settings import load_api_settings
-from hhem_evaluator.contracts.api_settings import ApiSettings
-from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
-from hhem_evaluator.contracts.service_settings import ServiceSettings
-from hhem_evaluator.contracts.unieval_request import UnievalRequest
-from hhem_evaluator.contracts.unieval_settings import UnievalSettings
-from hhem_evaluator.load_settings import load_settings
-from hhem_evaluator.load_unieval_settings import load_unieval_settings
-from hhem_evaluator.shared.contracts.service_settings import StartupContext
-from hhem_evaluator.shared.create_execution_id import create_execution_id
+from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
+from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
+from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
+from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
+from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
+from summary_evaluator.shared.contracts.service_settings import StartupContext
+from summary_evaluator.shared.create_execution_id import create_execution_id
+from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
+from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
 
 from .contracts import (
     WORKFLOW_VERSION,
@@ -72,12 +72,14 @@ async def guard_work[Result](
 async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
     pipeline = load_pipeline_settings(root)
     shared: ApiSettings | None = (
-        load_api_settings(root / "config" / "fastapi-server.json")
+        load_api_settings(root / "config" / "summary-evals" / "api.json")
         if phase == "evaluation"
         else None
     )
     settings: ServiceSettings | None = (
-        load_settings(root / "config" / "hhem-evaluator" / "settings.json", shared)
+        load_settings(
+            root / "config" / "summary-evals" / "hhem-evaluator" / "settings.json", shared
+        )
         if shared is not None
         else None
     )

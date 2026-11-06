@@ -288,7 +288,7 @@ hhem
 {sequence}
 ```
 
-`services/hhem-evaluator/src/hhem_evaluator/resolve_ids.py` declares this encoding
+`services/summary_evaluator/src/summary_evaluator/resolve_ids.py` declares this encoding
 once and uses Python's standard UUID implementation. The named
 `tests/fixtures/hhem-evaluator/event-id-vectors.json` vectors also run through
 the existing TypeScript `createUuidV5` implementation. Missing Bun or its locked

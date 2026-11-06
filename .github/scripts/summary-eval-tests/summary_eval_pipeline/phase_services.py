@@ -3,10 +3,10 @@
 import time
 from dataclasses import dataclass, field
 
-from hhem_evaluator.contracts.api_health import ApiHealth
-from hhem_evaluator.contracts.api_settings import ApiSettings
-from hhem_evaluator.contracts.service_settings import ServiceSettings
-from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
+from summary_evaluator.serve_http.contracts.api_health import ApiHealth
+from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
+from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
 
 from .contracts import PipelineError, RunIdentity, ServerOutcome, ServiceShutdown
 from .control import HostReady

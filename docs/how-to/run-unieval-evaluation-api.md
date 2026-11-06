@@ -8,7 +8,7 @@ The [reference](../reference/unieval-api.md) owns request fields and modes.
 
 ## Prepare offline-check resources
 
-From `services/hhem-evaluator`, use the existing CPython 3.12 environment:
+From `services/summary_evaluator`, use the existing CPython 3.12 environment:
 
 ```powershell
 uv sync --frozen --group dev
@@ -30,7 +30,7 @@ Use a separate environment so ordinary model-free checks remain separate:
 $env:UV_PROJECT_ENVIRONMENT = Join-Path (Get-Location) 'var\unieval-model-venv'
 uv sync --frozen --extra model --group dev
 uv run --frozen --extra model python .\scripts\prepare-unieval-resources.py --root '..\..' --include-weights
-uv run --frozen --extra model python -m hhem_evaluator --root '..\..' --settings '..\..\config\hhem-evaluator\settings.json' --routes unieval
+uv run --frozen --extra model python -m summary_evaluator --root '..\..' --settings '..\..\config\summary-evals\hhem-evaluator\settings.json' --routes unieval
 ```
 
 The shared config owns the loopback address. This invocation loads no HHEM
@@ -68,5 +68,5 @@ not prove live workflow integration, resource capacity or judging accuracy.
 
 - [../reference/unieval-api.md](../reference/unieval-api.md) - requests, results and error meanings.
 - [../architecture/evaluation/unieval-api.md](../architecture/evaluation/unieval-api.md) - complete-source calculation.
-- [../reference/fastapi-server.md](../reference/fastapi-server.md) - shared listener and logging.
+- [../reference/summary-evaluator-api.md](../reference/summary-evaluator-api.md) - shared listener and logging.
 - [run-the-gates.md](run-the-gates.md) - normal selected checks.

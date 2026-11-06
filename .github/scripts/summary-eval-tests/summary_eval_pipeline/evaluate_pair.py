@@ -5,14 +5,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
-from hhem_evaluator.contracts.api_health import ApiHealth
-from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
-from hhem_evaluator.contracts.evaluation_result import EvaluationResult
-from hhem_evaluator.contracts.service_health import ServiceHealth
-from hhem_evaluator.contracts.service_settings import ServiceSettings
-from hhem_evaluator.contracts.unieval_request import UnievalRequest
-from hhem_evaluator.contracts.unieval_result import UnievalHealth, UnievalResult
-from hhem_evaluator.contracts.unieval_settings import UnievalSettings
+from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
+from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
+from summary_evaluator.hhem.contracts.service_health import ServiceHealth
+from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
+from summary_evaluator.serve_http.contracts.api_health import ApiHealth
+from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
+from summary_evaluator.unieval.contracts.unieval_result import UnievalHealth, UnievalResult
+from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
 
 from .contracts import PipelineError, text_sha256
 from .evaluation import evaluate, evaluate_unieval

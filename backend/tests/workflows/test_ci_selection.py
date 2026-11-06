@@ -102,12 +102,13 @@ def test_ci_leaves_summary_evaluation_to_its_manual_workflow() -> None:
             if "run" in step:
                 command = _script(step, "ordinary CI step")
                 assert "hhem-evaluator" not in command
+                assert "summary_evaluator" not in command
                 assert "summary-eval-tests" not in command
     workflow = _load_workflows()["summary-eval-tests.yml"]
     assert set(_mapping(workflow["on"], "summary evaluation triggers")) == {"workflow_dispatch"}
     defaults = _mapping(_job(workflow, "evaluate")["defaults"], "evaluation defaults")
     assert _mapping(defaults["run"], "evaluation run defaults")["working-directory"] == (
-        "services/hhem-evaluator"
+        "services/summary_evaluator"
     )
 
 
@@ -124,9 +125,17 @@ def test_model_free_summary_checks_are_manual_read_only_and_complete() -> None:
     assert not job.get("continue-on-error")
     steps = _steps(workflow, "model-free")
     commands = "\n".join(_script(step, "model-free checks") for step in steps if "run" in step)
-    assert "uv sync --project services/hhem-evaluator --frozen --group dev" in commands
+    assert "uv sync --project services/summary_evaluator --frozen --group dev" in commands
     assert "prepare-unieval-resources.py --root ../.." in commands
-    assert "uv run --frozen pytest tests --junitxml=var/model-free-results.xml" in commands
+    assert (
+        "uv run --frozen pytest -c pyproject.toml tests "
+        "../../.github/scripts/summary-eval-tests/summary_eval_tests "
+        "--junitxml=var/model-free-results.xml"
+    ) in commands
+    assert (
+        "mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline "
+        "../../.github/scripts/summary-eval-tests/summary_eval_tests"
+    ) in commands
     assert "command -v setpriv" in commands
     for forbidden in (
         "--extra model",

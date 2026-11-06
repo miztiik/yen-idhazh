@@ -2,14 +2,14 @@
 
 from pathlib import Path
 
-from hhem_evaluator.shared.contracts.base import (
+from pydantic import ValidationError
+from summary_evaluator.shared.contracts.base import (
     ContextIdentity,
     NonblankText,
     PositiveCount,
     RelativePath,
 )
-from hhem_evaluator.shared.contracts.service_settings import LoggingSettings
-from pydantic import ValidationError
+from summary_evaluator.shared.contracts.service_settings import LoggingSettings
 
 from .contracts import WorkflowContract
 
@@ -41,7 +41,7 @@ class PipelineSettings(WorkflowContract):
 
 
 def load_pipeline_settings(root: Path) -> PipelineSettings:
-    path = root / "config" / "summary-eval-tests.json"
+    path = root / "config" / "summary-evals" / "workflow.json"
     try:
         return PipelineSettings.model_validate_json(path.read_bytes())
     except (OSError, ValidationError):

@@ -72,7 +72,7 @@ async function main() {
   const pipeline = z.object({
     output_directory: z.string(), control_max_bytes: z.int().positive(),
     max_response_bytes: z.int().positive(), http_connect_timeout_ms: z.int().positive(),
-  }).parse(await Bun.file(join(root, "config", "summary-eval-tests.json")).json());
+  }).parse(await Bun.file(join(root, "config", "summary-evals", "workflow.json")).json());
   const runtime = join(root, pipeline.output_directory);
   const packets = readPackets(process.stdin, pipeline.control_max_bytes);
   const startup = StartupSchema.parse((await packets.next()).value);

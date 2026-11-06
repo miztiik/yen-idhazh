@@ -9,9 +9,9 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
-from hhem_evaluator.shared.contracts.base import NonblankText
 from idhazh.llm.server import server_argv
 from pydantic import BaseModel, ConfigDict
+from summary_evaluator.shared.contracts.base import NonblankText
 from utilities.model_runtime import BIN_DIR, SERVER_BINARY, verify_model_files
 
 from .contracts import LoadedModel, PreparedRun, ServerOutcome
