@@ -40,6 +40,7 @@ from summary_evaluator.shared.contracts.api_paths import (
 )
 from summary_evaluator.shared.contracts.error_policy import ErrorCode
 from summary_evaluator.shared.contracts.service_settings import StartupContext
+from summary_evaluator.shared.fail_runtime import RuntimeFailure
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 from summary_evaluator.unieval.unieval_router import UNIEVAL_HEALTH_PATH, UNIEVAL_PATH
 
@@ -286,7 +287,7 @@ def test_lifespan_preserves_the_original_error_when_cleanup_also_fails() -> None
                 raise original
         assert observed.value.exceptions[0] is original
         cleanup = observed.value.exceptions[1]
-        assert isinstance(cleanup, EvaluationFailure)
-        assert cleanup.error.code == "LOGGING_FAILED"
+        assert isinstance(cleanup, RuntimeFailure)
+        assert cleanup.code == "LOGGING_FAILED"
 
     asyncio.run(check())

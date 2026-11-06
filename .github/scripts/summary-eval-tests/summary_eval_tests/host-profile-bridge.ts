@@ -66,7 +66,7 @@ if (Bun.argv[2] === "schemas") {
         const recorded = z.object({
           pid: z.int().positive(), stat: z.string(),
         }).parse(await Bun.file(new URL(
-          "../../../tests/fixtures/host-probes/process-inputs.json", import.meta.url,
+          "../../../../tests/fixtures/host-probes/process-inputs.json", import.meta.url,
         )).json());
         const processRoot = join(input.proc_root, String(process.pid));
         await mkdir(processRoot, { recursive: true });
@@ -89,7 +89,7 @@ if (Bun.argv[2] === "schemas") {
               config: f.config, settings: f.settings,
               options: {
                 outputRoot: join(f.directory, "state"), inspection: f.inspection,
-                registryPath: new URL("../../../config/ledgers.json", import.meta.url),
+                registryPath: new URL("../../../../config/ledgers.json", import.meta.url),
               },
             },
             probes: profiling,

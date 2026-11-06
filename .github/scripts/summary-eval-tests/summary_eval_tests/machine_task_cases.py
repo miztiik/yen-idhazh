@@ -79,7 +79,7 @@ def stage_machine_run(
     root: Path,
 ) -> tuple[StartupPacket, PipelineSettings]:
     pipeline = load_pipeline_settings(REPOSITORY)
-    (root / "config").mkdir()
+    (root / "config" / "summary-evals").mkdir(parents=True)
     (root / "config" / "summary-evals" / "workflow.json").write_bytes(
         (REPOSITORY / "config" / "summary-evals" / "workflow.json").read_bytes()
     )
