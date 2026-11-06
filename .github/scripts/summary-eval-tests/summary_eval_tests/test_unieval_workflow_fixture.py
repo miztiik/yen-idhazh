@@ -1,5 +1,7 @@
 """Does the named live input exercise complete long-source prompts with the actual tokenizer?"""
 
+from itertools import pairwise
+
 import pytest
 from summary_eval_pipeline.contracts import text_sha256
 from summary_eval_pipeline.evaluate_pair import require_unieval_work
@@ -37,7 +39,7 @@ def test_named_source_alone_exceeds_the_original_coherence_cutoff_and_covers_its
     assert spans[0].start == 0 and spans[-1].end == len(inputs.source_text)
     assert all(
         current.start < previous.end
-        for previous, current in zip(spans[:-1], spans[1:], strict=True)
+        for previous, current in pairwise(spans)
     )
     assert "Thursday" in inputs.source_text[spans[-1].start : spans[-1].end]
     assert "Thursday" in inputs.reference_summary_text

@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from string import Template
 
-from idhazh.llm.server import SystemPlacement, TurnMarkers
 from summary_eval_pipeline.contracts import (
     WORKFLOW_VERSION,
     GenerationReceipt,
@@ -18,6 +17,8 @@ from summary_eval_pipeline.inputs import ManualInputs
 from summary_eval_pipeline.model_selection import SelectedModel, select_model
 from summary_evaluator_cases.contract_examples import REPOSITORY
 from summary_evaluator_cases.replay_predictions import read_recordings
+
+from idhazh.llm.server import SystemPlacement, TurnMarkers
 
 
 def example_run() -> RunIdentity:

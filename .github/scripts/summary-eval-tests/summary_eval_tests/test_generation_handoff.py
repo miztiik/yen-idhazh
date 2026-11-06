@@ -6,7 +6,6 @@ from pathlib import Path
 
 import httpx
 import pytest
-from idhazh.llm.server import request_payload, server_argv
 from pydantic import ValidationError
 from summary_eval_pipeline.contracts import (
     WORKFLOW_VERSION,
@@ -28,6 +27,7 @@ from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_eval_pipeline.storage import read_result, write_result
 from summary_evaluator_cases.contract_examples import REPOSITORY
 
+from idhazh.llm.server import request_payload, server_argv
 from summary_eval_tests.generation_cases import (
     chat_markers,
     handoff_case,

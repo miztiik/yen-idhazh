@@ -8,7 +8,6 @@ from pathlib import Path
 
 import httpx
 import pytest
-from idhazh.llm.server import request_payload
 from pydantic import ValidationError
 from summary_eval_pipeline.contracts import GeneratedAnswer
 from summary_eval_pipeline.failures import WorkflowError
@@ -19,6 +18,7 @@ from summary_eval_pipeline.native_response import NativeCompletion, NativeReply
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_evaluator_cases.contract_examples import REPOSITORY
 
+from idhazh.llm.server import request_payload
 from summary_eval_tests.generation_cases import chat_markers, native_generation_case
 from summary_eval_tests.native_cases import RecordedLlama
 
