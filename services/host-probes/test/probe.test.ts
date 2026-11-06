@@ -4,7 +4,9 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { copyFileSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { createRootContext } from "@idhazh/common-contracts/create-operation-context";
-import { writeTraceContext } from "@idhazh/common-contracts/propagate-trace-context";
+import { readTraceContext, writeTraceContext } from "@idhazh/common-contracts/propagate-trace-context";
+import type { ProbeEvent } from "../src/api/create-probe-event";
+import { readProbeEvent } from "../src/api/create-probe-event";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -465,7 +467,9 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
   config.task_profile = { ...config.task_profile, enabled: true, memory_enabled: false, max_profile_handles: 1 };
   config.cache_probe.counters.enabled = true;
   const profiles: TaskProfile[] = [];
-  const profilesHandler = createSampleHandler(config, { platform: "linux", procRoot: directory }, profile => { profiles.push(profile); });
+  const nativeEvents: ProbeEvent[] = [];
+  const profilesHandler = createSampleHandler(config, { platform: "linux", procRoot: directory },
+    profile => { profiles.push(profile); }, { writeEvent: event => { nativeEvents.push(event); } });
   const input = { identity: taskIdentity(), target: { pid: 4242, start_ticks: "12345" } };
   const parent = createRootContext({ traceState: "profile=http" });
   const stopCarrier = writeTraceContext(createRootContext({ traceState: "stop=independent" }));
@@ -485,6 +489,12 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
     expect(started.spanId).not.toBe(parent.spanId);
     expect(started.traceState).toBe(parent.traceState);
     expect(started.links).toEqual([]);
+    const startEvent = nativeEvents.find(event => event.type === "host_probe_completed"
+      && event.data.operation === "start-task-profile");
+    expect(startEvent).toBeDefined();
+    expect(readTraceContext({ traceparent: startEvent?.traceparent, tracestate: startEvent?.tracestate })).toMatchObject({
+      traceId: started.traceId, spanId: started.spanId, traceState: started.traceState,
+    });
     expect(started.target).toEqual(input.target);
     expect(started.cache_counters?.status).toBe("unavailable");
     if (started.cache_counters?.status === "unavailable") expect(started.cache_counters.reason).toBe("target_not_owned");
@@ -513,6 +523,16 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
       handle: started.handle, outcome: "cancelled",
     }, undefined, stopCarrier));
     expect(await repeated.text()).toBe(bodies[0]!);
+    const stopEvents = nativeEvents.flatMap(event => event.type === "host_probe_completed" ? [event] : [])
+      .filter(event => event.data.operation === "stop-task-profile");
+    expect(stopEvents).toHaveLength(3);
+    expect(new Set(stopEvents.map(event => event.id)).size).toBe(3);
+    for (const event of stopEvents) {
+      expect(event.data).toEqual({ operation: "stop-task-profile", outcome: "handled" });
+      expect(readTraceContext({ traceparent: event.traceparent, tracestate: event.tracestate })).toMatchObject({
+        traceId: started.traceId, spanId: started.spanId, traceState: started.traceState,
+      });
+    }
     const next = StartTaskProfileResponseSchema.parse(await (await profilesHandler(command(START_TASK_PROFILE_PATH, input))).json());
     if (next.status !== "started") throw new Error("Completed handles must not exhaust capacity");
     expect(next.traceId).not.toBe(started.traceId);
@@ -602,12 +622,23 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
       await Bun.write(join(directory, "4242", "stat"), recorded.stat);
     }
   }
+});
+
+test("private report failures retain native session and service-lifetime diagnostics", async () => {
+  const directory = await procDirectory();
+  const config = await loadConfig();
+  config.task_profile = { ...config.task_profile, enabled: true, memory_enabled: false, max_profile_handles: 1 };
+  config.cache_probe.counters.enabled = true;
+  const input = { identity: taskIdentity(), target: { pid: 4242, start_ticks: "12345" } };
   for (const stopThrough of ["request", "shutdown"] as const) {
     let releaseReport: () => void;
     const reporting = new Promise<void>(resolve => { releaseReport = resolve; });
+    const lifetime = createRootContext({ traceState: "service=lifetime" });
+    const failures: ProbeEvent[] = [];
     const pendingReport = createSampleHandler({
       ...config, task_profile: { ...config.task_profile, lifecycle_timeout_ms: 1000 },
-    }, { platform: "linux", procRoot: directory }, () => reporting);
+    }, { platform: "linux", procRoot: directory }, () => reporting,
+    { lifetimeContext: lifetime, writeEvent: event => { failures.push(event); } });
     try {
       const started = StartTaskProfileResponseSchema.parse(await (await pendingReport(command(START_TASK_PROFILE_PATH, input))).json());
       if (started.status !== "started") throw new Error("Pending report case requires an actual collector");
@@ -619,6 +650,14 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
       const shutdown = pendingReport.close();
       expect(pendingReport.close()).toBe(shutdown);
       await expect(shutdown).rejects.toThrow(AggregateError);
+      const cleanup = failures.filter(event => event.type === "host_probe_cleanup_failed");
+      expect(cleanup).toHaveLength(1);
+      expect(cleanup[0]).toMatchObject(writeTraceContext(lifetime));
+      const profileFailure = failures.find(event => event.type === "task_profile_failed");
+      expect(profileFailure).toBeDefined();
+      expect(readTraceContext({
+        traceparent: profileFailure?.traceparent, tracestate: profileFailure?.tracestate,
+      })).toMatchObject({ traceId: started.traceId, spanId: started.spanId });
       expect((await pendingReport(command(START_TASK_PROFILE_PATH, input))).status).toBe(503);
       expect(readProcessIdentity(input.target.pid, config.max_proc_bytes, { platform: "linux", procRoot: directory }).value)
         .toMatchObject(input.target);
@@ -880,7 +919,9 @@ test("the one-shot CLI returns a sample and invalid arguments fail without succe
     new Response(process.stdout).text(), new Response(process.stderr).text(), process.exited,
   ]);
   expect(exitCode).toBe(0);
-  expect(stderr).toBe("");
+  expect(readProbeEvent(JSON.parse(stderr))).toMatchObject({
+    source: "/services/host-probes", type: "host_probe_completed", data: { operation: "sample", outcome: "handled" },
+  });
   const sample = JSON.parse(stdout);
   expect(sample.sampled_at).toMatch(/Z$/);
   expect(sample).toHaveProperty("cpu");
@@ -892,5 +933,7 @@ test("the one-shot CLI returns a sample and invalid arguments fail without succe
   ]);
   expect(invalidExit).toBe(1);
   expect(invalidOut).toBe("");
-  expect(JSON.parse(invalidError).error).toContain("Usage:");
+  expect(readProbeEvent(JSON.parse(invalidError))).toMatchObject({
+    source: "/services/host-probes", type: "host_probe_failed", data: { code: "HOST_PROBE_FAILED" },
+  });
 });

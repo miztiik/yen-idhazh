@@ -1,6 +1,6 @@
 # Feed planning operator APIs
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
@@ -137,7 +137,7 @@ fields, failure-only article addresses and elapsed-time meaning.
 
 Terminal article diagnostics use
 [`ArticleFailureDiagnosticSchema`](../../../packages/common-contracts/src/schemas/article-failure-diagnostic.schema.ts).
-The existing `planner.progress` envelope retains its event version and configured
+The existing `planner.progress` envelope retains its event version and planner
 source. Failed `fetch`, `parse` or `quality` data contains the actual run;
 details contain its positive attempt, feed, captured candidate, address hash,
 `harvest-feeds` stage, native reason and complete `HarvestDiagnosticsSchema`.
@@ -147,8 +147,11 @@ object.
 
 The diagnostic retains native failure codes, extraction warnings and versions,
 timings, pacing, byte-limit facts and all measured quality fields. Unmeasured
-facts stay null; measured zero stays zero. Available response evidence keeps
-only the MIME type without parameters, byte counts and request profile.
+facts stay null; measured zero stays zero. Source word count
+(`quality.source_word_count`) measures the extracted article body before the
+token cap, not the whole web page; it cannot alone prove complete extraction.
+Available response evidence keeps only the MIME type without parameters, byte
+counts and request profile.
 Selected headers and truncated-header names are empty. No article text, HTML,
 title, address, header value, arbitrary exception message or stack enters this
 projection. Standalone parse retains these available fetch facts from its held
@@ -312,27 +315,30 @@ another operation for logging or use the server's supervision operation.
 The [shared identity contract](../contracts/identity.md#4-native-typescript-event-and-operation-metadata)
 defines that context and its carrier.
 
-[`SafePersistHttpDiagnosticSchema`](../../../services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts)
-owns this strict current-only relay shape and derives request/result field
-validators from their native authorities. The same native module declares
-`DeliveryCompletionDiagnosticSchema` and constructs its completion CloudEvent
-from the native run number, attempt, result and receiving context, without
-importing a server lifecycle contract. Paths, process IDs and arbitrary
+[`DeliveryCompletionDiagnosticSchema`](../../../services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts)
+owns this strict current-only payload and derives request/result field
+validators from their native authorities. The handler constructs its CloudEvent
+from the native run number, attempt, result and receiving context before any
+supervisor reads it, without importing a server lifecycle contract. Paths, process IDs and arbitrary
 fields are not diagnostic fields. `DeliveryEventSchema` accepts native
 completion and failure envelopes. A completion carrier must exactly match
 `writeTraceContext(data.context)`; failure data contains only the native
 planner error code. Accepted native envelopes retain their original
-occurrence and source. The current private completion packet is also read
-by the feed decoder. The
+occurrence and source. The old plain completion packet and its translator are
+removed. The
 [server writer](../../reference/serve-pipeline-apis.md#diagnostics-and-current-task-evidence)
 retains these facts and context in a separate completion event, not a lifecycle
 payload. The native HTTP result and saved `delivery-result.json`, including
 their exact paths, remain unchanged and remain the delivery authority.
 The API and client use the existing `writeJsonLine` helper to write one JSON
 object per stderr line.
-`safe_persist_http_failed` and
-`safe_persist_http_client_failed` identify server and transport failures without
-article bodies. An unconfirmed response or failed child shutdown records a failed
+`safe_persist_http_failed` is a native event with only the declared planner
+error code and the real receiving operation. Detailed sanitized failure
+evidence stays in its existing response/evidence surfaces.
+`safe_persist_http_client_failed` remains the separate client transport record.
+The [native API support matrix](../contracts/identity.md#native-api-support)
+defines the complete API standard and its private transport boundaries.
+An unconfirmed response or failed child shutdown records a failed
 receipt, not a successful one. Report generation and artifact preparation still
 run independently; [the workflow guide](../../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures)
 defines recovery and upload behavior.

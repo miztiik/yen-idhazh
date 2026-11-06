@@ -24,6 +24,7 @@ export type FeedApiInputs = {
   };
   machine?: MachineApiInputs;
   delivery?: Parameters<typeof createSafePersistApp>[0];
+  writeEvent?: Parameters<typeof createApiApp>[0]["writeEvent"];
 };
 
 export function createFeedApiApp(input: FeedApiInputs) {
@@ -33,7 +34,8 @@ export function createFeedApiApp(input: FeedApiInputs) {
     || enabled.has("machine") !== (input.machine !== undefined)) {
     throw new Error("Readiness must identify exactly the actual enabled API modules");
   }
-  return createApiApp({ identity: input.identity, create: signal => {
+  return createApiApp({ identity: input.identity,
+    ...(input.writeEvent === undefined ? {} : { writeEvent: input.writeEvent }), create: signal => {
     const app = new Hono<{ Bindings: ApiBindings }>();
     const planner = input.planner === undefined ? undefined : createPlanApp(input.planner.inputs, {
       ...input.planner.runtime,

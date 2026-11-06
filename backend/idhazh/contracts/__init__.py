@@ -24,6 +24,12 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.collection_prune import CollectionPruneRow
 from idhazh.contracts.console_band import ConsoleBand
+from idhazh.contracts.content_similarity_judge_evaluation import (
+    EvaluationLabels,
+    EvaluationReport,
+    EvaluationRun,
+    EvaluationSet,
+)
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
 from idhazh.contracts.council_invocation import PreparationReceipt, Selection, ShardFiles
@@ -148,6 +154,10 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     DigestView,
     ElementTable,
     EvalRow,
+    EvaluationLabels,
+    EvaluationReport,
+    EvaluationRun,
+    EvaluationSet,
     EvidenceItem,
     FeedHealthRow,
     FeedRetirementRow,
@@ -221,6 +231,10 @@ __all__ = [
     "EntityDef",
     "EntityFeed",
     "EvalRow",
+    "EvaluationLabels",
+    "EvaluationReport",
+    "EvaluationRun",
+    "EvaluationSet",
     "EventDef",
     "FeedDef",
     "FileEnvelope",

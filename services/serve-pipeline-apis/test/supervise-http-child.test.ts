@@ -3,7 +3,8 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRootContext, readCloudEvent } from "@idhazh/common-contracts";
+import { createRootContext, readCloudEvent, readTraceContext, writeTraceContext } from "@idhazh/common-contracts";
+import { readRequestFailureEvent } from "../src/create-request-failure-event";
 import { z } from "zod";
 import { ApiHostStartupSchema, enabledModules } from "../src/api-startup";
 import { apiOrigin, loadHonoSettings, SupervisionSettingsSchema } from "../src/load-settings";
@@ -76,8 +77,12 @@ async function retained({ root, startup }: HostFixture) {
   const evidence = evidenceSchema.parse(await Bun.file(join(directory, serverEvidenceFilename("machine"))).json());
   expect(await readServerEvidence(directory, evidenceSchema, startup.run)).toEqual([evidence]);
   const log = await readFile(join(directory, evidence.log_filename), "utf8");
-  const events = log.trim().split("\n").map(line => readCloudEvent(JSON.parse(line), value => ServerEventDataSchema.parse(value)));
-  return { evidence, log, events };
+  const rawEvents = log.trim().split("\n").map(line => JSON.parse(line));
+  const events = rawEvents.filter(event => event.type === "hono.server")
+    .map(event => readCloudEvent(event, value => ServerEventDataSchema.parse(value)));
+  const requestFailures = rawEvents.filter(event => event.type === "typescript_api_request_failed").map(readRequestFailureEvent);
+  expect(events.length + requestFailures.length).toBe(rawEvents.length);
+  return { evidence, log, events, requestFailures };
 }
 
 async function assertReleased(fixture: HostFixture, pid: number | null) {
@@ -118,6 +123,7 @@ test("private startup rejects missing or invalid server.supervision by field nam
 
 test("shared hosting awaits cancelled work, application close and the final diagnostic", async () => {
   await withHost({}, async fixture => {
+    const receiving = createRootContext({ traceState: "host=receiving" });
     let pending: Promise<Response> | undefined;
     const result = await superviseApiTask({
       ...taskInput(fixture),
@@ -128,7 +134,7 @@ test("shared hosting awaits cancelled work, application close and the final diag
         });
         expect(response.status).toBe(200);
         const value: unknown = await response.json();
-        const failed = await fetch(new URL("/fail", origin), { signal: deadline });
+        const failed = await fetch(new URL("/fail", origin), { signal: deadline, headers: writeTraceContext(receiving) });
         expect(failed.status).toBe(500);
         expect(await failed.json()).toEqual({ code: "API_OPERATION_FAILED" });
         pending = fetch(new URL("/wait", origin), { signal: deadline });
@@ -139,7 +145,16 @@ test("shared hosting awaits cancelled work, application close and the final diag
     });
     await pending?.catch(() => {});
     expect(result).toEqual({ body: "PRIVATE_REQUEST_BODY", origin: apiOrigin(fixture.startup.server) });
-    const { evidence, log, events } = await retained(fixture);
+    const { evidence, log, events, requestFailures } = await retained(fixture);
+    expect(requestFailures).toHaveLength(1);
+    expect(requestFailures[0]).toMatchObject({
+      source: "/services/typescript-api", data: { code: "API_OPERATION_FAILED" },
+    });
+    const failureOperation = readTraceContext({
+      traceparent: requestFailures[0]?.traceparent, tracestate: requestFailures[0]?.tracestate,
+    });
+    expect(failureOperation).toMatchObject({ traceId: receiving.traceId, traceState: receiving.traceState });
+    expect(failureOperation?.spanId).not.toBe(receiving.spanId);
     expect(evidence).toMatchObject({
       startup: "ready", shutdown: "stopped", exit_code: 0, error_code: null,
       cleanup_error_code: null, log_available: true, reported_profiles: [],

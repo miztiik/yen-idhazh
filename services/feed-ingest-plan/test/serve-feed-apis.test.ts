@@ -3,7 +3,9 @@ import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRootContext, PLANNER_API_PREFIX, PlannerSavedResponseSchema, writeTraceContext } from "@idhazh/common-contracts";
+import { createRootContext, PLANNER_API_PREFIX, PlannerSavedResponseSchema, readTraceContext, writeTraceContext } from "@idhazh/common-contracts";
+import type { FingerprintEvent } from "@idhazh/host-fingerprints/diagnostic";
+import type { ProbeEvent } from "@idhazh/host-probes/diagnostic";
 import { FingerprintResponseSchema } from "@idhazh/host-fingerprints/response";
 import { FINGERPRINT_PATH } from "@idhazh/host-fingerprints/api";
 import { loadConfig as loadProbeConfig } from "@idhazh/host-probes/config";
@@ -41,6 +43,7 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
     group: "planning", modules: ["planning", "machine"], enabled: true,
   });
   const probe = await loadProbeConfig(new URL("../../../config/host-probes.json", import.meta.url));
+  const nativeEvents: (FingerprintEvent | ProbeEvent)[] = [];
   const server = await serveApiApp(settings, createFeedApiApp({
     identity,
     planner: { inputs: recorded.inputs, runtime: recorded.runtime, identity: PlannerReadySchema.parse({
@@ -51,8 +54,9 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
     machine: {
       fingerprint: { config: host.config, settings: host.settings, options: {
         outputRoot: join(host.directory, "state"), inspection: host.inspection,
-      } },
-      probes: { config: probe, context: { platform: "win32" } },
+      }, diagnostics: { writeEvent: event => { nativeEvents.push(event); } } },
+      probes: { config: probe, context: { platform: "win32" },
+        diagnostics: { writeEvent: event => { nativeEvents.push(event); } } },
     },
   }));
   const origin = `http://${settings.hostname}:${server.port}`;
@@ -63,7 +67,7 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
   } });
   try {
     expect(await (await fetch(`${origin}/health`)).json()).toEqual({ identity });
-    const fingerprint = await fetch(`${origin}${FINGERPRINT_PATH}`, json(host.apiInput));
+    const fingerprint = await fetch(`${origin}${FINGERPRINT_PATH}`, json(host.apiInput, writeTraceContext(parent)));
     expect(fingerprint.status).toBe(200);
     const captured = FingerprintResponseSchema.parse(await fingerprint.json());
     expect(captured.status).toBe("written");
@@ -71,9 +75,18 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
     expect(captured.row.machine_memory_total_mib).toBe(16383.75);
     expect(captured.files).toHaveLength(1);
     expect(await Bun.file(join(host.directory, "state", captured.files[0]!.path)).exists()).toBe(true);
-    const sample = await fetch(`${origin}${SAMPLE_PATH}`);
+    const sample = await fetch(`${origin}${SAMPLE_PATH}`, { headers: writeTraceContext(parent) });
     expect(sample.status).toBe(200);
     expect(HostSampleSchema.parse(await sample.json()).unavailable.cpu).toBe("unsupported_platform");
+    expect(nativeEvents.map(event => [event.source, event.type, event.data])).toEqual([
+      ["/services/host-fingerprints", "host_fingerprint_completed", { status: "written" }],
+      ["/services/host-probes", "host_probe_completed", { operation: "sample", outcome: "handled" }],
+    ]);
+    for (const event of nativeEvents) {
+      const operation = readTraceContext({ traceparent: event.traceparent, tracestate: event.tracestate });
+      expect(operation?.traceId).toBe(parent.traceId);
+      expect(operation?.spanId).not.toBe(parent.spanId);
+    }
     const source = recorded.inputs.harvest.sources[0]!;
     const response = await fetch(`${origin}${PLANNER_API_PREFIX}/fetch`, json({
       feed_id: source.id, fetch_item_type: "feed",

@@ -4,25 +4,38 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { readMetadata } from "parquet-wasm/esm";
-import { HostFingerprintRowSchema, HOST_FINGERPRINT_VERSION } from "@idhazh/common-contracts";
+import { createRootContext, HostFingerprintRowSchema, HOST_FINGERPRINT_VERSION, readTraceContext, writeTraceContext } from "@idhazh/common-contracts";
 import { createFingerprintHandler, FINGERPRINT_PATH, HEALTH_PATH } from "../src/api/server";
 import { persistFingerprint } from "../src/persist-fingerprint";
 import { writeAtomically } from "../../../packages/ledger-file-writer/src/atomic-file";
 import { fixture } from "./fixture";
 import { readTable, storedRow } from "./parquet-readback";
+import { FingerprintEventSchema } from "../src/api/create-fingerprint-event";
+import type { FingerprintEvent } from "../src/api/create-fingerprint-event";
 
-function request(input: unknown) {
-  return new Request(`http://localhost${FINGERPRINT_PATH}`, { method: "POST", body: JSON.stringify(input) });
+function request(input: unknown, carrier = {}) {
+  return new Request(`http://localhost${FINGERPRINT_PATH}`, { method: "POST", headers: carrier, body: JSON.stringify(input) });
 }
 test("POST persists the entire hardware row and independent Arrow column transcript", async () => {
   const f = await fixture();
   try {
     const outputRoot = join(f.directory, "state");
-    const handler = createFingerprintHandler(f.config, f.settings, { outputRoot, inspection: f.inspection });
-    const response = await handler(request(f.apiInput));
+    const events: FingerprintEvent[] = [];
+    const parent = createRootContext({ traceState: "fingerprint=http" });
+    const handler = createFingerprintHandler(f.config, f.settings, { outputRoot, inspection: f.inspection },
+      { writeEvent: event => { events.push(event); } });
+    const response = await handler(request(f.apiInput, writeTraceContext(parent)));
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.status).toBe("written");
+    expect(events).toHaveLength(1);
+    const event = FingerprintEventSchema.parse(events[0]);
+    expect(event.type).toBe("host_fingerprint_completed");
+    expect(event.source).toBe("/services/host-fingerprints");
+    expect(event.data).toEqual({ status: body.status });
+    const operation = readTraceContext({ traceparent: event.traceparent, tracestate: event.tracestate });
+    expect(operation).toMatchObject({ traceId: parent.traceId, traceState: parent.traceState });
+    expect(operation?.spanId).not.toBe(parent.spanId);
     expect(body.row).toMatchObject(f.input.expected);
     expect(body.files).toHaveLength(1);
     expect(body.row).toMatchObject({
@@ -75,9 +88,12 @@ test("health and inspection GET have no side effects; malformed caller input nev
   const f = await fixture();
   try {
     const outputRoot = join(f.directory, "never-created");
-    const handler = createFingerprintHandler(f.config, f.settings, { outputRoot, inspection: f.inspection });
+    const events: FingerprintEvent[] = [];
+    const handler = createFingerprintHandler(f.config, f.settings, { outputRoot, inspection: f.inspection },
+      { writeEvent: event => { events.push(event); } });
     expect((await handler(new Request(`http://localhost${HEALTH_PATH}`))).status).toBe(200);
     expect((await handler(new Request(`http://localhost${FINGERPRINT_PATH}`))).status).toBe(405);
+    expect(events).toHaveLength(0);
     expect((await handler(request({ ...f.apiInput, writer: { ...f.apiInput.writer, pipeline_name: "../unsafe" } }))).status).toBe(400);
     expect((await handler(request({ ...f.apiInput, writer: { ...f.apiInput.writer, task_name: null } }))).status).toBe(400);
     expect((await handler(request({ ...f.apiInput, writer: { ...f.apiInput.writer, shard: -1 } }))).status).toBe(400);
@@ -96,6 +112,18 @@ test.each(["host_telemetry_enabled", "host_fingerprint"] as const)("%s off skips
     const result = await persistFingerprint(f.capture, f.config, f.settings, { outputRoot, registryPath: join(f.directory, "missing-registry") });
     expect(result).toEqual({ status: "disabled", row: null, files: [], unavailable: {} });
     expect(await Bun.file(outputRoot).exists()).toBe(false);
+    const events: FingerprintEvent[] = [];
+    const handler = createFingerprintHandler(f.config, f.settings,
+      { outputRoot, registryPath: join(f.directory, "missing-registry") },
+      { writeEvent: event => { events.push(event); } });
+    const response = await handler(request(f.apiInput));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(result);
+    expect(events).toHaveLength(1);
+    expect(FingerprintEventSchema.parse(events[0])).toMatchObject({
+      source: "/services/host-fingerprints", type: "host_fingerprint_completed", data: { status: "disabled" },
+    });
+    expect(await Bun.file(outputRoot).exists()).toBe(false);
     await expect(persistFingerprint({ ...f.capture, writer: {} }, f.config, f.settings, { outputRoot })).rejects.toThrow();
   } finally { await f.cleanup(); }
 });
@@ -104,8 +132,15 @@ test("failed persistence rejects the API request rather than returning row or pa
   try {
     const outputRoot = join(f.directory, "blocked");
     await writeFile(outputRoot, "existing file");
-    const handler = createFingerprintHandler(f.config, f.settings, { outputRoot, inspection: f.inspection });
+    const events: FingerprintEvent[] = [];
+    const handler = createFingerprintHandler(f.config, f.settings, { outputRoot, inspection: f.inspection },
+      { writeEvent: event => { events.push(event); } });
     await expect(handler(request(f.apiInput))).rejects.toThrow();
+    expect(events).toHaveLength(1);
+    expect(FingerprintEventSchema.parse(events[0])).toMatchObject({
+      source: "/services/host-fingerprints", type: "host_fingerprint_failed", data: { code: "HOST_FINGERPRINT_FAILED" },
+    });
+    expect(JSON.stringify(events)).not.toContain(outputRoot);
     expect(await readFile(outputRoot, "utf8")).toBe("existing file");
     const target = join(f.directory, "rename-blocked.parquet");
     await mkdir(target);

@@ -13,6 +13,11 @@ Both select `/services/summarizer` from the service's
 `src/declare-event-source.ts`, without reading a source registry.
 The [identity contract](../architecture/contracts/identity.md#4-native-typescript-event-and-operation-metadata)
 defines these fixed producer identities; they are not fetch destinations.
+Both entry points support the
+[complete native API standard](../architecture/contracts/identity.md#native-api-support).
+The summarizer is independent of the composed listener. Its full application
+events stay in request-private histories/files; they are not forwarded into
+ordinary host logs.
 
 The selected model and its destination still come from the existing Python
 configuration loader. Environment values cannot replace the model or the

@@ -5,7 +5,8 @@
     {"bytes": 44039,"covers": "2026-10-31","lost_days": [],"rows": 514,"set_aside": 0,"state": "packed"},
     {"bytes": 40548,"covers": "2026-11-01","lost_days": [],"rows": 434,"set_aside": 0,"state": "packed"},
     {"bytes": 36397,"covers": "2026-11-02","lost_days": [],"rows": 378,"set_aside": 0,"state": "packed"},
-    {"bytes": 40855,"covers": "2026-11-03","lost_days": [],"rows": 437,"set_aside": 0,"state": "packed"}
+    {"bytes": 40855,"covers": "2026-11-03","lost_days": [],"rows": 437,"set_aside": 0,"state": "packed"},
+    {"bytes": 40111,"covers": "2026-11-04","lost_days": [],"rows": 433,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "visual-design-attempts",
   "period": "daily",

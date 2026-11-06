@@ -1,0 +1,6 @@
+{
+  "max_cases": 200,
+  "confidence_level": 0.95,
+  "resamples": 2000,
+  "resample_seed": 0
+}

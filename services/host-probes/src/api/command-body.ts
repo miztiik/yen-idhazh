@@ -1,9 +1,17 @@
 /** Can one JSON command be read without exceeding its configured byte bound? */
+import type { OperationMetadata } from "@idhazh/common-contracts";
+import { createProbeFailureEvent } from "./create-probe-event";
+import type { ProbeEventOutput } from "./create-probe-event";
+
+export type ProbeRequestDiagnostics = { context: OperationMetadata; writeEvent: ProbeEventOutput };
+
 export class CommandBodyError extends Error {
   constructor(readonly status: 400 | 413, message: string) { super(message); }
 }
 
-export async function readCommandBody(request: Request, maxBytes: number, timeoutMs?: number): Promise<unknown> {
+export async function readCommandBody(
+  request: Request, maxBytes: number, diagnostics: ProbeRequestDiagnostics, timeoutMs?: number,
+): Promise<unknown> {
   if (request.signal.aborted) throw new CommandBodyError(400, "Host probe request aborted");
   if (request.headers.has("Origin")) throw new CommandBodyError(400, "Host probe commands accept operator requests, not browser origins");
   if (request.headers.get("Content-Type")?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
@@ -19,8 +27,8 @@ export async function readCommandBody(request: Request, maxBytes: number, timeou
   let expired = false;
   const timeout = timeoutMs === undefined ? undefined : setTimeout(() => {
     expired = true;
-    void reader.cancel().catch((error: unknown) => {
-      console.error(JSON.stringify({ event: "host_probe_body_cleanup_failed", error: error instanceof Error ? error.name : "unknown" }));
+    void reader.cancel().catch(() => {
+      diagnostics.writeEvent(createProbeFailureEvent({ context: diagnostics.context, type: "host_probe_body_cleanup_failed" }));
     });
   }, timeoutMs);
   const chunks: Uint8Array[] = [];
