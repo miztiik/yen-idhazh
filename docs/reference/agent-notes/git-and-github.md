@@ -1,9 +1,9 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-06
 
 Checks for agents using Git and GitHub. Follow the
-[PR workflow](../../how-to/ship-a-pr.md) and [git rules](../../../CLAUDE.md#8-git-hygiene).
+[PR workflow](../../how-to/ship-a-pr.md) and [git rules](../../../CLAUDE.md#7-git-hygiene).
 
 ## Worktrees
 
@@ -24,6 +24,23 @@ Checks for agents using Git and GitHub. Follow the
 - Review `git diff --name-only <base>...HEAD` before publishing; a clean checkout does not prove the branch contains only your changes.
 - Resolve conflicts from both changes' intent. Do not take `--ours` or `--theirs` for every file without checking what it discards.
 - A documentation branch based on a feature branch can retain its old code after that feature is squash-merged. Merge current main, keep its tested code and verify that the final diff changes only the intended documents.
+
+## Git timestamps and REST replies
+
+REST commit replies normalize timestamps to `Z`; they do not prove the stored
+Git author or committer offset. Inspect the actual object:
+
+```text
+git show --no-patch --format='%H %aI %cI' <commit>
+```
+
+For REST merge or commit creation with implicit dates, pass
+`Time-Zone: Etc/UTC` explicitly. An explicit timestamp must itself use UTC.
+The [REST timezone rules](https://docs.github.com/en/rest/using-the-rest-api/timezones-and-the-rest-api)
+describe request precedence and response normalization.
+
+A stored `+01:00` can denote the same instant as `Z`. This representation does
+not justify repairing application timestamps or rewriting history.
 
 ## Local Git fixtures
 

@@ -117,6 +117,10 @@ metadata without a tracing provider, exporter or global active context.
 Server diagnostics contain startup, readiness, stop, safe error codes and
 observed lifecycle facts, but no process IDs. Private readiness, supervision,
 profiling and current-task evidence retain their existing process identities.
+The application warning or failure reason is recorded in `data.code`, not an
+HTTP status or process exit value. Null means no reason was supplied; it does
+not prove success. `data.server_name` is the fixed `hono-server` protocol tag,
+not a per-service setting.
 Validated terminal article diagnostics are a narrow exception to the lifecycle
 projection: the writer emits and mirrors the original accepted
 [`ArticleFailureDiagnosticSchema`](../../packages/common-contracts/src/schemas/article-failure-diagnostic.schema.ts)

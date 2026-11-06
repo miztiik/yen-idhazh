@@ -17,13 +17,17 @@ Table A - distinct identities
 | --- | --- | --- | --- |
 | A1 | Ledger `unit_id` | UUIDv5 from the fixed namespace and work seed | Repeatable work, unchanged across retries. |
 | A2 | Ledger `file_id` | UUIDv8 under the writer's file contract | One physical file, not an event or operation. |
-| A3 | Article and URL keys | Their declared SHA-256 encodings | An address or foreign domain item, not a captured input. |
+| A3 | Native TypeScript `article_id` and storage `url_key` | Full SHA-256 of `canonical_url` | One article address, not article text or a captured input. |
 | A4 | Native TypeScript event `source + id` | Producer-local protocol URI reference and a fresh lowercase UUIDv4 | One event occurrence; replay retains the saved envelope. |
 | A5 | Native TypeScript `traceId` | Nonzero 16 random bytes, encoded as 32 lowercase hexadecimal characters | One execution. |
 | A6 | Native TypeScript `spanId` | Nonzero 8 random bytes, encoded as 16 lowercase hexadecimal characters | One operation within that execution. |
 | A7 | Python protocol identifiers | The owning Python contract's UUID rules | Foreign caller, execution and operation identities; see section 6. |
 | A8 | Native TypeScript `candidate_id` | A fresh lowercase hyphenated UUIDv4 | One captured article input, not its URL, event or operation. |
 | A9 | Native TypeScript `document_id` | The full SHA-256 resource address key | A fetched feed or article document, without calling a feed an article. |
+| A10 | Public digest `item_id` | [Python publication encoding](../sources/item-health.md) | Reader-facing item within a vertical; use full `url_key` for historical joins. |
+
+Choose the identifier's role first. Do not replace these roles with one UUID
+scheme or identify new captures by the stable address hash.
 
 ---
 
@@ -231,7 +235,8 @@ invented hash. Initial dispatch uses the same normalized URL that was hashed.
 Every actual redirect hop passes the existing target checks and preserves its
 query; its destination is evidence, not a replacement for the initial key.
 
-This rule belongs to the native TypeScript planner. Python normalization,
+This rule belongs to the native TypeScript planner.
+[Python normalization](../sources/discovery.md#one-address-per-story),
 public digest identifiers, configured feed slugs and health endpoint keys
 retain their separate rules. No cross-language normalization parity is claimed.
 The [native history contract](../sources/planner-feed-history.md#raw-and-compact-copies)

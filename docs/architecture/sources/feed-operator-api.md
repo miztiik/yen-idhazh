@@ -1,6 +1,6 @@
 # Feed planning operator APIs
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
@@ -137,7 +137,7 @@ fields, failure-only article addresses and elapsed-time meaning.
 
 Terminal article diagnostics use
 [`ArticleFailureDiagnosticSchema`](../../../packages/common-contracts/src/schemas/article-failure-diagnostic.schema.ts).
-The existing `planner.progress` envelope retains its event version and configured
+The existing `planner.progress` envelope retains its event version and planner
 source. Failed `fetch`, `parse` or `quality` data contains the actual run;
 details contain its positive attempt, feed, captured candidate, address hash,
 `harvest-feeds` stage, native reason and complete `HarvestDiagnosticsSchema`.
@@ -147,8 +147,11 @@ object.
 
 The diagnostic retains native failure codes, extraction warnings and versions,
 timings, pacing, byte-limit facts and all measured quality fields. Unmeasured
-facts stay null; measured zero stays zero. Available response evidence keeps
-only the MIME type without parameters, byte counts and request profile.
+facts stay null; measured zero stays zero. Source word count
+(`quality.source_word_count`) measures the extracted article body before the
+token cap, not the whole web page; it cannot alone prove complete extraction.
+Available response evidence keeps only the MIME type without parameters, byte
+counts and request profile.
 Selected headers and truncated-header names are empty. No article text, HTML,
 title, address, header value, arbitrary exception message or stack enters this
 projection. Standalone parse retains these available fetch facts from its held

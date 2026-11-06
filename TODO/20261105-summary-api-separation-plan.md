@@ -1,6 +1,6 @@
 # Summary API separation
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 **Level**: 5 - service responsibilities and live request, health and saved-workflow contracts.
 
 ## 0. Operating contract
@@ -528,8 +528,7 @@ config/
   - `.github/workflows/summary-eval-tests.yml`
   - `.gitignore`
   - `backend/tests/workflows/test_ci_selection.py`
-  - `TODO/20261103-standardize-typescript-metadata-plan.md` - update current path references; do not rewrite shipped outcomes.
-  - `docs/architecture/contracts/identity.md`
+  - `docs/architecture/contracts/identity.md` - update current boundary paths; keep identifier meanings unchanged.
   - `docs/architecture/contracts/schemas.md`
   - `docs/architecture/evaluation/hhem-evaluation-api.md`
   - `docs/architecture/evaluation/unieval-api.md`
@@ -662,7 +661,7 @@ config/
   - `.github/scripts/read-pipeline-events.ts`
   - `.github/scripts/test/workflow-handoff.test.ts`
   - `.github/scripts/summary-generator-tests/declare-event-source.ts` - new, independent caller producer declaration.
-  - `TODO/20261103-standardize-typescript-metadata-plan.md` - update moved current paths, not shipped outcomes.
+  - `docs/architecture/contracts/identity.md` - update current producer paths; keep identifier meanings unchanged.
   - `docs/reference/summarizer-api.md` - move R17.
   - `docs/reference/summary-generator-api.md`
   - `docs/reference/api-routing.md`
