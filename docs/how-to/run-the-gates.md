@@ -391,6 +391,10 @@ weights, starts no production pipeline and publishes no production data.
 Retain the run's source revision and current test-result artifact. A changed
 candidate needs new evidence; unchanged tested inputs reuse their passed run.
 There is no schedule or added evaluator job in ordinary `ci.yml`.
+Before the standalone workflow reaches the default branch, an explicitly
+manual bootstrap job in `ci.yml` calls the same composite check action from
+the candidate checkout. It does not run on pull requests or pushes. Remove
+that delegating job after the standalone checker is registered.
 
 Owned-process fixtures launch the actual CPython executable with the same
 environment's installed packages: a Windows virtual-environment redirector
@@ -641,6 +645,8 @@ turning a live content workflow into a test gate or requiring a developer-host
 installation. Its read-only job runs the complete recorded-boundary suite, not
 a smaller success-shaped substitute. The workflow has no schedule; changed
 candidates run it once and unchanged tested inputs reuse their evidence.
+The shared composite action avoids two copies of preparation or verification
+commands while the first branch uses the manual bootstrap.
 
 ### Bounded state CSV integrity check
 

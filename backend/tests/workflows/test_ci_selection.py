@@ -90,9 +90,16 @@ def test_documentation_only_changes_run_whitespace_not_application_gates() -> No
 
 
 def test_ci_leaves_summary_evaluation_to_its_manual_workflow() -> None:
-    ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    assert "hhem-evaluator" not in ci
-    assert "summary-eval-tests" not in ci
+    ci = _load_workflows()["ci.yml"]
+    for name in _mapping(ci["jobs"], "CI jobs"):
+        if name == "summary-evaluator-checks":
+            assert _job(ci, name)["if"] == "github.event_name == 'workflow_dispatch'"
+            continue
+        for step in _steps(ci, name):
+            if "run" in step:
+                command = _script(step, "ordinary CI step")
+                assert "hhem-evaluator" not in command
+                assert "summary-eval-tests" not in command
     workflow = _load_workflows()["summary-eval-tests.yml"]
     assert set(_mapping(workflow["on"], "summary evaluation triggers")) == {"workflow_dispatch"}
     defaults = _mapping(_job(workflow, "evaluate")["defaults"], "evaluation defaults")
@@ -127,6 +134,13 @@ def test_model_free_summary_checks_are_manual_read_only_and_complete() -> None:
     ):
         assert forbidden not in commands
     assert all("GITHUB_TOKEN" not in _mapping(step.get("env", {}), "model-free env") for step in steps)
+    bootstrap = _job(_load_workflows()["ci.yml"], "summary-evaluator-checks")
+    assert bootstrap["if"] == "github.event_name == 'workflow_dispatch'"
+    call = _step(
+        _load_workflows()["ci.yml"], "summary-evaluator-checks", "name",
+        "Verify the complete model-free suites",
+    )
+    assert call["uses"] == "./.github/actions/check-summary-evaluator"
 
 
 def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs() -> None:

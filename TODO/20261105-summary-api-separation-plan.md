@@ -187,6 +187,8 @@ config/
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/settings.py`
   - `.github/workflows/summary-eval-tests.yml`
   - `.github/workflows/summary-evaluator-checks.yml` - manual model-free Linux verification.
+  - `.github/actions/check-summary-evaluator/action.yml` - one shared verification implementation.
+  - `.github/workflows/ci.yml` - temporary manual-only bootstrap until the checker is registered on the default branch.
   - `config/summary-eval-tests.json`
   - `backend/tests/workflows/_harness.py` - bind artifact expressions to the named workflow settings.
   - `backend/tests/workflows/test_ci_selection.py` - keep the manual verification separate from ordinary CI.
