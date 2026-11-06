@@ -14,8 +14,7 @@ from summary_eval_pipeline.control import StartupPacket
 from summary_eval_pipeline.model_selection import select_model, stage_configuration
 from summary_eval_pipeline.settings import PipelineSettings, load_pipeline_settings
 
-from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
-from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.contracts.service_settings import StartupContext
 from hhem_evaluator.resolve_ids import create_execution_id
 
 from .contract_examples import REPOSITORY
@@ -79,7 +78,7 @@ def available_loopback_port() -> int:
 
 def stage_machine_run(
     root: Path,
-) -> tuple[StartupPacket, ServiceSettings, PipelineSettings]:
+) -> tuple[StartupPacket, PipelineSettings]:
     pipeline = load_pipeline_settings(REPOSITORY)
     (root / "config").mkdir()
     (root / "config" / "summary-eval-tests.json").write_bytes(
@@ -116,8 +115,4 @@ def stage_machine_run(
         phase="generation",
         run=run,
     )
-    return (
-        packet,
-        load_settings(REPOSITORY / "config" / "hhem-evaluator" / "settings.json"),
-        pipeline,
-    )
+    return packet, pipeline

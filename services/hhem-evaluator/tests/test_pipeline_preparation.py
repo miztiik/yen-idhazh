@@ -10,7 +10,7 @@ from typing import Literal
 
 import pytest
 from pydantic import ValidationError
-from summary_eval_pipeline.contracts import PipelineEvidence, PreparedRun
+from summary_eval_pipeline.contracts import PipelineEvidence, PreparedRun, text_sha256
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.inputs import ManualInputs
 from summary_eval_pipeline.model_selection import select_model, stage_configuration
@@ -147,6 +147,83 @@ def test_unfinished_preparation_is_not_assumed_complete_or_reported_as_a_missing
     assert evidence.generation_phase is None and evidence.evaluation_phase is None
 
 
+def test_generation_preparation_and_handoff_need_no_evaluator_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inputs = prepare_dispatch(tmp_path, monkeypatch)
+    for name in (
+        "fastapi-server.json",
+        "hhem-evaluator/settings.json",
+        "unieval-evaluator.json",
+    ):
+        (tmp_path / "config" / name).unlink()
+    prepared, selected = prepare_run(tmp_path)
+    assert prepared.status == "pending"
+    assert prepared.source_sha256 == text_sha256(inputs.source_text)
+    assert prepared.reference_summary_sha256 == text_sha256(inputs.reference_summary_text)
+    saved, selected_again = read_prepared(tmp_path)
+    assert saved == prepared and selected_again == selected
+    assert inputs.source_text not in prepared.model_dump_json()
+    assert inputs.reference_summary_text not in prepared.model_dump_json()
+
+
+def test_configured_artifact_paths_survive_a_real_preparation_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_dispatch(tmp_path, monkeypatch)
+    path = tmp_path / "config" / "summary-eval-tests.json"
+    settings = json.loads(path.read_bytes())
+    settings["output_directory"] = "backend/var/alternate-output"
+    settings["native_log_directory"] = "backend/var/alternate-native-logs"
+    path.write_text(json.dumps(settings), encoding="utf-8")
+    destination = tmp_path / "step-output.txt"
+    destination.write_text("existing_output=retained\n", encoding="utf-8")
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    with pytest.raises(WorkflowError) as failure:
+        prepare_assets(tmp_path, artifact_output=destination)
+    assert failure.value.error.code == "ASSET_AUTH_MISSING"
+    assert destination.read_text(encoding="utf-8") == (
+        "existing_output=retained\n"
+        "output_directory=backend/var/alternate-output\n"
+        "native_log_directory=backend/var/alternate-native-logs\n"
+    )
+    prepared, _ = read_prepared(tmp_path)
+    assert prepared.status == "failed" and prepared.errors == (failure.value.error,)
+    assert (tmp_path / "backend" / "var" / "alternate-output" / "run.json").is_file()
+
+
+def test_artifact_output_write_failure_is_retained_as_failed_preparation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_dispatch(tmp_path, monkeypatch)
+    destination = tmp_path / "step-output"
+    destination.mkdir()
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    with pytest.raises(WorkflowError) as failure:
+        prepare_assets(tmp_path, artifact_output=destination)
+    assert failure.value.error.code == "ASSET_FAILED"
+    prepared, _ = read_prepared(tmp_path)
+    assert prepared.status == "failed" and prepared.errors == (failure.value.error,)
+
+
+def test_evaluation_configuration_still_fails_at_its_original_entry_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_dispatch(tmp_path, monkeypatch)
+    (tmp_path / "config" / "fastapi-server.json").write_text(
+        '{"version":"invalid"}', encoding="utf-8"
+    )
+    with pytest.raises(ValueError):
+        asyncio.run(collect_phase(tmp_path, "evaluation"))
+    directory = tmp_path / load_pipeline_settings(REPOSITORY).output_directory
+    assert not (directory / "evaluation.json").exists()
+    assert not (directory / "logs").exists()
+
+
 def test_staged_machine_configuration_needs_no_feed_settings(tmp_path: Path) -> None:
     selected_root(tmp_path)
     for name in (
@@ -155,9 +232,7 @@ def test_staged_machine_configuration_needs_no_feed_settings(tmp_path: Path) -> 
         "host-probes.json",
         "ledgers.json",
     ):
-        (tmp_path / "config" / name).write_bytes(
-            (REPOSITORY / "config" / name).read_bytes()
-        )
+        (tmp_path / "config" / name).write_bytes((REPOSITORY / "config" / name).read_bytes())
     selected = select_model(tmp_path, "")
     directory = tmp_path / "runtime"
     stage_configuration(tmp_path, directory, selected)

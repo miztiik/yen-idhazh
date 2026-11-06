@@ -1,27 +1,56 @@
 """How does one committed declaration supply the actual weights and request settings?"""
 
 import hashlib
+import ipaddress
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated, Self
+from urllib.parse import urlsplit
 
-from hhem_evaluator.contracts.llama_settings import LlamaSettings
-from pydantic import TypeAdapter
+from pydantic import Field, TypeAdapter, model_validator
 
 from idhazh.config import refuse_a_model_nothing_could_run
 from idhazh.contracts.app_config import AppConfig, ModelsFile
 from idhazh.contracts.knobs.models import ModelEntry, ModelsConfig
 from utilities.model_refs import list_model_files, resolve_under_config
 
-from .contracts import ModelSelection
+from .contracts import ModelSelection, WorkflowContract
 from .failures import WorkflowError
+
+
+class NativeGenerationSettings(WorkflowContract):
+    base_url: str
+    request_timeout_ms: Annotated[float, Field(gt=0, allow_inf_nan=False)]
+
+    @model_validator(mode="after")
+    def require_private_origin(self) -> Self:
+        try:
+            parts = urlsplit(self.base_url)
+            private = ipaddress.ip_address(parts.hostname or "").is_loopback
+            valid = (
+                parts.scheme == "http"
+                and private
+                and parts.port is not None
+                and parts.port > 0
+                and parts.username is None
+                and parts.password is None
+                and parts.path in ("", "/")
+                and not parts.query
+                and not parts.fragment
+            )
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError("model_server.base_url must name one private loopback HTTP origin")
+        return self
 
 
 @dataclass(frozen=True)
 class SelectedModel:
     identity: ModelSelection
     entry: ModelEntry
-    native: LlamaSettings
+    native: NativeGenerationSettings
 
 
 def select_model(root: Path, named: str) -> SelectedModel:
@@ -35,7 +64,7 @@ def select_model(root: Path, named: str) -> SelectedModel:
         refuse_a_model_nothing_could_run(wanted, models)
         files = list_model_files(config, wanted)
         entry = models.summarizer
-        native = LlamaSettings(
+        native = NativeGenerationSettings(
             base_url=app.model_server.base_url,
             request_timeout_ms=entry.request_timeout_minutes * 60_000,
         )

@@ -10,7 +10,8 @@ from fastapi import FastAPI
 
 from .contracts.api_settings import ApiSettings
 from .contracts.server_event import ApiDiagnosticData, ServerEvent
-from .emit_events import JsonEventFormatter, StrictEventHandler
+from .emit_events import JsonEventFormatter
+from .write_event_records import StrictEventHandler
 
 
 def create_server_config(app: FastAPI, settings: ApiSettings) -> uvicorn.Config:

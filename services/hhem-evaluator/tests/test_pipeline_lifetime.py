@@ -1,6 +1,7 @@
 """Preserve private channels, parent-loss deadlines and trustworthy worker-exit receipts."""
 
 import asyncio
+import contextlib
 import os
 import subprocess
 import sys
@@ -8,17 +9,16 @@ from pathlib import Path
 from typing import Literal
 
 import pytest
-from summary_eval_pipeline.contracts import WORKFLOW_VERSION
-from summary_eval_pipeline.control import StartupPacket
+from summary_eval_pipeline.contracts import WORKFLOW_VERSION, PipelineError
+from summary_eval_pipeline.control import HostReady, ServiceStopped, StartupPacket
 from summary_eval_pipeline.failures import WorkflowError
-from summary_eval_pipeline.native_log import NativeEvent, NativeLog
+from summary_eval_pipeline.native_log import NativeDiagnosticData, NativeEvent, NativeLog
 from summary_eval_pipeline.phase_services import PhaseServices
 from summary_eval_pipeline.phases import guard_work
 from summary_eval_pipeline.services import OwnedService
 from summary_eval_pipeline.settings import load_pipeline_settings
 
 from hhem_evaluator.api_settings import load_api_settings
-from hhem_evaluator.contracts.server_event import ApiDiagnosticData
 from hhem_evaluator.contracts.service_settings import StartupContext
 
 from .contract_examples import REPOSITORY, REQUEST_ID
@@ -42,8 +42,12 @@ def start_child(service: Literal["api", "host"], mode: str) -> OwnedService:
                 "forced_stop_ms": 1000,
                 "shutdown_timeout_ms": 1500,
             }
+        )
+        if service == "api"
+        else None,
+        load_pipeline_settings(REPOSITORY).model_copy(
+            update={"host_stop_grace_ms": 500, "host_forced_stop_ms": 1000}
         ),
-        load_pipeline_settings(REPOSITORY),
     )
 
 
@@ -152,6 +156,7 @@ def test_original_work_failure_and_both_real_cleanup_failures_remain_separate() 
         load_api_settings(REPOSITORY / "config" / "fastapi-server.json"),
         errors,
         False,
+        pipeline=load_pipeline_settings(REPOSITORY),
     )
     assert errors[0] == original
     assert [(error.code, error.service) for error in errors[1:]] == [
@@ -162,6 +167,43 @@ def test_original_work_failure_and_both_real_cleanup_failures_remain_separate() 
     assert services.shutdown().worker_exit_confirmed is True
     assert services.shutdown().unieval_worker_exit_confirmed is True
     assert services.shutdown().api_stopped is False
+
+
+def test_host_cleanup_keeps_its_advertised_budget_plus_the_workflow_stop_grace() -> None:
+    observed: list[int] = []
+
+    class ObservedService(OwnedService):
+        def close(self, timeout_ms: int) -> ServiceStopped:
+            observed.append(timeout_ms)
+            return super().close(timeout_ms)
+
+    pipeline = load_pipeline_settings(REPOSITORY)
+    host = ObservedService(
+        "host",
+        owned_child_command("clean"),
+        REPOSITORY,
+        StartupPacket(version=WORKFLOW_VERSION, startup_id=REQUEST_ID, context=StartupContext()),
+        None,
+        pipeline,
+    )
+    try:
+        ready = host.wait_ready(CHILD_STARTUP_MS)
+        assert isinstance(ready, HostReady) and host.settings is None
+        assert host.stop_grace_ms == pipeline.host_stop_grace_ms
+        assert host.forced_stop_ms == pipeline.host_forced_stop_ms
+        errors: list[PipelineError] = []
+        services = PhaseServices(example_run(), host=host)
+        services.close(None, None, errors, True, pipeline=pipeline)
+        assert observed == [ready.lifecycle_timeout_ms + pipeline.host_stop_grace_ms]
+        assert errors == [] and services.host_stopped is True
+        assert host.process.poll() == 0
+        assert services.shutdown().api_stopped is None
+        assert services.shutdown().worker_exit_confirmed is None
+        assert services.shutdown().unieval_worker_exit_confirmed is None
+    finally:
+        if not host.closed:
+            with contextlib.suppress(WorkflowError):
+                host.close(pipeline.host_shutdown_timeout_ms)
 
 
 def test_unieval_cleanup_failure_preserves_the_original_error_and_independent_hhem_exit() -> None:
@@ -175,6 +217,7 @@ def test_unieval_cleanup_failure_preserves_the_original_error_and_independent_hh
         load_api_settings(REPOSITORY / "config" / "fastapi-server.json"),
         errors,
         False,
+        pipeline=load_pipeline_settings(REPOSITORY),
     )
     assert errors[0] == original
     assert [(error.phase, error.service) for error in errors[1:]] == [
@@ -195,11 +238,11 @@ def test_native_log_mirror_failure_warns_and_does_not_fail_useful_work(
     directory = tmp_path / "logs"
     if failure == "open":
         directory.write_text("A regular file is not a log directory.", encoding="utf-8")
-    logger = NativeLog(directory, example_run(), service_settings().logging)
+    logger = NativeLog(directory, example_run(), load_pipeline_settings(REPOSITORY).native_logging)
     if failure == "write":
         assert logger.file is not None and logger.file.stream is not None
         logger.file.stream.close()
-    logger.event(ApiDiagnosticData(component="llama", action="ready", level="INFO"))
+    logger.event(NativeDiagnosticData(component="llama", action="ready", level="INFO"))
     logger.close()
     assert logger.available is False
     events = [
@@ -235,7 +278,7 @@ def test_completed_work_survives_a_simultaneous_real_child_exit() -> None:
         async def check() -> None:
             done = asyncio.get_running_loop().create_future()
             done.set_result("A completed result is not a shutdown observation.")
-            actual = await guard_work(done, child, None, load_pipeline_settings(REPOSITORY))
+            actual = await guard_work(done, child, load_pipeline_settings(REPOSITORY))
             assert actual == done.result()
 
         asyncio.run(check())

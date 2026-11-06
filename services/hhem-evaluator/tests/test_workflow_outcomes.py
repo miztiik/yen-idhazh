@@ -97,6 +97,7 @@ def test_native_zero_scores_complete_only_with_both_results_measurement_and_join
             machine,
             shutdown.model_copy(
                 update={
+                    "api_stopped": None,
                     "llama_stopped": True,
                     "worker_exit_confirmed": None,
                     "unieval_worker_exit_confirmed": None,

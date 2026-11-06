@@ -13,12 +13,12 @@
 | A2 | Hard scope - in | Separate generation from evaluation; name and divide the evaluator package; bring the older coverage scorer into it; rename the TypeScript API and separate its full-analysis caller; retain prompt overrides and fresh independent requests; centralize the named prompts; group evaluation configuration; standardize every first-party TypeScript HTTP route; update callers, tests, CI, docs and reports in each cutover. |
 | A3 | Hard scope - out | Table B prices the exclusions. None is permission to reduce the requested separation. |
 | A4 | Chosen strategy | Fowler: one evaluation application with independent HHEM, native UniEval and source-coverage children and workers; independent native llama-server; the existing workflow is the orchestrator, meaning the caller that runs the steps in order. |
-| A5 | Plan state | Proposal only. No implementation starts from authoring this file. Level-5 changes require a decision before execution under [the execution contract](../docs/how-to/execute-a-plan.md#escalation-when-to-pause-for-the-user). |
+| A5 | Plan state | Execution in progress. Table E records each implementation and merge; unfinished rows retain their declared gates. |
 | A6 | ESCALATE triggers | 1. A removed input, output or route has an unnamed caller. 2. A move causes a score, error, schema or identity change not declared here. 3. A saved format needs a compatibility rule not declared in Table G. 4. A change discards classifications, source fallback, legacy coverage scores or report evidence instead of relocating or explicitly pricing it. 5. An external required-check setting prevents a CI name change. 6. A model, dependency family, service deployment or runtime destination not declared here is needed. |
-| A7 | Execution | Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 1 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes. |
+| A7 | Execution | Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 1 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. |
 | A8 | Why parallel N is lower | The PRs share CI and the gate guide. The evaluator PRs also change the same callers and test helpers. Serial writing avoids conflicting cutovers; it does not add a dependency between independent APIs. |
 | A9 | Canonical pages | The composition page follows move K11. Other authorities: [HHEM](../docs/reference/hhem-evaluation-api.md), [UniEval](../docs/reference/unieval-api.md), [workflow](../docs/reference/summary-evaluation-workflow.md), [summarizer](../docs/reference/summarizer-api.md), [saved experiment events](../docs/reference/workflow-pipeline-events.md). |
-| A10 | Verification record | Record the source revision, selected tests, result and platform for each PR. Follow [the gate guide](../docs/how-to/run-the-gates.md): complete model-free evaluator/workflow suites are mandatory Linux execution gates outside ordinary CI. CI retains its actual backend, native TypeScript and saved-handoff gates. Do not invent a Python CI job or dispatch a live workflow as a merge gate. This plan has no application-test result. |
+| A10 | Verification record | Record the source revision, selected tests, result and platform for each PR. Follow [the gate guide](../docs/how-to/run-the-gates.md): complete model-free evaluator/workflow suites run through the read-only `summary-evaluator-checks.yml` Linux gate on relevant pull requests, with manual reruns, separate from ordinary `ci.yml`. Reuse passed evidence while its tested inputs are unchanged. Ordinary CI retains its backend, native TypeScript and saved-handoff gates. Do not dispatch a live production workflow as a merge gate. Windows results do not replace Linux evidence. |
 | A11 | Native request boundary | Do not introduce a Pydantic or Zod model of llama-server's request fields. Forward its configured JSON fields and server flags without an enumerated field list. Validate only the settings this repository computes on, its own API products, the committed destination, transport bounds and protected decoding controls. Adding a supported native setting outside those protected controls must not require source or test-fixture edits. |
 | A12 | Repeated generation calls | The generator accepts repeated independent requests. Each builds a fresh system/user request; it carries no earlier answer, conversation history or server session. Keeping the model process or its prefix cache alive is not conversation continuation. The production digest's existing two-call continuation is a separate flow and stays unchanged. |
 | A13 | Prompt control | The configured generator prompt is a default, not a restriction. A nonblank request-level `system_prompt` replaces that default without a restart or config edit. Record the effective prompt's digest and origin; never append hidden classification instructions to the override. Table W declares the prompt sources and destinations. |
@@ -139,7 +139,7 @@ config/
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| E1 | 1 | Call native generation without the evaluator | - | A | PENDING | - | - | - |
+| E1 | 1 | Call native generation without the evaluator | - | A | DONE | curly-lamp | - | - |
 | E2 | 2 | Remove generation from the evaluation API | 1 | A | PENDING | - | - | - |
 | E3 | 3 | Rename and divide the evaluator and its tests | 2 | A | PENDING | - | - | - |
 | E4 | 4 | Rename and isolate the summary generator and its caller | 2 | B | PENDING | - | - | - |
@@ -162,6 +162,7 @@ config/
   8. Update report assembly, artifact paths and the living workflow page in this PR. No generation report may claim a Python evaluation application ran.
   9. Advance the disposable workflow version in Python and the real Bun machine bridge together under G1; exercise the serialized cross-language startup/control packets, not only Python validation.
 - **Files touched:**
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/artifact_paths.py` - derived validated directories for workflow uploads.
   - `.github/scripts/summary-eval-tests/machine-task.ts`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/contracts.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/control.py`
@@ -180,21 +181,29 @@ config/
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/report.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/report_models.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/report_task.py`
+  - `.github/scripts/summary-eval-tests/summary_eval_pipeline/run.py` - pass the platform-owned artifact-output file only at the CLI boundary.
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/serve_api.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/services.py`
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/settings.py`
   - `.github/workflows/summary-eval-tests.yml`
+  - `.github/workflows/summary-evaluator-checks.yml` - PR-triggered model-free Linux verification with manual reruns.
+  - `.github/actions/check-summary-evaluator/action.yml` - one shared verification implementation.
   - `config/summary-eval-tests.json`
+  - `backend/tests/workflows/_harness.py` - bind artifact expressions to the named workflow settings.
+  - `backend/tests/workflows/test_ci_selection.py` - keep the model-free verification separate from ordinary CI.
   - `services/hhem-evaluator/src/hhem_evaluator/contracts/server_event.py`
   - `services/hhem-evaluator/src/hhem_evaluator/contracts/lifecycle_fields.py` - new extraction of the existing safe lifecycle fields.
   - `services/hhem-evaluator/src/hhem_evaluator/emit_events.py`
+  - `services/hhem-evaluator/src/hhem_evaluator/configure_server.py` - existing strict-writer caller.
   - `services/hhem-evaluator/src/hhem_evaluator/write_event_records.py` - new extraction of the existing strict record handler.
   - `services/hhem-evaluator/tests/generation_cases.py`
+  - `services/hhem-evaluator/tests/host-profile-bridge.ts` - explicit caller-owned registry input and safe failure-stage evidence.
   - `services/hhem-evaluator/tests/llama_cases.py`
   - `services/hhem-evaluator/tests/machine_task_cases.py`
   - `services/hhem-evaluator/tests/owned_service_child.py`
   - `services/hhem-evaluator/tests/pipeline_cases.py`
   - `services/hhem-evaluator/tests/test_generation_handoff.py`
+  - `services/hhem-evaluator/tests/test_native_generation.py` - direct native transport and fresh-request boundaries.
   - `services/hhem-evaluator/tests/test_machine_task.py`
   - `services/hhem-evaluator/tests/test_manual_workflow.py`
   - `services/hhem-evaluator/tests/test_pipeline_control.py`
@@ -205,6 +214,7 @@ config/
   - `services/hhem-evaluator/tests/test_pipeline_report.py`
   - `services/hhem-evaluator/tests/test_server_events.py`
   - `services/hhem-evaluator/tests/test_workflow_outcomes.py`
+  - `tests/fixtures/hhem-evaluator/pipeline-evidence.json` - current disposable contract example; model recordings remain unchanged.
   - `docs/reference/summary-evaluation-workflow.md`
   - `docs/how-to/run-the-gates.md`
 - **Acceptance gates:**
@@ -215,6 +225,7 @@ config/
   - Report: render a representative successful run and a cleanup-failure run through the production report function. Require real native and host outcomes, absent unstarted evaluator outcomes, escaped source text and explicit failures. Review the changed report against the design requirements before merge.
   - Observation, not a merge gate: on the next intended manual workflow run, read `generation-phase.json`, `generation.json`, native logs and the published job report. An evaluator row or readiness wait during generation is a failed cutover; fix this PR's implementation, not the evidence.
 - **Oracle:** Run the real generation phase with recorded native responses, evaluator configuration files absent, and no evaluator child; require the bound answer receipt and truthful native/host shutdown evidence. This does not prove live model quality, weight loading or runner speed.
+- **Execution status:** Direct native generation, truthful process evidence and configured artifact routing are complete. The read-only Linux suite and ordinary CI verify the candidate; their evidence remains separate from Windows checks.
 
 **Table F - PR 1 decisions**
 
@@ -545,7 +556,7 @@ config/
   - Local parity: compare generated scoring schemas and existing recorded outputs before/after. Cover HHEM primary/full reuse, complete windows, partial retention, all native UniEval dimensions, incomplete dimensions, fixed errors and deterministic HHEM event IDs.
   - Local behavior: run actual installed-package imports and spawned workers, not merely source-tree imports. Verify single-scorer settings isolation and the distinct HHEM replacement/UniEval failure policies.
   - Linux execution gate: run complete service and moved workflow suites with the explicit service pytest configuration. Update the manual workflow's project directory, compiler target and resource preparation, plus the gate guide's lint/type/test commands.
-  - CI: update the named workflow-selection test's directory assertion while retaining its prohibition on evaluator setup in ordinary CI. Keep actual backend/native coverage and required-check names; do not invent or rename a Python evaluator CI job.
+  - CI: update the named workflow-selection test's directory assertion and carry the model-free Linux verifier across the moves. Retain the prohibition on evaluator setup in ordinary `ci.yml`, its backend/native coverage and required-check names.
   - Documentation: verify inbound links to moved pages, live launch commands, configured cache/log locations, report config links and fixture provenance. Keep any required historical check/event identifier documented as such, not as a current package path.
 - **Oracle:** The complete named recording set produces the same scoring schemas, accepted values, errors and event IDs through the installed renamed application and real workers, with all baseline files assigned to one move or retirement. This does not prove a new model run or remove the shared application's restart boundary.
 

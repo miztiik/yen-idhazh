@@ -20,7 +20,14 @@ def main() -> None:
     os.chdir(root)
     try:
         if args.phase == "prepare":
-            prepare_assets(root)
+            prepare_assets(
+                root,
+                artifact_output=(
+                    Path(os.environ["GITHUB_OUTPUT"])
+                    if os.environ.get("GITHUB_ACTIONS") == "true" or "GITHUB_OUTPUT" in os.environ
+                    else None
+                ),
+            )
         else:
             phase: PhaseName = "generation" if args.phase == "generate" else "evaluation"
             evidence = run_phase(root, phase)

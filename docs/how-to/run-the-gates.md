@@ -312,13 +312,22 @@ Push-Location ..\..
 uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
 Pop-Location
 uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
-uv run --frozen pytest tests/test_pipeline_preparation.py tests/test_generation_handoff.py tests/test_host_profile_reader_parity.py tests/test_machine_task.py tests/test_pipeline_control.py tests/test_pipeline_evaluation.py tests/test_unieval_workflow.py tests/test_workflow_health_isolation.py tests/test_evaluator_response_binding.py tests/test_unieval_workflow_fixture.py tests/test_workflow_outcomes.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
+uv run --frozen pytest tests/test_pipeline_preparation.py tests/test_generation_handoff.py tests/test_native_generation.py tests/test_host_profile_reader_parity.py tests/test_machine_task.py tests/test_pipeline_control.py tests/test_pipeline_evaluation.py tests/test_unieval_workflow.py tests/test_workflow_health_isolation.py tests/test_evaluator_response_binding.py tests/test_unieval_workflow_fixture.py tests/test_workflow_outcomes.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
 ```
 
 The host compatibility test exports the actual native schemas through Bun,
-including the consumed shared-server outcomes. The generation checks bind the
+including the consumed shared-server outcomes. Recorded host cases select the
+committed registry from the caller's root, not an installed package location;
+safe stage/status diagnostics retain a failed native boundary.
+The backend artifact guard resolves the workflow's two configured directories
+from that named settings file, so a path change cannot hide behind a fixed test value.
+The generation checks bind the
 source, answer, independent reference, model and run before either evaluator
-can start. Native pair checks run the actual shared app and owned workers with
+can start. Direct native generation checks use the recorded HTTP boundary,
+without evaluator configuration or a forwarding application. They cover exact
+UTF-8 request/response byte limits and one byte above each limit, refused
+redirects and encodings, cancellation, unchanged sampling pass-through and fresh
+requests. Native pair checks run the actual shared app and owned workers with
 recorded predictions only at the model boundary. They retain a completed
 sibling, incomplete dimensions, native error HTTP bodies and actual zeroes;
 response-boundary damage must not become a score. The health-isolation
@@ -360,6 +369,29 @@ processes and a private pre-arm pipe, not model weights or network access.
 They prove refusal when the owner dies before protection is armed, confirmed
 kernel stop after exec, and normal same-PID startup/shutdown. Run these cases
 on Linux; their Windows skips do not count as launch-boundary proof.
+Before merging a workflow or evaluator runtime change, run the complete
+model-free service and workflow suites on Linux from the service directory:
+
+```powershell
+uv run --frozen pytest tests
+```
+
+Keep the socket guard and resource preparation above. Ordinary `ci.yml` does
+not run these Python suites, and a live manual workflow is not a repeatable
+merge gate. Windows contract or lint results do not replace Linux process,
+ASGI and serialized Python-to-Bun bridge evidence.
+
+When a local Linux host is unavailable, dispatch
+`.github/workflows/summary-evaluator-checks.yml` on the candidate branch.
+This reusable development check runs on relevant pull requests and supports
+manual reruns, with read-only repository permissions. It prepares frozen model-free dependencies and the
+named tokenizer/sentence resources, then runs lint, strict types and the
+complete Linux suites with the existing socket guard. It installs no model
+weights, starts no production pipeline and publishes no production data.
+Retain the run's source revision and current test-result artifact. A changed
+candidate needs new evidence; unchanged tested inputs reuse their passed run.
+There is no schedule or added evaluator job in ordinary `ci.yml`.
+
 Owned-process fixtures launch the actual CPython executable with the same
 environment's installed packages: a Windows virtual-environment redirector
 has a different PID. The runtime ownership check stays strict.
@@ -621,6 +653,16 @@ and replay recorded responses on loopback; they download no model and contact
 no external service.
 
 ## Design rationale
+
+### Manual model-free Linux verification
+
+A separate manual Linux verifier preserves process and ASGI coverage without
+turning a live content workflow into a test gate or requiring a developer-host
+installation. Its read-only job runs the complete recorded-boundary suite, not
+a smaller success-shaped substitute. The workflow has no schedule; changed
+candidates run it once and unchanged tested inputs reuse their evidence.
+The shared composite action holds one copy of preparation and verification
+commands for pull-request runs and manual reruns.
 
 ### Bounded state CSV integrity check
 

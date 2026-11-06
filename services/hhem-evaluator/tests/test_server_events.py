@@ -6,8 +6,10 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from summary_eval_pipeline.native_log import NativeDiagnosticData
 
 from hhem_evaluator.contracts.evaluation_event import EventDetails
+from hhem_evaluator.contracts.lifecycle_fields import LifecycleFields
 from hhem_evaluator.contracts.server_event import ApiDiagnosticData, ServerEvent
 from hhem_evaluator.contracts.service_settings import StartupContext
 from hhem_evaluator.emit_events import EventEmitter, EventWriter
@@ -27,6 +29,24 @@ def test_native_event_has_one_current_cloudevents_occurrence_and_no_legacy_reade
         ServerEvent.model_validate_json(native.model_dump_json())
     with pytest.raises(ValidationError):
         ServerEvent.model_validate({**event.model_dump(), "type": "fastapi-server.api.ready"})
+
+
+def test_independent_lifecycle_logs_share_fields_but_not_component_ownership() -> None:
+    fields = {
+        "action": "failed",
+        "level": "ERROR",
+        "code": "STARTUP_FAILED",
+        "duration_ms": 1.0,
+    }
+    common = LifecycleFields.model_validate(fields)
+    native = NativeDiagnosticData.model_validate({**fields, "component": "llama"})
+    api = ApiDiagnosticData.model_validate({**fields, "component": "llama"})
+    assert native.model_dump(exclude={"component"}) == common.model_dump()
+    assert api.model_dump(exclude={"component"}) == common.model_dump()
+    assert set(LifecycleFields.model_fields) == set(ApiDiagnosticData.model_fields) - {"component"}
+    for component in ("api", "unieval"):
+        with pytest.raises(ValidationError):
+            NativeDiagnosticData.model_validate({**fields, "component": component})
 
 
 def test_live_records_and_named_file_match_and_restarts_append(tmp_path: Path) -> None:

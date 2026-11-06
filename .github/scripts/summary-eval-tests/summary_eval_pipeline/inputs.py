@@ -6,7 +6,6 @@ from pathlib import Path
 
 from hhem_evaluator.contracts.base import NativeContract, NonblankText
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
-from hhem_evaluator.contracts.service_settings import ServiceSettings
 from hhem_evaluator.contracts.unieval_request import UnievalRequest
 from pydantic import ValidationError
 
@@ -20,11 +19,11 @@ class ManualInputs(NativeContract):
     models_file: str = ""
 
 
-def read_manual_inputs(settings: ServiceSettings, manual: PipelineSettings) -> ManualInputs:
+def read_manual_inputs(manual: PipelineSettings) -> ManualInputs:
     event_path = os.environ.get("GITHUB_EVENT_PATH")
     if not event_path:
         raise WorkflowError("INPUT_INVALID", "input")
-    allowance = settings.listener.max_body_bytes + manual.event_envelope_bytes
+    allowance = manual.max_input_bytes + manual.event_envelope_bytes
     try:
         with Path(event_path).open("rb") as stream:
             encoded = stream.read(allowance + 1)
@@ -37,7 +36,7 @@ def read_manual_inputs(settings: ServiceSettings, manual: PipelineSettings) -> M
         if not isinstance(event, dict) or not isinstance(event.get("inputs"), dict):
             raise WorkflowError("INPUT_INVALID", "input")
         inputs = ManualInputs.model_validate(event["inputs"])
-        if len(inputs.model_dump_json().encode("utf-8")) > settings.listener.max_body_bytes:
+        if len(inputs.model_dump_json().encode("utf-8")) > manual.max_input_bytes:
             raise WorkflowError("INPUT_TOO_LARGE", "input")
         return inputs
     except (ValueError, ValidationError, UnicodeError):

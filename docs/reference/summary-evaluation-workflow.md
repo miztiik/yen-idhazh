@@ -21,6 +21,12 @@ different declaration, not a matrix, model loop or shared-default edit. The
 declaration supplies the actual pinned weights, companions, revisions, hashes,
 native flags, sampling and template settings. It selects neither evaluator's model.
 `config/summary-eval-tests.json` holds the fixed generation instruction.
+It also owns the input, generation-request and generation-response byte
+allowances. Native sampling and server options remain open JSON from the
+selected declaration; there is no second list of supported native fields.
+Every generation call builds fresh system and source turns, without earlier
+answers or conversation history. The digest's separate continuation flow is
+unchanged.
 
 There is no supplied-summary input. Source text enters only the user-data turn;
 it never selects a shell argument, filename, model destination or system
@@ -34,7 +40,7 @@ generation. The bounded event reader preserves its exact UTF-8 bytes and
 preparation saves its SHA-256 identity. Its text goes only to UniEval and the
 escaped report, never generation, HHEM, diagnostic logs or process controls.
 Missing, invalid or oversized reference input blocks preparation; the input
-object must fit the shared request byte allowance before generation. Independence comes from
+object must fit the workflow's `max_input_bytes` allowance before generation. Independence comes from
 input provenance, not string inequality: an independently supplied reference
 may happen to equal the answer. There is no generated or substituted reference.
 
@@ -45,7 +51,7 @@ Table A - Task order
 | Id | Task | Work and ownership |
 | --- | --- | --- |
 | A1 | Prepare | Install frozen Bun and Python model dependencies, validate source/reference/model inputs, capture the reference hash, copy named configuration inputs, and acquire pinned native and UniEval assets, tokenizer and sentence resources. |
-| A2 | Generate | Start the actual native model and FastAPI's llama-only component, verify their identities, generate through FastAPI, atomically save the answer, then close and reap both. |
+| A2 | Generate | Start the native model and host collector, verify native health and loaded identity, call native generation directly, atomically save the answer, then close and reap both. No Python evaluation application starts. |
 | A3 | Evaluate | Re-read the bounded event and generation. Require the current run, attempt, revision, source, answer, model, reference and confirmed native shutdown. Start HHEM and UniEval on the same FastAPI address; score the saved pair independently. |
 | A4 | Report | Read saved results only. Write combined JSON and escaped Markdown; append that exact Markdown to the step summary. Do not start a server or repeat generation. |
 | A5 | Retain | Upload available results/report on success or failure. Upload server diagnostics after errors or cancellation, with platform-default retention. |
@@ -74,16 +80,25 @@ metadata. The shared server schema is not relaxed to accept extra fields.
 Run-local configuration copies enable the existing whole-machine CPU/RAM
 instruments without changing committed defaults. Reads name only their required
 files; there is no configuration-tree scan or second collector.
-`config/hono-server.json` supplies both listener controls and supervision waits,
+`config/hono-server.json` supplies the machine listener controls and supervision waits,
 including the helper's profile-stop cleanup allowance. There is no feed-settings
 fallback.
+The workflow settings own the host startup, shutdown, post-termination grace
+and forced-stop waits. A ready helper receives its advertised lifecycle timeout
+plus `host_stop_grace_ms`; a helper not yet ready receives
+`host_shutdown_timeout_ms`. Termination and killing retain their separate
+grace and forced-stop joins.
 Invalid shared listener controls retain `MACHINE_API_STARTUP_INVALID`;
 invalid probe settings retain `MACHINE_SETTINGS_INVALID`.
 The native Hono supervisor verifies its startup nonce, spawned PID, uncached
-health and enabled module group. FastAPI's private readiness and shared health
+health and enabled module group. During evaluation, FastAPI's private readiness and shared health
 must identify the actual application instance and selected component. Native
 readiness checks the owned process's listening socket and its observed
-model path and alias against the verified selected files.
+model path and alias against the verified selected files, as well as native
+health. Template rendering and completion call that same committed origin.
+Requests refuse redirects and environment proxies, bound response bytes and
+encoding, and retain deadline and cancellation handling.
+Generation reads neither evaluator listener settings nor scorer settings.
 
 Each phase keeps its service handles through request and cleanup. Early exits,
 signals and broken parent pipes stop owned work. The platform's existing
@@ -107,9 +122,11 @@ overall completion even when a sibling returns a score.
 
 ## Same-run files and status
 
-`summary_eval_pipeline/contracts.py` owns version `2026-11-04` of these
+`summary_eval_pipeline/contracts.py` owns version `2026-11-05` of these
 disposable native results. Readers accept the current shape only; these files
-are not committed ledgers or restart stores.
+are not committed ledgers or restart stores. The Bun machine bridge uses the
+same workflow-control version and rejects earlier startup packets; native
+machine-result versions remain independent.
 
 Table B - Named output under `backend/var/summary-eval-tests/`
 
@@ -156,7 +173,11 @@ validated and read, not discarded.
 Phase shutdown distinguishes `api_stopped`, the shared FastAPI application's
 exit, from HHEM's `worker_exit_confirmed` and the independent
 `unieval_worker_exit_confirmed`. Neither worker flag stands for the other.
-Generation starts no evaluator worker and does not claim either exit.
+Generation sets all three evaluator shutdown fields to null because neither
+the application nor its workers started. Its report contains only the native
+model and host server outcomes, with no invented evaluator startup time or
+exit. Completion requires the native model and host collector to stop; failed
+generation cleanup cannot start evaluation.
 
 Machine CPU is zero to 100 percent for the whole machine, including background
 work. Stored RAM uses KiB; the report displays closing use in MiB, not peak use.
@@ -170,6 +191,15 @@ and `{server_name}_{yyyy_mm_dd}_{run_id}_{attempt}.log`. The date is the UTC
 run-start day. Restarting a role appends to its file. Private control packets
 are separate. Source, prompts, model output and secrets never enter diagnostic
 records; native raw output is suppressed with the configured quiet flags.
+`native_logging` and `native_log_directory` in the workflow settings control
+the native lifecycle log independently of evaluator logging. Its configured
+directory is retained with the workflow diagnostics, not an evaluator-labelled
+artifact. Common safe lifecycle fields and the strict record writer are shared
+mechanisms; native logs declare only their own model and log components.
+Preparation publishes the validated output and native-log directories through
+the platform's step-output file before asset work. Uploads use those values,
+including on preparation failure; changing either directory needs no workflow
+source edit. No artifact lookup runs when preparation has not published a path.
 
 An unopenable or unwritable mirror warns and records that the log is unavailable.
 It does not cancel useful model work. Actual worker, API or cleanup failures
@@ -221,6 +251,9 @@ adding another server configuration authority.
 The workflow adds no Python model binding, collector dependency or root
 workspace. The shared FastAPI/Hono applications, frozen dependencies, native
 asset tools and request/final-answer readers do the actual work.
+The evaluation application is not a generation proxy: the workflow already
+owns the native model, so a second forwarding process would add a readiness
+and shutdown dependency without doing another task.
 
 The pinned native decoder refuses unanchored regular-expression patterns.
 Generation therefore derives string-length constraints from its answer model;

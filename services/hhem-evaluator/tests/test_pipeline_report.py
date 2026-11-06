@@ -197,7 +197,7 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
         None,
         None,
         ServiceShutdown(
-            api_stopped=True,
+            api_stopped=None,
             host_stopped=False,
             worker_exit_confirmed=None,
             llama_stopped=True,
@@ -258,6 +258,10 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
     assert "Artifacts -> summary-eval-tests-server-logs" in markdown
     assert log_filename in markdown
     assert host_log_filename in markdown
+    assert "| generation | fastapi-server |" not in markdown
+    assert "| generation | HHEM worker exit confirmed |" not in markdown
+    assert "| generation | UniEval worker exit confirmed |" not in markdown
+    assert "| evaluation | HHEM worker exit confirmed |" in markdown
     assert re.findall(r"\*\*Table ([A-Z])\*\*", markdown) == ["A", "B", "C", "D", "E"]
     row_ids = re.findall(r"^\| ([A-Z]\d+) \|", markdown, re.MULTILINE)
     assert len(row_ids) == len(set(row_ids))
@@ -325,7 +329,7 @@ def test_report_creator_retains_full_artifact_and_never_promotes_failed_work(
             None,
             None,
             ServiceShutdown(
-                api_stopped=True,
+                api_stopped=None if phase == "generation" else True,
                 host_stopped=True,
                 worker_exit_confirmed=None,
                 llama_stopped=True if phase == "generation" else None,
