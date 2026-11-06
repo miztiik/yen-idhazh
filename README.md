@@ -1,151 +1,87 @@
 # yen-idhazh
 
-**A daily news digest that checks its own work.**
+**Catch up on the news without opening every article.**
 
-**Read it: <https://miztiik.github.io/yen-idhazh/>**
+yen-idhazh brings selected news sources into one daily digest. Read a short
+summary, decide what deserves your attention, and follow the original link when
+you want more detail.
 
-*idhazh* is Tamil for a journal. **yen-idhazh** is "my journal".
+**[Read the latest digest](https://miztiik.github.io/yen-idhazh/)**
 
-Every morning it reads a curated set of public sources, writes a short summary of
-what matters, and - the part that makes it different - **scores each summary
-against the article it came from** and shows you the score. Where the check went
-badly, the item says so.
+*idhazh* is Tamil for a journal. *yen-idhazh* means "my journal".
 
-Nothing runs when you read it. The page is plain files.
+## Spend less time catching up
 
----
+Each story gives you a headline that says what happened, a concise summary and
+its named source. You can get the outline without reading every article in full.
 
-## What you get
+Start with **Top stories** for a shortlist, with a brief reason beside each
+selection. Keep reading the day's stream when you have more time.
 
-| | |
-| --- | --- |
-| **Five subjects, one page** | AI, energy, business and economy, world, India. Ten to fifteen stories, not a firehose. |
-| **A confidence mark on every story** | Each summary is machine-checked against its source article. A story that scored badly is labelled, not hidden. |
-| **The link, always** | You get our summary and the address it came from. The article itself is never republished. |
-| **Two minutes, then out** | A digest, not a feed. No infinite scroll, nothing to come back for. |
-| **Nothing follows you** | No accounts, no analytics, no cookies, no third-party scripts. |
-| **A picture only when it earns one** | Numbers become a chart. A process becomes a diagram. Everything else gets nothing. |
-| **Search on your device** | Optional. One download, then the archive is searchable without anything you type leaving your browser. |
+## Find the stories you care about
 
-It is for someone who wants to know what happened in a few subjects, in two
-minutes, from a page that says how much to trust it.
+Choose from **AI, energy, business and economy, world news, and India**. Topic
+filters let you focus on one subject instead of working through the whole day.
 
----
+Type in the filter bar to narrow the stories on the page. When you remember a
+subject but not the date, search earlier days from the
+[archive](https://miztiik.github.io/yen-idhazh/archive/). Search may need an
+initial download; the page tells you which dates it searched.
 
-## How it works
+## Go beyond the summary
 
-```mermaid
-flowchart TD
-    subgraph build["Build time - Content refresh, four UTC runs daily"]
-        direction TB
-        A["<b>Collect</b><br/>read 138 live feeds<br/>rank by tier, repetition and age"]
-        B["<b>Extract</b><br/>pull readable text<br/>sanitise at the trust boundary"]
-        C["<b>Summarize</b><br/>Qwen3-8B on CPU<br/>output shape pinned by a schema"]
-        D["<b>Score</b><br/>faithfulness vs the source<br/>plus model-free counterweights"]
-        E["<b>Plan a visual</b><br/>a chart, or nothing<br/>the model picks numbers by index"]
-        F["<b>Assemble</b><br/>write the day's payload<br/>commit it to the repository"]
-        A --> B --> C --> D --> E --> F
-    end
+Use **Read the original** to open the source article for its full context,
+evidence and detail. Source labels help distinguish reporting from announcements,
+government statements, research and community posts.
 
-    F -->|"committed JSON + SVG"| G
+Some stories include a chart to make figures easier to compare, or a compact
+**Who/What grid** that keeps each participant beside its claim or action. When a
+visual adds nothing useful, the story stays text.
 
-    subgraph read["Read time - a static page"]
-        direction TB
-        G["<b>Two kinds of page</b><br/>home, archive, scores prerendered<br/>a day page renders in the browser"]
-        H["<b>On-device search</b><br/>optional, reader-initiated"]
-        G -.->|"only if you click"| H
-    end
+## Know when to look closer
 
-    style build fill:#eef2ff,stroke:#4c6ef5
-    style read fill:#f0fdf4,stroke:#16a34a
-```
+Summaries are generated automatically and checked against the source text.
+These checks help identify omissions and unsupported claims. They are **not
+independent fact-checking**: agreement with an article does not prove that its
+reporting is correct.
 
-The line between the two boxes is the whole design: **everything expensive
-happens before you arrive.** The summaries are written and committed; a page
-only reads them.
+A plain-language note tells you when a summary missed information, when only the
+first part of a page was available, or when the source was a paper's abstract
+rather than the full paper. A summary without a warning is not a guarantee that
+every important detail is included.
 
-### The one rule that shapes everything
+If some articles did not finish, the day says so rather than appearing complete.
 
-The pipeline runs on a stock GitHub runner - 4 vCPU, no GPU, a 6-hour job cap.
-That is not a budget to be raised; it is the platform. It decides which model can
-be used, how work is sharded, and which features never ship.
+## Read on your terms
 
-When a measurement contradicts the design, the design changes. A laptop said the
-8B model decoded 3.3x slower than the 4B, which nearly cost it the job. The
-runner said 1.8x, so the 8B writes the summaries.
+- **Keep your place.** Read marks help you avoid going through the same stories
+  again.
+- **Listen instead.** Use **Listen** to hear a summary when your browser supports
+  reading aloud.
+- **Choose your theme.** Switch between light and dark.
+- **Return without a connection.** Previously opened days can be read offline
+  while they remain saved on your device.
 
----
+## How sources are selected
 
-## Where the stories come from
+The digest starts with a chosen list of public feeds, not every page on the web.
+Sources are selected for the subjects they cover and the evidence they provide:
+direct announcements and data, specialist reporting, and wider news coverage.
 
-Sources are **curated, not crawled**. Every feed is listed by hand in
-[`config/sources.json`](config/sources.json) with a subject and a tier:
+Recent articles get priority, along with sources that have a stronger record of
+providing readable articles. Repeated links are removed, and related coverage is
+grouped where it can be recognised. Limits on each source help keep a mix of
+coverage instead of letting one feed fill the day.
 
-| Tier | What it is | Example |
-| --- | --- | --- |
-| 1 | The institution that *is* the fact | a central bank, a statistical agency, a lab's own blog |
-| 2 | Trade press that covers the beat daily | a specialist outlet, a wire's section feed |
-| 3 | Community and aggregators | a forum, a link aggregator |
+This is a selected view of the news, not complete coverage. A missing story may
+not have reached the chosen sources, or its article may not have been available
+to read.
 
-Ranking is arithmetic, not judgement: **tier weight, times how many independent
-sources carried the story today**, plus a bonus for a watched entity. A story
-three independent outlets carried is the day's story. No model is involved in
-choosing.
+## Follow a day as it develops
 
-Live feeds, counted 2026-08-24: ai 38, india 27, world 27, energy 24,
-business-economy 22 - 138 in total.
+New stories are added through the day. The header shows the latest update and
+how much was added; the stream puts newer stories first. Dates and times use
+**UTC**, so a day's address means the same day wherever you read it.
 
-A source that dies is retired in config, never deleted - deleting an id would
-break every payload that referenced it. See
-[`docs/architecture/sources/discovery.md`](docs/architecture/sources/discovery.md).
-
----
-
-## Documentation
-
-Start here, in this order:
-
-| If you want to know | Read |
-| --- | --- |
-| What this is and is not | [`docs/concepts/vision.md`](docs/concepts/vision.md) |
-| **How the whole system fits together** | [`docs/architecture/overview.md`](docs/architecture/overview.md) |
-| What each pipeline stage owns | [`docs/concepts/pipeline-loop.md`](docs/concepts/pipeline-loop.md) |
-| How a summary is scored, and why | [`docs/concepts/evaluation.md`](docs/concepts/evaluation.md) |
-| What one column on the eval row means | [`docs/concepts/summary-metrics.md`](docs/concepts/summary-metrics.md) |
-| Where stories come from | [`docs/architecture/sources/discovery.md`](docs/architecture/sources/discovery.md) |
-| Why a story gets a chart or nothing | [`docs/architecture/publishing/visuals.md`](docs/architecture/publishing/visuals.md) |
-| Real numbers from real hardware | [`docs/reference/pipeline-cost.md`](docs/reference/pipeline-cost.md) |
-| How the production pipeline runs | [`docs/how-to/run-the-pipeline.md`](docs/how-to/run-the-pipeline.md) |
-| How to test the production pipeline | [`docs/reference/github-actions.md#pipeline-tests`](docs/reference/github-actions.md#pipeline-tests) |
-| **What every top-level directory is for** | [`docs/reference/repository-layout.md`](docs/reference/repository-layout.md) |
-| Where any other doc belongs | [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md) |
-
----
-
-## Local development
-
-```bash
-python -m venv .venv
-.venv/bin/pip install -e ".[dev]"        # .venv/Scripts/pip on Windows
-.venv/bin/python -m pytest               # tests
-.venv/bin/python -m ruff check .         # lint
-.venv/bin/python -m mypy                 # strict type check
-```
-
-Production runs in GitHub Actions; local model inference is not supported.
-Use the [Pipeline tests workflow](docs/reference/github-actions.md#pipeline-tests)
-to exercise the production stages with configured article cases. Model weights
-and llama.cpp binaries are downloaded in CI and never committed.
-
-## Repository layout
-
-`backend/` produces and `frontend/` publishes. They meet only through committed
-files and the schemas generated from `backend/idhazh/contracts/` - never through
-a running service. Every directory is explained in
-[`docs/reference/repository-layout.md`](docs/reference/repository-layout.md).
-
-## See also
-
-- [`CLAUDE.md`](CLAUDE.md) - the engineering contract every change is held to.
-- [`AGENTS.md`](AGENTS.md) - the pointer coding agents start from.
-- [`TODO/20260815-digest-pipeline-plan.md`](TODO/20260815-digest-pipeline-plan.md) - the build plan and its current state.
+Open the archive to revisit an earlier day or follow a subject across several
+days.
