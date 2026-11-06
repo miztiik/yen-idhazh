@@ -69,10 +69,19 @@ def test_serialized_python_packet_starts_stops_and_retains_native_http_machine_r
         assert child.process.poll() is not None
 
 
-@pytest.mark.skipif(
-    sys.platform != "linux", reason="The native machine collector requires Linux proc."
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "invalid_settings",
+        pytest.param(
+            "occupied_listener",
+            marks=pytest.mark.skipif(
+                sys.platform != "linux",
+                reason="The native machine collector requires Linux proc.",
+            ),
+        ),
+    ],
 )
-@pytest.mark.parametrize("failure", ["invalid_settings", "occupied_listener"])
 def test_real_helper_startup_failure_retains_safe_cause_without_adopting_another_listener(
     tmp_path: Path,
     capfd: pytest.CaptureFixture[str],

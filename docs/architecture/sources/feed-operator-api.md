@@ -5,9 +5,10 @@
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
 The sections below define each operation and its current request and response.
-The feed workflow serves them with machine routes through the
-[shared pipeline API server](../../reference/serve-pipeline-apis.md);
-the delivery task restarts that application with its private delivery group.
+The feed package assembles them with machine routes under
+[shared pipeline API hosting](../../reference/serve-pipeline-apis.md).
+The delivery task constructs only its private delivery group. Shared hosting
+owns their listener and process lifetime, not native API construction.
 
 ## Independent fetch and parse endpoints
 
@@ -124,8 +125,11 @@ without adding names to HTTP responses or progress logs.
 Standalone fetch, parse and persistence use the same structured publisher
 as `/plan`. Progress uses a shared event envelope with a fresh occurrence ID
 and application fields under `data`; reading a saved event preserves its
-original occurrence and operation. The configured planner source is loaded
-explicitly from `config/typescript-event-sources.json`.
+original occurrence and operation. The planner selects its local protocol
+identity `/services/feed-ingest-plan` through `PlanInputs.event_source`;
+all mounted routes and the upload inventory use that same declaration.
+The [identity contract](../contracts/identity.md#4-native-typescript-event-and-operation-metadata)
+defines producer selection and validation.
 Invalid controls that
 cannot resolve a document do not log caller-supplied addresses.
 The [runner](feed-plan-runner.md#first-sight-and-retained-output) owns event
@@ -294,7 +298,8 @@ system.
 Always-run finalization owns a separate delivery child because collection has
 already closed its planner child. The delivery child needs no live planner batch
 or collection inputs; completed partial metadata remains deliverable after
-planner failure. It reuses the configured listener and supervision limits,
+planner failure. It reuses the listener and supervision limits from
+`config/hono-server.json`,
 checks owned-child readiness through `/health`, and closes and reaps that child
 after success, failure or cancellation. Cancellation known before finalization
 skips new Git delivery.
@@ -307,19 +312,30 @@ another operation for logging or use the server's supervision operation.
 The [shared identity contract](../contracts/identity.md#4-native-typescript-event-and-operation-metadata)
 defines that context and its carrier.
 
-[`SafePersistHttpDiagnosticSchema`](../../../services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts)
-owns this strict current-only relay shape and derives request/result field
-validators from their native authorities. Paths, process IDs and arbitrary
-fields are not diagnostic fields. The
+[`DeliveryCompletionDiagnosticSchema`](../../../services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts)
+owns this strict current-only payload and derives request/result field
+validators from their native authorities. The handler constructs its CloudEvent
+from the native run number, attempt, result and receiving context before any
+supervisor reads it, without importing a server lifecycle contract. Paths, process IDs and arbitrary
+fields are not diagnostic fields. `DeliveryEventSchema` accepts native
+completion and failure envelopes. A completion carrier must exactly match
+`writeTraceContext(data.context)`; failure data contains only the native
+planner error code. Accepted native envelopes retain their original
+occurrence and source. The old plain completion packet and its translator are
+removed. The
 [server writer](../../reference/serve-pipeline-apis.md#diagnostics-and-current-task-evidence)
 retains these facts and context in a separate completion event, not a lifecycle
 payload. The native HTTP result and saved `delivery-result.json`, including
 their exact paths, remain unchanged and remain the delivery authority.
 The API and client use the existing `writeJsonLine` helper to write one JSON
 object per stderr line.
-`safe_persist_http_failed` and
-`safe_persist_http_client_failed` identify server and transport failures without
-article bodies. An unconfirmed response or failed child shutdown records a failed
+`safe_persist_http_failed` is a native event with only the declared planner
+error code and the real receiving operation. Detailed sanitized failure
+evidence stays in its existing response/evidence surfaces.
+`safe_persist_http_client_failed` remains the separate client transport record.
+The [native API support matrix](../contracts/identity.md#native-api-support)
+defines the complete API standard and its private transport boundaries.
+An unconfirmed response or failed child shutdown records a failed
 receipt, not a successful one. Report generation and artifact preparation still
 run independently; [the workflow guide](../../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures)
 defines recovery and upload behavior.

@@ -21,9 +21,13 @@ backend. Requests with a browser `Origin` header are refused.
 
 The feed workflow uses the same native handlers through the
 [shared pipeline API server](serve-pipeline-apis.md), alongside
-fingerprint and planning routes. Its single loopback address comes from
-`config/hono-server.json`. The standalone command above retains its own
-listener controls.
+fingerprint and planning routes. The probe package's
+`src/api/serve-machine-apis.ts` also assembles the machine-only application for
+summary evaluation without feed source or feed settings. It composes the real
+fingerprint and profiling implementations; shared hosting owns only their
+listener and process lifetime. The single loopback address and supervision
+waits come from `config/hono-server.json`. The standalone command above retains
+its own listener controls.
 
 Task commands require UTF-8 JSON and `Content-Type: application/json`.
 Unknown fields fail. No command accepts a path, executable, URL, proc root,
@@ -126,6 +130,28 @@ There is no disk registry, host-ledger field or request-journal change.
 A restart loses its handles. CPU/RAM metadata may be returned by this API,
 reported through the existing TypeScript callback or written to structured
 stderr; none of these makes it durable request authority.
+
+## Native command diagnostics
+
+All commands follow the
+[native API event standard](../architecture/contracts/identity.md#native-api-support).
+After an actual result, `host_probe_completed` contains only the command name
+and `handled` or `disabled`. Handled means the command returned its native
+result, not that a measurement was available or that the profiled task succeeded.
+Disabled start/stop creates no collector, handle or measurement.
+
+An enabled start uses the real profiler operation for its event. Successful
+and repeated stops use that same retained operation, ignoring conflicting stop
+headers. Ordinary requests derive a child from a valid incoming carrier or a
+root otherwise. Safe failure events contain only their fixed code; body cleanup
+uses the receiving request, background profile failure uses its session, and
+service cleanup uses its owned lifetime operation.
+
+Full `{event: "task_profile", profile}` reports remain the existing private
+callback/child transport and task evidence. They are excluded from normal
+event mirrors. Native diagnostics never copy profiles, PIDs, counters,
+request bodies, exception text or paths. The one-shot CLI keeps its native
+sample on stdout and emits the corresponding safe event on stderr.
 
 ## Bounds and failures
 

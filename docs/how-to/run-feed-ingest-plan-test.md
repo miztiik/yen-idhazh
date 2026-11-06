@@ -190,6 +190,13 @@ reporting. `services/host-probes/scripts/` owns optional controlled host tools.
 with a default of three decimal places. Saved metadata and selected-text
 artifacts keep exact scores; rounding never affects winner comparisons.
 
+Every TypeScript API used by this workflow follows the
+[native event standard and support matrix](../architecture/contracts/identity.md#native-api-support).
+Handlers create their own events before supervision, and the mirror retains
+their original source, occurrence and operation. Native HTTP results, private
+readiness/stdout, full task profiles and saved delivery receipts keep their
+existing protocols; event envelopes do not replace them.
+
 Workflow YAML calls those modules directly. `.github/scripts/` retains only
 the independent `ai-pipeline.ts` experiment and `serve-evaluator.py`; neither
 is required for the native feed APIs. Recorded compatibility drivers live in
@@ -280,7 +287,7 @@ verified files remain recoverable. Cancellation skips new Git delivery while
 still attempting the report and recovery upload.
 
 Readiness, graceful drain and forced-exit waits are finite settings under
-`supervision` in `config/feed-ingest-plan-service.json`; the
+`supervision` in `config/hono-server.json`; the
 [runner](../architecture/sources/feed-plan-runner.md#entry-points-and-controls)
 defines their defaults and failure behavior. Termination cancels the real HTTP
 client, then closes the child pipe. Pipe closure also triggers child cleanup

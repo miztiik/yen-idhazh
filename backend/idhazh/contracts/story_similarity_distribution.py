@@ -16,10 +16,9 @@ count, so it survives that reset. It is what the council's outstanding-nights
 question is answered from, and it is why moving the model does not send every
 night in the window back to a runner.
 
-Instrument fields say what a count means - which encoder, weights, model,
-prompt, grammar, sampler, reasoning mode and interpretation. Change any and
-the counts describe a different question, so the record is archived rather than
-reinterpreted.
+Instrument and policy fields say what a count means - which encoder, weights,
+model, prompt, grammar, sampler, reasoning mode, interpretation and calibration
+population. Change any and the record is archived rather than reinterpreted.
 """
 
 from __future__ import annotations
@@ -50,6 +49,9 @@ from idhazh.contracts.story_similarity_pair import (
 #: lands a few bits off the number a person typed without anybody having moved
 #: it. A billionth is far below the width of any slot worth cutting.
 GRID_TOLERANCE: Final = 1e-9
+
+#: Protocol identity for adjustable, non-headline calibration counts, not a knob.
+CALIBRATION_POLICY_VERSION: Final[DateStamp] = "2026-11-05"
 
 
 class ScoreSlot(Model):
@@ -91,8 +93,8 @@ class StorySimilarityDistribution(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-11-05",
-            change="Judge policy separates counts taken under different evidence rules.",
-            why="Counts cannot be reinterpreted when reading validity changes.",
+            change="Judge and calibration policies identify evidence and adjustable-score counts.",
+            why="Changed reading validity or calibration populations require separate counts.",
         ),
         ChangelogEntry(
             version="2026-10-24T19:49",
@@ -218,6 +220,12 @@ class StorySimilarityDistribution(Contract):
             "UTC date identifying counted judge interpretation; null on historical records."
         ),
     )
+    calibration_policy_version: DateStamp | None = Field(
+        default=None,
+        description=(
+            "UTC date identifying the calibration population; null on historical records."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -331,9 +339,9 @@ class StorySimilarityDistribution(Contract):
     def record_stamp(self) -> str:
         """Everything that decides what a count in this record means.
 
-        **An interpretation policy changes the identity without changing the ask.**
-        Older records retain a null policy and archive before current-policy
-        counts replace them. The remembered dates survive that reset.
+        **Interpretation and calibration policies change identity without changing the ask.**
+        Older records retain null policies and archive before current-policy
+        counts replace them. Remembered dates survive that single reset.
 
         **The read-side migration for the two decode values is this method.**
         A record written before they existed carries them null, loads under this
@@ -359,6 +367,7 @@ class StorySimilarityDistribution(Contract):
             "judge_temperature": self.judge_temperature,
             "judge_thinks": self.judge_thinks,
             "judge_policy_version": self.judge_policy_version,
+            "calibration_policy_version": self.calibration_policy_version,
             "prompt_digest": self.prompt_digest,
             "scorer_model": self.scorer_model,
         }

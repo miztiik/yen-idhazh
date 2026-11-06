@@ -6,12 +6,13 @@ import {
   TraceIdSchema, readTraceContext,
 } from "@idhazh/common-contracts";
 import type { ArticleFailureDiagnostic } from "@idhazh/common-contracts";
-import type { ServerEvidence } from "../../serve-pipeline-apis/src/server-evidence";
+import type { MachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
+import { SERVER_LIFECYCLE_EVENT_TYPE } from "@idhazh/serve-pipeline-apis/evidence";
 import { distinctArticleDiagnostics } from "../src/reporting/article-failure-evidence";
 import type { ReportDiagnosticIdentity } from "../src/reporting/article-failure-evidence";
 
 export async function readArticleFailureDiagnostics(input: {
-  directory: string; servers: readonly ServerEvidence[]; expected: ReportDiagnosticIdentity;
+  directory: string; servers: readonly MachineServerEvidence[]; expected: ReportDiagnosticIdentity;
 }) {
   const gaps: [string, string, string][] = [];
   const gap = (problem: string, impact: string) => {
@@ -58,7 +59,8 @@ export async function readArticleFailureDiagnostics(input: {
         continue;
       }
       if (!isArticleFailureDiagnostic(raw)) {
-        if (raw !== null && typeof raw === "object" && "data" in raw
+        if (raw !== null && typeof raw === "object" && "type" in raw && raw.type === SERVER_LIFECYCLE_EVENT_TYPE
+          && "data" in raw
           && raw.data !== null && typeof raw.data === "object" && "code" in raw.data
           && raw.data.code === "CHILD_DIAGNOSTIC_INVALID") {
           gap("A child diagnostic was rejected", "Terminal article evidence may be incomplete");

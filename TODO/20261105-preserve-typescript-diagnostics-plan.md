@@ -56,7 +56,7 @@ Table C - PR rows
 - `services/feed-ingest-plan/src/api/fetch-operation.ts` - connect the existing stage logger to final article rejection diagnostics.
 - `services/feed-ingest-plan/src/api/parse-operation.ts` - connect that logger and preserve available native fetch/extraction evidence.
 - `services/feed-ingest-plan/src/logging/structured-logger.ts` - publish the narrowly validated complete diagnostic without generic field loss.
-- `services/serve-pipeline-apis/src/write-server-event.ts` - preserve accepted native terminal article CloudEvents.
+- `services/feed-ingest-plan/scripts/read-feed-api-diagnostic.ts` - validate native terminal article CloudEvents for the shared mirror.
 - `services/feed-ingest-plan/scripts/read-article-failure-diagnostics.ts` - new bounded reader for the existing named log.
 - `services/feed-ingest-plan/scripts/feed-ingest-plan-report-evidence.ts` - collect separate typed diagnostic evidence.
 - `services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts` - retain diagnostics on complete, partial, error and absent-response paths.
@@ -71,8 +71,8 @@ Table C - PR rows
 - `services/feed-ingest-plan/test/report-native-evidence.test.ts`
 - `services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts` - share captured failure evidence between both report modes.
 - `services/feed-ingest-plan/test/write-article-failure-events.ts` - real recorded article work in an stderr-producing child.
-- `services/serve-pipeline-apis/test/server-events.test.ts`
-- `services/serve-pipeline-apis/test/write-server-events.ts`
+- `services/feed-ingest-plan/test/relay-feed-api-events.test.ts`
+- `services/feed-ingest-plan/test/write-feed-api-events.ts`
 - `tests/fixtures/feed-ingest-plan/article-terminal-failures.json`
 - `docs/architecture/sources/feed-harvesting.md` - work facts and failures.
 - `docs/architecture/sources/feed-operator-api.md` - structured logs and Markdown evidence input.
@@ -85,7 +85,7 @@ Table D - Agreed article event shape
 
 | Id | Field | Type / rule |
 | --- | --- | --- |
-| D1 | CloudEvent envelope | Existing native envelope, configured planner source and `planner.progress` type; preserve original occurrence ID, time and operation carrier through the relay. |
+| D1 | CloudEvent envelope | Existing native envelope, producer-local planner source and `planner.progress` type; preserve original occurrence ID, time and operation carrier through the relay. |
 | D2 | `data.version` | Existing `FEED_INGEST_EVENT_VERSION`, currently `2026-11-05`; no second version field. |
 | D3 | `data.run_id` | Existing `RunIdSchema`; actual captured run. |
 | D4 | `data.operation` | `fetch`, `parse` or `quality`; quality rejection uses the existing parse operation context. |
@@ -146,7 +146,7 @@ Table G - Article implementation sequence
 | G4 | In parse diagnostics, retain available native fetch evidence from the held artifact rather than copying only HTTP/pacing fields. Keep unmeasured duration null and native HTTP response shapes unchanged. | Existing native fetch diagnostic projection. |
 | G5 | Add a narrowly validated publisher branch before generic detail cleaning and ordinary document/quality-subset checks. Do not add `publisher_id` or a second quality object merely to satisfy those checks. Preserve existing bounds and explicit compliance reporting. | Agreed terminal shape; existing publisher controls. |
 | G6 | Safely project available response facts: omit header values and MIME parameters, retain native nulls and safe facts. Exclude body, HTML, title, addresses, secrets, arbitrary exception text and stacks. | Native diagnostics and trust boundary. |
-| G7 | The server writer validates this same terminal subtype and mirrors the original CloudEvent unchanged. `services/feed-ingest-plan/scripts/http-child-lifetime.ts` and `services/serve-pipeline-apis/src/supervise-api-task.ts` already pipe/drain stderr and remain unchanged. Other module stderr does not bypass its current validation. | Existing diagnostic relay. |
+| G7 | The feed diagnostic adapter validates this same terminal subtype and the shared writer mirrors the original CloudEvent unchanged. `services/serve-pipeline-apis/src/supervise-http-child.ts` and `services/serve-pipeline-apis/src/supervise-api-task.ts` pipe/drain stderr. Other module stderr does not bypass its current validation. | Existing diagnostic relay. |
 | G8 | Add separate `article_diagnostics` to the existing in-memory `ReportFailureEvidence`, not to rejected rows, `/plan` or another endpoint. The new reader uses only distinct named log files returned by `readServerEvidence`; no directory walk or latest-file search. | Existing report and same-run evidence path. |
 | G9 | Validate expected run/attempt from explicit report inputs, saved response or saved failure context; use available captured execution metadata to exclude unrelated requests. Missing identity is an explicit correlation gap, not a guessed run. | Existing run/operation meanings. |
 | G10 | Correlate by run, attempt and captured candidate; check feed/address/reason agreement. Identical repetitions count once; conflicting records fail explicitly. Health remains the aggregate authority. Show log-only missing-title evidence without adding it twice to totals or altering reliability. | Existing report evidence semantics. |
@@ -198,13 +198,13 @@ Table H - Evaluated article alternatives
 - `services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts` - new native relay contract derived from existing field authorities.
 - `services/feed-ingest-plan/scripts/safe-persist-http-api.ts` - emit the already allocated request context with completion facts.
 - `services/feed-ingest-plan/package.json` - export that diagnostic contract; no new dependency.
-- `services/serve-pipeline-apis/src/delivery-completion-diagnostic.ts` - new strict completion payload/builder.
-- `services/serve-pipeline-apis/src/write-server-event.ts` - route validated completion separately from lifecycle events.
+- `services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts` - strict completion payload/builder.
+- `services/feed-ingest-plan/scripts/read-feed-api-diagnostic.ts` - supply validated completion separately from lifecycle events.
 - `services/serve-pipeline-apis/src/server-evidence.ts` - separate lifecycle phase membership/metadata; do not change saved task evidence.
 - `services/feed-ingest-plan/test/safe-persist-http.test.ts`
 - `services/feed-ingest-plan/test/feed-ingest-plan-finalization.test.ts`
-- `services/serve-pipeline-apis/test/server-events.test.ts`
-- `services/serve-pipeline-apis/test/write-server-events.ts`
+- `services/feed-ingest-plan/test/relay-feed-api-events.test.ts`
+- `services/feed-ingest-plan/test/write-feed-api-events.ts`
 - `docs/architecture/sources/feed-operator-api.md` - safe-persist completion log contract.
 - `docs/reference/serve-pipeline-apis.md` - separate payloads, contexts and current-only diagnostics.
 - `TODO/20261105-preserve-typescript-diagnostics-plan.md` - this row's status only.
@@ -215,9 +215,9 @@ Table I - Delivery allowlist and mapping
 
 | Id | Native relay field / server field | Type / rule |
 | --- | --- | --- |
-| I1 | Relay `event` | Literal `safe_persist_http_completed`; selects the existing configured completion event type, not a new type. |
-| I2 | Relay `run_number` -> completion `data.run_id` | Existing numeric-string `SafePersistHttpRequestSchema.shape.runNumber`; actual request run, no additional alias or supervision fallback. |
-| I3 | Relay `attempt` -> completion `data.attempt` | Existing positive integer attempt; actual request value. |
+| I1 | Native event `type` | Literal `safe_persist_http_completed`; the handler constructs this existing completion event type. |
+| I2 | Factory `runNumber` -> completion `data.run_id` | Existing numeric-string `SafePersistHttpRequestSchema.shape.runNumber`; actual request run, no additional alias or supervision fallback. |
+| I3 | Completion `data.attempt` | Existing positive integer attempt; actual request value. |
 | I4 | Relay/completion `status` | Existing `MetadataDeliveryResultSchema.shape.status`: `landed`, `already-on-main`, `no-changes`, `failed`. |
 | I5 | Relay/completion `commit` | Existing native lowercase hexadecimal commit string, 40-64 characters, or null. |
 | I6 | Relay/completion `files` | Existing native nonnegative integer file count; do not copy paths. |
@@ -235,11 +235,11 @@ Table J - Delivery implementation sequence
 | Id | Decision | Authority |
 | --- | --- | --- |
 | J1 | Declare native relay/completion shapes and changed lifecycle diagnostic metadata first. Stamp them `2026-11-05`, add one-line changelogs and current-only rules. Do not change the separate saved `ServerEvidenceSchema`. | Native diagnostic authority. |
-| J2 | Derive request/result field validators from `services/feed-ingest-plan/scripts/feed-ingest-plan-delivery-result.ts` and context validation from the existing common contract. API server already depends on the feed package; do not add a reverse dependency or copy the status vocabulary. | Existing package and contract graph. |
+| J2 | Derive request/result field validators from `services/feed-ingest-plan/scripts/feed-ingest-plan-delivery-result.ts` and context validation from the existing common contract. The feed producer owns its contracts; shared hosting consumes typed decoder results and imports no native package. Do not copy the status vocabulary. | Existing package and contract graph. |
 | J3 | The handler passes the exact context already allocated by `commandContext(captureRequestRuntime(...))` to its diagnostic. Its native delivery call, HTTP result and receipt remain unchanged. | Existing receiving operation. |
-| J4 | The relay/writer accepts only the explicit allowlist in Table I. Validate the native request/result before projection. Missing or invalid completion context is an explicit diagnostic error, not a fallback to supervision or a newly allocated child. | Diagnostic contract and request isolation. |
+| J4 | The relay/writer accepts only the explicit native allowlist in Table I. Validate the event and require its carrier to match the native receiving context. Missing or invalid context is an explicit diagnostic error, not a fallback to supervision or a newly allocated child. | Diagnostic contract and request isolation. |
 | J5 | `createCloudEvent` receives that exact request context. Retain full context in completion data as well as its carrier; keep lifecycle writes on the existing supervision context. | Existing operation/event meanings. |
-| J6 | Keep configured sources, event types and server names, process-ID handling and other module projections unchanged. Do not add a tracing runtime or arbitrary diagnostic spreading. | Existing server contract. |
+| J6 | Keep producer-local source values, event types, server names and process-ID handling unchanged. Relay accepted native application events without lifecycle conversion; retain ordinary planner failure projection. Do not add a tracing runtime or arbitrary diagnostic spreading. | Existing server contract. |
 | J7 | Leave native HTTP schemas/client, delivery receipts, ledgers and behavior unchanged. Completion diagnostics do not become the delivery confirmation authority. | Existing native result and receipt readers. |
 | J8 | One behavioral commit: contract -> completion reader/builder -> handler/relay wiring -> real integration assertions/docs. Both delivery faults land together; no structural refactoring is required. | One coherent completion outcome. |
 | J9 | Both rows use current-only diagnostic readers/writers together. Historical files/events remain untouched; no legacy aliases, dual readers, migrations or backfills. Unchanged ledgers/native results retain their existing readers. | Diagnostic cutover scope. |

@@ -1,6 +1,6 @@
 # Summarizer API and private events
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-05
 
 Which requests, results and private event records does the independent
 TypeScript summarizer expose?
@@ -9,9 +9,15 @@ TypeScript summarizer expose?
 
 `services/summarizer/src/start-api-server.ts` starts the HTTP API.
 `services/summarizer/src/execute-cli-pipeline.ts` runs one CLI request.
-Both load the producer reference from the committed
-`config/typescript-event-sources.json`, written by this repository.
-That reference identifies the event producer; it is not a fetch destination.
+Both select `/services/summarizer` from the service's
+`src/declare-event-source.ts`, without reading a source registry.
+The [identity contract](../architecture/contracts/identity.md#4-native-typescript-event-and-operation-metadata)
+defines these fixed producer identities; they are not fetch destinations.
+Both entry points support the
+[complete native API standard](../architecture/contracts/identity.md#native-api-support).
+The summarizer is independent of the composed listener. Its full application
+events stay in request-private histories/files; they are not forwarded into
+ordinary host logs.
 
 The selected model and its destination still come from the existing Python
 configuration loader. Environment values cannot replace the model or the

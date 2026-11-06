@@ -1,36 +1,38 @@
 /** Run one real HTTP task and retain observed child outcomes even when startup fails. */
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { loadEventSources } from "@idhazh/common-contracts";
-import { superviseHttpChild } from "@idhazh/feed-ingest-plan/http-child-lifetime";
-import { withPlannerFailure } from "@idhazh/feed-ingest-plan/plan-failure";
-import { loadConfig as loadProbeConfig } from "@idhazh/host-probes/config";
-import type { FailureCaptureOptions } from "@idhazh/feed-ingest-plan/plan-failure";
-import { ApiStartupSchema, startupSupervision } from "./api-startup";
-import type { ApiStartup } from "./api-startup";
-import { ServerEvidenceSchema, serverEvidenceFilename, serverLogFilename } from "./server-evidence";
+import type { z } from "zod";
+import { PIPELINE_API_EVENT_SOURCE } from "./declare-event-source";
+import { superviseHttpChild } from "./supervise-http-child";
+import { ApiHostStartupSchema } from "./api-startup";
+import type { ApiHostStartup } from "./api-startup";
+import type { HttpChildFailure, HttpChildFailurePolicy, HttpChildKind } from "./http-child-failure";
+import type { SupervisionSettings } from "./load-settings";
+import { serverEvidenceFilename, serverLogFilename } from "./server-evidence";
 import type { ServerEvidence } from "./server-evidence";
 import { createServerEventWriter } from "./write-server-event";
-import { readApiReadiness } from "./read-api-readiness";
+import type { ApiDiagnostic } from "./write-server-event";
+import type { ApiGroup } from "./server-evidence";
 
-export async function superviseApiTask<T>(input: {
-  root: string; startup: ApiStartup; kind: Parameters<typeof superviseHttpChild>[0]["kind"];
-  capture?: FailureCaptureOptions; serverEntry?: string; signal?: AbortSignal;
+export async function superviseApiTask<T, Profile, Failure extends HttpChildFailure, NativeData = never>(input: {
+  root: string; startup: ApiHostStartup & { group: ApiGroup }; kind: HttpChildKind;
+  failure: HttpChildFailurePolicy<Failure>; serverEntry: string; signal?: AbortSignal;
+  supervision: SupervisionSettings; maxControlBytes: number;
+  evidenceSchema: z.ZodType<ServerEvidence<Profile>>;
+  decodeDiagnostic: (raw: unknown) => ApiDiagnostic<Profile, NativeData>;
+  ready: (message: unknown, pid: number, signal: AbortSignal) => Promise<string>;
   request: (origin: string, signal: AbortSignal) => Promise<T>;
 }): Promise<T> {
-  const startup = ApiStartupSchema.parse(input.startup);
+  const startup = ApiHostStartupSchema.parse(input.startup);
   const directory = resolve(input.root, startup.directory);
   await mkdir(directory, { recursive: true });
-  const sources = await loadEventSources(join(input.root, "config", "typescript-event-sources.json"));
-  const maxControlBytes = startup.group === "machine"
-    ? (await loadProbeConfig(join(input.root, "config", "host-probes.json"))).max_request_body_bytes
-    : startup.group === "planning" ? startup.planner.settings.listener.max_body_bytes
-    : startup.delivery.settings.listener.max_body_bytes;
-  const logger = createServerEventWriter({ directory, source: sources.typescript_api, group: startup.group, run: startup.run });
+  const logger = createServerEventWriter({
+    directory, source: PIPELINE_API_EVENT_SOURCE, group: input.startup.group, run: startup.run,
+    decode: input.decodeDiagnostic,
+  });
   const started = performance.now();
-  const evidence: ServerEvidence = {
-    version: "2026-11-04", server_name: "hono-server", group: startup.group,
+  const evidence: ServerEvidence<Profile> = {
+    version: "2026-11-04", server_name: "hono-server", group: input.startup.group,
     run_id: startup.run.run_id, attempt: startup.run.attempt, started_at: startup.run.started_at,
     pid: null, startup: "not_started", startup_ms: null, shutdown: "not_started", exit_code: null,
     log_filename: serverLogFilename(startup.run), log_available: logger.available,
@@ -38,23 +40,19 @@ export async function superviseApiTask<T>(input: {
   };
   let original: unknown;
   let failed = false;
-  const destination = join(directory, serverEvidenceFilename(startup.group));
+  const destination = join(directory, serverEvidenceFilename(input.startup.group));
   async function saveEvidence() {
-    await writeFile(`${destination}.tmp`, JSON.stringify(ServerEvidenceSchema.parse(evidence)));
+    await writeFile(`${destination}.tmp`, JSON.stringify(input.evidenceSchema.parse(evidence)));
     await rename(`${destination}.tmp`, destination);
   }
   try {
     await saveEvidence();
     logger.write({ phase: "starting" });
     return await superviseHttpChild({
-      root: input.root, kind: input.kind, startup,
-      settings: {
-        listener: { max_body_bytes: maxControlBytes },
-        supervision: startupSupervision(startup),
-      },
-      ...(input.capture === undefined ? {} : { capture: input.capture }),
+      root: input.root, kind: input.kind, startup: input.startup,
+      maxControlBytes: input.maxControlBytes, supervision: input.supervision, failure: input.failure,
       ...(input.signal === undefined ? {} : { signal: input.signal }),
-      serverEntry: input.serverEntry ?? fileURLToPath(new URL("./index.ts", import.meta.url)),
+      serverEntry: input.serverEntry,
       diagnostics: line => logger.acceptModuleLine(line),
       observe: event => {
         evidence.pid = event.pid;
@@ -79,13 +77,13 @@ export async function superviseApiTask<T>(input: {
           exit_code: event.exit_code ?? null,
         });
       },
-      ready: (message, pid, signal) => readApiReadiness({ message, pid, signal, startup, kind: input.kind }),
+      ready: input.ready,
       request: input.request,
     });
   } catch (error) {
     original = error;
     failed = true;
-    const failure = withPlannerFailure(error, input.capture ?? { operation: "workflow" });
+    const failure = input.failure.capture(error);
     evidence.error_code = failure.code;
     if (evidence.startup !== "ready") {
       evidence.startup = "failed";

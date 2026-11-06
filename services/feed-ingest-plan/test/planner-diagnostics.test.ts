@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { createCloudEvent, createRootContext, createCandidateId, deriveUrlKey, FEED_INGEST_EVENT_VERSION, FeedIngestEventDataSchema, FetchRequestSchema, loadEventSources, PlannerSavedResponseSchema } from "@idhazh/common-contracts";
+import { createCloudEvent, createRootContext, createCandidateId, deriveUrlKey, FEED_INGEST_EVENT_VERSION, FeedIngestEventDataSchema, FetchRequestSchema, PlannerSavedResponseSchema } from "@idhazh/common-contracts";
+import { PLANNER_EVENT_SOURCE } from "../src/declare-event-source";
 import { recognizeArticleEntities } from "../src/recognize-article-entities";
 import { capturePlannerFailure, combinePlannerFailures, describePlanError, readPlannerResponseError } from "../src/api/plan-failure";
 import { retainFailureThroughCleanup } from "../src/api/retain-failure-through-cleanup";
@@ -111,9 +112,8 @@ test("native error frames survive real cleanup refusal without body text or gues
     expect(serialized).not.toContain("Private article text");
     expect(serialized).not.toContain("token=private");
     expect(serialized).not.toContain("injected");
-    const sources = await loadEventSources(new URL("../../../config/typescript-event-sources.json", import.meta.url));
     const event = prepareProgressEvent(createCloudEvent({
-      source: sources.planner, type: "planner.progress",
+      source: PLANNER_EVENT_SOURCE, type: "planner.progress",
       context: { traceId: execution.traceId, spanId: execution.spanId, links: [] },
       data: { version: FEED_INGEST_EVENT_VERSION, run_id: execution.run_id, operation: "plan", phase: "failed", details: { failure } },
       parseData: value => FeedIngestEventDataSchema.parse(value),

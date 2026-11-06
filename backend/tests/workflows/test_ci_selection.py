@@ -89,6 +89,18 @@ def test_documentation_only_changes_run_whitespace_not_application_gates() -> No
     assert not scope.get("if")
 
 
+def test_ci_leaves_summary_evaluation_to_its_manual_workflow() -> None:
+    ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "hhem-evaluator" not in ci
+    assert "summary-eval-tests" not in ci
+    workflow = _load_workflows()["summary-eval-tests.yml"]
+    assert set(_mapping(workflow["on"], "summary evaluation triggers")) == {"workflow_dispatch"}
+    defaults = _mapping(_job(workflow, "evaluate")["defaults"], "evaluation defaults")
+    assert _mapping(defaults["run"], "evaluation run defaults")["working-directory"] == (
+        "services/hhem-evaluator"
+    )
+
+
 def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs() -> None:
     workflow = _load_workflows()["ci.yml"]
     events = _mapping(workflow["on"], "CI events")
@@ -144,7 +156,7 @@ def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs(
     assert not prepare.get("continue-on-error")
     assert _script(prepare, "native API dependency preparation").splitlines() == [
         f"bun install --frozen-lockfile --cwd services/{name}"
-        for name in ("feed-ingest-plan", "host-fingerprints", "host-probes", "serve-pipeline-apis")
+        for name in ("serve-pipeline-apis", "host-fingerprints", "host-probes", "feed-ingest-plan")
     ]
     planner = _step(workflow, "gates", "name", "TypeScript feed planner and native audit evidence")
     assert _script(planner, "ordinary planner gates").splitlines() == [

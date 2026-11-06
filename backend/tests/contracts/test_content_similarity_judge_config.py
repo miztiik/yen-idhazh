@@ -68,3 +68,36 @@ def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key
     path.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
     with pytest.raises(ValueError, match=key):
         judge_settings.load(tmp_path)
+
+
+def test_offline_settings_use_their_own_named_file_and_defaults(tmp_path: Path) -> None:
+    from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityEvaluationConfig
+
+    committed = judge_settings.load_evaluation(CONFIG_DIR)
+    assert committed == ContentSimilarityEvaluationConfig()
+    path = tmp_path / "judges" / "content-similarity-evaluation.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps({"max_cases": 3, "confidence_level": 0.8, "resamples": 17, "resample_seed": -4}),
+        encoding="utf-8",
+    )
+    assert judge_settings.load_evaluation(tmp_path).model_dump() == {
+        "max_cases": 3, "confidence_level": 0.8, "resamples": 17, "resample_seed": -4,
+    }
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"max_cases": True}, {"max_cases": 0}, {"resamples": 0}, {"resamples": 1.5},
+        {"resample_seed": False}, {"confidence_level": 0}, {"confidence_level": 1},
+        {"confidence_level": float("nan")}, {"base_url": "https://invalid.test:443"},
+    ],
+)
+def test_offline_settings_refuse_invalid_bounds_and_destination_fields(
+    changes: dict[str, object],
+) -> None:
+    from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityEvaluationConfig
+
+    with pytest.raises(ValueError):
+        ContentSimilarityEvaluationConfig.model_validate(changes)

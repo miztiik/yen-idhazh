@@ -1,6 +1,6 @@
 # Phased workflow events
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-05
 
 Which saved events does the independent inference and evaluation workflow read?
 
@@ -15,10 +15,15 @@ inference.
 
 The envelope follows the shared
 [identity contract](../architecture/contracts/identity.md#4-native-typescript-event-and-operation-metadata).
-The configured producer is `workflow` in `config/typescript-event-sources.json`.
+The workflow selects `/workflows/ai-pipeline` from its local
+`.github/scripts/declare-workflow-event-source.ts`, without a source registry.
 Project data version `2026-11-03` is attached to `PipelineEventDataSchema`;
 CloudEvents `specversion` remains `1.0`. This is a current-only reader with no
 aliases, old-format reader, identity conversion or backfill.
+The [native support matrix](../architecture/contracts/identity.md#native-api-support)
+also identifies this non-HTTP producer and the upload inventory. Native API
+support does not convert the workflow's saved application payload or its
+foreign evaluator protocol into a different transport.
 
 Table A - workflow application data
 

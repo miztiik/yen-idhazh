@@ -2,27 +2,30 @@
 import { appendFileSync, closeSync, openSync } from "node:fs";
 import { join } from "node:path";
 import type { z } from "zod";
-import {
-  createChildContext, createCloudEvent, FeedIngestEventDataSchema, readCloudEvent,
-  ArticleFailureDiagnosticSchema, isArticleFailureDiagnostic,
-} from "@idhazh/common-contracts";
-import { TaskProfileSchema } from "@idhazh/host-probes/profile";
-import type { TaskProfile } from "@idhazh/host-probes/profile";
-import { SafePersistHttpDiagnosticSchema } from "@idhazh/feed-ingest-plan/delivery-diagnostic";
-import { createDeliveryCompletionEvent } from "./delivery-completion-diagnostic";
-import { ServerEventDataSchema, serverLogFilename } from "./server-evidence";
+import { createChildContext, createCloudEvent } from "@idhazh/common-contracts";
+import type { CloudEvent, OperationMetadata } from "@idhazh/common-contracts";
+import { SERVER_LIFECYCLE_EVENT_TYPE, ServerEventDataSchema, serverLogFilename } from "./server-evidence";
 import type { ApiGroup, ServerRun } from "./server-evidence";
+import { RequestFailureEventSchema } from "./create-request-failure-event";
 
-type EventInput = Pick<z.infer<typeof ServerEventDataSchema>, "phase">
+export type ServerEventInput = Pick<z.infer<typeof ServerEventDataSchema>, "phase">
   & Partial<Pick<z.infer<typeof ServerEventDataSchema>, "severity" | "duration_ms" | "exit_code" | "code">>;
+export type ApiDiagnostic<Profile, NativeData = never> =
+  | { kind: "ignored" | "invalid" }
+  | { kind: "event"; data: ServerEventInput }
+  | { kind: "native_event"; createEvent: (source: string) => CloudEvent<NativeData> }
+  | { kind: "profile"; profile: Profile; operation: Pick<OperationMetadata, "traceId" | "spanId"> };
 
-export function createServerEventWriter(input: { directory: string; source: string; group: ApiGroup; run: ServerRun }) {
+export function createServerEventWriter<Profile, NativeData = never>(input: {
+  directory: string; source: string; group: ApiGroup; run: ServerRun;
+  decode: (raw: unknown) => ApiDiagnostic<Profile, NativeData>;
+}) {
   const context = createChildContext(input.run.context);
   const filename = serverLogFilename(input.run);
   let descriptor: number | undefined;
   let available = true;
-  const profiles = new Map<string, TaskProfile>();
-  function publish(event: unknown, mirror = true) {
+  const profiles = new Map<string, Profile>();
+  function publish<Data>(event: CloudEvent<Data>, mirror = true) {
     const line = `${JSON.stringify(event)}\n`;
     process.stderr.write(line);
     if (mirror && available && descriptor !== undefined) {
@@ -30,9 +33,9 @@ export function createServerEventWriter(input: { directory: string; source: stri
       catch { unavailable(); }
     }
   }
-  function record(data: EventInput, mirror = true) {
+  function record(data: ServerEventInput, mirror = true) {
     const event = createCloudEvent({
-      source: input.source, type: "hono.server", context,
+      source: input.source, type: SERVER_LIFECYCLE_EVENT_TYPE, context,
       data: {
         server_name: "hono-server", group: input.group, run_id: input.run.run_id, attempt: input.run.attempt,
         severity: data.severity ?? "info",
@@ -48,54 +51,42 @@ export function createServerEventWriter(input: { directory: string; source: stri
     available = false;
     record({ phase: "log_unavailable", severity: "warning", code: "LOG_FILE_UNAVAILABLE" }, false);
   }
+  function invalidDiagnostic() {
+    record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
+  }
   try { descriptor = openSync(join(input.directory, filename), "a"); }
   catch { unavailable(); }
   return {
     filename,
     get available() { return available; },
-    get reportedProfiles(): TaskProfile[] { return [...profiles.values()]; },
+    get reportedProfiles(): Profile[] { return [...profiles.values()]; },
     write: record,
     acceptModuleLine(line: string) {
       if (line.trim() === "") return;
       let raw: unknown;
       try { raw = JSON.parse(line); }
       catch {
-        record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
+        invalidDiagnostic();
         return;
       }
-      if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-        record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
-        return;
-      }
-      if ("specversion" in raw) {
-        if (isArticleFailureDiagnostic(raw)) {
-          if (ArticleFailureDiagnosticSchema.safeParse(raw).success) publish(raw);
-          else record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
+      if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
+        if ("type" in raw && raw.type === "typescript_api_request_failed") {
+          const event = RequestFailureEventSchema.safeParse(raw);
+          if (event.success) publish(event.data);
+          else invalidDiagnostic();
           return;
         }
-        try {
-          const event = readCloudEvent(raw, value => FeedIngestEventDataSchema.parse(value));
-          if (event.data.phase === "failed") record({ phase: "module_failed", severity: "error", code: "API_OPERATION_FAILED" });
-        } catch {
-          record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
-        }
-        return;
       }
-      if ("event" in raw && raw.event === "safe_persist_http_completed") {
-        const diagnostic = SafePersistHttpDiagnosticSchema.safeParse(raw);
-        if (diagnostic.success) publish(createDeliveryCompletionEvent({ source: input.source, diagnostic: diagnostic.data }));
-        else record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
-        return;
+      const diagnostic = input.decode(raw);
+      if (diagnostic.kind === "invalid") {
+        invalidDiagnostic();
+      } else if (diagnostic.kind === "profile") {
+        profiles.set(`${diagnostic.operation.traceId}:${diagnostic.operation.spanId}`, diagnostic.profile);
+      } else if (diagnostic.kind === "event") {
+        record(diagnostic.data);
+      } else if (diagnostic.kind === "native_event") {
+        publish(diagnostic.createEvent(input.source));
       }
-      if ("event" in raw && raw.event === "task_profile") {
-        const profile = TaskProfileSchema.safeParse("profile" in raw ? raw.profile : undefined);
-        if (!profile.success) record({ phase: "module_failed", severity: "warning", code: "CHILD_DIAGNOSTIC_INVALID" });
-        else profiles.set(`${profile.data.traceId}:${profile.data.spanId}`, profile.data);
-        return;
-      }
-      const code = "code" in raw && typeof raw.code === "string" && /^[A-Z][A-Z0-9_]*$/.test(raw.code)
-        ? raw.code : "API_OPERATION_FAILED";
-      record({ phase: "module_failed", severity: "error", code });
     },
     close() {
       if (descriptor === undefined) return;

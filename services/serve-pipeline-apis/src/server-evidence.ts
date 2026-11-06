@@ -1,7 +1,9 @@
 /** Which server outcomes were observed during this task, separately from its API result? */
 import { z } from "zod";
 import { DateStampSchema, OperationMetadataSchema, PositiveCountSchema } from "@idhazh/common-contracts";
-import { TaskProfileSchema } from "@idhazh/host-probes/profile";
+
+// Saved lifecycle envelopes retain this protocol type across listener changes.
+export const SERVER_LIFECYCLE_EVENT_TYPE = "hono.server";
 
 export const ApiGroupSchema = z.enum(["planning", "machine", "delivery"]);
 export type ApiGroup = z.infer<typeof ApiGroupSchema>;
@@ -20,7 +22,8 @@ export function serverLogFilename(run: Pick<ServerRun, "run_id" | "attempt" | "s
   return ServerLogFilenameSchema.parse(`hono-server_${date}_${run.run_id}_${run.attempt}.log`);
 }
 
-export const ServerEvidenceSchema = z.strictObject({
+export function createServerEvidenceSchema<Profile>(profile: z.ZodType<Profile>) {
+  return z.strictObject({
   version: z.literal("2026-11-04"),
   server_name: z.literal("hono-server"),
   group: ApiGroupSchema,
@@ -36,7 +39,7 @@ export const ServerEvidenceSchema = z.strictObject({
   log_available: z.boolean(),
   error_code: z.string().regex(/^[A-Z][A-Z0-9_]*$/).nullable(),
   cleanup_error_code: z.string().regex(/^[A-Z][A-Z0-9_]*$/).nullable(),
-  reported_profiles: z.array(TaskProfileSchema).default([]).describe(
+  reported_profiles: z.array(profile).default([]).describe(
     "Native task-profile reports captured before task exit; no reports does not prove no profiles ran.",
   ),
 }).refine(value => value.log_filename === serverLogFilename(value), {
@@ -48,8 +51,9 @@ export const ServerEvidenceSchema = z.strictObject({
     { version: "2026-11-04", change: "Retain native task-profile reports when their owning server stops." },
     { version: "2026-11-04", change: "Record actual task-owned TypeScript server outcomes without changing committed ledgers." },
   ],
-});
-export type ServerEvidence = z.infer<typeof ServerEvidenceSchema>;
+  });
+}
+export type ServerEvidence<Profile> = z.infer<ReturnType<typeof createServerEvidenceSchema<Profile>>>;
 export const ServerEventDataSchema = z.strictObject({
   server_name: z.literal("hono-server"),
   group: ApiGroupSchema,

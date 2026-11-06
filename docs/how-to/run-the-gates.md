@@ -102,6 +102,10 @@ not a change to inherited `safe.bareRepository=explicit`. Never lower that
 security control to make fixture tests pass. Install this checkout's package in
 an isolated environment before tests that invoke its console entry point.
 
+Backend pytest fixtures start each test with `GITHUB_RUN_ATTEMPT=1`, independent
+of the hosting CI attempt. Tests that exercise reruns explicitly set their own
+attempt after fixture setup. Production still reads the platform's attempt.
+
 Run records under `backend/var/checks/` hold the source fingerprint, selected
 groups and specs, exit status, step durations, test counts and queue/startup
 time separately. Logic and browser reports use separate output directories.
@@ -236,9 +240,12 @@ uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test
 
 If Bun cannot copy the local writer dependency on Windows, repeat its locked
 install with `--linker=isolated`; do not change either package manifest or lock.
-The isolated `hhem-evaluator` CI job runs the complete offline service suite,
-strict types and lint when the scope job selects code. It installs neither
-the backend nor the model extra. The named UUID test fails with preparation
+The evaluator's offline suite, strict types and lint are local checks, not jobs
+in `ci.yml`. The dedicated manual `summary-eval-tests.yml` workflow exercises
+the HHEM and UniEval APIs without adding evaluator setup to ordinary CI; the
+[manual procedure](run-hhem-evaluation-api.md) owns dispatch and live evidence.
+The model-free environment installs neither the backend nor the model extra.
+The named UUID test fails with preparation
 instructions when its real TypeScript dependency is absent; it never skips.
 The model-free environment includes the pinned tokenizer and sentence-rule
 libraries for UniEval. Preparation fetches only their named resources, not
@@ -269,7 +276,7 @@ without opening an HTTP listener or weakening the socket guard.
 The socket guard allows only Unix-domain sockets for local event-loop IPC.
 Windows asyncio needs an internal TCP socket pair and cannot run these ASGI
 cases under that guard. Record this platform limitation rather than weakening
-the guard; the complete isolated Linux CI suite remains authoritative.
+the guard; run the complete offline service suite on Linux.
 
 Real recordings are a separate operator check, not an ordinary test. From the
 service directory, prepare a separate environment so later model-free checks
@@ -285,7 +292,7 @@ Keep the model-extra selector while using that environment. In a fresh shell,
 ordinary commands use the service's default model-free environment again.
 Commit only the named bounded fixtures and actual provenance, never `var/`,
 weights, caches or raw third-party diagnostics. A cached-only reload must match
-the captured model identity. Existing full-suite merge-candidate gates remain unchanged.
+the captured model identity. Recordings do not replace the offline service checks.
 The [service reference](../reference/hhem-evaluation-api.md) owns the fields
 and dependency boundary.
 
@@ -294,10 +301,11 @@ existing locked host APIs and shared application from the repository root.
 Run the named modules from the service directory:
 
 ```powershell
-bun install --frozen-lockfile --cwd .\services\host-probes
-bun install --frozen-lockfile --cwd .\services\host-fingerprints
-bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
+bun install --frozen-lockfile --cwd .\packages\common-contracts
 bun install --frozen-lockfile --cwd .\services\serve-pipeline-apis
+bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
+bun install --frozen-lockfile --cwd .\services\host-fingerprints
+bun install --frozen-lockfile --cwd .\services\host-probes
 Set-Location .\services\hhem-evaluator
 uv run --frozen ruff check src tests scripts
 Push-Location ..\..
@@ -350,16 +358,20 @@ The native launch-boundary cases additionally require Linux `setpriv` and
 the kernel's parent-death and child-adoption operations. They use actual
 processes and a private pre-arm pipe, not model weights or network access.
 They prove refusal when the owner dies before protection is armed, confirmed
-kernel stop after exec, and normal same-PID startup/shutdown. Linux CI runs
-these cases; their Windows skips do not count as launch-boundary proof.
+kernel stop after exec, and normal same-PID startup/shutdown. Run these cases
+on Linux; their Windows skips do not count as launch-boundary proof.
 Owned-process fixtures launch the actual CPython executable with the same
 environment's installed packages: a Windows virtual-environment redirector
 has a different PID. The runtime ownership check stays strict.
-The isolated CI job prepares the host's locked dependencies and checks the
-new Bun scripts with that package's compiler; it still installs no model.
-The bounded workflow inventory change also selects
+The local caller checks require the host's locked dependencies, not model packages.
+Ordinary evaluator preparation
+installs neither feed-ingest-plan nor data-delivery.
+Workflow changes also select
+`backend/tests/workflows/test_ci_selection.py`,
 `backend/tests/workflows/test_workflow_inputs.py` and
 `backend/tests/workflows/test_triggers.py`. Keep full suites in CI.
+Input checks read actual Actions expressions, including implicit job and step
+conditions, not filenames or quoted expression literals.
 The [manual procedure](run-hhem-evaluation-api.md) owns registration and real
 hosted evidence; offline results do not close that check.
 
@@ -393,8 +405,8 @@ bun run --cwd .\packages\ledger-file-writer test .\test\uuid.test.ts
 
 The flow uses the real shared factories, codec and application reader with the
 named selected-article recording. It checks distinct occurrences, unchanged
-replay, parent/input relationships, state propagation and explicit source
-loading. It does not certify service work ownership, live delivery or a tracing
+replay, parent/input relationships, state propagation and producer URI
+validation without a source registry. It does not certify service work ownership, live delivery or a tracing
 runtime. Ordinary CI installs the pinned codec dependencies through the
 publication runtime and runs the full common/native suites. Browser callers
 still use the independent observation-order module.
@@ -409,18 +421,24 @@ bun run --cwd .\services\feed-ingest-plan test .\test\plan-entry-points.test.ts 
 ```
 
 The shared selection lists affected surfaces; it does not execute Bun.
-For the composed feed listener, install the declared native modules before
-the composition package, using their frozen locks. Check the actual shared
-server and its named workflow dependants:
+For the composed feed listener, install shared hosting before the native
+assembly packages, using their frozen locks. Check the actual shared
+server, native construction and named workflow dependants:
 
 ```powershell
-bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
+bun install --frozen-lockfile --cwd .\packages\common-contracts
+bun install --frozen-lockfile --cwd .\services\serve-pipeline-apis
+bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
+bun install --frozen-lockfile --cwd .\packages\data-delivery
 bun install --frozen-lockfile --cwd .\services\host-fingerprints
 bun install --frozen-lockfile --cwd .\services\host-probes
-bun install --frozen-lockfile --cwd .\services\serve-pipeline-apis
+bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
 bun run --cwd .\services\serve-pipeline-apis check
 bun run --cwd .\services\serve-pipeline-apis test
-bun run --cwd .\services\feed-ingest-plan test .\test\feed-ingest-plan-supervisor.test.ts .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-workflow.test.ts .\test\feed-ingest-plan-report.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\feed-ingest-plan-host.test.ts
+bun run --cwd .\services\host-probes check
+bun run --cwd .\services\host-probes test .\test\serve-machine-apis.test.ts .\test\record-machine-api-events.test.ts .\test\check-machine-api-dependencies.test.ts
+bun run --cwd .\services\feed-ingest-plan check
+bun run --cwd .\services\feed-ingest-plan test .\test\serve-feed-apis.test.ts .\test\retain-api-profiles.test.ts .\test\feed-ingest-plan-supervisor.test.ts .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-workflow.test.ts .\test\feed-ingest-plan-report.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\feed-ingest-plan-host.test.ts
 ```
 
 The shared-port oracle uses real fingerprint and sampling handlers, recorded
@@ -431,6 +449,26 @@ evidence and available log artifacts independently of a planner result.
 These checks do not dispatch the data-writing workflow or prove live feed
 delivery. The [server reference](../reference/serve-pipeline-apis.md) owns
 configuration, current-task evidence and log semantics.
+
+For native API event changes, use the same declared checks and combine these
+functional cases within each package invocation:
+
+```powershell
+bun run --cwd .\services\host-fingerprints test .\test\native-events.test.ts .\test\fingerprint-persistence.test.ts
+bun run --cwd .\services\host-probes test .\test\native-events.test.ts .\test\probe.test.ts .\test\serve-machine-apis.test.ts .\test\record-machine-api-events.test.ts
+bun run --cwd .\services\serve-pipeline-apis test .\test\server-events.test.ts .\test\supervise-http-child.test.ts
+bun run --cwd .\services\feed-ingest-plan test .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\serve-feed-apis.test.ts .\test\relay-feed-api-events.test.ts .\test\retain-api-profiles.test.ts .\test\plan-entry-points.test.ts
+```
+
+These are real handler/process and named-mirror checks, not source-constant
+existence checks. They verify the
+[API support matrix](../architecture/contracts/identity.md#native-api-support),
+including disabled commands, retained profile operations, native delivery
+before supervision and unchanged relay identity. Private profiles and
+summarizer contents remain private. Reuse unchanged summarizer/workflow check
+records only when their tested inputs are unchanged. Keep Linux-only native
+instrument coverage and the full suite in merge-candidate CI; no live
+data-writing workflow or published-site browser gate is added.
 
 The native package command supplies its declared timeout. Keep shorter
 process deadlines and existing independent failure checks; do not raise

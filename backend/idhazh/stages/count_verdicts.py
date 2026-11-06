@@ -98,8 +98,8 @@ def stage_count_verdicts(
     a day that could not be counted are two different facts, and holding the
     readings back would delete the evidence of the first to record the second.
 
-    **An instrument move archives the counts and keeps the date memory.** The
-    counts go because they answer a different question under the new instrument.
+    **An instrument or policy move archives counts and keeps the date memory.** The
+    counts go because they answer a different question under the new semantics.
     The list of nights already read comes across, because that is not a count -
     and without it the council would be told every night in its window is
     outstanding the first time somebody changes the model, which is a week of

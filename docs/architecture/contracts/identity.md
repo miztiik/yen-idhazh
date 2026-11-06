@@ -18,7 +18,7 @@ Table A - distinct identities
 | A1 | Ledger `unit_id` | UUIDv5 from the fixed namespace and work seed | Repeatable work, unchanged across retries. |
 | A2 | Ledger `file_id` | UUIDv8 under the writer's file contract | One physical file, not an event or operation. |
 | A3 | Article and URL keys | Their declared SHA-256 encodings | An address or foreign domain item, not a captured input. |
-| A4 | Native TypeScript event `source + id` | Configured producer URI reference and a fresh lowercase UUIDv4 | One event occurrence; replay retains the saved envelope. |
+| A4 | Native TypeScript event `source + id` | Producer-local protocol URI reference and a fresh lowercase UUIDv4 | One event occurrence; replay retains the saved envelope. |
 | A5 | Native TypeScript `traceId` | Nonzero 16 random bytes, encoded as 32 lowercase hexadecimal characters | One execution. |
 | A6 | Native TypeScript `spanId` | Nonzero 8 random bytes, encoded as 16 lowercase hexadecimal characters | One operation within that execution. |
 | A7 | Python protocol identifiers | The owning Python contract's UUID rules | Foreign caller, execution and operation identities; see section 6. |
@@ -135,13 +135,47 @@ the codec; native `traceState` is its serialized form. Locally emitted carriers
 use version `00` and unsampled flags `00`. Callers derive a child or start a root
 explicitly; these identifiers grant no authorization or request replay promise.
 
-`loadEventSources(path)` explicitly reads
-`config/typescript-event-sources.json`, written by this repository. It validates
-the named pipeline API server, planner, summarizer and workflow producer URI references. These
-identify producers, not fetch destinations. Importing the package reads no
-configuration. Schema, creation, reading, source-loading and codec entry points
-are exported separately; the browser's framework-free observation-order path
-remains independent.
+Each producer declares its fixed logical URI in its own `declare-event-source.ts`
+module; the independent workflow uses `declare-workflow-event-source.ts`.
+These protocol identities are not configuration, deployment addresses or fetch
+destinations. Shared `EventSourceSchema` validates URI references when events
+are constructed or read, without enumerating applications or reading files.
+Schema, creation, reading and codec entry points remain separately exported;
+the browser's framework-free observation-order path stays independent.
+
+### Native API support
+
+Every authored TypeScript HTTP API supports this standard. Native support means
+the producing API constructs and validates its application event at the actual
+work or error boundary, using its local producer identity and real operation.
+It does not mean replacing HTTP results with event envelopes or inventing work
+events for health and diagnostic reads.
+
+Table B - verified API and producer bindings
+
+| ID | Surface | Producer URI and declaration | Native work and functional evidence |
+| --- | --- | --- | --- |
+| B1 | Planner HTTP: health, plan, fetch/parse, collections, selection, partition, persistence and feed-health-state | `/services/feed-ingest-plan`; `services/feed-ingest-plan/src/declare-event-source.ts` | Mounted routes receive `PlanInputs.event_source`; real progress and terminal article events retain their operations. `plan-entry-points.test.ts`, `operation-logging.test.ts` and the named planner route cases cover real API/CLI work. |
+| B2 | Independent summarizer HTTP: health, diagnostics and summarize; summarizer CLI | `/services/summarizer`; `services/summarizer/src/declare-event-source.ts` | HTTP and CLI use the same local identity and request-private event bus. `services/summarizer/test/pipeline-events.test.ts` verifies actual HTTP/CLI output, isolated histories and saved-event replay. It is not mounted into the composed listener. |
+| B3 | Fingerprint HTTP: fingerprint and health; fingerprint CLI | `/services/host-fingerprints`; `services/host-fingerprints/src/declare-event-source.ts` | Actual written/disabled results and failures create native events. `fingerprint-persistence.test.ts` covers real writes, disabled work, failures and CLI output; `serve-feed-apis.test.ts` covers the real composed port. |
+| B4 | Probe HTTP: sample, start/stop task profile and cache latency; probe CLI | `/services/host-probes`; `services/host-probes/src/declare-event-source.ts` | Native handled/disabled outcomes and safe failures come from real commands. `native-events.test.ts` and `probe.test.ts` cover all commands, private reports, cleanup and retained profile operations; `serve-machine-apis.test.ts` covers native machine composition. |
+| B5 | Delivery HTTP: health and safe-persist-data | `/services/typescript-api`; delivery's declaration in `services/feed-ingest-plan/src/declare-event-source.ts` | The handler creates completion/failure events before supervision. `safe-persist-http.test.ts` verifies native stderr before relay, unchanged occurrence/context after relay and actual local Git delivery; finalization retains the same native facts. |
+| B6 | Composed listener: health, lifecycle and request-error boundary | `/services/typescript-api`; `services/serve-pipeline-apis/src/declare-event-source.ts` | The host constructs its own request-failure event and relays validated producer events unchanged. `supervise-http-child.test.ts`, `server-events.test.ts` and `serve-feed-apis.test.ts` exercise real listeners and error paths without reverse native dependencies. |
+| B7 | Non-HTTP phased workflow and upload inventory | `/workflows/ai-pipeline` in `.github/scripts/declare-workflow-event-source.ts`; upload inventory reuses B1 | The workflow and inventory emit real native events without a registry file. `workflow-handoff.test.ts` and planner `operation-logging.test.ts` preserve saved handoff, upload facts and source identities. |
+
+Delivery intentionally retains the API host's published namespace through its
+own declaration; neither producer loads the other's source. Their integration
+case holds these declarations equal. Sources are logical protocol identities,
+not deployment settings or directory-derived names.
+
+Accepted native events retain source, occurrence ID, UTC time, carrier and data
+through relay. Producer-specific validators reject unknown types and unsafe
+extra fields. A delivery completion carrier must agree with its saved receiving
+context; a successful or repeated profile stop retains the original profile
+operation even when stop headers differ. Full task profiles and summarizer
+events retain their private transports, not a second copy in normal logs.
+Readiness packets, native HTTP results and CLI result stdout keep their
+existing protocols. No runtime tracing or collector is implied.
 
 ---
 
@@ -272,6 +306,11 @@ The reference-summary digest identifies the exact UTF-8 reference bytes,
 not the source, generated answer or an event occurrence.
 
 ## Design rationale
+
+An event source identifies a logical producer across deployments and file
+moves. Keeping that protocol literal beside its producer preserves existing
+recordings without a runtime registry, environment override or missing-file
+fallback. Shared helpers validate the protocol rather than select applications.
 
 An event occurrence, an execution, an operation and a domain item answer
 different questions. Shared metadata removes duplicate identity machinery

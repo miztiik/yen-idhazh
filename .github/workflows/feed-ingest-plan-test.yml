@@ -93,12 +93,12 @@ jobs:
       - name: Install declared TypeScript dependencies
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
           bun install --frozen-lockfile --cwd packages/data-delivery
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
-          bun install --frozen-lockfile --cwd services/feed-ingest-plan
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/host-probes
-          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
+          bun install --frozen-lockfile --cwd services/feed-ingest-plan
 
       # This one step owns the child server, readiness, HTTP client and shutdown.
       - name: Collect and select articles

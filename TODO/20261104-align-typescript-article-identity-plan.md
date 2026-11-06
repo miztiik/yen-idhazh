@@ -418,7 +418,7 @@ Table M - Row 2 alternatives
 - `services/feed-ingest-plan/test/collection-http.test.ts`
 - `services/feed-ingest-plan/test/collection-recordings.ts`
 - `services/feed-ingest-plan/test/file-baseline-recording.ts`
-- `services/serve-pipeline-apis/test/api-composition.test.ts`
+- `services/feed-ingest-plan/test/serve-feed-apis.test.ts`
 - `tests/fixtures/contracts/fetched-document/refused.json`
 - `tests/fixtures/feed-ingest-plan/report-events.json`
 - `tests/fixtures/feed-ingest-plan/entry-points/response.json`
@@ -439,7 +439,7 @@ Table M - Row 2 alternatives
 - `docs/how-to/run-feed-ingest-plan-test.md`
 
 **Acceptance gates:**
-- **Local:** H6; native checks in common-contracts, feed-ingest-plan and serve-pipeline-apis. In common-contracts run `config.test.ts`, `planner-diagnostics.test.ts`, `metadata-flow.test.ts` and `article-identity-compatibility.test.ts`; in the planner run `plan-api.test.ts`, `plan-entry-points.test.ts`, `plan-cli.test.ts`, `collection-http.test.ts`, `plan-engine.test.ts`, `file-baseline.test.ts`, `feed-ingest-plan-outputs.test.ts` and `operation-logging.test.ts` together; in the composed server run `api-composition.test.ts`. Include other actually changed caller cases from H6.
+- **Local:** H6; native checks in common-contracts, feed-ingest-plan and serve-pipeline-apis. In common-contracts run `config.test.ts`, `planner-diagnostics.test.ts`, `metadata-flow.test.ts` and `article-identity-compatibility.test.ts`; in the planner run `plan-api.test.ts`, `plan-entry-points.test.ts`, `plan-cli.test.ts`, `collection-http.test.ts`, `plan-engine.test.ts`, `file-baseline.test.ts`, `feed-ingest-plan-outputs.test.ts`, `operation-logging.test.ts` and `serve-feed-apis.test.ts` together. Include other actually changed caller cases from H6.
 - **Contract:** Check each Table E branch. Reject retired public keys and ambiguous feed/article combinations. D18 accepts typed API booleans only; test missing, explicit true/false, config override, CLI bare/value forms and invalid/repeated controls. D19 validates all-or-none URL presence, exact URL/hash agreement, partial and empty outcomes. Toggle the option over the same captured native result in lower-tier tests: chosen rows, ranks, assignments and ledger data must not change.
 - **Bounded integration:** Reuse the existing successful API entry-point journey with D18 enabled and the existing CLI journey with its default disabled; assert the actual saved JSON output as well as the response. Do not add a second whole-planner run for every flag/state combination. Preserve existing reference claims, body privacy and foreign publication fixture reads.
 - **CI:** H7; API/CLI responses, requested URLs, actual Parquet and selected text reconcile through H3. URL inclusion introduces no source fetch, Parquet lookup or routine progress/log output.

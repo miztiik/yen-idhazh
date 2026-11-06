@@ -16,9 +16,9 @@ import type { ReportFailureEvidence } from "../src/reporting/failure-evidence-ma
 import { verifyParquetFiles } from "./feed-ingest-plan-verification";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { articleEntitiesFilename, articleEntitiesPath } from "../src/selected-artifact-path";
-import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
+import { readMachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { renderServerEvidence } from "./feed-ingest-plan-server-report";
-import type { ServerEvidence } from "../../serve-pipeline-apis/src/server-evidence";
+import type { MachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import type { ReportDiagnosticIdentity } from "../src/reporting/article-failure-evidence";
 
 export type WorkflowReportEvidence = {
@@ -74,7 +74,7 @@ export async function writePlannerReport(input: {
 }
 
 export async function readExecutionEvidence(directory: string, root?: string, options: {
-  execution?: ReportDiagnosticIdentity; servers?: readonly ServerEvidence[];
+  execution?: ReportDiagnosticIdentity; servers?: readonly MachineServerEvidence[];
 } = {}): Promise<WorkflowReportEvidence> {
   const responseFile = Bun.file(join(directory, "response.json"));
   const response: unknown = await responseFile.exists() ? await responseFile.json() : undefined;
@@ -123,7 +123,7 @@ export async function writeWorkflowReport(input: {
   if (!config.workflow_reporting.enabled) return { status: "disabled" as const };
   if (!input.summaryPath) throw new Error("Enabled reporting requires a summary output path");
   await mkdir(input.directory, { recursive: true });
-  const servers = await readServerEvidence(input.directory);
+  const servers = await readMachineServerEvidence(input.directory);
   const evidence = await readExecutionEvidence(input.directory, input.root, {
     execution: {
       ...(input.runId === undefined ? {} : { run_id: input.runId }),

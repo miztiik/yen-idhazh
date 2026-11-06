@@ -1,12 +1,12 @@
 /** Run the production child lifecycle against recorded feed bytes and UTC clocks, without network access. */
-import { runApiServer } from "../../serve-pipeline-apis/src/index";
+import { runFeedApiServer } from "../scripts/serve-feed-apis";
 import { restorePlannerStartup } from "../scripts/restore-planner-startup";
 import { readRecordings, RecordedTransport } from "./harvest-recordings";
 import { appendFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
-await runApiServer({ restorePlanner: async startup => {
+await runFeedApiServer({ restorePlanner: async startup => {
   if (await Bun.file(join(process.cwd(), "recorded-readiness-mismatch")).exists()) startup.nonce = randomUUID();
   if (await Bun.file(join(process.cwd(), "recorded-runtime-mismatch")).exists()) startup.runtime.attempt++;
   const restored = await restorePlannerStartup(startup);

@@ -1,6 +1,8 @@
 /** Who owns each bounded, transient HTTP task profile until it closes? */
 import { randomUUID } from "node:crypto";
 import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
+import { createProbeFailureEvent } from "./create-probe-event";
+import type { ProbeEventOutput } from "./create-probe-event";
 import { ProbeConfigSchema } from "../config";
 import type { ProbeConfig } from "../config";
 import type { ProbeContext } from "../probe/proc-reader";
@@ -39,10 +41,15 @@ export class TaskProfileManager {
   private readonly entries = new Map<string, Entry>();
   private stopping = false;
   private shutdownPromise: Promise<void> | undefined;
+  private readonly writeEvent: ProbeEventOutput;
 
   constructor(private readonly options: {
     config: ProbeConfig; context?: ProbeContext; report: TaskProfiling["report"]; cache: CacheProbeController;
-  }) { this.config = ProbeConfigSchema.parse(options.config); }
+    writeEvent?: ProbeEventOutput;
+  }) {
+    this.config = ProbeConfigSchema.parse(options.config);
+    this.writeEvent = options.writeEvent ?? (event => { console.error(JSON.stringify(event)); });
+  }
 
   private prune(): void {
     const now = performance.now();
@@ -124,7 +131,7 @@ export class TaskProfileManager {
         }
         entry.result = result;
         entry.retainUntil = performance.now() + this.config.task_profile.profile_handle_ttl_ms;
-        if ("error" in result) console.error(JSON.stringify({ event: "task_profile_failed", error: result.error.name }));
+        if ("error" in result) this.writeEvent(createProbeFailureEvent({ context: session.operation, type: "task_profile_failed" }));
       });
       if (this.stopping || signal?.aborted) throw new TaskProfileCommandError(400, "Task profile start aborted");
       return StartTaskProfileResponseSchema.parse({

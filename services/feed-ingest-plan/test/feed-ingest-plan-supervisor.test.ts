@@ -11,7 +11,7 @@ import { metadataRegistrations } from "./host-recordings";
 import { source } from "./harvest-recordings";
 import { writePlannerOutputRecording } from "./planner-output-recordings";
 import { PLANNER_API_PREFIX, PlannerFailureSchema } from "@idhazh/common-contracts";
-import { readServerEvidence } from "../../serve-pipeline-apis/src/read-server-evidence";
+import { readMachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { writeWorkflowReport } from "../scripts/feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
 import { HonoServerSettingsSchema, loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
@@ -40,7 +40,7 @@ test("an occupied port fails without stopping or planning against the unrelated 
     })).rejects.toMatchObject({ code: "PLANNER_BIND_FAILED" });
     expect(requests).toBe(0);
     expect(await Bun.file(join(fixture.evidence, "response.json")).exists()).toBe(false);
-    const [server] = await readServerEvidence(fixture.evidence, { run_id: "700", attempt: 3 });
+    const [server] = await readMachineServerEvidence(fixture.evidence, { run_id: "700", attempt: 3 });
     expect(server).toMatchObject({
       group: "planning", startup: "failed", error_code: "PLANNER_BIND_FAILED", shutdown: "stopped",
     });
@@ -78,8 +78,9 @@ test("a real child with missing authored inputs exits before readiness and is re
 test("expired readiness cancels startup and leaves no listener", async () => {
   const fixture = await recordedPlannerProcess();
   try {
-    fixture.inputs.settings.supervision.readiness_timeout_ms = 1;
-    fixture.startup.settings.supervision.readiness_timeout_ms = 1;
+    const server = await loadHonoSettings(fixture.directory);
+    server.supervision.readiness_timeout_ms = 1;
+    await writeFile(join(fixture.directory, "config", "hono-server.json"), JSON.stringify(server));
     await expect(invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
       serverEntry: fixture.serverEntry,
     })).rejects.toThrow("PLANNER_READY_TIMEOUT");
@@ -106,14 +107,15 @@ test("cancellation during real recorded feed work reaps the child and releases i
   const cancellation = new AbortController();
   let pending: ReturnType<typeof invokePlannerHttp> | undefined;
   try {
-    fixture.inputs.settings.supervision.shutdown_timeout_ms = 200;
-    fixture.startup.settings.supervision.shutdown_timeout_ms = 200;
+    const server = await loadHonoSettings(fixture.directory);
+    server.supervision.shutdown_timeout_ms = 200;
+    await writeFile(join(fixture.directory, "config", "hono-server.json"), JSON.stringify(server));
     pending = invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
       serverEntry: fixture.serverEntry, signal: cancellation.signal,
     });
     void pending.catch(() => {});
     const health = `http://127.0.0.1:${fixture.inputs.settings.listener.port}${PLANNER_API_PREFIX}/health`;
-    const deadline = AbortSignal.timeout(fixture.inputs.settings.supervision.readiness_timeout_ms);
+    const deadline = AbortSignal.timeout(server.supervision.readiness_timeout_ms);
     let identity: ReturnType<typeof PlannerReadySchema.parse> | undefined;
     while (!identity) {
       deadline.throwIfAborted();
@@ -135,14 +137,16 @@ test("cancellation during real recorded feed work reaps the child and releases i
 
 test("parent disappearance closes the child pipe and the child bounds its own drain", async () => {
   const fixture = await recordedPlannerProcess([source({ url: "https://news.example/timeout" })]);
-  fixture.startup.settings.supervision.shutdown_timeout_ms = 200;
+  const server = await loadHonoSettings(fixture.directory);
+  server.supervision.shutdown_timeout_ms = 200;
+  await writeFile(join(fixture.directory, "config", "hono-server.json"), JSON.stringify(server));
   const parent = Bun.spawn([process.execPath, fileURLToPath(new URL("./planner-supervisor-recording.ts", import.meta.url))], {
     cwd: fixture.directory, stdin: new Blob([JSON.stringify(fixture.startup)]), stdout: "ignore", stderr: "inherit",
   });
   let childPid: number | undefined;
   let childGone = false;
   try {
-    await awaitRecordedRequest(fixture.directory, AbortSignal.timeout(fixture.startup.settings.supervision.readiness_timeout_ms));
+    await awaitRecordedRequest(fixture.directory, AbortSignal.timeout(server.supervision.readiness_timeout_ms));
     childPid = (await Bun.file(join(fixture.directory, "recorded-startup.json")).json()).pid;
     expect(childPid).not.toBe(parent.pid);
     parent.kill("SIGKILL");
@@ -207,7 +211,7 @@ test("a real caller failure retains a separate nonzero child cleanup failure", a
     const captured = PlannerFailureSchema.parse(failure.failure);
     expect(captured).toMatchObject({ operation: "workflow", system_code: "ENOENT" });
     expect(captured.causes).toContainEqual(expect.objectContaining({ operation: "listener-close" }));
-    const [server] = await readServerEvidence(fixture.evidence);
+    const [server] = await readMachineServerEvidence(fixture.evidence);
     expect(server).toMatchObject({ startup: "ready", shutdown: "failed", exit_code: 1,
       cleanup_error_code: "PLANNER_CLEANUP_FAILED" });
     await assertReleased(fixture.startup.settings.listener.port);
