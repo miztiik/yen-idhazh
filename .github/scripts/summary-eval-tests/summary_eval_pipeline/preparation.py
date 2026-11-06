@@ -9,13 +9,13 @@ from uuid import UUID
 import httpx
 from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.load_model import quiet_model_output
-from hhem_evaluator.load_settings import load_settings
 from hhem_evaluator.load_unieval_settings import load_unieval_settings
 from hhem_evaluator.prepare_unieval_resources import prepare_unieval_resources
 from hhem_evaluator.resolve_ids import create_execution_id
 
 from utilities.model_runtime import download_model_files, install_runtime, verify_model_files
 
+from .artifact_paths import write_artifact_paths
 from .contracts import WORKFLOW_VERSION, PreparedRun, RunIdentity, text_sha256
 from .failures import WorkflowError
 from .inputs import read_manual_inputs
@@ -26,9 +26,7 @@ from .storage import read_result, write_result
 
 def prepare_run(root: Path) -> tuple[PreparedRun, SelectedModel]:
     pipeline = load_pipeline_settings(root)
-    inputs = read_manual_inputs(
-        load_settings(root / "config" / "hhem-evaluator" / "settings.json"), pipeline
-    )
+    inputs = read_manual_inputs(pipeline)
     selected = select_model(root, inputs.models_file)
     revision = (
         os.environ.get("GITHUB_SHA")
@@ -58,9 +56,7 @@ def read_prepared(root: Path) -> tuple[PreparedRun, SelectedModel]:
     prepared = read_result(
         root / pipeline.output_directory / "run.json", PreparedRun, pipeline.max_response_bytes
     )
-    inputs = read_manual_inputs(
-        load_settings(root / "config" / "hhem-evaluator" / "settings.json"), pipeline
-    )
+    inputs = read_manual_inputs(pipeline)
     selected = select_model(root, inputs.models_file)
     expected = (
         os.environ.get("GITHUB_RUN_ID", prepared.run.run_id),
@@ -77,11 +73,14 @@ def read_prepared(root: Path) -> tuple[PreparedRun, SelectedModel]:
     return prepared, selected
 
 
-def prepare_assets(root: Path) -> None:
+def prepare_assets(root: Path, *, artifact_output: Path | None = None) -> None:
     prepared, selected = prepare_run(root)
-    directory = root / load_pipeline_settings(root).output_directory
+    pipeline = load_pipeline_settings(root)
+    directory = root / pipeline.output_directory
     failure: WorkflowError | None = None
     try:
+        if artifact_output is not None:
+            write_artifact_paths(pipeline, artifact_output)
         if not os.environ.get("GITHUB_TOKEN"):
             raise WorkflowError("ASSET_AUTH_MISSING", "preparation")
         stage_configuration(root, directory, selected)

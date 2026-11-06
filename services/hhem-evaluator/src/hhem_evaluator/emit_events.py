@@ -17,21 +17,10 @@ from .contracts.server_event import ApiDiagnosticData, ServerEvent
 from .contracts.service_settings import LoggingSettings, StartupContext
 from .fail_evaluation import EvaluationFailure
 from .resolve_ids import create_event_id, create_execution_id
+from .write_event_records import StrictEventHandler
 
 type EventPhase = Literal["started", "completed", "failed", "cancelled"]
 type EventLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-
-
-class StrictEventHandler(logging.Handler):
-    """Propagate write and flush errors instead of invoking logging's fallback."""
-
-    def __init__(self, stream: TextIO) -> None:
-        super().__init__()
-        self.stream = stream
-
-    def emit(self, record: logging.LogRecord) -> None:
-        self.stream.write(self.format(record) + "\n")
-        self.stream.flush()
 
 
 class JsonEventFormatter(logging.Formatter):

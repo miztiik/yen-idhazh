@@ -17,7 +17,7 @@ import { START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../../servic
 import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../../../services/host-probes/src/api/task-command-schema";
 import { HardwareSchema, projectMachineProfile } from "./machine-results";
 
-const VERSION = "2026-11-04"; // Disposable workflow control version.
+const VERSION = "2026-11-05"; // Disposable workflow control version.
 const StartupSchema = z.strictObject({
   version: z.literal(VERSION), startup_id: z.uuidv4(),
   context: z.strictObject({

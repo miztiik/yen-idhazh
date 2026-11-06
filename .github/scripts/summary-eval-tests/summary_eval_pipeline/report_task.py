@@ -83,7 +83,7 @@ def collect_results(root: Path) -> PipelineEvidence:
                     or generation.status != "complete"
                     or generated_phase is None
                     or generated_phase.shutdown.llama_stopped is not True
-                    or generated_phase.shutdown.api_stopped is not True
+                    or generated_phase.shutdown.api_stopped is not None
                 )
             ):
                 raise WorkflowError("RECEIPT_INVALID", "report")
@@ -126,7 +126,7 @@ def main() -> None:
         directory = root / pipeline.output_directory
         evidence = collect_results(root)
         write_result(directory / "results.json", evidence)
-        inputs = read_manual_inputs(settings, pipeline)
+        inputs = read_manual_inputs(pipeline)
         if evidence.prepared is not None and (
             text_sha256(inputs.source_text) != evidence.prepared.source_sha256
             or text_sha256(inputs.reference_summary_text)

@@ -99,6 +99,32 @@ def recorded_selection(directory: Path) -> SelectedModel:
     return select_model(directory, name)
 
 
+def native_generation_case(
+    directory: Path,
+) -> tuple[ManualInputs, PreparedRun, SelectedModel, LoadedModel]:
+    selected = recorded_selection(directory)
+    inputs = ManualInputs(
+        source_text="  PrivateSourceCanary\nexact source \u00e9.  ",
+        reference_summary_text="PrivateReferenceCanary: an independent expected summary.",
+    )
+    prepared = PreparedRun(
+        version=WORKFLOW_VERSION,
+        run=example_run(),
+        selected=selected.identity,
+        source_sha256=text_sha256(inputs.source_text),
+        reference_summary_sha256=text_sha256(inputs.reference_summary_text),
+        status="complete",
+        errors=(),
+    )
+    loaded = LoadedModel(
+        model_id=selected.identity.model_id,
+        weights_path=f"backend/models/{selected.identity.filename}",
+        sha256=selected.identity.sha256,
+        pid=123,
+    )
+    return inputs, prepared, selected, loaded
+
+
 def chat_markers(selected: SelectedModel) -> TurnMarkers:
     # These are request-builder inputs, not a simulated template API or model.
     return TurnMarkers(

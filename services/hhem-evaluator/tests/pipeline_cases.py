@@ -76,7 +76,7 @@ class NativeHostPipe:
             cwd=REPOSITORY,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stderr=None,
         )
         self.messages: queue.Queue[bytes] = queue.Queue(3)
 

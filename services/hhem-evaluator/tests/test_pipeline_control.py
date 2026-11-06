@@ -18,7 +18,6 @@ from hhem_evaluator.contracts.service_settings import StartupContext
 from .contract_examples import REPOSITORY, REQUEST_ID
 from .generation_cases import example_run
 from .pipeline_cases import owned_child_command
-from .service_cases import service_settings
 from .test_pipeline_lifetime import CHILD_STARTUP_MS
 
 
@@ -43,14 +42,10 @@ def start_scheduled_failure(
             startup_id=REQUEST_ID,
             context=StartupContext(),
         ),
-        service_settings(
-            worker={
-                "stop_grace_ms": 500,
-                "forced_stop_ms": 1000,
-                "shutdown_timeout_ms": 1500,
-            }
+        None,
+        load_pipeline_settings(REPOSITORY).model_copy(
+            update={"host_stop_grace_ms": 500, "host_forced_stop_ms": 1000}
         ),
-        load_pipeline_settings(REPOSITORY),
     )
 
 
@@ -91,6 +86,7 @@ def test_exit_after_queue_timeout_prioritizes_three_validated_controls_before_fa
             load_api_settings(REPOSITORY / "config" / "fastapi-server.json"),
             errors,
             False,
+            pipeline=child.manual,
         )
         assert [(error.code, error.source_code) for error in errors] == [
             ("STARTUP_FAILED", "MACHINE_API_STARTUP_INVALID"),
@@ -121,6 +117,7 @@ def test_cleanup_retains_original_startup_failure_first_discovered_without_readi
             load_api_settings(REPOSITORY / "config" / "fastapi-server.json"),
             errors,
             False,
+            pipeline=child.manual,
         )
         assert child.ready is None and child.process.returncode == 1
         assert [(error.code, error.source_code) for error in errors] == [

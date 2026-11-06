@@ -60,7 +60,7 @@ jobs:
           uv run --frozen --extra model --no-dev python
           ../../.github/scripts/summary-eval-tests/run.py --root ../.. prepare
 
-      - name: Generate through FastAPI and stop the native model
+      - name: Generate natively and stop the model
         run: >-
           uv run --frozen --extra model --no-dev python
           ../../.github/scripts/summary-eval-tests/run.py --root ../.. generate
@@ -78,23 +78,25 @@ jobs:
           ../../.github/scripts/summary-eval-tests/report.py --root ../..
 
       - name: Retain results and escaped report
-        if: always()
+        if: ${{ always() && steps.prepare.outputs.output_directory != '' }}
         uses: actions/upload-artifact@v6
         with:
           name: summary-eval-tests-report
           path: |
-            backend/var/summary-eval-tests/run.json
-            backend/var/summary-eval-tests/generation.json
-            backend/var/summary-eval-tests/generation-phase.json
-            backend/var/summary-eval-tests/evaluation.json
-            backend/var/summary-eval-tests/results.json
-            backend/var/summary-eval-tests/report.md
+            ${{ steps.prepare.outputs.output_directory }}/run.json
+            ${{ steps.prepare.outputs.output_directory }}/generation.json
+            ${{ steps.prepare.outputs.output_directory }}/generation-phase.json
+            ${{ steps.prepare.outputs.output_directory }}/evaluation.json
+            ${{ steps.prepare.outputs.output_directory }}/results.json
+            ${{ steps.prepare.outputs.output_directory }}/report.md
           if-no-files-found: warn
 
       - name: Retain server diagnostics after failure or cancellation
-        if: failure() || cancelled()
+        if: ${{ (failure() || cancelled()) && steps.prepare.outputs.output_directory != '' && steps.prepare.outputs.native_log_directory != '' }}
         uses: actions/upload-artifact@v6
         with:
           name: summary-eval-tests-server-logs
-          path: backend/var/summary-eval-tests/logs/
+          path: |
+            ${{ steps.prepare.outputs.output_directory }}/logs/
+            ${{ steps.prepare.outputs.native_log_directory }}/
           if-no-files-found: warn

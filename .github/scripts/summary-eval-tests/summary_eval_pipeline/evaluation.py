@@ -48,7 +48,8 @@ def bind_evaluations(
         or generation.run != prepared.run
         or generation.phase != "generation"
         or generation.shutdown.llama_stopped is not True
-        or generation.shutdown.api_stopped is not True
+        or generation.shutdown.api_stopped is not None
+        or generation.shutdown.host_stopped is not True
         or generation.generation_sha256 != text_sha256(receipt.model_dump_json())
         or generation.reference_summary_sha256 != prepared.reference_summary_sha256
     ):

@@ -5,7 +5,7 @@ import asyncio
 import httpx
 from fastapi import FastAPI
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import Response, StreamingResponse
 
 from hhem_evaluator.contracts.llama_settings import LlamaSettings
 from hhem_evaluator.forward_llama import LLAMA_COMPLETIONS_PATH
@@ -24,6 +24,8 @@ class RecordedLlama:
         self.status = 200
         self.health_status = 200
         self.health_body = b'{"status":"ok"}'
+        self.response_headers = {"Location": "https://not-a-native-destination.invalid"}
+        self.stream_body = False
         self.hold_generation = False
         self.started = asyncio.Event()
         self.release = asyncio.Event()
@@ -44,11 +46,18 @@ class RecordedLlama:
             try:
                 if self.hold_generation:
                     await self.release.wait()
+                if self.stream_body:
+                    return StreamingResponse(
+                        iter((self.body[: len(self.body) // 2], self.body[len(self.body) // 2 :])),
+                        status_code=self.status,
+                        media_type="application/json",
+                        headers=self.response_headers,
+                    )
                 return Response(
                     self.body,
                     status_code=self.status,
                     media_type="application/json",
-                    headers={"Location": "https://not-a-native-destination.invalid"},
+                    headers=self.response_headers,
                 )
             except asyncio.CancelledError:
                 self.cancelled.set()

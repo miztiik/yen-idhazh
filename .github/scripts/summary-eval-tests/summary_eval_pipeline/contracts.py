@@ -28,8 +28,8 @@ from idhazh.contracts.app_config import ModelsFile
 from .host_reader import HardwareRow, MachineUsage, measurement_complete
 
 # These identities version disposable same-run files, not committed ledgers.
-WORKFLOW_VERSION: Final = "2026-11-04"
-WorkflowVersion = Literal["2026-11-04"]
+WORKFLOW_VERSION: Final = "2026-11-05"
+WorkflowVersion = Literal["2026-11-05"]
 PhaseName = Literal["generation", "evaluation"]
 ServiceName = Literal["api", "hhem", "unieval", "host", "llama", "caller"]
 # Cause codes are protocol identifiers with the same wire bound as context identities.
@@ -105,19 +105,11 @@ class WorkflowContract(NativeContract):
             "changelog": [
                 {
                     "version": WORKFLOW_VERSION,
-                    "change": "Bind both evaluators and worker exits to one answer and reference.",
+                    "change": "Generate natively and report only processes actually started.",
                 },
                 {
-                    "version": WORKFLOW_VERSION,
-                    "change": "Retain safe machine-helper failure cause codes.",
-                },
-                {
-                    "version": WORKFLOW_VERSION,
-                    "change": "Record preparation outcomes and safe asset failures.",
-                },
-                {
-                    "version": WORKFLOW_VERSION,
-                    "change": "Use native string-length constraints for generation text.",
+                    "version": "2026-11-04",
+                    "change": "Bind evaluator results and safe preparation to one answer.",
                 },
                 {
                     "version": "2026-11-02",
@@ -294,15 +286,19 @@ def phase_status(
         if phase == "evaluation"
         else shutdown.llama_stopped is True
     )
-    clean = (
-        shutdown.api_stopped is True
-        and shutdown.host_stopped is True
-        and (
-            phase != "evaluation"
-            or (
+    clean = shutdown.host_stopped is True and (
+        (
+            shutdown.api_stopped is True
+            and (
                 shutdown.worker_exit_confirmed is True
                 and shutdown.unieval_worker_exit_confirmed is True
             )
+        )
+        if phase == "evaluation"
+        else (
+            shutdown.api_stopped is None
+            and shutdown.worker_exit_confirmed is None
+            and shutdown.unieval_worker_exit_confirmed is None
         )
     )
     complete = (
@@ -353,10 +349,13 @@ class PhaseEvidence(WorkflowContract):
         if self.phase == "generation" and (self.evaluation is not None or self.unieval is not None):
             raise ValueError("Generation does not score a summary")
         if self.phase == "generation" and (
-            self.shutdown.worker_exit_confirmed is not None
+            self.shutdown.api_stopped is not None
+            or self.shutdown.worker_exit_confirmed is not None
             or self.shutdown.unieval_worker_exit_confirmed is not None
+            or self.api_health is not None
+            or any(server.server_name == "fastapi-server" for server in self.servers)
         ):
-            raise ValueError("Generation starts no evaluator worker and cannot claim its exit")
+            raise ValueError("Generation starts no evaluation application or evaluator worker")
         for result in (self.evaluation, self.unieval):
             if result is None:
                 continue
@@ -456,7 +455,7 @@ class PipelineEvidence(WorkflowContract):
                 or generation.status != "complete"
                 or phase is None
                 or phase.shutdown.llama_stopped is not True
-                or phase.shutdown.api_stopped is not True
+                or phase.shutdown.api_stopped is not None
             )
         ):
             raise ValueError("Scoring requires the current answer and confirmed native shutdown")

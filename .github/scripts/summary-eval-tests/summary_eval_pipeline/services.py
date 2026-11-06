@@ -36,10 +36,19 @@ class OwnedService:
         command: list[str],
         root: Path,
         packet: StartupPacket,
-        settings: ServiceSettings,
+        settings: ServiceSettings | None,
         manual: PipelineSettings,
     ) -> None:
         self.service, self.packet, self.settings, self.manual = service, packet, settings, manual
+        self.stop_grace_ms = manual.host_stop_grace_ms
+        self.forced_stop_ms = manual.host_forced_stop_ms
+        self.max_event_bytes: int | None = None
+        if service == "api":
+            if settings is None:
+                raise ValueError("An evaluator child requires its validated service settings")
+            self.stop_grace_ms = settings.worker.stop_grace_ms
+            self.forced_stop_ms = settings.worker.forced_stop_ms
+            self.max_event_bytes = settings.logging.max_event_bytes
         self.messages: queue.Queue[ServiceControl | None] = queue.Queue(CONTROL_PACKET_CAPACITY)
         self.protocol_failed = threading.Event()
         self.events_failed = threading.Event()
@@ -98,12 +107,12 @@ class OwnedService:
             self.events_failed.set()
             return
         try:
-            while line := stream.readline(self.settings.logging.max_event_bytes + 1):
-                if (
-                    self.service != "api"
-                    or len(line) > self.settings.logging.max_event_bytes
-                    or not line.endswith(b"\n")
-                ):
+            limit = self.max_event_bytes
+            if limit is None:
+                self.events_failed.set()
+                return
+            while line := stream.readline(limit + 1):
+                if self.service != "api" or len(line) > limit or not line.endswith(b"\n"):
                     self.events_failed.set()
                     return
                 event = ServerEvent.model_validate_json(line)
@@ -129,7 +138,7 @@ class OwnedService:
                 break
             except queue.Empty:
                 if self.process.poll() is not None:
-                    self.readers[0].join(timeout=self.settings.worker.forced_stop_ms / 1000)
+                    self.readers[0].join(timeout=self.forced_stop_ms / 1000)
                     try:
                         message = self.messages.get_nowait()
                     except queue.Empty:
@@ -203,15 +212,15 @@ class OwnedService:
             escalated = True
             self.process.terminate()
             try:
-                self.process.wait(timeout=self.settings.worker.stop_grace_ms / 1000)
+                self.process.wait(timeout=self.stop_grace_ms / 1000)
             except subprocess.TimeoutExpired:
                 self.process.kill()
                 try:
-                    self.process.wait(timeout=self.settings.worker.forced_stop_ms / 1000)
+                    self.process.wait(timeout=self.forced_stop_ms / 1000)
                 except subprocess.TimeoutExpired:
                     raise WorkflowError("SERVICE_STOP_FAILED", "cleanup", self.service) from None
         for reader in self.readers:
-            reader.join(timeout=self.settings.worker.forced_stop_ms / 1000)
+            reader.join(timeout=self.forced_stop_ms / 1000)
         while not self.messages.empty():
             message = self.messages.get_nowait()
             if message is not None and isinstance(message.root, ServiceStartFailed):

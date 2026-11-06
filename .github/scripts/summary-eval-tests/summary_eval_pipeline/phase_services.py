@@ -14,6 +14,7 @@ from .failures import WorkflowError
 from .host_reader import MachineUsage
 from .llama import OwnedLlama
 from .services import OwnedService
+from .settings import PipelineSettings
 
 
 @dataclass
@@ -50,11 +51,13 @@ class PhaseServices:
 
     def close(
         self,
-        settings: ServiceSettings,
-        shared: ApiSettings,
+        settings: ServiceSettings | None,
+        shared: ApiSettings | None,
         errors: list[PipelineError],
         work_complete: bool,
         unieval_settings: UnievalSettings | None = None,
+        *,
+        pipeline: PipelineSettings,
     ) -> None:
         if self.host is not None:
             host_cleanup: PipelineError | None = None
@@ -65,9 +68,9 @@ class PhaseServices:
                 errors.append(error.error)
             try:
                 timeout = (
-                    self.host.ready.lifecycle_timeout_ms + settings.worker.stop_grace_ms
+                    self.host.ready.lifecycle_timeout_ms + pipeline.host_stop_grace_ms
                     if isinstance(self.host.ready, HostReady)
-                    else settings.worker.shutdown_timeout_ms
+                    else pipeline.host_shutdown_timeout_ms
                 )
                 self.host.close(timeout)
                 self.host_stopped = True
@@ -109,6 +112,8 @@ class PhaseServices:
             if host_cleanup is not None:
                 errors.append(host_cleanup)
         if self.api is not None:
+            if settings is None or shared is None:
+                raise ValueError("An evaluator child requires its validated shutdown settings")
             try:
                 self.api.close(
                     shared.shutdown_timeout_ms
