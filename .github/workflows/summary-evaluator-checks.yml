@@ -1,0 +1,71 @@
+name: Summary evaluator checks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  model-free:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: services/hhem-evaluator
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.9.7'
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Prepare frozen model-free dependencies
+        working-directory: .
+        run: |
+          bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd packages/ledger-file-writer
+          bun install --frozen-lockfile --cwd packages/data-delivery
+          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
+          bun install --frozen-lockfile --cwd services/host-fingerprints
+          bun install --frozen-lockfile --cwd services/host-probes
+          uv sync --project services/hhem-evaluator --frozen --group dev
+
+      - name: Prepare named tokenizer and sentence resources
+        run: uv run --frozen python scripts/prepare-unieval-resources.py --root ../..
+
+      - name: Verify the model-free environment
+        run: |
+          command -v setpriv
+          uv run --frozen python -c "import importlib.util; assert importlib.util.find_spec('torch') is None"
+
+      - name: Lint evaluator
+        run: uv run --frozen ruff check src tests scripts
+
+      - name: Lint workflow from the repository root
+        working-directory: .
+        run: uv run --project services/hhem-evaluator --frozen ruff check .github/scripts/summary-eval-tests
+
+      - name: Check evaluator and workflow types
+        run: uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
+
+      - name: Run complete model-free Linux suites
+        run: uv run --frozen pytest tests --junitxml=var/model-free-results.xml
+
+      - name: Retain the current test result
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: summary-evaluator-model-free-results
+          path: services/hhem-evaluator/var/model-free-results.xml
+          if-no-files-found: warn

@@ -381,6 +381,17 @@ not run these Python suites, and a live manual workflow is not a repeatable
 merge gate. Windows contract or lint results do not replace Linux process,
 ASGI and serialized Python-to-Bun bridge evidence.
 
+When a local Linux host is unavailable, dispatch
+`.github/workflows/summary-evaluator-checks.yml` on the candidate branch.
+This reusable development check has only a manual trigger and read-only
+repository permissions. It prepares frozen model-free dependencies and the
+named tokenizer/sentence resources, then runs lint, strict types and the
+complete Linux suites with the existing socket guard. It installs no model
+weights, starts no production pipeline and publishes no production data.
+Retain the run's source revision and current test-result artifact. A changed
+candidate needs new evidence; unchanged tested inputs reuse their passed run.
+There is no schedule or added evaluator job in ordinary `ci.yml`.
+
 Owned-process fixtures launch the actual CPython executable with the same
 environment's installed packages: a Windows virtual-environment redirector
 has a different PID. The runtime ownership check stays strict.
@@ -622,6 +633,14 @@ and replay recorded responses on loopback; they download no model and contact
 no external service.
 
 ## Design rationale
+
+### Manual model-free Linux verification
+
+A separate manual Linux verifier preserves process and ASGI coverage without
+turning a live content workflow into a test gate or requiring a developer-host
+installation. Its read-only job runs the complete recorded-boundary suite, not
+a smaller success-shaped substitute. The workflow has no schedule; changed
+candidates run it once and unchanged tested inputs reuse their evidence.
 
 ### Bounded state CSV integrity check
 

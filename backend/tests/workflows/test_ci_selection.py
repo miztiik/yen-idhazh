@@ -101,6 +101,34 @@ def test_ci_leaves_summary_evaluation_to_its_manual_workflow() -> None:
     )
 
 
+def test_model_free_summary_checks_are_manual_read_only_and_complete() -> None:
+    workflow = _load_workflows()["summary-evaluator-checks.yml"]
+    assert set(_mapping(workflow["on"], "model-free triggers")) == {"workflow_dispatch"}
+    assert _mapping(workflow["permissions"], "model-free permissions") == {"contents": "read"}
+    assert set(_mapping(workflow["jobs"], "model-free jobs")) == {"model-free"}
+    job = _job(workflow, "model-free")
+    assert job["runs-on"] == "ubuntu-latest"
+    assert not job.get("continue-on-error")
+    steps = _steps(workflow, "model-free")
+    commands = "\n".join(_script(step, "model-free checks") for step in steps if "run" in step)
+    assert "uv sync --project services/hhem-evaluator --frozen --group dev" in commands
+    assert "prepare-unieval-resources.py --root ../.." in commands
+    assert "uv run --frozen pytest tests --junitxml=var/model-free-results.xml" in commands
+    assert "command -v setpriv" in commands
+    for forbidden in (
+        "--extra model",
+        "--include-weights",
+        "run.py --root ../..",
+        "git push",
+        "git commit",
+        "idhazh pipeline",
+        "continue-on-error",
+        "--disable-socket=",
+    ):
+        assert forbidden not in commands
+    assert all("GITHUB_TOKEN" not in _mapping(step.get("env", {}), "model-free env") for step in steps)
+
+
 def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs() -> None:
     workflow = _load_workflows()["ci.yml"]
     events = _mapping(workflow["on"], "CI events")
