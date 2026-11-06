@@ -1,6 +1,6 @@
 # Identity contracts
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 How files, work units, content, event occurrences and operations retain distinct identities.
 
@@ -150,6 +150,8 @@ the producing API constructs and validates its application event at the actual
 work or error boundary, using its local producer identity and real operation.
 It does not mean replacing HTTP results with event envelopes or inventing work
 events for health and diagnostic reads.
+An HTTP error adapter formats the response without re-emitting a
+domain failure that the producer already reported.
 
 Table B - verified API and producer bindings
 

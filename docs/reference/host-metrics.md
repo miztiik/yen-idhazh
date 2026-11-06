@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
@@ -137,8 +137,9 @@ The service is build-time operator tooling, not a backend for the published site
 Fingerprint HTTP and CLI follow the
 [native event standard](../architecture/contracts/identity.md#native-api-support).
 The producing boundary emits `host_fingerprint_completed` with the actual
-`written` or `disabled` status, or `host_fingerprint_failed` with its fixed
-code. These events contain no hardware row, measurements or output paths.
+`written` or `disabled` status, or `host_fingerprint_failed` with
+`code: "HOST_FINGERPRINT_FAILED"`. These events contain no hardware row,
+measurements or output paths.
 Health remains a native JSON read with no capture side effects; CLI result
 stdout and persisted hardware rows keep their existing shapes.
 
