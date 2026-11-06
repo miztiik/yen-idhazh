@@ -1,8 +1,8 @@
-# Shared local Python API
+# Summary evaluator API
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
-Which routes and startup settings the single FastAPI application exposes.
+Which routes and startup settings the single `summary-evaluator` application exposes.
 This is a local workflow service, not a backend for the published site.
 The [architecture](../architecture/evaluation/local-model-api.md) explains
 process ownership and failure handling.
@@ -10,11 +10,13 @@ process ownership and failure handling.
 ## Configuration and routes
 
 `config/fastapi-server.json` owns the listener, explicit component selection,
-diagnostic settings and HTTP transport bounds. The frozen native models live
+diagnostic settings and request-body bounds. The frozen native models live
 in `services/hhem-evaluator/src/hhem_evaluator/contracts/`. Shared settings,
-health, llama data and CloudEvents schemas have version `2026-11-04`.
-They are current-only: an old event envelope or old authored listener location
-is rejected, not read through an alias.
+health, generic API errors and CloudEvents schemas have version `2026-11-06`.
+They are current-only: previous application versions and retired generation
+settings are rejected, not read through aliases. Historical logs and model
+recordings remain unchanged. HHEM and native UniEval scoring schemas retain
+their own versions.
 
 Table A - Listener and component selection
 
@@ -23,72 +25,50 @@ Table A - Listener and component selection
 | A1 | `listener.host`, `listener.port` | Loopback `127.0.0.1`, port 3010. The host can also be the literal `::1`. |
 | A2 | `listener.max_body_bytes` | At most 1048576 bytes, or 1 MiB, per input body. |
 | A3 | `listener.body_read_timeout_ms` | An absolute input-read deadline of 5000 milliseconds, or five seconds. |
-| A4 | `enabled_routes` | A distinct list drawn from `hhem`, `llama` and `unieval`; all three are enabled by default. Each task selects only its required components. An empty list disables all operation routes. |
-| A5 | `shutdown_timeout_ms` | 15000 milliseconds, or fifteen seconds, for forwarding-request shutdown and Uvicorn's graceful wait. When HHEM is enabled, this cannot be shorter than its worker shutdown wait. |
+| A4 | `enabled_routes` | A distinct list drawn from `hhem` and `unieval`; both are enabled by default. Each task selects only its required scorers. An empty list disables both scoring operations. |
+| A5 | `shutdown_timeout_ms` | 15000 milliseconds, or fifteen seconds, for Uvicorn's graceful wait. This cannot be shorter than an enabled scorer's worker shutdown wait. Enabled worker cleanups run concurrently. |
 
 Table B - Native operations
 
 | Id | Route | Meaning |
 | --- | --- | --- |
-| B1 | `GET /health` | Shared readiness, enabled components, the actual service instance and diagnostic-file availability. Every enabled component must be ready for HTTP 200; otherwise the response is HTTP 503. |
-| B2 | `GET /api/2026-11-02/health` | HHEM's own observed worker/model state. It remains usable independently of llama health. Registered only with HHEM enabled. |
-| B3 | `POST /api/2026-11-02/summary-eval-hhem` | The existing [native evaluation operation](hhem-evaluation-api.md). Registered only with HHEM enabled. There is no `/evaluate` alias. |
-| B4 | `POST /v1/chat/completions` | Nonstreaming native llama generation. Registered only with llama enabled. |
-| B5 | `GET /api/2026-11-02/openapi.json` | The application's current native schemas. There is no interactive documentation UI. |
-| B6 | `POST /api/2026-11-02/summary-eval-unieval` | The [four-score UniEval operation](unieval-api.md), with an independent reference summary. |
-| B7 | `GET /api/2026-11-02/summary-eval-unieval/health` | UniEval's observed model/worker/queue state, independent of the other components. |
+| B1 | `GET /api/2026-11-05/get-summary-evaluator-health` | Shared readiness, enabled scorers, the actual service instance and diagnostic-file availability. Every enabled scorer must be ready for HTTP 200; otherwise the response is HTTP 503. |
+| B2 | `GET /api/2026-11-05/get-hhem-health` | HHEM's own observed worker/model state, independent of UniEval. Registered only with HHEM enabled. |
+| B3 | `POST /api/2026-11-05/evaluate-summary-hhem` | The unchanged [native evaluation operation](hhem-evaluation-api.md). Registered only with HHEM enabled. |
+| B4 | `GET /api/2026-11-05/get-summary-evaluator-schema` | The application's current native schemas. Always registered, without an interactive documentation UI. |
+| B5 | `POST /api/2026-11-05/evaluate-summary-unieval` | The [four-score UniEval operation](unieval-api.md), with an independent reference summary. |
+| B6 | `GET /api/2026-11-05/get-unieval-health` | UniEval's observed model/worker/queue state, independent of HHEM. Registered only with UniEval enabled. |
 
 Disabled operation routes return HTTP 404. Shared health explicitly reports
-disabled components; it does not claim their models loaded. Browser origins,
+disabled scorers; it does not claim their models loaded. Browser origins,
 duplicate or unexpected Host headers and slash redirects remain refused.
 
-The standalone default requires prepared evaluator assets and a separately
-owned native llama process before every component can report ready. Workflow
-phases keep their explicit selections: llama for generation, HHEM and UniEval
-for evaluation. Changing the standalone default does not keep the summarizer
-running while evaluators load.
+The standalone default requires only prepared evaluator assets. HHEM-only
+startup reads no UniEval configuration; UniEval-only startup reads no HHEM
+configuration. Disabled scorers construct no controller or worker and import
+no optional model libraries. Neither scorer calls generation or its sibling.
 
-## Native llama forwarding
+The [routing convention](api-routing.md) separates the fixed HTTP date from
+payload schema dates. The old dated evaluator paths, `/health` and the former
+`/v1/chat/completions` proxy return HTTP 404. The native generation server
+keeps its own upstream paths; it is not part of this application.
+The launcher refuses `--routes llama` and the removed `--model-config`
+option. Authored `llama` transport settings are refused, not ignored.
 
-The only upstream operation is `/v1/chat/completions`. Its private origin comes
-from the selected committed configuration's `model_server.base_url`, normally
-`http://127.0.0.1:8080`. It must be an HTTP loopback origin with an explicit
-nonzero port, without credentials, path, query or fragment. Its port must
-differ from the shared listener's port.
+## Safe local refusals
 
-The loader reads that named configuration and the one declaration named by
-its `models_file`. It projects the declaration's
-`summarizer.request_timeout_minutes` into the forwarding deadline. It does
-not load weights, choose another declaration or duplicate a model selection
-in the shared server configuration. The phase that starts native llama owns
-full declaration validation, asset acquisition and the native process.
+Scoring routes retain their own native result/error envelopes.
+Host/Origin refusals for health, schema and unknown routes instead use
+`contracts/api_error_detail.py` and `refuse_request.py`:
 
-`LlamaRequest` requires a model string and nonempty text messages with the
-roles `system`, `user` or `assistant`. Omitted `stream` means false; any supplied
-value other than the boolean false is refused. Native JSON sampling, template
-and response-format fields pass through without a per-parameter translation.
-They cannot change the destination, route, HTTP method or forwarded headers.
-The original validated request bytes are sent unchanged.
-Native extension values reject NaN and infinities recursively, including
-nested usage and sampling data. Invalid numeric bytes are refused, not
-replaced with null or forwarded as a successful response.
+```json
+{"error":{"code":"HOST_FORBIDDEN","message":"The request Host header is not accepted.","type":"api_error"}}
+```
 
-Valid native result and error JSON retain their exact response bytes and HTTP
-status. Answer, reasoning, usage, timing and other native JSON fields are not
-stripped. A length-limited result remains length-limited; extracting and
-accepting the final summary is the caller's job. Redirects are not followed.
-Invalid or oversized native responses and unreachable origins return explicit
-HTTP 502 errors; an expired generation deadline returns HTTP 504. Local input
-refusals use safe native error JSON rather than FastAPI validation dumps.
-
-Table C - Transport settings
-
-| Id | Setting | Meaning |
-| --- | --- | --- |
-| C1 | `llama.connect_timeout_ms` | 5000 milliseconds, or five seconds, to connect. |
-| C2 | `llama.health_timeout_ms` | 5000 milliseconds, or five seconds, for one native health observation. |
-| C3 | `llama.max_response_bytes` | At most 1048576 decoded bytes, or 1 MiB, per native response. Overflow is refused, not truncated. |
-| C4 | `llama.max_inflight_requests` | One admitted generation request. Additional requests receive HTTP 429 before reading their bodies; there is no second queue or retry system. |
+The message comes from the declared local error policy, never request input
+or a raw exception. The guard runs before body reading. Bounded reads,
+disconnect handling, absolute deadlines and real cleanup failures remain
+part of the enabled scorers' request path.
 
 ## Diagnostics
 
@@ -125,7 +105,7 @@ returns normally. Its bound socket and diagnostic file still close.
 ## See also
 
 - [../architecture/evaluation/local-model-api.md](../architecture/evaluation/local-model-api.md) - composition and owned lifetimes.
+- [api-routing.md](api-routing.md) - dated operations and the native generation exception.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - unchanged scoring requests, results and worker packets.
 - [unieval-api.md](unieval-api.md) - independent full-source evaluation and four-score results.
-- [../concepts/config/model-file.md](../concepts/config/model-file.md) - selected model authority.
 - [../how-to/run-the-gates.md#independent-python-service-contracts](../how-to/run-the-gates.md#independent-python-service-contracts) - focused offline checks.

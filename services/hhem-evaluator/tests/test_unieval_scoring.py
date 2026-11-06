@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 
+from hhem_evaluator.contracts.base import API_HEALTH_PATH
 from hhem_evaluator.contracts.unieval_result import UnievalResult
 from hhem_evaluator.contracts.unieval_settings import UnievalSettings
 from hhem_evaluator.unieval_router import UNIEVAL_PATH
@@ -76,7 +77,7 @@ def test_normalization_planning_error_keeps_recorded_independent_dimensions() ->
                 for error in result.errors
             )
             assert all(error.code != "WORKER_EXITED" for error in result.errors)
-            assert (await client.get("/health")).status_code == 200
+            assert (await client.get(API_HEALTH_PATH)).status_code == 200
             assert worker.is_alive
 
     asyncio.run(check())

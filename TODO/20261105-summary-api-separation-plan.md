@@ -140,7 +140,7 @@ config/
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | E1 | 1 | Call native generation without the evaluator | - | A | DONE | curly-lamp | - | - |
-| E2 | 2 | Remove generation from the evaluation API | 1 | A | PENDING | - | - | - |
+| E2 | 2 | Remove generation from the evaluation API | 1 | A | DONE | curly-lamp | - | adopted worker |
 | E3 | 3 | Rename and divide the evaluator and its tests | 2 | A | PENDING | - | - | - |
 | E4 | 4 | Rename and isolate the summary generator and its caller | 2 | B | PENDING | - | - | - |
 | E5 | 5 | Consolidate source coverage under the summary evaluator | 3, 4 | C | PENDING | - | - | - |

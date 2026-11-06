@@ -1,14 +1,27 @@
 """Prove native contract boundaries without serving HTTP or loading a model."""
 
+import io
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import get_args
 
 import pytest
 from fastapi import FastAPI
 from pydantic import ValidationError
 
-from hhem_evaluator.contracts.base import API_PREFIX, EVALUATE_PATH, SCHEMA_VERSION, NativeContract
+from hhem_evaluator.api_settings import load_api_settings
+from hhem_evaluator.contracts.api_error_detail import ApiErrorDetail, ApiErrorResult
+from hhem_evaluator.contracts.api_health import ApiHealth, DisabledEvaluatorHealth
+from hhem_evaluator.contracts.api_settings import ApiSettings
+from hhem_evaluator.contracts.base import (
+    API_HEALTH_PATH,
+    API_SCHEMA_PATH,
+    EVALUATE_PATH,
+    HHEM_HEALTH_PATH,
+    SCHEMA_VERSION,
+    NativeContract,
+)
 from hhem_evaluator.contracts.error_detail import (
     ERROR_POLICIES,
     ErrorCode,
@@ -26,6 +39,8 @@ from hhem_evaluator.contracts.evaluation_progress import (
 )
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.model_identity import ModelIdentity
+from hhem_evaluator.contracts.server_contract import SERVER_SCHEMA_VERSION, ServerContract
+from hhem_evaluator.contracts.server_event import ApiDiagnosticData, ServerEvent
 from hhem_evaluator.contracts.service_health import ServiceHealth
 from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
 from hhem_evaluator.contracts.worker_identity import WorkerIdentity
@@ -41,11 +56,17 @@ from hhem_evaluator.contracts.worker_message import (
     WorkerStarted,
     validate_window_reply,
 )
+from hhem_evaluator.emit_events import EventWriter
 from hhem_evaluator.load_settings import load_settings
+from hhem_evaluator.refuse_request import refuse_request
 from hhem_evaluator.resolve_ids import create_event_id
+from hhem_evaluator.serve_api import create_app
+from hhem_evaluator.unieval_router import UNIEVAL_HEALTH_PATH, UNIEVAL_PATH
 
 from .contract_examples import (
+    API_SETTINGS_FILE,
     EXECUTION_ID,
+    REPOSITORY,
     SETTINGS_FILE,
     example_command,
     example_event,
@@ -110,7 +131,7 @@ def test_omittable_does_not_mean_nullable(field: str) -> None:
 
 
 def test_fastapi_openapi_matches_native_omission_and_null_rules() -> None:
-    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=f"{API_PREFIX}/openapi.json")
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=API_SCHEMA_PATH)
 
     def accept_native_request(request: EvaluateRequest) -> EvaluateRequest:
         return request
@@ -127,6 +148,126 @@ def test_fastapi_openapi_matches_native_omission_and_null_rules() -> None:
         assert "default" not in schema["properties"][field]
     assert "version" not in schema["properties"]
     assert schema["version"] == SCHEMA_VERSION
+
+
+@pytest.mark.parametrize(
+    "contract",
+    [
+        ApiSettings,
+        ApiHealth,
+        DisabledEvaluatorHealth,
+        ApiErrorDetail,
+        ApiErrorResult,
+        ApiDiagnosticData,
+        ServerEvent,
+    ],
+)
+def test_application_schemas_are_current_only_and_change_logged(
+    contract: type[ServerContract],
+) -> None:
+    schema = contract.model_json_schema()
+    assert schema["version"] == SERVER_SCHEMA_VERSION
+    assert schema["changelog"][0]["version"] == SERVER_SCHEMA_VERSION
+    assert 1 <= len(schema["changelog"]) <= 5
+    assert all("\n" not in entry["change"] for entry in schema["changelog"])
+    assert schema["additionalProperties"] is False
+
+
+@pytest.mark.parametrize("code", ["HOST_FORBIDDEN", "ORIGIN_FORBIDDEN"])
+def test_local_refusal_keeps_the_declared_safe_shape_and_http_status(code: ErrorCode) -> None:
+    policy = ERROR_POLICIES[code]
+    response = refuse_request(code, policy.message, 403)
+    observed = ApiErrorResult.model_validate_json(bytes(response.body))
+    assert response.status_code == 403 and response.media_type == "application/json"
+    assert observed.model_dump() == {
+        "error": {"code": code, "message": policy.message, "type": "api_error"}
+    }
+
+
+def test_actual_evaluator_openapi_has_only_dated_routes_and_resolvable_native_schemas() -> None:
+    api = load_api_settings(API_SETTINGS_FILE)
+    app = create_app(
+        api,
+        load_settings(SETTINGS_FILE, api),
+        REPOSITORY,
+        writer=EventWriter(api.logging, io.StringIO()),
+    )
+    assert app.state.controller.worker.process is None
+    assert app.state.unieval.worker.process is None
+    assert not hasattr(app.state, "forwarder")
+    assert app.openapi_url == "/api/2026-11-05/get-summary-evaluator-schema"
+    schema = app.openapi()
+    assert schema["info"]["title"] == "summary-evaluator"
+    assert schema["info"]["version"] == SERVER_SCHEMA_VERSION
+    assert set(schema["paths"]) == {
+        "/api/2026-11-05/evaluate-summary-hhem",
+        "/api/2026-11-05/get-hhem-health",
+        "/api/2026-11-05/evaluate-summary-unieval",
+        "/api/2026-11-05/get-unieval-health",
+        "/api/2026-11-05/get-summary-evaluator-health",
+    }
+    assert set(ApiHealth.model_fields) == {
+        "version",
+        "service_instance_id",
+        "enabled_routes",
+        "status",
+        "hhem",
+        "unieval",
+        "log_file",
+        "log_available",
+    }
+
+    def references(value: object) -> Iterator[str]:
+        if isinstance(value, dict):
+            for name, child in value.items():
+                if name == "$ref":
+                    assert isinstance(child, str)
+                    yield child
+                else:
+                    yield from references(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from references(child)
+
+    for reference in references(schema):
+        prefix = "#/components/schemas/"
+        assert reference.startswith(prefix), reference
+        assert reference[len(prefix) :] in schema["components"]["schemas"], reference
+
+
+def test_hhem_only_construction_reads_no_other_scorer_or_generation_configuration(
+    tmp_path: Path,
+) -> None:
+    api = load_api_settings(API_SETTINGS_FILE).model_copy(update={"enabled_routes": ("hhem",)})
+    app = create_app(
+        api,
+        load_settings(SETTINGS_FILE, api),
+        tmp_path,
+        writer=EventWriter(api.logging, io.StringIO()),
+    )
+    assert app.state.unieval is None and app.state.controller.worker.process is None
+    assert set(app.openapi()["paths"]) == {EVALUATE_PATH, HHEM_HEALTH_PATH, API_HEALTH_PATH}
+
+
+def test_unieval_only_construction_reads_only_its_named_configuration(tmp_path: Path) -> None:
+    config = tmp_path / "config"
+    config.mkdir()
+    (config / "unieval-evaluator.json").write_bytes(
+        (REPOSITORY / "config" / "unieval-evaluator.json").read_bytes()
+    )
+    api = load_api_settings(API_SETTINGS_FILE).model_copy(update={"enabled_routes": ("unieval",)})
+    app = create_app(api, None, tmp_path, writer=EventWriter(api.logging, io.StringIO()))
+    assert app.state.controller is None and app.state.unieval.worker.process is None
+    assert set(app.openapi()["paths"]) == {UNIEVAL_PATH, UNIEVAL_HEALTH_PATH, API_HEALTH_PATH}
+
+
+def test_disabled_application_constructs_no_scorers_or_reads_their_configuration(
+    tmp_path: Path,
+) -> None:
+    api = load_api_settings(API_SETTINGS_FILE).model_copy(update={"enabled_routes": ()})
+    app = create_app(api, None, tmp_path, writer=EventWriter(api.logging, io.StringIO()))
+    assert app.state.controller is None and app.state.unieval is None
+    assert set(app.openapi()["paths"]) == {API_HEALTH_PATH}
 
 
 @pytest.mark.parametrize(

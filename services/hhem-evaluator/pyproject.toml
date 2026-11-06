@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "hhem-evaluator"
 version = "2026.11.2"
-description = "Local HHEM and UniEval scoring with native generation forwarding."
+description = "Local HHEM and UniEval summary evaluation."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "pydantic>=2.12,<3",

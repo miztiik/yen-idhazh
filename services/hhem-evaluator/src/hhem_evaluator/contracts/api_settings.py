@@ -8,16 +8,7 @@ from .base import PositiveCount, RelativePath
 from .server_contract import ServerContract, ServerSchemaVersion
 from .service_settings import ListenerSettings, LoggingSettings
 
-ApiComponent = Literal["hhem", "llama", "unieval"]
-
-
-class LlamaTransportSettings(ServerContract):
-    """Bound forwarding without selecting weights or a native destination."""
-
-    connect_timeout_ms: PositiveCount
-    health_timeout_ms: PositiveCount
-    max_response_bytes: PositiveCount
-    max_inflight_requests: PositiveCount
+ApiComponent = Literal["hhem", "unieval"]
 
 
 class ApiSettings(ServerContract):
@@ -31,7 +22,6 @@ class ApiSettings(ServerContract):
     logging: LoggingSettings
     log_directory: RelativePath
     shutdown_timeout_ms: PositiveCount
-    llama: LlamaTransportSettings
 
     @model_validator(mode="after")
     def require_distinct_routes(self) -> Self:

@@ -6,8 +6,8 @@ from pydantic import ConfigDict
 
 from .base import NativeContract
 
-SERVER_SCHEMA_VERSION: Final = "2026-11-04"
-ServerSchemaVersion = Literal["2026-11-04"]
+SERVER_SCHEMA_VERSION: Final = "2026-11-06"
+ServerSchemaVersion = Literal["2026-11-06"]
 
 
 class ServerContract(NativeContract):
@@ -19,6 +19,10 @@ class ServerContract(NativeContract):
             "changelog": [
                 {
                     "version": SERVER_SCHEMA_VERSION,
+                    "change": "Remove generation and use dated evaluator-only HTTP operations.",
+                },
+                {
+                    "version": "2026-11-04",
                     "change": "Add independent four-score UniEval routing and readiness.",
                 },
                 {

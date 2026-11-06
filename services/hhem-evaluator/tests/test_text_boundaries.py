@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from hhem_evaluator.contracts.base import API_PREFIX, EVALUATE_PATH
+from hhem_evaluator.contracts.base import API_HEALTH_PATH, EVALUATE_PATH, HHEM_HEALTH_PATH
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 
 from .contract_examples import REPOSITORY
@@ -128,7 +128,7 @@ def test_streamed_overflow_slow_input_and_capacity_are_bounded_before_parsing() 
             assert unread.messages[0]["status"] == 429
             headers = dict(unread.messages[0]["headers"])
             assert headers[b"retry-after"] == b"2"
-            health = await service.client.get(f"{API_PREFIX}/health")
+            health = await service.client.get(HHEM_HEALTH_PATH)
             assert health.status_code == 200
             assert health.json()["queue_depth"] == 1
             expired = await slow_task
@@ -205,7 +205,7 @@ def test_unavailable_file_mirror_does_not_change_a_completed_score(tmp_path: Pat
             result = EvaluationResult.model_validate_json(response.content)
             assert result.status == "complete" and result.hhem == predictions.cases[0].score
             assert not result.errors
-            health = await service.client.get("/health")
+            health = await service.client.get(API_HEALTH_PATH)
             assert health.status_code == 200 and not health.json()["log_available"]
             assert any(
                 envelope.type == "fastapi-server.log.unavailable"

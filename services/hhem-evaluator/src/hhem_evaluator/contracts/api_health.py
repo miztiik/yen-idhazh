@@ -6,7 +6,6 @@ from pydantic import StrictBool, model_validator
 
 from .api_settings import ApiComponent
 from .base import RelativePath, Uuid4
-from .llama_result import LlamaHealth
 from .server_contract import ServerContract, ServerSchemaVersion
 from .service_health import ServiceHealth
 from .unieval_result import UnievalHealth
@@ -28,14 +27,13 @@ class ApiHealth(ServerContract):
     enabled_routes: tuple[ApiComponent, ...]
     status: Literal["disabled", "loading", "ready", "failed", "stopping"]
     hhem: ServiceHealth | DisabledEvaluatorHealth
-    llama: LlamaHealth
     unieval: UnievalHealth | DisabledEvaluatorHealth
     log_file: RelativePath | None
     log_available: StrictBool
 
     @model_validator(mode="after")
     def require_enabled_readiness(self) -> Self:
-        components = {"hhem": self.hhem, "llama": self.llama, "unieval": self.unieval}
+        components = {"hhem": self.hhem, "unieval": self.unieval}
         states = [components[component].status for component in self.enabled_routes]
         if self.status == "ready" and (not states or any(state != "ready" for state in states)):
             raise ValueError("Ready requires every enabled component to be ready")

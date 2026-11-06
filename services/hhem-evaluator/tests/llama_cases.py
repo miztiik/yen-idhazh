@@ -1,21 +1,21 @@
 """Replay a named native model response at the external HTTPX boundary only."""
 
 import asyncio
+from typing import Final
 
 import httpx
 from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import Response, StreamingResponse
 
-from hhem_evaluator.contracts.llama_settings import LlamaSettings
-from hhem_evaluator.forward_llama import LLAMA_COMPLETIONS_PATH
-from hhem_evaluator.load_llama_settings import load_llama_settings
-
 from .contract_examples import REPOSITORY
+
+# This operation belongs to the upstream native protocol, not the evaluation app.
+LLAMA_COMPLETIONS_PATH: Final = "/v1/chat/completions"
 
 
 class RecordedLlama:
-    """Leave validation, forwarding, admission and cancellation in the real API."""
+    """Replay native HTTP responses while the real caller owns validation and transport."""
 
     def __init__(self) -> None:
         self.body = (
@@ -66,20 +66,3 @@ class RecordedLlama:
     @property
     def transport(self) -> httpx.ASGITransport:
         return httpx.ASGITransport(app=self.app)
-
-
-def llama_settings(timeout_ms: float = 5000) -> LlamaSettings:
-    selected = load_llama_settings(REPOSITORY / "config" / "idhazh.json")
-    return LlamaSettings.model_validate_json(
-        selected.model_copy(update={"request_timeout_ms": timeout_ms}).model_dump_json()
-    )
-
-
-def generation_body() -> bytes:
-    return (
-        b'{"model":"selected-native-model","messages":['
-        b'{"role":"system","content":"Summarize the supplied text."},'
-        b'{"role":"user","content":" PrivateSourceCanary\\nunchanged. "}],'
-        b'"stream":false,"temperature":0.2,"max_tokens":4096,'
-        b'"chat_template_kwargs":{"enable_thinking":false},"response_format":{"type":"json_object"}}'
-    )

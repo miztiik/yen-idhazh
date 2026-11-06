@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from .contracts.base import API_PREFIX, EVALUATE_PATH
+from .contracts.base import EVALUATE_PATH, HHEM_HEALTH_PATH
 from .contracts.evaluate_request import EvaluateRequest
 from .contracts.evaluation_result import EvaluationResult
 from .contracts.service_health import ServiceHealth
@@ -15,7 +15,7 @@ from .dispatch_evaluation import dispatch_evaluation
 def create_hhem_router(controller: EvaluationController) -> APIRouter:
     router = APIRouter()
 
-    @router.get(f"{API_PREFIX}/health", response_model=ServiceHealth)
+    @router.get(HHEM_HEALTH_PATH, response_model=ServiceHealth)
     async def health() -> JSONResponse:
         observed = controller.health()
         return JSONResponse(observed.model_dump(mode="json"), status_code=observed.http_status)

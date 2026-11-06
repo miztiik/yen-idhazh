@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from hhem_evaluator.contracts.base import API_PREFIX, EVALUATE_PATH, SCHEMA_VERSION
+from hhem_evaluator.contracts.base import EVALUATE_PATH, HHEM_HEALTH_PATH, SCHEMA_VERSION
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.service_health import ServiceHealth
 from hhem_evaluator.contracts.worker_message import ScoreWindow
@@ -85,11 +85,11 @@ def test_oracle_full_timeout_retains_primary_and_preserves_queued_work() -> None
             refused = DirectRequest(b"PrivateQueueOverflowCanary")
             await refused.run(service.app)
             assert refused.messages[0]["status"] == 429 and refused.body_reads == 0
-            health = await service.client.get(f"{API_PREFIX}/health")
+            health = await service.client.get(HHEM_HEALTH_PATH)
             assert health.status_code == 200 and health.json()["queue_depth"] == 2
             # Replacement loading is held only after the active deadline and joined exit.
             assert await service.worker.handshake(2) == {"phase": "loading", "local_only": True}
-            replacing = await service.client.get(f"{API_PREFIX}/health")
+            replacing = await service.client.get(HHEM_HEALTH_PATH)
             assert replacing.status_code == 503
             assert replacing.json()["status"] == "replacing"
             assert service.worker.confirmed_before_spawn[0][0] == old_pid
@@ -323,7 +323,7 @@ def test_replacement_identity_mismatch_fails_closed() -> None:
             result = EvaluationResult.model_validate_json(response.content)
             assert result.status == "partial" and result.hhem is not None
             await service.app.state.controller.loading_task
-            health = (await service.client.get(f"{API_PREFIX}/health")).json()
+            health = (await service.client.get(HHEM_HEALTH_PATH)).json()
             assert health["status"] == "failed"
             assert health["failure_code"] == "MODEL_IDENTITY_CHANGED"
             assert health["model"] is None

@@ -6,7 +6,7 @@ import time
 import httpx
 from hhem_evaluator.contracts.api_health import ApiHealth
 from hhem_evaluator.contracts.api_settings import ApiComponent
-from hhem_evaluator.contracts.base import EVALUATE_PATH
+from hhem_evaluator.contracts.base import API_HEALTH_PATH, EVALUATE_PATH
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.service_settings import ServiceSettings
@@ -99,7 +99,7 @@ async def read_owned_health(
             status, health = await call_local_api(
                 client,
                 "GET",
-                base_url + "/health",
+                base_url + API_HEALTH_PATH,
                 ApiHealth,
                 pipeline,
                 min(remaining * 1000, pipeline.http_connect_timeout_ms),

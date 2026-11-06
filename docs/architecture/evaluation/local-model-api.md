@@ -1,18 +1,19 @@
-# How one Python API serves local model operations
+# How one Python API serves summary evaluation
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-06
 
-How the shared FastAPI application serves HHEM, UniEval and native llama generation
-without coupling their model lifetimes. Exact routes, settings and diagnostics
+How the shared `summary-evaluator` application serves HHEM and native UniEval
+with independent queues and model workers. Exact routes, settings and diagnostics
 live in the [server reference](../../reference/fastapi-server.md).
 
 ## Explicit composition
 
 One Uvicorn process binds the configured loopback listener before model
 startup. The application registers only its explicitly enabled routers.
-HHEM routing delegates to the existing evaluation controller; llama routing
-delegates to one asynchronous HTTPX client. Neither router chooses a model
-from request text or imports a module named by a request.
+Each scorer's router delegates to its own evaluation controller. Neither
+scorer generates a summary, calls the other scorer or chooses a model from
+request text. The listener has no generation router, forwarder, upstream
+health polling or generation-client lifespan.
 
 The HHEM scoring controller, queue, recorded-output validation and owned
 worker remain [separate from app construction](hhem-evaluation-api.md).
@@ -31,37 +32,34 @@ HHEM window rule or a generic evaluator plugin. Disabled UniEval neither
 loads its optional dependencies nor reads its configuration. Enabled
 components retain separate observed health and completed results.
 
-The native llama executable stays in a separate process on a private port.
-Its phase owns acquisition, launch, exact-child readiness and process exit.
-FastAPI neither embeds a model binding nor starts or adopts that process.
-The client always uses the selected committed `model_server.base_url`, with
-proxy environment settings and redirects disabled.
+The workflow calls the separate native generation server directly and owns
+its acquisition, launch, readiness and exit. The evaluation application does
+not read generation configuration or depend on that process.
 
 ## Real readiness and independent work
 
-Shared health reports the exact application instance, both component states
+Shared health reports the exact application instance, both scorer states
 and diagnostic-file availability. HHEM readiness still requires its observed
-model and owned worker identities. Llama readiness requires a successful
-native `/health` observation with status `ok`, not merely a listening socket.
-The phase must also check that the native child it started is still alive.
+model and owned worker identities; UniEval reports its own observed model and
+worker. No generation observation appears in evaluator health or OpenAPI.
 
-Aggregate readiness requires every enabled component. HHEM's own health and
-operation remain available when llama is unavailable. A failed component
-does not close the other's completed result or transport.
+Aggregate readiness requires every enabled scorer. A failed scorer does not
+erase its sibling's readiness or completed result. An empty selection exposes
+only application health and schema and constructs no model worker.
 
-HHEM performs heavy work in its existing scoring process. Native generation
-uses asynchronous HTTP; it does not execute inference on the API event loop.
-Finite admission applies before reading generation input, and input, native
-response, connection and request deadlines remain bounded. There is no
-transport retry, result cache, streaming path or general proxy.
+Both scorers perform heavy work in their own model processes, not on the HTTP
+event loop. Each finite queue reserves capacity before body reading.
+Host/Origin checks, bounded input reads, disconnect handling and absolute
+input, queue and evaluation deadlines remain in the actual scoring path.
+Generic operational and unknown-route refusals use the independent
+`refuse_request.py` renderer and declared `api_error_detail.py` shape.
 
 ## Owned shutdown and diagnostics
 
-The application lifespan creates and closes the HTTPX client, cancels and
-joins its outstanding forwarding requests, and shuts down HHEM through the
-existing worker controller. Disconnect closes the outstanding HTTP operation.
-It does not claim to stop the separately owned native llama process; the
-phase still has to stop and join that process.
+The application lifespan closes each enabled scorer through its existing
+worker controller. Disconnect cancels admitted scoring work and follows its
+bounded owned-child retirement policy. There is no generation client to
+close and no invented generation shutdown outcome.
 
 Enabled component cleanups run concurrently, each within its declared wait,
 so adding another independent worker does not add their shutdown waits.
@@ -80,19 +78,22 @@ receipts, not a search through terminal output, establish success.
 
 ## Design rationale
 
-One API address keeps caller routing simple while leaving native llama in
-the runtime that already loads the selected weights. HTTPX supplies the
-asynchronous transport from the existing frozen environment; there is no new
-dependency, native build or published-site cost.
+One evaluation address serves related scoring operations while separate
+workers and queues retain their independent work. Separate HTTP deployments
+would add another listener and lifecycle; the shared HTTP process remains a
+common restart boundary.
 
-Explicit routers and one client need no plugin registry or worker framework.
-Keeping the existing HHEM snapshot preserves its private process protocol and
-real scoring behavior. Native llama request parameters and response bytes
-remain native rather than acquiring a second sampling or summary policy.
+Keeping a dormant generation proxy would retain another API's transport,
+configuration and failure surface without enabling evaluation. The existing
+workflow already speaks the native protocol directly. Explicit scorer routers
+need no plugin registry or generic worker framework. HTTPX remains in the
+frozen environment for resource preparation and offline ASGI boundaries.
+Scoring snapshots, model identities, event seeds and recordings are unchanged.
 
 ## See also
 
 - [../../reference/fastapi-server.md](../../reference/fastapi-server.md) - shared API contract and settings.
+- [../../reference/api-routing.md](../../reference/api-routing.md) - dated first-party routes and the upstream native-protocol exception.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - HHEM scoring and cancellation.
 - [unieval-api.md](unieval-api.md) - independent UniEval scoring and source coverage.
 - [../../reference/summary-evaluation-workflow.md](../../reference/summary-evaluation-workflow.md) - current caller and machine control.

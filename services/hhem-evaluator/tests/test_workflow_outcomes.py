@@ -17,7 +17,6 @@ from summary_eval_pipeline.report import render_report
 
 from hhem_evaluator.contracts.api_health import ApiHealth
 from hhem_evaluator.contracts.base import SCHEMA_VERSION
-from hhem_evaluator.contracts.llama_result import LlamaHealth
 from hhem_evaluator.contracts.server_contract import SERVER_SCHEMA_VERSION
 from hhem_evaluator.contracts.service_health import ServiceHealth
 from hhem_evaluator.contracts.unieval_contract import UNIEVAL_VERSION
@@ -61,7 +60,6 @@ def test_native_zero_scores_complete_only_with_both_results_measurement_and_join
             queue_capacity=1,
             failure_code=None,
         ),
-        llama=LlamaHealth(status="disabled", http_status=None, failure_code=None),
         log_file=None,
         log_available=False,
     )
