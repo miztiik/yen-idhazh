@@ -31,7 +31,7 @@ declaration validation and pinned file semantics.
 
 One run selects one summarizer. To compare declarations, dispatch separate
 runs with the same source and reference. The generation instruction stays fixed in
-`config/summary-eval-tests.json`; neither dispatch changes the shared pointer.
+`config/summary-evals/workflow.json`; neither dispatch changes the shared pointer.
 There is no manual summary input or model matrix.
 
 This command sends the named, project-authored source/reference fixture through standard
@@ -110,7 +110,7 @@ stop the native model, evaluate through FastAPI and create the report.
 Machine preparation installs shared hosting, fingerprinting and probes without
 feed-ingest-plan or data-delivery. It copies only named machine configuration;
 `config/hono-server.json` owns the listener and supervision waits.
-The [evaluator](../reference/fastapi-server.md) and
+The [evaluator](../reference/summary-evaluator-api.md) and
 [pipeline API](../reference/serve-pipeline-apis.md) references own listener,
 readiness and process controls. The published site needs neither server.
 

@@ -4,8 +4,8 @@ import html
 from collections.abc import Sequence
 from decimal import ROUND_CEILING, Decimal
 
-from hhem_evaluator.contracts.evaluation_result import EvaluationResult
-from hhem_evaluator.contracts.service_settings import ServiceSettings
+from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
+from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
 
 from .contracts import PhaseEvidence, PhaseName, PipelineError, PipelineEvidence
 from .host_reader import measurement_complete

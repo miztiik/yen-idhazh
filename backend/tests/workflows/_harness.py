@@ -652,7 +652,7 @@ SUBSTITUTED_TENANT: Final = "a-paper-tenant"
 
 def _read_summary_eval_artifact_paths() -> dict[str, str]:
     """Resolve the preparation outputs from their named committed configuration."""
-    settings: object = json.loads(read_text(CONFIG_DIR / "summary-eval-tests.json"))
+    settings: object = json.loads(read_text(CONFIG_DIR / "summary-evals" / "workflow.json"))
     assert isinstance(settings, dict), "Summary workflow settings must be a mapping"
     outputs: dict[str, str] = {}
     for field in ("output_directory", "native_log_directory"):

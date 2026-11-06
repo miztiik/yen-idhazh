@@ -35,9 +35,10 @@ model or comparison copy. The Python gardener keeps its scheduler and delegates
 planner file validation and compaction to the TypeScript writer; generic
 compact-index and non-planner ledger contracts retain their Pydantic owners.
 
-Transient HHEM API contracts live only in
-`services/hhem-evaluator/src/hhem_evaluator/contracts/`. Their native Pydantic
-models own validation and on-demand schemas without importing the backend or
+Transient evaluation API contracts live only in
+the `hhem/contracts/`, `unieval/contracts/`, `serve_http/contracts/` and
+`shared/contracts/` children of `services/summary_evaluator/src/summary_evaluator/`.
+Their native Pydantic models own validation and on-demand schemas without importing the backend or
 entering its persisted-contract registry. The
 [service reference](../../reference/hhem-evaluation-api.md) owns their current
 fields, versions and startup settings. Caller-saved responses are outputs of

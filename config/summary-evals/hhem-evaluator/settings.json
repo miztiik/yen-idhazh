@@ -1,0 +1,52 @@
+{
+  "version": "2026-11-02",
+  "hhem": {
+    "model": {
+      "reference": "vectara/hallucination_evaluation_model",
+      "revision": "8e4a2e6e96c708cc76c2344f7e4757df2515292c",
+      "files": [
+        "config.json",
+        "configuration_hhem_v2.py",
+        "modeling_hhem_v2.py",
+        "model.safetensors"
+      ]
+    },
+    "foundation": {
+      "reference": "google/flan-t5-base",
+      "revision": "7bcac572ce56db69c1ea7c8af255c5d7c9672fc2",
+      "files": [
+        "config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "spiece.model"
+      ]
+    },
+    "cache_directory": "services/summary_evaluator/var/model-cache"
+  },
+  "scoring": {
+    "chunk_words": 5000,
+    "chunk_overlap_words": 500,
+    "max_windows_per_comparison": 256
+  },
+  "response": {
+    "hhem_full": false,
+    "include_window_details": false
+  },
+  "queue": {
+    "capacity": 8,
+    "wait_timeout_ms": 60000,
+    "retry_after_seconds": 2
+  },
+  "evaluation": {
+    "timeout_ms": 120000
+  },
+  "worker": {
+    "startup_timeout_ms": 600000,
+    "replacement_timeout_ms": 120000,
+    "stop_grace_ms": 5000,
+    "forced_stop_ms": 5000,
+    "shutdown_timeout_ms": 15000,
+    "max_proc_identity_bytes": 4096
+  }
+}

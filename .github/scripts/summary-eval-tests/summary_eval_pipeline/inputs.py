@@ -4,10 +4,10 @@ import json
 import os
 from pathlib import Path
 
-from hhem_evaluator.contracts.base import NativeContract, NonblankText
-from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
-from hhem_evaluator.contracts.unieval_request import UnievalRequest
 from pydantic import ValidationError
+from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
+from summary_evaluator.shared.contracts.base import NativeContract, NonblankText
+from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
 
 from .failures import WorkflowError
 from .settings import PipelineSettings

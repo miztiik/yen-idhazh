@@ -3,7 +3,6 @@
 import math
 from typing import Annotated, Literal, Self
 
-from hhem_evaluator.contracts.base import Count, NonblankText
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -13,6 +12,7 @@ from pydantic import (
     RootModel,
     model_validator,
 )
+from summary_evaluator.shared.contracts.base import Count, NonblankText
 
 
 def require_finite_json(value: JsonValue) -> JsonValue:

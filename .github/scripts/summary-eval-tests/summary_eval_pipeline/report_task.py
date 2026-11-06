@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 
-from hhem_evaluator.load_settings import load_settings
+from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
 
 from .contracts import (
     WORKFLOW_VERSION,
@@ -122,7 +122,9 @@ def main() -> None:
     root = parser.parse_args().root.resolve()
     try:
         pipeline = load_pipeline_settings(root)
-        settings = load_settings(root / "config" / "hhem-evaluator" / "settings.json")
+        settings = load_settings(
+            root / "config" / "summary-evals" / "hhem-evaluator" / "settings.json"
+        )
         directory = root / pipeline.output_directory
         evidence = collect_results(root)
         write_result(directory / "results.json", evidence)
@@ -135,7 +137,7 @@ def main() -> None:
             raise WorkflowError("RECEIPT_INVALID", "report")
         config_url = (
             f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
-            f"/blob/{os.environ['GITHUB_SHA']}/config/hhem-evaluator/settings.json"
+            f"/blob/{os.environ['GITHUB_SHA']}/config/summary-evals/hhem-evaluator/settings.json"
         )
         markdown = render_report(evidence, inputs, settings, config_url)
         temporary = directory / "report.md.tmp"

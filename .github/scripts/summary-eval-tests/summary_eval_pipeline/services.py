@@ -10,9 +10,9 @@ import time
 from pathlib import Path
 from typing import Literal
 
-from hhem_evaluator.contracts.server_event import ServerEvent
-from hhem_evaluator.contracts.service_settings import ServiceSettings
 from pydantic import ValidationError
+from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
+from summary_evaluator.serve_http.contracts.server_event import ServerEvent
 
 from .control import (
     ApiReady,

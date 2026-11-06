@@ -7,6 +7,12 @@ Which inputs, saved results and process outcomes belong to the manual
 `.github/scripts/summary-eval-tests/`; evaluator calculations remain native API
 operations.
 
+Workflow tests live in the distinct `summary_eval_tests` package beside those
+programs. Service tests remain under `services/summary_evaluator/tests`;
+`summary_evaluator_cases` there contains their single shared recording and
+process harness. The service pytest configuration names both suites in one
+locked model-free environment. Tests keep the original fixture provenance.
+
 ## One model and one generated answer
 
 The form requires `source_text` and `reference_summary_text`. Optional
@@ -20,7 +26,7 @@ One dispatch selects one summarizer. A comparison is another dispatch with a
 different declaration, not a matrix, model loop or shared-default edit. The
 declaration supplies the actual pinned weights, companions, revisions, hashes,
 native flags, sampling and template settings. It selects neither evaluator's model.
-`config/summary-eval-tests.json` holds the fixed generation instruction.
+`config/summary-evals/workflow.json` holds the fixed generation instruction.
 It also owns the input, generation-request and generation-response byte
 allowances. Native sampling and server options remain open JSON from the
 selected declaration; there is no second list of supported native fields.
@@ -263,7 +269,7 @@ UTF-8 answers without changing accepted text.
 ## See also
 
 - [Run and inspect the workflow](../how-to/run-hhem-evaluation-api.md)
-- [Shared Python API](fastapi-server.md)
+- [Shared Python API](summary-evaluator-api.md)
 - [Serve pipeline APIs](serve-pipeline-apis.md)
 - [Model-file selection](../concepts/config/model-file.md)
 - [Native HHEM operation](hhem-evaluation-api.md)

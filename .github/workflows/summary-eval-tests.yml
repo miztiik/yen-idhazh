@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 180
     defaults:
       run:
-        working-directory: services/hhem-evaluator
+        working-directory: services/summary_evaluator
     steps:
       - uses: actions/checkout@v6
 
@@ -50,7 +50,7 @@ jobs:
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/host-probes
-          uv sync --project services/hhem-evaluator --frozen --extra model --no-dev
+          uv sync --project services/summary_evaluator --frozen --extra model --no-dev
 
       - name: Prepare selected native assets and validate inputs
         id: prepare

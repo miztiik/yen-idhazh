@@ -217,7 +217,7 @@ which run inside the backend group.
 
 ### Independent Python service contracts
 
-Project bindings: the HHEM package uses its own CPython 3.12 environment and
+Project bindings: the summary evaluator uses its own CPython 3.12 environment and
 manifest. Inspect the shared selection without changing its selector. Prepare
 the existing writer for the real UUID comparison, then run from the service
 directory:
@@ -227,14 +227,14 @@ npm --prefix .\frontend run test:changed -- --list
 bun install --frozen-lockfile --cwd .\packages\common-contracts
 bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
 bun install --frozen-lockfile --cwd .\packages\data-delivery
-Set-Location .\services\hhem-evaluator
+Set-Location .\services\summary_evaluator
 uv sync --frozen --group dev
 uv run --frozen python .\scripts\prepare-unieval-resources.py --root '..\..'
 uv run --frozen ruff check src tests scripts
 Push-Location ..\..
-uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
+uv run --project .\services\summary_evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
 Pop-Location
-uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
+uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline ../../.github/scripts/summary-eval-tests/summary_eval_tests
 uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test_event_ids.py tests/test_server_events.py
 ```
 
@@ -245,6 +245,10 @@ in `ci.yml`. The dedicated manual `summary-eval-tests.yml` workflow exercises
 the HHEM and UniEval APIs without adding evaluator setup to ordinary CI; the
 [manual procedure](run-hhem-evaluation-api.md) owns dispatch and live evidence.
 The model-free environment installs neither the backend nor the model extra.
+The `src` package is installed from this project, not supplied through pytest's
+source path. Shared test support is `tests/summary_evaluator_cases`; the
+comparison workflow's independent tests are `summary_eval_tests` under its
+script directory. The explicit pytest configuration names both suites.
 The named UUID test fails with preparation
 instructions when its real TypeScript dependency is absent; it never skips.
 The model-free environment includes the pinned tokenizer and sentence-rule
@@ -307,13 +311,13 @@ bun install --frozen-lockfile --cwd .\services\serve-pipeline-apis
 bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
 bun install --frozen-lockfile --cwd .\services\host-fingerprints
 bun install --frozen-lockfile --cwd .\services\host-probes
-Set-Location .\services\hhem-evaluator
+Set-Location .\services\summary_evaluator
 uv run --frozen ruff check src tests scripts
 Push-Location ..\..
-uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
+uv run --project .\services\summary_evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
 Pop-Location
-uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
-uv run --frozen pytest tests/test_pipeline_preparation.py tests/test_generation_handoff.py tests/test_native_generation.py tests/test_host_profile_reader_parity.py tests/test_machine_task.py tests/test_pipeline_control.py tests/test_pipeline_evaluation.py tests/test_unieval_workflow.py tests/test_workflow_health_isolation.py tests/test_evaluator_response_binding.py tests/test_unieval_workflow_fixture.py tests/test_workflow_outcomes.py tests/test_pipeline_measurement.py tests/test_pipeline_lifetime.py tests/test_native_launch.py tests/test_pipeline_report.py tests/test_manual_workflow.py
+uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline ../../.github/scripts/summary-eval-tests/summary_eval_tests
+uv run --frozen pytest -c pyproject.toml ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_pipeline_preparation.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_generation_handoff.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_native_generation.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_host_profile_reader_parity.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_machine_task.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_pipeline_control.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_pipeline_evaluation.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_unieval_workflow.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_workflow_health_isolation.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_evaluator_response_binding.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_unieval_workflow_fixture.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_workflow_outcomes.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_pipeline_measurement.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_pipeline_lifetime.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_native_launch.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_pipeline_report.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_manual_workflow.py
 ```
 
 The host compatibility test exports the actual native schemas through Bun,
@@ -374,7 +378,7 @@ Before merging a workflow or evaluator runtime change, run the complete
 model-free service and workflow suites on Linux from the service directory:
 
 ```powershell
-uv run --frozen pytest tests
+uv run --frozen pytest -c pyproject.toml tests ../../.github/scripts/summary-eval-tests/summary_eval_tests
 ```
 
 Keep the socket guard and resource preparation above. Ordinary `ci.yml` does
@@ -655,9 +659,9 @@ no external service.
 
 ## Design rationale
 
-### Manual model-free Linux verification
+### Model-free Linux verification
 
-A separate manual Linux verifier preserves process and ASGI coverage without
+A separate pull-request and manual Linux verifier preserves process and ASGI coverage without
 turning a live content workflow into a test gate or requiring a developer-host
 installation. Its read-only job runs the complete recorded-boundary suite, not
 a smaller success-shaped substitute. The workflow has no schedule; changed

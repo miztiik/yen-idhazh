@@ -1,0 +1,65 @@
+{
+  "version": "2026-11-04",
+  "assets": {
+    "model": {
+      "reference": "MingZhong/unieval-sum",
+      "revision": "ed8da5a8aa01b19d49a5f8738d382ced54b73ad0",
+      "files": [
+        "config.json",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "spiece.model",
+        "tokenizer.json",
+        "tokenizer_config.json"
+      ]
+    },
+    "reference_code_revision": "d33e7b6cfebe97b2bafe435adbd818230d5a416a",
+    "cache_directory": "services/summary_evaluator/var/unieval-cache",
+    "sentences": {
+      "archive_url": "https://raw.githubusercontent.com/nltk/nltk_data/4f15a3d89eefe9748ec1c05be495d91289197155/packages/tokenizers/punkt_tab.zip",
+      "archive_sha256": "e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106",
+      "max_archive_bytes": 8388608,
+      "download_timeout_ms": 120000,
+      "language": "english",
+      "files": [
+        "punkt_tab/english/collocations.tab",
+        "punkt_tab/english/sent_starters.txt",
+        "punkt_tab/english/abbrev_types.txt",
+        "punkt_tab/english/ortho_context.tab"
+      ]
+    }
+  },
+  "prompts": {
+    "fluency": "question: Is this a fluent paragraph? </s> paragraph: {summary}",
+    "coherence": "question: Is this a coherent summary to the document? </s> summary: {summary} </s> document: {source}",
+    "consistency": "question: Is this claim consistent with the document? </s> claim: {summary} </s> document: {source}",
+    "relevance": "question: Is this summary relevant to the reference? </s> summary: {summary} </s> reference: {reference}",
+    "positive_answer": "Yes",
+    "negative_answer": "No"
+  },
+  "scoring": {
+    "consistency_source_mode": "all_source_windows",
+    "max_input_tokens": 4096,
+    "source_window_tokens": 512,
+    "source_overlap_tokens": 64,
+    "max_source_windows": 256,
+    "max_comparisons": 4096
+  },
+  "queue": {
+    "capacity": 8,
+    "wait_timeout_ms": 60000,
+    "retry_after_seconds": 2
+  },
+  "evaluation": {
+    "timeout_ms": 600000
+  },
+  "worker": {
+    "startup_timeout_ms": 600000,
+    "replacement_timeout_ms": 120000,
+    "stop_grace_ms": 5000,
+    "forced_stop_ms": 5000,
+    "shutdown_timeout_ms": 15000,
+    "max_proc_identity_bytes": 4096,
+    "max_reply_bytes": 262144
+  }
+}

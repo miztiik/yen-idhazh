@@ -73,7 +73,7 @@ All four dimensions and no errors are required for a complete result.
 
 ## Independent ownership
 
-The [shared application](local-model-api.md) explicitly registers the
+The [shared application](summary-evaluator.md) explicitly registers the
 UniEval router. Its queue and owned process are independent of HHEM and
 native generation. Model loading, tokenization and inference run in the
 worker, not on the HTTP event loop. Body reservations and deadlines still
@@ -132,6 +132,6 @@ accuracy certificate. Workflow delivery remains a separate integration.
 ## See also
 
 - [../../reference/unieval-api.md](../../reference/unieval-api.md) - native fields, preparation and errors.
-- [local-model-api.md](local-model-api.md) - shared app composition and logging.
+- [summary-evaluator.md](summary-evaluator.md) - shared app composition and logging.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - independent HHEM process ownership.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - published evaluation semantics.

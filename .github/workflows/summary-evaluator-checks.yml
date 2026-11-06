@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        working-directory: services/hhem-evaluator
+        working-directory: services/summary_evaluator
     steps:
       - uses: actions/checkout@v6
         with:
@@ -36,5 +36,5 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: summary-evaluator-model-free-results
-          path: services/hhem-evaluator/var/model-free-results.xml
+          path: services/summary_evaluator/var/model-free-results.xml
           if-no-files-found: warn

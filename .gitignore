@@ -57,6 +57,7 @@ backend/var/
 
 # Independent evaluator model assets and disposable capture output.
 services/hhem-evaluator/var/
+services/summary_evaluator/var/
 
 # Exact-byte local copies of saved encoder artifacts, not authored dataset labels.
 corpus/story-dataset-1/vector-evidence/
