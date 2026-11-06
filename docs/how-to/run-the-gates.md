@@ -319,6 +319,8 @@ The host compatibility test exports the actual native schemas through Bun,
 including the consumed shared-server outcomes. Recorded host cases select the
 committed registry from the caller's root, not an installed package location;
 safe stage/status diagnostics retain a failed native boundary.
+The backend artifact guard resolves the workflow's two configured directories
+from that named settings file, so a path change cannot hide behind a fixed test value.
 The generation checks bind the
 source, answer, independent reference, model and run before either evaluator
 can start. Direct native generation checks use the recorded HTTP boundary,

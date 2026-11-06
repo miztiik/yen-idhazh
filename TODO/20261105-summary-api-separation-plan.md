@@ -187,6 +187,7 @@ config/
   - `.github/scripts/summary-eval-tests/summary_eval_pipeline/settings.py`
   - `.github/workflows/summary-eval-tests.yml`
   - `config/summary-eval-tests.json`
+  - `backend/tests/workflows/_harness.py` - bind artifact expressions to the named workflow settings.
   - `services/hhem-evaluator/src/hhem_evaluator/contracts/server_event.py`
   - `services/hhem-evaluator/src/hhem_evaluator/contracts/lifecycle_fields.py` - new extraction of the existing safe lifecycle fields.
   - `services/hhem-evaluator/src/hhem_evaluator/emit_events.py`
