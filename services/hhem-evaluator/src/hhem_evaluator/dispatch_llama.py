@@ -12,8 +12,9 @@ from .contracts.llama_request import LlamaRequest
 from .contracts.server_event import ApiDiagnosticData
 from .dispatch_evaluation import DisconnectedResponse
 from .fail_evaluation import EvaluationFailure
-from .forward_llama import LlamaForwarder, llama_error
+from .forward_llama import LlamaForwarder
 from .read_request_body import ClientDisconnected, read_request_body, wait_for_disconnect
+from .refuse_request import refuse_request
 
 
 async def dispatch_llama(request: Request, forwarder: LlamaForwarder) -> Response:
@@ -22,7 +23,7 @@ async def dispatch_llama(request: Request, forwarder: LlamaForwarder) -> Respons
             stopped = forwarder.stopping or forwarder.client is None
             code, status = ("SERVICE_STOPPED", 503) if stopped else ("QUEUE_FULL", 429)
             forwarder.warn(code, status)
-            return llama_error(code, "Native generation admission is unavailable.", status)
+            return refuse_request(code, "Native generation admission is unavailable.", status)
         work: asyncio.Task[Response] | None = None
         disconnect: asyncio.Task[None] | None = None
         started = time.monotonic()
@@ -34,7 +35,7 @@ async def dispatch_llama(request: Request, forwarder: LlamaForwarder) -> Respons
                 invalid_json = error.errors(include_input=False)[0]["type"] == "json_invalid"
                 code = "INVALID_JSON" if invalid_json else "INVALID_REQUEST"
                 forwarder.warn(code, 400)
-                return llama_error(code, "Invalid native chat generation request.", 400)
+                return refuse_request(code, "Invalid native chat generation request.", 400)
             work = asyncio.create_task(forwarder.generate(body))
             del body
             disconnect = asyncio.create_task(wait_for_disconnect(request))
@@ -51,7 +52,7 @@ async def dispatch_llama(request: Request, forwarder: LlamaForwarder) -> Respons
             )
             status = policy.http_status or 500
             forwarder.warn(failure.error.code, status)
-            return llama_error(failure.error.code, message, status)
+            return refuse_request(failure.error.code, message, status)
         except (ClientDisconnected, asyncio.CancelledError):
             forwarder.writer.diagnostic(
                 ApiDiagnosticData(

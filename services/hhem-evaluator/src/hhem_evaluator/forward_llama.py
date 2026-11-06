@@ -12,10 +12,11 @@ from starlette.responses import Response
 
 from .contracts.api_settings import ApiSettings
 from .contracts.llama_request import NativeLlamaObject
-from .contracts.llama_result import LlamaError, LlamaErrorResult, LlamaHealth, LlamaResult
+from .contracts.llama_result import LlamaErrorResult, LlamaHealth, LlamaResult
 from .contracts.llama_settings import LlamaSettings
 from .contracts.server_event import ApiDiagnosticData
 from .emit_events import EventWriter
+from .refuse_request import refuse_request
 
 # These are native protocol paths, not caller-selected proxy destinations.
 LLAMA_COMPLETIONS_PATH: Final = "/v1/chat/completions"
@@ -24,11 +25,6 @@ LLAMA_HEALTH_PATH: Final = "/health"
 
 class NativeHealth(NativeLlamaObject):
     status: str
-
-
-def llama_error(code: str, message: str, status: int) -> Response:
-    result = LlamaErrorResult(error=LlamaError(code=code, type="api_error", message=message))
-    return Response(result.model_dump_json(), status_code=status, media_type="application/json")
 
 
 class NativeResponseTooLarge(ValueError):
@@ -167,7 +163,7 @@ class LlamaForwarder:
     async def generate(self, body: bytes) -> Response:
         client = self.client
         if client is None:
-            return llama_error("SERVICE_STOPPED", "The native model client is not running.", 503)
+            return refuse_request("SERVICE_STOPPED", "The native model client is not running.", 503)
         try:
             async with (
                 asyncio.timeout(self.selected.request_timeout_ms / 1000),
@@ -187,7 +183,7 @@ class LlamaForwarder:
                 self.warn("UPSTREAM_HTTP_ERROR", status)
             else:
                 self.warn("UPSTREAM_REDIRECT", status)
-                return llama_error("UPSTREAM_REDIRECT", "The native model redirected.", 502)
+                return refuse_request("UPSTREAM_REDIRECT", "The native model redirected.", 502)
             return Response(encoded, status_code=status, media_type="application/json")
         except (TimeoutError, httpx.TimeoutException):
             code, message, status = "UPSTREAM_TIMEOUT", "The native model request timed out.", 504
@@ -210,7 +206,7 @@ class LlamaForwarder:
                 502,
             )
         self.warn(code, status)
-        return llama_error(code, message, status)
+        return refuse_request(code, message, status)
 
     def warn(self, code: str, status: int | None = None) -> None:
         self.writer.diagnostic(
