@@ -139,7 +139,7 @@ config/
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| E1 | 1 | Call native generation without the evaluator | - | A | IN-FLIGHT | curly-lamp | - | - |
+| E1 | 1 | Call native generation without the evaluator | - | A | DONE | curly-lamp | - | - |
 | E2 | 2 | Remove generation from the evaluation API | 1 | A | PENDING | - | - | - |
 | E3 | 3 | Rename and divide the evaluator and its tests | 2 | A | PENDING | - | - | - |
 | E4 | 4 | Rename and isolate the summary generator and its caller | 2 | B | PENDING | - | - | - |
@@ -225,7 +225,7 @@ config/
   - Report: render a representative successful run and a cleanup-failure run through the production report function. Require real native and host outcomes, absent unstarted evaluator outcomes, escaped source text and explicit failures. Review the changed report against the design requirements before merge.
   - Observation, not a merge gate: on the next intended manual workflow run, read `generation-phase.json`, `generation.json`, native logs and the published job report. An evaluator row or readiness wait during generation is a failed cutover; fix this PR's implementation, not the evidence.
 - **Oracle:** Run the real generation phase with recorded native responses, evaluator configuration files absent, and no evaluator child; require the bound answer receipt and truthful native/host shutdown evidence. This does not prove live model quality, weight loading or runner speed.
-- **Execution status:** Implementation and Windows-compatible checks are complete. The read-only Linux verifier and ordinary CI check the PR candidate before merge; Windows results do not satisfy the Linux gate.
+- **Execution status:** Direct native generation, truthful process evidence and configured artifact routing are complete. The read-only Linux suite and ordinary CI verify the candidate; their evidence remains separate from Windows checks.
 
 **Table F - PR 1 decisions**
 
