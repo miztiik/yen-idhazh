@@ -4,7 +4,6 @@ import hashlib
 from datetime import timedelta
 from typing import Annotated, Final, Literal, Self
 
-from idhazh.contracts.app_config import ModelsFile
 from pydantic import AfterValidator, AwareDatetime, ConfigDict, Field, model_validator
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.serve_http.contracts.api_health import ApiHealth
@@ -23,6 +22,8 @@ from summary_evaluator.shared.contracts.base import (
 )
 from summary_evaluator.unieval.contracts.unieval_contract import DIMENSIONS
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
+
+from idhazh.contracts.app_config import ModelsFile
 
 from .host_reader import HardwareRow, MachineUsage, measurement_complete
 

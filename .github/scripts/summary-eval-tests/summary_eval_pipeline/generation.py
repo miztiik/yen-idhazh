@@ -3,6 +3,8 @@
 import json
 
 import httpx
+from pydantic import BaseModel, ConfigDict
+
 from idhazh.llm.server import (
     PROBE_FOLLOW_UP,
     PROBE_REPLY,
@@ -15,7 +17,6 @@ from idhazh.llm.server import (
     template_kwargs,
     turn_markers_from_renderings,
 )
-from pydantic import BaseModel, ConfigDict
 
 from .contracts import (
     WORKFLOW_VERSION,

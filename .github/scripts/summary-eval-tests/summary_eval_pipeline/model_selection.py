@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import Annotated, Self
 from urllib.parse import urlsplit
 
+from pydantic import Field, TypeAdapter, model_validator
+
 from idhazh.config import refuse_a_model_nothing_could_run
 from idhazh.contracts.app_config import AppConfig, ModelsFile
 from idhazh.contracts.knobs.models import ModelEntry, ModelsConfig
-from pydantic import Field, TypeAdapter, model_validator
 from utilities.model_refs import list_model_files, resolve_under_config
 
 from .contracts import ModelSelection, WorkflowContract
