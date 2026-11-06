@@ -12,8 +12,11 @@ import {
 type FingerprintOptions = Parameters<typeof createFingerprintHandler>;
 type ProbeOptions = Parameters<typeof createSampleHandler>;
 export type MachineApiInputs = {
-  fingerprint: { config: FingerprintOptions[0]; settings: FingerprintOptions[1]; options: FingerprintOptions[2] };
-  probes: { config: ProbeOptions[0]; context?: ProbeOptions[1]; report?: ProbeOptions[2] };
+  fingerprint: {
+    config: FingerprintOptions[0]; settings: FingerprintOptions[1]; options: FingerprintOptions[2];
+    diagnostics?: FingerprintOptions[3];
+  };
+  probes: { config: ProbeOptions[0]; context?: ProbeOptions[1]; report?: ProbeOptions[2]; diagnostics?: ProbeOptions[3] };
 };
 
 export async function loadMachineApiInputs(
@@ -32,8 +35,9 @@ export async function loadMachineApiInputs(
 
 export function createMachineApp(input: MachineApiInputs): ApiApplication {
   const app = new Hono<{ Bindings: ApiBindings }>();
-  const fingerprint = createFingerprintHandler(input.fingerprint.config, input.fingerprint.settings, input.fingerprint.options);
-  const probe = createSampleHandler(input.probes.config, input.probes.context, input.probes.report);
+  const fingerprint = createFingerprintHandler(input.fingerprint.config, input.fingerprint.settings,
+    input.fingerprint.options, input.fingerprint.diagnostics);
+  const probe = createSampleHandler(input.probes.config, input.probes.context, input.probes.report, input.probes.diagnostics);
   app.all(FINGERPRINT_PATH, c => fingerprint(c.req.raw));
   app.all(HEALTH_PATH, c => fingerprint(c.req.raw));
   for (const path of [SAMPLE_PATH, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH, CACHE_LATENCY_PATH]) {

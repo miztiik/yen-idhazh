@@ -85,7 +85,7 @@ Table D - Agreed article event shape
 
 | Id | Field | Type / rule |
 | --- | --- | --- |
-| D1 | CloudEvent envelope | Existing native envelope, configured planner source and `planner.progress` type; preserve original occurrence ID, time and operation carrier through the relay. |
+| D1 | CloudEvent envelope | Existing native envelope, producer-local planner source and `planner.progress` type; preserve original occurrence ID, time and operation carrier through the relay. |
 | D2 | `data.version` | Existing `FEED_INGEST_EVENT_VERSION`, currently `2026-11-05`; no second version field. |
 | D3 | `data.run_id` | Existing `RunIdSchema`; actual captured run. |
 | D4 | `data.operation` | `fetch`, `parse` or `quality`; quality rejection uses the existing parse operation context. |
@@ -215,9 +215,9 @@ Table I - Delivery allowlist and mapping
 
 | Id | Native relay field / server field | Type / rule |
 | --- | --- | --- |
-| I1 | Relay `event` | Literal `safe_persist_http_completed`; selects the existing configured completion event type, not a new type. |
-| I2 | Relay `run_number` -> completion `data.run_id` | Existing numeric-string `SafePersistHttpRequestSchema.shape.runNumber`; actual request run, no additional alias or supervision fallback. |
-| I3 | Relay `attempt` -> completion `data.attempt` | Existing positive integer attempt; actual request value. |
+| I1 | Native event `type` | Literal `safe_persist_http_completed`; the handler constructs this existing completion event type. |
+| I2 | Factory `runNumber` -> completion `data.run_id` | Existing numeric-string `SafePersistHttpRequestSchema.shape.runNumber`; actual request run, no additional alias or supervision fallback. |
+| I3 | Completion `data.attempt` | Existing positive integer attempt; actual request value. |
 | I4 | Relay/completion `status` | Existing `MetadataDeliveryResultSchema.shape.status`: `landed`, `already-on-main`, `no-changes`, `failed`. |
 | I5 | Relay/completion `commit` | Existing native lowercase hexadecimal commit string, 40-64 characters, or null. |
 | I6 | Relay/completion `files` | Existing native nonnegative integer file count; do not copy paths. |
@@ -235,11 +235,11 @@ Table J - Delivery implementation sequence
 | Id | Decision | Authority |
 | --- | --- | --- |
 | J1 | Declare native relay/completion shapes and changed lifecycle diagnostic metadata first. Stamp them `2026-11-05`, add one-line changelogs and current-only rules. Do not change the separate saved `ServerEvidenceSchema`. | Native diagnostic authority. |
-| J2 | Derive request/result field validators from `services/feed-ingest-plan/scripts/feed-ingest-plan-delivery-result.ts` and context validation from the existing common contract. API server already depends on the feed package; do not add a reverse dependency or copy the status vocabulary. | Existing package and contract graph. |
+| J2 | Derive request/result field validators from `services/feed-ingest-plan/scripts/feed-ingest-plan-delivery-result.ts` and context validation from the existing common contract. The feed producer owns its contracts; shared hosting consumes typed decoder results and imports no native package. Do not copy the status vocabulary. | Existing package and contract graph. |
 | J3 | The handler passes the exact context already allocated by `commandContext(captureRequestRuntime(...))` to its diagnostic. Its native delivery call, HTTP result and receipt remain unchanged. | Existing receiving operation. |
-| J4 | The relay/writer accepts only the explicit allowlist in Table I. Validate the native request/result before projection. Missing or invalid completion context is an explicit diagnostic error, not a fallback to supervision or a newly allocated child. | Diagnostic contract and request isolation. |
+| J4 | The relay/writer accepts only the explicit native allowlist in Table I. Validate the event and require its carrier to match the native receiving context. Missing or invalid context is an explicit diagnostic error, not a fallback to supervision or a newly allocated child. | Diagnostic contract and request isolation. |
 | J5 | `createCloudEvent` receives that exact request context. Retain full context in completion data as well as its carrier; keep lifecycle writes on the existing supervision context. | Existing operation/event meanings. |
-| J6 | Keep configured sources, event types and server names, process-ID handling and other module projections unchanged. Do not add a tracing runtime or arbitrary diagnostic spreading. | Existing server contract. |
+| J6 | Keep producer-local source values, event types, server names and process-ID handling unchanged. Relay accepted native application events without lifecycle conversion; retain ordinary planner failure projection. Do not add a tracing runtime or arbitrary diagnostic spreading. | Existing server contract. |
 | J7 | Leave native HTTP schemas/client, delivery receipts, ledgers and behavior unchanged. Completion diagnostics do not become the delivery confirmation authority. | Existing native result and receipt readers. |
 | J8 | One behavioral commit: contract -> completion reader/builder -> handler/relay wiring -> real integration assertions/docs. Both delivery faults land together; no structural refactoring is required. | One coherent completion outcome. |
 | J9 | Both rows use current-only diagnostic readers/writers together. Historical files/events remain untouched; no legacy aliases, dual readers, migrations or backfills. Unchanged ledgers/native results retain their existing readers. | Diagnostic cutover scope. |

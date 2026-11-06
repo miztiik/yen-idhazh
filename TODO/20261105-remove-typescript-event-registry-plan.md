@@ -80,7 +80,7 @@ Table F - PR sequence
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | F1 | 1 | Remove the registry and localize existing producer identities | - | A | DONE | urban-goggles | - | - |
 | F2 | 2 | Move native diagnostic contracts to producers and expand relay readers | 1 | B | DONE | urban-goggles | - | - |
-| F3 | 3 | Emit native events across every API and retire legacy translation | 2 | C | PENDING | - | - | - |
+| F3 | 3 | Emit native events across every API and retire legacy translation | 2 | C | DONE | urban-goggles | - | - |
 
 ## 2. Row #1 - Remove the registry and localize existing producer identities
 
@@ -237,20 +237,24 @@ Table J - Row 2 rejected alternatives
   - `services/host-probes/src/api/cache-latency-route.ts`
   - `services/host-probes/src/api/command-body.ts`
   - `services/host-probes/src/api/create-machine-app.ts`
+  - `services/host-probes/src/api/read-machine-api-diagnostic.ts`
   - `services/host-probes/test/native-events.test.ts`
   - `services/host-probes/test/probe.test.ts`
   - `services/host-probes/test/serve-machine-apis.test.ts`
   - `services/feed-ingest-plan/scripts/safe-persist-http-api.ts`
   - `services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts`
   - `services/feed-ingest-plan/scripts/create-feed-api-app.ts`
+  - `services/feed-ingest-plan/scripts/read-feed-api-diagnostic.ts`
   - `services/feed-ingest-plan/test/safe-persist-http.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-finalization.test.ts`
   - `services/feed-ingest-plan/test/serve-feed-apis.test.ts`
   - `services/feed-ingest-plan/test/relay-feed-api-events.test.ts`
   - `services/feed-ingest-plan/test/retain-api-profiles.test.ts`
   - `services/serve-pipeline-apis/src/create-api-app.ts`
+  - `services/serve-pipeline-apis/src/create-request-failure-event.ts`
   - `services/serve-pipeline-apis/src/write-server-event.ts`
   - `services/serve-pipeline-apis/test/server-events.test.ts`
+  - `services/serve-pipeline-apis/test/supervise-http-child.test.ts`
   - `docs/architecture/contracts/identity.md`
   - `docs/architecture/sources/feed-operator-api.md`
   - `docs/reference/serve-pipeline-apis.md`
@@ -265,7 +269,7 @@ Table J - Row 2 rejected alternatives
 - **Acceptance gates - local:**
   - Inspect the shared selector; run declared checks for fingerprint, probes, planner and composition.
   - Extend existing real handler cases, not a separate fake implementation: fingerprint write/disabled/failure; probe sample/start/stop/cache and safe failures; direct delivery and actual finalization; real composed listener and its error boundary.
-  - Run fingerprint `native-events.test.ts` and `fingerprint-persistence.test.ts`; probes `native-events.test.ts`, `probe.test.ts` and `serve-machine-apis.test.ts`; planner `safe-persist-http.test.ts`, `feed-ingest-plan-finalization.test.ts`, `serve-feed-apis.test.ts`, `relay-feed-api-events.test.ts` and `retain-api-profiles.test.ts`; shared hosting `server-events.test.ts`.
+  - Run fingerprint `native-events.test.ts` and `fingerprint-persistence.test.ts`; probes `native-events.test.ts`, `probe.test.ts` and `serve-machine-apis.test.ts`; planner `safe-persist-http.test.ts`, `feed-ingest-plan-finalization.test.ts`, `serve-feed-apis.test.ts`, `relay-feed-api-events.test.ts` and `retain-api-profiles.test.ts`; shared hosting `server-events.test.ts` and `supervise-http-child.test.ts`.
   - Use existing recorded host/process inputs and actual ephemeral outputs. Capture through an explicit event-output boundary or real stderr; do not patch business logic, create new disk recordings or scan directories.
   - Verify each Table C API through an actual emitting handler/process case. Reuse unchanged row-1 planner, summarizer and workflow records only when their tested inputs remain unchanged; otherwise rerun the affected selection.
   - Verify enabled profile start/stop carriers against their real operation, including conflicting stop headers and repeated stop. Disabled work must not create handles or measurements. A repeated event occurrence may be new while its retained profile operation stays the same.

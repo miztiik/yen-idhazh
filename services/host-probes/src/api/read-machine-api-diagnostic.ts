@@ -1,6 +1,5 @@
 /** Project native machine diagnostics without forwarding bodies or duplicating profile measurements. */
 import type { ApiDiagnostic } from "@idhazh/serve-pipeline-apis/events";
-import { z } from "zod";
 import { FingerprintEventSchema } from "@idhazh/host-fingerprints/diagnostic";
 import type { FingerprintDiagnosticData } from "@idhazh/host-fingerprints/diagnostic";
 import { ProbeEventSchema } from "./create-probe-event";
@@ -9,14 +8,6 @@ import { TaskProfileSchema } from "../task-profile/profile-schema";
 import type { TaskProfile } from "../task-profile/profile-schema";
 
 export type MachineDiagnosticData = FingerprintDiagnosticData | ProbeDiagnosticData;
-const LegacyMachineFailureSchema = z.strictObject({
-  event: z.enum([
-    "host_fingerprint_failed", "host_probe_failed", "host_probe_cleanup_failed",
-    "host_probe_body_cleanup_failed", "task_profile_failed",
-  ]),
-  error: z.string(), detail: z.string().optional(),
-  code: z.string().regex(/^[A-Z][A-Z0-9_]*$/).optional(),
-});
 
 export function readMachineApiDiagnostic(raw: unknown): ApiDiagnostic<TaskProfile, MachineDiagnosticData> {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return { kind: "invalid" };
@@ -40,8 +31,5 @@ export function readMachineApiDiagnostic(raw: unknown): ApiDiagnostic<TaskProfil
       ? { kind: "profile", profile: profile.data, operation: profile.data }
       : { kind: "invalid" };
   }
-  const failure = LegacyMachineFailureSchema.safeParse(raw);
-  return failure.success
-    ? { kind: "event", data: { phase: "module_failed", severity: "error", code: failure.data.code ?? "API_OPERATION_FAILED" } }
-    : { kind: "invalid" };
+  return { kind: "invalid" };
 }

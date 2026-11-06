@@ -40,37 +40,6 @@ async function writeEvents(directory: string, run: ServerRun, moduleLine?: strin
   return { result: JSON.parse(output), error, pid: child.pid };
 }
 
-test("delivery completions retain native facts and full request context instead of supervision", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "api-delivery-events-"));
-  const run = { run_id: "700", attempt: 3, started_at: "2026-11-05T00:00:00Z", context: createRootContext() };
-  const linked = createRootContext();
-  const context = createChildContext(createRootContext({ traceState: "diagnostics=retained" }), {
-    links: [{ traceId: linked.traceId, spanId: linked.spanId }],
-  });
-  const diagnostic = {
-    event: "safe_persist_http_completed", run_number: "701", attempt: 4,
-    status: "landed", commit: "a".repeat(40), files: 2, context,
-  };
-  try {
-    const result = await writeEvents(directory, run, JSON.stringify(diagnostic), undefined, "delivery");
-    const events = result.error.trim().split("\n").map(line => JSON.parse(line));
-    const completion = events.find(event => event.type === diagnostic.event);
-    expect(completion.data).toEqual({
-      server_name: "hono-server", group: "delivery", run_id: diagnostic.run_number, attempt: diagnostic.attempt,
-      phase: "operation_completed", status: diagnostic.status, commit: diagnostic.commit, files: diagnostic.files,
-      context, severity: "info", duration_ms: null, exit_code: null, code: null,
-    });
-    expect(completion).toMatchObject(writeTraceContext(context));
-    expect(completion.source).toBe("/fixtures/typescript-api");
-    const lifecycle = events.filter(event => event.type === "hono.server")
-      .map(event => readCloudEvent(event, value => ServerEventDataSchema.parse(value)));
-    expect(lifecycle.map(event => event.data.phase)).toEqual(["starting", "ready", "stopped"]);
-    expect(lifecycle.every(event => event.traceparent === lifecycle[0]!.traceparent)).toBe(true);
-    expect(lifecycle[0]!.traceparent).not.toBe(completion.traceparent);
-    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(result.error);
-  } finally { await rm(directory, { recursive: true, force: true }); }
-});
-
 test("completion and lifecycle shapes remain strict while native statuses and ancillary fields retain their meaning", () => {
   const paths = ["raw/generated.parquet"];
   const nativeResults = [
@@ -108,35 +77,6 @@ test("completion and lifecycle shapes remain strict while native statuses and an
     expect(ServerEventDataSchema.safeParse({ ...lifecycle, context: input.context }).success).toBe(false);
     expect(ServerEventDataSchema.safeParse({ ...lifecycle, status: result.status }).success).toBe(false);
   }
-});
-
-test("invalid or missing completion context and unlisted fields produce safe typed warnings, not fallback completions", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "api-invalid-delivery-"));
-  const run = { run_id: "700", attempt: 3, started_at: "2026-11-05T00:00:00Z", context: createRootContext() };
-  const diagnostic = {
-    event: "safe_persist_http_completed", run_number: "701", attempt: 4,
-    status: "no-changes", commit: null, files: 0, context: createRootContext(),
-  };
-  const invalid = [
-    { context: undefined }, { context: null }, { context: { ...diagnostic.context, spanId: "0".repeat(16) } },
-    { context: { ...diagnostic.context, links: undefined } },
-    { paths: ["PRIVATE_PATH"] }, { headers: { authorization: "PRIVATE_HEADER" } }, { pid: process.pid },
-    { status: "PRIVATE_STATUS" }, { commit: "PRIVATE_COMMIT" }, { files: -1 }, { run_number: undefined },
-    { attempt: 0 },
-  ];
-  try {
-    const result = await writeEvents(directory, run, undefined,
-      invalid.map(fields => JSON.stringify({ ...diagnostic, ...fields })), "delivery");
-    const events = result.error.trim().split("\n")
-      .map(line => readCloudEvent(JSON.parse(line), value => ServerEventDataSchema.parse(value)));
-    expect(events.filter(event => event.data.phase === "module_failed")).toHaveLength(invalid.length);
-    expect(events.filter(event => event.data.phase === "module_failed").every(event =>
-      event.data.severity === "warning" && event.data.code === "CHILD_DIAGNOSTIC_INVALID")).toBe(true);
-    expect(events.every(event => event.type === "hono.server")).toBe(true);
-    expect(result.error).not.toContain("PRIVATE_");
-    expect(result.error).not.toContain('"pid"');
-    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(result.error);
-  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test("native delivery and machine events retain their exact producer envelopes through feed relay", async () => {

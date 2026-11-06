@@ -135,8 +135,9 @@ supervised task. Its group remains `delivery` and phase remains
 `operation_completed`. Severity and nullable duration, exit code and safe code
 keep their existing validation and defaults.
 
-The complete native request `context` appears in completion data and supplies
-the CloudEvent carrier without allocating another operation. The writer
+The native delivery handler creates the complete event before relay. Its request
+`context` appears in completion data and supplies the CloudEvent carrier without
+allocating another operation. The writer
 preserves its execution, operation, optional parent and trace state, and
 required input links under the
 [shared identity contract](../architecture/contracts/identity.md#4-native-typescript-event-and-operation-metadata).
@@ -163,9 +164,10 @@ Shared hosting validates its own `typescript_api_request_failed` subtype,
 with only `API_OPERATION_FAILED` in its data. It imports no native package.
 Accepted native envelopes are mirrored unchanged, including source, occurrence
 ID, UTC time, carrier and data. Invalid or unknown types produce
-`CHILD_DIAGNOSTIC_INVALID`, not a replacement event. Existing plain diagnostic
-writers retain their strict transition readers; this reader expansion does
-not change the HTTP handlers or claim their native emission.
+`CHILD_DIAGNOSTIC_INVALID`, not a replacement event. Every API in the
+[native support matrix](../architecture/contracts/identity.md#native-api-support)
+now constructs its own application events. Plain completion/failure translation
+is removed; only the declared private profile/control transports remain separate.
 Article reports recognize rejection markers only in server lifecycle events;
 a native delivery code with the same spelling does not create an evidence gap.
 Ordinary planner failures still use the body-free lifecycle projection.

@@ -312,27 +312,30 @@ another operation for logging or use the server's supervision operation.
 The [shared identity contract](../contracts/identity.md#4-native-typescript-event-and-operation-metadata)
 defines that context and its carrier.
 
-[`SafePersistHttpDiagnosticSchema`](../../../services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts)
-owns this strict current-only relay shape and derives request/result field
-validators from their native authorities. The same native module declares
-`DeliveryCompletionDiagnosticSchema` and constructs its completion CloudEvent
-from the native run number, attempt, result and receiving context, without
-importing a server lifecycle contract. Paths, process IDs and arbitrary
+[`DeliveryCompletionDiagnosticSchema`](../../../services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts)
+owns this strict current-only payload and derives request/result field
+validators from their native authorities. The handler constructs its CloudEvent
+from the native run number, attempt, result and receiving context before any
+supervisor reads it, without importing a server lifecycle contract. Paths, process IDs and arbitrary
 fields are not diagnostic fields. `DeliveryEventSchema` accepts native
 completion and failure envelopes. A completion carrier must exactly match
 `writeTraceContext(data.context)`; failure data contains only the native
 planner error code. Accepted native envelopes retain their original
-occurrence and source. The current private completion packet is also read
-by the feed decoder. The
+occurrence and source. The old plain completion packet and its translator are
+removed. The
 [server writer](../../reference/serve-pipeline-apis.md#diagnostics-and-current-task-evidence)
 retains these facts and context in a separate completion event, not a lifecycle
 payload. The native HTTP result and saved `delivery-result.json`, including
 their exact paths, remain unchanged and remain the delivery authority.
 The API and client use the existing `writeJsonLine` helper to write one JSON
 object per stderr line.
-`safe_persist_http_failed` and
-`safe_persist_http_client_failed` identify server and transport failures without
-article bodies. An unconfirmed response or failed child shutdown records a failed
+`safe_persist_http_failed` is a native event with only the declared planner
+error code and the real receiving operation. Detailed sanitized failure
+evidence stays in its existing response/evidence surfaces.
+`safe_persist_http_client_failed` remains the separate client transport record.
+The [native API support matrix](../contracts/identity.md#native-api-support)
+defines the complete API standard and its private transport boundaries.
+An unconfirmed response or failed child shutdown records a failed
 receipt, not a successful one. Report generation and artifact preparation still
 run independently; [the workflow guide](../../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures)
 defines recovery and upload behavior.

@@ -1,5 +1,8 @@
 /** How does a native-built application acquire one listener, cancellation and awaited cleanup? */
 import { Hono } from "hono";
+import { createChildContext, createRootContext, readTraceContext } from "@idhazh/common-contracts";
+import { createRequestFailureEvent } from "./create-request-failure-event";
+import type { RequestFailureEvent } from "./create-request-failure-event";
 import { API_HEALTH_PATH } from "./api-startup";
 import type { ApiReady } from "./api-startup";
 import { apiOrigin } from "./load-settings";
@@ -18,7 +21,9 @@ export type ApiApplication = {
 
 export function createApiApp(input: {
   identity: ApiReady; create: (signal: AbortSignal) => ApiApplication;
+  writeEvent?: (event: RequestFailureEvent) => void;
 }): ApiApplication {
+  const writeEvent = input.writeEvent ?? ((event: RequestFailureEvent) => { console.error(JSON.stringify(event)); });
   const app = new Hono<{ Bindings: ApiBindings }>();
   const cancellation = new AbortController();
   const pending = new Set<Promise<Response>>();
@@ -26,7 +31,11 @@ export function createApiApp(input: {
   app.get(API_HEALTH_PATH, c => c.json({ identity: input.identity }, 200, { "Cache-Control": "no-store" }));
   app.all("*", c => native.fetch(c.req.raw, c.env));
   app.onError((_error, c) => {
-    console.error(JSON.stringify({ event: "typescript_api_request_failed", code: "API_OPERATION_FAILED" }));
+    const parent = readTraceContext({
+      traceparent: c.req.header("traceparent"), tracestate: c.req.header("tracestate"),
+    });
+    const context = parent === undefined ? createRootContext() : createChildContext(parent);
+    writeEvent(createRequestFailureEvent({ context }));
     return c.json({ code: "API_OPERATION_FAILED" }, 500);
   });
   let closed = false;
