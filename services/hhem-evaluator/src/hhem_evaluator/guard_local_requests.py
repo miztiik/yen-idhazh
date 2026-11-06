@@ -11,7 +11,7 @@ from .control_service import EvaluationController
 from .control_unieval import UnievalController
 from .dispatch_evaluation import dispatch_evaluation
 from .dispatch_unieval import dispatch_unieval
-from .forward_llama import llama_error
+from .refuse_request import refuse_request
 from .unieval_router import UNIEVAL_PATH
 
 
@@ -53,7 +53,7 @@ class GuardLocalRequests:
             response = (
                 await dispatch_evaluation(request, self.controller, error)
                 if scope["path"] == EVALUATE_PATH and self.controller is not None
-                else llama_error(error.code, error.message, 403)
+                else refuse_request(error.code, error.message, 403)
             )
             await response(scope, receive, send)
             return

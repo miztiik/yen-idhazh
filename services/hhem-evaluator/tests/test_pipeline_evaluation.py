@@ -13,6 +13,7 @@ from summary_eval_pipeline.http import call_local_api
 from summary_eval_pipeline.phase_result import build_evidence
 from summary_eval_pipeline.settings import load_pipeline_settings
 
+from hhem_evaluator.contracts.base import EVALUATE_PATH, HHEM_HEALTH_PATH
 from hhem_evaluator.contracts.evaluate_request import EvaluateRequest
 from hhem_evaluator.contracts.service_health import ServiceHealth
 
@@ -48,7 +49,7 @@ def test_actual_handlers_preserve_scores_including_error_http_results(
                 evaluation_timeouts: list[object] = []
 
                 async def observe_timeout(sent: httpx.Request) -> None:
-                    if sent.url.path.endswith("/summary-eval-hhem"):
+                    if sent.url.path == EVALUATE_PATH:
                         evaluation_timeouts.append(sent.extensions["timeout"]["read"])
 
                 service.client.event_hooks["request"].append(observe_timeout)
@@ -183,7 +184,7 @@ def test_health_waits_for_actual_model_readiness_without_sending_a_score_request
 def test_actual_health_response_enforces_the_exact_byte_allowance() -> None:
     async def check() -> None:
         async with running_service() as service:
-            url = "http://127.0.0.1:3010/api/2026-11-02/health"
+            url = "http://127.0.0.1:3010" + HHEM_HEALTH_PATH
             size = len((await service.client.get(url)).content)
             pipeline = load_pipeline_settings(REPOSITORY)
             for allowance, allowed in ((size, True), (size - 1, False)):

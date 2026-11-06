@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from hhem_evaluator.contracts.api_settings import ApiSettings
-from hhem_evaluator.contracts.base import API_PREFIX, EVALUATE_PATH
+from hhem_evaluator.contracts.base import API_HEALTH_PATH, EVALUATE_PATH, HHEM_HEALTH_PATH
 from hhem_evaluator.contracts.evaluation_result import EvaluationResult
 from hhem_evaluator.contracts.unieval_result import UnievalResult
 from hhem_evaluator.emit_events import EventWriter
@@ -33,12 +33,12 @@ def test_real_component_health_and_reference_identity_are_bound_to_actual_work()
         inputs, _, identity = read_unieval_recordings()
         async with running_unieval() as (client, worker, _):
             health = await client.get(UNIEVAL_HEALTH_PATH)
-            shared = await client.get("/health")
+            shared = await client.get(API_HEALTH_PATH)
             assert health.status_code == shared.status_code == 200
             assert worker.worker is not None
             assert shared.json()["unieval"]["worker"]["pid"] == worker.worker.pid
             assert shared.json()["hhem"]["status"] == "disabled"
-            assert (await client.get("/api/2026-11-02/health")).status_code == 404
+            assert (await client.get(HHEM_HEALTH_PATH)).status_code == 404
             response = await client.post(UNIEVAL_PATH, json=inputs.cases[1].request.model_dump())
             result = UnievalResult.model_validate_json(response.content)
             assert result.model == identity
@@ -106,8 +106,8 @@ def test_unieval_worker_failure_does_not_close_or_block_the_hhem_component(
                         )
                         assert response.status_code == 500
                     assert unieval_worker.exit_confirmed
-                    assert (await client.get("/health")).status_code == 503
-                    assert (await client.get(f"{API_PREFIX}/health")).status_code == 200
+                    assert (await client.get(API_HEALTH_PATH)).status_code == 503
+                    assert (await client.get(HHEM_HEALTH_PATH)).status_code == 200
                     hhem_inputs, predictions, _ = read_recordings(REPOSITORY)
                     response = await client.post(
                         EVALUATE_PATH,
@@ -152,7 +152,7 @@ def test_idle_exit_refuses_admission_before_reading_input_and_joins_the_child() 
             assert result.errors[0].code == "WORKER_EXITED"
             assert not consumed
             assert worker.exit_confirmed and worker.last_exit == (pid, 0)
-            assert (await client.get("/health")).status_code == 503
+            assert (await client.get(API_HEALTH_PATH)).status_code == 503
 
     asyncio.run(check())
 

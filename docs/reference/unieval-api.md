@@ -1,6 +1,6 @@
 # UniEval evaluation API
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-06
 
 Which requests, results and settings belong to the local four-score API.
 The [architecture](../architecture/evaluation/unieval-api.md) defines score
@@ -18,14 +18,16 @@ Table A - Native operations
 
 | Id | Route | Meaning |
 | --- | --- | --- |
-| A1 | `POST /api/2026-11-02/summary-eval-unieval` | Perform one synchronous four-dimension evaluation. |
-| A2 | `GET /api/2026-11-02/summary-eval-unieval/health` | Observe this component's actual model, worker, queue and failure state. |
-| A3 | `GET /health` | Shared application readiness, with independent HHEM, llama and UniEval observations. |
+| A1 | `POST /api/2026-11-05/evaluate-summary-unieval` | Perform one synchronous four-dimension evaluation. |
+| A2 | `GET /api/2026-11-05/get-unieval-health` | Observe this component's actual model, worker, queue and failure state. |
+| A3 | `GET /api/2026-11-05/get-summary-evaluator-health` | Shared application readiness, with independent HHEM and UniEval observations. |
 
 `config/fastapi-server.json` owns the listener, logging and explicit
 `enabled_routes`. Add `unieval` for the invocation that needs it. Disabled
 operation routes return HTTP 404 and no model/configuration is loaded.
-The inherited API prefix is a protocol path, not another listener.
+The API prefix is a protocol path, not another listener. The
+[routing convention](api-routing.md) separates its date from the unchanged
+native UniEval scoring schema.
 
 ## Request
 

@@ -10,6 +10,7 @@ from summary_eval_pipeline.native_log import NativeDiagnosticData
 
 from hhem_evaluator.contracts.evaluation_event import EventDetails
 from hhem_evaluator.contracts.lifecycle_fields import LifecycleFields
+from hhem_evaluator.contracts.server_contract import SERVER_SCHEMA_VERSION
 from hhem_evaluator.contracts.server_event import ApiDiagnosticData, ServerEvent
 from hhem_evaluator.contracts.service_settings import StartupContext
 from hhem_evaluator.emit_events import EventEmitter, EventWriter
@@ -24,7 +25,7 @@ def test_native_event_has_one_current_cloudevents_occurrence_and_no_legacy_reade
     assert event.id == native.event_id and event.time == native.occurred_at
     assert event.source == "/fastapi-server" and event.specversion == "1.0"
     assert ServerEvent.model_validate_json(event.model_dump_json()) == event
-    assert ServerEvent.model_json_schema()["version"] == "2026-11-04"
+    assert ServerEvent.model_json_schema()["version"] == SERVER_SCHEMA_VERSION
     with pytest.raises(ValidationError):
         ServerEvent.model_validate_json(native.model_dump_json())
     with pytest.raises(ValidationError):
@@ -40,13 +41,15 @@ def test_independent_lifecycle_logs_share_fields_but_not_component_ownership() -
     }
     common = LifecycleFields.model_validate(fields)
     native = NativeDiagnosticData.model_validate({**fields, "component": "llama"})
-    api = ApiDiagnosticData.model_validate({**fields, "component": "llama"})
+    api = ApiDiagnosticData.model_validate({**fields, "component": "unieval"})
     assert native.model_dump(exclude={"component"}) == common.model_dump()
     assert api.model_dump(exclude={"component"}) == common.model_dump()
     assert set(LifecycleFields.model_fields) == set(ApiDiagnosticData.model_fields) - {"component"}
     for component in ("api", "unieval"):
         with pytest.raises(ValidationError):
             NativeDiagnosticData.model_validate({**fields, "component": component})
+    with pytest.raises(ValidationError):
+        ApiDiagnosticData.model_validate({**fields, "component": "llama"})
 
 
 def test_live_records_and_named_file_match_and_restarts_append(tmp_path: Path) -> None:

@@ -1,6 +1,6 @@
 # HHEM evaluation API
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 Which fields, identities and startup settings the independent HHEM evaluator
 accepts. The HHEM component serves synchronous local CPU evaluations with one owned
@@ -19,12 +19,15 @@ no tensor, configuration or service-settings digests. The recording reader
 verifies historical fixture provenance against the original complete JSON,
 then reads its revision and runtime fields. It does not rewrite recorded scores.
 
-The protocol reserves `GET /api/2026-11-02/health`,
-`POST /api/2026-11-02/summary-eval-hhem` and `GET /api/2026-11-02/openapi.json`.
+The HTTP protocol reserves `GET /api/2026-11-05/get-hhem-health`,
+`POST /api/2026-11-05/evaluate-summary-hhem` and the shared
+`GET /api/2026-11-05/get-summary-evaluator-schema`.
 There is no `/evaluate` alias. These HHEM routes are registered only when the
 shared application's explicit component selection includes `hhem`.
-The request body's version comes from that route, not a body field. These
-are protocol names, not listener settings. No interactive documentation UI,
+The request has no version field. HHEM's scoring schema remains
+`2026-11-02`, independently of the HTTP route date and the shared application's
+schema. These are protocol names, not listener settings; the
+[routing convention](api-routing.md) owns that distinction. No interactive documentation UI,
 streaming, polling or result-history endpoint is defined.
 
 These are transient contracts. The caller supplies both texts and saves the
@@ -252,7 +255,7 @@ that code belongs to the evaluator package.
 ## See also
 
 - [../how-to/run-the-gates.md#independent-python-service-contracts](../how-to/run-the-gates.md#independent-python-service-contracts) - preparation and model-free checks.
-- [fastapi-server.md](fastapi-server.md) - shared readiness, native llama forwarding and diagnostic files.
+- [fastapi-server.md](fastapi-server.md) - shared evaluator readiness and diagnostic files.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - native schema ownership.
 - [../architecture/contracts/identity.md#6-hhem-execution-and-event-identity](../architecture/contracts/identity.md#6-hhem-execution-and-event-identity) - caller, execution and event identities.
 - [repository-layout.md](repository-layout.md) - package, configuration and fixture locations.

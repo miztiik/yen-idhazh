@@ -2,6 +2,7 @@
 
 import asyncio
 
+from hhem_evaluator.contracts.base import API_HEALTH_PATH
 from hhem_evaluator.contracts.unieval_result import UnievalResult
 from hhem_evaluator.unieval_router import UNIEVAL_PATH
 
@@ -34,6 +35,6 @@ def test_timed_out_matrix_preserves_three_scores_and_confirms_actual_worker_exit
             assert result.scores.relevance is not None
             assert result.errors[0].code == "EVALUATION_TIMEOUT"
             assert worker.exit_confirmed and worker.last_exit is not None
-            assert (await client.get("/health")).status_code == 503
+            assert (await client.get(API_HEALTH_PATH)).status_code == 503
 
     asyncio.run(check())

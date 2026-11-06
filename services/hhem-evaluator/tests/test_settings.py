@@ -17,7 +17,7 @@ from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupCo
 from hhem_evaluator.load_settings import SettingsLoadError, load_settings
 from hhem_evaluator.resolve_request import RequestResolutionError, resolve_request
 
-from .contract_examples import API_SETTINGS_FILE, SETTINGS_FILE, read_contract
+from .contract_examples import API_SETTINGS_FILE, REPOSITORY, SETTINGS_FILE, read_contract
 
 
 def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model() -> None:
@@ -67,9 +67,25 @@ def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model
             sys.executable,
             "-I",
             "-c",
-            "import importlib.util; import hhem_evaluator.serve_api; "
+            "import importlib.util; import io; import sys; "
+            "from pathlib import Path; "
+            "from hhem_evaluator.api_settings import load_api_settings; "
+            "from hhem_evaluator.emit_events import EventWriter; "
+            "from hhem_evaluator.load_settings import load_settings; "
+            "from hhem_evaluator.serve_api import create_app; "
             "assert importlib.util.find_spec('idhazh') is None; "
-            "assert importlib.util.find_spec('torch') is None",
+            "assert importlib.util.find_spec('torch') is None; "
+            "api = load_api_settings(Path(sys.argv[1])); "
+            "root = Path(sys.argv[2]); "
+            "settings = load_settings(Path(sys.argv[3]), api); "
+            "writer = EventWriter(api.logging, io.StringIO()); "
+            "app = create_app(api, settings, root, writer=writer); "
+            "assert app.state.controller.worker.process is None; "
+            "assert app.state.unieval.worker.process is None; "
+            "assert not {'torch', 'transformers', 'nltk'} & sys.modules.keys()",
+            str(API_SETTINGS_FILE),
+            str(REPOSITORY),
+            str(SETTINGS_FILE),
         ],
         capture_output=True,
         text=True,
@@ -271,7 +287,7 @@ def test_shared_listener_is_the_only_authority_and_disabled_routes_are_explicit(
 ) -> None:
     shared = load_api_settings(API_SETTINGS_FILE)
     assert shared.listener.host == "127.0.0.1" and shared.listener.port == 3010
-    assert shared.enabled_routes == ("hhem", "llama", "unieval")
+    assert shared.enabled_routes == ("hhem", "unieval")
     selected = ApiSettings.model_validate_json(
         shared.model_copy(
             update={
@@ -284,6 +300,49 @@ def test_shared_listener_is_the_only_authority_and_disabled_routes_are_explicit(
     assert frozen.enabled == ("hhem" in routes)
     assert frozen.listener.port == 3011
     assert load_settings(SETTINGS_FILE).listener.port == 3010
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"enabled_routes": ["llama"]},
+        {"enabled_routes": ["hhem", "llama"]},
+        {"llama": {"connect_timeout_ms": 5000}},
+        {"version": "2026-11-04"},
+    ],
+)
+def test_retired_generation_settings_and_previous_application_version_are_refused(
+    change: dict[str, object],
+) -> None:
+    shared = load_api_settings(API_SETTINGS_FILE)
+    with pytest.raises(ValidationError):
+        ApiSettings.model_validate_json(json.dumps({**shared.model_dump(mode="json"), **change}))
+
+
+@pytest.mark.parametrize("options", [["--routes", "llama"], ["--model-config", "retired.json"]])
+def test_retired_generation_cli_values_are_refused_before_configuration_reads(
+    options: list[str], tmp_path: Path
+) -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-m",
+            "hhem_evaluator",
+            "--root",
+            str(tmp_path),
+            "--settings",
+            str(tmp_path / "absent.json"),
+            *options,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "invalid choice" in result.stderr or "unrecognized arguments" in result.stderr
+    assert "INVALID_SERVER_SETTINGS" not in result.stderr
 
 
 @pytest.mark.parametrize("field", ["enabled", "listener", "logging"])

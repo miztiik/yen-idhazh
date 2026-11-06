@@ -17,7 +17,7 @@ from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_eval_pipeline.storage import read_result, write_result
 
 from hhem_evaluator.contracts.api_health import ApiHealth
-from hhem_evaluator.contracts.base import EVALUATE_PATH
+from hhem_evaluator.contracts.base import API_HEALTH_PATH, EVALUATE_PATH
 from hhem_evaluator.contracts.unieval_settings import UnievalSettings
 from hhem_evaluator.unieval_router import UNIEVAL_PATH
 
@@ -66,7 +66,7 @@ def test_native_load_failure_and_slow_join_retain_health_error_and_ready_hhem_re
                 scoring_paths.append(request.url.path)
 
         async def release_failed_load(response: httpx.Response) -> None:
-            if response.request.url.path != "/health":
+            if response.request.url.path != API_HEALTH_PATH:
                 return
             observed = ApiHealth.model_validate_json(await response.aread())
             if observed.hhem.status == "ready" and observed.unieval.status == "loading":

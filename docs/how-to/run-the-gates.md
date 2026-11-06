@@ -235,7 +235,7 @@ Push-Location ..\..
 uv run --project .\services\hhem-evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
 Pop-Location
 uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline
-uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test_event_ids.py tests/test_llama_contracts.py tests/test_server_events.py
+uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test_event_ids.py tests/test_server_events.py
 ```
 
 If Bun cannot copy the local writer dependency on Windows, repeat its locked
@@ -256,7 +256,7 @@ These checks certify contracts and configuration, not model loading, scoring
 by the real model. For a runtime change, use one combined selected invocation:
 
 ```powershell
-uv run --frozen pytest tests/test_windows.py tests/test_scoring.py tests/test_api.py tests/test_llama_api.py tests/test_server_lifecycle.py tests/test_worker_lifecycle.py tests/test_text_boundaries.py
+uv run --frozen pytest tests/test_windows.py tests/test_scoring.py tests/test_api.py tests/test_server_lifecycle.py tests/test_worker_lifecycle.py tests/test_text_boundaries.py
 ```
 
 The runtime cases compose the actual ASGI lifespan, owned multiprocessing byte
@@ -264,14 +264,15 @@ pipes and recorded predictions at the model boundary. The primary/full timeout
 case must retain the exact primary maximum, confirm the old PID's exit, keep
 queued identities and deadlines, and load the same replacement identity.
 No ordinary test opens an HTTP listener or downloads model assets.
-Llama cases replay a named native model response at the HTTPX boundary while
-using the real shared application, request validation, admission and client
-cleanup. They prove fixed-origin forwarding, response/status retention and
-independent health, not live model execution. File-mirror cases use real
+The evaluator application has no generation route or client lifespan.
+Direct native generation cases live with the workflow and replay the named
+model response at the HTTPX boundary; they do not start an evaluation proxy.
+They prove the caller's transport and final-answer controls, not live model execution.
+File-mirror cases use real
 unopenable or unwritable files; they must not turn a completed score into a
 failed evaluation.
-The standalone exit case runs real Uvicorn with an empty socket list and the
-real llama client lifespan. It must exit nonzero on observed shutdown failure,
+The standalone exit cases run real Uvicorn with an empty socket list and the
+actual evaluator lifespan. They must exit nonzero on observed shutdown failure,
 without opening an HTTP listener or weakening the socket guard.
 The socket guard allows only Unix-domain sockets for local event-loop IPC.
 Windows asyncio needs an internal TCP socket pair and cannot run these ASGI

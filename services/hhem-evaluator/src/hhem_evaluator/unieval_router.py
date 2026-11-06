@@ -1,5 +1,7 @@
 """Which native routes expose independent UniEval readiness and real four-score work?"""
 
+from typing import Final
+
 from fastapi import APIRouter
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -11,8 +13,8 @@ from .control_unieval import UnievalController
 from .dispatch_unieval import dispatch_unieval
 
 # These are native protocol paths, not operator destinations.
-UNIEVAL_PATH = f"{API_PREFIX}/summary-eval-unieval"
-UNIEVAL_HEALTH_PATH = f"{UNIEVAL_PATH}/health"
+UNIEVAL_PATH: Final = f"{API_PREFIX}/evaluate-summary-unieval"
+UNIEVAL_HEALTH_PATH: Final = f"{API_PREFIX}/get-unieval-health"
 
 
 def create_unieval_router(controller: UnievalController) -> APIRouter:

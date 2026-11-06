@@ -11,7 +11,7 @@ from .evaluation_event import EvaluationEvent
 from .lifecycle_fields import LifecycleFields
 from .server_contract import ServerContract
 
-DiagnosticComponent = Literal["api", "llama", "unieval", "log"]
+DiagnosticComponent = Literal["api", "unieval", "log"]
 
 
 class ApiDiagnosticData(LifecycleFields):

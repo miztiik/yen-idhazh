@@ -19,7 +19,6 @@ from hhem_evaluator.api_settings import load_api_settings
 from hhem_evaluator.contracts.api_settings import ApiComponent, ApiSettings
 from hhem_evaluator.contracts.base import EVALUATE_PATH
 from hhem_evaluator.contracts.evaluation_event import EvaluationEvent
-from hhem_evaluator.contracts.llama_settings import LlamaSettings
 from hhem_evaluator.contracts.server_event import ServerEvent
 from hhem_evaluator.contracts.service_settings import ServiceSettings, StartupContext
 from hhem_evaluator.contracts.unieval_settings import UnievalSettings
@@ -175,8 +174,7 @@ async def running_service(
     *,
     wait_ready: bool = True,
     routes: tuple[ApiComponent, ...] | None = None,
-    llama_settings: LlamaSettings | None = None,
-    llama_transport: httpx.AsyncBaseTransport | None = None,
+    root: Path = REPOSITORY,
     log_directory: Path | None = None,
     unieval_settings: UnievalSettings | None = None,
     unieval_supervisor: UnievalSupervisor | None = None,
@@ -203,11 +201,9 @@ async def running_service(
     app = create_app(
         api,
         selected,
-        REPOSITORY,
+        root,
         supervisor=worker,
         writer=EventWriter(selected.logging, log, directory=log_directory),
-        llama_settings=llama_settings,
-        llama_transport=llama_transport,
         unieval_settings=unieval_settings,
         unieval_supervisor=unieval_supervisor,
     )

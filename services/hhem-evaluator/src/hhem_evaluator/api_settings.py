@@ -19,4 +19,4 @@ def load_api_settings(path: Path) -> ApiSettings:
     except ValidationError as error:
         failure = error.errors(include_input=False, include_context=False, include_url=False)[0]
         location = ".".join(str(part) for part in failure["loc"]) or "settings"
-        raise ApiSettingsLoadError(f"Invalid FastAPI setting {location}.") from None
+        raise ApiSettingsLoadError(f"Invalid summary evaluator setting {location}.") from None
