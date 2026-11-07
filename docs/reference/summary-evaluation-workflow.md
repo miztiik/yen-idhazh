@@ -100,7 +100,7 @@ metadata. The shared server schema is not relaxed to accept extra fields.
 Run-local configuration copies enable the existing whole-machine CPU/RAM
 instruments without changing committed defaults. Reads name only their required
 files; there is no configuration-tree scan or second collector.
-`config/hono-server.json` supplies the machine listener controls and supervision waits,
+`config/hono-server.json` selects the explicit machine listener and shared supervision waits,
 including the helper's profile-stop cleanup allowance. There is no feed-settings
 fallback.
 The workflow settings own the host startup, shutdown, post-termination grace
@@ -111,7 +111,13 @@ grace and forced-stop joins.
 Invalid shared listener controls retain `MACHINE_API_STARTUP_INVALID`;
 invalid probe settings retain `MACHINE_SETTINGS_INVALID`.
 The native Hono supervisor verifies its startup nonce, spawned PID, uncached
-health and enabled module group. During evaluation, each FastAPI child's private
+health and single enabled module group. The machine helper keeps its own PID
+in private phase controls, while its native server projection retains the
+separate Hono child PID, listener and verified readiness nonce. The measured
+subject remains the existing helper, not the machine API process.
+Current phase reports retain that native projection; old unversioned server
+outcomes remain readable without inventing missing identity or rewriting
+saved reports. During evaluation, each FastAPI child's private
 readiness must identify its selected scorer, startup nonce, actual PID and bounded
 kernel start pin. Its application health must identify that same instance and only
 that scorer; model readiness also verifies the native owned worker and loaded identity.

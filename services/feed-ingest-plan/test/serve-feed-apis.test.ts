@@ -1,21 +1,14 @@
-/** Do real machine and recorded-source operations share one port and close all owned resources? */
+/** Does the planning-only listener retain native source operations and close its owned resources? */
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRootContext, DELIVERY_API_PATHS, PLANNER_API_PATHS, PLANNER_API_PREFIX, PlannerSavedResponseSchema, readTraceContext, writeTraceContext } from "@idhazh/common-contracts";
-import type { FingerprintEvent } from "@idhazh/host-fingerprints/diagnostic";
-import type { ProbeEvent } from "@idhazh/host-probes/diagnostic";
-import { FingerprintResponseSchema } from "@idhazh/host-fingerprints/response";
+import { createRootContext, DELIVERY_API_PATHS, PLANNER_API_PATHS, PLANNER_API_PREFIX, PlannerSavedResponseSchema, writeTraceContext } from "@idhazh/common-contracts";
 import { FINGERPRINT_PATH } from "@idhazh/host-fingerprints/api";
-import { loadConfig as loadProbeConfig } from "@idhazh/host-probes/config";
 import { SAMPLE_PATH } from "@idhazh/host-probes/api";
-import { fixture as fingerprintFixture } from "../../host-fingerprints/test/fixture";
 import { recordedPlan } from "./plan-recordings";
 import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-response.schema";
 import { operationLink } from "../src/api/operation-context";
 import { PlannerReadySchema } from "../src/config/planner-startup";
-import { HostSampleSchema } from "../../host-probes/src/probe/sample-host";
 import { API_HEALTH_PATH, ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
 import { serveApiApp } from "@idhazh/serve-pipeline-apis/app";
 import { readApiReadiness } from "@idhazh/serve-pipeline-apis/readiness";
@@ -31,24 +24,21 @@ const json = (body: unknown, carrier = {}) => ({
 });
 
 async function listenerSettings() {
-  const config = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)));
+  const config = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)), "planning");
   const reservation = Bun.serve({ hostname: config.hostname, port: 0, fetch: () => new Response() });
   const port = reservation.port!;
   await reservation.stop(true);
   return { ...config, port };
 }
 
-test("one actual Bun port returns native fingerprint, sample, fetch and parse results", async () => {
+test("the actual planning listener returns fetch and parse results without machine routes", async () => {
   const recorded = await recordedPlan();
-  const host = await fingerprintFixture();
   const settings = await listenerSettings();
   const parent = createRootContext();
   const identity = ApiReadySchema.parse({
     event: "typescript_api_ready", nonce: randomUUID(), pid: process.pid, port: settings.port,
-    group: "planning", modules: ["planning", "machine"], enabled: true,
+    group: "planning", modules: ["planning"], enabled: true,
   });
-  const probe = await loadProbeConfig(new URL("../../../config/host-probes.json", import.meta.url));
-  const nativeEvents: (FingerprintEvent | ProbeEvent)[] = [];
   const plannerIdentity = PlannerReadySchema.parse({
     event: "planner_ready", nonce: identity.nonce, pid: process.pid, port: settings.port,
     runtime: { ...parent, git_sha: recorded.runtime.git_sha, run_number: "700",
@@ -57,14 +47,6 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
   const server = await serveApiApp(settings, createFeedApiApp({
     identity,
     planner: { inputs: recorded.inputs, runtime: recorded.runtime, identity: plannerIdentity },
-    machine: {
-      fingerprint: { config: host.config, settings: host.settings, options: {
-        outputRoot: join(host.directory, "state"), inspection: host.inspection,
-        registryPath: new URL("../../../config/ledgers.json", import.meta.url),
-      }, diagnostics: { writeEvent: event => { nativeEvents.push(event); } } },
-      probes: { config: probe, context: { platform: "win32" },
-        diagnostics: { writeEvent: event => { nativeEvents.push(event); } } },
-    },
   }));
   const origin = `http://${settings.hostname}:${server.port}`;
   let unrelatedRequests = 0;
@@ -79,7 +61,7 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
       signal: AbortSignal.timeout(settings.supervision.readiness_timeout_ms),
       failure: { create: (code: string, message: string) => new PlanError(code, message) },
     };
-    expect(await readApiReadiness({ ...readiness, message: identity, expected: identity })).toBe(origin);
+    expect(await readApiReadiness({ ...readiness, message: identity, expected: identity })).toEqual({ origin, identity });
     const startup = FeedApiStartupSchema.parse({
       group: "planning", server: settings, directory: "evidence",
       run: { run_id: "700", attempt: 1, started_at: plannerIdentity.runtime.captured_at, context: parent },
@@ -93,7 +75,7 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
       message: identity, pid: process.pid, startup, kind: "PLANNER" as const,
       signal: readiness.signal, failure: captureFeedApiFailure({ operation: "workflow" }),
     };
-    expect(await readFeedApiReadiness(nativeReadiness)).toBe(origin);
+    expect(await readFeedApiReadiness(nativeReadiness)).toEqual({ origin, identity });
     for (const runtime of [
       { ...startup.planner.runtime, run_number: "701" },
       { ...startup.planner.runtime, attempt: 2 },
@@ -112,7 +94,7 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
     for (const overrides of [
       { nonce: randomUUID() }, { pid: identity.pid + 1 },
       { port: identity.port === 65535 ? identity.port - 1 : identity.port + 1 },
-      { group: "delivery", modules: ["delivery"] }, { modules: ["machine"] }, { enabled: false },
+      { group: "delivery", modules: ["delivery"] }, { enabled: false },
     ]) {
       const wrong = ApiReadySchema.parse({ ...identity, ...overrides });
       await expect(readApiReadiness({ ...readiness, message: wrong, expected: wrong }))
@@ -120,29 +102,13 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
       await expect(readFeedApiReadiness({ ...nativeReadiness, message: wrong }))
         .rejects.toMatchObject({ code: "PLANNER_READY_IDENTITY" });
     }
+    expect(ApiReadySchema.safeParse({ ...identity, modules: ["machine"] }).success).toBe(false);
+    expect(ApiReadySchema.safeParse({ ...identity, modules: ["planning", "machine"] }).success).toBe(false);
     expect((await fetch(`${origin}/health`)).status).toBe(404);
     expect((await fetch(`${origin}${PLANNER_API_PREFIX}/health`)).status).toBe(404);
     expect((await fetch(`${origin}${PLANNER_API_PREFIX}${DELIVERY_API_PATHS.health}`)).status).toBe(404);
-    const fingerprint = await fetch(`${origin}${FINGERPRINT_PATH}`, json(host.apiInput, writeTraceContext(parent)));
-    expect(fingerprint.status).toBe(200);
-    const captured = FingerprintResponseSchema.parse(await fingerprint.json());
-    expect(captured.status).toBe("written");
-    if (captured.status !== "written") throw new Error("The recorded host observation must be persisted");
-    expect(captured.row.machine_memory_total_mib).toBe(16383.75);
-    expect(captured.files).toHaveLength(1);
-    expect(await Bun.file(join(host.directory, "state", captured.files[0]!.path)).exists()).toBe(true);
-    const sample = await fetch(`${origin}${SAMPLE_PATH}`, { headers: writeTraceContext(parent) });
-    expect(sample.status).toBe(200);
-    expect(HostSampleSchema.parse(await sample.json()).unavailable.cpu).toBe("unsupported_platform");
-    expect(nativeEvents.map(event => [event.source, event.type, event.data])).toEqual([
-      ["/services/host-fingerprints", "host_fingerprint_completed", { status: "written" }],
-      ["/services/host-probes", "host_probe_completed", { operation: "sample", outcome: "handled" }],
-    ]);
-    for (const event of nativeEvents) {
-      const operation = readTraceContext({ traceparent: event.traceparent, tracestate: event.tracestate });
-      expect(operation?.traceId).toBe(parent.traceId);
-      expect(operation?.spanId).not.toBe(parent.spanId);
-    }
+    expect((await fetch(`${origin}${FINGERPRINT_PATH}`, json({}))).status).toBe(404);
+    expect((await fetch(`${origin}${SAMPLE_PATH}`)).status).toBe(404);
     const source = recorded.inputs.harvest.sources[0]!;
     const response = await fetch(`${origin}${PLANNER_API_PREFIX}${PLANNER_API_PATHS.fetch}`, json({
       feed_id: source.id, fetch_item_type: "feed",
@@ -175,7 +141,7 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
     await unrelated.stop(true);
     const replacement = Bun.serve({ hostname: settings.hostname, port: settings.port, fetch: () => new Response() });
     await replacement.stop(true);
-    await Promise.all([recorded.close(), host.cleanup()]);
+    await recorded.close();
   }
 });
 

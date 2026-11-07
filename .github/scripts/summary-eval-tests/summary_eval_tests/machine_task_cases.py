@@ -95,7 +95,7 @@ def stage_machine_run(
     stage_configuration(REPOSITORY, runtime, select_model(REPOSITORY, ""))
     listener = runtime / "config" / "hono-server.json"
     settings = json.loads(listener.read_bytes())
-    settings["port"] = available_loopback_port()
+    settings["listeners"]["machine"]["port"] = available_loopback_port()
     listener.write_text(json.dumps(settings), encoding="utf-8")
     fingerprint = runtime / "config" / "host-fingerprints.json"
     controls = json.loads(fingerprint.read_bytes())

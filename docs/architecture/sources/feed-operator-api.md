@@ -301,7 +301,7 @@ system.
 Always-run finalization owns a separate delivery child because collection has
 already closed its planner child. The delivery child needs no live planner batch
 or collection inputs; completed partial metadata remains deliverable after
-planner failure. It reuses the listener and supervision limits from
+planner failure. It selects the delivery listener and shared supervision limits from
 `config/hono-server.json`,
 checks owned-child readiness through `/api/2026-11-05/get-api-health` and the
 distinct native `/api/2026-11-05/get-data-delivery-health`, and closes and reaps that child

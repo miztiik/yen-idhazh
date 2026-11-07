@@ -8,7 +8,8 @@ import { join } from "node:path";
 import { runtimeFailureExecution, withPlannerFailure } from "../src/api/plan-failure";
 import { retainFailureThroughCleanup } from "../src/api/retain-failure-through-cleanup";
 import { retainWorkflowFailure } from "./retain-workflow-failure";
-import { captureWorkflowHostFingerprint } from "./feed-ingest-plan-host-fingerprint";
+import { captureWorkflowMachineTask } from "./capture-workflow-machine-task";
+import { operationMetadata } from "../src/api/operation-context";
 
 export async function runWorkflow(signal: AbortSignal, options: { serverEntry?: string } = {}) {
   const { root, directory, inputs, startup, request, identity, registrations, outputPath, date }
@@ -23,17 +24,20 @@ export async function runWorkflow(signal: AbortSignal, options: { serverEntry?: 
       dump_raw_document_contents: String(inputs.settings.dump_raw_document_contents),
       current_run_files: "[]",
     });
-    result = await invokePlannerHttp(inputs, startup, request, directory, {
-      signal, ...options,
-      beforePlan: async (origin, requestSignal) => {
-        await captureWorkflowHostFingerprint({
-          root, directory, stateRoot: inputs.outputRoot, identity, registrations,
-          origin, signal: requestSignal,
-        });
-      },
-    });
+    try {
+      await captureWorkflowMachineTask({
+        root, directory, stateRoot: inputs.outputRoot, identity, registrations, signal,
+        registryPath: inputs.settings.inputs.registrations,
+        run: { run_id: startup.runtime.run_number, attempt: startup.runtime.attempt,
+          started_at: startup.runtime.captured_at, context: operationMetadata(startup.runtime) },
+      });
+    } catch (error) { failure = withPlannerFailure(error, capture); }
+    result = await invokePlannerHttp(inputs, startup, request, directory, { signal, ...options });
     if (!result.summary.planning_complete || result.summary.failure !== null || result.http_status !== 200) process.exitCode = 2;
-  } catch (error) { failure = withPlannerFailure(error, capture); }
+  } catch (error) {
+    failure = withPlannerFailure(failure === undefined ? error
+      : new AggregateError([failure, error], "Independent API tasks failed"), capture);
+  }
   const finish = async () => {
     const completed = await collectWorkflowFiles({ root, directory, identity, registrations });
     await writeGitHubOutputs(outputPath, {

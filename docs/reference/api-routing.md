@@ -78,7 +78,8 @@ The host operations and shared process health use the fixed HTTP date
 `2026-11-05`. Their existing exported constants remain the caller authority in
 `services/host-fingerprints/src/api/server.ts`,
 `services/host-probes/src/api/server.ts` and
-`services/serve-pipeline-apis/src/api-startup.ts`. Shared hosting mounts the
+`services/serve-pipeline-apis/src/declare-api-identity.ts` (re-exported by
+`api-startup.ts`). Shared hosting mounts the
 same native handlers; it does not wrap their payloads or select another module
 from a request.
 
@@ -104,7 +105,9 @@ remain separate native route families.
 
 Shared readiness still compares the private nonce, spawned PID, configured
 port, group, modules and enablement with the uncached HTTP identity, then runs
-the selected module's additional native checks. Its
+the selected module's additional native checks. Each process advertises only
+its selected module; machine operations remain one group on their configured
+listener and are absent from planning. Its
 [listener reference](serve-pipeline-apis.md) owns lifetime and cleanup.
 The [hardware reference](host-metrics.md), [profile reference](host-probe-api.md)
 and [cache reference](host-cache-probes.md) own measurements and payloads.
