@@ -17,8 +17,11 @@ BodyFailureCode = Literal[
 class RequestBodySettings(Protocol):
     """Provide only the two bounds body reading consumes."""
 
-    max_body_bytes: int
-    body_read_timeout_ms: int
+    @property
+    def max_body_bytes(self) -> int: ...
+
+    @property
+    def body_read_timeout_ms(self) -> int: ...
 
 
 class RequestBodyError(Exception):
