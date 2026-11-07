@@ -1,6 +1,6 @@
 # Summary evaluation workflow
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-07
 
 Which inputs, saved results and process outcomes belong to the manual
 `summary-eval-tests.yml` workflow. Its task programs live in
@@ -26,13 +26,27 @@ One dispatch selects one summarizer. A comparison is another dispatch with a
 different declaration, not a matrix, model loop or shared-default edit. The
 declaration supplies the actual pinned weights, companions, revisions, hashes,
 native flags, sampling and template settings. It selects neither evaluator's model.
-`config/summary-evals/workflow.json` holds the fixed generation instruction.
-It also owns the input, generation-request and generation-response byte
+`config/summary-evals/workflow.json.generation_prompt_file` selects
+`prompts/generate-evaluation-summary.txt` relative to this invocation's
+`config/` root. Safe relative POSIX paths under `prompts/` are validated before
+reading that one file; the caller preserves every UTF-8 space and newline.
+The default has no final newline, matching its former inline value.
+This authored settings family is version `2026-11-07`, current-only, without
+an inline-instruction fallback. Resolution yields the existing effective
+generation instruction; saved workflow/result contracts retain `2026-11-05`.
+Neither scorer reads this workflow configuration.
+
+The file also owns the input, generation-request and generation-response byte
 allowances. Native sampling and server options remain open JSON from the
 selected declaration; there is no second list of supported native fields.
 Every generation call builds fresh system and source turns, without earlier
 answers or conversation history. The digest's separate continuation flow is
 unchanged.
+
+Transport bounds, native/host startup and cleanup waits, output directories
+and body-free native logging remain caller-owned settings. The selected model
+still supplies all native JSON and server controls. Moving the instruction
+adds no process, copy of the configuration tree or pipeline framework.
 
 There is no supplied-summary input. Source text enters only the user-data turn;
 it never selects a shell argument, filename, model destination or system
@@ -253,6 +267,11 @@ text equality. Independent native results retain useful work when a sibling
 fails. Named run-local configuration copies reuse
 the current model and machine readers without editing shared defaults or
 adding another server configuration authority.
+
+A named instruction file makes the task independently editable without mixing
+its title/summary answer with the generator API's different product. Resolving
+it before request construction preserves fresh calls and independently supplied
+references while keeping orchestration controls in the workflow.
 
 The workflow adds no Python model binding, collector dependency or root
 workspace. The shared FastAPI/Hono applications, frozen dependencies, native

@@ -1,3 +1,0 @@
-Now write about the item above.
-Summary: $target_words_min to $target_words_max words.
-$write
