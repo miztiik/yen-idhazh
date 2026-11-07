@@ -126,7 +126,6 @@ def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model
             (
                 "summary_evaluator.hhem",
                 "summary_evaluator.unieval",
-                "summary_evaluator.source_coverage",
                 "summary_evaluator.serve_http",
             ),
         ),
@@ -134,7 +133,6 @@ def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model
             "summary_evaluator.hhem.create_api_component",
             (
                 "summary_evaluator.unieval",
-                "summary_evaluator.source_coverage",
                 "summary_evaluator.serve_http",
             ),
         ),
@@ -142,15 +140,6 @@ def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model
             "summary_evaluator.unieval.create_api_component",
             (
                 "summary_evaluator.hhem",
-                "summary_evaluator.source_coverage",
-                "summary_evaluator.serve_http",
-            ),
-        ),
-        (
-            "summary_evaluator.source_coverage.create_api_component",
-            (
-                "summary_evaluator.hhem",
-                "summary_evaluator.unieval",
                 "summary_evaluator.serve_http",
             ),
         ),
@@ -389,6 +378,7 @@ def test_selected_listener_is_the_only_authority_and_disabled_snapshots_are_expl
     [
         {"enabled_routes": ["llama"]},
         {"enabled_routes": ["hhem", "llama"]},
+        {"enabled_routes": ["coverage"]},
         {"llama": {"connect_timeout_ms": 5000}},
         {"version": "2026-11-04"},
     ],
@@ -401,7 +391,10 @@ def test_retired_generation_settings_and_previous_application_version_are_refuse
         ApiSettings.model_validate_json(json.dumps({**shared.model_dump(mode="json"), **change}))
 
 
-@pytest.mark.parametrize("options", [["--routes", "llama"], ["--model-config", "retired.json"]])
+@pytest.mark.parametrize(
+    "options",
+    [["--routes", "llama"], ["--routes", "coverage"], ["--model-config", "retired.json"]],
+)
 def test_retired_generation_cli_values_are_refused_before_configuration_reads(
     options: list[str], tmp_path: Path
 ) -> None:

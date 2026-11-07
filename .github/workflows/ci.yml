@@ -152,6 +152,27 @@ jobs:
           fi
           echo "playwright=$version" >> "$GITHUB_OUTPUT"
 
+  model-free:
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Verify the complete model-free suites
+        uses: ./.github/actions/check-summary-evaluator
+
+      - name: Retain the current test result
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: summary-evaluator-model-free-results
+          path: services/summary_evaluator/var/model-free-results.xml
+          if-no-files-found: warn
+
   gates:
     needs: scope
     if: needs.scope.outputs.code == 'true'

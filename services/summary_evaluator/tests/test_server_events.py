@@ -3,6 +3,7 @@
 import io
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import get_args
 
 import pytest
 from pydantic import ValidationError
@@ -31,6 +32,15 @@ def test_native_event_has_one_current_cloudevents_occurrence_and_no_legacy_reade
         ServerEvent.model_validate_json(native.model_dump_json())
     with pytest.raises(ValidationError):
         ServerEvent.model_validate({**event.model_dump(), "type": "fastapi-server.api.ready"})
+
+
+def test_historical_coverage_diagnostics_are_independent_of_live_scorer_selection() -> None:
+    assert get_args(ApiComponent) == ("hhem", "unieval")
+    event = ServerEvent.diagnostic(
+        ApiDiagnosticData(component="coverage", action="stopped", level="INFO")
+    )
+    assert ServerEvent.model_validate_json(event.model_dump_json()) == event
+    assert event.type == "fastapi-server.coverage.stopped"
 
 
 def test_independent_lifecycle_logs_share_fields_but_not_component_ownership() -> None:
@@ -77,7 +87,7 @@ def test_live_records_and_named_file_match_and_restarts_append(tmp_path: Path) -
 
 def test_independent_scorer_logs_do_not_share_the_same_role_file(tmp_path: Path) -> None:
     settings = load_settings(SETTINGS_FILE).logging
-    scorers: tuple[ApiComponent, ...] = ("hhem", "unieval", "coverage")
+    scorers: tuple[ApiComponent, ...] = ("hhem", "unieval")
     for scorer in scorers:
         writer = EventWriter(
             settings, io.StringIO(), directory=tmp_path, run_id="123456", attempt=1,

@@ -5,15 +5,11 @@ on:
     paths:
       - '.github/scripts/ai-pipeline.ts'
       - 'tools/ai-pipeline-experiment/read-pipeline-events.ts'
-      - 'tools/ai-pipeline-experiment/prepare-evaluation-request.ts'
-      - 'tools/ai-pipeline-experiment/read-coverage-settings.ts'
       - 'tools/ai-pipeline-experiment/test/workflow-handoff.test.ts'
       - '.github/workflows/ai-pipeline-tests.yml'
       - 'packages/common-contracts/**'
       - 'services/summary-generator/**'
       - 'tests/fixtures/typescript-metadata/workflow-output-event.json'
-      - 'tests/fixtures/typescript-metadata/evaluator-request.json'
-      - 'tests/fixtures/typescript-metadata/evaluator-response.json'
   workflow_dispatch:
     inputs:
       input_source:
@@ -103,7 +99,7 @@ jobs:
   run-pipeline:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    name: Phased LLM Inference & UniEval Audit
+    name: LLM Inference
     env:
       MODELS_FILE: ${{ inputs.models_file || inputs.model }}
       CONFIG_ROOT: ${{ (inputs.models_file || inputs.model) != '' && 'backend/var/candidate-config' || 'config' }}
@@ -127,11 +123,6 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
-      - name: Setup frozen Python dependency tooling
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: '0.9.7'
 
       - name: Install Shared Metadata Dependencies
         working-directory: packages/common-contracts
@@ -174,41 +165,12 @@ jobs:
           sudo mkswap /swapfile
           sudo swapon /swapfile
 
-      - name: Install existing inference and frozen evaluation dependencies
+      - name: Install existing inference dependencies
         run: |
           set -euo pipefail
           if [ ! -f package.json ]; then npm init -y; fi
           npm pkg set type="module"
           npm install --no-audit --no-fund defuddle linkedom feedsmith tidy-url
-
-          uv sync --project services/summary_evaluator --frozen --extra model --no-dev
-          services/summary_evaluator/.venv/bin/python \
-            services/summary_evaluator/scripts/prepare-coverage-resources.py --root . --include-weights
-
-      - name: Read the actual coverage listener and lifecycle bounds
-        id: coverage
-        run: |
-          services/summary_evaluator/.venv/bin/python - <<'PY' >> "$GITHUB_OUTPUT"
-          import math
-          from pathlib import Path
-          from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
-          from summary_evaluator.shared.contracts.api_paths import API_HEALTH_PATH
-          from summary_evaluator.source_coverage.load_settings import load_settings
-          root = Path(".")
-          api = load_scorer_api_settings(root / "config" / "summary-evals" / "api.json", "coverage")
-          selected = load_settings(root, api.listener, api.logging)
-          host = f"[{api.listener.host}]" if ":" in api.listener.host else api.listener.host
-          print(f"health_url=http://{host}:{api.listener.port}{API_HEALTH_PATH}")
-          print(f"startup_seconds={math.ceil(selected.worker.startup_timeout_ms / 1000)}")
-          print(f"shutdown_seconds={math.ceil((api.shutdown_timeout_ms + selected.worker.shutdown_timeout_ms + selected.worker.forced_stop_ms) / 1000)}")
-          print(f"forced_stop_seconds={math.ceil(selected.worker.forced_stop_ms / 1000)}")
-          print(f"health_seconds={math.ceil(api.listener.body_read_timeout_ms / 1000)}")
-          print(f"max_identity_bytes={selected.worker.max_proc_identity_bytes}")
-          print(f"max_reply_bytes={selected.worker.max_reply_bytes}")
-          print(f"model_revision={selected.assets.model.revision}")
-          print(f"code_revision={selected.assets.code.revision}")
-          print(f"log_directory={api.log_directory}")
-          PY
 
       - name: Start selected model
         uses: ./.github/actions/model-server
@@ -245,176 +207,10 @@ jobs:
         if: always()
         run: |
           if [ -f llama-server.pid ]; then
-            echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"INFO","message":"Stopping llama-server to reclaim RAM for UniEval..."}'
+            echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"INFO","message":"Stopping llama-server after inference."}'
             kill "$(cat llama-server.pid)" || true
             rm -f llama-server.pid
             sudo sync && echo 3 | sudo tee /proc/sys/vm/drop_caches
-          fi
-
-      - name: Start the explicitly selected source-coverage evaluator
-        id: coverage_server
-        env:
-          COVERAGE_HEALTH_URL: ${{ steps.coverage.outputs.health_url }}
-          STARTUP_SECONDS: ${{ steps.coverage.outputs.startup_seconds }}
-          HEALTH_SECONDS: ${{ steps.coverage.outputs.health_seconds }}
-          MAX_IDENTITY_BYTES: ${{ steps.coverage.outputs.max_identity_bytes }}
-          MAX_REPLY_BYTES: ${{ steps.coverage.outputs.max_reply_bytes }}
-          MODEL_REVISION: ${{ steps.coverage.outputs.model_revision }}
-          CODE_REVISION: ${{ steps.coverage.outputs.code_revision }}
-        run: |
-          set -euo pipefail
-          DEADLINE=$((SECONDS + STARTUP_SECONDS))
-          services/summary_evaluator/.venv/bin/python -m summary_evaluator \
-            --root . --routes coverage > eval_server.log 2>&1 &
-          SERVER_PID=$!
-          echo "pid=$SERVER_PID" >> "$GITHUB_OUTPUT"
-          export SERVER_PID
-          PIN=$(services/summary_evaluator/.venv/bin/python - <<'PY'
-          import os
-          from pathlib import Path
-          pid = int(os.environ["SERVER_PID"])
-          try:
-              with Path(f"/proc/{pid}/stat").open("rb") as source:
-                  raw = source.read(int(os.environ["MAX_IDENTITY_BYTES"]) + 1)
-              if len(raw) > int(os.environ["MAX_IDENTITY_BYTES"]):
-                  raise ValueError("Process identity exceeds its bound")
-              print(raw.decode().rsplit(")", 1)[1].split()[19])
-          except (OSError, ValueError, IndexError, UnicodeError):
-              raise SystemExit(1) from None
-          PY
-          )
-          echo "start_ticks=$PIN" >> "$GITHUB_OUTPUT"
-          export SERVER_START_TICKS="$PIN"
-          READY=0
-          while [ "$SECONDS" -lt "$DEADLINE" ]; do
-            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-              echo "The owned coverage server exited before readiness"
-              cat eval_server.log
-              exit 1
-            fi
-            REMAINING=$((DEADLINE - SECONDS))
-            if [ "$REMAINING" -le 0 ]; then break; fi
-            HEALTH_WAIT=$((REMAINING < HEALTH_SECONDS ? REMAINING : HEALTH_SECONDS))
-            if curl --silent --fail --max-time "$HEALTH_WAIT" "$COVERAGE_HEALTH_URL" \
-              | services/summary_evaluator/.venv/bin/python -c '
-          import os, subprocess, sys
-          from pathlib import Path
-          from summary_evaluator.serve_http.contracts.api_health import ApiHealth
-          from summary_evaluator.source_coverage.contracts.service_health import CoverageHealth
-          try:
-              limit = int(os.environ["MAX_REPLY_BYTES"])
-              raw = sys.stdin.buffer.read(limit + 1)
-              if len(raw) > limit:
-                  raise ValueError("Coverage health exceeds its reply bound")
-              value = ApiHealth.model_validate_json(raw)
-              observed = value.coverage
-              if not isinstance(observed, CoverageHealth):
-                  raise ValueError("Coverage was not selected")
-              model, worker = observed.model, observed.worker
-              if model is None or worker is None:
-                  raise ValueError("The owned coverage model is not ready")
-              pid = worker.pid
-              api_pid = int(os.environ["SERVER_PID"])
-              with Path(f"/proc/{api_pid}/stat").open("rb") as source:
-                  identity = source.read(int(os.environ["MAX_IDENTITY_BYTES"]) + 1)
-              if len(identity) > int(os.environ["MAX_IDENTITY_BYTES"]):
-                  raise ValueError("API process identity exceeds its bound")
-              fields = identity.decode().rsplit(")", 1)[1].split()
-              valid = fields[19] == os.environ["SERVER_START_TICKS"] and fields[0] != "Z"
-              owner = int(subprocess.check_output(["ps", "-o", "ppid=", "-p", str(pid)], text=True).strip())
-              valid = valid and value.enabled_routes == ("coverage",) and value.status == "ready"
-              valid = valid and value.hhem.status == value.unieval.status == "disabled"
-              valid = valid and observed.status == "ready" and pid != api_pid and owner == api_pid
-              valid = valid and observed.service_instance_id == value.service_instance_id
-              valid = valid and model.loaded_revision == os.environ["MODEL_REVISION"]
-              valid = valid and model.tokenizer_revision == os.environ["MODEL_REVISION"]
-              valid = valid and model.code_revision == os.environ["CODE_REVISION"]
-              raise SystemExit(0 if valid else 1)
-          except (OSError, ValueError, KeyError, TypeError, IndexError, UnicodeError, subprocess.SubprocessError):
-              raise SystemExit(1) from None
-          '; then
-              READY=1
-              break
-            fi
-            sleep 1
-          done
-          if [ $READY -ne 1 ]; then
-            echo "Coverage did not become ready within its configured startup bound"
-            cat eval_server.log
-            exit 1
-          fi
-
-      # 8. PHASE 2: RUN QUALITY AUDIT
-      - name: Execute Phase 2 Quality Audit
-        env:
-          RUNNER_NAME: "${{ runner.name }}"
-          RUNNER_OS: "${{ runner.os }}"
-          RUNNER_ARCH: "${{ runner.arch }}"
-          GITHUB_RUN_ID: "${{ github.run_id }}"
-          GITHUB_RUN_NUMBER: "${{ github.run_number }}"
-          GITHUB_WORKFLOW: "${{ github.workflow }}"
-          SHARD_ID: "${{ github.job }}"
-          PIPELINE_EVENTS_PATH: "pipeline-events.jsonl"
-        run: |
-          npx --yes tsx .github/scripts/ai-pipeline.ts --phase=eval
-
-      - name: Stop the exact owned coverage server
-        if: always()
-        env:
-          SERVER_PID: ${{ steps.coverage_server.outputs.pid }}
-          SERVER_START_TICKS: ${{ steps.coverage_server.outputs.start_ticks }}
-          SHUTDOWN_SECONDS: ${{ steps.coverage.outputs.shutdown_seconds }}
-          FORCED_STOP_SECONDS: ${{ steps.coverage.outputs.forced_stop_seconds }}
-          MAX_IDENTITY_BYTES: ${{ steps.coverage.outputs.max_identity_bytes }}
-        run: |
-          set -euo pipefail
-          if [ -z "$SERVER_PID" ]; then exit 0; fi
-          if [ -z "$SERVER_START_TICKS" ]; then
-            echo "Coverage startup did not establish an owned process pin" >&2
-            exit 1
-          fi
-          owns_server() {
-            services/summary_evaluator/.venv/bin/python - <<'PY'
-          import os
-          from pathlib import Path
-          try:
-              pid = int(os.environ["SERVER_PID"])
-              with Path(f"/proc/{pid}/stat").open("rb") as source:
-                  raw = source.read(int(os.environ["MAX_IDENTITY_BYTES"]) + 1)
-              if len(raw) > int(os.environ["MAX_IDENTITY_BYTES"]):
-                  raise ValueError("Process identity exceeds its bound")
-              fields = raw.decode().rsplit(")", 1)[1].split()
-              matches = fields[19] == os.environ["SERVER_START_TICKS"] and fields[0] != "Z"
-              raise SystemExit(0 if matches else 1)
-          except FileNotFoundError:
-              raise SystemExit(1) from None
-          except (OSError, ValueError, IndexError, UnicodeError):
-              raise SystemExit(2) from None
-          PY
-          }
-          STATE=0
-          owns_server || STATE=$?
-          if [ "$STATE" -eq 2 ]; then
-            echo "The owned server identity is unreadable; refusing an unpinned stop" >&2
-            exit 1
-          fi
-          if [ "$STATE" -eq 0 ]; then
-            kill "$SERVER_PID"
-            DEADLINE=$((SECONDS + SHUTDOWN_SECONDS))
-            while owns_server && [ "$SECONDS" -lt "$DEADLINE" ]; do sleep 1; done
-            STATE=0
-            owns_server || STATE=$?
-            if [ "$STATE" -eq 0 ]; then
-              kill -KILL "$SERVER_PID"
-              DEADLINE=$((SECONDS + FORCED_STOP_SECONDS))
-              while owns_server && [ "$SECONDS" -lt "$DEADLINE" ]; do sleep 1; done
-              STATE=0
-              owns_server || STATE=$?
-            fi
-            if [ "$STATE" -ne 1 ]; then
-              echo "The exact owned coverage server exit could not be confirmed" >&2
-              exit 1
-            fi
           fi
 
       # 10. UPLOAD LOGS & JSONL TELEMETRY
@@ -425,6 +221,4 @@ jobs:
           name: pipeline-artifacts
           path: |
             llama-server.log
-            eval_server.log
             pipeline-events.jsonl
-            ${{ steps.coverage.outputs.log_directory }}

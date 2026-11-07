@@ -230,7 +230,6 @@ bun install --frozen-lockfile --cwd .\packages\data-delivery
 Set-Location .\services\summary_evaluator
 uv sync --frozen --group dev
 uv run --frozen python .\scripts\prepare-unieval-resources.py --root '..\..'
-uv run --frozen python .\scripts\prepare-coverage-resources.py --root '..\..'
 uv run --frozen ruff check src tests scripts
 Push-Location ..\..
 uv run --project .\services\summary_evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
@@ -241,9 +240,10 @@ uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test
 
 If Bun cannot copy the local writer dependency on Windows, repeat its locked
 install with `--linker=isolated`; do not change either package manifest or lock.
-The evaluator's offline suite, strict types and lint are local checks, not jobs
-in `ci.yml`. The dedicated manual `summary-eval-tests.yml` workflow exercises
-the HHEM and UniEval APIs without adding evaluator setup to ordinary CI; the
+The evaluator's complete offline suite, strict types and lint run in the Linux
+`model-free` job in `ci.yml`, using the existing code-change gate and
+`check-summary-evaluator` action. The dedicated manual `summary-eval-tests.yml`
+workflow exercises live HHEM and UniEval scoring separately; the
 [manual procedure](run-hhem-evaluation-api.md) owns dispatch and live evidence.
 The model-free environment installs neither the backend nor the model extra.
 The `src` package is installed from this project, not supplied through pytest's
@@ -257,12 +257,6 @@ libraries for UniEval. Preparation fetches only their named resources, not
 Torch or weights; tests read them locally. The
 [UniEval run guide](run-unieval-evaluation-api.md) owns model preparation and
 actual prediction capture.
-Coverage preparation additionally resolves the declared legacy code and sentence
-layout without Torch or weights. Its tests replay actual ordered model calls
-through the real converter, retrieval and reduction. The
-[coverage capture guide](capture-source-coverage-calls.md) owns the separate
-real model and owned-worker verification utilities. These are not inference
-inside the model-free checker.
 These checks certify contracts and configuration, not model loading, scoring
 by the real model. For a runtime change, use one combined selected invocation:
 
@@ -388,31 +382,32 @@ processes and a private pre-arm pipe, not model weights or network access.
 They prove refusal when the owner dies before protection is armed, confirmed
 kernel stop after exec, and normal same-PID startup/shutdown. Run these cases
 on Linux; their Windows skips do not count as launch-boundary proof.
-Before merging a workflow or evaluator runtime change, run the complete
-model-free service and workflow suites on Linux from the service directory:
+The candidate CI job runs the complete model-free service and workflow suites
+on Linux. The same invocation is available for local Linux debugging from the
+service directory:
 
 ```powershell
 uv run --frozen pytest -c pyproject.toml tests ../../.github/scripts/summary-eval-tests/summary_eval_tests
 ```
 
-Keep the socket guard and resource preparation above. Ordinary `ci.yml` does
-not run these Python suites, and a live manual workflow is not a repeatable
-merge gate. Windows contract or lint results do not replace Linux process,
+Keep the socket guard and resource preparation above. The ordinary CI job
+is the repeatable merge gate, not the live manual workflow.
+Windows contract or lint results do not replace Linux process,
 ASGI and serialized Python-to-Bun bridge evidence.
 
-When a local Linux host is unavailable, dispatch
-`.github/workflows/summary-evaluator-checks.yml` on the candidate branch.
-This reusable development check runs on relevant pull requests and supports
-manual reruns, with read-only repository permissions. It prepares frozen model-free dependencies and the
+When a local Linux host is unavailable, use the candidate's ordinary CI run
+or dispatch `ci.yml` on that branch. Its `model-free` job runs for code changes,
+with read-only repository permissions. The shared action prepares frozen model-free dependencies and the
 named tokenizer/sentence resources, then runs lint, strict types and the
 complete Linux suites with the existing socket guard. It installs no model
 weights, starts no production pipeline and publishes no production data.
 Retain the run's source revision and current test-result artifact. A changed
 candidate needs new evidence; unchanged tested inputs reuse their passed run.
-There is no schedule or added evaluator job in ordinary `ci.yml`.
-Its current strict check also names the coverage capture/preparation/worker
-utilities, and its complete pytest roots include native coverage API/process,
-real TypeScript-reader binding and Linux-only named workflow-syntax checks.
+The result artifact remains `summary-evaluator-model-free-results`; a failed
+check propagates failure rather than selecting a smaller suite.
+The complete pytest roots retain both native scorer/API/process suites,
+strict previous-settings and disabled-coverage health reading, both API
+isolation directions and Linux-only named workflow-syntax checks.
 Windows portable records must list the omitted ASGI/control and Linux syntax
 cases rather than count them as Linux proof.
 
@@ -726,13 +721,14 @@ content workflow or prove new summary quality.
 
 ### Model-free Linux verification
 
-A separate pull-request and manual Linux verifier preserves process and ASGI coverage without
-turning a live content workflow into a test gate or requiring a developer-host
-installation. Its read-only job runs the complete recorded-boundary suite, not
-a smaller success-shaped substitute. The workflow has no schedule; changed
-candidates run it once and unchanged tested inputs reuse their evidence.
-The shared composite action holds one copy of preparation and verification
-commands for pull-request runs and manual reruns.
+A separate Linux job in ordinary CI preserves complete process and ASGI coverage
+without turning a live content workflow into a test gate or requiring a
+developer-host installation. Its read-only job uses the existing code-change
+decision and the same complete recorded-boundary suite, not a smaller substitute.
+The shared composite action holds one copy of preparation and verification.
+Removing a redundant checker workflow therefore changes where the checks run,
+not their maintained coverage. Changed candidates need new evidence; unchanged
+tested inputs reuse their passed run.
 
 ### Bounded state CSV integrity check
 

@@ -88,9 +88,7 @@ async def read_owned_health(
 ) -> ApiHealth:
     if deadline is None:
         deadline = time.monotonic() + settings.startup_timeout_ms / 1000
-    service: ServiceName = (
-        "hhem" if scorer == "hhem" else "unieval" if scorer == "unieval" else "api"
-    )
+    service: ServiceName = scorer
     while (remaining := deadline - time.monotonic()) > 0:
         status, health = await call_local_api(
             client,
@@ -108,7 +106,7 @@ async def read_owned_health(
             or health.enabled_routes != (scorer,)
             or any(
                 getattr(health, name).status != "disabled"
-                for name in ("hhem", "unieval", "coverage")
+                for name in ("hhem", "unieval")
                 if name != scorer
             )
             or (
