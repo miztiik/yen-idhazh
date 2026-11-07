@@ -650,20 +650,29 @@ SUBSTITUTED_COUNCIL_RUN: Final = "2026-08-26-35534060762"
 SUBSTITUTED_TENANT: Final = "a-paper-tenant"
 
 
-def _read_summary_eval_artifact_paths() -> dict[str, str]:
-    """Resolve the preparation outputs from their named committed configuration."""
-    settings: object = json.loads(read_text(CONFIG_DIR / "summary-evals" / "workflow.json"))
+def _read_summary_artifact_paths(
+    config: Path, step: str, fields: tuple[str, ...]
+) -> dict[str, str]:
+    """Resolve workflow outputs from one named committed configuration."""
+    settings: object = json.loads(read_text(config))
     assert isinstance(settings, dict), "Summary workflow settings must be a mapping"
     outputs: dict[str, str] = {}
-    for field in ("output_directory", "native_log_directory"):
+    for field in fields:
         value = settings.get(field)
         assert isinstance(value, str), f"Summary workflow {field} must be a path"
-        outputs[f"steps.prepare.outputs.{field}"] = value
+        outputs[f"steps.{step}.outputs.{field}"] = value
     return outputs
 
 
 EXPRESSION_VALUES: Final = {
-    **_read_summary_eval_artifact_paths(),
+    **_read_summary_artifact_paths(
+        CONFIG_DIR / "summary-evals" / "workflow.json",
+        "prepare",
+        ("output_directory", "native_log_directory"),
+    ),
+    **_read_summary_artifact_paths(
+        CONFIG_DIR / "summary-generator" / "workflow.json", "summary", ("output_directory",)
+    ),
     "env.SET_DIRECTORY": "corpus/encoder-comparison-1",
     "matrix.encoder": "fixture-encoder",
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
