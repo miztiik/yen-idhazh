@@ -1,6 +1,15 @@
 // Build a chat request and read its answer without guessing model-specific syntax.
 import type { ModelRuntime } from "../config/load-model-runtime.js";
 
+// These keys are owned by this application's turn assembly and decoding, not native tunables.
+const MODEL_REQUEST_CONTROL_KEYS = ["messages", "response_format"] as const;
+
+export function rejectModelRequestControls(request: Record<string, unknown>): void {
+  for (const key of MODEL_REQUEST_CONTROL_KEYS) {
+    if (key in request) throw new Error(`Selected model sampling may not set ${key}; the caller sets it.`);
+  }
+}
+
 export function buildModelRequest(
   runtime: ModelRuntime,
   systemPrompt: string,
@@ -14,11 +23,7 @@ export function buildModelRequest(
     ],
     response_format: responseFormat,
   };
-  for (const key of Object.keys(controls)) {
-    if (key in runtime.request) {
-      throw new Error(`Selected model sampling may not set ${key}; the caller sets it.`);
-    }
-  }
+  rejectModelRequestControls(runtime.request);
   return { ...runtime.request, ...controls };
 }
 

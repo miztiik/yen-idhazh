@@ -1,0 +1,17 @@
+{
+  "version": "2026-11-06",
+  "max_input_words": 6000,
+  "base_prompt_file": "prompts/request-json.txt",
+  "analysis_prompt_file": "prompts/analyze-article.txt",
+  "max_native_request_bytes": 1048576,
+  "max_native_response_bytes": 1048576,
+  "body_read_timeout_ms": 5000,
+  "heartbeat_ms": 10000,
+  "extraction_timeout_ms": 15000,
+  "min_html_bytes": 100,
+  "min_content_characters": 50,
+  "api_startup_timeout_ms": 30000,
+  "api_poll_interval_ms": 1000,
+  "output_directory": "backend/var/summary-generator-tests",
+  "logging": { "level": "INFO", "max_event_bytes": 4096 }
+}

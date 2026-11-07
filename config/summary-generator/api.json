@@ -1,0 +1,11 @@
+{
+  "version": "2026-11-06",
+  "hostname": "127.0.0.1",
+  "port": 9932,
+  "prompt_file": "prompts/generate-summary.txt",
+  "max_request_bytes": 1048576,
+  "max_native_request_bytes": 1048576,
+  "max_native_response_bytes": 1048576,
+  "body_read_timeout_ms": 5000,
+  "logging": { "level": "INFO", "max_event_bytes": 4096 }
+}

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { execSync } from "node:child_process";
-import type { SwapActivityMetrics } from "../schemas/export-all-schemas.js";
+import type { SwapActivityMetrics } from "./contracts/export-analysis-schemas.js";
 
 export function readServerPid(): number | null {
   try {

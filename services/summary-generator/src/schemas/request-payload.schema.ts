@@ -1,19 +1,9 @@
+/** Which prepared text and complete prompt override may one independent request supply? */
 import { z } from "zod";
 
-export const SummarizeRequestSchema = z
-  .object({
-    url: z.string().trim().optional().default(""),
-    input_text: z.string().trim().optional().default(""),
-    system_prompt: z.string().trim().min(1, "System prompt is required"),
-    server_url: z.string().url("server_url must be a valid URL").optional(),
-    model_name: z.string().min(1, "model_name cannot be empty").optional(),
-  })
-  .refine(
-    (data) => Boolean((data.url && data.url.length > 0) || (data.input_text && data.input_text.length > 0)),
-    {
-      message: "Execution rejected: Either 'url' or 'input_text' must be provided.",
-      path: ["input_text"],
-    }
-  );
-
+const nonblank = z.string().min(1).refine(value => value.trim().length > 0, "Text must not be blank.");
+export const SummarizeRequestSchema = z.object({
+  input_text: nonblank,
+  system_prompt: nonblank.optional(),
+}).strict();
 export type SummarizeRequest = z.infer<typeof SummarizeRequestSchema>;

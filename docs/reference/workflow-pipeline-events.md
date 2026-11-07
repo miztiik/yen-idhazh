@@ -1,8 +1,13 @@
 # Phased workflow events
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 Which saved events does the independent inference and evaluation workflow read?
+
+This page owns `ai-pipeline.ts` and its `analytic_synthesis` payload.
+The separate [summary-generator caller](summary-generator-caller.md) retains
+its own full-analysis and summary-only products; those are not aliases for this
+saved experiment format.
 
 ## Saved file contract
 
@@ -89,3 +94,4 @@ has not changed.
 - [../architecture/contracts/identity.md](../architecture/contracts/identity.md) - shared identity and propagation meanings.
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md#independent-typescript-packages-and-services) - focused native checks.
 - [../../.github/workflows/ai-pipeline-tests.yml](../../.github/workflows/ai-pipeline-tests.yml) - offline handoff gate and manual live phases.
+- [summary-generator-caller.md](summary-generator-caller.md) - independent full-analysis and summary-only caller capture.

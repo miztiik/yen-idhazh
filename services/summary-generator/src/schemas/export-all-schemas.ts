@@ -1,5 +1,3 @@
-export * from "./analysis-result.schema.js";
-export * from "./system-telemetry.schema.js";
-export * from "./pipeline-event.schema.js";
+/** Export the independent summary API's request and result contracts. */
+export * from "./summary-result.schema.js";
 export * from "./request-payload.schema.js";
-export * from "./environment-variable.schema.js";

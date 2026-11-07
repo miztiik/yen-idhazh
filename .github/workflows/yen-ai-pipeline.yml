@@ -16,9 +16,9 @@ on:
         required: false
         default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.'
       prompt:
-        description: 'System Prompt'
+        description: 'Complete generator system prompt override; blank uses the configured default.'
         required: false
-        default: 'You are an executive summarizer. Output ONLY the requested JSON. Do NOT output thinking tags or reasoning.'
+        default: ''
 
 jobs:
   run-api-pipeline:
@@ -78,6 +78,7 @@ jobs:
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
           bun install --frozen-lockfile --cwd services/summary-generator
+          bun install --frozen-lockfile --cwd .github/scripts/summary-generator-tests
 
       - name: Start selected model
         uses: ./.github/actions/model-server
@@ -87,49 +88,32 @@ jobs:
           llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
           config_root: ${{ env.CONFIG_ROOT }}
 
-      - name: Start Summarizer Bun API Daemon (Port 9932)
+      - name: Start summary-generator API
         env:
-          PORT: 9932
           CONFIG_ROOT: ${{ github.workspace }}/${{ env.CONFIG_ROOT }}
-          LLAMA_PID_FILE: ${{ github.workspace }}/llama-server.pid
         run: |
           set -euo pipefail
-          cd services/summary-generator
-          bun run src/start-api-server.ts > backend_ts_server_log.log 2>&1 &
+          bun run services/summary-generator/src/start-api-server.ts \
+            > services/summary-generator/backend_ts_server_log.log 2>&1 &
           API_PID=$!
-          echo "$API_PID" > .summarizer_api.pid
-          for _ in {1..30}; do
-            if ! kill -0 "$API_PID" 2>/dev/null; then
-              cat backend_ts_server_log.log >&2
-              exit 1
-            fi
-            if curl -sf http://127.0.0.1:9932/health > /dev/null; then
-              break
-            fi
-            sleep 1
-          done
-          curl -sf http://127.0.0.1:9932/health > /dev/null
+          echo "$API_PID" > services/summary-generator/.summary-generator.pid
+          bun run .github/scripts/summary-generator-tests/wait-summary-api.ts "$API_PID"
 
-      - name: Dispatch Summarize Request
+      - name: Prepare input, call summary API and publish its report
+        id: summary
         env:
-          INPUT_URL: ${{ inputs.url }}
+          URL: ${{ inputs.url }}
           INPUT_TEXT: ${{ inputs.input_text }}
           SYSTEM_PROMPT: ${{ inputs.prompt }}
         run: |
           set -euo pipefail
-          REQUEST=$(jq -n --arg url "$INPUT_URL" --arg input_text "$INPUT_TEXT" \
-            --arg system_prompt "$SYSTEM_PROMPT" \
-            '{url: $url, input_text: $input_text, system_prompt: $system_prompt}')
-          RESPONSE=$(curl -sf -X POST http://127.0.0.1:9932/api/summarize \
-            -H "Content-Type: application/json" --data-binary "$REQUEST")
-          echo "$RESPONSE" | jq -e '.success == true' > /dev/null
-          echo "$RESPONSE" | jq '{success, prompt_tokens: .data.token_metrics.prompt_tokens,
-            completion_tokens: .data.token_metrics.completion_tokens}'
+          bun run .github/scripts/summary-generator-tests/run-summary-api.ts \
+            | jq '{success, prompt_source, prompt_sha256, usage}'
 
       - name: Stop local processes
         if: always()
         run: |
-          for file in services/summary-generator/.summarizer_api.pid llama-server.pid; do
+          for file in services/summary-generator/.summary-generator.pid llama-server.pid; do
             if [ -f "$file" ]; then
               kill "$(cat "$file")" 2>/dev/null || true
               rm -f "$file"
@@ -144,4 +128,4 @@ jobs:
           path: |
             llama-server.log
             services/summary-generator/backend_ts_server_log.log
-            services/summary-generator/pipeline-events.jsonl
+            ${{ steps.summary.outputs.output_directory }}

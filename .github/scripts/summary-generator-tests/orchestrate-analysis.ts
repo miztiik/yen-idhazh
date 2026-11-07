@@ -1,38 +1,41 @@
-/** How does one request produce its complete summary without sharing operation state? */
+/** How does one caller request preserve its full analysis, private events and measurements? */
 import { performance } from "node:perf_hooks";
 import { createChildContext } from "@idhazh/common-contracts/create-operation-context";
 import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
 import {
   type SummarizeRequest,
   type SummaryStructuredOutput,
-  type SourceAudit,
   type DetailedTokenMetrics,
   SummarizeRequestSchema,
   SummaryStructuredOutputSchema,
-} from "../schemas/export-all-schemas.js";
-import { extractContentFromUrl } from "../services/extract-content.service.js";
+} from "./contracts/export-analysis-schemas.js";
+import { prepareApiInput } from "./prepare-api-input.js";
 import {
   getVmstatSwap,
   getMemorySnapshot,
   finalizeSwapMetrics,
-} from "../services/collect-telemetry.service.js";
+} from "./collect-measurements.js";
 import {
   buildInferencePrompt,
   queryLlamaServer,
-} from "../services/query-llama.service.js";
-import { PipelineEventBus } from "../services/dispatch-event.service.js";
-import type { ModelRuntime } from "../config/load-model-runtime.js";
+} from "./query-analysis.js";
+import { PipelineEventBus } from "./publish-events.js";
+import type { ModelRuntime } from "../../../services/summary-generator/src/config/load-model-runtime.js";
+import type { CompletionFetch } from "../../../services/summary-generator/src/services/request-completion.service.js";
+import { loadAnalysisSettings, type AnalysisSettings } from "./load-analysis-config.js";
 
 export async function orchestratePipeline(
   requestInput: SummarizeRequest,
   eventBus: PipelineEventBus,
   runtime: ModelRuntime,
   context: OperationMetadata,
+  send?: CompletionFetch,
+  settings: AnalysisSettings = loadAnalysisSettings(process.env.CONFIG_ROOT),
+  signal?: AbortSignal,
 ): Promise<SummaryStructuredOutput> {
   const validatedInput = SummarizeRequestSchema.parse(requestInput);
+  const controls = settings.config;
 
-  const cleanUrl = (validatedInput.url || "").trim();
-  const fallbackText = (validatedInput.input_text || "").trim();
   const systemPrompt = validatedInput.system_prompt;
   const serverUrl = runtime.base_url;
   const modelName = runtime.request.model;
@@ -43,78 +46,18 @@ export async function orchestratePipeline(
     throw new Error("model_name must match the selected model declaration.");
   }
 
-  let targetText = fallbackText;
-  let sourceAudit: SourceAudit;
-  let inputContext: OperationMetadata | undefined;
-
-  // 1. Ingestion Phase (URL direct scrape or fallback)
-  if (cleanUrl.length > 0) {
-    const extractionContext = createChildContext(context);
-
-    try {
-      const extracted = await extractContentFromUrl(
-        cleanUrl,
-        extractionContext,
-        progress => eventBus.emitEvent(progress.type, progress.data, progress.context),
-      );
-      inputContext = extracted.context;
-
-      sourceAudit = {
-        sourceType: "URL",
-        sourceIdentifier: cleanUrl,
-        sourceTitle: extracted.title,
-        extractedWordCount: extracted.wordCount,
-        extractedCharCount: extracted.content.length,
-        extractedText: extracted.content,
-      };
-      targetText = extracted.content;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Source extraction failed.";
-      if (!fallbackText) {
-        throw new Error(`Scraping URL failed (${message}) and no input_text fallback was provided.`);
-      }
-
-      eventBus.emitEvent("URL_EXTRACTION_FAILED", {
-        url: cleanUrl,
-        error: message,
-        resolution: "Fallback to direct input_text",
-      }, extractionContext);
-
-      const fallbackWordCount = fallbackText.split(/\s+/).filter(Boolean).length;
-      sourceAudit = {
-        sourceType: "FALLBACK_INPUT_TEXT",
-        sourceIdentifier: `Fallback (URL failed: ${cleanUrl})`,
-        sourceTitle: "Direct Text (Fallback)",
-        extractedWordCount: fallbackWordCount,
-        extractedCharCount: fallbackText.length,
-        extractedText: fallbackText,
-        scrapeError: message,
-      };
-      targetText = fallbackText;
-    }
-  } else {
-    const wordCount = fallbackText.split(/\s+/).filter(Boolean).length;
-    sourceAudit = {
-      sourceType: "INPUT_TEXT",
-      sourceIdentifier: "Direct Text Input",
-      sourceTitle: "Direct Input Text",
-      extractedWordCount: wordCount,
-      extractedCharCount: fallbackText.length,
-      extractedText: fallbackText,
-    };
-    targetText = fallbackText;
-  }
-
-  // Safety truncate to ~6,000 words
-  const words = targetText.split(/\s+/).filter(Boolean);
-  if (words.length > 6000) {
-    targetText = words.slice(0, 6000).join(" ") + "\n\n[...Truncated to fit context window...]";
-  }
+  const prepared = await prepareApiInput(validatedInput, context,
+    progress => eventBus.emitEvent(progress.type, progress.data, progress.context),
+    send, controls, signal);
+  const targetText = prepared.input_text;
+  const sourceAudit = prepared.source_audit;
+  const inputContext = prepared.input_context;
 
   const { fullSystemPrompt, userPrompt } = buildInferencePrompt(
     systemPrompt,
     sourceAudit.sourceTitle,
-    targetText
+    targetText,
+    settings.analysisPrompt,
   );
 
   eventBus.emitEvent("INPUT_RESOLVED", {
@@ -122,7 +65,7 @@ export async function orchestratePipeline(
     sourceType: sourceAudit.sourceType,
     sourceIdentifier: sourceAudit.sourceIdentifier,
     sourceTitle: sourceAudit.sourceTitle,
-    wordCount: words.length,
+    wordCount: prepared.original_word_count,
     charCount: targetText.length,
     inputText: targetText,
     systemPrompt: fullSystemPrompt,
@@ -151,24 +94,27 @@ export async function orchestratePipeline(
           serverUrl,
           targetModel: modelName,
           sourceType: sourceAudit.sourceType,
-          wordCount: words.length,
+          wordCount: prepared.original_word_count,
           charCount: targetText.length,
         }, operation);
         const startedAt = performance.now();
         const heartbeat = setInterval(() => {
           const snap = getMemorySnapshot();
           peakProcessSwapMb = Math.max(peakProcessSwapMb, snap.vmSwapMb);
-          console.error(JSON.stringify({
+          eventBus.recordDiagnostic({
             code: "INFERENCE_WAITING",
             traceId: operation.traceId,
             spanId: operation.spanId,
             elapsedSeconds: Math.round((performance.now() - startedAt) / 1000),
             rssMb: snap.vmRssMb,
             swapMb: snap.vmSwapMb,
-          }));
-        }, 10000);
+          });
+        }, controls.heartbeat_ms);
         timing = { startedAt, heartbeat };
       },
+      send,
+      controls,
+      signal,
     );
   } finally {
     if (timing) clearInterval(timing.heartbeat);

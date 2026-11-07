@@ -1,3 +1,4 @@
+/** Which source and native-cost readings does a complete analysis retain? */
 import { z } from "zod";
 
 export const SourceTypeEnum = z.enum(["URL", "INPUT_TEXT", "FALLBACK_INPUT_TEXT"]);

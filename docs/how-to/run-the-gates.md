@@ -650,12 +650,36 @@ Set `IDHAZH_PYTHON` to this checkout's installed Python environment.
 This subsection stays here because it selects the local commands; format and
 compatibility rules remain in the persistence contract.
 
-The independent summarizer service reads its selected model through the
-existing Python config loader, unlike the feed planner above. From the
-repository root, its native checks are `bun run --cwd services/summary-generator check`
-and `bun run --cwd services/summary-generator test`. Its tests copy named config inputs
-and replay recorded responses on loopback; they download no model and contact
-no external service.
+The independent summary generator still reads its selected model through the
+existing Python request-declaration exporter, unlike the feed planner above.
+Use the existing backend development environment; no model asset or evaluator
+environment is required. From the repository root, prepare only the changed
+manifests, then check the native API and both caller products:
+
+```powershell
+bun install --frozen-lockfile --cwd services/summary-generator
+bun install --frozen-lockfile --cwd .github/scripts/summary-generator-tests
+bun run --cwd services/summary-generator check
+bun run --cwd services/summary-generator test
+bun run --cwd .github/scripts/summary-generator-tests check
+bun run --cwd .github/scripts/summary-generator-tests test
+bun test ./.github/scripts/test/workflow-handoff.test.ts
+```
+
+The existing saved-handoff check also requires its locked shared metadata and
+already declared root inference dependencies. Its TypeScript command stays in
+`ai-pipeline-tests.yml`; run that same named selection locally.
+The generator and caller cases use standard in-memory HTTP requests/responses,
+recorded native/source boundaries, real JSDOM parsing and named private output
+files under generated project-owned directories. They open no test sockets,
+download no model and contact no external service.
+The original full-analysis recording, event date and separate older
+`analytic_synthesis` handoff remain unchanged. Pure summary responses and
+nullable native usage are checked independently.
+Ordinary CI runs both complete native suites; `Saved workflow handoff` remains
+in its existing workflow. The separate model-free Linux evaluator/workflow gate
+still applies to the merge candidate. These checks do not dispatch either live
+content workflow or prove new summary quality.
 
 ## Design rationale
 
@@ -972,7 +996,7 @@ a month in memory with the published shape, so a search spec needs no
 committed shard. When a producer writes a derived file from committed config,
 build a bounded artifact through its producer and read it back; tests must not
 rely on a generated file committed to the repository
-([CLAUDE.md section 13](../../CLAUDE.md#13-test-coverage-policy)). **This one
+([CLAUDE.md section 12](../../CLAUDE.md#12-test-coverage-policy)). **This one
 is caught by review rather than by a check.** A guard that lists the paths
 cannot do it: such a list only ever holds the collections
 somebody remembered, and its own upkeep grows with the rest. The
@@ -1227,7 +1251,7 @@ figure as a runner figure.
 
 **Delete redundant coverage before parallelising.** The browser set is very
 narrow and representative, as required by
-[CLAUDE.md section 13](../../CLAUDE.md#13-test-coverage-policy). One explorer
+[CLAUDE.md section 12](../../CLAUDE.md#12-test-coverage-policy). One explorer
 journey covers real ledger loading, a query, its answer, one chart transition
 and usable shared layout. Do not restore its former per-region checks or the
 chart-to-chart transition matrix.

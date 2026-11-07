@@ -1,15 +1,11 @@
+/** Which caller environment fields select input, prompts and private output without choosing a model? */
 import { z } from "zod";
 
 export const EnvironmentVariablesSchema = z.object({
-  PORT: z.coerce.number().default(9932),
   CONFIG_ROOT: z.string().min(1).optional(),
   URL: z.string().optional().default(""),
   INPUT_TEXT: z.string().optional().default(""),
-  PROMPT: z
-    .string()
-    .default(
-      "You are an executive summarizer. Output ONLY the requested JSON. Do NOT output thinking tags or reasoning."
-    ),
+  PROMPT: z.string().optional(),
   GITHUB_STEP_SUMMARY: z.string().optional(),
 });
 

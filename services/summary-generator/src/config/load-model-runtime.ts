@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { rejectModelRequestControls } from "../services/model-request.service.js";
 
 const repositoryRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 
@@ -46,5 +47,7 @@ export function loadModelRuntime(configRoot = path.join(repositoryRoot, "config"
       },
     },
   );
-  return ModelRuntimeSchema.parse(JSON.parse(output));
+  const runtime = ModelRuntimeSchema.parse(JSON.parse(output));
+  rejectModelRequestControls(runtime.request);
+  return runtime;
 }

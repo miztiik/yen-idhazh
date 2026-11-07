@@ -9,6 +9,7 @@ on:
       - '.github/scripts/test/workflow-handoff.test.ts'
       - '.github/workflows/ai-pipeline-tests.yml'
       - 'packages/common-contracts/**'
+      - 'services/summary-generator/**'
       - '.github/scripts/declare-workflow-event-source.ts'
       - 'tests/fixtures/typescript-metadata/workflow-output-event.json'
       - 'tests/fixtures/typescript-metadata/evaluator-request.json'
@@ -132,7 +133,7 @@ jobs:
         id: runtime
         run: python backend/utilities/model_runtime.py print-pinned-build >> "$GITHUB_OUTPUT"
 
-      - name: Install Summarizer Dependencies
+      - name: Install native model-request helper dependencies
         working-directory: services/summary-generator
         run: bun install --frozen-lockfile
 

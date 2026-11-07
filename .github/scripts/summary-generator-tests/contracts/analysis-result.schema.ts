@@ -1,4 +1,6 @@
+/** Which complete summary and classifications belong to a private full-analysis result? */
 import { z } from "zod";
+import { SummaryFieldsSchema } from "../../../../services/summary-generator/src/schemas/summary-result.schema.js";
 import {
   DetailedTokenMetricsSchema,
   SwapActivityMetricsSchema,
@@ -19,10 +21,7 @@ export type StanceOnBorders = z.infer<typeof StanceOnBordersEnum>;
 export type StanceOnPersonalSphere = z.infer<typeof StanceOnPersonalSphereEnum>;
 export type Sentiment = z.infer<typeof SentimentEnum>;
 
-export const RawModelAnalysisSchema = z.object({
-  headline: z.string().min(1),
-  executive_summary: z.string().min(1),
-  key_points: z.array(z.string().min(1)),
+export const RawModelAnalysisSchema = SummaryFieldsSchema.extend({
   sentiment: SentimentEnum,
   stance_on_change: StanceOnChangeEnum,
   stance_on_economic_power: StanceOnEconomicPowerEnum,

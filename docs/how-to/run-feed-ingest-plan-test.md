@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -241,10 +241,12 @@ Finalization keeps delivery, reporting and artifact preparation separate:
 3. `Upload run artifacts` uploads that prepared directory as one archive named
    `collect-and-select-articles-<run>-<attempt>`, including after finalization
    failure. It contains `<run>-<attempt>-selected-articles.json` for the next
-   summarizer, plus the delivery result, body-free response and Markdown report
+   summarization caller, plus the delivery result, body-free response and Markdown report
    when available.
-   The summarizer downloads this named artifact and reads its selected JSON
-   file, not a ledger. Article bodies never enter the Git request.
+   The summarization caller downloads this named artifact and reads its selected
+   JSON file, not a ledger. The [summary API](../reference/summary-generator-api.md)
+   receives prepared text; artifact acquisition stays outside HTTP.
+   Article bodies never enter the Git request.
 4. `Upload failed document metadata` runs only when the dropdown is `true` and a
    diagnostic file exists. Preparation first hands the closed
    `raw-document-contents-<UTC-day>-<numeric-run-id>-<attempt>.jsonl` to the hash-free artifact-directory destination,

@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node", "bun"],
+    "noEmit": true
+  },
+  "include": ["*.ts", "contracts/*.ts", "test/*.ts"]
+}
