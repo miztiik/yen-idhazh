@@ -11,9 +11,13 @@ live in the [server reference](../../reference/summary-evaluator-api.md).
 Each Uvicorn process binds its scorer's committed loopback listener before model
 startup. HHEM, UniEval and source coverage use separate API processes, not only
 separate workers behind one address. Stopping one API does not stop another API
-or its model worker. A fixed registration list binds each declared scorer to its
-module's `create_api_component` adapter. The same host composition invokes setup
-only for the selected scorer, then includes its native FastAPI router.
+or its model worker. The neutral
+[local Python API host](../local-api-host.md) owns the listener, FastAPI lifespan,
+request guard, health route and exact Uvicorn exit. A fixed evaluator
+registration list binds each declared scorer to its module's
+`create_api_component` adapter. The evaluator folds the enabled registrations
+into one aggregate component before calling the neutral host; setup still runs
+only for the selected scorer and includes only its native FastAPI router.
 Each scorer's router delegates to its own evaluation controller. Neither
 scorer generates a summary, calls the other scorer or chooses a model from
 request text. The listener has no generation router, forwarder, upstream
@@ -21,12 +25,13 @@ health polling or generation-client lifespan.
 
 An adapter owns its settings validation, controller construction, startup,
 shutdown, native health observation and refusal of unsafe Host/Origin headers.
-The common interface carries those typed callbacks, the native router and an
-opaque controller for existing private app-state callers. The host supplies
-validated listener/logging bounds, closed event writers and one service
-instance identity; it contains no scorer-specific construction, health,
-admission or start/stop branch. HHEM, UniEval and coverage retain their existing
-private state aliases; each selected controller shares its own API instance identity.
+The evaluator extension of the neutral component interface carries those typed
+callbacks, the native router, worker observations and an opaque controller for
+existing private app-state callers. The evaluator adapter supplies validated
+listener/logging bounds, closed event writers and one service instance identity;
+the neutral host contains no scorer-specific construction, health, admission or
+start/stop branch. HHEM, UniEval and coverage retain their existing private
+state aliases; each selected controller shares its own API instance identity.
 Typed callbacks also expose the selected worker's configured bounds and observed exit,
 without making the host inspect an opaque controller. Diagnostic callbacks use the same
 declared CloudEvents envelopes, not a new per-API logging implementation.
@@ -74,8 +79,8 @@ The installed package is `summary_evaluator` under
 `services/summary_evaluator/src/`. `serve_http` assembles requests and logs;
 `hhem`, `unieval` and `source_coverage` retain their independent scoring and worker policies.
 `shared` provides strict primitives, bounded transport, queue mechanics and
-process identity, plus the small in-memory HTTP component interface. It imports
-no scorer or serving package. Each scorer maps a
+process identity, plus the evaluator-specific worker extension of the neutral
+component interface. It imports no scorer or serving package. Each scorer maps a
 shared code-only failure to its existing public error. Event writers are
 closed functions supplied by the serving package, not scorer imports of it.
 
@@ -149,8 +154,9 @@ Keeping a dormant generation proxy would retain another API's transport,
 configuration and failure surface without enabling evaluation. The existing
 workflow already speaks the native protocol directly. A fixed registration list
 keeps every integration visible without a plugin framework or another worker
-implementation. The common host owns orchestration while the scorer adapter
-owns all native HTTP behavior; this prevents a new router from silently missing
+implementation. The neutral host owns reusable orchestration while the
+evaluator composite and scorer adapters own all native HTTP behavior; this
+prevents a new router from silently missing
 health, safe refusal or cleanup integration. HTTPX remains in the
 frozen environment for resource preparation and offline ASGI boundaries.
 Scoring snapshots, model identities, event seeds and recordings are unchanged.
@@ -161,6 +167,8 @@ deleted. New preparation reads only the configured cache and log paths.
 
 ## See also
 
+- [../local-api-host.md](../local-api-host.md) - neutral listener, lifecycle,
+  request guard and trace ownership.
 - [../../reference/summary-evaluator-api.md](../../reference/summary-evaluator-api.md) - shared API contract and settings.
 - [../../reference/api-routing.md](../../reference/api-routing.md) - dated first-party routes and the upstream native-protocol exception.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - HHEM scoring and cancellation.

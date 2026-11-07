@@ -1,18 +1,18 @@
-"""How can an HTTP host invoke a scorer without owning its native behavior?"""
+"""How does evaluator-specific worker state extend the neutral HTTP component?"""
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 from typing import Protocol
 
-from fastapi import APIRouter
+from local_api_host.create_api_component import (
+    ApiComponentRuntime as HostApiComponentRuntime,
+)
+from local_api_host.create_api_component import RefusalHandler
 from pydantic import BaseModel
-from starlette.requests import Request
-from starlette.responses import Response
 
 from summary_evaluator.shared.contracts.base import ServiceStatus
-from summary_evaluator.shared.contracts.error_policy import ErrorCode
 from summary_evaluator.shared.contracts.service_settings import (
     ListenerSettings,
     LoggingSettings,
@@ -20,8 +20,6 @@ from summary_evaluator.shared.contracts.service_settings import (
     WorkerSettings,
 )
 from summary_evaluator.shared.contracts.worker_exit import WorkerExit
-
-RefusalHandler = Callable[[Request, ErrorCode], Awaitable[Response]]
 
 
 class WorkerOwnership(Protocol):
@@ -69,16 +67,10 @@ class ComponentHealth:
     payload: BaseModel
 
 
-@dataclass(frozen=True)
-class ApiComponentRuntime:
-    """Bind native operations and lifecycle without a generic scoring implementation."""
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ApiComponentRuntime(HostApiComponentRuntime[ComponentHealth]):
+    """Add worker observations without teaching the host evaluator vocabulary."""
 
-    router: APIRouter
-    state: object
-    start: Callable[[], Awaitable[None]]
-    shutdown: Callable[[], Awaitable[None]]
-    observe_health: Callable[[], Awaitable[ComponentHealth]]
-    refuse_requests: Mapping[str, RefusalHandler]
     worker_settings: WorkerSettings
     is_stopping: Callable[[], bool]
     observe_exit: Callable[[], WorkerExit]

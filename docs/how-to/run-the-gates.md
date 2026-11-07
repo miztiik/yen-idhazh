@@ -218,9 +218,18 @@ which run inside the backend group.
 ### Independent Python service contracts
 
 Project bindings: the summary evaluator uses its own CPython 3.12 environment and
-manifest. Inspect the shared selection without changing its selector. Prepare
-the existing writer for the real UUID comparison, then run from the service
-directory:
+manifest. Its frozen environment installs the sibling `local_api_host` path
+dependency; the evaluator's strict type path includes that package, and the
+complete suites exercise it through the real evaluator adapter. Validate both
+locks without installing before preparing the environment:
+
+```powershell
+uv lock --locked --project .\services\local_api_host
+uv lock --locked --project .\services\summary_evaluator
+```
+
+Inspect the shared selection without changing its selector. Prepare the existing
+writer for the real UUID comparison, then run from the service directory:
 
 ```powershell
 npm --prefix .\frontend run test:changed -- --list

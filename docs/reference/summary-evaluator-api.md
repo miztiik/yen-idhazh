@@ -12,7 +12,10 @@ process ownership and failure handling.
 `config/summary-evals/api.json` owns the per-scorer listeners,
 diagnostic settings and request-body bounds. The frozen native models live
 in `services/summary_evaluator/src/summary_evaluator/serve_http/contracts/`
-and `shared/contracts/`. Shared settings,
+and `shared/contracts/`. The reusable listener contract lives in
+`services/local_api_host/src/local_api_host/contracts.py`; the evaluator
+projects its committed settings into that contract with trace propagation
+disabled, so evaluator responses and events gain no trace fields. Shared settings,
 health, generic API errors and CloudEvents schemas have version `2026-11-07`.
 Health, errors and event envelopes remain current-only. The authored deployment
 settings also read the strict single-listener shape for one explicitly selected
@@ -47,6 +50,8 @@ Table B - Native operations
 Disabled operation routes return HTTP 404. Shared health explicitly reports
 disabled scorers; it does not claim their models loaded. Browser origins,
 duplicate or unexpected Host headers and slash redirects remain refused.
+The neutral host performs the authority check, while evaluator callbacks retain
+the exact native and generic refusal bodies below.
 
 Each standalone invocation requires only its selected evaluator's prepared assets. HHEM-only
 startup reads no UniEval configuration; UniEval-only startup reads no HHEM
@@ -120,6 +125,8 @@ returns normally. Its bound socket and diagnostic file still close.
 
 ## See also
 
+- [../architecture/local-api-host.md](../architecture/local-api-host.md) -
+  reusable listener, lifecycle and request-boundary contract.
 - [../architecture/evaluation/summary-evaluator.md](../architecture/evaluation/summary-evaluator.md) - composition and owned lifetimes.
 - [api-routing.md](api-routing.md) - dated operations and the native generation exception.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - unchanged scoring requests, results and worker packets.

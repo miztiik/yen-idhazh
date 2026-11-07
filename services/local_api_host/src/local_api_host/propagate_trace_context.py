@@ -1,0 +1,212 @@
+"""How does one local request retain valid W3C context and receive a fresh API span?"""
+
+import time
+from secrets import token_hex
+from typing import Self
+
+from opentelemetry.trace import (
+    NonRecordingSpan,
+    SpanContext,
+    TraceFlags,
+    TraceState,
+    get_current_span,
+    set_span_in_context,
+)
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from starlette.datastructures import Headers, MutableHeaders
+from starlette.requests import Request
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+_TRACE_PROPAGATOR = TraceContextTextMapPropagator()
+
+
+class OperationLink(BaseModel):
+    """Name one distinct operation related to the current operation."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        strict=True,
+        validate_by_alias=True,
+        validate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+    trace_id: str = Field(alias="traceId", pattern=r"^[0-9a-f]{32}$")
+    span_id: str = Field(alias="spanId", pattern=r"^[0-9a-f]{16}$")
+
+    @model_validator(mode="after")
+    def require_nonzero_identifiers(self) -> Self:
+        if self.trace_id == "0" * 32 or self.span_id == "0" * 16:
+            raise ValueError("Operation link identifiers must be nonzero")
+        return self
+
+
+class OperationMetadata(BaseModel):
+    """Carry one W3C operation, its parent, links and canonical trace state."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        strict=True,
+        validate_by_alias=True,
+        validate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+    trace_id: str = Field(alias="traceId", pattern=r"^[0-9a-f]{32}$")
+    span_id: str = Field(alias="spanId", pattern=r"^[0-9a-f]{16}$")
+    parent_span_id: str | None = Field(
+        default=None,
+        alias="parentSpanId",
+        pattern=r"^[0-9a-f]{16}$",
+    )
+    links: tuple[OperationLink, ...]
+    trace_state: str | None = Field(default=None, alias="traceState", min_length=1)
+
+    @field_validator("trace_state")
+    @classmethod
+    def require_canonical_trace_state(cls, value: str | None) -> str | None:
+        if value is not None and TraceState.from_header([value]).to_header() != value:
+            raise ValueError("traceState must be canonical W3C tracestate")
+        return value
+
+    @model_validator(mode="after")
+    def require_valid_relationships(self) -> Self:
+        if self.trace_id == "0" * 32 or self.span_id == "0" * 16:
+            raise ValueError("Operation identifiers must be nonzero")
+        if self.parent_span_id == "0" * 16:
+            raise ValueError("Operation parent identifier must be nonzero")
+        if self.parent_span_id == self.span_id:
+            raise ValueError("An operation cannot be its own parent")
+        return self
+
+
+def _create_nonzero_identifier(byte_length: int, excluded: str | None = None) -> str:
+    zero = "0" * (byte_length * 2)
+    while True:
+        identifier = token_hex(byte_length)
+        if identifier != zero and identifier != excluded:
+            return identifier
+
+
+def create_root_operation(
+    *,
+    links: tuple[OperationLink, ...] = (),
+    trace_state: str | None = None,
+) -> OperationMetadata:
+    """Create one unsampled operation root."""
+    return OperationMetadata(
+        trace_id=_create_nonzero_identifier(16),
+        span_id=_create_nonzero_identifier(8),
+        links=links,
+        trace_state=trace_state,
+    )
+
+
+def create_child_operation(
+    parent: OperationMetadata,
+    *,
+    links: tuple[OperationLink, ...] = (),
+) -> OperationMetadata:
+    """Create one fresh operation inside an existing trace."""
+    return OperationMetadata(
+        trace_id=parent.trace_id,
+        span_id=_create_nonzero_identifier(8, parent.span_id),
+        parent_span_id=parent.span_id,
+        links=links,
+        trace_state=parent.trace_state,
+    )
+
+
+def read_trace_context(headers: Headers) -> OperationMetadata | None:
+    """Read one valid incoming W3C operation without treating it as received work."""
+    traceparents = headers.getlist("traceparent")
+    if len(traceparents) != 1:
+        return None
+    carrier: dict[str, str | list[str]] = {"traceparent": traceparents}
+    tracestate = headers.getlist("tracestate")
+    if tracestate:
+        carrier["tracestate"] = tracestate
+    incoming = get_current_span(_TRACE_PROPAGATOR.extract(carrier)).get_span_context()
+    if not incoming.is_valid:
+        return None
+    canonical_state = incoming.trace_state.to_header()
+    return OperationMetadata(
+        trace_id=f"{incoming.trace_id:032x}",
+        span_id=f"{incoming.span_id:016x}",
+        links=(),
+        trace_state=canonical_state or None,
+    )
+
+
+def create_request_operation(headers: Headers) -> OperationMetadata:
+    """Create the receiving operation for one optional incoming carrier."""
+    parent = read_trace_context(headers)
+    return create_root_operation() if parent is None else create_child_operation(parent)
+
+
+def write_trace_context(operation: OperationMetadata) -> dict[str, str]:
+    """Write the canonical unsampled W3C carrier for one API operation."""
+    span_context = SpanContext(
+        trace_id=int(operation.trace_id, 16),
+        span_id=int(operation.span_id, 16),
+        is_remote=False,
+        trace_flags=TraceFlags(0),
+        trace_state=(
+            TraceState()
+            if operation.trace_state is None
+            else TraceState.from_header([operation.trace_state])
+        ),
+    )
+    carrier: dict[str, str] = {}
+    _TRACE_PROPAGATOR.inject(
+        carrier,
+        context=set_span_in_context(NonRecordingSpan(span_context)),
+    )
+    return carrier
+
+
+def observe_request_operation(request: Request) -> OperationMetadata | None:
+    """Read the receiving operation selected before guards or body access."""
+    operation = getattr(request.state, "operation_metadata", None)
+    return operation if isinstance(operation, OperationMetadata) else None
+
+
+def observe_request_started_at(request: Request) -> float:
+    """Read the monotonic instant captured before request guards or body access."""
+    started_at = getattr(request.state, "request_started_at", None)
+    if not isinstance(started_at, float):
+        raise RuntimeError("The local API host did not capture the request start")
+    return started_at
+
+
+class PropagateTraceContext:
+    """Capture request timing and optionally write W3C context on every response."""
+
+    def __init__(self, app: ASGIApp, enabled: bool) -> None:
+        self.app = app
+        self.enabled = enabled
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        state = scope.setdefault("state", {})
+        state["request_started_at"] = time.monotonic()
+        operation = create_request_operation(Headers(scope=scope)) if self.enabled else None
+        state["operation_metadata"] = operation
+
+        async def send_with_trace(message: Message) -> None:
+            if operation is not None and message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                carrier = write_trace_context(operation)
+                headers["traceparent"] = carrier["traceparent"]
+                if "tracestate" in carrier:
+                    headers["tracestate"] = carrier["tracestate"]
+                elif "tracestate" in headers:
+                    del headers["tracestate"]
+            await send(message)
+
+        await self.app(scope, receive, send_with_trace)

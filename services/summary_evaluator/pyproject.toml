@@ -8,6 +8,7 @@ version = "2026.11.2"
 description = "Local HHEM, native UniEval and legacy source-coverage evaluation."
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "local-api-host",
     "pydantic>=2.12,<3",
     "fastapi>=0.121,<0.122",
     "uvicorn>=0.38,<1",
@@ -46,6 +47,7 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.sources]
+local-api-host = { path = "../local_api_host" }
 torch = { index = "pytorch-cpu" }
 
 [tool.ruff]
@@ -59,7 +61,13 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-mypy_path = ["src", "../../backend", "tests", "../../.github/scripts/summary-eval-tests"]
+mypy_path = [
+    "src",
+    "../local_api_host/src",
+    "../../backend",
+    "tests",
+    "../../.github/scripts/summary-eval-tests",
+]
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
