@@ -7,8 +7,8 @@ TypeScript summarizer expose?
 
 ## Entry points
 
-`services/summarizer/src/start-api-server.ts` starts the HTTP API.
-`services/summarizer/src/execute-cli-pipeline.ts` runs one CLI request.
+`services/summary-generator/src/start-api-server.ts` starts the HTTP API.
+`services/summary-generator/src/execute-cli-pipeline.ts` runs one CLI request.
 Both select `/services/summarizer` from the service's
 `src/declare-event-source.ts`, without reading a source registry.
 The [identity contract](../architecture/contracts/identity.md#4-native-typescript-event-and-operation-metadata)
@@ -71,13 +71,13 @@ parsing. Do not pass an HTML string to the Node adapter: that branch enables
 
 The repair affects:
 
-- `services/summarizer/src/services/extract-content.service.ts`.
-- `services/summarizer/package.json` and `services/summarizer/bun.lock`:
+- `services/summary-generator/src/services/extract-content.service.ts`.
+- `services/summary-generator/package.json` and `services/summary-generator/bun.lock`:
   declare the already installed `jsdom` peer directly; remove `linkedom` only
   if this is its last caller.
-- A named offline case under `services/summarizer/test/`, based on
+- A named offline case under `services/summary-generator/test/`, based on
   `tests/fixtures/feed-probe/readable-article.html`.
-- `docs/reference/summarizer-api.md`, to replace this limitation with the
+- `docs/reference/summary-generator-api.md`, to replace this limitation with the
   checked URL behavior.
 
 The offline check must serve the readable article from an ephemeral loopback
@@ -97,7 +97,7 @@ append their events in occurrence order; a private job report receives only
 its own request's history.
 
 The event family version is `2026-11-03`; its stamp and changelog are exported
-from `services/summarizer/src/schemas/pipeline-event.schema.ts`. Its envelope
+from `services/summary-generator/src/schemas/pipeline-event.schema.ts`. Its envelope
 uses the [shared event and operation contract](../architecture/contracts/identity.md#4-native-typescript-event-and-operation-metadata).
 Event types are unchanged. `OUTPUT_STRUCTURED` stores the complete validated
 summary directly under `data`.

@@ -77,7 +77,7 @@ jobs:
       - name: Install Dependencies
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
-          bun install --frozen-lockfile --cwd services/summarizer
+          bun install --frozen-lockfile --cwd services/summary-generator
 
       - name: Start selected model
         uses: ./.github/actions/model-server
@@ -94,7 +94,7 @@ jobs:
           LLAMA_PID_FILE: ${{ github.workspace }}/llama-server.pid
         run: |
           set -euo pipefail
-          cd services/summarizer
+          cd services/summary-generator
           bun run src/start-api-server.ts > backend_ts_server_log.log 2>&1 &
           API_PID=$!
           echo "$API_PID" > .summarizer_api.pid
@@ -129,7 +129,7 @@ jobs:
       - name: Stop local processes
         if: always()
         run: |
-          for file in services/summarizer/.summarizer_api.pid llama-server.pid; do
+          for file in services/summary-generator/.summarizer_api.pid llama-server.pid; do
             if [ -f "$file" ]; then
               kill "$(cat "$file")" 2>/dev/null || true
               rm -f "$file"
@@ -143,5 +143,5 @@ jobs:
           name: yen-ai-pipeline-artifacts
           path: |
             llama-server.log
-            services/summarizer/backend_ts_server_log.log
-            services/summarizer/pipeline-events.jsonl
+            services/summary-generator/backend_ts_server_log.log
+            services/summary-generator/pipeline-events.jsonl

@@ -1,5 +1,5 @@
 {
-  "name": "@yen-idhazh/summarizer",
+  "name": "summary-generator",
   "version": "1.0.0",
   "description": "Event-driven, local LLM summarization pipeline with Zod validation",
   "type": "module",

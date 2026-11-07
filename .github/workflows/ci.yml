@@ -242,7 +242,7 @@ jobs:
 
       - name: TypeScript summarizer model boundary
         if: needs.scope.outputs.code == 'true'
-        working-directory: services/summarizer
+        working-directory: services/summary-generator
         run: |
           bun install --frozen-lockfile
           bun run check

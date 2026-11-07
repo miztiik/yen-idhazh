@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@yen-idhazh/summarizer",
+      "name": "summary-generator",
       "dependencies": {
         "@idhazh/common-contracts": "file:../../packages/common-contracts",
         "defuddle": "^0.6.1",

@@ -68,7 +68,7 @@ jobs:
       - name: Prepare locked metadata and existing workflow dependencies
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
-          bun install --frozen-lockfile --cwd services/summarizer
+          bun install --frozen-lockfile --cwd services/summary-generator
           npm install --no-save --package-lock=false --no-audit --no-fund defuddle linkedom feedsmith tidy-url
       - name: Check the real saved handoff without model dispatch
         run: |
@@ -133,7 +133,7 @@ jobs:
         run: python backend/utilities/model_runtime.py print-pinned-build >> "$GITHUB_OUTPUT"
 
       - name: Install Summarizer Dependencies
-        working-directory: services/summarizer
+        working-directory: services/summary-generator
         run: bun install --frozen-lockfile
 
       # 1. TUNE LINUX MEMORY
