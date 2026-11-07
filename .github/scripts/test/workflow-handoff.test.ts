@@ -180,15 +180,17 @@ test("the caller resolves the actual committed listener and complete transport b
 });
 
 function apiConfiguration() {
-  const listener = { host: "127.0.0.1", port: 4010, max_body_bytes: 1200, body_read_timeout_ms: 30 };
+  const listener = {
+    host: "127.0.0.1" as const, port: 4010, max_body_bytes: 1200, body_read_timeout_ms: 30,
+  };
   return {
-    version: "2026-11-07",
+    version: "2026-11-07" as const,
     listeners: {
       hhem: listener,
       unieval: { ...listener, port: 4011 },
-      coverage: { ...listener, host: "::1", port: 4012, max_body_bytes: 2400 },
+      coverage: { ...listener, host: "::1" as const, port: 4012, max_body_bytes: 2400 },
     },
-    logging: { level: "INFO", max_event_bytes: 3200 },
+    logging: { level: "INFO" as const, max_event_bytes: 3200 },
     log_directory: "backend/var/scorer-logs",
     shutdown_timeout_ms: 20000,
   };
