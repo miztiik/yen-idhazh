@@ -76,6 +76,7 @@ module = [
     "nltk.*",
     "tokenizers",
     "rank_bm25",
+    "yaml",
 ]
 ignore_missing_imports = true
 
