@@ -26,12 +26,12 @@
   },
   "compaction_lag_days": 0,
   "covers_through": "2026-11-07",
-  "generated_at": "2026-11-07T08:21:12Z",
+  "generated_at": "2026-11-07T11:24:52Z",
   "routes": [
-    {"carries": "The model spent 37 h 10 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 2,"worst": "3 runs worth a look"},
-    {"carries": "This day ran in 3 runs, 1.28x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "67 items failed"},
-    {"carries": "145 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 1080.3 MB"},
-    {"carries": "19 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
+    {"carries": "The model spent 50 h 14 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 2,"worst": "4 runs worth a look"},
+    {"carries": "This day ran in 4 runs, 1.28x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "86 items failed"},
+    {"carries": "206 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 1080.3 MB"},
+    {"carries": "27 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
     {"carries": "100 feeds failed on the last ask.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "6 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
   ],
@@ -134,12 +134,12 @@
     "compared_from": "2026-09-14"
   },
   "size": {
-    "articles_to_cap": 449496,
-    "bytes": 62682289,
-    "cap_fraction": 0.05837743077427149,
-    "left_mb": 964.221510887146,
+    "articles_to_cap": 449440,
+    "bytes": 62807295,
+    "cap_fraction": 0.05849385168403387,
+    "left_mb": 964.1022958755493,
     "measured_days": 77,
-    "sentence": "59.8 MB of the 1 GB limit - room for about 449,000 more articles."
+    "sentence": "59.9 MB of the 1 GB limit - room for about 449,000 more articles."
   },
   "verdict": {
     "date": "2026-11-07",
@@ -148,15 +148,16 @@
     "runs": [
       {"health": "amber","label": "Run 1 is worth a look"},
       {"health": "amber","label": "Run 2 is worth a look"},
-      {"health": "amber","label": "Run 3 is worth a look"}
+      {"health": "amber","label": "Run 3 is worth a look"},
+      {"health": "amber","label": "Run 4 is worth a look"}
     ],
-    "sentence": "2026-11-07 ran 3 runs and published 173 of 240 planned items. 67 items failed."
+    "sentence": "2026-11-07 ran 4 runs and published 234 of 320 planned items. 86 items failed."
   },
   "version": "2026-10-11T21:00",
   "worst": {
     "href": "/console/model/",
     "id": "model",
     "label": "Summaries",
-    "sentence": "67 items failed, so they are not in the day the digest published."
+    "sentence": "86 items failed, so they are not in the day the digest published."
   }
 }
