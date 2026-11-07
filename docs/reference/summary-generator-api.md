@@ -29,7 +29,7 @@ Table A - Generator operations
 | Id | Method | Path | Meaning |
 | --- | --- | --- | --- |
 | A1 | POST | `/api/2026-11-05/generate-summary` | Generate one independent structured summary. |
-| A2 | GET | `/api/2026-11-05/get-summary-generator-health` | Return `{status: "ok", version: "2026-11-06"}` for process/configuration availability, not model readiness. |
+| A2 | GET | `/api/2026-11-05/get-summary-generator-health` | Return `{status: "ok", version: "2026-11-07"}` for process/configuration availability, not model readiness. |
 
 Paths match exactly, without a trailing slash. Retired `/api/summarize`,
 `/health` and `/api/diagnostics` paths return HTTP 404 with no alias or redirect.
@@ -49,7 +49,7 @@ Every request builds fresh system and user messages and makes one native
 generation call. A running model or native prefix cache may be reused;
 no previous answer or conversation is carried into the next request.
 
-Success is `{success: true, data, prompt_sha256, prompt_source, usage}`.
+Success is `{success: true, data, model, prompt_sha256, prompt_source, usage}`.
 
 Table B - Successful response
 
@@ -62,6 +62,12 @@ Table B - Successful response
 | B5 | `prompt_source` | `default` or `override`. |
 | B6 | `usage.prompt_tokens` | Actual nonnegative native input count, or `null` when absent. |
 | B7 | `usage.completion_tokens` | Actual nonnegative native output count, or `null` when absent. |
+| B8 | `model` | Nonblank model name reported by the native server, unchanged, or `null` when unavailable. |
+
+`model` describes server-reported metadata, not verified model weights.
+Missing, blank or malformed model metadata stays `null`, never the configured
+model name. A different reported name does not discard a valid summary.
+Reporting it performs no readiness probe, model switch or server restart.
 
 Native usage fields take precedence over available native timing counts.
 Missing counts never become zero. Summary data contains no classifications,
@@ -70,9 +76,11 @@ Native completion, final-content and output validation fail rather than
 accepting an incomplete answer or inventing a missing summary field.
 
 The API payload version and changelog are declared in
-`src/schemas/summary-result.schema.ts` as `2026-11-06`, separately from the
-fixed HTTP date. The current response and private caller reader switch together;
-older HTTP products are not compatibility modes.
+`src/schemas/summary-result.schema.ts` as `2026-11-07`, separately from the
+fixed HTTP date. New responses always include `model`. The strict reader also
+accepts older saved summary results that omit it; omission remains unknown,
+not a configured-name substitution. The private caller retains reading of its
+`2026-11-06` captures. Older HTTP products are not compatibility modes.
 
 ## Refusals and transport
 

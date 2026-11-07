@@ -14,10 +14,11 @@ import { SUMMARY_GENERATOR_TESTS_EVENT_SOURCE } from "../declare-event-source.js
 export const SUMMARY_WORKFLOW_VERSION = SUMMARY_API_VERSION;
 export const SUMMARY_WORKFLOW_EVENT_TYPE = "SUMMARY_API_COMPLETED";
 export const SUMMARY_WORKFLOW_CHANGELOG = [
-  { version: SUMMARY_WORKFLOW_VERSION, change: "Capture the pure summary response and caller-owned preparation evidence." },
+  { version: SUMMARY_WORKFLOW_VERSION, change: "Capture the server-reported model and retain earlier summary captures." },
+  { version: "2026-11-06", change: "Capture the pure summary response and caller-owned preparation evidence." },
 ] as const;
 export const SummaryWorkflowDataSchema = z.object({
-  version: z.literal(SUMMARY_WORKFLOW_VERSION),
+  version: z.enum([SUMMARY_WORKFLOW_VERSION, "2026-11-06"]),
   model_name: z.string().min(1),
   request: SummarizeRequestSchema,
   result: SummaryResultSchema,

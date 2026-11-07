@@ -1,6 +1,6 @@
 # Summary generator callers
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 
 Which analysis and summary-only outputs does the independent private caller
 retain outside the generation API?
@@ -76,11 +76,18 @@ The summary-only caller writes named `summary-response.json`,
 `summary-events.jsonl` and `summary-report.md` files with temp-file-plus-rename.
 Its step summary is caller-owned. The saved event uses the shared metadata
 envelope, with nested response validation against the API contract.
-Its data version/changelog is `2026-11-06`, with current-only reading.
+Its data version/changelog is `2026-11-07`. The reader also accepts
+`2026-11-06` captures without changing their version, identity or original
+contents; their omitted `result.model` remains unknown.
 Input hashes and supplied prompt hashes are checked against their captured text;
 the API response and caller carriers must belong to the same request trace.
 Absent native usage stays `null`; actual zero counts remain zero counts.
 No missing classification, score or machine reading is fabricated.
+
+The report separates configured `model_name` from the API's server-reported
+`result.model`. A missing reported name is labelled as not reported, never
+replaced with the configured name. The [API contract](summary-generator-api.md#request-and-response)
+owns the reported name's meaning and validation.
 
 ## Full-analysis saved events
 
@@ -89,23 +96,37 @@ named `pipeline-events.jsonl` privately. Each request has its own event bus and
 history; reports receive that request's history only.
 `OUTPUT_STRUCTURED.data` remains the complete validated analysis object.
 
-Its event family remains `2026-11-03`, declared in
-`contracts/pipeline-event.schema.ts`. Moving the producer does not restamp
-the saved format or rewrite historical `/services/summarizer` occurrences.
-The current-format reader retains their original source, UUID, UTC time,
-carrier and data. Malformed envelopes or application values fail by line,
-without silently dropping a record or allocating a replacement occurrence.
+The full-analysis result and event contracts are `2026-11-07`, declared in
+`contracts/analysis-result.schema.ts` and `contracts/pipeline-event.schema.ts`.
+Their shared metrics contract writes that date at `token_metrics.version` in
+results and structured-output events, and `tokenMetrics.version` in completed
+inference events. New writes require that stamp and the complete current shape.
+Readers also accept unversioned numeric metrics from the earlier format, retaining
+the original source, UUID, UTC time, carrier and data, including historical
+`/services/summarizer` occurrences. They never restamp or rewrite a recording,
+infer missing data from a historical zero, or use legacy reading to accept an
+invalid current or unsupported version. Malformed values fail by line.
 
 The full-analysis report retains classifications, source text, prompts, raw
-model output and existing measurements. Native measurements keep their legacy
-saved-value rules; the summary-only product has its own nullable usage contract.
-Private captures are not published site data.
+model output and existing measurements. Missing native counts use the corresponding
+timing count when available, then `null`; a reported zero takes precedence over
+that fallback. An independently reported total survives missing component counts;
+otherwise a total requires both counts. Missing stage times and token rates stay
+`null`. A reported rate survives missing counts or times; deriving a rate requires
+an available count and positive native stage time. The measured whole-request
+duration remains available but never replaces native completion time.
+Reports and notices display null measurements as `Not reported`, and actual
+zeroes numerically. Legacy reports show values as recorded with a warning that
+zeroes may mean unavailable data and stage times may include historical
+whole-request substitutions. Private captures are not published site data.
 
 ## Offline verification
 
 `analysis-events.test.ts` and `analysis-runtime.test.ts` compose the real CLI,
 orchestrator, validators, event writer/reader and report with named native
-recordings. `extract-content.test.ts` uses the real readable-article fixture,
+recordings. `token-metrics.test.ts` checks in-memory missing, zero and partial
+measurements, strict current writes, lossless historical reads and report labels.
+`extract-content.test.ts` uses the real readable-article fixture,
 one recorded main-document request and actual JSDOM parsing/closure.
 `summary-workflow.test.ts` runs the actual summary caller against the real
 recorded-boundary API handler and reads back its response, event and report.
@@ -120,6 +141,12 @@ transport preserves source fallback, input shortening and full-analysis
 measurements without making every summary request pay for them.
 The explicit JSDOM peer fixes the parser's native-instance contract; extraction
 dependencies install only with the private caller, not the API or site.
+
+One nested metrics version identifies the same changed shape in results and
+both metrics-bearing events without duplicating application-version fields.
+Legacy readers preserve recorded values because an old zero cannot establish
+whether the native server reported it. A future change outside metrics needs
+its own applicable version rather than borrowing this stamp.
 
 ## See also
 

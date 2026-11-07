@@ -712,9 +712,11 @@ The generator and caller cases use standard in-memory HTTP requests/responses,
 recorded native/source boundaries, real JSDOM parsing and named private output
 files under generated project-owned directories. They open no test sockets,
 download no model and contact no external service.
-The original full-analysis recording, event date and separate older
-`analytic_synthesis` handoff remain unchanged. Pure summary responses and
-nullable native usage are checked independently.
+The original native recordings and separate older `analytic_synthesis` handoff
+remain unchanged. Full-analysis checks cover the current nullable format and
+historical readback described in
+[summary-generator-caller.md](../reference/summary-generator-caller.md#full-analysis-saved-events).
+Pure summary responses and nullable native usage are checked independently.
 Ordinary CI runs both complete native suites; `Saved workflow handoff` remains
 in its existing workflow. The separate model-free Linux evaluator/workflow gate
 still applies to the merge candidate. These checks do not dispatch either live

@@ -2,16 +2,22 @@
 import { z } from "zod";
 import { readCloudEvent } from "@idhazh/common-contracts/read-cloud-event";
 import type { CloudEvent } from "@idhazh/common-contracts/schemas/cloud-event";
-import { SummaryStructuredOutputSchema } from "./analysis-result.schema.js";
 import {
+  SummaryStructuredOutputSchema, readSummaryStructuredOutput,
+  type LegacySummaryStructuredOutput,
+} from "./analysis-result.schema.js";
+import {
+  DETAILED_TOKEN_METRICS_VERSION,
   DetailedTokenMetricsSchema,
+  LegacyDetailedTokenMetricsSchema,
   SourceTypeEnum,
   SwapActivityMetricsSchema,
 } from "./system-telemetry.schema.js";
 
-export const PIPELINE_EVENT_VERSION = "2026-11-03" as const;
+export const PIPELINE_EVENT_VERSION = DETAILED_TOKEN_METRICS_VERSION;
 export const PIPELINE_EVENT_CHANGELOG = [
-  { version: PIPELINE_EVENT_VERSION, change: "Use shared CloudEvents with validated summarizer data and explicit operation context." },
+  { version: PIPELINE_EVENT_VERSION, change: "Save dated nullable token metrics and read unversioned numeric events unchanged." },
+  { version: "2026-11-03", change: "Use shared CloudEvents with validated summarizer data and explicit operation context." },
 ] as const;
 
 export const PipelineEventDataSchemas = {
@@ -47,9 +53,14 @@ export const PipelineEventDataSchemas = {
     tokenMetrics: DetailedTokenMetricsSchema,
     swapMetrics: SwapActivityMetricsSchema,
     rawOutput: z.string(),
-  }),
+  }).strict(),
   OUTPUT_STRUCTURED: SummaryStructuredOutputSchema,
 };
+
+const LegacyInferenceCompletedSchema = PipelineEventDataSchemas.INFERENCE_COMPLETED.extend({
+  tokenMetrics: LegacyDetailedTokenMetricsSchema,
+  swapMetrics: SwapActivityMetricsSchema.passthrough(),
+}).passthrough();
 
 export const PipelineEventTypeEnum = z.enum([
   "URL_HTTP_FETCH_STARTED",
@@ -66,6 +77,10 @@ export type PipelineEventData<T extends PipelineEventType> =
   z.infer<(typeof PipelineEventDataSchemas)[T]>;
 export type PipelineEvent<T extends PipelineEventType = PipelineEventType> =
   Omit<CloudEvent<PipelineEventData<T>>, "type"> & { type: T };
+export type RecordedPipelineEventData = PipelineEventData<PipelineEventType>
+  | LegacySummaryStructuredOutput | z.infer<typeof LegacyInferenceCompletedSchema>;
+export type RecordedPipelineEvent = Omit<CloudEvent<RecordedPipelineEventData>, "type">
+  & { type: PipelineEventType };
 
 export function parsePipelineEventData<T extends PipelineEventType>(
   type: T,
@@ -74,7 +89,21 @@ export function parsePipelineEventData<T extends PipelineEventType>(
   return PipelineEventDataSchemas[type].parse(value);
 }
 
-export function readPipelineEvent(value: unknown): PipelineEvent {
+export function readPipelineEventData(
+  type: PipelineEventType,
+  value: unknown,
+): RecordedPipelineEventData {
+  if (type === "OUTPUT_STRUCTURED") return readSummaryStructuredOutput(value);
+  if (type === "INFERENCE_COMPLETED") {
+    const { tokenMetrics } = z.object({ tokenMetrics: z.record(z.unknown()) }).parse(value);
+    return Object.hasOwn(tokenMetrics, "version")
+      ? parsePipelineEventData(type, value)
+      : LegacyInferenceCompletedSchema.parse(value);
+  }
+  return parsePipelineEventData(type, value);
+}
+
+export function readPipelineEvent(value: unknown): RecordedPipelineEvent {
   const { type } = z.object({ type: PipelineEventTypeEnum }).parse(value);
-  return { ...readCloudEvent(value, data => parsePipelineEventData(type, data)), type };
+  return { ...readCloudEvent(value, data => readPipelineEventData(type, data)), type };
 }
