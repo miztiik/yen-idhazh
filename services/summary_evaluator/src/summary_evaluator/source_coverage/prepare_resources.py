@@ -9,7 +9,10 @@ from pathlib import Path
 import httpx
 
 from summary_evaluator.shared.load_model_assets import resolve_snapshot
-from summary_evaluator.source_coverage.contracts.service_settings import CoverageSettings
+from summary_evaluator.source_coverage.contracts.service_settings import (
+    CoverageSentenceResources,
+    CoverageSettings,
+)
 
 
 def atomic_write(path: Path, data: bytes) -> None:
@@ -38,6 +41,17 @@ def read_bounded_url(url: str, maximum: int, timeout_ms: int) -> bytes:
                 raise ValueError("A named coverage resource exceeds its declared allowance")
             data.extend(block)
     return bytes(data)
+
+
+def extract_sentences(
+    archive: Path, destination: Path, selected: CoverageSentenceResources
+) -> None:
+    with zipfile.ZipFile(archive) as source:
+        for name in selected.files:
+            if source.getinfo(name).file_size > selected.max_archive_bytes:
+                raise ValueError("A named sentence resource exceeds its declared allowance")
+            # NLTK's public sentence API resolves these archive entries below tokenizers/.
+            atomic_write(destination / "tokenizers" / name, source.read(name))
 
 
 def prepare_resources(root: Path, settings: CoverageSettings, *, include_weights: bool) -> None:
@@ -82,8 +96,4 @@ def prepare_resources(root: Path, settings: CoverageSettings, *, include_weights
         archive.read_bytes()
     ).hexdigest() != sentences.archive_sha256:
         raise ValueError("Prepared sentence rules do not match the pinned digest")
-    with zipfile.ZipFile(archive) as source:
-        for name in sentences.files:
-            if source.getinfo(name).file_size > sentences.max_archive_bytes:
-                raise ValueError("A named sentence resource exceeds its declared allowance")
-            atomic_write(cache / "sentences" / name, source.read(name))
+    extract_sentences(archive, cache / "sentences", sentences)
