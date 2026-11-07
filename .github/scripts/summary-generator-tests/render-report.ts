@@ -1,21 +1,39 @@
 /** Which summary and saved event identities belong in the private job report? */
 import fs from "node:fs";
 import type { Writable } from "node:stream";
-import type { SummaryStructuredOutput, PipelineEvent } from "./contracts/export-analysis-schemas.js";
+import type {
+  RecordedSummaryStructuredOutput, RecordedPipelineEvent,
+} from "./contracts/export-analysis-schemas.js";
+
+const NOT_REPORTED = "Not reported";
+
+function formatMeasurement(value: number | null, unit: string): string {
+  return value === null ? NOT_REPORTED : `${value} ${unit}`;
+}
+
+function formatStageTime(milliseconds: number | null): string {
+  return milliseconds === null ? NOT_REPORTED : `${(milliseconds / 1000).toFixed(2)}s`;
+}
 
 export function renderGithubStepSummary(
   modelName: string,
-  result: SummaryStructuredOutput,
-  events: PipelineEvent[],
+  result: RecordedSummaryStructuredOutput,
+  events: RecordedPipelineEvent[],
   options: { summaryPath?: string; diagnostic?: Pick<Writable, "write">; writeNotice?: boolean } = {},
 ): void {
   const tm = result.token_metrics;
   const sm = result.swap_metrics;
   const sa = result.source_audit;
+  const promptCount = formatMeasurement(tm.prompt_tokens, "tokens");
+  const completionCount = formatMeasurement(tm.completion_tokens, "tokens");
+  const promptRate = formatMeasurement(tm.prompt_tokens_per_second, "tokens/sec");
+  const completionRate = formatMeasurement(tm.completion_tokens_per_second, "tokens/sec");
+  const legacy = !Object.hasOwn(tm, "version");
+  const legacyWarning = "Historical measurements are shown as recorded; zeroes may mean unavailable data and stage times may include whole-request timing.";
 
   if (options.writeNotice !== false) {
     (options.diagnostic ?? process.stderr).write(
-      `::notice title=AI Pipeline Succeeded::Input: ${tm.prompt_tokens_per_second} tokens/s (${tm.prompt_tokens} tokens) | Output: ${tm.completion_tokens_per_second} tokens/s (${tm.completion_tokens} tokens) | Time: ${(tm.total_duration_ms / 1000).toFixed(1)}s | Peak swap: ${sm.peak_server_swap_mb} MB\n`,
+      `::notice title=AI Pipeline Succeeded::Input: ${promptRate} (${promptCount}) | Output: ${completionRate} (${completionCount}) | Time: ${(tm.total_duration_ms / 1000).toFixed(1)}s | Peak swap: ${sm.peak_server_swap_mb} MB${legacy ? ` | ${legacyWarning}` : ""}\n`,
     );
   }
 
@@ -33,10 +51,11 @@ export function renderGithubStepSummary(
     ``,
     `| Id | Metric | Token Count | Elapsed Time | Speed (Tokens / Sec) |`,
     `| :--- | :--- | :--- | :--- | :--- |`,
-    `| A1 | **Prompt (Input Ingestion)** | **${tm.prompt_tokens} tokens** | ${tm.prompt_time_ms > 0 ? (tm.prompt_time_ms / 1000).toFixed(2) + "s" : "Batched"} | **${tm.prompt_tokens_per_second} tokens/sec** |`,
-    `| A2 | **Completion (Output Gen)** | **${tm.completion_tokens} tokens** | ${(tm.completion_time_ms / 1000).toFixed(2)}s | **${tm.completion_tokens_per_second} tokens/sec** |`,
-    `| A3 | **Total Evaluation** | **${tm.total_tokens} tokens** | **${(tm.total_duration_ms / 1000).toFixed(2)}s** | Overall Pipeline Throughput |`,
+    `| A1 | **Prompt (Input Ingestion)** | **${promptCount}** | ${formatStageTime(tm.prompt_time_ms)} | **${promptRate}** |`,
+    `| A2 | **Completion (Output Gen)** | **${completionCount}** | ${formatStageTime(tm.completion_time_ms)} | **${completionRate}** |`,
+    `| A3 | **Total Evaluation** | **${formatMeasurement(tm.total_tokens, "tokens")}** | **${(tm.total_duration_ms / 1000).toFixed(2)}s** | ${NOT_REPORTED} |`,
     ``,
+    ...(legacy ? [legacyWarning, ``] : []),
     `---`,
     ``,
     `## Content Stance & Ideological Alignment`,

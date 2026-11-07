@@ -13,9 +13,10 @@ import {
   type PipelineEvent,
   type PipelineEventData,
   type PipelineEventType,
+  type RecordedPipelineEvent,
 } from "./contracts/pipeline-event.schema.js";
 
-export function readPipelineEvents(jsonlFilePath: string): PipelineEvent[] {
+export function readPipelineEvents(jsonlFilePath: string): RecordedPipelineEvent[] {
   const lines = fs.readFileSync(jsonlFilePath, "utf8").split(/\r?\n/);
   if (lines.at(-1) === "") lines.pop();
   return lines.map((line, index) => {

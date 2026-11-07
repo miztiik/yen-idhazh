@@ -10,7 +10,7 @@ import { readTraceContext } from "@idhazh/common-contracts/propagate-trace-conte
 import { SUMMARY_GENERATOR_TESTS_EVENT_SOURCE } from "../declare-event-source.js";
 import { orchestratePipeline } from "../orchestrate-analysis.js";
 import { SummaryStructuredOutputSchema } from "../contracts/analysis-result.schema.js";
-import { PIPELINE_EVENT_VERSION, readPipelineEvent, type PipelineEvent } from "../contracts/pipeline-event.schema.js";
+import { PIPELINE_EVENT_VERSION, readPipelineEvent, type RecordedPipelineEvent } from "../contracts/pipeline-event.schema.js";
 import { PipelineEventBus, readPipelineEvents } from "../publish-events.js";
 import { renderGithubStepSummary } from "../render-report.js";
 import { runCli } from "../run.js";
@@ -20,7 +20,7 @@ import {
 } from "../../../../services/summary-generator/test/model-recordings.js";
 import { recordOutput, withRecordedModel } from "./pipeline-recordings.js";
 
-function eventContext(event: PipelineEvent) {
+function eventContext(event: RecordedPipelineEvent) {
   return readTraceContext({ traceparent: event.traceparent, tracestate: event.tracestate });
 }
 
@@ -60,7 +60,7 @@ test("same-operation occurrences retain unchanged current-format historical sour
     const first = bus.emitEvent("URL_HTTP_FETCH_COMPLETED", data, context);
     const second = bus.emitEvent("URL_HTTP_FETCH_COMPLETED", data, context);
     const bytes = readFileSync(eventFile, "utf8");
-    assert.equal(PIPELINE_EVENT_VERSION, "2026-11-03");
+    assert.equal(PIPELINE_EVENT_VERSION, "2026-11-07");
     assert.notEqual(first.id, second.id);
     assert.equal(first.traceparent, second.traceparent);
     assert.deepEqual(readPipelineEvents(eventFile), [first, second]);
@@ -190,6 +190,40 @@ test("concurrent caller operations retain separate histories and reports inside 
       history.find(event => event.type === "INFERENCE_DISPATCHED")?.traceparent)).size, 2);
     assert.ok(calls.every(call => call.headers.traceparent === undefined && call.headers.tracestate === undefined));
   }, { waitForCalls: 2 })));
+
+test("the real caller saves nullable measurements without losing independent timings, totals or zero rates", { timeout: 120000 }, () =>
+  withConfig(async root => {
+    const { loadModelRuntime } = await import("../../../../services/summary-generator/src/config/load-model-runtime.js");
+    const runtime = loadModelRuntime(root);
+    const reply = readJson<RecordedNativeReply>("tests/fixtures/typescript-metadata/summarizer-model-response.json");
+    const eventFile = path.join(root, "nullable-events.jsonl"), reportFile = path.join(root, "nullable-report.md");
+    const bus = new PipelineEventBus(SUMMARY_GENERATOR_TESTS_EVENT_SOURCE, eventFile);
+    const result = await orchestratePipeline({
+      input_text: "Article text.", url: "", system_prompt: "Return structured analysis.",
+    }, bus, runtime, createRootContext(),
+    async () => new Response(JSON.stringify({
+      choices: reply.choices, usage: { total_tokens: 17 },
+      timings: { predicted_ms: 20, prompt_per_second: 0 },
+    }), { headers: { "Content-Type": "application/json" } }), loadAnalysisSettings(root));
+    assert.deepEqual(result.token_metrics, {
+      version: "2026-11-07", prompt_tokens: null, completion_tokens: null, total_tokens: 17,
+      prompt_time_ms: null, completion_time_ms: 20, total_duration_ms: result.token_metrics.total_duration_ms,
+      prompt_tokens_per_second: 0, completion_tokens_per_second: null,
+    });
+    assert.ok(result.token_metrics.total_duration_ms >= 0);
+    const events = readPipelineEvents(eventFile);
+    const completed = events.find(event => event.type === "INFERENCE_COMPLETED");
+    const structured = events.find(event => event.type === "OUTPUT_STRUCTURED");
+    assert.ok(completed && structured);
+    assert.deepEqual(structured.data, result);
+    assert.ok("tokenMetrics" in completed.data);
+    assert.deepEqual(completed.data.tokenMetrics, result.token_metrics);
+    renderGithubStepSummary(runtime.request.model, result, events, { summaryPath: reportFile, writeNotice: false });
+    const report = readFileSync(reportFile, "utf8");
+    assert.match(report, /\*\*Not reported\*\* \| Not reported \| \*\*0 tokens\/sec\*\*/);
+    assert.match(report, /\*\*Not reported\*\* \| 0\.02s \| \*\*Not reported\*\*/);
+    assert.match(report, /\*\*17 tokens\*\*/);
+  }));
 
 test("an incompatible recorded native reply saves no successful CLI output or private report", { timeout: 120000 }, () =>
   withConfig(root => withRecordedModel(root, async ({ send }) => {

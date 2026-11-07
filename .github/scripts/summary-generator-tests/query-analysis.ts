@@ -9,9 +9,12 @@ import type { NativeBounds } from "../../../services/summary-generator/src/confi
 import { loadAnalysisConfig, loadAnalysisSettings } from "./load-analysis-config.js";
 
 const timings = z.object({
-  prompt_n: z.number().nullable().optional(), prompt_ms: z.number().nullable().optional(),
-  prompt_per_second: z.number().nullable().optional(), predicted_n: z.number().nullable().optional(),
-  predicted_ms: z.number().nullable().optional(), predicted_per_second: z.number().nullable().optional(),
+  prompt_n: z.number().int().nonnegative().nullable().optional(),
+  prompt_ms: z.number().finite().nonnegative().nullable().optional(),
+  prompt_per_second: z.number().finite().nonnegative().nullable().optional(),
+  predicted_n: z.number().int().nonnegative().nullable().optional(),
+  predicted_ms: z.number().finite().nonnegative().nullable().optional(),
+  predicted_per_second: z.number().finite().nonnegative().nullable().optional(),
 }).passthrough();
 const reply = z.object({
   choices: z.array(z.object({
@@ -21,8 +24,9 @@ const reply = z.object({
     }).passthrough(),
   }).passthrough()).min(1),
   usage: z.object({
-    prompt_tokens: z.number().nullable().optional(), completion_tokens: z.number().nullable().optional(),
-    total_tokens: z.number().nullable().optional(),
+    prompt_tokens: z.number().int().nonnegative().nullable().optional(),
+    completion_tokens: z.number().int().nonnegative().nullable().optional(),
+    total_tokens: z.number().int().nonnegative().nullable().optional(),
   }).passthrough().nullable().optional(),
   timings: timings.nullable().optional(),
 }).passthrough();
@@ -31,7 +35,7 @@ export interface LlamaInferenceResponse {
   context: OperationMetadata;
   rawContent: string;
   parsedAnalysis: RawModelAnalysis;
-  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  usage: { prompt_tokens: number | null; completion_tokens: number | null; total_tokens: number | null };
   timings: LlamaInferenceTimings;
 }
 export function buildInferencePrompt(
@@ -58,14 +62,14 @@ export async function queryLlamaServer(
   const jsonMatch = answer.match(/\{[\s\S]*\}/);
   const parsed: unknown = JSON.parse(jsonMatch ? jsonMatch[0] : answer);
   const parsedAnalysis = RawModelAnalysisSchema.parse(parsed);
-  // These defaults retain the caller's existing saved measurement contract.
-  const promptTokens = response.usage?.prompt_tokens ?? response.timings?.prompt_n ?? 0;
-  const completionTokens = response.usage?.completion_tokens ?? response.timings?.predicted_n ?? 0;
+  const promptTokens = response.usage?.prompt_tokens ?? response.timings?.prompt_n ?? null;
+  const completionTokens = response.usage?.completion_tokens ?? response.timings?.predicted_n ?? null;
   return {
     context, rawContent, parsedAnalysis,
     usage: {
       prompt_tokens: promptTokens, completion_tokens: completionTokens,
-      total_tokens: response.usage?.total_tokens ?? promptTokens + completionTokens,
+      total_tokens: response.usage?.total_tokens
+        ?? (promptTokens !== null && completionTokens !== null ? promptTokens + completionTokens : null),
     },
     timings: response.timings ?? {},
   };
