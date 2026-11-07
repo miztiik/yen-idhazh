@@ -77,7 +77,9 @@ PASTEABLE_CONTEXTS = ("steps", "needs", "inputs")
 
 
 @pytest.mark.parametrize("filename", ["yen-ai-pipeline.yml", "ai-pipeline-tests.yml"])
-def test_independent_launchers_validate_the_optional_model_file_before_launch(filename: str) -> None:
+def test_independent_launchers_validate_the_optional_model_file_before_launch(
+    filename: str,
+) -> None:
     workflow = _load_workflows()[filename]
     models_file = _mapping(_declared_dispatch_inputs(workflow)["models_file"], "models_file")
     assert models_file.get("default") == ""
@@ -85,7 +87,17 @@ def test_independent_launchers_validate_the_optional_model_file_before_launch(fi
     assert len(callers) == 1
     _, job_name = next(iter(callers))
     pointer = _action_call(workflow, job_name, "./.github/actions/candidate-config")
-    assert pointer["models_file"] == "${{ inputs.models_file }}"
+    if filename == "ai-pipeline-tests.yml":
+        job = _mapping(_mapping(workflow["jobs"], "jobs")[job_name], "job")
+        job_env = _mapping(job["env"], "env")
+        assert job_env["MODELS_FILE"] == "${{ inputs.models_file || inputs.model }}"
+        assert job_env["CONFIG_ROOT"] == (
+            "${{ (inputs.models_file || inputs.model) != '' "
+            "&& 'backend/var/candidate-config' || 'config' }}"
+        )
+        assert pointer["models_file"] == "${{ env.MODELS_FILE }}"
+    else:
+        assert pointer["models_file"] == "${{ inputs.models_file }}"
     steps = _steps(workflow, job_name)
     validation = next(
         index
