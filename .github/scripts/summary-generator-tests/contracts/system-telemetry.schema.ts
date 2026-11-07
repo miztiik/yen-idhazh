@@ -16,7 +16,12 @@ export const SourceAuditSchema = z.object({
 
 export type SourceAudit = z.infer<typeof SourceAuditSchema>;
 
-export const DetailedTokenMetricsSchema = z.object({
+export const DETAILED_TOKEN_METRICS_VERSION = "2026-11-07" as const;
+export const DETAILED_TOKEN_METRICS_CHANGELOG = [
+  { version: DETAILED_TOKEN_METRICS_VERSION, change: "Distinguish unavailable native measurements from reported zeroes." },
+] as const;
+
+export const LegacyDetailedTokenMetricsSchema = z.object({
   prompt_tokens: z.number().int().nonnegative(),
   completion_tokens: z.number().int().nonnegative(),
   total_tokens: z.number().int().nonnegative(),
@@ -25,7 +30,19 @@ export const DetailedTokenMetricsSchema = z.object({
   total_duration_ms: z.number().nonnegative(),
   prompt_tokens_per_second: z.number().nonnegative(),
   completion_tokens_per_second: z.number().nonnegative(),
-});
+}).passthrough();
+
+export const DetailedTokenMetricsSchema = LegacyDetailedTokenMetricsSchema.extend({
+  version: z.literal(DETAILED_TOKEN_METRICS_VERSION),
+  prompt_tokens: LegacyDetailedTokenMetricsSchema.shape.prompt_tokens.nullable(),
+  completion_tokens: LegacyDetailedTokenMetricsSchema.shape.completion_tokens.nullable(),
+  total_tokens: LegacyDetailedTokenMetricsSchema.shape.total_tokens.nullable(),
+  prompt_time_ms: LegacyDetailedTokenMetricsSchema.shape.prompt_time_ms.finite().nullable(),
+  completion_time_ms: LegacyDetailedTokenMetricsSchema.shape.completion_time_ms.finite().nullable(),
+  total_duration_ms: LegacyDetailedTokenMetricsSchema.shape.total_duration_ms.finite(),
+  prompt_tokens_per_second: LegacyDetailedTokenMetricsSchema.shape.prompt_tokens_per_second.finite().nullable(),
+  completion_tokens_per_second: LegacyDetailedTokenMetricsSchema.shape.completion_tokens_per_second.finite().nullable(),
+}).strict();
 
 export type DetailedTokenMetrics = z.infer<typeof DetailedTokenMetricsSchema>;
 

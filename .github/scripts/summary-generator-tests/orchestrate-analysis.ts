@@ -5,7 +5,6 @@ import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operati
 import {
   type SummarizeRequest,
   type SummaryStructuredOutput,
-  type DetailedTokenMetrics,
   SummarizeRequestSchema,
   SummaryStructuredOutputSchema,
 } from "./contracts/export-analysis-schemas.js";
@@ -19,6 +18,7 @@ import {
   buildInferencePrompt,
   queryLlamaServer,
 } from "./query-analysis.js";
+import { deriveTokenMetrics } from "./derive-token-metrics.js";
 import { PipelineEventBus } from "./publish-events.js";
 import type { ModelRuntime } from "../../../services/summary-generator/src/config/load-model-runtime.js";
 import type { CompletionFetch } from "../../../services/summary-generator/src/services/request-completion.service.js";
@@ -124,42 +124,7 @@ export async function orchestratePipeline(
   const totalDurationMs = Math.round(performance.now() - timing.startedAt);
   const swapMetrics = finalizeSwapMetrics(peakProcessSwapMb, vmstatStart);
 
-  // Token Metrics calculation
-  const promptTokens = inferenceResult.usage.prompt_tokens;
-  const completionTokens = inferenceResult.usage.completion_tokens;
-  const promptTimeMs = inferenceResult.timings.prompt_ms
-    ? Math.round(inferenceResult.timings.prompt_ms)
-    : 0;
-  let completionTimeMs = inferenceResult.timings.predicted_ms
-    ? Math.round(inferenceResult.timings.predicted_ms)
-    : 0;
-
-  if (promptTimeMs === 0 && completionTimeMs === 0) {
-    completionTimeMs = totalDurationMs;
-  }
-
-  const promptTokensPerSec = inferenceResult.timings.prompt_per_second
-    ? Number(inferenceResult.timings.prompt_per_second.toFixed(2))
-    : promptTimeMs > 0
-    ? Number((promptTokens / (promptTimeMs / 1000)).toFixed(2))
-    : 0;
-
-  const completionTokensPerSec = inferenceResult.timings.predicted_per_second
-    ? Number(inferenceResult.timings.predicted_per_second.toFixed(2))
-    : completionTimeMs > 0
-    ? Number((completionTokens / (completionTimeMs / 1000)).toFixed(2))
-    : 0;
-
-  const tokenMetrics: DetailedTokenMetrics = {
-    prompt_tokens: promptTokens,
-    completion_tokens: completionTokens,
-    total_tokens: inferenceResult.usage.total_tokens,
-    prompt_time_ms: promptTimeMs,
-    completion_time_ms: completionTimeMs,
-    total_duration_ms: totalDurationMs,
-    prompt_tokens_per_second: promptTokensPerSec,
-    completion_tokens_per_second: completionTokensPerSec,
-  };
+  const tokenMetrics = deriveTokenMetrics(inferenceResult, totalDurationMs);
 
   eventBus.emitEvent("INFERENCE_COMPLETED", {
     modelName,
