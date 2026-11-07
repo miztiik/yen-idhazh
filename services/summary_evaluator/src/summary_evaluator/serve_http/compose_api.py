@@ -8,9 +8,12 @@ from typing import Final, get_args
 
 from fastapi import APIRouter, FastAPI
 from local_api_host.compose_api import compose_api
-from local_api_host.contracts import HostSettings, ListenerSettings as HostListenerSettings
+from local_api_host.contracts import HostSettings
+from local_api_host.contracts import ListenerSettings as HostListenerSettings
 from local_api_host.create_api_component import (
     ApiComponentRuntime as HostApiComponentRuntime,
+)
+from local_api_host.create_api_component import (
     ComponentShutdownError,
     HealthRenderer,
     HostEventContext,

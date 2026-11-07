@@ -8,8 +8,8 @@ from typing import Protocol
 
 from local_api_host.create_api_component import (
     ApiComponentRuntime as HostApiComponentRuntime,
-    RefusalHandler,
 )
+from local_api_host.create_api_component import RefusalHandler
 from pydantic import BaseModel
 
 from summary_evaluator.shared.contracts.base import ServiceStatus
