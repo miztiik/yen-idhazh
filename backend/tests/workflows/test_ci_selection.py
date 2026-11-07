@@ -180,6 +180,7 @@ def test_legacy_workflow_selects_pinned_coverage_after_generation_and_keeps_one_
         assert removed not in commands
     upload = _step(workflow, "run-pipeline", "name", "Upload Logs and JSONL Telemetry")
     paths = _mapping(upload["with"], "coverage artifacts")["path"]
+    assert isinstance(paths, str)
     assert "pipeline-events.jsonl" in paths and "eval-events.jsonl" not in paths
     assert "${{ steps.coverage.outputs.log_directory }}" in paths
 

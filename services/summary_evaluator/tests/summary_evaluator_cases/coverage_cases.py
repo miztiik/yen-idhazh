@@ -153,12 +153,14 @@ class RecordedCoverageSupervisor(CoverageSupervisor):
         self.scenario = scenario or CoverageScenario()
         self.control: PollableChannel | None = None
         self.child_control: PollableChannel | None = None
+        self.control_ready = asyncio.Event()
 
     def _create_process(
         self, channel: ByteChannel, lifetime: ByteChannel, generation: int
     ) -> BaseProcess:
         parent, child = multiprocessing.get_context("spawn").Pipe(duplex=True)
         self.control, self.child_control = parent, child
+        self.control_ready.set()
         return multiprocessing.get_context("spawn").Process(
             target=run_recorded_coverage_worker,
             args=(
@@ -176,6 +178,8 @@ class RecordedCoverageSupervisor(CoverageSupervisor):
                 self.child_control = None
 
     async def handshake(self) -> dict[str, str]:
+        async with asyncio.timeout(30):
+            await self.control_ready.wait()
         assert self.control is not None
         ready = await asyncio.to_thread(self.control.poll, 30)
         assert ready, "The real coverage boundary did not reach its named phase"
