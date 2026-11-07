@@ -12,6 +12,7 @@ from summary_evaluator.source_coverage.prepare_text import (
     split_sentences,
 )
 from summary_evaluator.source_coverage.retrieve_evidence import EvidenceRetriever
+from summary_evaluator.source_coverage.validate_model_output import validate_model_output
 
 # These evidence phrases retain the existing metric's explanation format.
 UNSUPPORTED_EVIDENCE = "[No strongly entailed passage in matched section]"
@@ -28,15 +29,17 @@ def score_coverage(
     clean_summary = summary_text.strip() or settings.empty_summary
     clean_source = source_text.strip() or settings.empty_source
     data_fluency = backend.convert_input(output_list=[clean_summary])
-    eval_fluency = backend.evaluate_dimension(data_fluency, "fluency")
-    fluency = round(eval_fluency[0]["fluency"], settings.score_decimals) if eval_fluency else 0.0
+    eval_fluency = validate_model_output(
+        backend.evaluate_dimension(data_fluency, "fluency"), len(data_fluency), "fluency"
+    )
+    fluency = round(eval_fluency[0]["fluency"], settings.score_decimals)
 
     macro = extract_macro_skeleton(clean_source, settings)
     data_coherence = backend.convert_input(output_list=[clean_summary], src_list=[macro])
-    eval_coherence = backend.evaluate_dimension(data_coherence, "coherence")
-    coherence = (
-        round(eval_coherence[0]["coherence"], settings.score_decimals) if eval_coherence else 0.0
+    eval_coherence = validate_model_output(
+        backend.evaluate_dimension(data_coherence, "coherence"), len(data_coherence), "coherence"
     )
+    coherence = round(eval_coherence[0]["coherence"], settings.score_decimals)
     chunks = chunk_document(clean_source, settings)
     sentences = split_sentences(clean_summary, settings, warning)
     retriever = EvidenceRetriever(chunks, settings, warning)
@@ -58,15 +61,19 @@ def score_coverage(
         eval_source = [key[0] for key in unique_pairs]
         eval_output = [key[1] for key in unique_pairs]
         data_consistency = backend.convert_input(output_list=eval_output, src_list=eval_source)
-        consistency_results = backend.evaluate_dimension(data_consistency, "consistency")
+        consistency_results = validate_model_output(
+            backend.evaluate_dimension(data_consistency, "consistency"),
+            len(data_consistency),
+            "consistency",
+        )
         for index, result in enumerate(consistency_results):
             pair_key = (eval_source[index], eval_output[index])
-            unique_pairs[pair_key] = float(result.get("consistency", 0.0))
+            unique_pairs[pair_key] = float(result["consistency"])
 
         sentence_scores: dict[int, float] = {}
         sentence_chunk_map: dict[int, int] = {}
         for sentence_index, chunk_index, chunk, sentence in pair_mappings:
-            score = unique_pairs.get((chunk, sentence), 0.0)
+            score = unique_pairs[(chunk, sentence)]
             if score > chunk_max_scores[chunk_index]:
                 chunk_max_scores[chunk_index] = score
             if sentence_index not in sentence_scores or score > sentence_scores[sentence_index]:
@@ -74,8 +81,8 @@ def score_coverage(
                 sentence_chunk_map[sentence_index] = chunk_index
 
         for sentence_index, sentence in enumerate(sentences):
-            score = round(sentence_scores.get(sentence_index, 0.0), settings.score_decimals)
-            chunk_index = sentence_chunk_map.get(sentence_index, 0)
+            score = round(sentence_scores[sentence_index], settings.score_decimals)
+            chunk_index = sentence_chunk_map[sentence_index]
             supported = score >= settings.grounding_threshold
             if supported:
                 supported_chunks.add(chunk_index)

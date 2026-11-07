@@ -57,6 +57,15 @@ genuine ordered dimension-call inputs/results and final metrics. Replay uses
 the actual upstream converter, tokenizer, retrieval and reduction; a saved final
 HTTP response is not that calculation oracle.
 
+## Complete native result boundary
+
+Each returned batch must match its requested comparison count and contain
+every requested dimension as a finite probability. Validation runs before
+rounding or reduction. Missing batches, keys or nonfinite values fail with
+`INVALID_MODEL_OUTPUT` instead of becoming successful zero scores. A genuine
+numeric zero remains valid. No completed dimension becomes partial coverage
+success when another required call fails.
+
 ## Design rationale
 
 Preparation, retrieval and reduction answer separate questions, so they live
