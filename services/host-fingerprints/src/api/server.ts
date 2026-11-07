@@ -6,8 +6,8 @@ import { FingerprintHealthSchema } from "./fingerprint-response";
 import type { FingerprintEventOutput } from "./create-fingerprint-event";
 
 // Calendar-versioned routes identify the API protocol, not operator controls.
-export const FINGERPRINT_PATH = "/api/2026-10-20/fingerprint";
-export const HEALTH_PATH = "/api/2026-10-20/health";
+export const FINGERPRINT_PATH = "/api/2026-11-05/capture-host-fingerprint";
+export const HEALTH_PATH = "/api/2026-11-05/get-host-fingerprint-health";
 export function createFingerprintHandler(
   config: ServiceConfig, settings: SelectedSettings, options: PersistenceOptions,
   diagnostics: { writeEvent?: FingerprintEventOutput } = {},

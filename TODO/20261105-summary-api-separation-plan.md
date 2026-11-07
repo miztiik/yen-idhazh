@@ -145,7 +145,7 @@ config/
 | E4 | 4 | Rename and isolate the summary generator and its caller | 2 | B | DONE | curly-lamp | - | - |
 | E5 | 5 | Consolidate source coverage under the summary evaluator | 3, 4 | C | DONE | curly-lamp | - | - |
 | E6 | 6 | Centralize production and evaluation prompt files | 3, 4 | D | OWN DONE; delivery PENDING merge | curly-lamp | this PR | - |
-| E7 | 7 | Standardize host and shared TypeScript routes | 2 | E | PENDING | - | - | - |
+| E7 | 7 | Standardize host and shared TypeScript routes | 2 | E | OWN DONE; delivery PENDING merge | curly-lamp | this PR | - |
 | E8 | 8 | Standardize planner and delivery routes | 7 | E | PENDING | - | - | - |
 
 ## Row #1 - Call native generation without the evaluator

@@ -1,6 +1,6 @@
 # Feed planning operator APIs
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
@@ -303,7 +303,7 @@ already closed its planner child. The delivery child needs no live planner batch
 or collection inputs; completed partial metadata remains deliverable after
 planner failure. It reuses the listener and supervision limits from
 `config/hono-server.json`,
-checks owned-child readiness through `/health`, and closes and reaps that child
+checks owned-child readiness through `/api/2026-11-05/get-api-health`, and closes and reaps that child
 after success, failure or cancellation. Cancellation known before finalization
 skips new Git delivery.
 
@@ -399,7 +399,9 @@ uses actual loopback HTTP; no in-process transport substitutes for it. Selection
 uses the run's captured calculations and actual completed work but does not
 write health. The
 `feed-health-state` request can summarize or record a held operation result.
-The workflow HTTP client checks `/health`, then calls `/plan`. That one planning
+Shared process readiness uses `/api/2026-11-05/get-api-health` in addition to
+the selected module's native identity checks. The workflow HTTP client checks
+the planner's `/api/2026-11-05/health`, then calls `/plan`. That one planning
 request captures the actual health summary and releases its collection before
 replying. It uses the selected result when available, otherwise the completed
 global parsed result. Cancelled-only partial work is not a completed report

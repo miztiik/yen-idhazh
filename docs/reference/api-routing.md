@@ -18,8 +18,9 @@ follow the same convention; framework defaults are not exceptions.
 A breaking HTTP change advances the affected route family. Its writers,
 real clients, readiness probes, OpenAPI and tests switch together.
 Retired paths return HTTP 404, without permanent aliases or redirects.
-Matching is exact, including the absence of a trailing slash. A wrong method
-on an existing path retains the framework's HTTP 405 refusal.
+Matching is exact, including the absence of a trailing slash. Wrong methods
+retain the owning handler's existing refusal; a route change does not change
+method dispatch.
 
 HTTP route dates, application payload schema dates, scoring schema dates,
 package release versions and external protocol versions are separate
@@ -71,6 +72,43 @@ The former `/api/summarize`, `/health` and `/api/diagnostics` operations are
 removed, not redirected. The [generator reference](summary-generator-api.md)
 owns input/result validation, safe refusals and its independent listener.
 
+## Current host and shared family
+
+The host operations and shared process health use the fixed HTTP date
+`2026-11-05`. Their existing exported constants remain the caller authority in
+`services/host-fingerprints/src/api/server.ts`,
+`services/host-probes/src/api/server.ts` and
+`services/serve-pipeline-apis/src/api-startup.ts`. Shared hosting mounts the
+same native handlers; it does not wrap their payloads or select another module
+from a request.
+
+Table C - Host and shared operations
+
+| Id | Method | Path | Meaning |
+| --- | --- | --- | --- |
+| C1 | POST | `/api/2026-11-05/capture-host-fingerprint` | Capture and persist the native hardware row, or return the configured disabled result. |
+| C2 | GET | `/api/2026-11-05/get-host-fingerprint-health` | Read the fingerprint instrument's enablement without capture or writes. |
+| C3 | GET | `/api/2026-11-05/sample-host` | One native CPU/RAM sampling interval. |
+| C4 | POST | `/api/2026-11-05/start-task-profile` | Start a profile for the supplied PID and kernel start ticks. |
+| C5 | POST | `/api/2026-11-05/stop-task-profile` | Close or read the retained result for its genuine profile handle. |
+| C6 | POST | `/api/2026-11-05/measure-cache-latency` | Run the configured optional cache instrument, without a task handle. |
+| C7 | GET | `/api/2026-11-05/get-api-health` | Read the exact shared process identity, not a native module's readiness. |
+
+The old host operations and unversioned shared `/health` return HTTP 404,
+without aliases or redirects. Native host operations retain HTTP 405 and
+`Allow` for wrong methods. Shared health retains its existing POST fallback
+to native dispatch, which returns HTTP 404 rather than process identity.
+The HTTP date does not restamp hardware, task-profile, cache or event schemas,
+change measurements or rewrite recordings. Planner and delivery operations
+remain separate native route families.
+
+Shared readiness still compares the private nonce, spawned PID, configured
+port, group, modules and enablement with the uncached HTTP identity, then runs
+the selected module's additional native checks. Its
+[listener reference](serve-pipeline-apis.md) owns lifetime and cleanup.
+The [hardware reference](host-metrics.md), [profile reference](host-probe-api.md)
+and [cache reference](host-cache-probes.md) own measurements and payloads.
+
 ## Upstream native-protocol exception
 
 The existing llama-server owns `/v1/chat/completions`, `/completions`,
@@ -92,3 +130,4 @@ implementation.
 - [source-coverage-api.md](source-coverage-api.md) - distinct legacy method and selected operation.
 - [summary-evaluation-workflow.md](summary-evaluation-workflow.md) - direct native generation and evaluator clients.
 - [summary-generator-api.md](summary-generator-api.md) - prepared-text generation and its independent listener.
+- [serve-pipeline-apis.md](serve-pipeline-apis.md) - shared process identity and owned-child lifetime.

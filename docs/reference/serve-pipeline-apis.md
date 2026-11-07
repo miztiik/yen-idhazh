@@ -1,6 +1,6 @@
 # Serve pipeline APIs
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 
 Which local listener serves planning, article fetching/parsing, machine
 measurements and output delivery?
@@ -77,7 +77,7 @@ The current planner prefix is `/api/2026-11-05`. Its
 and [combined response controls](../architecture/sources/feed-plan-runner.md#entry-points-and-controls)
 also apply on this shared listener.
 
-`GET /health` returns the exact child's startup nonce, PID, configured port,
+`GET /api/2026-11-05/get-api-health` returns the exact child's startup nonce, PID, configured port,
 group, enabled modules and enablement. The supervisor compares the private
 readiness packet with the spawned PID and invocation, then verifies this
 uncached HTTP result and the selected module's native identity. Planning also

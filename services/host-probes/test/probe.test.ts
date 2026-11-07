@@ -74,6 +74,35 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
+test("dated probe commands refuse retired paths and keep native method refusals", async () => {
+  const handler = createSampleHandler(await loadConfig(), { platform: "unsupported" });
+  try {
+    for (const [path, allow] of [
+      [SAMPLE_PATH, "GET"], [START_TASK_PROFILE_PATH, "POST"],
+      [STOP_TASK_PROFILE_PATH, "POST"], [CACHE_LATENCY_PATH, "POST"],
+    ] as const) {
+      const response = await handler(new Request(`http://localhost${path}`, { method: allow === "GET" ? "POST" : "GET" }));
+      expect(response.status).toBe(405);
+      expect(response.headers.get("Allow")).toBe(allow);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+      expect(await response.json()).toEqual({ error: "Method not allowed" });
+    }
+    for (const path of [
+      "/api/2026-10-20/sample", "/api/2026-10-24/start-task-profile",
+      "/api/2026-10-24/stop-task-profile", "/api/2026-10-24/cache/latency",
+      "/api/2026-11-04/sample-host", "/api/2026-11-06/start-task-profile",
+      ...[SAMPLE_PATH, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH, CACHE_LATENCY_PATH].map(path => `${path}/`),
+    ]) {
+      for (const method of ["GET", "POST"]) {
+        const response = await handler(new Request(`http://localhost${path}`, { method }));
+        expect(response.status).toBe(404);
+        expect(response.headers.get("Cache-Control")).toBe("no-store");
+        expect(response.headers.get("Location")).toBeNull();
+      }
+    }
+  } finally { await handler.close(); }
+});
+
 test("recorded Linux CPU interval and memory satisfy the Row 5 oracle", async () => {
   const start = parseCpuCounters(await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
   const end = parseCpuCounters(await fixture("runtime/2026-08-30-probe-proc-stat-at-end.txt"));
