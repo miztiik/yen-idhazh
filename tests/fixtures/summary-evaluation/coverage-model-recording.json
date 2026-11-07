@@ -1,0 +1,383 @@
+{
+  "captured_at": "2026-11-07T01:21:52.285Z",
+  "cases": [
+    {
+      "calls": [
+        {
+          "dimension": "fluency",
+          "index": 0,
+          "inputs": [
+            {
+              "system_output": "The library opened on Saturday mornings during a six week pilot. The council will review visits before deciding whether to continue the schedule."
+            }
+          ],
+          "overall": false,
+          "results": [
+            {
+              "fluency": 0.9560114876652076
+            }
+          ]
+        },
+        {
+          "dimension": "coherence",
+          "index": 1,
+          "inputs": [
+            {
+              "source": "A public library tested longer opening hours during a six week pilot. The library opened on Saturday mornings and kept its weekday schedule unchanged. Staff counted visits at the entrance but did not record the names of visitors. The pilot ended in June. The council will review the visit counts before deciding whether the Saturday schedule should continue.",
+              "system_output": "The library opened on Saturday mornings during a six week pilot. The council will review visits before deciding whether to continue the schedule."
+            }
+          ],
+          "overall": false,
+          "results": [
+            {
+              "coherence": 0.9799950019197753
+            }
+          ]
+        },
+        {
+          "dimension": "consistency",
+          "index": 2,
+          "inputs": [
+            {
+              "source": "A public library tested longer opening hours during a six week pilot. The library opened on Saturday mornings and kept its weekday schedule unchanged. Staff counted visits at the entrance but did not record the names of visitors. The pilot ended in June. The council will review the visit counts before deciding whether the Saturday schedule should continue.",
+              "system_output": "The library opened on Saturday mornings during a six week pilot."
+            },
+            {
+              "source": "A public library tested longer opening hours during a six week pilot. The library opened on Saturday mornings and kept its weekday schedule unchanged. Staff counted visits at the entrance but did not record the names of visitors. The pilot ended in June. The council will review the visit counts before deciding whether the Saturday schedule should continue.",
+              "system_output": "The council will review visits before deciding whether to continue the schedule."
+            }
+          ],
+          "overall": false,
+          "results": [
+            {
+              "consistency": 0.9833692439808974
+            },
+            {
+              "consistency": 0.9790467660897628
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "chunk_coverage_percent": 100.0,
+        "coherence": 0.98,
+        "document_chunks_covered": 1,
+        "document_chunks_total": 1,
+        "fluency": 0.956,
+        "overall_consistency": 0.981,
+        "sentence_breakdown": [
+          {
+            "matched_chunk": 1,
+            "reason": "Supported by source evidence.",
+            "score": 0.983,
+            "sentence_index": 1,
+            "source_sentence": "A public library tested longer opening hours during a six week pilot.",
+            "supported": true,
+            "text": "The library opened on Saturday mornings during a six week pilot."
+          },
+          {
+            "matched_chunk": 1,
+            "reason": "Supported by source evidence.",
+            "score": 0.979,
+            "sentence_index": 2,
+            "source_sentence": "The council will review the visit counts before deciding whether the Saturday schedule should continue.",
+            "supported": true,
+            "text": "The council will review visits before deciding whether to continue the schedule."
+          }
+        ],
+        "uncovered_sections": []
+      },
+      "id": "short-source",
+      "input_sha256": "aeb7ec6272be429d875d21585db603068864055dff61f3c958a630b7bebc4360"
+    },
+    {
+      "calls": [
+        {
+          "dimension": "fluency",
+          "index": 0,
+          "inputs": [
+            {
+              "system_output": "The town proposes an electric bus route connecting the station with the eastern neighbourhood. The town proposes an electric bus route connecting the station with the eastern neighbourhood. The library tested Saturday morning opening without changing weekday hours. The town has ordered a nuclear submarine."
+            }
+          ],
+          "overall": false,
+          "results": [
+            {
+              "fluency": 0.9294447717994225
+            }
+          ]
+        },
+        {
+          "dimension": "coherence",
+          "index": 1,
+          "inputs": [
+            {
+              "source": "The town transport committee published a proposal for a new electric bus route connecting the railway station with the eastern neighbourhood. The committee said the route would use existing roads and would not require a new bridge. The plan includes stops at the market, the library, and the community clinic. Buses would run every thirty minutes during the day. The proposal does not include a night service. Drivers would receive additional training before the first scheduled journey. The town has not placed a vehicle order yet. A consultation will remain open for six weeks. Residents may send written comments or attend one of three public meetings. The committee will compare the comments with passenger counts from the current route. A final decision will be published after that review. The depot already has room for the proposed vehicles, but charging equipment would need to be installed. The cost estimate includes that equipment and the training programme. It does not include an expansion of the depot. The station stop would remain in its current location. The town will keep the existing route operating during the consultation, so passengers do not need to change their travel plans while the proposal is discussed. The public library completed a separate trial of Saturday opening hours. During the trial the building opened in the morning and closed at noon. The weekday schedule stayed the same. Librarians used an entrance counter to estimate visits and did not collect the names of visitors. They also counted borrowed books and returns at the service desk. Those counts will be compared with the same weeks in the previous year. The building offered its ordinary reading rooms and lending service during the trial. There was no additional ticket charge. Staff said the entrance count does not show how long a visitor stayed or which rooms they used. The council therefore asked for a short explanation of the limits of the evidence alongside the totals. The council has not yet decided whether Saturday opening should become permanent. The trial budget covered staff time, cleaning, and lighting. The report will distinguish those costs from the normal weekday budget. Residents who could not visit during the trial may submit comments separately. The council will publish the report and the decision together. The library will",
+              "system_output": "The town proposes an electric bus route connecting the station with the eastern neighbourhood. The town proposes an electric bus route connecting the station with the eastern neighbourhood. The library tested Saturday morning opening without changing weekday hours. The town has ordered a nuclear submarine."
+            }
+          ],
+          "overall": false,
+          "results": [
+            {
+              "coherence": 0.014358068972024438
+            }
+          ]
+        },
+        {
+          "dimension": "consistency",
+          "index": 2,
+          "inputs": [
+            {
+              "source": "The town transport committee published a proposal for a new electric bus route connecting the railway station with the eastern neighbourhood. The committee said the route would use existing roads and would not require a new bridge. The plan includes stops at the market, the library, and the community clinic. Buses would run every thirty minutes during the day. The proposal does not include a night service. Drivers would receive additional training before the first scheduled journey. The town has not placed a vehicle order yet. A consultation will remain open for six weeks. Residents may send written comments or attend one of three public meetings. The committee will compare the comments with passenger counts from the current route. A final decision will be published after that review. The depot already has room for the proposed vehicles, but charging equipment would need to be installed. The cost estimate includes that equipment and the training programme. It does not include an expansion of the depot. The station stop would remain in its current location. The town will keep the existing route operating during the consultation, so passengers do not need to change their travel plans while the proposal is discussed. The public library completed a separate trial of Saturday opening hours. During the trial the building opened in the morning and closed at noon. The weekday schedule stayed the same. Librarians used an entrance counter to estimate visits and did not collect the names of visitors. They also counted borrowed books and returns at the service desk. Those counts will be compared with the same weeks in the previous year. The building offered its ordinary reading rooms and lending service during the trial. There was no additional ticket charge. Staff said the entrance count does not show how long a visitor stayed or which rooms they used. The council therefore asked for a short explanation of the limits of the evidence alongside the totals. The council has not yet decided whether Saturday opening should become permanent. The trial budget covered staff time, cleaning, and lighting. The report will distinguish those costs from the normal weekday budget. Residents who could not visit during the trial may submit comments separately. The council will publish the report and the decision together. The library will",
+              "system_output": "The town proposes an electric bus route connecting the station with the eastern neighbourhood."
+            },
+            {
+              "source": "stayed or which rooms they used. The council therefore asked for a short explanation of the limits of the evidence alongside the totals. The council has not yet decided whether Saturday opening should become permanent. The trial budget covered staff time, cleaning, and lighting. The report will distinguish those costs from the normal weekday budget. Residents who could not visit during the trial may submit comments separately. The council will publish the report and the decision together. The library will not change its weekday hours before that decision. The trial concerns access to the existing building rather than a proposal to construct another library or move the collection. The drainage team inspected culverts near the sports field after several days of rain. Inspectors found leaves and branches blocking two entrances. They removed those materials and checked that water could pass through both culverts. The inspection did not find structural damage. The team scheduled another visit after the next period of heavy rain. A maintenance notice asks residents not to leave garden waste beside roadside drains. That notice is advice about keeping the drains clear, not a warning that the sports field is closed. The field remains available for its normal activities. The team will record the date of each inspection and whether cleaning was needed. Those records will help determine whether the usual inspection interval is sufficient. No new drainage channel has been approved. The current work uses the maintenance budget already allocated for this year. Contractors will only be requested if a later inspection finds damage that the team cannot repair. The report distinguishes routine cleaning from repairs so that the council can read the costs correctly. Residents can report a blocked entrance using the ordinary maintenance contact. The report should include a location description, but it does not require photographs or personal details. Staff will check reported locations during their scheduled rounds unless an immediate safety concern is identified. The recycling centre changed the signs above its sorting bays. Each sign now names the accepted material in larger text and gives one example of an item that should go elsewhere. Opening hours and collection charges did not change. Staff will observe whether fewer items are placed in the wrong bay during the next month. The observation concerns sorting",
+              "system_output": "The town proposes an electric bus route connecting the station with the eastern neighbourhood."
+            },
+            {
+              "source": "The town transport committee published a proposal for a new electric bus route connecting the railway station with the eastern neighbourhood. The committee said the route would use existing roads and would not require a new bridge. The plan includes stops at the market, the library, and the community clinic. Buses would run every thirty minutes during the day. The proposal does not include a night service. Drivers would receive additional training before the first scheduled journey. The town has not placed a vehicle order yet. A consultation will remain open for six weeks. Residents may send written comments or attend one of three public meetings. The committee will compare the comments with passenger counts from the current route. A final decision will be published after that review. The depot already has room for the proposed vehicles, but charging equipment would need to be installed. The cost estimate includes that equipment and the training programme. It does not include an expansion of the depot. The station stop would remain in its current location. The town will keep the existing route operating during the consultation, so passengers do not need to change their travel plans while the proposal is discussed. The public library completed a separate trial of Saturday opening hours. During the trial the building opened in the morning and closed at noon. The weekday schedule stayed the same. Librarians used an entrance counter to estimate visits and did not collect the names of visitors. They also counted borrowed books and returns at the service desk. Those counts will be compared with the same weeks in the previous year. The building offered its ordinary reading rooms and lending service during the trial. There was no additional ticket charge. Staff said the entrance count does not show how long a visitor stayed or which rooms they used. The council therefore asked for a short explanation of the limits of the evidence alongside the totals. The council has not yet decided whether Saturday opening should become permanent. The trial budget covered staff time, cleaning, and lighting. The report will distinguish those costs from the normal weekday budget. Residents who could not visit during the trial may submit comments separately. The council will publish the report and the decision together. The library will",
+              "system_output": "The library tested Saturday morning opening without changing weekday hours."
+            },
+            {
+              "source": "require photographs or personal details. Staff will check reported locations during their scheduled rounds unless an immediate safety concern is identified. The recycling centre changed the signs above its sorting bays. Each sign now names the accepted material in larger text and gives one example of an item that should go elsewhere. Opening hours and collection charges did not change. Staff will observe whether fewer items are placed in the wrong bay during the next month. The observation concerns sorting behaviour rather than the total amount collected. The centre does not claim that the new signs have already reduced contamination. It will compare the observations with its earlier records before making that claim. The signs were printed from the existing communications budget. Staff checked the wording with the collection team before installation. A visitor who is unsure where an item belongs may still ask an attendant for help. Materials that the centre does not accept must be taken to an appropriate collection point. The centre will publish a short update after the observation period. The update will describe the method and its limitations as well as the results. The council has not proposed closing the centre or replacing the sorting bays. This change is limited to the information visitors see at the existing bays.",
+              "system_output": "The library tested Saturday morning opening without changing weekday hours."
+            },
+            {
+              "source": "The town transport committee published a proposal for a new electric bus route connecting the railway station with the eastern neighbourhood. The committee said the route would use existing roads and would not require a new bridge. The plan includes stops at the market, the library, and the community clinic. Buses would run every thirty minutes during the day. The proposal does not include a night service. Drivers would receive additional training before the first scheduled journey. The town has not placed a vehicle order yet. A consultation will remain open for six weeks. Residents may send written comments or attend one of three public meetings. The committee will compare the comments with passenger counts from the current route. A final decision will be published after that review. The depot already has room for the proposed vehicles, but charging equipment would need to be installed. The cost estimate includes that equipment and the training programme. It does not include an expansion of the depot. The station stop would remain in its current location. The town will keep the existing route operating during the consultation, so passengers do not need to change their travel plans while the proposal is discussed. The public library completed a separate trial of Saturday opening hours. During the trial the building opened in the morning and closed at noon. The weekday schedule stayed the same. Librarians used an entrance counter to estimate visits and did not collect the names of visitors. They also counted borrowed books and returns at the service desk. Those counts will be compared with the same weeks in the previous year. The building offered its ordinary reading rooms and lending service during the trial. There was no additional ticket charge. Staff said the entrance count does not show how long a visitor stayed or which rooms they used. The council therefore asked for a short explanation of the limits of the evidence alongside the totals. The council has not yet decided whether Saturday opening should become permanent. The trial budget covered staff time, cleaning, and lighting. The report will distinguish those costs from the normal weekday budget. Residents who could not visit during the trial may submit comments separately. The council will publish the report and the decision together. The library will",
+              "system_output": "The town has ordered a nuclear submarine."
+            },
+            {
+              "source": "require photographs or personal details. Staff will check reported locations during their scheduled rounds unless an immediate safety concern is identified. The recycling centre changed the signs above its sorting bays. Each sign now names the accepted material in larger text and gives one example of an item that should go elsewhere. Opening hours and collection charges did not change. Staff will observe whether fewer items are placed in the wrong bay during the next month. The observation concerns sorting behaviour rather than the total amount collected. The centre does not claim that the new signs have already reduced contamination. It will compare the observations with its earlier records before making that claim. The signs were printed from the existing communications budget. Staff checked the wording with the collection team before installation. A visitor who is unsure where an item belongs may still ask an attendant for help. Materials that the centre does not accept must be taken to an appropriate collection point. The centre will publish a short update after the observation period. The update will describe the method and its limitations as well as the results. The council has not proposed closing the centre or replacing the sorting bays. This change is limited to the information visitors see at the existing bays.",
+              "system_output": "The town has ordered a nuclear submarine."
+            }
+          ],
+          "overall": false,
+          "results": [
+            {
+              "consistency": 0.950046522114542
+            },
+            {
+              "consistency": 0.04066910517507923
+            },
+            {
+              "consistency": 0.8989347088221772
+            },
+            {
+              "consistency": 0.031142290231973385
+            },
+            {
+              "consistency": 0.15217635263445825
+            },
+            {
+              "consistency": 0.01868860765881378
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "chunk_coverage_percent": 33.3,
+        "coherence": 0.014,
+        "document_chunks_covered": 1,
+        "document_chunks_total": 3,
+        "fluency": 0.929,
+        "overall_consistency": 0.738,
+        "sentence_breakdown": [
+          {
+            "matched_chunk": 1,
+            "reason": "Supported by source evidence.",
+            "score": 0.95,
+            "sentence_index": 1,
+            "source_sentence": "The town transport committee published a proposal for a new electric bus route connecting the railway station with the eastern neighbourhood.",
+            "supported": true,
+            "text": "The town proposes an electric bus route connecting the station with the eastern neighbourhood."
+          },
+          {
+            "matched_chunk": 1,
+            "reason": "Supported by source evidence.",
+            "score": 0.95,
+            "sentence_index": 2,
+            "source_sentence": "The town transport committee published a proposal for a new electric bus route connecting the railway station with the eastern neighbourhood.",
+            "supported": true,
+            "text": "The town proposes an electric bus route connecting the station with the eastern neighbourhood."
+          },
+          {
+            "matched_chunk": 1,
+            "reason": "Supported by source evidence.",
+            "score": 0.899,
+            "sentence_index": 3,
+            "source_sentence": "The public library completed a separate trial of Saturday opening hours.",
+            "supported": true,
+            "text": "The library tested Saturday morning opening without changing weekday hours."
+          },
+          {
+            "matched_chunk": 1,
+            "reason": "Chunk entailment score (0.152) fell below the 0.50 threshold.",
+            "score": 0.152,
+            "sentence_index": 4,
+            "source_sentence": "[No strongly entailed passage in matched section]",
+            "supported": false,
+            "text": "The town has ordered a nuclear submarine."
+          }
+        ],
+        "uncovered_sections": [
+          {
+            "chunk_index": 2,
+            "chunk_total": 3,
+            "excerpt": "stayed or which rooms they used. The council therefore asked for a short explanation of the limits of the evidence alongside the totals. The council has not yet decided whether Saturday opening should become permanent....",
+            "max_similarity_score": 0.041,
+            "reason": "No summary claim reached the 0.50 grounding threshold for this section (Peak entailment: 0.041). Key facts from this section were omitted."
+          },
+          {
+            "chunk_index": 3,
+            "chunk_total": 3,
+            "excerpt": "require photographs or personal details. Staff will check reported locations during their scheduled rounds unless an immediate safety concern is identified. The recycling centre changed the signs above its sorting bays. Each sign now names...",
+            "max_similarity_score": 0.031,
+            "reason": "No summary claim reached the 0.50 grounding threshold for this section (Peak entailment: 0.031). Key facts from this section were omitted."
+          }
+        ]
+      },
+      "id": "retrieval-and-duplicate-claims",
+      "input_sha256": "0fc184196e314f8ae581fd67243e20e710a5d97c9a251d77699eb9d774db5f06"
+    }
+  ],
+  "effective_settings": {
+    "assets": {
+      "cache_directory": "services/summary_evaluator/var/coverage-cache",
+      "code": {
+        "download_timeout_ms": 120000,
+        "files": {
+          "metric/evaluator.py": "c172248fe44085978893d4fd77cc586882c3cb03ed29f36a9b704167b3c3d142",
+          "metric/scorer.py": "d5835036017772c9dc60c9ccb0111e07a94fc323b7fccdfc1da2049a5c77da22",
+          "utils.py": "f27b0af0ad521df72138d8412a3bf843436ad1e3486905470562e4436df4565d"
+        },
+        "max_file_bytes": 65536,
+        "repository": "maszhongming/UniEval",
+        "revision": "d33e7b6cfebe97b2bafe435adbd818230d5a416a"
+      },
+      "model": {
+        "files": [
+          "config.json",
+          "pytorch_model.bin",
+          "special_tokens_map.json",
+          "spiece.model",
+          "tokenizer.json",
+          "tokenizer_config.json"
+        ],
+        "reference": "MingZhong/unieval-sum",
+        "revision": "ed8da5a8aa01b19d49a5f8738d382ced54b73ad0"
+      },
+      "sentences": {
+        "archive_sha256": "e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106",
+        "archive_url": "https://raw.githubusercontent.com/nltk/nltk_data/4f15a3d89eefe9748ec1c05be495d91289197155/packages/tokenizers/punkt_tab.zip",
+        "download_timeout_ms": 120000,
+        "files": [
+          "punkt_tab/english/collocations.tab",
+          "punkt_tab/english/sent_starters.txt",
+          "punkt_tab/english/abbrev_types.txt",
+          "punkt_tab/english/ortho_context.tab"
+        ],
+        "language": "english",
+        "max_archive_bytes": 8388608
+      }
+    },
+    "evaluation": {
+      "timeout_ms": 600000
+    },
+    "listener": {
+      "body_read_timeout_ms": 5000,
+      "host": "127.0.0.1",
+      "max_body_bytes": 1048576,
+      "port": 3010
+    },
+    "logging": {
+      "level": "INFO",
+      "max_event_bytes": 4096
+    },
+    "model": {
+      "device": "cpu",
+      "max_length": 1024,
+      "threads": 12
+    },
+    "preparation": {
+      "chunk_words": 380,
+      "coverage_decimals": 1,
+      "empty_document": "Empty document content.",
+      "empty_macro": "Document body.",
+      "empty_sentence": "Summary content sentence.",
+      "empty_source": "No source content provided.",
+      "empty_summary": "No summary content provided.",
+      "evidence_fallback_chars": 200,
+      "evidence_min_score": 0.05,
+      "grounding_threshold": 0.5,
+      "macro_complete_paragraphs": 3,
+      "macro_few_paragraph_chars": 1800,
+      "macro_min_paragraph_chars": 40,
+      "macro_no_paragraph_chars": 1500,
+      "macro_words": 380,
+      "score_decimals": 3,
+      "stride_words": 80,
+      "summary_min_sentence_chars": 10,
+      "top_chunks": 2,
+      "uncovered_excerpt_words": 35
+    },
+    "queue": {
+      "capacity": 8,
+      "retry_after_seconds": 2,
+      "wait_timeout_ms": 60000
+    },
+    "version": "2026-11-07",
+    "worker": {
+      "forced_stop_ms": 5000,
+      "max_proc_identity_bytes": 4096,
+      "max_reply_bytes": 1048576,
+      "replacement_timeout_ms": 120000,
+      "shutdown_timeout_ms": 15000,
+      "startup_timeout_ms": 600000,
+      "stop_grace_ms": 5000
+    }
+  },
+  "inputs_sha256": "a0f66a61f6864daca3fdc20bed7ce83987dd431b4fa3c4caa415b744b51966e2",
+  "provenance": {
+    "code_files": {
+      "metric/evaluator.py": "c172248fe44085978893d4fd77cc586882c3cb03ed29f36a9b704167b3c3d142",
+      "metric/scorer.py": "d5835036017772c9dc60c9ccb0111e07a94fc323b7fccdfc1da2049a5c77da22",
+      "utils.py": "f27b0af0ad521df72138d8412a3bf843436ad1e3486905470562e4436df4565d"
+    },
+    "code_repository": "maszhongming/UniEval",
+    "code_revision": "d33e7b6cfebe97b2bafe435adbd818230d5a416a",
+    "configured_model_revision": "ed8da5a8aa01b19d49a5f8738d382ced54b73ad0",
+    "loaded_model_revision": "ed8da5a8aa01b19d49a5f8738d382ced54b73ad0",
+    "model_reference": "MingZhong/unieval-sum",
+    "platform": {
+      "logical_processors": 12,
+      "machine": "AMD64",
+      "model_threads": 12,
+      "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+      "release": "11",
+      "system": "Windows"
+    },
+    "producer": ".github/scripts/serve-evaluator.py",
+    "producer_sha256": "95e988c0814e75f93a9274727cdf363eb90767cb06ea1ad0493daed7f4b84ef8",
+    "runtime_versions": {
+      "nltk": "3.9.2",
+      "prettytable": "3.16.0",
+      "python": "3.12.12",
+      "rank-bm25": "0.2.2",
+      "tokenizers": "0.22.2",
+      "torch": "2.8.0+cpu",
+      "transformers": "4.57.6"
+    },
+    "source_revision": "bf9e6414d1add3400f9f541c67fb16923687ded8",
+    "tokenizer_files": {
+      "config.json": "85e259b6772a86ae1d7dd9f04ccf35889a8c8984bda8c475bf9d2067d3344fb5",
+      "special_tokens_map.json": "4720c0fddbe4c5991334f85ad7073d9bd0a294a8ba4641a2f8dab614ca825949",
+      "spiece.model": "d60acb128cf7b7f2536e8f38a5b18a05535c9e14c7a355904270e15b0945ea86",
+      "tokenizer.json": "22e3d3c05c41c731548b9a6c362751b55f7bd80bb4f59af8458fbd94fb0b6f60",
+      "tokenizer_config.json": "7120ed73a80da0e885c699e3c635d6ce329ec8bd6ffd4daad1d662af7f528aef"
+    },
+    "tokenizer_revision": "ed8da5a8aa01b19d49a5f8738d382ced54b73ad0"
+  },
+  "settings_sha256": "e22f234d32f0b4a07048eb6a0a3bf79927a51ce2bcd707971dfe75ea89e4f105",
+  "version": "2026-11-07"
+}

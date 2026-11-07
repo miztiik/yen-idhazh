@@ -1,6 +1,6 @@
 # Summary API separation
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 **Level**: 5 - service responsibilities and live request, health and saved-workflow contracts.
 
 ## 0. Operating contract
@@ -143,7 +143,7 @@ config/
 | E2 | 2 | Remove generation from the evaluation API | 1 | A | DONE | curly-lamp | - | adopted worker |
 | E3 | 3 | Rename and divide the evaluator and its tests | 2 | A | DONE | curly-lamp | - | - |
 | E4 | 4 | Rename and isolate the summary generator and its caller | 2 | B | DONE | curly-lamp | - | - |
-| E5 | 5 | Consolidate source coverage under the summary evaluator | 3, 4 | C | PENDING | - | - | - |
+| E5 | 5 | Consolidate source coverage under the summary evaluator | 3, 4 | C | DONE | curly-lamp | - | - |
 | E6 | 6 | Centralize production and evaluation prompt files | 3, 4 | D | PENDING | - | - | - |
 | E7 | 7 | Standardize host and shared TypeScript routes | 2 | E | PENDING | - | - | - |
 | E8 | 8 | Standardize planner and delivery routes | 7 | E | PENDING | - | - | - |
@@ -729,6 +729,7 @@ config/
 
 ## Row #5 - Consolidate source coverage under the summary evaluator
 
+- **Outcome:** DONE - the retained genuine before-calculation calls, exact replay, real pinned owned worker and reader-first cutover are implemented. Delivery still requires the candidate's complete Linux, ordinary CI and saved-handoff gates and a separate merge; no later row starts here.
 - **Scope:** Move the older coverage calculation into its own evaluation child and worker; retire the separate listener, duplicate publication and machine sampling.
 - **Tasks:**
   1. Make the current model-call boundary explicit without changing its calculation. Capture actual dimension-call inputs/results and final metrics for bounded named inputs before moving the algorithm. Record resource revisions and effective settings; a fabricated final-response fixture cannot prove calculation parity.
@@ -745,6 +746,7 @@ config/
   - `.github/scripts/prepare-evaluation-request.ts`
   - `.github/scripts/read-pipeline-events.ts`
   - `.github/scripts/ai-pipeline.ts`
+  - `.github/scripts/read-coverage-settings.ts`
   - `.github/scripts/test/workflow-handoff.test.ts`
   - `.github/workflows/ai-pipeline-tests.yml`
   - `.github/workflows/ci.yml`
@@ -767,13 +769,20 @@ config/
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/contracts/evaluation_result.py`
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/contracts/service_settings.py`
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/contracts/worker_message.py`
+  - `services/summary_evaluator/src/summary_evaluator/source_coverage/contracts/model_call.py`
+  - `services/summary_evaluator/src/summary_evaluator/source_coverage/contracts/model_identity.py`
+  - `services/summary_evaluator/src/summary_evaluator/source_coverage/contracts/service_health.py`
+  - `services/summary_evaluator/src/summary_evaluator/source_coverage/contracts/scoring_warning.py`
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/prepare_text.py`
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/retrieve_evidence.py`
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/load_settings.py`
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/load_model.py`
+  - `services/summary_evaluator/src/summary_evaluator/source_coverage/load_converter.py`
+  - `services/summary_evaluator/src/summary_evaluator/source_coverage/call_dimensions.py`
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/prepare_resources.py`
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/score_coverage.py`
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/fail_evaluation.py`
+  - `services/summary_evaluator/src/summary_evaluator/source_coverage/validate_model_output.py`
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/control_evaluation.py`
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/dispatch_evaluation.py`
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/run_worker.py`
@@ -781,10 +790,15 @@ config/
   - `services/summary_evaluator/src/summary_evaluator/source_coverage/coverage_router.py`
   - `services/summary_evaluator/scripts/capture-coverage-recordings.py`
   - `services/summary_evaluator/scripts/prepare-coverage-resources.py`
+  - `services/summary_evaluator/scripts/verify-coverage-worker.py`
   - `services/summary_evaluator/tests/test_coverage_contracts.py`
   - `services/summary_evaluator/tests/test_coverage_scoring.py`
   - `services/summary_evaluator/tests/test_coverage_api.py`
   - `services/summary_evaluator/tests/test_coverage_worker.py`
+  - `services/summary_evaluator/tests/test_coverage_resources.py`
+  - `services/summary_evaluator/tests/test_coverage_model_output.py`
+  - `services/summary_evaluator/tests/test_coverage_binding.py`
+  - `services/summary_evaluator/tests/test_coverage_workflow.py`
   - `services/summary_evaluator/tests/test_api.py`
   - `services/summary_evaluator/tests/test_server_lifecycle.py`
   - `services/summary_evaluator/tests/test_server_events.py`
@@ -801,6 +815,13 @@ config/
   - `docs/architecture/evaluation/summary-evaluator.md`
   - `docs/reference/repository-layout.md`
   - `docs/how-to/run-the-gates.md`
+  - `docs/reference/source-coverage-api.md`
+  - `docs/architecture/evaluation/source-coverage.md`
+  - `docs/how-to/capture-source-coverage-calls.md`
+  - `.github/actions/check-summary-evaluator/action.yml`
+  - `.github/workflows/summary-evaluator-checks.yml`
+  - `backend/tests/workflows/_harness.py`
+  - `backend/tests/workflows/test_ci_selection.py`
 - **Acceptance gates:**
   - Local: inspect the shared selector; frozen-sync the changed evaluator manifest and run its declared lint/type checks, focused coverage tests and existing evaluator/application cases. Run the new backend recording-contract case and `bun test ./.github/scripts/test/workflow-handoff.test.ts`.
   - Calculation parity: replay real recorded model-call results through the actual text preparation, retrieval and reduction. Require exact final metrics, three-decimal score rounding, one-decimal coverage rounding, sentence/chunk links and evidence text for unchanged settings. The saved final-response fixture alone is not this oracle.

@@ -16,7 +16,7 @@ from summary_eval_pipeline.phase_result import build_evidence
 from summary_eval_pipeline.report import render_report
 from summary_evaluator.hhem.contracts.base import SCHEMA_VERSION
 from summary_evaluator.hhem.contracts.service_health import ServiceHealth
-from summary_evaluator.serve_http.contracts.api_health import ApiHealth
+from summary_evaluator.serve_http.contracts.api_health import ApiHealth, DisabledEvaluatorHealth
 from summary_evaluator.shared.contracts.server_contract import SERVER_SCHEMA_VERSION
 from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_VERSION
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
@@ -65,6 +65,7 @@ def test_native_zero_scores_complete_only_with_both_results_measurement_and_join
         ),
         log_file=None,
         log_available=False,
+        coverage=DisabledEvaluatorHealth(),
     )
     prepare_proc(tmp_path)
     host = NativeHostPipe(tmp_path)

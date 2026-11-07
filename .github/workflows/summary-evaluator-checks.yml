@@ -10,6 +10,12 @@ on:
       - 'config/**'
       - 'tests/fixtures/**'
       - '.github/scripts/summary-eval-tests/**'
+      - '.github/scripts/ai-pipeline.ts'
+      - '.github/scripts/read-pipeline-events.ts'
+      - '.github/scripts/prepare-evaluation-request.ts'
+      - '.github/scripts/read-coverage-settings.ts'
+      - '.github/scripts/test/workflow-handoff.test.ts'
+      - '.github/workflows/ai-pipeline-tests.yml'
       - '.github/actions/check-summary-evaluator/**'
       - '.github/workflows/summary-evaluator-checks.yml'
 

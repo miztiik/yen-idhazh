@@ -673,6 +673,9 @@ EXPRESSION_VALUES: Final = {
     **_read_summary_artifact_paths(
         CONFIG_DIR / "summary-generator" / "workflow.json", "summary", ("output_directory",)
     ),
+    **_read_summary_artifact_paths(
+        CONFIG_DIR / "summary-evals" / "api.json", "coverage", ("log_directory",)
+    ),
     "env.SET_DIRECTORY": "corpus/encoder-comparison-1",
     "matrix.encoder": "fixture-encoder",
     "needs.plan.outputs.date": SUBSTITUTED_DATE,

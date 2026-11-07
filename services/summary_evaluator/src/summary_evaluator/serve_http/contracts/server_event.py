@@ -11,7 +11,7 @@ from summary_evaluator.shared.contracts.diagnostic_data import LifecycleFields
 from summary_evaluator.shared.contracts.server_contract import ServerContract
 from summary_evaluator.shared.create_execution_id import create_execution_id
 
-DiagnosticComponent = Literal["api", "unieval", "log"]
+DiagnosticComponent = Literal["api", "unieval", "coverage", "log"]
 
 
 class ApiDiagnosticData(LifecycleFields):

@@ -1,8 +1,8 @@
 # How one Python API serves summary evaluation
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 
-How the shared `summary-evaluator` application serves HHEM and native UniEval
+How the shared `summary-evaluator` application serves independent evaluation methods
 with independent queues and model workers. Exact routes, settings and diagnostics
 live in the [server reference](../../reference/summary-evaluator-api.md).
 
@@ -32,13 +32,20 @@ HHEM window rule or a generic evaluator plugin. Disabled UniEval neither
 loads its optional dependencies nor reads its configuration. Enabled
 components retain separate observed health and completed results.
 
+Source coverage is an explicitly selected third method with its own bounded
+queue and owned model process. Its [legacy retrieval calculation](source-coverage.md)
+is not native UniEval's independent-reference relevance. The default remains
+HHEM plus native UniEval; disabled coverage reads no configuration/resources and
+constructs no worker. Enabling it adds resident model memory rather than sharing
+a native scorer's model.
+
 The workflow calls the separate native generation server directly and owns
 its acquisition, launch, readiness and exit. The evaluation application does
 not read generation configuration or depend on that process.
 
 The installed package is `summary_evaluator` under
 `services/summary_evaluator/src/`. `serve_http` assembles requests and logs;
-`hhem` and `unieval` retain their independent scoring and worker policies.
+`hhem`, `unieval` and `source_coverage` retain their independent scoring and worker policies.
 `shared` provides strict primitives, bounded transport, queue mechanics and
 process identity. It imports no scorer or serving package. Each scorer maps a
 shared code-only failure to its existing public error. Event writers are
@@ -46,7 +53,7 @@ closed functions supplied by the serving package, not scorer imports of it.
 
 ## Real readiness and independent work
 
-Shared health reports the exact application instance, both scorer states
+Shared health reports the exact application instance, each scorer's state
 and diagnostic-file availability. HHEM readiness still requires its observed
 model and owned worker identities; UniEval reports its own observed model and
 worker. No generation observation appears in evaluator health or OpenAPI.
@@ -55,7 +62,7 @@ Aggregate readiness requires every enabled scorer. A failed scorer does not
 erase its sibling's readiness or completed result. An empty selection exposes
 only application health and schema and constructs no model worker.
 
-Both scorers perform heavy work in their own model processes, not on the HTTP
+Enabled scorers perform heavy work in their own model processes, not on the HTTP
 event loop. Each finite queue reserves capacity before body reading.
 Host/Origin checks, bounded input reads, disconnect handling and absolute
 input, queue and evaluation deadlines remain in the actual scoring path.
@@ -77,6 +84,12 @@ retained separately in the raised group.
 HHEM's existing parent-loss watcher, bounded worker replacement and confirmed
 exit rules are unchanged. The current workflow's private control and
 TypeScript machine-measurement channels are unchanged.
+
+Coverage returns one complete metric payload or a fixed safe error. Native
+batches are validated before reduction; missing or nonfinite output does not
+become zero or partial success. A failed coverage child does not erase completed
+native scorer work. The caller retains its report/completion event, while the
+API collects no machine readings and writes no duplicate evaluation-event file.
 
 Standard logging formats validated native data as CloudEvents JSONL. The
 same accepted records reach stderr and the role's named file. A failed file
@@ -108,5 +121,6 @@ deleted. New preparation reads only the configured cache and log paths.
 - [../../reference/api-routing.md](../../reference/api-routing.md) - dated first-party routes and the upstream native-protocol exception.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - HHEM scoring and cancellation.
 - [unieval-api.md](unieval-api.md) - independent UniEval scoring and source coverage.
+- [source-coverage.md](source-coverage.md) - distinct legacy retrieval and complete-result boundary.
 - [../../reference/summary-evaluation-workflow.md](../../reference/summary-evaluation-workflow.md) - current caller and machine control.
 - [../../how-to/run-the-gates.md#independent-python-service-contracts](../../how-to/run-the-gates.md#independent-python-service-contracts) - offline composition checks.

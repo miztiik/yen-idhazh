@@ -1,6 +1,6 @@
 # UniEval evaluation API
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 
 Which requests, results and settings belong to the local four-score API.
 The [architecture](../architecture/evaluation/unieval-api.md) defines score
@@ -13,6 +13,12 @@ the native Pydantic contracts and on-demand schemas. Their version is
 `2026-11-04`. They are transient, current-only contracts: producers and
 consumers change together, without old-route aliases or historical readers.
 There is no result store, polling API or published-data contract.
+
+The [source-coverage operation](source-coverage-api.md) is a separate legacy
+method and worker in the same distribution. It has retrieved sentence evidence
+and section coverage, not this API's independent-reference relevance.
+The normal invocation still selects only HHEM and native UniEval; adding
+`coverage` constructs another resident model, not implicit model sharing.
 
 Table A - Native operations
 

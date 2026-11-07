@@ -127,13 +127,16 @@ def test_model_free_summary_checks_are_manual_read_only_and_complete() -> None:
     commands = "\n".join(_script(step, "model-free checks") for step in steps if "run" in step)
     assert "uv sync --project services/summary_evaluator --frozen --group dev" in commands
     assert "prepare-unieval-resources.py --root ../.." in commands
+    assert "prepare-coverage-resources.py --root ../.." in commands
     assert (
         "uv run --frozen pytest -c pyproject.toml tests "
         "../../.github/scripts/summary-eval-tests/summary_eval_tests "
         "--junitxml=var/model-free-results.xml"
     ) in commands
     assert (
-        "mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline "
+        "mypy src tests scripts/capture-coverage-recordings.py "
+        "scripts/prepare-coverage-resources.py scripts/verify-coverage-worker.py "
+        "../../.github/scripts/summary-eval-tests/summary_eval_pipeline "
         "../../.github/scripts/summary-eval-tests/summary_eval_tests"
     ) in commands
     assert "command -v setpriv" in commands
@@ -154,6 +157,32 @@ def test_model_free_summary_checks_are_manual_read_only_and_complete() -> None:
     assert "summary-evaluator-checks" not in _mapping(
         _load_workflows()["ci.yml"]["jobs"], "CI jobs"
     )
+
+
+def test_legacy_workflow_selects_pinned_coverage_after_generation_and_keeps_one_event_writer() -> None:
+    workflow = _load_workflows()["ai-pipeline-tests.yml"]
+    steps = _steps(workflow, "run-pipeline")
+    inference = _step(workflow, "run-pipeline", "name", "Execute Phase 1 Inference")
+    native_stop = _step(workflow, "run-pipeline", "name", "Stop llama-server (Reclaim Memory)")
+    start = _step(
+        workflow, "run-pipeline", "name", "Start the explicitly selected source-coverage evaluator"
+    )
+    evaluation = _step(workflow, "run-pipeline", "name", "Execute Phase 2 Quality Audit")
+    stop = _step(workflow, "run-pipeline", "name", "Stop the exact owned coverage server")
+    assert steps.index(inference) < steps.index(native_stop) < steps.index(start)
+    assert steps.index(start) < steps.index(evaluation) < steps.index(stop)
+    commands = "\n".join(_script(step, "coverage workflow") for step in steps if "run" in step)
+    assert "uv sync --project services/summary_evaluator --frozen --extra model --no-dev" in commands
+    assert "prepare-coverage-resources.py --root . --include-weights" in commands
+    assert "--root . --routes coverage" in _script(start, "coverage startup")
+    assert 'fields[19] == os.environ["SERVER_START_TICKS"]' in _script(stop, "owned stop")
+    for removed in ("serve-evaluator.py", "9933", "eval-events.jsonl", "/tmp/unieval"):
+        assert removed not in commands
+    upload = _step(workflow, "run-pipeline", "name", "Upload Logs and JSONL Telemetry")
+    paths = _mapping(upload["with"], "coverage artifacts")["path"]
+    assert isinstance(paths, str)
+    assert "pipeline-events.jsonl" in paths and "eval-events.jsonl" not in paths
+    assert "${{ steps.coverage.outputs.log_directory }}" in paths
 
 
 def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs() -> None:

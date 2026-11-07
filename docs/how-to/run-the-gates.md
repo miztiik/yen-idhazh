@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-07
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -230,6 +230,7 @@ bun install --frozen-lockfile --cwd .\packages\data-delivery
 Set-Location .\services\summary_evaluator
 uv sync --frozen --group dev
 uv run --frozen python .\scripts\prepare-unieval-resources.py --root '..\..'
+uv run --frozen python .\scripts\prepare-coverage-resources.py --root '..\..'
 uv run --frozen ruff check src tests scripts
 Push-Location ..\..
 uv run --project .\services\summary_evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
@@ -256,6 +257,12 @@ libraries for UniEval. Preparation fetches only their named resources, not
 Torch or weights; tests read them locally. The
 [UniEval run guide](run-unieval-evaluation-api.md) owns model preparation and
 actual prediction capture.
+Coverage preparation additionally resolves the declared legacy code and sentence
+layout without Torch or weights. Its tests replay actual ordered model calls
+through the real converter, retrieval and reduction. The
+[coverage capture guide](capture-source-coverage-calls.md) owns the separate
+real model and owned-worker verification utilities. These are not inference
+inside the model-free checker.
 These checks certify contracts and configuration, not model loading, scoring
 by the real model. For a runtime change, use one combined selected invocation:
 
@@ -396,6 +403,11 @@ weights, starts no production pipeline and publishes no production data.
 Retain the run's source revision and current test-result artifact. A changed
 candidate needs new evidence; unchanged tested inputs reuse their passed run.
 There is no schedule or added evaluator job in ordinary `ci.yml`.
+Its current strict check also names the coverage capture/preparation/worker
+utilities, and its complete pytest roots include native coverage API/process,
+real TypeScript-reader binding and Linux-only named workflow-syntax checks.
+Windows portable records must list the omitted ASGI/control and Linux syntax
+cases rather than count them as Linux proof.
 
 Owned-process fixtures launch the actual CPython executable with the same
 environment's installed packages: a Windows virtual-environment redirector

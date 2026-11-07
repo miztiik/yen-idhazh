@@ -24,10 +24,18 @@ import {
   PipelineEventDataSchema,
   PipelineInputError,
   readPipelineEvents,
+  readCurrentEvaluationTelemetry,
   selectStructuredOutputs,
   type PipelineEvent,
 } from "./read-pipeline-events.ts";
-import { prepareEvaluationRequest, readEvaluationResponse } from "./prepare-evaluation-request.ts";
+import {
+  CoverageApiFailure,
+  prepareEvaluationRequest,
+  readEvaluationResponse,
+  type EvaluationRequest,
+} from "./prepare-evaluation-request.ts";
+import { readCoverageSettings } from "./read-coverage-settings.ts";
+import { readBoundedText } from "../../services/summary-generator/src/services/request-completion.service.js";
 import { WORKFLOW_EVENT_SOURCE } from "./declare-workflow-event-source.ts";
 
 // -------------------------------------------------------------
@@ -59,8 +67,6 @@ export const DEFAULT_ARTICLE_CONFIG: ArticleProcessingConfig = {
 };
 
 export type ModelInferenceParams = Record<string, unknown>;
-
-export const PYTHON_EVAL_SERVER_URL = "http://127.0.0.1:9933";
 
 export const STRICT_SUMMARY_JSON_SCHEMA = {
   type: "object",
@@ -1140,49 +1146,28 @@ function postOpenAIChatCompletion(urlStr: string, payload: any, timeoutSeconds: 
     req.end();
   });
 }
-function postPythonEvaluation(urlStr: string, payload: any): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const url = new URL(urlStr);
-    const bodyData = JSON.stringify(payload);
-
-    const req = http.request(
-      {
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(bodyData),
-        },
-        timeout: 900_000, // 15-minute socket timeout
-      },
-      (res) => {
-        let raw = "";
-        res.setEncoding("utf8");
-        res.on("data", (chunk) => (raw += chunk));
-        res.on("end", () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            try {
-              resolve(JSON.parse(raw));
-            } catch {
-              reject(new Error(`Invalid JSON returned from Python evaluator: ${raw}`));
-            }
-          } else {
-            reject(new Error(`Python eval HTTP ${res.statusCode}: ${raw}`));
-          }
-        });
-      }
-    );
-
-    req.on("timeout", () => {
-      req.destroy(new Error("Python evaluation socket timed out after 15 minutes"));
-    });
-
-    req.on("error", reject);
-    req.write(bodyData);
-    req.end();
+async function postPythonEvaluation(payload: EvaluationRequest) {
+  const selected = readCoverageSettings();
+  const encoded = JSON.stringify(payload);
+  if (Buffer.byteLength(encoded, "utf8") > selected.maxRequestBytes) {
+    throw new Error("EVALUATION_REQUEST_TOO_LARGE");
+  }
+  const signal = AbortSignal.timeout(selected.requestTimeoutMs);
+  const response = await fetch(selected.evaluateUrl, {
+    method: "POST",
+    body: encoded,
+    headers: { "Content-Type": "application/json" },
+    redirect: "manual",
+    signal,
   });
+  const text = await readBoundedText(response.body, selected.maxResponseBytes, signal, "response");
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new Error("INVALID_EVALUATION_RESPONSE");
+  }
+  return { status: response.status, body };
 }
 
 // -------------------------------------------------------------
@@ -1573,13 +1558,13 @@ export function publishStepSummary(
   // -------------------------------------------------------------
   if (phase === "eval") {
     const evalLines: string[] = [
-      `# 🧪 UniEval Grounding & Factual Quality Audit Report`,
+      `# Source-coverage quality audit`,
       ``,
       `| Metric Target | Consistency Score | Sectional Coverage | Discourse Coherence | Syntax Fluency |`,
       `| :--- | :---: | :---: | :---: | :---: |`,
       ...results.map((res, idx) => {
         const qm = res.quality_metrics;
-        return `| **#${idx + 1}: ${res.headline.slice(0, 30)}...** | **\`${qm?.overall_consistency ?? "N/A"}\`** | **\`${qm?.chunk_coverage_percent ?? 0}%\`** | \`${qm?.coherence ?? "N/A"}\` | \`${qm?.fluency ?? "N/A"}\` |`;
+        return `| **#${idx + 1}: ${res.headline.slice(0, 30)}...** | **\`${qm?.overall_consistency ?? "N/A"}\`** | **\`${qm ? `${qm.chunk_coverage_percent}%` : "N/A"}\`** | \`${qm?.coherence ?? "N/A"}\` | \`${qm?.fluency ?? "N/A"}\` |`;
       }),
       ``,
       `---`,
@@ -1591,7 +1576,8 @@ export function publishStepSummary(
       if (!qm) {
         evalLines.push(
           `## ⚠️ Quality Evaluation Unavailable: *"${res.headline}"* (${idx + 1}/${results.length})`,
-          `> ❌ **Evaluation Failure:** The UniEval microservice was unable to compute quality metrics for this target. Consult \`eval_server.log\` for stack traces.`,
+          `> Evaluation failed: source coverage did not return complete metrics. Check the caller's safe failure event and evaluator diagnostics.`,
+          `Machine readings: uncollected for this evaluation phase.`,
           ``,
           `---`,
           ``
@@ -1610,7 +1596,21 @@ export function publishStepSummary(
         ``
       );
 
-      if (qm.uncovered_sections && qm.uncovered_sections.length > 0) {
+      const measured = readCurrentEvaluationTelemetry(
+        events, res.source_audit.sourceIdentifier,
+      );
+      if (measured) {
+        evalLines.push(
+          `Historical evaluator measurements: elapsed ${measured.duration_ms} ms; system CPU ${measured.cpu_percent}%; process resident memory ${measured.server_vm_rss_mb} MB; process swap ${measured.server_vm_swap_mb} MB.`,
+          ``
+        );
+      } else {
+        evalLines.push(`Machine readings: uncollected for this evaluation phase.`, ``);
+      }
+
+      if (qm.uncovered_sections === undefined) {
+        evalLines.push(`Uncovered-section details were not recorded in this historical response.`, ``);
+      } else if (qm.uncovered_sections.length > 0) {
         evalLines.push(
           `### ⚠️ Uncovered Document Sections (${qm.uncovered_sections.length}/${qm.document_chunks_total} Chunks Omitted)`,
           `> The following source sections have no supporting claims in the generated summary:`,
@@ -1920,7 +1920,8 @@ async function main() {
       const event = structuredEvents[idx];
       const payload = event.data.result;
       const output: SummaryStructuredOutput = { ...payload };
-      const { context, request } = prepareEvaluationRequest(event, pipeline.context, runnerMetadata);
+      delete output.quality_metrics;
+      const { context, request } = prepareEvaluationRequest(event, pipeline.context);
 
       logStructured("INFO", "Evaluating target", {
         target: idx + 1,
@@ -1949,7 +1950,8 @@ async function main() {
       }
 
       try {
-        const data = readEvaluationResponse(await postPythonEvaluation(`${PYTHON_EVAL_SERVER_URL}/v1/evaluate`, request));
+        const response = await postPythonEvaluation(request);
+        const data = readEvaluationResponse(response.body, response.status);
 
         evaluatedCount++;
         output.quality_metrics = data.metrics;
@@ -1981,11 +1983,22 @@ async function main() {
           output,
           context
         );
-      } catch {
+      } catch (error) {
         evalFailedCount++;
+        const code = error instanceof CoverageApiFailure ? error.code : "EVALUATION_REQUEST_FAILED";
+        pipeline.logEvent(
+          "QUALITY_EVALUATION_FAILED",
+          {
+            sourceIdentifier: output.source_audit.sourceIdentifier,
+            sourceTitle: output.headline,
+            code,
+            httpStatus: error instanceof CoverageApiFailure ? error.httpStatus : null,
+          },
+          context
+        );
         logStructured("ERROR", "Evaluation service request failed for target", {
           target: idx + 1,
-          code: "EVALUATION_REQUEST_FAILED",
+          code,
         });
       }
 
