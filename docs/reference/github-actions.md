@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-07
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -30,13 +30,24 @@ names instead: update its callers and the workflow tests when renaming a label.
 The [HHEM manual procedure](../how-to/run-hhem-evaluation-api.md) covers its
 first default-branch registration, exact-ref dispatch and body-free evidence.
 
-Both independent inference workflows accept `models_file`. Blank follows
-`config/idhazh.json`; a value selects that declaration through the shared
-candidate-config action. Both launch through the shared model-server action
-and obtain request settings and the committed destination through
-`model_runtime.py describe-request`. They expose no independent model-name,
-repository, quantization or sampling selection. See
+Both independent inference workflows accept `models_file`.
+`yen-ai-pipeline.yml` follows `config/idhazh.json` when it is blank.
+`ai-pipeline-tests.yml` also offers a `model` dropdown, defaulting to
+`models/ornith-1.5-9b-q5km.json`. Its fixed filename list lives in the workflow,
+not a runtime directory scan. A nonblank `models_file` overrides the dropdown
+and may name a valid committed model declaration not listed there.
+
+Selected declarations pass through the shared candidate-config action.
+Both workflows launch through the shared model-server action and obtain
+request settings and the committed destination through
+`model_runtime.py describe-request`. Each run selects one model; neither
+workflow exposes separate repository, quantization or sampling overrides. See
 [ci-model-runtime.md](ci-model-runtime.md) for the shared runtime contract.
+
+In `ai-pipeline-tests.yml`, `feed_url` replaces the existing feed list only
+when `input_source` is `feed`. Missing, empty or whitespace-only input keeps
+the list in `.github/scripts/ai-pipeline.ts`. The `url` and `text` modes ignore
+`feed_url`.
 
 ## Drift review
 

@@ -2105,7 +2105,9 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
   let feedAudit: FeedSelectionAudit | undefined;
 
   if (inputSource === "feed") {
-    feedAudit = await collectAndClassifyFeedArticles(DEFAULT_ARTICLE_CONFIG.feedUrls, maxAgeHours, goalCount, (type, payload) =>
+    const feedUrl = (process.env.FEED_URL ?? "").trim();
+    const feedUrls = feedUrl ? [feedUrl] : DEFAULT_ARTICLE_CONFIG.feedUrls;
+    feedAudit = await collectAndClassifyFeedArticles(feedUrls, maxAgeHours, goalCount, (type, payload) =>
       pipeline.logEvent(type, payload)
     );
 
