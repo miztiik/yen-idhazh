@@ -75,6 +75,7 @@ module = [
     "nltk",
     "nltk.*",
     "tokenizers",
+    "rank_bm25",
 ]
 ignore_missing_imports = true
 

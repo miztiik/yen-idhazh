@@ -8,23 +8,13 @@ import platform
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, cast
+from typing import cast
 
 from summary_evaluator.shared.load_model_assets import resolve_snapshot
 from summary_evaluator.shared.quiet_model_output import quiet_model_output
+from summary_evaluator.source_coverage.contracts.model_call import ConvertInput, LegacyEvaluator
 from summary_evaluator.source_coverage.contracts.service_settings import CoverageSettings
-
-
-class LegacyEvaluator(Protocol):
-    def evaluate(
-        self, data: list[dict[str, str]], *, dims: list[str], overall: bool
-    ) -> list[dict[str, float]]: ...
-
-
-class ConvertInput(Protocol):
-    def __call__(
-        self, *, output_list: list[str], src_list: list[str] | None = None
-    ) -> list[dict[str, str]]: ...
+from summary_evaluator.source_coverage.load_converter import load_converter
 
 
 @dataclass(frozen=True)
@@ -41,7 +31,10 @@ class CoverageModel:
         self, data: list[dict[str, str]], dimension: str
     ) -> list[dict[str, float]]:
         with quiet_model_output():
-            return self.evaluator.evaluate(data, dims=[dimension], overall=False)
+            import torch
+
+            with torch.inference_mode():
+                return self.evaluator.evaluate(data, dims=[dimension], overall=False)
 
 
 def load_model(settings: CoverageSettings, root: Path) -> CoverageModel:
@@ -110,7 +103,7 @@ def load_model(settings: CoverageSettings, root: Path) -> CoverageModel:
         }
     return CoverageModel(
         evaluator=cast(LegacyEvaluator, evaluator),
-        convert_input=cast(ConvertInput, converter_module.convert_to_json),
+        convert_input=load_converter(settings, root),
         loaded_model_revision=loaded_revision,
         tokenizer_revision=snapshot.name,
         tokenizer_files=tokenizer_files,

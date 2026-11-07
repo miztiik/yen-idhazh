@@ -10,7 +10,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 import sys
 import time
 import traceback
@@ -26,6 +25,10 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
+from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.source_coverage.call_dimensions import DimensionBoundary
+from summary_evaluator.source_coverage.load_settings import load_settings
+from summary_evaluator.source_coverage.score_coverage import score_coverage
 
 # -------------------------------------------------------------
 # 1. STRUCTURED JSONL LOGGING & TELEMETRY
@@ -105,105 +108,6 @@ class HardwareSampler:
             "server_vm_rss_mb": round(rss_kb / 1024),
             "server_vm_swap_mb": round(swap_kb / 1024),
         }
-
-
-# -------------------------------------------------------------
-# 3. TEXT CHUNKING & BM25 RETRIEVAL
-# -------------------------------------------------------------
-def split_sentences(text: str) -> list[str]:
-    try:
-        from nltk.tokenize import sent_tokenize
-        sentences = sent_tokenize(text)
-    except Exception:
-        sentences = re.split(r"(?<=[.!?])\s+", text)
-    valid = [s.strip() for s in sentences if len(s.strip()) > 10]
-    return valid if valid else ([text.strip()] if text.strip() else ["Summary content sentence."])
-
-
-def chunk_document(
-    text: str, chunk_words: int = 380, stride_words: int = 80
-) -> list[str]:
-    words = text.split()
-    if len(words) <= chunk_words:
-        return [text] if text.strip() else ["Empty document content."]
-
-    chunks = []
-    i = 0
-    while i < len(words):
-        chunks.append(" ".join(words[i : i + chunk_words]))
-        if i + chunk_words >= len(words):
-            break
-        i += chunk_words - stride_words
-    return chunks if chunks else ["Empty document content."]
-
-
-def extract_macro_skeleton(text: str, max_words: int = 380) -> str:
-    paragraphs = [p.strip() for p in text.split("\n\n") if len(p.strip()) > 40]
-    if not paragraphs:
-        return text[:1500] if text else "Document body."
-    if len(paragraphs) <= 3:
-        return "\n\n".join(paragraphs)[:1800]
-    combined = paragraphs[0] + "\n\n" + paragraphs[1] + "\n\n[...]\n\n" + paragraphs[-1]
-    words = combined.split()
-    return " ".join(words[:max_words]) if len(words) > max_words else combined
-
-
-class EvidenceRetriever:
-    def __init__(self, chunks: list[str]):
-        self.chunks = chunks
-        self.use_bm25 = False
-        try:
-            from rank_bm25 import BM25Okapi
-
-            tokenized = [re.findall(r"\w+", c.lower()) for c in self.chunks]
-            tokenized = [tok if tok else ["document"] for tok in tokenized]
-            self.bm25 = BM25Okapi(tokenized)
-            self.use_bm25 = True
-        except Exception:
-            self.use_bm25 = False
-
-    def retrieve_top_k(self, sentence: str, k: int = 2) -> list[tuple[int, str]]:
-        if len(self.chunks) <= k:
-            return list(enumerate(self.chunks))
-        tokens = re.findall(r"\w+", sentence.lower())
-        if not tokens:
-            tokens = ["text"]
-
-        if self.use_bm25:
-            try:
-                scores = self.bm25.get_scores(tokens)
-                top_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
-            except Exception:
-                top_idx = list(range(min(k, len(self.chunks))))
-        else:
-            token_set = set(tokens)
-            scores = [
-                len(token_set.intersection(set(re.findall(r"\w+", c.lower()))))
-                for c in self.chunks
-            ]
-            top_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
-        return [(idx, self.chunks[idx]) for idx in top_idx]
-
-    def find_best_sentence(self, sentence: str, chunk_text: str) -> str:
-        sentences = split_sentences(chunk_text)
-        if not sentences:
-            return chunk_text[:200]
-        if len(sentences) == 1:
-            return sentences[0]
-        try:
-            from rank_bm25 import BM25Okapi
-
-            tokenized = [re.findall(r"\w+", s.lower()) for s in sentences]
-            tokenized = [t if t else ["sentence"] for t in tokenized]
-            sent_bm25 = BM25Okapi(tokenized)
-            query_tokens = re.findall(r"\w+", sentence.lower())
-            scores = sent_bm25.get_scores(query_tokens)
-            best_idx = int(max(range(len(scores)), key=lambda i: scores[i]))
-            if scores[best_idx] > 0.05:
-                return sentences[best_idx]
-        except Exception:
-            pass
-        return sentences[0]
 
 
 # -------------------------------------------------------------
@@ -304,130 +208,16 @@ def compute_unieval_sync(
         lambda data, dimension: EVALUATOR_INSTANCE.evaluate(data, dims=[dimension], overall=False)
     )
 
-    clean_summary = summary_text.strip() or "No summary content provided."
-    clean_source = source_text.strip() or "No source content provided."
-
+    root = Path(__file__).resolve().parents[2]
+    api = load_api_settings(root / "config" / "summary-evals" / "api.json")
+    settings = load_settings(root, api.listener, api.logging)
     with torch.inference_mode():
-        # 1. Fluency
-        data_flu = convert_to_json(output_list=[clean_summary])
-        eval_flu = call(data_flu, "fluency")
-        fluency = round(eval_flu[0]["fluency"], 3) if eval_flu else 0.0
-
-        # 2. Coherence
-        macro_ctx = extract_macro_skeleton(clean_source, max_words=380)
-        data_coh = convert_to_json(output_list=[clean_summary], src_list=[macro_ctx])
-        eval_coh = call(data_coh, "coherence")
-        coherence = round(eval_coh[0]["coherence"], 3) if eval_coh else 0.0
-
-        # 3. Chunked Sentence-Level Consistency
-        chunks = chunk_document(clean_source, chunk_words=380, stride_words=80)
-        sentences = split_sentences(clean_summary)
-
-        retriever = EvidenceRetriever(chunks)
-
-        unique_pairs: dict[tuple[str, str], float] = {}
-        pair_mappings: list[tuple[int, int, str, str]] = []
-
-        for s_idx, sentence in enumerate(sentences):
-            for c_idx, chunk in retriever.retrieve_top_k(sentence, k=2):
-                pair_key = (chunk, sentence)
-                if pair_key not in unique_pairs:
-                    unique_pairs[pair_key] = 0.0
-                pair_mappings.append((s_idx, c_idx, chunk, sentence))
-
-        sentence_details = []
-        supported_chunks = set()
-        chunk_max_scores: dict[int, float] = dict.fromkeys(range(len(chunks)), 0.0)
-
-        if unique_pairs:
-            eval_src = [k[0] for k in unique_pairs.keys()]
-            eval_out = [k[1] for k in unique_pairs.keys()]
-
-            data_cons = convert_to_json(output_list=eval_out, src_list=eval_src)
-            cons_res = call(data_cons, "consistency")
-
-            for idx, r in enumerate(cons_res):
-                pair_key = (eval_src[idx], eval_out[idx])
-                unique_pairs[pair_key] = float(r.get("consistency", 0.0))
-
-            sentence_scores: dict[int, float] = {}
-            sentence_chunk_map: dict[int, int] = {}
-
-            for s_idx, c_idx, chunk, sentence in pair_mappings:
-                sc = unique_pairs.get((chunk, sentence), 0.0)
-                if sc > chunk_max_scores[c_idx]:
-                    chunk_max_scores[c_idx] = sc
-                if s_idx not in sentence_scores or sc > sentence_scores[s_idx]:
-                    sentence_scores[s_idx] = sc
-                    sentence_chunk_map[s_idx] = c_idx
-
-            for s_idx, sentence in enumerate(sentences):
-                sc = round(sentence_scores.get(s_idx, 0.0), 3)
-                c_idx = sentence_chunk_map.get(s_idx, 0)
-                supported = sc >= 0.50
-                if supported:
-                    supported_chunks.add(c_idx)
-
-                matched_chunk_text = chunks[c_idx] if c_idx < len(chunks) else clean_source
-
-                if supported:
-                    best_source_sent = retriever.find_best_sentence(sentence, matched_chunk_text)
-                    reason = "Supported by source evidence."
-                else:
-                    best_source_sent = "[No strongly entailed passage in matched section]"
-                    reason = f"Chunk entailment score ({sc:.3f}) fell below the 0.50 threshold."
-
-                sentence_details.append(
-                    {
-                        "sentence_index": s_idx + 1,
-                        "text": sentence,
-                        "score": sc,
-                        "matched_chunk": c_idx + 1,
-                        "supported": supported,
-                        "source_sentence": best_source_sent.strip(),
-                        "reason": reason,
-                    }
-                )
-
-        uncovered_sections = []
-        for c_idx in range(len(chunks)):
-            if c_idx not in supported_chunks:
-                chunk_text = chunks[c_idx].strip()
-                words = chunk_text.split()
-                lead_snippet = " ".join(words[:35]) + ("..." if len(words) > 35 else "")
-                max_sc = round(chunk_max_scores.get(c_idx, 0.0), 3)
-                uncovered_sections.append(
-                    {
-                        "chunk_index": c_idx + 1,
-                        "chunk_total": len(chunks),
-                        "excerpt": lead_snippet,
-                        "max_similarity_score": max_sc,
-                        "reason": (
-                            "No summary claim reached the 0.50 grounding threshold "
-                            f"for this section (Peak entailment: {max_sc}). "
-                            "Key facts from this section were omitted."
-                        ),
-                    }
-                )
-
-        avg_consistency = (
-            round(sum(s["score"] for s in sentence_details) / len(sentence_details), 3)
-            if sentence_details
-            else 0.0
+        return score_coverage(
+            source_text,
+            summary_text,
+            settings.preparation,
+            DimensionBoundary(convert_to_json, call),
         )
-        total_chunks = len(chunks) if chunks else 1
-        coverage_pct = round((len(supported_chunks) / total_chunks) * 100, 1)
-
-        return {
-            "overall_consistency": avg_consistency,
-            "coherence": coherence,
-            "fluency": fluency,
-            "document_chunks_total": len(chunks),
-            "document_chunks_covered": len(supported_chunks),
-            "chunk_coverage_percent": coverage_pct,
-            "sentence_breakdown": sentence_details,
-            "uncovered_sections": uncovered_sections,
-        }
 
 
 @app.post("/v1/evaluate")

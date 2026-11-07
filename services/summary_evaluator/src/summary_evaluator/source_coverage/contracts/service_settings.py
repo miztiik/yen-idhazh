@@ -68,6 +68,8 @@ class CoveragePreparation(CoverageContract):
     macro_complete_paragraphs: PositiveCount
     macro_no_paragraph_chars: PositiveCount
     macro_few_paragraph_chars: PositiveCount
+    macro_lead_paragraphs: PositiveCount = 2
+    macro_tail_paragraphs: PositiveCount = 1
     summary_min_sentence_chars: PositiveCount
     top_chunks: PositiveCount
     evidence_min_score: Score
@@ -75,6 +77,7 @@ class CoveragePreparation(CoverageContract):
     grounding_threshold: Score
     score_decimals: int = Field(strict=True, ge=0)
     coverage_decimals: int = Field(strict=True, ge=0)
+    threshold_decimals: int = Field(default=2, strict=True, ge=0)
     uncovered_excerpt_words: PositiveCount
     empty_summary: NonblankText
     empty_source: NonblankText
@@ -86,6 +89,8 @@ class CoveragePreparation(CoverageContract):
     def require_forward_stride(self) -> Self:
         if self.stride_words >= self.chunk_words:
             raise ValueError("Legacy overlapping chunks must advance")
+        if self.macro_complete_paragraphs < self.macro_lead_paragraphs + self.macro_tail_paragraphs:
+            raise ValueError("The legacy macro view must not duplicate its selected paragraphs")
         return self
 
 

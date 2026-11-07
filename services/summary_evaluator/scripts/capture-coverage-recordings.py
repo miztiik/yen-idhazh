@@ -3,7 +3,6 @@
 import argparse
 import copy
 import hashlib
-import importlib.util
 import os
 import platform
 import subprocess
@@ -22,10 +21,12 @@ from idhazh.contracts.coverage_model_recording import (
 )
 
 from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.source_coverage.call_dimensions import DimensionBoundary
 from summary_evaluator.source_coverage.contracts.evaluation_result import CoverageMetrics
 from summary_evaluator.source_coverage.load_model import CoverageModel, load_model
 from summary_evaluator.source_coverage.load_settings import load_settings
 from summary_evaluator.source_coverage.prepare_resources import atomic_write
+from summary_evaluator.source_coverage.score_coverage import score_coverage
 
 
 @dataclass
@@ -57,20 +58,14 @@ def main() -> None:
     inputs = CoverageRecordingInputs.model_validate_json(
         (directory / "coverage-recording-inputs.json").read_bytes()
     )
-    producer = ".github/scripts/serve-evaluator.py"
+    producer = "services/summary_evaluator/src/summary_evaluator/source_coverage/score_coverage.py"
     if subprocess.run(
         ["git", "diff", "--quiet", "HEAD", "--", producer], cwd=root, check=False
     ).returncode:
-        raise ValueError("Commit the concrete legacy call boundary before capturing its revision")
+        raise ValueError("Commit the concrete coverage call boundary before capturing its revision")
     revision = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=root, text=True
     ).strip()
-    spec = importlib.util.spec_from_file_location("legacy_coverage_capture", root / producer)
-    if spec is None or spec.loader is None:
-        raise ValueError("The named legacy producer could not be loaded")
-    legacy = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(legacy)
-
     api = load_api_settings(root / "config" / "summary-evals" / "api.json")
     settings = load_settings(root, api.listener, api.logging)
     model = load_model(settings, root)
@@ -79,11 +74,11 @@ def main() -> None:
     cases: list[CoverageRecordedCase] = []
     for case in inputs.cases:
         recorder = RecordDimensionCalls(model, [])
-        metrics = legacy.compute_unieval_sync(
+        metrics = score_coverage(
             case.source_text,
             case.summary_text,
-            convert_input=model.convert_input,
-            dimension_call=recorder,
+            settings.preparation,
+            DimensionBoundary(model.convert_input, recorder),
         )
         CoverageMetrics.model_validate_json(canonical_json(metrics))
         cases.append(
