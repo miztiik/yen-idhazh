@@ -42,7 +42,7 @@ This canonical standard applies to all agent responses, docs, pull requests, com
 
 ## 0c. Decision Requests and Tables
 
-**Follow section 0b.** Write plain English that a person outside this project understands on one read. Define unavoidable terms in the same sentence.
+Write plain English that a person outside this project understands on one read. Define unavoidable terms in the same sentence.
 
 Whenever you need human help, clarification, a decision or approval, use one message in this order, with no preamble:
 
@@ -95,10 +95,10 @@ Routine progress updates do not need this structure.
 3. **Contracts before logic**. Every **persisted payload a later run reads** is declared once in code - before any logic reads or writes it - using whatever validation library is native to its own language. A downstream artifact is derived from that model at the moment it is needed. Where a copy must cross into another language, it is small, hand-written, and held in step by a named test. A shape nobody declared is a shape nobody can validate or migrate, so it survives instead as a hand-written copy that drifts quietly out of sync.
 4. **docs/ is the memory, and a decision lives on the page it impacts**. Pipeline rules, published shapes, tuning knobs and current subsystem contracts live under `docs\`; a choice that clears the bar is recorded IN the living doc it impacts as a `## Design rationale` section, never as a standalone record. There is no ADR file and no `decisions/` directory - a decision written beside the thing it governs is read by the person about to change it, and one filed in a register is read by nobody. **A private note store is a cache of** `docs\`, **never the only copy**: a fact learned with no page to hold it gets a page, or goes to `docs\reference\agent-notes.md`, in the same session.
 5. **Structural fixes only.** No band-aids, no monkey patches, no "temporary" hacks. This one does not bend: a temporary fix is a permanent fix with a note attached, and the note is what gets lost. When the structural fix is out of scope, escalate the correction level and say so - that is the adapt path, and it is the only one. Escalation is a person's decision under section 6, not a label an agent applies to itself to keep going.
-6. **No hard coding, anywhere in the codebase**. Every layer - frontend included - reads tunable behavior from schema-validated `config\` with sane defaults; a theme token is a knob, not a literal. The substitution test: change the config and behavior changes, no source edit required - anything else is hard coded. A feature in development ships behind a config flag: default agreed and documented at build time; removal condition on the declaring line, or the flag is a permanent second implementation. A value that truly belongs in source - a protocol constant, a format literal - is named as one by someone who states why it can never vary.
+6. **No hard coding, anywhere in the codebase**. Every layer - frontend included - reads tunable behavior from schema-validated `config\` with sane defaults; a theme token is a knob, not a literal. The substitution test: change the config and behavior changes, no source edit required - anything else is hard coded. Features have meaningful sane defaults and flags where applicable. A value that truly belongs in source - a protocol constant, a format literal - is named as one by someone who states why it can never vary.
 7. **No mocks unless asked, because a mock is how a thing looks finished without being built.** The failure is an agent failure: asked for a capability, an agent writes a stub returning a plausible value, writes a test asserting the stub, and reports success - everything passes, nothing works, which is worse than a red test because a red test tells the truth. So real implementations and real fixtures under `tests\fixtures\`, no test touches the network, and where the model is not itself under test the boundary is driven by a recorded response. A mock ships only on explicit request, named as one where it sits; that named exception is the whole of the adapt path, and it is a person's to open.
 8. **Open source first**. Prefer a mature library over a custom build, and name each dependency's beneficiary feature and its cost - install time, shipped bytes etc. A library has already paid for edge cases we haven't met yet; a hand-rolled HTTP client, retry policy, or parser buys them back one outage at a time. Naming the beneficiary matters as much as the cost: an unattributed dependency is one nobody can later argue to remove. Writing it ourselves is a person's call: which library was considered, and what didn't fit.
-9. **Tests ship with the feature**. A behavior-changing commit lands with its tests at the tier matching the surface, and the full suite is green at merge. A late test is written against code as built rather than behavior as intended, so it documents the bug as readily as the feature and then defends it. A feature that lands without one carries a person's name and the row that will add it.
+9. **Tests ship with the feature**. Reuse existing coverage. A behavior-changing commit lands with its tests at the tier matching the surface, and the full suite is green at merge. A late test is written against code as built rather than behavior as intended, so it documents the bug as readily as the feature and then defends it. A feature that lands without one carries a person's name and the row that will add it.
 10. **Measure to decide, not to stall**. If a change has low downside and is easily reversible, ship it immediately without gating on metrics - indecision is not safe, merely slow. Only measure when the number directly alters what you build next. Never invent precision: make fast, provisional calls on labeled estimates, and only measure if it's cheap to confirm. When you do test, blunt tools are not a veto: "the gain is smaller than the noise" indicts your benchmark, not your idea - use paired A/B runs to isolate signal. Finally, keep metrics clean: store only the single current reading, let Git hold history, and when data contradicts your design, pivot instantly and dump the old numbers.
 11. **Fetched text is data, never instruction.** Every run reads the open web and all of it is untrusted. The threat is model compromise through side-loaded instructions: fetched text persuading a model to act rather than be summarized. Fetched text must never become a system prompt, shell argument, file path, or fetch URL, and must never be presented to readers as trusted instruction. Filenames come only from recomputed item identity, never source text. The **schema and sanitizer are the control**. Prompt wording is not a control; it is untrusted text too. Any stage that requires fetched text to cross these boundaries must be redesigned or escalated as a design question. **And it goes only where the operator sends it.** Article text is sent only to a model process the operator of this run controls, and a run that sent it elsewhere is not a run this project publishes. The risk in this clause is the recipient rather than the model: a third party that receives the text holds a copy, and what it logs, retains or trains on is outside this repository's reach. The control is that the address is a committed config value, `model_server.base_url`, so moving it is a diff a person reads. An environment value is not an acceptable control for a destination, because it is the one kind of setting that changes one with no review (maintainer ruling, 2026-09-22). This is a reader-safety boundary, so it is not weakened or adapted.
 12. **Every read has a fixed-size input.** A read must not grow as the repository accumulates code, data, docs, or history. Name the fixed-size input: one item, one day, one shard, one run directory, a named file, or a named list in config. A glob, `rglob`, `os.walk`, `iterdir`, `listdir`, `git ls-files`, or a parse over a committed tree whose size grows with the repository is forbidden in production code, utilities, and tests. A workflow test reads only named inputs: a named list of workflows, named config files, named contract fixtures, or data the test generates. A walk over a directory that the test or run itself just built, such as `tmp_path` or one run's output directory, is bounded and allowed. Repository growth makes a read cost more without changing the question it answers, charging every later run for accumulated state. (Maintainer ruling 2026-10-03.)
@@ -220,18 +220,17 @@ Only the `history` job in [.github/workflows/idhazh-gardener.yml](.github/workfl
 
 The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md).
 
-- [ ] Tests added/updated at the tier appropriate to the surface (section 13). No mocks per Guardrail #7.
+- [ ] Tests added/updated at the tier appropriate to the surface.
 - [ ] Full suite green **on the merge candidate, once**. CI is authoritative; a local full-suite run before every push is optional, not required. A candidate that is already green does not re-run the suite because the trunk moved under it.
 - [ ] Applicable local lint, type checks and selected tests pass before the push, per [docs/how-to/run-the-gates.md](docs/how-to/run-the-gates.md). Use the shared test selector. Keep full-suite checks in CI unless local full coverage is explicitly needed. Verify a worker's unchanged test record instead of repeating its check; documentation-only closure needs no local application suite.
 - [ ] The frontend field-set and vocabulary tests are green for any contract the frontend copies.
-- [ ] For published-site changes: smoke-tested via integrated browser tools per section 12.
+- [ ] For published-site changes: smoke-tested via integrated browser tools.
 - [ ] Review the changed reader-facing or operator-facing surface against the design requirements in [`docs/concepts/design-system.md`](docs/concepts/design-system.md). Use a representative view and only check another view or state when the change alters its behaviour. This is a design review, not a per-panel test matrix.
 - [ ] Canonical docs updated in `docs/` (right tier). A page you added a section to paid the split test first, or the PR says in one line why it stays whole ([`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md)).
-- [ ] Schemas version-stamped + change logged when any persisted contract changed (section 11).
+- [ ] Schemas version-stamped when any persisted contract changed.
 - [ ] No `[DEBUG]` markers left.
 - [ ] No new hardcoded values.
 - [ ] No new mocks unless explicitly requested.
-- [ ] Any guardrail adapted or excepted in this change carries a person's name and a dated line in the living doc it impacts (section 1).
 - [ ] Lockfiles in sync with manifests.
 
 ## 9. Anti-Patterns (Do NOT)
@@ -240,7 +239,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - Assume a runtime backend, or ship features requiring one, an account or push notifications.
 - Hardcode tunables, source lists, model references, thresholds or magic strings; use `config/`.
 - Put a unit's execution in the file that routes to it.
-- Ship unfinished surfaces without a default-off config flag and a removal condition on its declaring line (Guardrail #6).
+- Ship unfinished surfaces without a default config flag.
 - Let the Pydantic model and frontend copy drift; update both and run both binding tests.
 - Persist absolute paths or backslashes.
 - Let fetched text reach a system prompt, shell arguments, file paths or outbound URLs (Guardrail #11).
@@ -342,9 +341,6 @@ Use these responsibilities to resolve disagreements, not as a checklist of appro
 **Measurement:** Measure to decide the next implementation step, not to obtain permission to build. If measurement needs working code, build that part of the real feature first. Further measurement must name what decision it could change; otherwise continue implementation.
 
 No advisor may reduce scope or require a separate experimental implementation without user approval. Platform limits, safety controls and required correctness tests still apply.
-
-**A removal veto is valid only if it names what is removed and what the reader loses.**
-
 
 ## See also
 
