@@ -1,12 +1,4 @@
 {
-  "prompt_files": {
-    "generate_labels": "prompts/generate-labels.txt",
-    "write_digest_summary": "prompts/write-digest-summary.txt",
-    "plan_visual": "prompts/plan-visual.txt",
-    "continue_summary": "prompts/continue-summary.txt",
-    "summarize_article": "prompts/summarize-article.txt",
-    "compare_articles": "prompts/compare-articles.txt"
-  },
   "assemble": {
     "group_identical_titles": true,
     "same_story": {
@@ -340,6 +332,14 @@
     "head_items": 20,
     "head_no_repeat": 10,
     "max_desk_in_head": 5
+  },
+  "prompt_files": {
+    "compare_articles": "prompts/compare-articles.txt",
+    "continue_summary": "prompts/continue-summary.txt",
+    "generate_labels": "prompts/generate-labels.txt",
+    "plan_visual": "prompts/plan-visual.txt",
+    "summarize_article": "prompts/summarize-article.txt",
+    "write_digest_summary": "prompts/write-digest-summary.txt"
   },
   "reference_dataset": {
     "article_words_min": 120,

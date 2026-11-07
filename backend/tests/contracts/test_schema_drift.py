@@ -23,6 +23,7 @@ from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from idhazh.contracts import CONTRACTS
 from idhazh.contracts.base import Contract
 from idhazh.contracts.knobs.models import ModelsConfig
+from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.visual_decision import VisualKind
 
@@ -133,6 +134,8 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
             expected = {"calibration_policy_version": None, **expected}
         if contract.__schema_stem__ == "day-metrics":
             expected.pop("label_similarity", None)
+        if contract.__schema_stem__ == "app-config" and "prompt_files" not in original:
+            expected = {**expected, "prompt_files": PromptFilesConfig().model_dump(mode="json")}
         assert json.loads(once) == expected
     else:
         assert original["version"] < record.version

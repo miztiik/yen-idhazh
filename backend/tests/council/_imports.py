@@ -50,6 +50,7 @@ MODULE_NAMES = (
     "idhazh.contracts.knobs.observability",
     "idhazh.contracts.knobs.page_weight",
     "idhazh.contracts.knobs.placement",
+    "idhazh.contracts.knobs.prompts",
     "idhazh.contracts.knobs.removed",
     "idhazh.contracts.knobs.retention",
     "idhazh.contracts.knobs.run",
