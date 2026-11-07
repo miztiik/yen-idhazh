@@ -3,8 +3,8 @@
 from typing import Final, Self
 
 from pydantic import ConfigDict, model_validator
-from summary_evaluator.serve_http.contracts.api_health import ApiHealth
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
+from summary_evaluator.serve_http.read_api_health import ReadableApiHealth
 from summary_evaluator.shared.contracts.base import Uuid4
 from summary_evaluator.shared.contracts.process_identity import ProcessIdentity
 from summary_evaluator.shared.contracts.service_settings import ListenerSettings
@@ -20,10 +20,11 @@ class EvidenceContract(WorkflowContract):
         json_schema_extra={
             "version": EVIDENCE_VERSION,
             "readCompatibility": (
-                "read frozen 2026-11-05 shared evidence without inventing identity"
+                "read frozen shared evidence and disabled-coverage health "
+                "without inventing identity"
             ),
             "changelog": [
-                {"version": EVIDENCE_VERSION, "change": "Record independent scorer API lifetimes."}
+                {"version": EVIDENCE_VERSION, "change": "Keep independent maintained scorer APIs."}
             ],
         }
     )
@@ -34,7 +35,7 @@ class ScorerApiEvidence(EvidenceContract):
     listener: ListenerSettings
     process: ProcessIdentity | None
     service_instance_id: Uuid4 | None
-    health: ApiHealth | None
+    health: ReadableApiHealth | None
     worker_exit: WorkerExit
     outcome: ServerOutcome
     errors: tuple[PipelineError, ...]
@@ -58,7 +59,7 @@ class ScorerApiEvidence(EvidenceContract):
                 or self.health.enabled_routes != (self.scorer,)
             ):
                 raise ValueError("Health must identify the actual selected API process")
-            for name in ("hhem", "unieval", "coverage"):
+            for name in ("hhem", "unieval"):
                 observed = getattr(self.health, name)
                 if name != self.scorer and observed.status != "disabled":
                     raise ValueError("An independent API must not enable another scorer")

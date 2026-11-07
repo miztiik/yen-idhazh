@@ -12,12 +12,16 @@ from summary_evaluator.serve_http.api_settings import (
     resolve_selected_api_settings,
 )
 from summary_evaluator.serve_http.contracts.api_deployment_settings import ApiDeploymentSettings
-from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
+from summary_evaluator.serve_http.contracts.api_settings import ApiComponent, ApiSettings
+from summary_evaluator.serve_http.contracts.previous_api_settings import (
+    PreviousApiDeploymentSettings,
+    PreviousApiSettings,
+)
 from summary_evaluator.shared.contracts.process_identity import ProcessIdentity
 from summary_evaluator.shared.contracts.worker_exit import WorkerExit
 
 
-def deployment() -> dict[str, object]:
+def deployment(*, previous: bool = False) -> dict[str, object]:
     return {
         "version": "2026-11-07",
         "listeners": {
@@ -27,7 +31,10 @@ def deployment() -> dict[str, object]:
                 "max_body_bytes": 1024,
                 "body_read_timeout_ms": 1000,
             }
-            for scorer, port in (("hhem", 3010), ("unieval", 3011), ("coverage", 3012))
+            for scorer, port in (
+                (("hhem", 3010), ("unieval", 3011), ("coverage", 3012))
+                if previous else (("hhem", 3010), ("unieval", 3011))
+            )
         },
         "logging": {"level": "INFO", "max_event_bytes": 4096},
         "log_directory": "logs",
@@ -37,6 +44,7 @@ def deployment() -> dict[str, object]:
 
 def test_each_scorer_receives_only_its_declared_listener_and_route() -> None:
     configured = ApiDeploymentSettings.model_validate_json(json.dumps(deployment()))
+    assert set(configured.listeners) == {"hhem", "unieval"}
     for scorer, listener in configured.listeners.items():
         selected = resolve_scorer_api_settings(configured, scorer)
         assert selected.listener == listener
@@ -56,20 +64,83 @@ def test_legacy_settings_are_explicitly_projected_without_new_destinations() -> 
     assert selected.enabled_routes == ("unieval",)
 
 
-def test_colliding_or_incomplete_deployments_are_not_legacy_fallbacks() -> None:
+def test_previous_three_listener_settings_resolve_only_authored_maintained_bindings() -> None:
+    encoded = json.dumps(deployment(previous=True))
+    with pytest.raises(ValidationError):
+        ApiDeploymentSettings.model_validate_json(encoded)
+    previous = ApiConfiguration.model_validate_json(encoded).root
+    assert isinstance(previous, PreviousApiDeploymentSettings)
+    scorers: tuple[ApiComponent, ...] = ("hhem", "unieval")
+    for scorer in scorers:
+        selected = resolve_scorer_api_settings(previous, scorer)
+        assert selected.listener == previous.listeners[scorer]
+        assert selected.enabled_routes == (scorer,)
+        assert selected.logging == previous.logging
+        assert selected.log_directory == previous.log_directory
+        assert selected.shutdown_timeout_ms == previous.shutdown_timeout_ms
+
+
+def test_previous_single_listener_selection_does_not_restore_coverage() -> None:
     configured = ApiDeploymentSettings.model_validate_json(json.dumps(deployment()))
-    colliding = configured.model_copy(
-        update={"listeners": {**configured.listeners, "unieval": configured.listeners["hhem"]}}
+    original = resolve_scorer_api_settings(configured, "hhem")
+    previous = ApiConfiguration.model_validate_json(
+        original.model_copy(
+            update={"enabled_routes": ("hhem", "unieval", "coverage")}
+        ).model_dump_json()
+    ).root
+    assert isinstance(previous, PreviousApiSettings)
+    selected = resolve_scorer_api_settings(previous, "unieval")
+    assert selected.listener == original.listener
+    assert selected.enabled_routes == ("unieval",)
+    with pytest.raises(ApiSettingsLoadError, match="exactly one"):
+        resolve_selected_api_settings(previous, None)
+    coverage_only = previous.model_copy(update={"enabled_routes": ("coverage",)})
+    with pytest.raises(ApiSettingsLoadError, match="maintained scorer"):
+        resolve_selected_api_settings(coverage_only, None)
+
+
+def test_single_listener_projection_revalidates_frozen_bounds() -> None:
+    configured = ApiDeploymentSettings.model_validate_json(json.dumps(deployment()))
+    single = resolve_scorer_api_settings(configured, "hhem")
+    invalid = single.model_copy(
+        update={"listener": single.listener.model_copy(update={"port": 0})}
     )
     with pytest.raises(ValidationError):
-        ApiConfiguration.model_validate_json(colliding.model_dump_json())
-    incomplete = configured.model_copy(update={"listeners": {"hhem": configured.listeners["hhem"]}})
+        resolve_scorer_api_settings(invalid, "unieval")
+
+
+@pytest.mark.parametrize("previous", [False, True])
+@pytest.mark.parametrize("fault", ["missing", "unknown", "collision", "mixed", "version", "bound"])
+def test_invalid_deployments_are_not_compatibility_fallbacks(previous: bool, fault: str) -> None:
+    payload = deployment(previous=previous)
+    listeners = payload["listeners"]
+    assert isinstance(listeners, dict)
+    if fault == "missing":
+        del listeners["unieval"]
+    elif fault == "unknown":
+        listeners["unknown"] = listeners["hhem"]
+    elif fault == "collision":
+        listeners["coverage" if previous else "unieval"] = listeners["hhem"]
+    elif fault == "mixed":
+        payload["listener"] = listeners["hhem"]
+    elif fault == "version":
+        payload["version"] = "2026-11-05"
+    else:
+        listeners["coverage" if previous else "unieval"]["max_body_bytes"] = 0
     with pytest.raises(ValidationError):
-        ApiConfiguration.model_validate_json(incomplete.model_dump_json())
-    mixed = deployment()
-    mixed["listener"] = configured.listeners["hhem"].model_dump(mode="json")
-    with pytest.raises(ValidationError):
-        ApiConfiguration.model_validate_json(json.dumps(mixed))
+        ApiConfiguration.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize("previous", [False, True])
+def test_retired_or_unknown_runtime_selection_cannot_choose_a_listener(previous: bool) -> None:
+    configured = ApiConfiguration.model_validate_json(
+        json.dumps(deployment(previous=previous))
+    ).root
+    selected = resolve_scorer_api_settings(configured, "hhem")
+    for invalid in ("coverage", "unknown"):
+        damaged = selected.model_copy(update={"enabled_routes": (invalid,)})
+        with pytest.raises(ApiSettingsLoadError, match="maintained scorer"):
+            resolve_selected_api_settings(configured, damaged.enabled_routes)
 
 
 def test_modern_configuration_requires_an_explicit_singleton_selection() -> None:
@@ -80,7 +151,7 @@ def test_modern_configuration_requires_an_explicit_singleton_selection() -> None
         resolve_selected_api_settings(configured, ())
     with pytest.raises(ApiSettingsLoadError):
         resolve_selected_api_settings(configured, ("hhem", "unieval"))
-    assert resolve_selected_api_settings(configured, ("coverage",)).enabled_routes == ("coverage",)
+    assert resolve_selected_api_settings(configured, ("unieval",)).enabled_routes == ("unieval",)
 
 
 def test_unambiguous_legacy_selection_remains_explicit_in_its_authored_settings() -> None:

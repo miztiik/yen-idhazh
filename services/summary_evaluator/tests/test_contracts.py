@@ -197,6 +197,7 @@ def test_actual_evaluator_openapi_has_only_dated_routes_and_resolvable_native_sc
     assert not hasattr(app.state, "forwarder")
     assert app.openapi_url == "/api/2026-11-05/get-summary-evaluator-schema"
     schema = app.openapi()
+    assert set(app.state.components) == {"hhem", "unieval"}
     assert schema["info"]["title"] == "summary-evaluator"
     assert schema["info"]["version"] == SERVER_SCHEMA_VERSION
     assert set(schema["paths"]) == {
@@ -213,7 +214,6 @@ def test_actual_evaluator_openapi_has_only_dated_routes_and_resolvable_native_sc
         "status",
         "hhem",
         "unieval",
-        "coverage",
         "log_file",
         "log_available",
     }
@@ -281,8 +281,8 @@ def test_disabled_application_constructs_no_scorers_or_reads_their_configuration
     assert (
         app.state.controller is None
         and app.state.unieval is None
-        and app.state.coverage is None
     )
+    assert not hasattr(app.state, "coverage")
     assert set(app.openapi()["paths"]) == {API_HEALTH_PATH}
 
 

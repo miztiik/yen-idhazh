@@ -46,14 +46,13 @@ Table A - Evaluator operations
 | A4 | GET | `/api/2026-11-05/get-unieval-health` | Only with UniEval enabled. |
 | A5 | GET | `/api/2026-11-05/get-summary-evaluator-health` | Always registered; HTTP 200 requires every enabled scorer to be ready. |
 | A6 | GET | `/api/2026-11-05/get-summary-evaluator-schema` | Always registered; no interactive documentation UI. |
-| A7 | POST | `/api/2026-11-05/evaluate-summary-coverage` | Only with source coverage explicitly enabled. |
-| A8 | GET | `/api/2026-11-05/get-summary-coverage-health` | Only with source coverage enabled; actual owned-worker readiness. |
 
-The application and source-coverage schemas are `2026-11-07`, HHEM's scoring
+The application schemas are `2026-11-07`, HHEM's scoring
 schema remains `2026-11-02`, and native UniEval's scoring schema remains `2026-11-04`.
-The legacy coverage `/v1/evaluate` and separate listener are removed, without aliases.
-The [application reference](summary-evaluator-api.md) owns current-only validation,
-local refusals and listener settings.
+Coverage operations and selection are retired without aliases or scorer
+fallbacks; their HTTP paths use the normal unknown-route refusal.
+The [application reference](summary-evaluator-api.md) owns strict live
+validation, narrow previous-shape readers, local refusals and listener settings.
 
 ## Current generator family
 
@@ -182,7 +181,6 @@ implementation.
 - [summary-evaluator-api.md](summary-evaluator-api.md) - evaluator listener and live application contract.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - HHEM scoring contract.
 - [unieval-api.md](unieval-api.md) - native UniEval scoring contract.
-- [source-coverage-api.md](source-coverage-api.md) - distinct legacy method and selected operation.
 - [summary-evaluation-workflow.md](summary-evaluation-workflow.md) - direct native generation and evaluator clients.
 - [summary-generator-api.md](summary-generator-api.md) - prepared-text generation and its independent listener.
 - [serve-pipeline-apis.md](serve-pipeline-apis.md) - shared process identity and owned-child lifetime.

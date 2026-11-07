@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 from summary_eval_pipeline.contracts import (
     PipelineError,
     ServerOutcome,
@@ -398,6 +399,7 @@ def test_preserved_parent_report_renders_one_shared_api_without_independent_proc
     current_outer: bool,
 ) -> None:
     from summary_eval_pipeline.contracts import WORKFLOW_VERSION
+    from summary_eval_pipeline.contracts import PhaseEvidence as LegacyPhaseEvidence
 
     evidence = legacy_pipeline_example(current_outer=current_outer)
     inputs, _ = in_memory_pipeline()
@@ -407,12 +409,34 @@ def test_preserved_parent_report_renders_one_shared_api_without_independent_proc
     assert "PID 2100" not in markdown and "PID 2101" not in markdown
     assert "worker exit PIDs/statuses not recorded" in markdown
     assert evidence.generation_phase is not None and evidence.evaluation_phase is not None
+    assert isinstance(evidence.evaluation_phase, LegacyPhaseEvidence)
+    assert evidence.evaluation_phase.api_health is not None
+    assert "coverage" not in evidence.evaluation_phase.api_health.model_dump()
     assert (
         evidence.generation_phase.version == evidence.evaluation_phase.version == WORKFLOW_VERSION
     )
     reread = PipelineDocument.model_validate_json(evidence.model_dump_json()).root
     assert reread.generation_phase is not None and reread.evaluation_phase is not None
     assert reread.generation_phase.version == reread.evaluation_phase.version == WORKFLOW_VERSION
+
+
+def test_previous_disabled_health_keeps_independent_api_observations_unchanged() -> None:
+    from summary_eval_pipeline.scorer_evidence import ScorerApiEvidence
+
+    _, complete = in_memory_pipeline()
+    assert isinstance(complete.evaluation_phase, PhaseEvidence)
+    original = complete.evaluation_phase.scorer_apis[0]
+    payload = original.model_dump(mode="json")
+    payload["health"]["coverage"] = {"status": "disabled", "worker": None, "model": None}
+    reread = ScorerApiEvidence.model_validate_json(json.dumps(payload))
+    assert reread == original
+    assert reread.process == original.process
+    assert reread.service_instance_id == original.service_instance_id
+    assert reread.worker_exit == original.worker_exit
+    assert reread.health is not None and "coverage" not in reread.health.model_dump()
+    payload["health"]["coverage"]["status"] = "ready"
+    with pytest.raises(ValidationError):
+        ScorerApiEvidence.model_validate_json(json.dumps(payload))
 
 
 def test_independent_rows_show_actual_identity_exit_and_scorer_scoped_startup_failure() -> None:

@@ -5,7 +5,7 @@ import {
   readCloudEvent,
   type CloudEvent,
 } from "../../packages/common-contracts/src/index.ts";
-import type { QualityEvaluationMetrics, SummaryStructuredOutput } from "./ai-pipeline.ts";
+import type { SummaryStructuredOutput } from "./ai-pipeline.ts";
 
 export type PipelineEventData<T = unknown> = {
   result: T;
@@ -13,13 +13,6 @@ export type PipelineEventData<T = unknown> = {
   cumulativeMs: number;
 };
 export type PipelineEvent<T = unknown> = CloudEvent<PipelineEventData<T>>;
-
-export type EvaluationServerTelemetry = {
-  duration_ms: number;
-  cpu_percent: number;
-  server_vm_rss_mb: number;
-  server_vm_swap_mb: number;
-};
 
 export class PipelineInputError extends Error {
   constructor(public readonly code: string, public readonly line?: number) {
@@ -38,52 +31,6 @@ function hasStrings(value: unknown, fields: readonly string[]): boolean {
 
 function hasNumbers(value: unknown, fields: readonly string[]): boolean {
   return isRecord(value) && fields.every(field => typeof value[field] === "number" && Number.isFinite(value[field]));
-}
-
-export function readQualityMetrics(value: unknown): QualityEvaluationMetrics {
-  if (!isQualityMetrics(value)) throw new Error("INVALID_EVALUATION_METRICS");
-  return value;
-}
-
-export function readEvaluationServerTelemetry(value: unknown): EvaluationServerTelemetry {
-  if (!isRecord(value) || !hasNumbers(value, [
-    "duration_ms", "cpu_percent", "server_vm_rss_mb", "server_vm_swap_mb",
-  ])) throw new Error("INVALID_EVALUATION_SERVER_TELEMETRY");
-  return {
-    duration_ms: value.duration_ms as number,
-    cpu_percent: value.cpu_percent as number,
-    server_vm_rss_mb: value.server_vm_rss_mb as number,
-    server_vm_swap_mb: value.server_vm_swap_mb as number,
-  };
-}
-
-export function readCurrentEvaluationTelemetry(
-  events: readonly PipelineEvent[],
-  sourceIdentifier: string,
-): EvaluationServerTelemetry | undefined {
-  const start = events.findLastIndex(event => event.type === "QUALITY_EVALUATION_STARTED");
-  const selected = events.slice(start + 1).findLast(event => event.type === "EVALUATION_SERVER_TELEMETRY"
-    && isRecord(event.data.result) && event.data.result.sourceIdentifier === sourceIdentifier);
-  if (!selected) return undefined;
-  if (!isRecord(selected.data.result)) throw new Error("INVALID_EVALUATION_SERVER_TELEMETRY");
-  return readEvaluationServerTelemetry(selected.data.result.serverTelemetry);
-}
-
-function isQualityMetrics(value: unknown): value is QualityEvaluationMetrics {
-  if (!isRecord(value) || !hasNumbers(value, [
-    "overall_consistency", "coherence", "fluency", "document_chunks_total",
-    "document_chunks_covered", "chunk_coverage_percent",
-  ]) || !Array.isArray(value.sentence_breakdown)) return false;
-  if (!value.sentence_breakdown.every(sentence => isRecord(sentence)
-    && hasStrings(sentence, ["text"])
-    && hasNumbers(sentence, ["sentence_index", "score", "matched_chunk"])
-    && typeof sentence.supported === "boolean"
-    && (sentence.source_sentence === undefined || typeof sentence.source_sentence === "string")
-    && (sentence.reason === undefined || typeof sentence.reason === "string"))) return false;
-  return value.uncovered_sections === undefined || (Array.isArray(value.uncovered_sections)
-    && value.uncovered_sections.every(section => hasNumbers(section, [
-      "chunk_index", "chunk_total", "max_similarity_score",
-    ]) && hasStrings(section, ["excerpt", "reason"])));
 }
 
 function isFeedArticle(value: unknown): boolean {
@@ -149,8 +96,7 @@ function isSummaryResult(value: unknown): value is SummaryStructuredOutput {
   if (!hasStrings(value.runner_metadata, [
     "runnerName", "runId", "runNumber", "workflow", "osArch", "shardId", "modelFamily", "requestedModelId",
   ]) || !isRecord(value.inference_params)
-    || (value.error_flag !== undefined && typeof value.error_flag !== "boolean")
-    || (value.quality_metrics !== undefined && !isQualityMetrics(value.quality_metrics))) return false;
+    || (value.error_flag !== undefined && typeof value.error_flag !== "boolean")) return false;
   return true;
 }
 

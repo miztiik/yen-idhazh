@@ -25,14 +25,10 @@ from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.serve_api import create_app
 from summary_evaluator.shared.contracts.api_paths import (
     API_HEALTH_PATH,
-    COVERAGE_EVALUATE_PATH,
     EVALUATE_PATH,
 )
 from summary_evaluator.shared.read_process_identity import read_owned_process_identity
-from summary_evaluator.source_coverage.contracts.evaluate_request import CoverageRequest
 from summary_evaluator.unieval.unieval_router import UNIEVAL_PATH
-from summary_evaluator_cases.coverage_cases import RecordedCoverageSupervisor
-from summary_evaluator_cases.coverage_recordings import coverage_settings, read_coverage_recordings
 from summary_evaluator_cases.replay_predictions import Scenario, read_recordings
 from summary_evaluator_cases.service_cases import RecordedSupervisor, service_settings
 from summary_evaluator_cases.unieval_cases import (
@@ -54,19 +50,11 @@ def recorded_app(
             api, hhem, root, packet.startup.context,
             supervisor=RecordedSupervisor(hhem, (Scenario(),)), writer=events,
         )
-    if packet.scorer == "unieval":
-        _, unieval = unieval_settings()
-        unieval = unieval.model_copy(update={"listener": api.listener, "logging": api.logging})
-        return api, create_app(
-            api, None, root, packet.startup.context, writer=events,
-            unieval_settings=unieval, unieval_supervisor=RecordedUnievalSupervisor(unieval),
-        )
-    coverage = coverage_settings().model_copy(
-        update={"listener": api.listener, "logging": api.logging}
-    )
+    _, unieval = unieval_settings()
+    unieval = unieval.model_copy(update={"listener": api.listener, "logging": api.logging})
     return api, create_app(
         api, None, root, packet.startup.context, writer=events,
-        coverage_settings=coverage, coverage_supervisor=RecordedCoverageSupervisor(coverage),
+        unieval_settings=unieval, unieval_supervisor=RecordedUnievalSupervisor(unieval),
     )
 
 
@@ -77,13 +65,7 @@ def native_request(root: Path, scorer: ApiComponent) -> tuple[str, BaseModel]:
         return EVALUATE_PATH, EvaluateRequest(
             source_text=case.source_text, summary_text=case.summary_text
         )
-    if scorer == "unieval":
-        return UNIEVAL_PATH, read_unieval_inputs().cases[0].request
-    coverage_inputs, _ = read_coverage_recordings()
-    coverage_case = coverage_inputs.cases[0]
-    return COVERAGE_EVALUATE_PATH, CoverageRequest(
-        source_text=coverage_case.source_text, summary_text=coverage_case.summary_text
-    )
+    return UNIEVAL_PATH, read_unieval_inputs().cases[0].request
 
 
 def save_observation(path: Path, value: dict[str, object]) -> None:
