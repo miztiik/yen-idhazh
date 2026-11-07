@@ -2,6 +2,7 @@
 
 import argparse
 from pathlib import Path
+from typing import get_args
 
 import uvicorn
 
@@ -10,7 +11,7 @@ from summary_evaluator.serve_http.configure_server import (
     create_server_config,
     report_startup_failure,
 )
-from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
+from summary_evaluator.serve_http.contracts.api_settings import ApiComponent, ApiSettings
 from summary_evaluator.serve_http.contracts.server_event import ApiDiagnosticData
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
 from summary_evaluator.serve_http.run_server import run_server
@@ -22,7 +23,7 @@ def main() -> None:
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--settings", type=Path)
     parser.add_argument("--api-settings", type=Path)
-    parser.add_argument("--routes", nargs="*", choices=("hhem", "unieval", "coverage"))
+    parser.add_argument("--routes", nargs="*", choices=get_args(ApiComponent))
     args = parser.parse_args()
     root = args.root.resolve()
     try:

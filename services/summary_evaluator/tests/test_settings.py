@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import get_args
 
 import pytest
 from pydantic import ValidationError
@@ -21,7 +22,7 @@ from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
 from summary_evaluator.hhem.load_settings import SettingsLoadError
 from summary_evaluator.hhem.resolve_request import RequestResolutionError, resolve_request
 from summary_evaluator.serve_http.api_settings import ApiSettingsLoadError, load_api_settings
-from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
+from summary_evaluator.serve_http.contracts.api_settings import ApiComponent, ApiSettings
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
 from summary_evaluator.shared.contracts.service_settings import StartupContext
 
@@ -115,6 +116,39 @@ def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model
         (
             "summary_evaluator.unieval.control_unieval",
             ("summary_evaluator.hhem", "summary_evaluator.serve_http"),
+        ),
+        (
+            "summary_evaluator.shared.create_api_component",
+            (
+                "summary_evaluator.hhem",
+                "summary_evaluator.unieval",
+                "summary_evaluator.source_coverage",
+                "summary_evaluator.serve_http",
+            ),
+        ),
+        (
+            "summary_evaluator.hhem.create_api_component",
+            (
+                "summary_evaluator.unieval",
+                "summary_evaluator.source_coverage",
+                "summary_evaluator.serve_http",
+            ),
+        ),
+        (
+            "summary_evaluator.unieval.create_api_component",
+            (
+                "summary_evaluator.hhem",
+                "summary_evaluator.source_coverage",
+                "summary_evaluator.serve_http",
+            ),
+        ),
+        (
+            "summary_evaluator.source_coverage.create_api_component",
+            (
+                "summary_evaluator.hhem",
+                "summary_evaluator.unieval",
+                "summary_evaluator.serve_http",
+            ),
         ),
     ],
 )
@@ -387,6 +421,31 @@ def test_retired_generation_cli_values_are_refused_before_configuration_reads(
     assert result.returncode == 2
     assert "invalid choice" in result.stderr or "unrecognized arguments" in result.stderr
     assert "INVALID_SERVER_SETTINGS" not in result.stderr
+
+
+@pytest.mark.parametrize("component", get_args(ApiComponent))
+def test_declared_cli_choices_reach_settings_validation(
+    component: ApiComponent, tmp_path: Path
+) -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-m",
+            "summary_evaluator",
+            "--root",
+            str(tmp_path),
+            "--routes",
+            component,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "INVALID_SERVER_SETTINGS" in result.stderr
+    assert "invalid choice" not in result.stderr
 
 
 @pytest.mark.parametrize("field", ["enabled", "listener", "logging"])
