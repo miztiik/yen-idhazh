@@ -7,7 +7,6 @@ and implements deterministic RFC 4122 UUIDv5 hashing.
 """
 
 import asyncio
-import importlib.util
 import json
 import logging
 import os
@@ -17,31 +16,10 @@ import time
 import traceback
 import uuid
 from contextlib import asynccontextmanager
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
-# -------------------------------------------------------------
-# 0. IN-MEMORY SHIM FOR PRETTYTABLE (IF MISSING)
-# -------------------------------------------------------------
-if importlib.util.find_spec("prettytable") is None:
-    import types
-
-    dummy = types.ModuleType("prettytable")
-
-    class DummyPrettyTable:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            self.field_names: list[str] = []
-            self.rows: list[Any] = []
-
-        def add_row(self, row: Any) -> None:
-            self.rows.append(row)
-
-        def get_string(self) -> str:
-            return ""
-
-    dummy.PrettyTable = DummyPrettyTable
-    sys.modules["prettytable"] = dummy
 
 import torch
 import uvicorn
@@ -314,9 +292,17 @@ def health():
     }
 
 
-def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
-    convert_to_json = UNIEVAL_MODULES["convert_to_json"]
-    evaluator = EVALUATOR_INSTANCE
+def compute_unieval_sync(
+    source_text: str,
+    summary_text: str,
+    *,
+    convert_input: Any = None,
+    dimension_call: Callable[[list[dict[str, str]], str], list[dict[str, float]]] | None = None,
+) -> dict[str, Any]:
+    convert_to_json = convert_input or UNIEVAL_MODULES["convert_to_json"]
+    call = dimension_call or (
+        lambda data, dimension: EVALUATOR_INSTANCE.evaluate(data, dims=[dimension], overall=False)
+    )
 
     clean_summary = summary_text.strip() or "No summary content provided."
     clean_source = source_text.strip() or "No source content provided."
@@ -324,13 +310,13 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
     with torch.inference_mode():
         # 1. Fluency
         data_flu = convert_to_json(output_list=[clean_summary])
-        eval_flu = evaluator.evaluate(data_flu, dims=["fluency"], overall=False)
+        eval_flu = call(data_flu, "fluency")
         fluency = round(eval_flu[0]["fluency"], 3) if eval_flu else 0.0
 
         # 2. Coherence
         macro_ctx = extract_macro_skeleton(clean_source, max_words=380)
         data_coh = convert_to_json(output_list=[clean_summary], src_list=[macro_ctx])
-        eval_coh = evaluator.evaluate(data_coh, dims=["coherence"], overall=False)
+        eval_coh = call(data_coh, "coherence")
         coherence = round(eval_coh[0]["coherence"], 3) if eval_coh else 0.0
 
         # 3. Chunked Sentence-Level Consistency
@@ -358,7 +344,7 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
             eval_out = [k[1] for k in unique_pairs.keys()]
 
             data_cons = convert_to_json(output_list=eval_out, src_list=eval_src)
-            cons_res = evaluator.evaluate(data_cons, dims=["consistency"], overall=False)
+            cons_res = call(data_cons, "consistency")
 
             for idx, r in enumerate(cons_res):
                 pair_key = (eval_src[idx], eval_out[idx])
