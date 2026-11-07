@@ -52,8 +52,8 @@ export function describeArticleDiagnostic(event: ArticleFailureDiagnostic): stri
   return [
     cause === null ? "specific cause unavailable" : cause.replace(/[-_]/g, " "),
     ...(quality === null ? [] : [
-      `${quality.source_word_count} extracted body words before the cap`,
-      `${quality.word_count} body words after the cap`,
+      `${quality.source_word_count} source words measured during extraction`,
+      `${quality.word_count} body words measured during extraction`,
     ]),
   ].join("; ");
 }
@@ -64,7 +64,7 @@ export function renderArticleDiagnostics(events: readonly ArticleFailureDiagnost
     character => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
   return [
     "", "<details>", "<summary>Terminal article diagnostic details</summary>", "",
-    "These are captured failures, not extra health totals. Source word counts measure the extracted body before the cap, not every word on the source page. Null means not measured; zero is a measured value.",
+    "These are captured failures, not extra health totals. Word counts measure extraction, not every word on the source page or later API word shortening. Null means not measured; zero is a measured value.",
     "", "```json", json, "```", "", "</details>",
   ].join("\n");
 }

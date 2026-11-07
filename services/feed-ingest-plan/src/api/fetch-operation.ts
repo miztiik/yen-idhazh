@@ -183,6 +183,7 @@ export async function fetchDocument(
     run_id: record.context.run_id, fetch_item_type: request.fetch_item_type, feed_id: source.id,
     canonical_url: identity.canonical_url, http_status: fetched.http_status,
     failure: fetched.failure, body_sha256: artifact.body_sha256,
+    body_limit: fetched.body_limit ?? null,
     ...(request.fetch_item_type === "article"
       ? { article_id: identity.url_key, candidate_id: candidateId } : { document_id: identity.url_key }),
   }) };

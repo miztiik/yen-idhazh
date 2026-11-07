@@ -1,6 +1,6 @@
 # Feed and article failure diagnostics
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-07
 
 Which operation failed, what evidence survives it, and which durations were
 actually measured? This is the isolated TypeScript planner's diagnostic
@@ -38,6 +38,10 @@ Table A - diagnostic fields
 | A13 | `body_limit` | The configured decoded-byte limit and bytes observed at cutoff as a lower bound. It is present only when a feed or article response hit the limit; the remaining response is not read to obtain a full size. |
 | A14 | `response_evidence` | Target facts: content type, measured decoded bytes, declared content length if available, selected headers, truncation names and native browser profile. An absent response stays null. |
 | A15 | `pacing_time_ms`, `pacing_settings` | The terminal record's summed measured queue wait and the effective domain delay, publisher delay, jitter and enable setting. Each actual attempt keeps its own `pacing_wait_ms`. |
+
+The [public fetch response](feed-operator-api.md) forwards the same `body_limit`
+under the existing `body-too-large` failure. It does not measure the body again
+or read beyond the cutoff to claim a complete response size.
 
 Null means unavailable or unperformed; zero milliseconds means a real
 measurement rounded below one millisecond. Inactive feeds, invalid entry
