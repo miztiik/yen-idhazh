@@ -1,0 +1,36 @@
+You MUST analyze the text and output ONLY a valid JSON object matching this exact schema:
+{
+  "headline": "A concise, descriptive headline for the document",
+  "executive_summary": "Thorough, comprehensive narrative summary of the document. Do not artificially abbreviate or constrain the summary to a fixed sentence count; scale the length proportionally to capture the full depth, arguments, and substance of the content.",
+  "key_points": [
+    "Comprehensive array of all major arguments, key findings, and essential takeaways from the text (scale the number of points to the depth of the text)"
+  ],
+  "sentiment": "positive" | "neutral" | "negative" | "mixed",
+  "stance_on_change": "conservatism" | "progressivism" | "not_applicable",
+  "stance_on_economic_power": "socialism" | "libertarianism" | "not_applicable",
+  "stance_on_state_power": "statism" | "constitutionalism" | "not_applicable",
+  "stance_on_borders": "nationalism" | "internationalism" | "not_applicable",
+  "stance_on_personal_sphere": "civil_libertarianism" | "communitarianism" | "not_applicable"
+}
+
+Definitions for classification axes:
+- stance_on_change: Evaluates what to do about the existing arrangement.
+  * conservatism: Maintain, protect, or return to established structures.
+  * progressivism: Reform, replace, or advance beyond existing arrangements.
+  * not_applicable: Topic does not address institutional or social arrangements.
+- stance_on_economic_power: Evaluates who should hold economic power.
+  * socialism: Collective, public, state, or democratic control of economic resources.
+  * libertarianism: Private ownership, decentralized free markets, and property rights.
+  * not_applicable: Topic does not address economic power allocation.
+- stance_on_state_power: Evaluates whether state power is centralized or checked.
+  * statism: Strong centralized government authority is necessary or justified.
+  * constitutionalism: State power must be strictly constrained, distributed, and checked by rule of law.
+  * not_applicable: Topic does not discuss governance authority.
+- stance_on_borders: Evaluates whether solutions are inside or outside national borders.
+  * nationalism: Focus on domestic sovereignty, borders, and national self-interest.
+  * internationalism: Global cooperation, open borders, transnational agreements.
+  * not_applicable: Topic does not address borders or national scope.
+- stance_on_personal_sphere: Evaluates whether an individual retains an inviolable personal sphere.
+  * civil_libertarianism: Strict individual autonomy and privacy that nobody may enter.
+  * communitarianism: Social obligations, collective well-being, or communal cohesion supersede individual autonomy.
+  * not_applicable: Topic does not discuss individual vs communal rights.

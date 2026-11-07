@@ -51,6 +51,23 @@ The application schema is `2026-11-06`, HHEM's scoring schema remains
 The [application reference](summary-evaluator-api.md) owns current-only validation,
 local refusals and listener settings.
 
+## Current generator family
+
+The independent generator uses the same fixed HTTP date, `2026-11-05`.
+Its constants live in `services/summary-generator/src/api/api-paths.ts`.
+Its payload date is separately `2026-11-06`.
+
+Table B - Generator operations
+
+| Id | Method | Path | Availability |
+| --- | --- | --- | --- |
+| B1 | POST | `/api/2026-11-05/generate-summary` | Prepared text and an optional complete system-prompt override. |
+| B2 | GET | `/api/2026-11-05/get-summary-generator-health` | Process/configuration availability, without machine or model-readiness claims. |
+
+The former `/api/summarize`, `/health` and `/api/diagnostics` operations are
+removed, not redirected. The [generator reference](summary-generator-api.md)
+owns input/result validation, safe refusals and its independent listener.
+
 ## Upstream native-protocol exception
 
 The existing llama-server owns `/v1/chat/completions`, `/completions`,
@@ -70,3 +87,4 @@ implementation.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - HHEM scoring contract.
 - [unieval-api.md](unieval-api.md) - native UniEval scoring contract.
 - [summary-evaluation-workflow.md](summary-evaluation-workflow.md) - direct native generation and evaluator clients.
+- [summary-generator-api.md](summary-generator-api.md) - prepared-text generation and its independent listener.

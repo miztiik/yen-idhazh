@@ -12,8 +12,8 @@ import { parseHTML } from "linkedom";
 import { Defuddle } from "defuddle/node";
 import { parseFeed } from "feedsmith";
 import { TidyURL } from "tidy-url";
-import { loadModelRuntime, type ModelRuntime } from "../../services/summarizer/src/config/load-model-runtime.js";
-import { buildModelRequest, readModelContent } from "../../services/summarizer/src/services/model-request.service.js";
+import { loadModelRuntime, type ModelRuntime } from "../../services/summary-generator/src/config/load-model-runtime.js";
+import { buildModelRequest, readModelContent } from "../../services/summary-generator/src/services/model-request.service.js";
 import {
   createCloudEvent,
   createRootContext,

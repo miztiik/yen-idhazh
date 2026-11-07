@@ -240,9 +240,17 @@ jobs:
           bun run check
           bun run test
 
-      - name: TypeScript summarizer model boundary
+      - name: TypeScript summary-generator API
         if: needs.scope.outputs.code == 'true'
-        working-directory: services/summarizer
+        working-directory: services/summary-generator
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+          bun run test
+
+      - name: TypeScript summary-generator callers
+        if: needs.scope.outputs.code == 'true'
+        working-directory: .github/scripts/summary-generator-tests
         run: |
           bun install --frozen-lockfile
           bun run check

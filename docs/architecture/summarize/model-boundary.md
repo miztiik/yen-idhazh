@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-06
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -398,6 +398,19 @@ for 25 alternatives, and asking for the post-sampling numbers returns no window
 at all - [which probabilities the server
 returns](../../reference/benchmarks/which-probabilities-the-server-returns.md).
 
+### Independent summary products
+
+The [summary generator](../../reference/summary-generator-api.md) reads the
+same Python-exported selected request declaration and committed native origin.
+Its request JSON stays open pass-through; application-owned messages and
+decoding controls cannot be replaced by sampling entries. The API and
+[full-analysis caller](../../reference/summary-generator-caller.md) share
+native request assembly, final-content reading and one bounded, nonredirecting
+transport. Each API call contains only its own complete system/user request.
+The default or exact request override has a prompt digest; no classification
+suffix enters this HTTP product. The production digest's label-then-summary
+continuation remains a separate flow.
+
 ## What the entry declares, and what refuses a declaration
 
 Every value the entry carries about a file it names passes a closed grammar
@@ -428,3 +441,4 @@ when the shape changes. The model file and its settings are described in
 - [../../concepts/config/model-file.md](../../concepts/config/model-file.md) - the runtime settings and turn markers declared for one set of weights.
 - [../../how-to/fine-tune-a-model.md](../../how-to/fine-tune-a-model.md) - the training corpus, and what a base swap does to an adapter.
 - [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - the instrument log.
+- [../../reference/summary-generator-api.md](../../reference/summary-generator-api.md) - independent summary request and transport controls.

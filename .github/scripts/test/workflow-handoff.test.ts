@@ -1,7 +1,7 @@
 /** Do the real workflow writer, saved-input reader and foreign boundary preserve each result? */
 import { expect, test } from "bun:test";
-import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
@@ -30,7 +30,9 @@ function readProducer(event: PipelineEvent) {
 }
 
 async function withDirectory(run: (directory: string) => Promise<void>) {
-  const directory = await mkdtemp(join(tmpdir(), "workflow-handoff-"));
+  const directory = join(fileURLToPath(new URL("../../../backend/var/", import.meta.url)),
+    `workflow-handoff-${randomUUID()}`);
+  await mkdir(directory, { recursive: true });
   try {
     await run(directory);
   } finally {

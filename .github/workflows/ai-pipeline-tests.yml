@@ -9,6 +9,7 @@ on:
       - '.github/scripts/test/workflow-handoff.test.ts'
       - '.github/workflows/ai-pipeline-tests.yml'
       - 'packages/common-contracts/**'
+      - 'services/summary-generator/**'
       - '.github/scripts/declare-workflow-event-source.ts'
       - 'tests/fixtures/typescript-metadata/workflow-output-event.json'
       - 'tests/fixtures/typescript-metadata/evaluator-request.json'
@@ -68,7 +69,7 @@ jobs:
       - name: Prepare locked metadata and existing workflow dependencies
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
-          bun install --frozen-lockfile --cwd services/summarizer
+          bun install --frozen-lockfile --cwd services/summary-generator
           npm install --no-save --package-lock=false --no-audit --no-fund defuddle linkedom feedsmith tidy-url
       - name: Check the real saved handoff without model dispatch
         run: |
@@ -132,8 +133,8 @@ jobs:
         id: runtime
         run: python backend/utilities/model_runtime.py print-pinned-build >> "$GITHUB_OUTPUT"
 
-      - name: Install Summarizer Dependencies
-        working-directory: services/summarizer
+      - name: Install native model-request helper dependencies
+        working-directory: services/summary-generator
         run: bun install --frozen-lockfile
 
       # 1. TUNE LINUX MEMORY
