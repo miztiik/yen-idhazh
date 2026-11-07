@@ -9,7 +9,7 @@ from urllib.request import Request, urlopen
 import pytest
 from contracts._fixtures import copy_config, entry_with
 from support.models import a_markers, a_sampling, a_server, active_model_file
-from support.paths import FIXTURES_DIR, read_text
+from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 from support.prompts import label_payload
 from support.server import RecordedEndpoint, render_template_response
 
@@ -44,6 +44,11 @@ def select_model(root: Path) -> Path:
     app = json.loads(read_text(app_path))
     app["models_file"] = name
     app_path.write_text(json.dumps(app), encoding="utf-8", newline="\n")
+    settings = config.load(config_dir)
+    for named in settings.app.prompt_files.model_dump().values():
+        target = config_dir / named
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((CONFIG_DIR / named).read_bytes())
     return config_dir
 
 

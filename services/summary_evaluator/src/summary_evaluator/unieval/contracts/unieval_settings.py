@@ -1,8 +1,8 @@
 """Which named local assets, prompts and process bounds govern UniEval?"""
 
-from typing import Self
+from typing import Final, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from summary_evaluator.shared.contracts.base import (
     CommitId,
@@ -12,6 +12,7 @@ from summary_evaluator.shared.contracts.base import (
     RelativePath,
     Sha256,
 )
+from summary_evaluator.shared.contracts.prompt_files import PromptFile
 from summary_evaluator.shared.contracts.service_settings import (
     EvaluationSettings,
     ListenerSettings,
@@ -80,7 +81,55 @@ class UnievalWorkerSettings(WorkerSettings):
     max_reply_bytes: PositiveCount
 
 
+AUTHORED_UNIEVAL_VERSION: Final = "2026-11-07"
+
+
+class UnievalPromptFiles(UnievalContract):
+    fluency: PromptFile
+    coherence: PromptFile
+    consistency: PromptFile
+    relevance: PromptFile
+
+
+class UnievalAnswers(UnievalContract):
+    positive_answer: NonblankText
+    negative_answer: NonblankText
+
+    @model_validator(mode="after")
+    def require_distinct_answers(self) -> Self:
+        if self.positive_answer == self.negative_answer:
+            raise ValueError("The positive and negative answers must differ")
+        return self
+
+
 class AuthoredUnievalSettings(UnievalContract):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": AUTHORED_UNIEVAL_VERSION,
+            "readCompatibility": "current_only; resolve files into unchanged native settings",
+            "changelog": [
+                {
+                    "version": AUTHORED_UNIEVAL_VERSION,
+                    "change": "Name question files separately from answer tokens.",
+                },
+                {
+                    "version": "2026-11-04",
+                    "change": "Declare assets, inline questions and scorer controls.",
+                },
+            ],
+        }
+    )
+    version: Literal["2026-11-07"]
+    assets: UnievalAssets
+    prompt_files: UnievalPromptFiles
+    prompts: UnievalAnswers
+    scoring: UnievalControls
+    queue: QueueSettings
+    evaluation: EvaluationSettings
+    worker: UnievalWorkerSettings
+
+
+class UnievalSettings(UnievalContract):
     version: UnievalVersion
     assets: UnievalAssets
     prompts: UnievalPrompts
@@ -88,8 +137,5 @@ class AuthoredUnievalSettings(UnievalContract):
     queue: QueueSettings
     evaluation: EvaluationSettings
     worker: UnievalWorkerSettings
-
-
-class UnievalSettings(AuthoredUnievalSettings):
     listener: ListenerSettings
     logging: LoggingSettings

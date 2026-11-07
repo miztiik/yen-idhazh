@@ -720,12 +720,15 @@ def conditions_of(
     `/proc/cpuinfo`, and the page then says so rather than printing a blank.
     """
     entry = settings.models.summarizer
+    prompt_digest = prompt.prompt_digest(
+        prompt_files=settings.app.prompt_files, config_dir=settings.config_dir
+    )
     return {
         "Processor": silicon.host_cpu_model() or "not reported by this host",
         "Runner": args.runner,
         "Weights": f"`{entry.file}`, id `{entry.id}`",
         "Declared for": entry.declared_for or "unset",
-        "Judge prompt": f"sha256 `{prompt.prompt_digest()[:16]}`",
+        "Judge prompt": f"sha256 `{prompt_digest[:16]}`",
         "Grammar": f"`{prompt.grammar()}`, sha256 `{prompt.grammar_digest()[:16]}`",
         "Day the pairs came from": f"`{args.day}`" if args.day else "re-rendered, not recorded",
         "Pairs available": str(pairs),

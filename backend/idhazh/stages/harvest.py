@@ -61,5 +61,7 @@ def stage_harvest(
         finetune=finetune,
         prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
+        prompt_files=settings.app.prompt_files,
+        config_dir=settings.config_dir,
     )
     return written.rows

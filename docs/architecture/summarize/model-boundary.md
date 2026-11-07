@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -19,7 +19,7 @@ flowchart LR
   subgraph app_in["The app - knows no model"]
     direction TB
     A1["article text<br/><i>sanitized once, at the trust boundary</i>"]
-    A2["the instructions<br/>backend/idhazh/prompts/*.txt"]
+    A2["the instructions<br/>named files under config/prompts/"]
     A3["the output schema<br/><i>generated from the contract</i>"]
   end
 
@@ -127,7 +127,9 @@ the day it is needed.
 
 A model with no system role is the case that looks like an exception and is
 not. The same bytes go to a different address: `turns.system_role` says which
-address, and `backend/idhazh/prompts/*.txt` is untouched either way.
+address, and the configured text under `config/prompts/` is untouched either
+way. [Prompt ownership](prompt.md#the-prompt-is-a-template-not-a-text) keeps
+those files relative to the selected configuration, separately from the model.
 
 ## Two shapes, and which one a run writes down
 

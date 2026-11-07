@@ -124,7 +124,13 @@ def stats(corpus_dir: Path, settings: config.Settings) -> int:
             share = 100 * count / len(rows) if rows else 0.0
             print(f"  {label} {name:<20} {count:>5}  {share:5.1f}%")
 
-    live = derive_text_digest(summarize.prompt_inputs(settings.app.summarize))
+    live = derive_text_digest(
+        summarize.prompt_inputs(
+            settings.app.summarize,
+            prompt_files=settings.app.prompt_files,
+            config_dir=settings.config_dir,
+        )
+    )
     if meta.prompt_digest is None:
         print("the window records no prompt digest, so it predates this check")
     elif meta.prompt_digest != live:
@@ -296,6 +302,8 @@ def backfill(corpus_dir: Path, settings: config.Settings, *, items_dir: Path) ->
         finetune=finetune,
         prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
+        prompt_files=settings.app.prompt_files,
+        config_dir=settings.config_dir,
     )
     print(f"{'items read':<{_WIDTH}} {len(scored)}")
     print(f"{'rows before':<{_WIDTH}} {before}")
@@ -420,6 +428,8 @@ def _commit(
         finetune=settings.app.finetune,
         prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
+        prompt_files=settings.app.prompt_files,
+        config_dir=settings.config_dir,
     )
 
 
@@ -603,7 +613,13 @@ def remove(
     meta = corpus.census(
         kept,
         previous=corpus.read_meta(corpus_dir),
-        prompt_digest=derive_text_digest(summarize.prompt_inputs(settings.app.summarize)),
+        prompt_digest=derive_text_digest(
+            summarize.prompt_inputs(
+                settings.app.summarize,
+                prompt_files=settings.app.prompt_files,
+                config_dir=settings.config_dir,
+            )
+        ),
     )
     corpus.write(corpus_dir, kept, meta)
     print(f"removed {len(doomed)} rows, {len(kept)} remain")

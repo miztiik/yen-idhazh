@@ -54,12 +54,14 @@ from typing import Final, NamedTuple
 from pydantic import ValidationError
 
 from idhazh import atomic_write, summarize
+from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import compact_json, derive_output_digest, derive_text_digest
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.finetune import FinetuneConfig
+from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.evals import metrics
@@ -419,6 +421,8 @@ def harvest_rows(
     date: str,
     prompt_config: SummarizeConfig,
     evaluation: EvaluationConfig,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> list[CorpusRow]:
     """The rows one run earned. Pure: no disk, no network, no clock.
 
@@ -443,7 +447,11 @@ def harvest_rows(
         if target is None:
             continue
         system = summarize.system_prompt(
-            prompt_config, source_words=article.band_source_words, brief=article.brief
+            prompt_config,
+            source_words=article.band_source_words,
+            brief=article.brief,
+            prompt_files=prompt_files,
+            config_dir=config_dir,
         )
         harvested.append(
             CorpusRow(
@@ -521,17 +529,28 @@ def harvest(
     finetune: FinetuneConfig,
     prompt_config: SummarizeConfig,
     evaluation: EvaluationConfig,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> CorpusMeta:
     """Read the window, add what this run earned, roll it, and write both files."""
     incoming = harvest_rows(
-        items, date=date, prompt_config=prompt_config, evaluation=evaluation
+        items,
+        date=date,
+        prompt_config=prompt_config,
+        evaluation=evaluation,
+        prompt_files=prompt_files,
+        config_dir=config_dir,
     )
     existing = read_rows(corpus_dir)
     kept = roll(existing, incoming, window=finetune.corpus_rows)
     meta = census(
         kept,
         previous=read_meta(corpus_dir).model_copy(update={"harvested_date": date}),
-        prompt_digest=derive_text_digest(summarize.prompt_inputs(prompt_config)),
+        prompt_digest=derive_text_digest(
+            summarize.prompt_inputs(
+                prompt_config, prompt_files=prompt_files, config_dir=config_dir
+            )
+        ),
     )
     refuse_a_miscounted_census(kept, meta)
     write(corpus_dir, kept, meta)

@@ -1,0 +1,1 @@
+question: Is this claim consistent with the document? </s> claim: {summary} </s> document: {source}

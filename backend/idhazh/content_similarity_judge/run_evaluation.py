@@ -76,7 +76,9 @@ def start_run(
         split=split,
         model=ModelRef.model_validate(entry.model_dump(include=set(ModelRef.model_fields))),
         config_sha256=config_sha256(settings),
-        prompt_digest=prompt.prompt_digest(),
+        prompt_digest=prompt.prompt_digest(
+            prompt_files=settings.app.prompt_files, config_dir=settings.config_dir
+        ),
         grammar_digest=prompt.grammar_digest(),
         judge_policy_version=JUDGE_POLICY_VERSION,
         envelope_sha256=turn_markers_digest(reader.markers),

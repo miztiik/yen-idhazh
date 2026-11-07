@@ -51,6 +51,10 @@ def test_the_judge_owns_the_three_execution_knobs_and_shared_stages_keep_the_res
 def test_a_written_judge_file_changes_the_sampler_and_the_stamp_together(tmp_path: Path) -> None:
     declaration(tmp_path, pair_budget=7, flush_every_pairs=2, judge_temperature=0.4)
     settings = dataclasses.replace(config.load(CONFIG_DIR), config_dir=tmp_path)
+    prompt_file = settings.app.prompt_files.compare_articles
+    prompt_path = tmp_path / prompt_file
+    prompt_path.parent.mkdir(parents=True)
+    prompt_path.write_bytes((CONFIG_DIR / prompt_file).read_bytes())
     execution = judge_settings.load(tmp_path)
     assert execution.pair_budget == 7 and execution.flush_every_pairs == 2
     sampling = judge.decode_settings(settings)

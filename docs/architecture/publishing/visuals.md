@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-07
 
 How an item gets a chart, a whowhat grid or - most of the time - nothing at
 all: which pass decides, which gate refuses, and what every refusal is called.
@@ -37,6 +37,11 @@ idhazh assemble --date <D> # the day payload picks up whatever was drawn
 
 The summarize-and-plan call writes the summary and the plan in one reply, so the same model that read the article
 decides the visual and `work` compiles its data while it still holds the text.
+
+The shared system turn joins the separately configured
+`write_digest_summary` and `plan_visual` files; the later `continue_summary`
+turn reads its own file from the same selected config root. Their paths and
+rendering rules belong to [the prompt page](../summarize/prompt.md).
 
 **It was two stages on two models until 2026-09-13.** `idhazh visuals` ran a Qwen3-4B after the
 summarizer had finished, decided a picture from the summary, and rendered it in a job of its own.
@@ -211,13 +216,14 @@ boundary.) How often the gate fires is the other half of the bill and is a run m
 owed on the two-call flow; the single-call gate's own rate was 46.9 percent of items, measured
 on 2026-08-25.
 
-**The prompt loses its plan half too, and that is the same rule read a second time.** A turn that
+**The trailing ask loses its visual field too, and that is the same rule read a second time.** A turn that
 asks for a title, a caption and a reason the grammar has nowhere to put does not simply get ignored:
 constrained decoding renormalises onto the tokens the grammar allows, so the text goes into the only
-channel left open, which is the summary a reader reads. `summarize_and_plan_visual.txt` is now the
-summary half with a `$plan` slot, and `plan_visual.txt` is what goes in it - one file substituted in
-or out rather than two whole prompts, so the summary half cannot drift between the two requests. A
-test asserts the two renders share it byte for byte.
+channel left open, which is the summary a reader reads.
+`config/prompts/continue-summary.txt` derives that last line from the selected
+reply shape. `write-digest-summary.txt` and `plan-visual.txt` remain in the
+shared system prefix, so the two requests cannot drift before the article.
+A test asserts that cached prefix is identical with and without a visual.
 
 **Suppressing the plan moves nothing in front of the article.** All three differences sit after the
 system turn, the article and the label call's reply, so the cached prefix a gated item reuses is the prefix

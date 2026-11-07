@@ -1,12 +1,49 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-11-07
 
 What the model is asked to produce, how the two calls share context, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
 
 ## The prompt is a template, not a text
 
-Templates under `backend/idhazh/prompts/` take their word ranges, title limits and quotation limits from configuration. Use strict substitution so a missing or renamed value fails rather than reaching the model as an unresolved placeholder.
+Templates under `config/prompts/` take their word ranges, title limits and
+quotation limits from configuration. Use strict substitution so a missing or
+renamed value fails rather than reaching the model as an unresolved placeholder.
+
+`config/idhazh.json.prompt_files` selects each production task's file, relative
+to the selected config root (`CONFIG_ROOT` in a candidate action). Validate the
+relative POSIX path when config loads: it must name a `.txt` file under
+`prompts/`, without an absolute path, URL, backslash or parent traversal.
+Read only the task being rendered. Missing, blank or invalid UTF-8 text fails
+by its configured name; templates are not globally cached across roots.
+Config/model description validates paths without requiring unrelated text files.
+
+Table A - Production instruction files
+
+| Id | `prompt_files` key | Path relative to the selected config root |
+| --- | --- | --- |
+| A1 | `generate_labels` | `prompts/generate-labels.txt` |
+| A2 | `write_digest_summary` | `prompts/write-digest-summary.txt` |
+| A3 | `plan_visual` | `prompts/plan-visual.txt` |
+| A4 | `continue_summary` | `prompts/continue-summary.txt` |
+| A5 | `summarize_article` | `prompts/summarize-article.txt` |
+| A6 | `compare_articles` | `prompts/compare-articles.txt` |
+
+Production rendering retains universal-newline reading and performs no
+whitespace trimming. The prompt-loop utility retains its raw-newline incumbent
+read. The app config's additive reader uses the declared task paths if an older
+authored input omits `prompt_files`; new authored configuration names them all.
+The standalone summary, corpus, reference-set and prompt-loop readers use A5;
+the comparison judge and its stamp use A6's full rendered instructions.
+Offline judge capture and saved-evidence validation use that same selected file,
+so their recorded identity cannot describe instructions from another root.
+
+The [summary generator](../../reference/summary-generator-api.md) and
+[comparison workflow](../../reference/summary-evaluation-workflow.md) select
+different tasks in the same directory. Neither replaces the digest's continuation
+with fresh independent calls. [Native UniEval](../../reference/unieval-api.md)
+resolves its own question files before scoring; source coverage keeps its pinned
+upstream question construction.
 
 Keep editorial wording shared across models. Model-specific turn markers and template behavior belong with the model entry, not in a second instruction set. [Model boundary](model-boundary.md) owns compatibility checks.
 
@@ -56,8 +93,10 @@ Use grammar-constrained decoding derived from the declared reply model. Refuse u
 
 [classify/calls.py](../../../backend/idhazh/classify/calls.py) makes adjacent calls for each item:
 
-1. Label the extracted article elements with `label_article_elements.txt`.
-2. Continue that conversation to write the summary and plan a visual.
+1. Label the extracted article elements with `generate-labels.txt`, sharing the
+   system turn with `write-digest-summary.txt` and `plan-visual.txt`.
+2. Continue that conversation with `continue-summary.txt` to write the summary
+   and plan a visual.
 
 The completion prompts are rendered explicitly. The second extends the first prompt and its validated reply instead of reconstructing a chat-message array. Keep the calls adjacent on the same slot so another item cannot evict the shared prefix.
 
@@ -170,6 +209,10 @@ Prompt changes affect new work, not frozen published days. Do not rebuild the ar
 ## Design rationale
 
 A stable prefix reduces repeated reading without treating prompt wording as a control. Per-band requests fit different source lengths while a separate acceptance policy preserves useful replies. Summary-first decoding protects the reader's primary content when visual planning cannot finish. Model-specific transport declarations keep shared editorial instructions testable across models.
+
+Task paths belong to the selected configuration so a candidate never reads
+instructions from the original checkout. One directory holds distinct products
+and call flows, not one shared summary instruction or a scanned prompt registry.
 
 ## See also
 

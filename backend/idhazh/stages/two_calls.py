@@ -651,6 +651,8 @@ def two_calls_one_item(
                     sampling=model.sampling,
                     markers=markers,
                     prompt_config=settings.app.summarize,
+                    prompt_files=settings.app.prompt_files,
+                    config_dir=settings.config_dir,
                 )
                 so_far.first = first
                 rendered = str(first["prompt"])
@@ -754,6 +756,8 @@ def two_calls_one_item(
                     brief=article.brief,
                     plan=so_far.wants_a_plan,
                     visuals=settings.app.visuals,
+                    prompt_files=settings.app.prompt_files,
+                    config_dir=settings.config_dir,
                 )
                 second_rendered = str(second["prompt"])
                 span.set(telemetry.AttrKey.PROMPT_CHARS, len(second_rendered))

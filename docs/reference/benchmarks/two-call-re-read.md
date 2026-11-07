@@ -5,6 +5,12 @@ Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
 
+Current production files are `config/prompts/generate-labels.txt`,
+`write-digest-summary.txt`, `plan-visual.txt` and `continue-summary.txt`, selected
+through [the prompt configuration](../../architecture/summarize/prompt.md).
+Historical filenames, token counts, weights and timings below still identify
+the recorded measurement, not a new run.
+
 The two-call summariser sends the summarize-and-plan call with the label call's whole message array in front
 of it, so most of the summarize-and-plan call's prompt should be answered from the server's prefix
 cache. The one earlier reading printed `FLOOR BROKEN - 4 tokens` and was taken on

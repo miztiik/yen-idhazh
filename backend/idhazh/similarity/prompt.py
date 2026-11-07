@@ -29,12 +29,13 @@ from pathlib import Path
 from string import Template
 from typing import Final
 
+from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.digest_day import DigestItem
+from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict
+from idhazh.load_prompt_text import load_prompt_text
 from idhazh.sanitize import untrusted_block
-
-PROMPT_PATH: Final = Path(__file__).parent.parent / "prompts" / "judge_same_story.txt"
 
 #: What labels each summary in the user turn. Two words rather than "Article A"
 #: and "Article B": the pair is judged again with the two swapped, and a label
@@ -95,12 +96,11 @@ Tokenizer = Callable[[str], Sequence[int]]
 TextTokenizer = Callable[[str], Sequence[str]]
 
 
-@lru_cache(maxsize=1)
-def _template() -> Template:
-    return Template(PROMPT_PATH.read_text(encoding="utf-8"))
-
-
-def system_turn() -> str:
+def system_turn(
+    *,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
+) -> str:
     """The instructions, as the model reads them.
 
     Read through `Template` although the file interpolates nothing today, which
@@ -109,7 +109,8 @@ def system_turn() -> str:
     adds beside this line, and a `$name` nobody filled raises here instead of
     reaching a model as the literal it looks like.
     """
-    return _template().substitute()
+    files = prompt_files or PromptFilesConfig()
+    return Template(load_prompt_text(config_dir, files.compare_articles)).substitute()
 
 
 def user_turn(left: DigestItem, right: DigestItem) -> str:
@@ -166,7 +167,11 @@ def blank_user_turn() -> str:
     return _rendered("", "")
 
 
-def prompt_text() -> str:
+def prompt_text(
+    *,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
+) -> str:
     """Everything the model reads that is not the pair itself.
 
     The system turn, both position labels, the fence the two summaries sit in,
@@ -179,12 +184,21 @@ def prompt_text() -> str:
     pair, they differ on every call, and a digest that moved with them would say
     nothing at all about the ask.
     """
-    return "\n".join((system_turn(), blank_user_turn()))
+    return "\n".join(
+        (
+            system_turn(prompt_files=prompt_files, config_dir=config_dir),
+            blank_user_turn(),
+        )
+    )
 
 
-def prompt_digest() -> str:
+def prompt_digest(
+    *,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
+) -> str:
     """sha256 of `prompt_text`, for the column of that name."""
-    return derive_text_digest(prompt_text())
+    return derive_text_digest(prompt_text(prompt_files=prompt_files, config_dir=config_dir))
 
 
 def grammar_digest() -> str:

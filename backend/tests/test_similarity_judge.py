@@ -113,6 +113,10 @@ def _settings_with_temperatures(
     root: Path, *, judge_temperature: float, entry_temperature: float
 ) -> config.Settings:
     settings = _settings()
+    prompt_file = settings.app.prompt_files.compare_articles
+    prompt_path = root / prompt_file
+    prompt_path.parent.mkdir(parents=True, exist_ok=True)
+    prompt_path.write_bytes((CONFIG_DIR / prompt_file).read_bytes())
     judge_raw = json.loads(read_text(CONFIG_DIR / "judges" / "content-similarity-judge.json"))
     judge_raw["judge_temperature"] = judge_temperature
     judge_path = root / "judges" / "content-similarity-judge.json"
@@ -134,6 +138,10 @@ def _settings_with_temperatures(
 def _settings_flushing_every(root: Path, pairs: int) -> config.Settings:
     """The committed settings with one knob moved, so the cadence is read and not assumed."""
     settings = _settings()
+    prompt_file = settings.app.prompt_files.compare_articles
+    prompt_path = root / prompt_file
+    prompt_path.parent.mkdir(parents=True, exist_ok=True)
+    prompt_path.write_bytes((CONFIG_DIR / prompt_file).read_bytes())
     target = root / "judges" / "content-similarity-judge.json"
     target.parent.mkdir(parents=True, exist_ok=True)
     raw = json.loads(read_text(CONFIG_DIR / "judges" / "content-similarity-judge.json"))

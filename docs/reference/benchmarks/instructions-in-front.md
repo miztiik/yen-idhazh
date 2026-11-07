@@ -5,6 +5,12 @@ Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
 
+Current production files are `config/prompts/generate-labels.txt`,
+`write-digest-summary.txt`, `plan-visual.txt` and `continue-summary.txt`, selected
+through [the prompt configuration](../../architecture/summarize/prompt.md).
+The filenames and readings below remain the provenance of the measured inputs;
+this location pointer does not claim another measurement.
+
 The summarize-and-plan call's question used to sit in a user turn behind the article. It is
 byte-identical on every item, but the text in front of it is not, so a prefix
 cache cannot reach it and every token of it was read again on every item, for

@@ -180,6 +180,28 @@ def replace_cases(frozen: EvaluationSet, cases: tuple[EvaluationCase, ...]) -> E
     })
 
 
+def test_capture_and_saved_evidence_validation_share_the_selected_prompt_root(
+    tmp_path: Path, settings: config.Settings,
+) -> None:
+    for name in ("content-similarity-judge.json", "content-similarity-evaluation.json"):
+        target = tmp_path / "judges" / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((CONFIG_DIR / "judges" / name).read_bytes())
+    target = tmp_path / settings.app.prompt_files.compare_articles
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("Configured comparison instructions.\n", encoding="utf-8", newline="\n")
+    selected = dataclasses.replace(settings, config_dir=tmp_path)
+    frozen = evaluation()
+    run, boundary = memory_run(frozen, selected)
+    assert run.prompt_digest == prompt.prompt_digest(
+        prompt_files=selected.app.prompt_files, config_dir=tmp_path
+    )
+    assert run.prompt_digest != prompt.prompt_digest()
+    assert all("Configured comparison instructions." in body["prompt"] for body in boundary.decodes)
+    report = score(frozen, labels(frozen), run, settings=selected, tuning=tuning())
+    assert "provenance_mismatch" not in report.blockers
+
+
 def test_freeze_binds_exact_named_source_bytes_and_production_inputs() -> None:
     published = day()
     raw = published.to_json().encode()

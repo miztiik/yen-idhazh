@@ -63,6 +63,7 @@ from typing import Annotated, Any, Final, Literal, NamedTuple, get_args
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model
 
 from idhazh import summarize
+from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article
 from idhazh.contracts.base import Model as ContractModel
 from idhazh.contracts.base import canonical_json, derive_text_digest
@@ -74,6 +75,7 @@ from idhazh.contracts.element import (
     derive_element_id,
 )
 from idhazh.contracts.knobs.extract import ElementsConfig
+from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json_characters
@@ -88,23 +90,9 @@ from idhazh.llm.server import (
     continued_prompt,
     render_prompt,
 )
+from idhazh.load_prompt_text import load_prompt_text
 from idhazh.sanitize import untrusted_block
 from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION
-
-#: The prompt files did not move, and `__file__` is one directory deeper here
-#: than it was, so the walk up is stated once rather than in each path below.
-PROMPTS: Final = Path(__file__).parent.parent / "prompts"
-
-LABEL_PROMPT_PATH: Final = PROMPTS / "label_article_elements.txt"
-#: The second job, in two files because the plan half is conditioned separately
-#: and a placeholder moved by accident has to be findable. Both are read into
-#: the SYSTEM turn, in front of the article, where they are the same bytes on
-#: every item; `label_system_prompt` joins them.
-SUMMARY_HALF_PROMPT_PATH: Final = PROMPTS / "summarize_and_plan_visual.txt"
-PLAN_HALF_PROMPT_PATH: Final = PROMPTS / "plan_visual.txt"
-#: The only thing left behind the article: what the band asks for, and which
-#: fields the grammar will hold this reply to.
-POINTER_PROMPT_PATH: Final = PROMPTS / "write_about_the_item.txt"
 
 #: Each module that reads a raw model reply keeps its own two-line cleaner,
 #: as `summarize` does. One shared cleaner is worth having and is not this
@@ -413,7 +401,12 @@ if label_budget_tokens() != LABEL_BUDGET_TOKENS:
     )
 
 
-def label_system_prompt(prompt_config: SummarizeConfig | None = None) -> str:
+def label_system_prompt(
+    prompt_config: SummarizeConfig | None = None,
+    *,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
+) -> str:
     """Both jobs, in one turn, in front of the article.
 
     Three files joined here rather than one file holding all of it, and the
@@ -434,16 +427,17 @@ def label_system_prompt(prompt_config: SummarizeConfig | None = None) -> str:
     article on every alternation and cost far more than it saved.
     """
     ask = prompt_config or SummarizeConfig()
+    files = prompt_files or PromptFilesConfig()
     return "\n".join(
         (
-            LABEL_PROMPT_PATH.read_text(encoding="utf-8"),
-            _summary_half().substitute(
+            Template(load_prompt_text(config_dir, files.generate_labels)).substitute(),
+            _summary_half(files, config_dir).substitute(
                 title_words_min=ask.title_words_min,
                 title_words_max=ask.title_words_max,
                 max_verbatim_words=ask.max_verbatim_words,
                 paragraph_rule=summarize.paragraph_rule(ask),
             ),
-            _plan_half(),
+            _plan_half(files, config_dir),
         )
     )
 
@@ -549,6 +543,8 @@ def build_label_request(
     sampling: Mapping[str, Any],
     markers: TurnMarkers,
     prompt_config: SummarizeConfig | None = None,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> dict[str, Any]:
     """The label call's request body, with the reply shape enforced by the decoder.
 
@@ -567,7 +563,9 @@ def build_label_request(
     """
     return completion_payload(
         model_id=model_id,
-        system=label_system_prompt(prompt_config),
+        system=label_system_prompt(
+            prompt_config, prompt_files=prompt_files, config_dir=config_dir
+        ),
         user=label_user_turn(article, table),
         output_schema=label_schema(),
         server=server,
@@ -1093,19 +1091,16 @@ class SummarizeAndPlanReply(NamedTuple):
     visual: VisualPlan | None
 
 
-@lru_cache(maxsize=1)
-def _pointer_template() -> Template:
-    return Template(POINTER_PROMPT_PATH.read_text(encoding="utf-8"))
+def _pointer_template(files: PromptFilesConfig, config_dir: Path) -> Template:
+    return Template(load_prompt_text(config_dir, files.continue_summary))
 
 
-@lru_cache(maxsize=1)
-def _summary_half() -> Template:
-    return Template(SUMMARY_HALF_PROMPT_PATH.read_text(encoding="utf-8"))
+def _summary_half(files: PromptFilesConfig, config_dir: Path) -> Template:
+    return Template(load_prompt_text(config_dir, files.write_digest_summary))
 
 
-@lru_cache(maxsize=1)
-def _plan_half() -> str:
-    return PLAN_HALF_PROMPT_PATH.read_text(encoding="utf-8")
+def _plan_half(files: PromptFilesConfig, config_dir: Path) -> str:
+    return Template(load_prompt_text(config_dir, files.plan_visual)).substitute()
 
 
 @lru_cache(maxsize=1)
@@ -1208,6 +1203,8 @@ def summarize_and_plan_user_turn(
     source_words: int | None = None,
     brief: bool = False,
     plan: bool = True,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> str:
     """The second question: the band, and the fields. Three lines.
 
@@ -1243,7 +1240,7 @@ def summarize_and_plan_user_turn(
     ask = prompt_config or SummarizeConfig()
     band = ask.band_for(0) if brief else ask.band_for(source_words or 0)
     shape = summarize_and_plan_model(ask, source_words=source_words, brief=brief, plan=plan)
-    return _pointer_template().substitute(
+    return _pointer_template(prompt_files or PromptFilesConfig(), config_dir).substitute(
         target_words_min=band.target_words_min,
         target_words_max=band.target_words_max,
         write="Write " + ", then ".join(f'"{name}"' for name in shape.model_fields) + ".",
@@ -1357,6 +1354,8 @@ def build_summarize_and_plan_request(
     brief: bool = False,
     plan: bool = True,
     visuals: VisualsConfig | None = None,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> dict[str, Any]:
     """The summarize-and-plan call's request body, built by extending the label call's prompt.
 
@@ -1388,7 +1387,12 @@ def build_summarize_and_plan_request(
         first,
         reply=reply,
         user=summarize_and_plan_user_turn(
-            prompt_config, source_words=source_words, brief=brief, plan=plan
+            prompt_config,
+            source_words=source_words,
+            brief=brief,
+            plan=plan,
+            prompt_files=prompt_files,
+            config_dir=config_dir,
         ),
         output_schema=summarize_and_plan_schema(
             prompt_config, source_words=source_words, brief=brief, plan=plan, visuals=visuals
@@ -1403,6 +1407,8 @@ def prompt_inputs(
     *,
     markers: TurnMarkers,
     visuals: VisualsConfig | None = None,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> str:
     """What the fingerprint hashes to stand for these two prompts.
 
@@ -1431,9 +1437,18 @@ def prompt_inputs(
     leaves the result the same on every item.
     """
     ask = prompt_config or SummarizeConfig()
-    first = render_prompt(system=label_system_prompt(ask), user="", markers=markers)
+    first = render_prompt(
+        system=label_system_prompt(ask, prompt_files=prompt_files, config_dir=config_dir),
+        user="",
+        markers=markers,
+    )
     rendered = continued_prompt(
-        first, reply="", user=summarize_and_plan_user_turn(ask), markers=markers
+        first,
+        reply="",
+        user=summarize_and_plan_user_turn(
+            ask, prompt_files=prompt_files, config_dir=config_dir
+        ),
+        markers=markers,
     )
     selection = (
         canonical_json([visual_type.value for visual_type in visuals.select_types()])

@@ -44,6 +44,7 @@ from pydantic import (
     create_model,
 )
 
+from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import (
     PARAGRAPH_BREAK,
@@ -55,13 +56,13 @@ from idhazh.contracts.base import (
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.summarize import OverLengthAction, SummarizeConfig, SummaryBand
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.server import Completion, TurnMarkers, request_payload
+from idhazh.load_prompt_text import load_prompt_text
 from idhazh.sanitize import LINK_PLACEHOLDER, sanitize, untrusted_block
-
-PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "summarize.txt"
 
 # How the decoder's character rails are derived from the word range the pipeline
 # accepts. The floor is a generation control as much as a check - grammar
@@ -150,9 +151,11 @@ class SummaryDraft(BaseModel):
     summary: str = Field(min_length=1)
 
 
-@lru_cache(maxsize=1)
-def _template() -> Template:
-    return Template(PROMPT_PATH.read_text(encoding="utf-8"))
+def _template(
+    prompt_files: PromptFilesConfig | None = None, config_dir: Path = DEFAULT_CONFIG_DIR
+) -> Template:
+    files = prompt_files or PromptFilesConfig()
+    return Template(load_prompt_text(config_dir, files.summarize_article))
 
 
 @lru_cache(maxsize=16)
@@ -267,6 +270,8 @@ def system_prompt(
     *,
     source_words: int = 0,
     brief: bool = False,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> str:
     """The prompt text with config's numbers substituted in.
 
@@ -290,7 +295,7 @@ def system_prompt(
     """
     ask = prompt_config or SummarizeConfig()
     band = ask.band_for(0 if brief else source_words)
-    return _template().substitute(
+    return _template(prompt_files, config_dir).substitute(
         {
             **ask.model_dump(),
             **band.model_dump(),
@@ -299,7 +304,12 @@ def system_prompt(
     )
 
 
-def prompt_inputs(prompt_config: SummarizeConfig | None = None) -> str:
+def prompt_inputs(
+    prompt_config: SummarizeConfig | None = None,
+    *,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
+) -> str:
     """What the fingerprint hashes to stand for the prompt.
 
     Not one rendered prompt. The rendered text varies with the article's length,
@@ -315,7 +325,9 @@ def prompt_inputs(prompt_config: SummarizeConfig | None = None) -> str:
     reached, and wrong in the safe direction.
     """
     ask = prompt_config or SummarizeConfig()
-    return _template().template + canonical_json(ask.model_dump(mode="json"))
+    return _template(prompt_files, config_dir).template + canonical_json(
+        ask.model_dump(mode="json")
+    )
 
 
 def user_turn(article: Article) -> str:
@@ -346,6 +358,8 @@ def build_request(
     sampling: Mapping[str, Any],
     markers: TurnMarkers,
     prompt_config: SummarizeConfig | None = None,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> dict[str, Any]:
     """One chat-route body. `markers` are the server's own, never a literal here.
 
@@ -357,7 +371,11 @@ def build_request(
     return request_payload(
         model_id=model_id,
         system=system_prompt(
-            prompt_config, source_words=article.band_source_words, brief=article.brief
+            prompt_config,
+            source_words=article.band_source_words,
+            brief=article.brief,
+            prompt_files=prompt_files,
+            config_dir=config_dir,
         ),
         user=user_turn(article),
         output_schema=output_schema(

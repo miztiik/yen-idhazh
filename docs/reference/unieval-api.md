@@ -77,10 +77,37 @@ result; clients must validate and retain them rather than discard their body.
 
 ## Settings and preparation
 
-`config/summary-evals/unieval-evaluator/settings.json` owns the selected assets, native prompt
-formats, source-processing defaults, queue, request and worker deadlines.
+`config/summary-evals/unieval-evaluator/settings.json` owns the selected assets,
+question-file paths, answer tokens, source-processing defaults, queue, request
+and worker deadlines.
 The shared listener/logging snapshot is supplied by the app, not duplicated
 in the evaluator file. The named file is loaded once per invocation.
+
+The authored config family is version `2026-11-07`, current-only: old inline
+question settings are refused rather than retained as another active default.
+Its `prompt_files` values are safe relative POSIX `.txt` paths under `prompts/`
+in the invocation's `config/` root. The loader reads the four declared files,
+preserves all UTF-8 whitespace, and builds the existing effective `prompts`
+model before placeholder validation, worker handoff or model input hashing.
+The effective settings and all scoring/recording contracts retain `2026-11-04`.
+No file path is hashed as though it changed question wording.
+
+Table D - Native question files
+
+| Id | `prompt_files` key | Default path and plain placeholders |
+| --- | --- | --- |
+| D1 | `fluency` | `prompts/evaluate-fluency.txt`; `{summary}` |
+| D2 | `coherence` | `prompts/evaluate-coherence.txt`; `{summary}`, `{source}` |
+| D3 | `consistency` | `prompts/evaluate-consistency.txt`; `{summary}`, `{source}` |
+| D4 | `relevance` | `prompts/evaluate-relevance.txt`; `{summary}`, `{reference}` |
+
+The default files have no final newline, matching the original inline strings.
+`prompts.positive_answer` and `prompts.negative_answer` remain in JSON.
+Unknown substitutions, conversions and format specifications fail before
+scoring. Paths are validated before text is read; absent files and invalid
+UTF-8 fail by the named file, without logging its contents.
+These questions belong to native UniEval, not the independent generator or
+the source-coverage worker's pinned upstream question construction.
 
 The config contains the immutable model revision and finite file list.
 `assets.sentences` declares the pinned sentence archive, digest, language,

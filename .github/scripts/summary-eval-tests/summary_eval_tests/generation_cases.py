@@ -15,6 +15,8 @@ from summary_eval_pipeline.contracts import (
 )
 from summary_eval_pipeline.inputs import ManualInputs
 from summary_eval_pipeline.model_selection import SelectedModel, select_model
+from summary_eval_pipeline.settings import AuthoredPipelineSettings
+from summary_evaluator.unieval.contracts.unieval_settings import AuthoredUnievalSettings
 from summary_evaluator_cases.contract_examples import REPOSITORY
 from summary_evaluator_cases.replay_predictions import read_recordings
 
@@ -44,6 +46,18 @@ def selected_root(directory: Path) -> None:
     ):
         (config / name).parent.mkdir(parents=True, exist_ok=True)
         (config / name).write_bytes((REPOSITORY / "config" / name).read_bytes())
+    workflow = AuthoredPipelineSettings.model_validate_json(
+        (config / "summary-evals" / "workflow.json").read_bytes()
+    )
+    unieval = AuthoredUnievalSettings.model_validate_json(
+        (config / "summary-evals" / "unieval-evaluator" / "settings.json").read_bytes()
+    )
+    for prompt_file in (
+        workflow.generation_prompt_file,
+        *unieval.prompt_files.model_dump().values(),
+    ):
+        (config / prompt_file).parent.mkdir(parents=True, exist_ok=True)
+        (config / prompt_file).write_bytes((REPOSITORY / "config" / prompt_file).read_bytes())
 
 
 def handoff_case() -> tuple[ManualInputs, PreparedRun, GenerationReceipt]:

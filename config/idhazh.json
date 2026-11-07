@@ -333,6 +333,14 @@
     "head_no_repeat": 10,
     "max_desk_in_head": 5
   },
+  "prompt_files": {
+    "compare_articles": "prompts/compare-articles.txt",
+    "continue_summary": "prompts/continue-summary.txt",
+    "generate_labels": "prompts/generate-labels.txt",
+    "plan_visual": "prompts/plan-visual.txt",
+    "summarize_article": "prompts/summarize-article.txt",
+    "write_digest_summary": "prompts/write-digest-summary.txt"
+  },
   "reference_dataset": {
     "article_words_min": 120,
     "domains_per_split_min": 20,
@@ -430,7 +438,7 @@
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark"
   },
-  "version": "2026-10-29",
+  "version": "2026-11-07",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,

@@ -1,6 +1,6 @@
 # Classification
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-11-07
 
 Every label this project puts on an article: what the word means, who decided
 it, and whether a reader ever sees it.
@@ -50,7 +50,7 @@ body are compared with configured target descriptions. Feed vertical remains
 the identity and provenance of the source; semantic assignment never rewrites
 it. On an encoder failure only, the deterministic phrase tagger remains a
 fallback. `entity` also appears in
-`backend/idhazh/prompts/label_article_elements.txt`, as the field naming what a
+`config/prompts/generate-labels.txt`, as the field naming what a
 number in the element table is about. Different word, different job.
 
 `events` and `entities` reach no reader at all. They are matched,

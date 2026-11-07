@@ -115,11 +115,14 @@ def _reading_matches(
     entry = judge.entry_of(settings)
     left, right = (case.right, case.left) if reverse else (case.left, case.right)
     expected_user = prompt.user_turn(left, right)
+    expected_system = prompt.system_turn(
+        prompt_files=settings.app.prompt_files, config_dir=settings.config_dir
+    )
     requests = [json.loads(body) for body in reading.request_json]
     if any(
         not isinstance(body.get("prompt"), str)
         or body["prompt"].count(expected_user) != 1
-        or prompt.system_turn() not in body["prompt"]
+        or expected_system not in body["prompt"]
         for body in requests
     ):
         return False
@@ -177,7 +180,9 @@ def _predictions(
         run.set_sha256 != document_sha256(evaluation)
         or run.config_sha256 != config_sha256(settings)
         or run.model != model
-        or run.prompt_digest != prompt.prompt_digest()
+        or run.prompt_digest != prompt.prompt_digest(
+            prompt_files=settings.app.prompt_files, config_dir=settings.config_dir
+        )
         or run.grammar_digest != prompt.grammar_digest()
         or run.judge_policy_version != JUDGE_POLICY_VERSION
     ):

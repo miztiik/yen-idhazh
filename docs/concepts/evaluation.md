@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-07
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
@@ -294,10 +294,15 @@ three defect rates and nothing else.
 
 Nothing the loop produces reaches a reader. It runs on a developer machine or a
 manual dispatch, never in the daily pipeline, and it never edits the live prompt
-itself: promoting a winner into `backend/idhazh/prompts/summarize.txt` is a human
+itself: promoting a winner into `config/prompts/summarize-article.txt` is a human
 act, taken after reading the committed scores. The committed artefacts are the
 winning prompt, the rubric, the scores of every candidate and the seed - never the
 transcripts.
+
+The utility reads the incumbent through the selected config root and
+`prompt_files.summarize_article`, retaining exact template text and the
+production paragraph substitution. [The prompt contract](../architecture/summarize/prompt.md)
+owns task paths and rendered identities.
 
 The load-bearing guard is a test, not a sentence. When the model judge prefers a
 candidate the deterministic scorers refuse, the incumbent stands

@@ -347,7 +347,11 @@ def stage_work(
         # do. Handing over the rendered pair is what digests the envelope, all
         # four prompt files and the turn order together.
         prompt=calls.prompt_inputs(
-            settings.app.summarize, markers=markers, visuals=settings.app.visuals
+            settings.app.summarize,
+            markers=markers,
+            visuals=settings.app.visuals,
+            prompt_files=settings.app.prompt_files,
+            config_dir=settings.config_dir,
         ),
         output_schema=summarize.output_schema_text(settings.app.summarize),
         runner_class=runner_class(),

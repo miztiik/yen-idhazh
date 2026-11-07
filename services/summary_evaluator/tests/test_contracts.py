@@ -254,6 +254,13 @@ def test_unieval_only_construction_reads_only_its_named_configuration(tmp_path: 
             REPOSITORY / "config" / "summary-evals" / "unieval-evaluator" / "settings.json"
         ).read_bytes()
     )
+    from summary_evaluator.unieval.contracts.unieval_settings import AuthoredUnievalSettings
+
+    authored = AuthoredUnievalSettings.model_validate_json((config / "settings.json").read_bytes())
+    for named in authored.prompt_files.model_dump().values():
+        target = tmp_path / "config" / named
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((REPOSITORY / "config" / named).read_bytes())
     api = load_api_settings(API_SETTINGS_FILE).model_copy(update={"enabled_routes": ("unieval",)})
     app = create_app(api, None, tmp_path, writer=EventWriter(api.logging, io.StringIO()))
     assert app.state.controller is None and app.state.unieval.worker.process is None
