@@ -109,6 +109,54 @@ the selected module's additional native checks. Its
 The [hardware reference](host-metrics.md), [profile reference](host-probe-api.md)
 and [cache reference](host-cache-probes.md) own measurements and payloads.
 
+## Current planner and delivery family
+
+Planning and delivery reuse the fixed `PLANNER_API_PREFIX`, `/api/2026-11-05`,
+from `packages/common-contracts/src/version.ts`. Their named suffix maps,
+`PLANNER_API_PATHS` and `DELIVERY_API_PATHS`, live in
+`packages/common-contracts/src/declare-feed-api-paths.ts`.
+Routers mount suffixes beneath the prefix; callers append the prefix and suffix
+once. These are protocol constants, not a runtime date or destination registry.
+
+Table D - Planner and delivery operations
+
+| Id | Method | Path | Native work |
+| --- | --- | --- | --- |
+| D1 | GET | `/api/2026-11-05/get-feed-planner-health` | Planner availability and captured native identity. |
+| D2 | POST | `/api/2026-11-05/plan-feed-ingestion` | Complete planning, report capture and collection release. |
+| D3 | POST | `/api/2026-11-05/fetch-document` | Bounded configured feed or captured article acquisition. |
+| D4 | POST | `/api/2026-11-05/parse-document` | Claim and consume one held fetch reference without network work. |
+| D5 | POST | `/api/2026-11-05/start-feed-collection` | Capture one collection's execution and inputs. |
+| D6 | POST | `/api/2026-11-05/check-feed-collection` | Inspect an ambiguous startup outcome without granting ownership. |
+| D7 | POST | `/api/2026-11-05/complete-feed-collection` | Settle required work and expose its completed parsed result. |
+| D8 | POST | `/api/2026-11-05/cancel-feed-collection` | Abort and drain owned work while retaining completed partial evidence. |
+| D9 | POST | `/api/2026-11-05/finalize-feed-collection` | Capture settled status, failures and timings without releasing references. |
+| D10 | POST | `/api/2026-11-05/release-feed-collection` | Release finalized execution state after dependent reads. |
+| D11 | POST | `/api/2026-11-05/update-feed-health` | Record or summarize the current operation's health. |
+| D12 | POST | `/api/2026-11-05/select-articles` | Select completed input; the existing path is unchanged. |
+| D13 | POST | `/api/2026-11-05/partition-articles` | Assign selected work; the existing path is unchanged. |
+| D14 | POST | `/api/2026-11-05/persist-selected-articles` | Write selected/rejected metadata and the separate selected text artifact; the existing path is unchanged. |
+| D15 | GET | `/api/2026-11-05/get-data-delivery-health` | Captured native delivery identity, independent of planner health. |
+| D16 | POST | `/api/2026-11-05/persist-data` | Existing verified metadata adapter and atomic safe delivery. |
+
+The former suffixes `health`, `plan`, `fetch`, `parse`, `collections` and its
+`exists`, `complete`, `cancel`, `finalize` and `release` children,
+`feed-health-state` and `safe-persist-data` return HTTP 404.
+GET on POST-only operations and POST on native health retain HTTP 404.
+Hono's existing HEAD handling for health is unchanged.
+Planning and delivery do not mount one another's native health operation.
+The native readiness reader selects health by startup group after the separate
+shared process check; captured nonce, PID, port, group, module enablement and
+planner execution controls still have to match.
+
+HTTP names do not change saved `safe_persist_data`, the `feed-health-state`
+ledger, failure-operation values, schema dates, receipts or recording bytes.
+The [operator API reference](../architecture/sources/feed-operator-api.md)
+owns document/reference lifetime, collection order, failure retention and
+delivery validation. The
+[runner reference](../architecture/sources/feed-plan-runner.md)
+owns the real stage HTTP composition and its supervised clients.
+
 ## Upstream native-protocol exception
 
 The existing llama-server owns `/v1/chat/completions`, `/completions`,
@@ -131,3 +179,4 @@ implementation.
 - [summary-evaluation-workflow.md](summary-evaluation-workflow.md) - direct native generation and evaluator clients.
 - [summary-generator-api.md](summary-generator-api.md) - prepared-text generation and its independent listener.
 - [serve-pipeline-apis.md](serve-pipeline-apis.md) - shared process identity and owned-child lifetime.
+- [feed-operator-api.md](../architecture/sources/feed-operator-api.md) - planner and delivery operations and native control flow.

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRootContext, PLANNER_API_PREFIX, PlannerSavedResponseSchema, readTraceContext, writeTraceContext } from "@idhazh/common-contracts";
+import { createRootContext, DELIVERY_API_PATHS, PLANNER_API_PATHS, PLANNER_API_PREFIX, PlannerSavedResponseSchema, readTraceContext, writeTraceContext } from "@idhazh/common-contracts";
 import type { FingerprintEvent } from "@idhazh/host-fingerprints/diagnostic";
 import type { ProbeEvent } from "@idhazh/host-probes/diagnostic";
 import { FingerprintResponseSchema } from "@idhazh/host-fingerprints/response";
@@ -22,6 +22,9 @@ import { readApiReadiness } from "@idhazh/serve-pipeline-apis/readiness";
 import { createFeedApiApp } from "../scripts/create-feed-api-app";
 import { loadHonoSettings } from "@idhazh/serve-pipeline-apis/settings";
 import { PlanError } from "../src/api/plan-request";
+import { FeedApiStartupSchema } from "../scripts/read-feed-api-startup";
+import { readFeedApiReadiness } from "../scripts/read-feed-api-readiness";
+import { captureFeedApiFailure } from "../scripts/capture-feed-api-failure";
 
 const json = (body: unknown, carrier = {}) => ({
   method: "POST", headers: { "content-type": "application/json", ...carrier }, body: JSON.stringify(body),
@@ -46,13 +49,14 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
   });
   const probe = await loadProbeConfig(new URL("../../../config/host-probes.json", import.meta.url));
   const nativeEvents: (FingerprintEvent | ProbeEvent)[] = [];
+  const plannerIdentity = PlannerReadySchema.parse({
+    event: "planner_ready", nonce: identity.nonce, pid: process.pid, port: settings.port,
+    runtime: { ...parent, git_sha: recorded.runtime.git_sha, run_number: "700",
+      attempt: 1, captured_at: "2026-10-21T23:59:59Z" },
+  });
   const server = await serveApiApp(settings, createFeedApiApp({
     identity,
-    planner: { inputs: recorded.inputs, runtime: recorded.runtime, identity: PlannerReadySchema.parse({
-      event: "planner_ready", nonce: identity.nonce, pid: process.pid, port: settings.port,
-      runtime: { ...parent, git_sha: recorded.runtime.git_sha, run_number: "700",
-        attempt: 1, captured_at: "2026-10-21T23:59:59Z" },
-    }) },
+    planner: { inputs: recorded.inputs, runtime: recorded.runtime, identity: plannerIdentity },
     machine: {
       fingerprint: { config: host.config, settings: host.settings, options: {
         outputRoot: join(host.directory, "state"), inspection: host.inspection,
@@ -76,6 +80,35 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
       failure: { create: (code: string, message: string) => new PlanError(code, message) },
     };
     expect(await readApiReadiness({ ...readiness, message: identity, expected: identity })).toBe(origin);
+    const startup = FeedApiStartupSchema.parse({
+      group: "planning", server: settings, directory: "evidence",
+      run: { run_id: "700", attempt: 1, started_at: plannerIdentity.runtime.captured_at, context: parent },
+      planner: {
+        nonce: identity.nonce, settings: recorded.inputs.settings, planning: recorded.inputs.harvest.config,
+        output_root: "state", runtime: plannerIdentity.runtime,
+      },
+    });
+    if (startup.group !== "planning") throw new Error("The native planner readiness test requires planning startup");
+    const nativeReadiness = {
+      message: identity, pid: process.pid, startup, kind: "PLANNER" as const,
+      signal: readiness.signal, failure: captureFeedApiFailure({ operation: "workflow" }),
+    };
+    expect(await readFeedApiReadiness(nativeReadiness)).toBe(origin);
+    for (const runtime of [
+      { ...startup.planner.runtime, run_number: "701" },
+      { ...startup.planner.runtime, attempt: 2 },
+      { ...startup.planner.runtime, captured_at: "2026-10-22T00:00:00Z" },
+      { ...startup.planner.runtime, git_sha: "b".repeat(40) },
+      { ...startup.planner.runtime, ...createRootContext() },
+    ]) {
+      const wrong = FeedApiStartupSchema.parse({ ...startup, planner: { ...startup.planner, runtime } });
+      await expect(readFeedApiReadiness({ ...nativeReadiness, startup: wrong }))
+        .rejects.toMatchObject({ code: "PLANNER_READY_IDENTITY" });
+    }
+    recorded.inputs.settings.enabled = false;
+    try {
+      await expect(readFeedApiReadiness(nativeReadiness)).rejects.toMatchObject({ code: "PLANNER_READY_IDENTITY" });
+    } finally { recorded.inputs.settings.enabled = true; }
     for (const overrides of [
       { nonce: randomUUID() }, { pid: identity.pid + 1 },
       { port: identity.port === 65535 ? identity.port - 1 : identity.port + 1 },
@@ -84,8 +117,12 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
       const wrong = ApiReadySchema.parse({ ...identity, ...overrides });
       await expect(readApiReadiness({ ...readiness, message: wrong, expected: wrong }))
         .rejects.toMatchObject({ code: "TYPESCRIPT_API_READY_IDENTITY" });
+      await expect(readFeedApiReadiness({ ...nativeReadiness, message: wrong }))
+        .rejects.toMatchObject({ code: "PLANNER_READY_IDENTITY" });
     }
     expect((await fetch(`${origin}/health`)).status).toBe(404);
+    expect((await fetch(`${origin}${PLANNER_API_PREFIX}/health`)).status).toBe(404);
+    expect((await fetch(`${origin}${PLANNER_API_PREFIX}${DELIVERY_API_PATHS.health}`)).status).toBe(404);
     const fingerprint = await fetch(`${origin}${FINGERPRINT_PATH}`, json(host.apiInput, writeTraceContext(parent)));
     expect(fingerprint.status).toBe(200);
     const captured = FingerprintResponseSchema.parse(await fingerprint.json());
@@ -107,14 +144,14 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
       expect(operation?.spanId).not.toBe(parent.spanId);
     }
     const source = recorded.inputs.harvest.sources[0]!;
-    const response = await fetch(`${origin}${PLANNER_API_PREFIX}/fetch`, json({
+    const response = await fetch(`${origin}${PLANNER_API_PREFIX}${PLANNER_API_PATHS.fetch}`, json({
       feed_id: source.id, fetch_item_type: "feed",
     }, writeTraceContext(parent)));
     expect(response.status).toBe(200);
     const fetched = FetchResponseSchema.parse(await response.json());
     expect(fetched.failure).toBeNull();
     expect(fetched.traceId).toBe(parent.traceId);
-    const parsedResponse = await fetch(`${origin}${PLANNER_API_PREFIX}/parse`, json({
+    const parsedResponse = await fetch(`${origin}${PLANNER_API_PREFIX}${PLANNER_API_PATHS.parse}`, json({
       links: [operationLink(fetched)],
     }, writeTraceContext(parent)));
     expect(parsedResponse.status).toBe(200);
@@ -126,7 +163,7 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
     expect(fetched).not.toHaveProperty("body");
     expect(parsed).not.toHaveProperty("body");
     expect(recorded.transport.requests.map(request => request.url.href)).toEqual([source.url]);
-    const planning = await fetch(`${origin}${PLANNER_API_PREFIX}/plan`, json({}, {
+    const planning = await fetch(`${origin}${PLANNER_API_PREFIX}${PLANNER_API_PATHS.plan}`, json({}, {
       host: `${settings.hostname}:${unrelated.port}`,
     }));
     const planned = PlannerSavedResponseSchema.parse(await planning.json());

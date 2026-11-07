@@ -13,7 +13,7 @@
 | A2 | Hard scope - in | Separate generation from evaluation; name and divide the evaluator package; bring the older coverage scorer into it; rename the TypeScript API and separate its full-analysis caller; retain prompt overrides and fresh independent requests; centralize the named prompts; group evaluation configuration; standardize every first-party TypeScript HTTP route; update callers, tests, CI, docs and reports in each cutover. |
 | A3 | Hard scope - out | Table B prices the exclusions. None is permission to reduce the requested separation. |
 | A4 | Chosen strategy | Fowler: one evaluation application with independent HHEM, native UniEval and source-coverage children and workers; independent native llama-server; the existing workflow is the orchestrator, meaning the caller that runs the steps in order. |
-| A5 | Plan state | Execution in progress. Table E records each implementation and merge; unfinished rows retain their declared gates. |
+| A5 | Plan state | Complete. All eight rows are delivered in separate pull requests; each merge carries its required local and CI evidence. |
 | A6 | ESCALATE triggers | 1. A removed input, output or route has an unnamed caller. 2. A move causes a score, error, schema or identity change not declared here. 3. A saved format needs a compatibility rule not declared in Table G. 4. A change discards classifications, source fallback, legacy coverage scores or report evidence instead of relocating or explicitly pricing it. 5. An external required-check setting prevents a CI name change. 6. A model, dependency family, service deployment or runtime destination not declared here is needed. |
 | A7 | Execution | Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 1 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. |
 | A8 | Why parallel N is lower | The PRs share CI and the gate guide. The evaluator PRs also change the same callers and test helpers. Serial writing avoids conflicting cutovers; it does not add a dependency between independent APIs. |
@@ -144,9 +144,9 @@ config/
 | E3 | 3 | Rename and divide the evaluator and its tests | 2 | A | DONE | curly-lamp | - | - |
 | E4 | 4 | Rename and isolate the summary generator and its caller | 2 | B | DONE | curly-lamp | - | - |
 | E5 | 5 | Consolidate source coverage under the summary evaluator | 3, 4 | C | DONE | curly-lamp | - | - |
-| E6 | 6 | Centralize production and evaluation prompt files | 3, 4 | D | OWN DONE; delivery PENDING merge | curly-lamp | this PR | - |
-| E7 | 7 | Standardize host and shared TypeScript routes | 2 | E | OWN DONE; delivery PENDING merge | curly-lamp | this PR | - |
-| E8 | 8 | Standardize planner and delivery routes | 7 | E | PENDING | - | - | - |
+| E6 | 6 | Centralize production and evaluation prompt files | 3, 4 | D | DONE | curly-lamp | - | - |
+| E7 | 7 | Standardize host and shared TypeScript routes | 2 | E | DONE | curly-lamp | - | - |
+| E8 | 8 | Standardize planner and delivery routes | 7 | E | DONE | curly-lamp | - | - |
 
 ## Row #1 - Call native generation without the evaluator
 

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRootContext, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
+import { createRootContext, PLANNER_API_PATHS, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
 import { FINGERPRINT_PATH } from "@idhazh/host-fingerprints/api";
 import { FingerprintResponseSchema } from "@idhazh/host-fingerprints/response";
 import { createApiApp, serveApiApp } from "@idhazh/serve-pipeline-apis/app";
@@ -76,7 +76,7 @@ test("machine-only shutdown waits for its real profile worker and asynchronous r
   const origin = apiOrigin(settings);
   let closing: Promise<void> | undefined;
   try {
-    expect((await fetch(`${origin}${PLANNER_API_PREFIX}/plan`, json({}))).status).toBe(404);
+    expect((await fetch(`${origin}${PLANNER_API_PREFIX}${PLANNER_API_PATHS.plan}`, json({}))).status).toBe(404);
     const parent = createRootContext();
     const response = await fetch(`${origin}${START_TASK_PROFILE_PATH}`, json({
       identity: { pipeline_name: "recorded-work", task_name: "composed-profile", run_id: "recorded-run" },
@@ -118,7 +118,7 @@ test.skipIf(process.platform !== "linux")("the real machine child writes fingerp
           group: "machine", modules: ["machine"], nonce: fixture.startup.nonce, port: fixture.startup.server.port,
         });
         expect(ready.pid).not.toBe(process.pid);
-        expect((await fetch(`${origin}${PLANNER_API_PREFIX}/plan`, { ...json({}), signal })).status).toBe(404);
+        expect((await fetch(`${origin}${PLANNER_API_PREFIX}${PLANNER_API_PATHS.plan}`, { ...json({}), signal })).status).toBe(404);
         const fingerprint = await fetch(origin + FINGERPRINT_PATH, { ...json({
           date: "2026-11-04", writer: {
             run_id: "2026-11-04-700", attempt: 3, job: null, pipeline_name: "recorded-work",

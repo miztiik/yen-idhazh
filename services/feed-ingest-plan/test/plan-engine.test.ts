@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import {
   DiscoveredArticleRowContract, FeedHealthStateRowContract, PlanRunRowContract, RejectedArticleRowContract,
   SelectedArticleRowContract, SelectedFeedBatchSchema, SelectedArticlesArtifactSchema, selectedArticleMetadata,
-  PlannerRunResponseSchema, createChildContext, createRootContext, readFeedIngestEvent, readTraceContext, PLANNER_API_PREFIX, writeTraceContext,
+  PlannerRunResponseSchema, createChildContext, createRootContext, readFeedIngestEvent, readTraceContext, PLANNER_API_PATHS, PLANNER_API_PREFIX, writeTraceContext,
 } from "@idhazh/common-contracts";
 import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-state.schema";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
@@ -145,11 +145,11 @@ test("uncertain collection startup uses its preallocated trace to recover owners
     const server = Bun.serve({
       hostname: "127.0.0.1", port: 0, idleTimeout: 0,
       async fetch(request) {
-        const path = new URL(request.url).pathname.slice(PLANNER_API_PREFIX.length + 1);
+        const path = new URL(request.url).pathname.slice(PLANNER_API_PREFIX.length);
         paths.push(path);
-        if (path === "collections/exists") lookupTrace = (await request.clone().json()).traceId;
+        if (path === PLANNER_API_PATHS.checkCollection) lookupTrace = (await request.clone().json()).traceId;
         const pending = (async () => {
-          if (path === "collections" && corruption === "cancelled-before-admission") {
+          if (path === PLANNER_API_PATHS.startCollection && corruption === "cancelled-before-admission") {
             receiveStartup();
             await startupGate;
             receivedCancellation = request.signal.aborted;
@@ -157,14 +157,14 @@ test("uncertain collection startup uses its preallocated trace to recover owners
           return app.fetch(request);
         })();
         let responsePromise = pending;
-        if (path === "collections") {
+        if (path === PLANNER_API_PATHS.startCollection) {
           responsePromise = pending.then(async response => {
             if (response.ok) started = CollectionResponseSchema.parse(await response.clone().json());
             return response;
           });
           startupRequest = responsePromise;
         }
-        if (path === "collections" && corruption === "cancelled-preparation") {
+        if (path === PLANNER_API_PATHS.startCollection && corruption === "cancelled-preparation") {
           let settled = false;
           const admitted = pending.finally(() => { settled = true; });
           while (!stageStore(fixture.inputs).isRunActive(expectedRun) && !settled) await Bun.sleep(0);
@@ -174,15 +174,15 @@ test("uncertain collection startup uses its preallocated trace to recover owners
           await admitted;
         }
         const response = await responsePromise;
-        if (path === "collections" && response.ok) {
+        if (path === PLANNER_API_PATHS.startCollection && response.ok) {
           if (corruption === "cancelled-preparation") return response;
           return new Response(corruption === "foreign-execution"
             ? JSON.stringify({ ...started, traceId: createRootContext().traceId })
             : (await response.text()).slice(0, -1),
           { status: response.status, headers: response.headers });
         }
-        if (response.ok && ((path === "collections/exists" && unreadableLookup)
-          || (path === "collections/release" && corruption === "unreadable-lookup-and-release"))) {
+        if (response.ok && ((path === PLANNER_API_PATHS.checkCollection && unreadableLookup)
+          || (path === PLANNER_API_PATHS.releaseCollection && corruption === "unreadable-lookup-and-release"))) {
           return new Response((await response.text()).slice(0, -1), { status: response.status, headers: response.headers });
         }
         return response;
@@ -229,13 +229,13 @@ test("uncertain collection startup uses its preallocated trace to recover owners
         expect(receivedCancellation).toBe(true);
         expect(startupReply?.ok).toBe(false);
         expect(started).toBeUndefined();
-        expect(paths).toEqual(["collections", "collections/exists", "terminal"]);
+        expect(paths).toEqual([PLANNER_API_PATHS.startCollection, PLANNER_API_PATHS.checkCollection, "terminal"]);
         expect(result.files.feed_health_state).toBeUndefined();
       } else {
         expect(started?.traceId).toBe(result.context.traceId);
         expect(started?.spanId).not.toBe(result.context.spanId);
-        expect(paths).toEqual(["collections", "collections/exists", "collections/cancel",
-          "feed-health-state", "collections/finalize", "collections/release", "terminal"]);
+        expect(paths).toEqual([PLANNER_API_PATHS.startCollection, PLANNER_API_PATHS.checkCollection, PLANNER_API_PATHS.cancelCollection,
+          PLANNER_API_PATHS.updateFeedHealth, PLANNER_API_PATHS.finalizeCollection, PLANNER_API_PATHS.releaseCollection, "terminal"]);
         expect(result.files.feed_health_state?.status).toBe("written");
       }
       expect(terminal).toEqual([{ held: false, active: false }]);
@@ -252,7 +252,7 @@ async function completeHeldCollection(fixture: Awaited<ReturnType<typeof recorde
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, idleTimeout: 0, fetch: app.fetch });
   const started = performance.now();
   async function post(path: string, body: unknown) {
-    const response = await fetch(`http://127.0.0.1:${server.port}${PLANNER_API_PREFIX}/${path}`, {
+    const response = await fetch(`http://127.0.0.1:${server.port}${PLANNER_API_PREFIX}${path}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     });
     const value: unknown = await response.json();
@@ -261,27 +261,27 @@ async function completeHeldCollection(fixture: Awaited<ReturnType<typeof recorde
   }
   try {
     for (const feedId of collection.feeds.keys()) {
-      const fetched = FetchResponseSchema.parse(await post("fetch", { traceId, feed_id: feedId, fetch_item_type: "feed" }));
-      const parsed = ParseResponseSchema.parse(await post("parse", { links: [operationLink(fetched)] }));
+      const fetched = FetchResponseSchema.parse(await post(PLANNER_API_PATHS.fetch, { traceId, feed_id: feedId, fetch_item_type: "feed" }));
+      const parsed = ParseResponseSchema.parse(await post(PLANNER_API_PATHS.parse, { links: [operationLink(fetched)] }));
       if (parsed.fetch_item_type !== "feed") throw new Error("The held collection must parse its recorded feed");
       for (const offer of parsed.offers) {
-        const article = FetchResponseSchema.parse(await post("fetch", {
+        const article = FetchResponseSchema.parse(await post(PLANNER_API_PATHS.fetch, {
           fetch_item_type: "article", links: [operationLink(parsed)], candidate_id: offer.candidate_id,
         }));
-        if (article.body_sha256 !== null) await post("parse", { links: [operationLink(article)] });
+        if (article.body_sha256 !== null) await post(PLANNER_API_PATHS.parse, { links: [operationLink(article)] });
       }
     }
-    const completed = CompletedCollectionSchema.parse(await post("collections/complete", { traceId }));
-    const selected = SelectionResponseSchema.parse(await post("select-articles", { links: [operationLink(completed)] }));
-    const persisted = PersistenceResponseSchema.parse(await post("persist-selected-articles", { links: [operationLink(selected)] }));
+    const completed = CompletedCollectionSchema.parse(await post(PLANNER_API_PATHS.completeCollection, { traceId }));
+    const selected = SelectionResponseSchema.parse(await post(PLANNER_API_PATHS.selectArticles, { links: [operationLink(completed)] }));
+    const persisted = PersistenceResponseSchema.parse(await post(PLANNER_API_PATHS.persistSelectedArticles, { links: [operationLink(selected)] }));
     expect(selected.run_id).toBe(collection.context.run_id);
     expect(persisted.selected_count).toBeGreaterThan(0);
     expect(persisted.selected_count).toBe(selected.articles.length);
-    expect(FinalizedCollectionSchema.parse(await post("collections/finalize", {
+    expect(FinalizedCollectionSchema.parse(await post(PLANNER_API_PATHS.finalizeCollection, {
       traceId, failure_code: null,
       collection_timing: { duration_ms: Math.round(performance.now() - started), status: "completed" },
     })).status).toBe("completed");
-    expect(ReleasedCollectionSchema.parse(await post("collections/release", {
+    expect(ReleasedCollectionSchema.parse(await post(PLANNER_API_PATHS.releaseCollection, {
       run_id: collection.context.run_id, attempt: collection.context.writer.attempt,
     })).released).toBe(true);
     expect(stageStore(fixture.inputs).isRunActive(collection.context.run_id)).toBe(false);
@@ -350,11 +350,11 @@ test("real stage responses supply saved timestamps and metadata to orchestration
       hostname: "127.0.0.1", port: 0, idleTimeout: 0,
       async fetch(request) {
         const path = new URL(request.url).pathname;
-        if (path === `${PLANNER_API_PREFIX}/persist-selected-articles`) {
+        if (path === `${PLANNER_API_PREFIX}${PLANNER_API_PATHS.persistSelectedArticles}`) {
           persistenceInput = await request.clone().json();
         }
         const response = await app.fetch(request);
-        if (response.ok && path === `${PLANNER_API_PREFIX}/select-articles`) {
+        if (response.ok && path === `${PLANNER_API_PREFIX}${PLANNER_API_PATHS.selectArticles}`) {
           selection = SelectionResponseSchema.parse(await response.clone().json());
           const batch = stageStore(fixture.inputs).read("selected", selection, SelectedFeedBatchSchema);
           expect(selection.selection_started_at_utc).toBe(batch.selection_started_at_utc);
@@ -365,7 +365,7 @@ test("real stage responses supply saved timestamps and metadata to orchestration
           expect(batch.articles.every(article => article.article_text.length > 0)).toBe(true);
           expect(SelectionResponseSchema.safeParse({ ...selection, articles: batch.articles }).success).toBe(false);
         }
-        if (response.ok && path === `${PLANNER_API_PREFIX}/partition-articles`) {
+        if (response.ok && path === `${PLANNER_API_PREFIX}${PLANNER_API_PATHS.partitionArticles}`) {
           partition = PartitionResponseSchema.parse(await response.clone().json());
           expect(partition.articles.every(article => !("article_text" in article))).toBe(true);
           expect(PartitionResponseSchema.safeParse({
@@ -467,7 +467,7 @@ test("health and selected persistence failures preserve the independent successf
       async fetch(request, server) {
         const response = await app.fetch(request, { beginPlanning: () => server.timeout(request, 0),
           stage_origin: `http://127.0.0.1:${server.port}` });
-        if (response.ok && new URL(request.url).pathname === `${PLANNER_API_PREFIX}/select-articles`) {
+        if (response.ok && new URL(request.url).pathname === `${PLANNER_API_PREFIX}${PLANNER_API_PATHS.selectArticles}`) {
           const obstruction = join(fixture.inputs.outputRoot, "raw", "feed-ingest-plan", blocked);
           await mkdir(dirname(obstruction), { recursive: true });
           await writeFile(obstruction, "recorded obstruction");
@@ -508,10 +508,10 @@ test("a completed parsed collection supplies the report when actual selection fa
     async fetch(request) {
       const path = new URL(request.url).pathname;
       const previous = fixture.runtime.selection_clock;
-      if (path.endsWith("/select-articles")) fixture.runtime.selection_clock = () => new Date(Number.NaN);
+      if (path.endsWith(PLANNER_API_PATHS.selectArticles)) fixture.runtime.selection_clock = () => new Date(Number.NaN);
       try {
         const response = await app.fetch(request);
-        if (path.endsWith("/collections/complete") && response.ok) {
+        if (path.endsWith(PLANNER_API_PATHS.completeCollection) && response.ok) {
           completedInput = operationLink(await response.clone().json());
         }
         return response;
@@ -569,12 +569,12 @@ test("offered articles start before another feed finishes and an independent col
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, idleTimeout: 0, fetch: app.fetch });
   const origin = `http://127.0.0.1:${server.port}`;
   const otherCaller = createRootContext();
-  const post = (path: string, body: unknown) => fetch(`${origin}${PLANNER_API_PREFIX}/${path}`, {
+  const post = (path: string, body: unknown) => fetch(`${origin}${PLANNER_API_PREFIX}${path}`, {
     method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(otherCaller) },
     body: JSON.stringify(body),
   });
   try {
-    const begun = await post("collections", { request: {} });
+    const begun = await post(PLANNER_API_PATHS.startCollection, { request: {} });
     expect(begun.status).toBe(200);
     const other = CollectionResponseSchema.parse(await begun.json());
     const independent = getCollection(fixture.inputs, other.traceId);
@@ -592,12 +592,12 @@ test("offered articles start before another feed finishes and an independent col
     expect([...independent.feeds.values()].every(feed => feed.state === "pending")).toBe(true);
     expect(independent.state.baseline).toEqual(baseline);
     expect(stageStore(fixture.inputs).isRunActive(other.context.run_id)).toBe(true);
-    expect((await post("collections/cancel", { traceId: other.traceId })).status).toBe(200);
-    expect((await post("collections/finalize", {
+    expect((await post(PLANNER_API_PATHS.cancelCollection, { traceId: other.traceId })).status).toBe(200);
+    expect((await post(PLANNER_API_PATHS.finalizeCollection, {
       traceId: other.traceId, failure_code: "PLANNER_EXECUTION_FAILED",
       collection_timing: { duration_ms: 0, status: "failed" },
     })).status).toBe(200);
-    expect((await post("collections/release", {
+    expect((await post(PLANNER_API_PATHS.releaseCollection, {
       run_id: other.context.run_id, attempt: other.context.writer.attempt,
     })).status).toBe(200);
   } finally { releaseFeed(); await server.stop(true); await app.close(); await fixture.close(); }

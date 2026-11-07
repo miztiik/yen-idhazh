@@ -1,7 +1,7 @@
 /** Route completed metadata to the existing safe-persist adapter without accepting its private controls. */
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { DELIVERY_API_PATHS, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import type { OperationMetadata } from "@idhazh/common-contracts";
 import { z } from "zod";
 import { describePlanError, PlanError } from "../src/api/plan-request";
@@ -40,8 +40,8 @@ export function createSafePersistApp(input: {
       ] }, 413);
     },
   }));
-  app.get(`${PLANNER_API_PREFIX}/health`, c => c.json({ identity: input.identity }));
-  app.post(`${PLANNER_API_PREFIX}/safe-persist-data`, async c => {
+  app.get(`${PLANNER_API_PREFIX}${DELIVERY_API_PATHS.health}`, c => c.json({ identity: input.identity }));
+  app.post(`${PLANNER_API_PREFIX}${DELIVERY_API_PATHS.persistData}`, async c => {
     let raw: unknown;
     try { raw = await c.req.json(); }
     catch (error) {

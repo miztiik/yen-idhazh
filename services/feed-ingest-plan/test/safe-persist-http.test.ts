@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRootContext, PLANNER_API_PREFIX, PlannerErrorResponseSchema, readCloudEvent, readTraceContext, writeTraceContext } from "@idhazh/common-contracts";
+import { createRootContext, PLANNER_API_PATHS, DELIVERY_API_PATHS, PLANNER_API_PREFIX, PlannerErrorResponseSchema, readCloudEvent, readTraceContext, writeTraceContext } from "@idhazh/common-contracts";
 import { PIPELINE_API_EVENT_SOURCE } from "../../serve-pipeline-apis/src/declare-event-source";
 import { DELIVERY_EVENT_SOURCE } from "../src/declare-event-source";
 import { SafePersistDataCommitterSchema } from "@idhazh/data-delivery";
@@ -22,10 +22,12 @@ import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { publicationGitRecording, publicationRecording } from "./publication-recordings";
 import { fixtureGit } from "./fixture-git";
 import { writeRecordedHostOutput } from "./host-output-recordings";
-import { ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
+import { API_HEALTH_PATH, ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
 import { FeedApiStartupFailureSchema, FeedApiStartupSchema } from "../scripts/read-feed-api-startup";
 import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
 import { ServerEventDataSchema, serverLogFilename } from "../../serve-pipeline-apis/src/server-evidence";
+import { readFeedApiReadiness } from "../scripts/read-feed-api-readiness";
+import { captureFeedApiFailure } from "../scripts/capture-feed-api-failure";
 
 type Recording = Awaited<ReturnType<typeof publicationGitRecording>>;
 const serverEntry = fileURLToPath(new URL("../scripts/serve-feed-apis.ts", import.meta.url));
@@ -60,8 +62,8 @@ async function openApi(f: Recording, writeEvent?: DeliveryEventOutput) {
     fetch: (request, listener) => app.fetch(request, { beginDelivery: () => listener.timeout(request, 0) }),
   });
   return {
-    server, base: `http://127.0.0.1:${server.port}${PLANNER_API_PREFIX}`,
-    post: (request: unknown, carrier = {}) => fetch(`http://127.0.0.1:${server.port}${PLANNER_API_PREFIX}/safe-persist-data`, {
+    app, identity, server, base: `http://127.0.0.1:${server.port}${PLANNER_API_PREFIX}`,
+    post: (request: unknown, carrier = {}) => fetch(`http://127.0.0.1:${server.port}${PLANNER_API_PREFIX}${DELIVERY_API_PATHS.persistData}`, {
       method: "POST", headers: { "content-type": "application/json", ...carrier }, body: JSON.stringify(request), timeout: false,
     }),
   };
@@ -76,7 +78,7 @@ async function waitForHealth(port: number, signal: AbortSignal) {
   while (true) {
     signal.throwIfAborted();
     try {
-      const response = await fetch(`http://127.0.0.1:${port}${PLANNER_API_PREFIX}/health`, { signal });
+      const response = await fetch(`http://127.0.0.1:${port}${PLANNER_API_PREFIX}${DELIVERY_API_PATHS.health}`, { signal });
       if (response.status !== 200) throw new Error("Expected safe-persist child health");
       return SafePersistHttpReadySchema.parse((await response.json()).identity);
     } catch (error) {
@@ -128,6 +130,24 @@ test("HTTP delivery lands exact remote bytes and repeats without changing comple
   const f = await publicationRecording();
   const api = await openApi(f);
   try {
+    const request = (suffix: string, method: string) => new Request(`http://127.0.0.1${PLANNER_API_PREFIX}${suffix}`, {
+      method, ...(method === "GET" ? {} : { body: "{}" }),
+    });
+    const health = await api.app.fetch(request(DELIVERY_API_PATHS.health, "GET"));
+    expect(health.status).toBe(200);
+    expect(await health.json()).toEqual({ identity: api.identity });
+    for (const suffix of [
+      "/health", "/safe-persist-data", ...Object.values(PLANNER_API_PATHS),
+      `${DELIVERY_API_PATHS.health}/`, `${DELIVERY_API_PATHS.persistData}/`,
+    ]) {
+      for (const method of ["GET", "POST"]) {
+        const response = await api.app.fetch(request(suffix, method));
+        expect(response.status, `${method} ${suffix}`).toBe(404);
+        expect(response.headers.get("Location")).toBeNull();
+      }
+    }
+    expect((await api.app.fetch(request(DELIVERY_API_PATHS.health, "POST"))).status).toBe(404);
+    expect((await api.app.fetch(request(DELIVERY_API_PATHS.persistData, "GET"))).status).toBe(404);
     const index = await readFile(join(f.repository, ".git", "index"));
     const responseBefore = await readFile(join(f.directory, "response.json"));
     const selectedBefore = await readFile(join(f.repository, f.summary.selected_articles_artifact!));
@@ -156,7 +176,7 @@ test("HTTP delivery lands exact remote bytes and repeats without changing comple
     expect(await readFile(join(f.repository, ".git", "index"))).toEqual(index);
     expect(await readFile(join(f.directory, "response.json"))).toEqual(responseBefore);
     expect(await readFile(join(f.repository, f.summary.selected_articles_artifact!))).toEqual(selectedBefore);
-    expect((await fetch(`${api.base}/plan`, { method: "POST", body: "{}" })).status).toBe(404);
+    expect((await fetch(`${api.base}${PLANNER_API_PATHS.plan}`, { method: "POST", body: "{}" })).status).toBe(404);
   } finally { await api.server.stop(true); await f.close(); }
 });
 
@@ -185,11 +205,29 @@ test("two actual delivery request operations survive native stderr, the completi
     await child.stdin.flush();
     const ready = await waitForHealth(settings.listener.port, AbortSignal.timeout(startup.server.supervision.readiness_timeout_ms));
     expect(ready.pid).toBe(child.pid);
+    const origin = `http://${startup.server.hostname}:${ready.port}`;
+    const message = ApiReadySchema.parse((await (await fetch(`${origin}${API_HEALTH_PATH}`)).json()).identity);
+    const readiness = {
+      message, pid: child.pid, startup, kind: "SAFE_PERSIST" as const,
+      signal: AbortSignal.timeout(startup.server.supervision.readiness_timeout_ms),
+      failure: captureFeedApiFailure({ operation: "commit-ledgers" }),
+    };
+    expect(await readFeedApiReadiness(readiness)).toBe(origin);
+    for (const overrides of [
+      { nonce: randomUUID() }, { pid: child.pid + 1 },
+      { port: ready.port === 65535 ? ready.port - 1 : ready.port + 1 },
+      { group: "planning", modules: ["planning", "machine"] }, { modules: ["machine"] }, { enabled: false },
+    ]) {
+      await expect(readFeedApiReadiness({ ...readiness, message: ApiReadySchema.parse({ ...message, ...overrides }) }))
+        .rejects.toMatchObject({ code: "SAFE_PERSIST_READY_IDENTITY" });
+    }
+    expect((await fetch(`${origin}${PLANNER_API_PREFIX}/health`)).status).toBe(404);
+    expect((await fetch(`${origin}${PLANNER_API_PREFIX}${PLANNER_API_PATHS.health}`)).status).toBe(404);
     const callers = [
       createRootContext({ traceState: "request=first" }), createRootContext({ traceState: "request=second" }),
     ];
     async function post(request: SafePersistHttpRequest, caller: typeof callers[number]) {
-      const response = await fetch(`http://127.0.0.1:${ready.port}${PLANNER_API_PREFIX}/safe-persist-data`, {
+      const response = await fetch(`http://127.0.0.1:${ready.port}${PLANNER_API_PREFIX}${DELIVERY_API_PATHS.persistData}`, {
         method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) },
         body: JSON.stringify(request), timeout: false,
       });
@@ -302,7 +340,7 @@ test("HTTP rejects malformed controls and retains the adapter's existing identit
       await checkFailure(await api.post({ ...requestFor(f), ...controls }, writeTraceContext(parent)), 400, before);
     }
     const before = events.length;
-    await checkFailure(await fetch(`${api.base}/safe-persist-data`, {
+    await checkFailure(await fetch(`${api.base}${DELIVERY_API_PATHS.persistData}`, {
       method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(parent) }, body: "{",
     }), 400, before);
     expect(await Bun.file(join(f.directory, "delivery-result.json")).exists()).toBe(false);

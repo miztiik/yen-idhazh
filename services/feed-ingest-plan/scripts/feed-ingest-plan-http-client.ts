@@ -1,7 +1,7 @@
 /** Call an enabled planner listener and verify its retained output before returning commit paths. */
 import { join } from "node:path";
 import { writeAtomically } from "@idhazh/ledger-file-writer";
-import { createRootContext, writeTraceContext } from "@idhazh/common-contracts";
+import { createRootContext, PLANNER_API_PATHS, writeTraceContext } from "@idhazh/common-contracts";
 import type { OperationMetadata, PlannerFailureOperation } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../src/load-plan-inputs";
 import type { PlanRequest } from "../src/api/plan-request";
@@ -17,11 +17,11 @@ export async function requestPlannerHttp(
   base: string, inputs: PlanInputs, request: PlanRequest, directory: string, signal?: AbortSignal,
   caller: OperationMetadata = createRootContext(),
 ) {
-  const healthResponse = await fetch(`${base}/health`, { signal: signal ?? null });
+  const healthResponse = await fetch(`${base}${PLANNER_API_PATHS.health}`, { signal: signal ?? null });
   const listener: unknown = await healthResponse.json();
   if (healthResponse.status !== 200 || typeof listener !== "object" || listener === null
     || !("planner_enabled" in listener) || listener.planner_enabled !== true) throw new Error("Planner listener is not enabled and responsive");
-  const response = await fetch(`${base}/plan`, {
+  const response = await fetch(`${base}${PLANNER_API_PATHS.plan}`, {
     method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) },
     body: JSON.stringify(request), timeout: false, signal: signal ?? null,
   });

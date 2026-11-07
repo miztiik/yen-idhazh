@@ -1,6 +1,6 @@
 /** Route current batch references without exposing parsed or rejected article populations. */
 import { Hono } from "hono";
-import { PartitionArticlesRequestSchema, StageReferenceRequestSchema, selectedArticleMetadata } from "@idhazh/common-contracts";
+import { PartitionArticlesRequestSchema, PLANNER_API_PATHS, StageReferenceRequestSchema, selectedArticleMetadata } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../../load-plan-inputs";
 import type { PlanRuntime } from "../../run-feed-plan";
 import type { PlanningBindings } from "./plan.route";
@@ -21,7 +21,7 @@ export async function readRequestBody(request: Request): Promise<unknown> {
 }
 export function stagesRoute(inputs: PlanInputs, runtime: () => PlanRuntime) {
   const app = new Hono<{ Bindings: PlanningBindings }>();
-  app.post("/select-articles", async c => {
+  app.post(PLANNER_API_PATHS.selectArticles, async c => {
     const request = StageReferenceRequestSchema.parse(await readRequestBody(c.req.raw));
     c.env?.beginPlanning?.();
     const { batch } = await executeSelection(request, inputs, captureRequestRuntime(runtime(), c.req.raw.headers));
@@ -33,7 +33,7 @@ export function stagesRoute(inputs: PlanInputs, runtime: () => PlanRuntime) {
       exclusions: batch.exclusions, request_report: batch.request_report,
     }));
   });
-  app.post("/partition-articles", async c => {
+  app.post(PLANNER_API_PATHS.partitionArticles, async c => {
     const request = PartitionArticlesRequestSchema.parse(await readRequestBody(c.req.raw));
     c.env?.beginPlanning?.();
     const { batch } = await executePartition(request, inputs, captureRequestRuntime(runtime(), c.req.raw.headers));
@@ -44,7 +44,7 @@ export function stagesRoute(inputs: PlanInputs, runtime: () => PlanRuntime) {
         run_id: batch.context.run_id, attempt: batch.context.writer.attempt, date: batch.context.date })),
     }));
   });
-  app.post("/persist-selected-articles", async c => {
+  app.post(PLANNER_API_PATHS.persistSelectedArticles, async c => {
     const request = StageReferenceRequestSchema.parse(await readRequestBody(c.req.raw));
     c.env?.beginPlanning?.();
     return c.json(PersistenceResponseSchema.parse(

@@ -8,7 +8,7 @@ import { z } from "zod";
 import {
   DiscoveredArticleRowContract, FeedHealthStateRowContract, ItemHealthFailureCodeSchema,
   ParsedFeedBatchSchema, SelectedFeedBatchSchema, SelectedArticleRowContract, SelectedArticlesArtifactSchema,
-  createRootContext, selectedArticleMetadata, PLANNER_API_PREFIX, writeTraceContext,
+  createRootContext, selectedArticleMetadata, PLANNER_API_PATHS, PLANNER_API_PREFIX, writeTraceContext,
 } from "@idhazh/common-contracts";
 import { persistLedger, readPlannerParquet } from "@idhazh/ledger-file-writer";
 import { loadPlanInputs } from "../src/load-plan-inputs";
@@ -115,7 +115,7 @@ async function runRecordingAt(root: string) {
   const app = createPlanTestServer(inputs, runtime);
   const caller = createRootContext();
   const post = async <T>(path: string, body: unknown, schema: z.ZodType<T>) => {
-    const response = await app.request(`${PLANNER_API_PREFIX}/${path}`, {
+    const response = await app.request(`${PLANNER_API_PREFIX}${path}`, {
       method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) }, body: JSON.stringify(body),
     });
     const result: unknown = await response.json();
@@ -124,7 +124,7 @@ async function runRecordingAt(root: string) {
   };
   try {
     const collectionId = caller.traceId;
-    const begun = await post("collections", { request: {} }, CollectionResponseSchema);
+    const begun = await post(PLANNER_API_PATHS.startCollection, { request: {} }, CollectionResponseSchema);
     assert.deepEqual(begun.feeds.sort(), ["recorded-atom", "recorded-news"]);
     assert.equal(transport.requests.length, 0, "All history must load before the first source request");
     const collection = getCollection(inputs, collectionId);
@@ -147,35 +147,35 @@ async function runRecordingAt(root: string) {
     for (const file of publications.files) await rm(join(stateRoot, file.path));
     for (const file of itemHealth.files) await rm(join(stateRoot, file.path));
     for (const feedId of begun.feeds) {
-      const fetched = await post("fetch", { traceId: collectionId,
+      const fetched = await post(PLANNER_API_PATHS.fetch, { traceId: collectionId,
         feed_id: feedId, fetch_item_type: "feed" }, FetchResponseSchema);
-      const parsed = await post("parse", { links: [operationLink(fetched)] }, ParseResponseSchema);
+      const parsed = await post(PLANNER_API_PATHS.parse, { links: [operationLink(fetched)] }, ParseResponseSchema);
       assert(parsed.fetch_item_type === "feed");
       for (const offer of parsed.offers) {
-        const article = await post("fetch", { links: [operationLink(parsed)], candidate_id: offer.candidate_id,
+        const article = await post(PLANNER_API_PATHS.fetch, { links: [operationLink(parsed)], candidate_id: offer.candidate_id,
           fetch_item_type: "article" }, FetchResponseSchema);
-        await post("parse", { links: [operationLink(article)] }, ParseResponseSchema);
+        await post(PLANNER_API_PATHS.parse, { links: [operationLink(article)] }, ParseResponseSchema);
       }
     }
-    const completed = await post("collections/complete", { traceId: collectionId }, CompletedCollectionSchema);
+    const completed = await post(PLANNER_API_PATHS.completeCollection, { traceId: collectionId }, CompletedCollectionSchema);
     const parsed = stageStore(inputs).read("parsed", completed, ParsedFeedBatchSchema);
     assert.equal(parsed.discovered.availability, "available");
     if (parsed.discovered.availability === "available") {
       assert.equal(parsed.discovered.rows.find(row => row.url_key === discovery.url_key)!.first_seen_at, discovery.first_seen_at);
     }
-    const selected = await post("select-articles", { links: [operationLink(completed)] }, SelectionResponseSchema);
+    const selected = await post(PLANNER_API_PATHS.selectArticles, { links: [operationLink(completed)] }, SelectionResponseSchema);
     assert.equal(selected.articles.length, 2);
     assert.equal(selected.request_report.feeds.find(feed => feed.feed_id === "recorded-news")!.feed_requests, seed.feed_requests);
     assert.equal(selected.request_report.feeds.find(feed => feed.feed_id === "recorded-news")!.article_requests, seed.article_requests);
     assert.deepEqual(collection.state.baseline, baseline, "Current work and disk changes must not mutate baseline records");
-    const recordedHealth = await post("feed-health-state", { links: [operationLink(selected)], action: "record" },
+    const recordedHealth = await post(PLANNER_API_PATHS.updateFeedHealth, { links: [operationLink(selected)], action: "record" },
       FeedHealthStateUpdateResponseSchema);
     assert.equal(recordedHealth.status, "recorded");
     assert(recordedHealth.files?.status === "written");
     const nativeHealth = await readPlannerParquet(join(inputs.outputRoot, recordedHealth.files.files[0]!.path),
       "feed-health-state", FeedHealthStateRowContract);
     assert(nativeHealth.rows.some(row => row.feed_id === "recorded-news" && (row.feed_requests ?? 0) > 0));
-    const persisted = await post("persist-selected-articles", { links: [operationLink(selected)] }, PersistenceResponseSchema);
+    const persisted = await post(PLANNER_API_PATHS.persistSelectedArticles, { links: [operationLink(selected)] }, PersistenceResponseSchema);
     assert(persisted.files.status === "written");
     const metadata = await readPlannerParquet(join(inputs.outputRoot, persisted.files.files[0]!.path),
       "selected-articles", SelectedArticleRowContract);
@@ -183,14 +183,14 @@ async function runRecordingAt(root: string) {
       ["https://atom.example/entry", "https://news.example/second"]);
     assert.equal(metadata.rows.find(row => row.url_key === discovery.url_key)!.timing_at, discovery.first_seen_at);
     assert(metadata.rows.every(row => row.ratings.adjustments.every(term => Number.isFinite(term.value))));
-    const summary = await post("feed-health-state", { links: [operationLink(selected)], action: "summarize" },
+    const summary = await post(PLANNER_API_PATHS.updateFeedHealth, { links: [operationLink(selected)], action: "summarize" },
       FeedHealthStateUpdateResponseSchema);
     assert(summary.rows.some(row => row.feed_id === "recorded-news" && (row.feed_requests ?? 0) > 0));
     assert.deepEqual(collection.state.baseline, baseline);
     assert.equal(transport.requests.filter(request => request.url.pathname === "/story/").length, 0);
     assert.equal(transport.requests.filter(request => request.url.pathname === "/undated").length, 0);
     runtime.selection_clock = () => new Date("2026-10-22T00:01:00Z");
-    const nextDaySelection = await post("select-articles", { links: [operationLink(completed)] }, SelectionResponseSchema);
+    const nextDaySelection = await post(PLANNER_API_PATHS.selectArticles, { links: [operationLink(completed)] }, SelectionResponseSchema);
     assert.equal(nextDaySelection.articles.length, 2);
     assert.equal(nextDaySelection.request_report.through_day, day);
     const currentRequests = collection.state.work.rows().filter(row => row.feed_id === "recorded-news" && row.date === day)
@@ -208,7 +208,7 @@ async function runRecordingAt(root: string) {
     try {
       const nextCaller = createRootContext();
       const id = nextCaller.traceId;
-      const response = await freshApp.request(`${PLANNER_API_PREFIX}/collections`, {
+      const response = await freshApp.request(`${PLANNER_API_PREFIX}${PLANNER_API_PATHS.startCollection}`, {
         method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(nextCaller) },
         body: JSON.stringify({ request: {} }),
       });
@@ -216,10 +216,10 @@ async function runRecordingAt(root: string) {
       const newRun = CollectionResponseSchema.parse(await response.json());
       assert(newRun.feeds.includes("recorded-resting"), "An independent execution must load current local evidence");
       assert.notDeepEqual(getCollection(freshInputs, id).state.baseline, baseline);
-      await freshApp.request(`${PLANNER_API_PREFIX}/collections/cancel`, {
+      await freshApp.request(`${PLANNER_API_PREFIX}${PLANNER_API_PATHS.cancelCollection}`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ traceId: id }),
       });
-      const standalone = await freshApp.request(`${PLANNER_API_PREFIX}/fetch`, {
+      const standalone = await freshApp.request(`${PLANNER_API_PREFIX}${PLANNER_API_PATHS.fetch}`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ feed_id: "recorded-news",
           fetch_item_type: "article", url: "https://news.example/second" }),
@@ -232,13 +232,13 @@ async function runRecordingAt(root: string) {
       for (const file of earlierDiscovery.files) await rm(join(stateRoot, file.path));
       await compact("discovered-articles", DiscoveredArticleRowContract,
         [{ ...discovery, first_seen_at: `${prior}T11:00:00Z` }], prior, "daily");
-      const parsedResponse = await freshApp.request(`${PLANNER_API_PREFIX}/parse`, {
+      const parsedResponse = await freshApp.request(`${PLANNER_API_PREFIX}${PLANNER_API_PATHS.parse}`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ links: [operationLink(document)] }),
       });
       assert.equal(parsedResponse.status, 200, await parsedResponse.clone().text());
       const standaloneParsed = ParseResponseSchema.parse(await parsedResponse.json());
-      const choice = await freshApp.request(`${PLANNER_API_PREFIX}/select-articles`, {
+      const choice = await freshApp.request(`${PLANNER_API_PREFIX}${PLANNER_API_PATHS.selectArticles}`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ links: [operationLink(standaloneParsed)] }),
       });

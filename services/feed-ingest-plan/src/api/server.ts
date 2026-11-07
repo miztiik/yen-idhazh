@@ -88,7 +88,7 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity
   app.notFound(c => c.json({ code: "NOT_FOUND", issues: [{ field: "route", message: "Unknown API route" }] }, 404));
   app.onError((error, c) => {
     const failure = describePlanError(error, inputs.root, {
-      operation: plannerFailureOperation(c.req.path.replace(`${apiPrefix}/`, "")),
+      operation: plannerFailureOperation(c.req.path.slice(apiPrefix.length)),
       execution: { ...failureExecution(), spanId: null, traceId: readTraceContext({
         traceparent: c.req.header("traceparent"), tracestate: c.req.header("tracestate"),
       })?.traceId ?? null }, limits: inputs.settings.diagnostics.failure,

@@ -1,7 +1,7 @@
 /** Execute one run through validated stage requests and retain honest failure output. */
 import { z } from "zod";
 import type { FeedIngestEvent, OperationLink, OperationMetadata, PlanApiTiming, PlanRunRow, PlannerArticleEvidence, PlannerFailure, PlannerHealthOutcome, SelectedArticleRow } from "@idhazh/common-contracts";
-import { createRootContext, PLANNER_API_PREFIX, PlannerHealthOutcomeSchema, PlannerRunResponseSchema, writeTraceContext } from "@idhazh/common-contracts";
+import { createRootContext, PLANNER_API_PATHS, PLANNER_API_PREFIX, PlannerHealthOutcomeSchema, PlannerRunResponseSchema, writeTraceContext } from "@idhazh/common-contracts";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { harvestFeeds } from "./harvest-feeds/harvest-pool";
 import { workPool } from "./harvest-feeds/harvest-pool";
@@ -104,7 +104,7 @@ async function runPlanStages(
       traceId, spanId: null, run_id: context.run_id, attempt: context.writer.attempt, git_sha: context.writer.git_sha,
     }, limits: inputs.settings.diagnostics.failure };
     try {
-      const response = await fetch(new Request(new URL(`${PLANNER_API_PREFIX}/${path}`, runtime.stage_origin), {
+      const response = await fetch(new Request(new URL(`${PLANNER_API_PREFIX}${path}`, runtime.stage_origin), {
         method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(operationMetadata(context)) },
         body: JSON.stringify(body),
         ...(runtime.signal === undefined || allowAborted ? {} : { signal: runtime.signal }),
@@ -124,7 +124,7 @@ async function runPlanStages(
     let begin: z.infer<typeof CollectionResponseSchema> | undefined;
     let startupFailure: PlanError | undefined;
     try {
-      begin = await call("collections", { request: raw }, CollectionResponseSchema);
+      begin = await call(PLANNER_API_PATHS.startCollection, { request: raw }, CollectionResponseSchema);
       if (begin.traceId !== traceId || begin.context.run_id !== context.run_id
         || begin.context.writer.attempt !== context.writer.attempt) {
         throw new PlanError("ARTIFACT_INVALID", "Collection startup differs from its captured execution");
@@ -138,7 +138,7 @@ async function runPlanStages(
         startupError = new AggregateError([error, preparationError], "Collection startup request and preparation failed");
       }
       try {
-        existing = await call("collections/exists", { traceId }, CollectionExistsResponseSchema, true);
+        existing = await call(PLANNER_API_PATHS.checkCollection, { traceId }, CollectionExistsResponseSchema, true);
         if (existing.traceId !== traceId) throw new PlanError("ARTIFACT_INVALID", "Collection lookup identity differs");
       } catch (lookupError) {
         startupError = new AggregateError([
@@ -210,7 +210,7 @@ async function runPlanStages(
         const parsed = await boundedDocuments(async () => {
           let fetched;
           try {
-            fetched = await call("fetch", {
+            fetched = await call(PLANNER_API_PATHS.fetch, {
               feed_id: feedId, fetch_item_type: "feed", traceId,
             }, FetchResponseSchema);
           } catch (error) {
@@ -221,7 +221,7 @@ async function runPlanStages(
           if (fetched.failure !== null) {
             return null;
           }
-          return parsePool(() => call("parse", {
+          return parsePool(() => call(PLANNER_API_PATHS.parse, {
             links: [operationLink(fetched)],
           }, ParseResponseSchema));
         });
@@ -236,7 +236,7 @@ async function runPlanStages(
           runtime.progress?.({ eventType: "ARTICLE_HARVEST_STARTED", feed_id: feedId, output_count: null });
           let article;
           try {
-            article = await call("fetch", {
+            article = await call(PLANNER_API_PATHS.fetch, {
               fetch_item_type: "article", links: [operationLink(parsed)], candidate_id: offer.candidate_id,
             }, FetchResponseSchema);
           } catch (error) {
@@ -250,7 +250,7 @@ async function runPlanStages(
             runtime.progress?.({ eventType: "ARTICLE_HARVEST_COMPLETED", feed_id: feedId, output_count: 0 });
             return;
           }
-          const parsedArticle = await parsePool(() => call("parse", {
+          const parsedArticle = await parsePool(() => call(PLANNER_API_PATHS.parse, {
             links: [operationLink(article)],
           }, ParseResponseSchema));
           runtime.progress?.({ eventType: "ARTICLE_HARVEST_COMPLETED", feed_id: feedId, output_count: parsedArticle.parsed_count });
@@ -265,7 +265,7 @@ async function runPlanStages(
       const outcomes = await Promise.allSettled(begin.feeds.map(feed => feedPool(() => processFeed(feed))));
       const failed = outcomes.find(outcome => outcome.status === "rejected");
       if (failed?.status === "rejected") throw failed.reason;
-      const collected = await call("collections/complete", { traceId }, CompletedCollectionSchema);
+      const collected = await call(PLANNER_API_PATHS.completeCollection, { traceId }, CompletedCollectionSchema);
       completedInput = operationLink(collected);
       collectionFinished = true;
       const collectionDuration = Math.round(performance.now() - collectionStarted);
@@ -273,22 +273,22 @@ async function runPlanStages(
       emit("fetch", "completed", { scope: "plan", duration_ms: collectionDuration });
       files.discovered_articles = collected.discovered_articles;
       files.rejected_articles = collected.rejected_articles;
-      const selectedResponse = await call("select-articles", { links: [operationLink(collected)] }, SelectionResponseSchema);
+      const selectedResponse = await call(PLANNER_API_PATHS.selectArticles, { links: [operationLink(collected)] }, SelectionResponseSchema);
       const selection = { ...selectedResponse, articles: selectedResponse.articles.map(restoreSelectedArticle) };
       selected = selection;
       selectionMetrics = summarizeSelectionMetrics(selection.articles,
         inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes);
       let output = operationLink(selected);
       if (inputs.harvest.config.partition.enabled) {
-        const partitionResponse = await call("partition-articles", {
+        const partitionResponse = await call(PLANNER_API_PATHS.partitionArticles, {
           links: [operationLink(selected)], strategy: request.partition_strategy, shards: request.shards,
         }, PartitionResponseSchema);
         partitioned = { ...partitionResponse, articles: partitionResponse.articles.map(restoreSelectedArticle) };
         output = operationLink(partitionResponse);
       }
       const outputs = await Promise.allSettled([
-        call("feed-health-state", { links: [output], action: "record" }, FeedHealthStateUpdateResponseSchema),
-        call("persist-selected-articles", { links: [output] }, PersistenceResponseSchema),
+        call(PLANNER_API_PATHS.updateFeedHealth, { links: [output], action: "record" }, FeedHealthStateUpdateResponseSchema),
+        call(PLANNER_API_PATHS.persistSelectedArticles, { links: [output] }, PersistenceResponseSchema),
       ]);
       if (outputs[0].status === "fulfilled" && outputs[0].value.files !== undefined) files.feed_health_state = outputs[0].value.files;
       if (outputs[1].status === "fulfilled") {
@@ -313,7 +313,7 @@ async function runPlanStages(
       let partial: OperationLink | undefined;
       let hasPartialWork = false;
       try {
-        const cancelled = await call("collections/cancel", { traceId }, CancelledCollectionSchema, true);
+        const cancelled = await call(PLANNER_API_PATHS.cancelCollection, { traceId }, CancelledCollectionSchema, true);
         files.rejected_articles ??= cancelled.rejected_articles;
         partial = operationLink(cancelled);
         hasPartialWork = cancelled.has_work;
@@ -324,7 +324,7 @@ async function runPlanStages(
       }
       if (partial !== undefined && hasPartialWork && files.feed_health_state === undefined) {
         try {
-          const health = await call("feed-health-state", { links: [partial], action: "record" },
+          const health = await call(PLANNER_API_PATHS.updateFeedHealth, { links: [partial], action: "record" },
             FeedHealthStateUpdateResponseSchema, true);
           if (health.files !== undefined) files.feed_health_state = health.files;
         } catch (error) {
@@ -340,7 +340,7 @@ async function runPlanStages(
       traceId, failure_code: failureCode, failure, collection_timing: collectionTiming,
     });
     let outcome: z.infer<typeof FinalizedCollectionSchema>;
-    try { outcome = await call("collections/finalize", finalization, FinalizedCollectionSchema, true); }
+    try { outcome = await call(PLANNER_API_PATHS.finalizeCollection, finalization, FinalizedCollectionSchema, true); }
     catch (error) {
       throw withPlannerFailure(failure === null ? error : new AggregateError([
         new PlanError(failureCode ?? "PLAN_FAILED", "Planner execution failed", null, { failure }), error,
@@ -374,7 +374,7 @@ async function runPlanStages(
     const reportInput = selected === undefined ? completedInput : operationLink(selected);
     if (reportInput !== undefined) {
       try {
-        health = PlannerHealthOutcomeSchema.parse(await call("feed-health-state", {
+        health = PlannerHealthOutcomeSchema.parse(await call(PLANNER_API_PATHS.updateFeedHealth, {
           links: [reportInput], action: "summarize",
         }, FeedHealthStateUpdateResponseSchema, true));
       } catch (error) {
@@ -394,7 +394,7 @@ async function runPlanStages(
     discardCollectionContext(inputs, context);
     if (owned && ownsPreparedCollection(inputs, context)) {
       try {
-        const released = await call("collections/release", {
+        const released = await call(PLANNER_API_PATHS.releaseCollection, {
           run_id: context.run_id, attempt: context.writer.attempt,
         }, ReleasedCollectionSchema, true);
         if (released.run_id !== context.run_id || released.attempt !== context.writer.attempt) {

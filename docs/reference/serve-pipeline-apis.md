@@ -76,6 +76,11 @@ The current planner prefix is `/api/2026-11-05`. Its
 [document and article identities](../architecture/sources/feed-operator-api.md#independent-fetch-and-parse-endpoints)
 and [combined response controls](../architecture/sources/feed-plan-runner.md#entry-points-and-controls)
 also apply on this shared listener.
+The [shared feed suffix declarations](../../packages/common-contracts/src/declare-feed-api-paths.ts)
+give planning `get-feed-planner-health` and delivery `get-data-delivery-health`
+distinct native checks beneath that prefix. The
+[routing reference](api-routing.md#current-planner-and-delivery-family)
+owns the complete operation list. Shared process health is not either native check.
 
 `GET /api/2026-11-05/get-api-health` returns the exact child's startup nonce, PID, configured port,
 group, enabled modules and enablement. The supervisor compares the private

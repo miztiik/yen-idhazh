@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import {
   ArticleFailureDiagnosticDetailsSchema, ArticleFailureDiagnosticSchema, createCandidateId, createRootContext, HarvestDiagnosticsSchema,
-  readTraceContext, PLANNER_API_PREFIX,
+  readTraceContext, PLANNER_API_PATHS, PLANNER_API_PREFIX,
 } from "@idhazh/common-contracts";
 import { PLANNER_EVENT_SOURCE } from "../src/declare-event-source";
 import { selectedArtifactPath, rawDocumentContentsFilename } from "../src/selected-artifact-path";
@@ -23,7 +23,7 @@ import { FetchResponseSchema } from "../src/api/document-response.schema";
 async function fetchFeed(f: Awaited<ReturnType<typeof recordedPlan>>) {
   const app = createPlanTestServer(f.inputs, f.runtime);
   try {
-    const response = await app.request(`${PLANNER_API_PREFIX}/fetch`, {
+    const response = await app.request(`${PLANNER_API_PREFIX}${PLANNER_API_PATHS.fetch}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
         feed_id: f.inputs.harvest.sources[0]!.id,
         fetch_item_type: "feed",
@@ -37,7 +37,7 @@ test("standalone document work logs failure addresses only and persistence logs 
   const f = await recordedPlan();
   const app = createPlanTestServer(f.inputs, f.runtime);
   async function post(operation: string, body: unknown) {
-    const response = await app.request(`${PLANNER_API_PREFIX}/${operation}`, {
+    const response = await app.request(`${PLANNER_API_PREFIX}${operation}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     });
     expect(response.status).toBe(200);
@@ -49,7 +49,7 @@ test("standalone document work logs failure addresses only and persistence logs 
         feed_id: "recorded-news",
         fetch_item_type: "article", url,
       };
-      const fetched = FetchResponseSchema.parse(await post("fetch", request));
+      const fetched = FetchResponseSchema.parse(await post(PLANNER_API_PATHS.fetch, request));
       if (fetched.fetch_item_type !== "article") throw new Error("Recorded article request returned a feed");
       const events = f.events.filter(event => readTraceContext({
         traceparent: event.traceparent, tracestate: event.tracestate,

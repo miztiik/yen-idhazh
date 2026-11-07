@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-07
 
 How do the API and CLI execute one real feed plan?
 Both compose the same units. The production Python news pipeline, digest
@@ -20,7 +20,7 @@ consumers. The local seven-day window is not the article-age limit.
 `listener.parser_concurrency` controls the shared feed XML and article HTML
 parser workers, not the number of feeds fetched.
 
-The standalone health route reports listener availability and enablement.
+`GET /api/2026-11-05/get-feed-planner-health` reports listener availability and enablement.
 The workflow child also reports its startup nonce, process ID and run identity.
 The service owns its API code and workflow adapters. GitHub workflow YAML
 calls `services/feed-ingest-plan/scripts/`; no native API depends on
@@ -45,7 +45,9 @@ one workflow step. Its address comes only from `config/hono-server.json`;
 standalone listener settings above do not select it.
 It verifies private-pipe readiness against the child's
 process ID, a fresh startup nonce, run, attempt, captured UTC clock and code
-revision, then checks that the HTTP health response matches. An occupied port,
+revision, then checks that both shared process health and the native planner health
+response match. Delivery uses its separate `get-data-delivery-health` operation.
+An occupied port,
 wrong identity, early child exit or expired readiness fails the step explicitly.
 The same child handles one complete planning request. That request captures
 the actual health report, then releases its finalized collection before
@@ -68,7 +70,7 @@ clock. No function, map, credential or article body crosses this pipe. Startup
 data is not a saved artifact and is never accepted by an HTTP route. Plain
 `--serve` does not acquire history or supply workflow controls. Each standalone
 execution follows the same file-capture rules as a collection.
-Workflow age overrides travel in that private policy, not as extra `/plan`
+Workflow age overrides travel in that private policy, not as extra `/plan-feed-ingestion`
 request fields. Each child receives its own policy without editing authored
 configuration.
 Selection and health recording use the bounded planning capture. The separate
@@ -84,7 +86,7 @@ killing only its owned child. Defaults allow 30 seconds for readiness, 10 second
 for drain and 5 seconds to confirm forced exit. The child also applies its own
 drain bound if its supervisor disappears. No process is detached, no process
 name is used for cleanup, and runner process tracking remains enabled.
-`POST /api/2026-11-05/plan` accepts optional numeric `article_limit` and `shards`,
+`POST /api/2026-11-05/plan-feed-ingestion` accepts optional numeric `article_limit` and `shards`,
 a configured `partition_strategy`, and the boolean `include_selected_urls`.
 Unknown fields, strings in numeric or boolean API fields, invalid counts and
 null controls fail before work. Blank limit and partition CLI values mean
@@ -124,7 +126,7 @@ assignment without bypassing article selection.
 
 ## Real composition and identity
 
-The router dispatches to execution modules. `/plan` calls the stage APIs over
+The router dispatches to execution modules. `/plan-feed-ingestion` calls the stage APIs over
 the trusted local listener using validated JSON requests and outcomes. HTTP
 is transport, not process isolation or an external message broker. If the
 collection-start response is ambiguous, the planner checks existence over HTTP.
@@ -307,7 +309,7 @@ safe addresses and bounded response headers. The flexible-field filter and
 its budget remain intact; they do not remove this typed evidence.
 The [diagnostic contract](feed-failure-diagnostics.md) owns its bounds.
 The document execution unit emits one started and one completed
-or failed event for each fetch or parse, both in `/plan` and standalone calls.
+or failed event for each fetch or parse, both in `/plan-feed-ingestion` and standalone calls.
 It names the actual operation and generic `document_id`, `feed_id` and
 `publisher_id`. `scope: document` identifies this work; `scope: plan` identifies
 aggregate orchestration, not a second fetch of that document. Worker callbacks

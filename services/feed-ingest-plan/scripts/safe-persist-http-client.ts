@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { CommitShaSchema, createRootContext, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
+import { CommitShaSchema, createRootContext, DELIVERY_API_PATHS, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
 import { PlanError } from "../src/api/plan-request";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { writeJsonLine } from "../src/logging/structured-logger";
@@ -45,7 +45,7 @@ export async function deliverWorkflowMetadataHttp(input: {
       ...(options.serverEntry === undefined ? {} : { serverEntry: options.serverEntry }),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
       request: async (origin, signal) => {
-        const response = await fetch(`${origin}${PLANNER_API_PREFIX}/safe-persist-data`, {
+        const response = await fetch(`${origin}${PLANNER_API_PREFIX}${DELIVERY_API_PATHS.persistData}`, {
           method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(context) },
           body: JSON.stringify(request), signal, timeout: false,
         });

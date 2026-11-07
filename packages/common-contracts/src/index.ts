@@ -1,5 +1,6 @@
 /** Which runtime contracts and explicit metadata helpers do native consumers share? */
 export * from "./version";
+export * from "./declare-feed-api-paths";
 export * from "./schemas/primitives";
 export * from "./schemas/source.schema";
 export * from "./schemas/candidate.schema";
