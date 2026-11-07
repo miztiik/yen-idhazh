@@ -26,10 +26,10 @@ from summary_evaluator.source_coverage.contracts.evaluation_result import (
 
 BIND_READER = """
 import { readEvaluationResponse, CoverageApiFailure, COVERAGE_FAILURE_STATUS }
-  from './.github/scripts/prepare-evaluation-request.ts';
+  from './tools/ai-pipeline-experiment/prepare-evaluation-request.ts';
 import { CoverageListenerSchema, CoverageApiSettingsSchema, CoverageDeploymentSettingsSchema,
   CoverageApiComponentSchema, CoverageLoggingSchema, resolveCoverageApiSettings }
-  from './.github/scripts/read-coverage-settings.ts';
+  from './tools/ai-pipeline-experiment/read-coverage-settings.ts';
 import ts from './packages/common-contracts/node_modules/typescript/lib/typescript.js';
 import { readFileSync } from 'node:fs';
 const input = await Bun.stdin.json();

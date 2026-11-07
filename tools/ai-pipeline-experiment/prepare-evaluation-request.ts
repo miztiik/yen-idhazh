@@ -4,7 +4,7 @@ import {
   readTraceContext,
   type OperationMetadata,
 } from "../../packages/common-contracts/src/index.ts";
-import type { SummaryStructuredOutput } from "./ai-pipeline.ts";
+import type { SummaryStructuredOutput } from "../../.github/scripts/ai-pipeline.ts";
 import {
   readEvaluationServerTelemetry,
   readQualityMetrics,

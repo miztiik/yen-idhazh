@@ -5,7 +5,7 @@ import {
   readCloudEvent,
   type CloudEvent,
 } from "../../packages/common-contracts/src/index.ts";
-import type { QualityEvaluationMetrics, SummaryStructuredOutput } from "./ai-pipeline.ts";
+import type { QualityEvaluationMetrics, SummaryStructuredOutput } from "../../.github/scripts/ai-pipeline.ts";
 
 export type PipelineEventData<T = unknown> = {
   result: T;

@@ -9,8 +9,9 @@ import {
   createRootContext,
   readTraceContext,
 } from "../../../packages/common-contracts/src/index.ts";
-import { AIEventPipeline, publishStepSummary } from "../ai-pipeline.ts";
-import { WORKFLOW_EVENT_SOURCE } from "../declare-workflow-event-source.ts";
+import {
+  AIEventPipeline, publishStepSummary, WORKFLOW_EVENT_SOURCE,
+} from "../../../.github/scripts/ai-pipeline.ts";
 import { readPipelineEvents, selectStructuredOutputs, type PipelineEvent } from "../read-pipeline-events.ts";
 import {
   CoverageApiFailure,
