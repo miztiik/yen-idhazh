@@ -1,5 +1,6 @@
 /** Route a validated operator request to the real planner composition. */
 import { Hono } from "hono";
+import { PLANNER_API_PATHS } from "@idhazh/common-contracts";
 import { PlanError, PlanRequestSchema } from "../plan-request";
 import { summarizePlan } from "../../run-feed-plan";
 import type { FeedPlanResult } from "../../run-feed-plan";
@@ -13,7 +14,7 @@ export function planRoute(
   execute: (request: PlanRequest, runtime: PlanRuntime) => Promise<FeedPlanResult>,
   runtime: () => PlanRuntime,
 ) {
-  return new Hono<{ Bindings: PlanningBindings }>().post("/plan", async c => {
+  return new Hono<{ Bindings: PlanningBindings }>().post(PLANNER_API_PATHS.plan, async c => {
     if (c.req.header("Idempotency-Key") !== undefined) {
       throw new PlanError("INVALID_REQUEST", "Idempotency-Key is unsupported; send a new live request", "Idempotency-Key");
     }

@@ -1,6 +1,6 @@
 /** Keep rejected offers out of HTTP work and assemble collection snapshots only at stage boundaries. */
 import { expect, test } from "bun:test";
-import { createRootContext, ParsedFeedBatchSchema, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
+import { createRootContext, ParsedFeedBatchSchema, PLANNER_API_PATHS, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
 import { stageStore } from "../src/api/stage-store";
 import { collectionForRun } from "../src/api/collection-operation";
 import { recordedPlan } from "./plan-recordings";
@@ -58,33 +58,33 @@ test("explicit health reads capture current collection work without allowing pre
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   const caller = createRootContext();
   const id = caller.traceId;
-  const post = (path: string, body: unknown) => app.request(`${PLANNER_API_PREFIX}/${path}`, {
+  const post = (path: string, body: unknown) => app.request(`${PLANNER_API_PREFIX}${path}`, {
     method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) }, body: JSON.stringify(body),
   });
   try {
-    expect((await post("collections", { request: {} })).status).toBe(200);
+    expect((await post(PLANNER_API_PATHS.startCollection, { request: {} })).status).toBe(200);
     const collection = getCollection(fixture.inputs, id);
-    const fetchedResponse = await post("fetch", {
+    const fetchedResponse = await post(PLANNER_API_PATHS.fetch, {
       traceId: id, feed_id: "recorded-news", fetch_item_type: "feed",
     });
     expect(fetchedResponse.status).toBe(200);
     const fetched = FetchResponseSchema.parse(await fetchedResponse.json());
-    const parseResponse = await post("parse", { links: [operationLink(fetched)] });
+    const parseResponse = await post(PLANNER_API_PATHS.parse, { links: [operationLink(fetched)] });
     expect(parseResponse.status).toBe(200);
     const parsed = ParseResponseSchema.parse(await parseResponse.json());
-    const healthResponse = await post("feed-health-state", { links: [operationLink(parsed)], action: "summarize" });
+    const healthResponse = await post(PLANNER_API_PATHS.updateFeedHealth, { links: [operationLink(parsed)], action: "summarize" });
     expect(healthResponse.status).toBe(200);
     const health = await healthResponse.json();
     expect(health.rows[0]).toMatchObject({ feed_requests: 1, article_requests: 0, items: 2, check_result: "valid-feed" });
     const captured = stageStore(fixture.inputs).read("parsed", parsed, ParsedFeedBatchSchema);
     expect(captured.offers).toHaveLength(2);
     expect(captured.input_complete).toBe(false);
-    expect((await post("select-articles", { links: [operationLink(captured)] })).status).toBe(409);
-    expect((await post("collections/cancel", { traceId: id })).status).toBe(200);
+    expect((await post(PLANNER_API_PATHS.selectArticles, { links: [operationLink(captured)] })).status).toBe(409);
+    expect((await post(PLANNER_API_PATHS.cancelCollection, { traceId: id })).status).toBe(200);
     expect(collection.signal.signal.aborted).toBe(true);
     expect(fixture.transport.requests).toHaveLength(1);
     expect(collection.state.work.rows().some(row => row.checked_at !== null)).toBe(true);
-    const outcome = FinalizedCollectionSchema.parse(await (await post("collections/finalize", {
+    const outcome = FinalizedCollectionSchema.parse(await (await post(PLANNER_API_PATHS.finalizeCollection, {
       traceId: id, failure_code: "PLANNER_EXECUTION_FAILED",
       collection_timing: { duration_ms: 1, status: "failed" },
     })).json());
@@ -104,26 +104,26 @@ test("cancellation drains owned requests and retains partial accounting without 
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   const caller = createRootContext();
   const id = caller.traceId;
-  const post = (path: string, body: unknown) => app.request(`${PLANNER_API_PREFIX}/${path}`, {
+  const post = (path: string, body: unknown) => app.request(`${PLANNER_API_PREFIX}${path}`, {
     method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) }, body: JSON.stringify(body),
   });
   let pending: Promise<Response> | undefined;
   let operationSettled = false;
   try {
-    expect((await post("collections", { request: {} })).status).toBe(200);
+    expect((await post(PLANNER_API_PATHS.startCollection, { request: {} })).status).toBe(200);
     const collection = getCollection(fixture.inputs, id);
-    const fetched = FetchResponseSchema.parse(await (await post("fetch", {
+    const fetched = FetchResponseSchema.parse(await (await post(PLANNER_API_PATHS.fetch, {
       traceId: id, feed_id: "recorded-news", fetch_item_type: "feed",
     })).json());
-    const parsed = ParseResponseSchema.parse(await (await post("parse", {
+    const parsed = ParseResponseSchema.parse(await (await post(PLANNER_API_PATHS.parse, {
       links: [operationLink(fetched)],
     })).json());
     if (parsed.fetch_item_type !== "feed") throw new Error("Expected a recorded feed offer");
-    pending = post("fetch", {
+    pending = post(PLANNER_API_PATHS.fetch, {
       fetch_item_type: "article", links: [operationLink(parsed)], candidate_id: parsed.offers[0]!.candidate_id,
     }).then(response => { operationSettled = true; return response; });
     await fetching;
-    const cancellation = await post("collections/cancel", { traceId: id });
+    const cancellation = await post(PLANNER_API_PATHS.cancelCollection, { traceId: id });
     expect(cancellation.status).toBe(200);
     expect(operationSettled).toBe(true);
     const cancelledCollection = CancelledCollectionSchema.parse(await cancellation.json());
@@ -141,8 +141,8 @@ test("cancellation drains owned requests and retains partial accounting without 
     expect(captured.input_complete).toBe(false);
     expect(captured.work_rows.some(row => (row.feed_requests ?? 0) > 0)).toBe(true);
     expect(fixture.transport.peak).toBeLessThanOrEqual(fixture.inputs.harvest.config.harvest.concurrency);
-    expect((await post("select-articles", { links: [operationLink(captured)] })).status).toBe(409);
-    const outcome = FinalizedCollectionSchema.parse(await (await post("collections/finalize", {
+    expect((await post(PLANNER_API_PATHS.selectArticles, { links: [operationLink(captured)] })).status).toBe(409);
+    const outcome = FinalizedCollectionSchema.parse(await (await post(PLANNER_API_PATHS.finalizeCollection, {
       traceId: id, failure_code: "PLANNER_EXECUTION_FAILED",
       collection_timing: { duration_ms: 3, status: "failed" },
     })).json());

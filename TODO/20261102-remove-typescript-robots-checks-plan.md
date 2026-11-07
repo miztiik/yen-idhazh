@@ -1,6 +1,6 @@
 # Remove robots checks from TypeScript ingestion
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-07
 
 **Level**: 5 - source request behavior and native API, diagnostic and ledger contracts.
 
@@ -47,16 +47,16 @@ Table D - TypeScript API impact
 | Id | Surface | Required result |
 | --- | --- | --- |
 | D1 | Dated HTTP API | In PR 2, set `PLANNER_API_PREFIX` from the protocol date in F1. Update active clients and readiness checks together. All route suffixes below use that prefix. No old-prefix alias. |
-| D2 | `POST /fetch` | No automatic robots request for a feed, article or redirect. Public response keys stay unchanged; the fetch-failure vocabulary loses the retired values in E3. Private fetched documents follow E2 and E4. |
-| D3 | `POST /parse` | Remains network-free and consumes the existing live fetch reference. Public response keys remain unchanged. Internal observations and diagnostics use the reduced contracts. |
-| D4 | `POST /plan` | Uses the same target-only fetch path. Public run-result keys remain unchanged; saved health/rejection output and the behavior of collection change. |
-| D5 | `POST /feed-health-state` | Both `summarize` and `record` return health rows and request reports without the fields in E5 and E6. Availability and reliability reuse required historical columns under F6. |
+| D2 | `POST /fetch-document` | No automatic robots request for a feed, article or redirect. Public response keys stay unchanged; the fetch-failure vocabulary loses the retired values in E3. Private fetched documents follow E2 and E4. |
+| D3 | `POST /parse-document` | Remains network-free and consumes the existing live fetch reference. Public response keys remain unchanged. Internal observations and diagnostics use the reduced contracts. |
+| D4 | `POST /plan-feed-ingestion` | Uses the same target-only fetch path. Public run-result keys remain unchanged; saved health/rejection output and the behavior of collection change. |
+| D5 | `POST /update-feed-health` | Both `summarize` and `record` return health rows and request reports without the fields in E5 and E6. Availability and reliability reuse required historical columns under F6. |
 | D6 | `POST /select-articles` | Returns the reduced request report. General earlier-failure, publication and content exclusions remain. Earlier robots-only failures cannot cause a TypeScript exclusion. Selected-article metadata is unchanged. |
 | D7 | `POST /partition-articles` | Public request, assignments and article metadata remain unchanged. Its private batch contains the updated health/report shapes. |
 | D8 | `POST /persist-selected-articles` | Receipt and selected-text artifact shapes remain unchanged. Rejected records use the reduced current schema and actual native file validation. |
-| D9 | `POST /collections`, `/collections/exists`, `/collections/complete`, `/collections/cancel`, `/collections/finalize`, `/collections/release` | Lifecycle controls and response keys remain unchanged. Work settlement, partial output and failure finalization use target-only attempts and revised records. |
-| D10 | `POST /safe-persist-data` | Delivery request and receipt shapes remain unchanged. Validate new output against current native contracts before delivery. No historical file modification is added. |
-| D11 | `GET /health` on planner and delivery listeners | Readiness payloads remain unchanged. Listener and supervisor use the same dated prefix from D1. |
+| D9 | `POST /start-feed-collection`, `/check-feed-collection`, `/complete-feed-collection`, `/cancel-feed-collection`, `/finalize-feed-collection`, `/release-feed-collection` | Lifecycle controls and response keys remain unchanged. Work settlement, partial output and failure finalization use target-only attempts and revised records. |
+| D10 | `POST /persist-data` | Delivery request and receipt shapes remain unchanged. Validate new output against current native contracts before delivery. No historical file modification is added. |
+| D11 | `GET /get-feed-planner-health` and `GET /get-data-delivery-health` on their respective listeners | Readiness payloads remain unchanged. Listener and supervisor use the same dated prefix from D1. Current names follow [the routing reference](../docs/reference/api-routing.md#current-planner-and-delivery-family). |
 | D12 | Source-fetch and harvest package APIs | Replace the `./robots-policy` export with `./fetch-source`. Export `createSourceFetcher` and `SourceFetcher` instead of `createPermittedFetcher` and `PermittedFetcher`. Keep `FetchResult` and attempt measurement types with their reduced fields. Expose pacing from its own `./request-pacing` module, not through the source fetcher. Update `harvestFeeds` and every direct caller; keep no forwarding export. |
 | D13 | `probeFeed`, `feedProbe`, probe CLI and machine reports | Shared-fetcher callers also stop robots work. Preserve feed validity, readability, paywall evidence, bounded sampling and body-free output. Update result/report versions and diagnostics; do not keep an independent robots path. |
 | D14 | `renderPlanMarkdown` and workflow summary adapter | Remove retired request columns, coverage categories and failure details. Preserve actual target status, partial coverage, terminal-failure grouping and the separate delivery receipt. |

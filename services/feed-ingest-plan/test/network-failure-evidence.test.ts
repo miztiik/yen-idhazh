@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ArticleFailureDiagnosticSchema, createRootContext, deriveUrlKey, RawDocumentFailureSchema, NetworkFailureDetailsSchema, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
+import { ArticleFailureDiagnosticSchema, createRootContext, deriveUrlKey, RawDocumentFailureSchema, NetworkFailureDetailsSchema, PLANNER_API_PATHS, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
 import { PLANNER_EVENT_SOURCE } from "../src/declare-event-source";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import { rawDocumentContentsFilename, rawDocumentContentsPath, ArtifactRootSchema } from "../src/selected-artifact-path";
@@ -37,7 +37,7 @@ test("article byte cutoffs retain the native lower bound, response bytes and pro
   };
   const app = createPlanTestServer(f.inputs, f.runtime);
   try {
-    const result = await app.request(`${PLANNER_API_PREFIX}/fetch`, {
+    const result = await app.request(`${PLANNER_API_PREFIX}${PLANNER_API_PATHS.fetch}`, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ fetch_item_type: "article", feed_id: "recorded-news", url: "https://news.example/second" }),
     });
@@ -67,19 +67,19 @@ test("actual parse failures write and package metadata under one validated gener
   const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   const caller = createRootContext();
   async function post(operation: string, body: unknown) {
-    const response = await app.request(`${PLANNER_API_PREFIX}/${operation}`, {
+    const response = await app.request(`${PLANNER_API_PREFIX}${operation}`, {
       method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) }, body: JSON.stringify(body),
     });
     expect(response.status).toBe(200);
     return response.json();
   }
   try {
-    const fetched = FetchResponseSchema.parse(await post("fetch", {
+    const fetched = FetchResponseSchema.parse(await post(PLANNER_API_PATHS.fetch, {
       feed_id: "recorded-news", fetch_item_type: "feed",
     }));
     const captured = stageStore(fixture.inputs).fetchedDocument(fetched)!;
     const artifact = captured.document;
-    const parsed = ParseResponseSchema.parse(await post("parse", { links: [operationLink(fetched)] }));
+    const parsed = ParseResponseSchema.parse(await post(PLANNER_API_PATHS.parse, { links: [operationLink(fetched)] }));
     expect(parsed.failure).toBe("malformed-feed");
     const canonicalUrl = `${artifact.canonical_url}?page=2`;
     const documentId = deriveUrlKey(canonicalUrl);

@@ -12,7 +12,7 @@ owns their listener and process lifetime, not native API construction.
 
 ## Independent fetch and parse endpoints
 
-`POST /api/2026-11-05/fetch` accepts an active configured `feed_id` and
+`POST /api/2026-11-05/fetch-document` accepts an active configured `feed_id` and
 `fetch_item_type` (`feed` or `article`). A feed request uses its configured
 URL. A direct article request also supplies its permitted operator URL.
 These requests may name their owning collection with `traceId`.
@@ -30,7 +30,7 @@ fetch remains a typed failure. Article fetch responses include `article_id`
 and the captured `candidate_id`. Feed responses include configured `feed_id`
 and `document_id`, with no article or candidate field.
 
-`POST /api/2026-11-05/parse` accepts
+`POST /api/2026-11-05/parse-document` accepts
 `links: [{ traceId, spanId }]`, naming exactly one completed fetch operation.
 It claims that live input and checks its expected kind, configuration,
 URL hash, byte limit and business ownership, then parses without any network call.
@@ -123,7 +123,7 @@ without adding names to HTTP responses or progress logs.
 ## Structured operation logs
 
 Standalone fetch, parse and persistence use the same structured publisher
-as `/plan`. Progress uses a shared event envelope with a fresh occurrence ID
+as `/plan-feed-ingestion`. Progress uses a shared event envelope with a fresh occurrence ID
 and application fields under `data`; reading a saved event preserves its
 original occurrence and operation. The planner selects its local protocol
 identity `/services/feed-ingest-plan` through `PlanInputs.event_source`;
@@ -258,14 +258,14 @@ Table A
 | --- | --- | --- |
 | A1 | `select-articles` | Accepts a complete global parsed result; returns its own operation metadata, metadata-only articles, grouped exclusions, request report and exact `selection_started_at_utc` and `evaluated_at` UTC timestamps. No fetch, model call or automatic health write. |
 | A2 | `partition-articles` | Accepts a selected result and optional configured strategy/count; returns its own operation metadata, assignments and estimated work without reranking. |
-| A3 | `feed-health-state` | Accepts a live document or stage reference and explicit `summarize` or `record` action, defaulting to record; returns its own operation metadata, saved and updated health calculations, partial evidence, request spend, `reliability.window_days` and actual receipts when saved. No availability state file or new addressable health result kind. |
+| A3 | `update-feed-health` | Accepts a live document or stage reference and explicit `summarize` or `record` action, defaulting to record; returns its own operation metadata, saved and updated health calculations, partial evidence, request spend, `reliability.window_days` and actual receipts when saved. No availability state file or new addressable health result kind. |
 | A4 | `persist-selected-articles` | Accepts a partitioned result, or a selected result when partitioning is disabled; writes selected and rejected metadata plus the selected text artifact, returning its own operation metadata, exact relative paths, `rejected_files` receipts even for zero-selected results, and a standalone run outcome where applicable. |
-| A5 | `collections` | Starts one collection per caller-preallocated execution trace with validated planning controls. Returns its actual operation metadata, captured UTC business context and configured feed IDs, not article text. |
-| A6 | `collections/complete` | Accepts `traceId`; refuses until every required feed and offered article has a terminal outcome. Drains owned work, saves discovery and harvested-rejection evidence and exposes a complete global parsed result under the actual completion operation. Its links name the contributing parses. Repeating completion reuses that completed result. |
-| A7 | `collections/cancel` | Accepts `traceId`; cancels and drains owned work and prevents selection. Returns harvested-rejection receipts and the actual cancellation reference for explicit partial-health recording. |
-| A8 | `collections/finalize` | Accepts `traceId`, measured collection timing and safe orchestration failure context after stage writes settle. Drains owned work and both private diagnostics, then returns state-based status, retained failure context and timing snapshot. |
-| A9 | `collections/release` | Accepts `run_id` and `attempt`; releases a finalized collection after dependent live reads finish. This does not erase written files. |
-| A10 | `collections/exists` | Accepts the preallocated `traceId`; reports whether that collection is held after an ambiguous startup response. Existence alone does not grant ownership. |
+| A5 | `start-feed-collection` | Starts one collection per caller-preallocated execution trace with validated planning controls. Returns its actual operation metadata, captured UTC business context and configured feed IDs, not article text. |
+| A6 | `complete-feed-collection` | Accepts `traceId`; refuses until every required feed and offered article has a terminal outcome. Drains owned work, saves discovery and harvested-rejection evidence and exposes a complete global parsed result under the actual completion operation. Its links name the contributing parses. Repeating completion reuses that completed result. |
+| A7 | `cancel-feed-collection` | Accepts `traceId`; cancels and drains owned work and prevents selection. Returns harvested-rejection receipts and the actual cancellation reference for explicit partial-health recording. |
+| A8 | `finalize-feed-collection` | Accepts `traceId`, measured collection timing and safe orchestration failure context after stage writes settle. Drains owned work and both private diagnostics, then returns state-based status, retained failure context and timing snapshot. |
+| A9 | `release-feed-collection` | Accepts `run_id` and `attempt`; releases a finalized collection after dependent live reads finish. This does not erase written files. |
+| A10 | `check-feed-collection` | Accepts the preallocated `traceId`; reports whether that collection is held after an ambiguous startup response. Existence alone does not grant ownership. |
 
 Orchestration consumes the validated selection and partition response metadata,
 not their text-bearing batches. Selection returns its saved timestamps without
@@ -273,7 +273,7 @@ creating new instants. Partition returns metadata with worker assignments,
 strategy, dispatch count and work estimates. The selected text stays private
 through these stages and reaches only its existing separate artifact writer.
 The [runner controls](feed-plan-runner.md#entry-points-and-controls) define the
-combined `/plan` request, selected identities and optional readable URLs in HTTP,
+combined `/plan-feed-ingestion` request, selected identities and optional readable URLs in HTTP,
 CLI and saved summaries. They do not add another selection or persistence path.
 
 Each finalized execution is immutable. A fresh result must not overwrite a
@@ -285,7 +285,7 @@ endpoint has no alias and returns ordinary HTTP 404.
 
 ## Safe-persist HTTP delivery
 
-`POST /api/2026-11-05/safe-persist-data` calls the existing verified metadata
+`POST /api/2026-11-05/persist-data` calls the existing verified metadata
 adapter and `safe_persist_data`, not another Git implementation. Its strict
 request contains `runNumber`, `attempt` and `paths`, the exact completed paths
 relative to the run's state directory. The response retains the existing
@@ -303,7 +303,8 @@ already closed its planner child. The delivery child needs no live planner batch
 or collection inputs; completed partial metadata remains deliverable after
 planner failure. It reuses the listener and supervision limits from
 `config/hono-server.json`,
-checks owned-child readiness through `/api/2026-11-05/get-api-health`, and closes and reaps that child
+checks owned-child readiness through `/api/2026-11-05/get-api-health` and the
+distinct native `/api/2026-11-05/get-data-delivery-health`, and closes and reaps that child
 after success, failure or cancellation. Cancellation known before finalization
 skips new Git delivery.
 
@@ -394,14 +395,15 @@ recorded fixtures. The exception does not permit live source fetching in tests.
 ## Request flow
 
 The diagram shows every stage HTTP call made by
-`POST /api/2026-11-05/plan` on its trusted local listener. Every stage call
+`POST /api/2026-11-05/plan-feed-ingestion` on its trusted local listener. Every stage call
 uses actual loopback HTTP; no in-process transport substitutes for it. Selection
 uses the run's captured calculations and actual completed work but does not
 write health. The
-`feed-health-state` request can summarize or record a held operation result.
+`update-feed-health` request can summarize or record a held operation result.
 Shared process readiness uses `/api/2026-11-05/get-api-health` in addition to
 the selected module's native identity checks. The workflow HTTP client checks
-the planner's `/api/2026-11-05/health`, then calls `/plan`. That one planning
+the planner's `/api/2026-11-05/get-feed-planner-health`, then calls
+`/plan-feed-ingestion`. That one planning
 request captures the actual health summary and releases its collection before
 replying. It uses the selected result when available, otherwise the completed
 global parsed result. Cancelled-only partial work is not a completed report
@@ -416,18 +418,18 @@ Startup controls pass only through the private process pipe, never HTTP paths.
 
 ```mermaid
 flowchart TD
-  OP["Operator"] --> PLAN["POST /plan"]
-  PLAN --> BEGIN["POST /collections<br/>one run identity, effective policy and cancellation"]
-  BEGIN --> FETCH_FEED["POST /fetch for each eligible feed"]
+  OP["Operator"] --> PLAN["POST /plan-feed-ingestion"]
+  PLAN --> BEGIN["POST /start-feed-collection<br/>one run identity, effective policy and cancellation"]
+  BEGIN --> FETCH_FEED["POST /fetch-document for each eligible feed"]
   CURRENT[("Captured health calculations<br/>supported endpoint eligibility")] --> FETCH_FEED
-  FETCH_FEED --> PARSE_FEED["POST /parse<br/>bounded XML worker"]
+  FETCH_FEED --> PARSE_FEED["POST /parse-document<br/>bounded XML worker"]
   PARSE_FEED --> BATCH["One run-owned collection batch<br/>feed provenance and terminal outcomes"]
-  BATCH --> FETCH_ARTICLE["POST /fetch for each admitted offer<br/>preflight rejections already settled"]
-  FETCH_ARTICLE --> PARSE_ARTICLE["POST /parse<br/>bounded HTML worker"]
+  BATCH --> FETCH_ARTICLE["POST /fetch-document for each admitted offer<br/>preflight rejections already settled"]
+  FETCH_ARTICLE --> PARSE_ARTICLE["POST /parse-document<br/>bounded HTML worker"]
   PARSE_ARTICLE --> BATCH
   FETCH_FEED -->|"Failure or eligibility skip"| BATCH
   FETCH_ARTICLE -->|"Fetch failure or exclusion"| BATCH
-  BATCH --> COMPLETE["POST /collections/complete<br/>all required work terminal"]
+  BATCH --> COMPLETE["POST /complete-feed-collection<br/>all required work terminal"]
   COMPLETE --> DISCOVERY[("discovered-articles<br/>earliest known sighting")]
   COMPLETE --> REJECTIONS[("Body-free harvested rejections")]
   COMPLETE --> SELECT["POST /select-articles<br/>global screening and selection"]
@@ -438,21 +440,21 @@ flowchart TD
   READY --> PERSIST["POST /persist-selected-articles"]
   PERSIST --> METADATA[("Body-free selected and rejected ledgers")]
   PERSIST --> TEXT["Separate selected full-text JSON artifact<br/>summarization is a later consumer"]
-  READY --> HEALTH["POST /feed-health-state<br/>record actual work and current availability"]
+  READY --> HEALTH["POST /update-feed-health<br/>record actual work and current availability"]
   HEALTH --> HEALTH_LEDGER[("feed-health-state")]
-  PERSIST --> FINAL["POST /collections/finalize<br/>settled status, failure cause and timings"]
+  PERSIST --> FINAL["POST /finalize-feed-collection<br/>settled status, failure cause and timings"]
   HEALTH --> FINAL
   FINAL --> RUNS[("plan-runs")]
-  PLAN -->|"Cancellation or incomplete work"| CANCEL["POST /collections/cancel<br/>no selection of partial input"]
+  PLAN -->|"Cancellation or incomplete work"| CANCEL["POST /cancel-feed-collection<br/>no selection of partial input"]
   CANCEL --> REJECTIONS
   CANCEL -->|"Completed feed work"| HEALTH
   CANCEL --> FINAL
-  RUNS --> SUMMARY["POST /feed-health-state<br/>capture report or its failure while input is retained"]
-  SUMMARY --> RELEASE["POST /collections/release<br/>also attempted after failure or cancellation"]
-  RELEASE --> RESULT["Complete /plan response<br/>planning facts, health outcome and request failure"]
+  RUNS --> SUMMARY["POST /update-feed-health<br/>capture report or its failure while input is retained"]
+  SUMMARY --> RELEASE["POST /release-feed-collection<br/>also attempted after failure or cancellation"]
+  RELEASE --> RESULT["Complete /plan-feed-ingestion response<br/>planning facts, health outcome and request failure"]
 ```
 
-`/collections/finalize` does not release the collection. Cancellation first
+`/finalize-feed-collection` does not release the collection. Cancellation first
 aborts and drains every owned document request before it snapshots rejection
 and health evidence. Raw-document diagnostics also finish before final status
 and timings are returned. The status is `completed` without a failure cause;
@@ -478,10 +480,17 @@ Parsing retains earliest first-sighting facts in `discovered-articles`.
 Selection uses the discovery evidence in the parsed batch and reads current
 feed, publication and settled item-health evidence. The
 [ledger reference](../../reference/feed-planner-ledgers.md) defines each saved
-ledger. A completed `/plan` run writes the same ledger and artifact families;
+ledger. A completed `/plan-feed-ingestion` run writes the same ledger and artifact families;
 a partial run records only the work it finished.
 
 ## Design rationale
+
+HTTP suffixes are shared declarations, not saved operation identities.
+The [routing reference](../../reference/api-routing.md#current-planner-and-delivery-family)
+owns their exact names. Failure classification and internal requests use
+those same declarations, so renaming a route does not reclassify failed work.
+`persist-data` retains `safe_persist_data` and its existing atomic delivery;
+the `feed-health-state` ledger and serialized failure operations stay unchanged.
 
 Server-owned offer references preserve a complete public feed-to-article
 flow without granting fetched prose authority over paths or later requests.

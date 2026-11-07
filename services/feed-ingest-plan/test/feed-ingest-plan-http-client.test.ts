@@ -7,7 +7,7 @@ import { requestPlannerHttp } from "../scripts/feed-ingest-plan-http-client";
 import { recordedPlan } from "./plan-recordings";
 import { collectionForRun } from "../src/api/collection-operation";
 import {
-  PLANNER_API_PREFIX, PlanRunRowContract, PlannerHealthOutcomeSchema, PlannerRunResponseSchema, PlannerSavedResponseSchema,
+  PLANNER_API_PATHS, PLANNER_API_PREFIX, PlanRunRowContract, PlannerHealthOutcomeSchema, PlannerRunResponseSchema, PlannerSavedResponseSchema,
 } from "@idhazh/common-contracts";
 import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-state.schema";
 import { readPlannerParquet } from "@idhazh/ledger-file-writer";
@@ -27,7 +27,7 @@ test("a disabled listener fails before planning and remains under its caller's c
       .rejects.toThrow("Planner listener is not enabled and responsive");
     expect(fixture.transport.requests).toHaveLength(0);
     expect(await Bun.file(join(directory, "response.json")).exists()).toBe(false);
-    expect((await fetch(`${base}/health`)).status).toBe(200);
+    expect((await fetch(`${base}${PLANNER_API_PATHS.health}`)).status).toBe(200);
   } finally { await server.stop(true); await fixture.close(); }
 });
 
@@ -45,7 +45,7 @@ test("the complete HTTP result contains its report and releases work before clie
       calls.push({ path: new URL(request.url).pathname, body });
       const response = await app.fetch(request, { beginPlanning: () => server.timeout(request, 0),
         stage_origin: `http://127.0.0.1:${server.port}` });
-      if (new URL(request.url).pathname.endsWith("/plan")) callsAtPlanReply = calls.length;
+      if (new URL(request.url).pathname.endsWith(PLANNER_API_PATHS.plan)) callsAtPlanReply = calls.length;
       return response;
     },
   });
@@ -68,9 +68,9 @@ test("the complete HTTP result contains its report and releases work before clie
       expect(row).not.toHaveProperty("permission");
       expect(row).not.toHaveProperty("robots_requests");
     }
-    const summary = calls.findIndex(call => call.path.endsWith("/feed-health-state")
+    const summary = calls.findIndex(call => call.path.endsWith(PLANNER_API_PATHS.updateFeedHealth)
       && typeof call.body === "object" && call.body !== null && "action" in call.body && call.body.action === "summarize");
-    const release = calls.findIndex(call => call.path.endsWith("/collections/release"));
+    const release = calls.findIndex(call => call.path.endsWith(PLANNER_API_PATHS.releaseCollection));
     expect(summary).toBeGreaterThanOrEqual(0);
     expect(release).toBeGreaterThan(summary);
     expect(calls.length).toBe(callsAtPlanReply!);
@@ -99,7 +99,7 @@ test("real report, recording and lost-release-response failures retain independe
         const path = new URL(request.url).pathname;
         const body = await request.clone().json();
         const previous = fixture.runtime.observation_clock;
-        const summary = path.endsWith("/feed-health-state") && body.action === "summarize";
+        const summary = path.endsWith(PLANNER_API_PATHS.updateFeedHealth) && body.action === "summarize";
         if (summary) {
           order.push("report");
           if (mode === "report-and-release") fixture.runtime.observation_clock = () => new Date(Number.NaN);
@@ -110,10 +110,10 @@ test("real report, recording and lost-release-response failures retain independe
           if (previous === undefined) delete fixture.runtime.observation_clock;
           else fixture.runtime.observation_clock = previous;
         }
-        if (response.ok && path.endsWith("/persist-selected-articles")) {
+        if (response.ok && path.endsWith(PLANNER_API_PATHS.persistSelectedArticles)) {
           persisted = PersistenceResponseSchema.parse(await response.clone().json());
         }
-        if (path.endsWith("/collections/release")) {
+        if (path.endsWith(PLANNER_API_PATHS.releaseCollection)) {
           expect(response.status).toBe(200);
           order.push("release");
           stopping = server.stop(true);
@@ -187,7 +187,7 @@ test("local report-file and verification failures retain the complete saved outc
       hostname: "127.0.0.1", port: 0, idleTimeout: 0,
       async fetch(request, server) {
         const response = await app.fetch(request, { stage_origin: `http://127.0.0.1:${server.port}` });
-        if (response.ok && new URL(request.url).pathname.endsWith("/plan") && mode === "verification") {
+        if (response.ok && new URL(request.url).pathname.endsWith(PLANNER_API_PATHS.plan) && mode === "verification") {
           const result = PlannerRunResponseSchema.parse(await response.clone().json());
           await rm(join(fixture.inputs.root, result.selected_articles_artifact!));
         }

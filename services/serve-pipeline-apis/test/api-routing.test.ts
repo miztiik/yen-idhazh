@@ -1,4 +1,4 @@
-/** Do the declared host paths dispatch native payloads through shared hosting without aliases? */
+/** Do declared native paths dispatch their own payloads through shared hosting without aliases? */
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,11 @@ import {
   CACHE_LATENCY_PATH, createSampleHandler, SAMPLE_PATH, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH,
 } from "../../host-probes/src/api/server";
 import { HostSampleSchema } from "../../host-probes/src/probe/sample-host";
+import { DELIVERY_API_PATHS, PLANNER_API_PATHS, PLANNER_API_PREFIX, createRootContext } from "@idhazh/common-contracts";
+import { createFeedApiApp } from "../../feed-ingest-plan/scripts/create-feed-api-app";
+import { recordedPlan } from "../../feed-ingest-plan/test/plan-recordings";
+import { PlannerReadySchema } from "../../feed-ingest-plan/src/config/planner-startup";
+import { SafePersistHttpReadySchema } from "../../feed-ingest-plan/scripts/feed-ingest-plan-delivery-result";
 
 test("exported host and shared paths use the fixed HTTP protocol date", () => {
   expect({
@@ -27,6 +32,66 @@ test("exported host and shared paths use the fixed HTTP protocol date", () => {
     CACHE_LATENCY_PATH: "/api/2026-11-05/measure-cache-latency",
     API_HEALTH_PATH: "/api/2026-11-05/get-api-health",
   });
+});
+
+test("shared planning and delivery keep distinct native health and refuse every retired feed route", async () => {
+  const recorded = await recordedPlan();
+  const host = await fixture();
+  const config = await loadConfig();
+  host.settings.observability.host_fingerprint = false;
+  const runtime = { ...createRootContext(), git_sha: recorded.runtime.git_sha, run_number: "700",
+    attempt: 1, captured_at: "2026-10-21T23:59:59Z" };
+  const identity = ApiReadySchema.parse({
+    event: "typescript_api_ready", nonce: crypto.randomUUID(), pid: process.pid, port: recorded.inputs.settings.listener.port,
+    group: "planning", modules: ["planning", "machine"], enabled: true,
+  });
+  const plannerIdentity = PlannerReadySchema.parse({
+    event: "planner_ready", nonce: identity.nonce, pid: identity.pid, port: identity.port, runtime,
+  });
+  const deliveryIdentity = SafePersistHttpReadySchema.parse({
+    event: "safe_persist_ready", nonce: identity.nonce, pid: identity.pid, port: identity.port,
+  });
+  const planning = createFeedApiApp({
+    identity, planner: { inputs: recorded.inputs, runtime: recorded.runtime, identity: plannerIdentity },
+    machine: {
+      fingerprint: { config: host.config, settings: host.settings, options: { outputRoot: host.directory } },
+      probes: { config, context: { platform: "unsupported" } },
+    },
+  });
+  const delivery = createFeedApiApp({
+    identity: ApiReadySchema.parse({ ...identity, group: "delivery", modules: ["delivery"] }),
+    delivery: { root: recorded.directory, directory: recorded.directory, gitSha: recorded.runtime.git_sha,
+      identity: deliveryIdentity, maxBodyBytes: recorded.inputs.settings.listener.max_body_bytes,
+      signal: new AbortController().signal },
+  });
+  const request = (suffix: string, method: string) => new Request(`http://127.0.0.1${PLANNER_API_PREFIX}${suffix}`, {
+    method, ...(method === "GET" ? {} : { body: "{}" }),
+  });
+  try {
+    const plannerHealth = await planning.fetch(request(PLANNER_API_PATHS.health, "GET"));
+    expect(plannerHealth.status).toBe(200);
+    expect(await plannerHealth.json()).toEqual({ status: "available", planner_enabled: true, identity: plannerIdentity });
+    const deliveryHealth = await delivery.fetch(request(DELIVERY_API_PATHS.health, "GET"));
+    expect(deliveryHealth.status).toBe(200);
+    expect(await deliveryHealth.json()).toEqual({ identity: deliveryIdentity });
+    expect((await planning.fetch(request(DELIVERY_API_PATHS.health, "GET"))).status).toBe(404);
+    expect((await delivery.fetch(request(PLANNER_API_PATHS.health, "GET"))).status).toBe(404);
+    for (const suffix of [
+      "/health", "/plan", "/fetch", "/parse", "/collections", "/collections/exists", "/collections/complete",
+      "/collections/cancel", "/collections/finalize", "/collections/release", "/feed-health-state", "/safe-persist-data",
+    ]) {
+      for (const app of [planning, delivery]) for (const method of ["GET", "POST"]) {
+        const response = await app.fetch(request(suffix, method));
+        expect(response.status, `${method} ${suffix}`).toBe(404);
+        expect(response.headers.get("Location")).toBeNull();
+      }
+    }
+    expect(recorded.transport.requests).toEqual([]);
+  } finally {
+    await Promise.all([planning.close(), delivery.close()]);
+    await recorded.close();
+    await host.cleanup();
+  }
 });
 
 test("shared dispatch preserves native disabled payloads, uncached identity and method refusals", async () => {

@@ -10,7 +10,7 @@ import { collectWorkflowFiles } from "../scripts/feed-ingest-plan-current-files"
 import { metadataRegistrations } from "./host-recordings";
 import { source } from "./harvest-recordings";
 import { writePlannerOutputRecording } from "./planner-output-recordings";
-import { PLANNER_API_PREFIX, PlannerFailureSchema } from "@idhazh/common-contracts";
+import { PLANNER_API_PATHS, PLANNER_API_PREFIX, PlannerFailureSchema } from "@idhazh/common-contracts";
 import { readMachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { writeWorkflowReport } from "../scripts/feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
@@ -114,7 +114,7 @@ test("cancellation during real recorded feed work reaps the child and releases i
       serverEntry: fixture.serverEntry, signal: cancellation.signal,
     });
     void pending.catch(() => {});
-    const health = `http://127.0.0.1:${fixture.inputs.settings.listener.port}${PLANNER_API_PREFIX}/health`;
+    const health = `http://127.0.0.1:${fixture.inputs.settings.listener.port}${PLANNER_API_PREFIX}${PLANNER_API_PATHS.health}`;
     const deadline = AbortSignal.timeout(server.supervision.readiness_timeout_ms);
     let identity: ReturnType<typeof PlannerReadySchema.parse> | undefined;
     while (!identity) {

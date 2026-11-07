@@ -1,6 +1,6 @@
 # Agent Notes - Shell and Tools
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-11-07
 
 Checks before trusting command output or an editor operation. Keep instructions portable; omit machine configuration and session transcripts.
 
@@ -33,6 +33,17 @@ Checks before trusting command output or an editor operation. Keep instructions 
   ```powershell
   python -c "import sys;p=sys.argv[1];b=open(p,'rb').read();print(b.count(b'\r\n'));open(p,'wb').write(b.replace(b'\r\n',b'\n'))" <path>
   ```
+
+## Bun local file dependencies
+
+**A current source export can read as missing from its installed file dependency.**
+Bun 1.3.13 on Windows can retain copied package files: an edited index is visible
+but a new exported file is absent. Refresh with the frozen install's `--force
+--linker=isolated`; do not change source types or lockfiles to match the stale copy.
+A source-binding oracle also checks the resolved path, not only matching bytes.
+If the install still resolves a copied package, bind only the confirmed local
+junction to the manifest's exact `file:` target and verify `realpath` again.
+Never remove its target, edit package sources, or change shared package settings.
 
 ## Nested subagents
 

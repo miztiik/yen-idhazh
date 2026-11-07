@@ -1,6 +1,6 @@
 /** Run real recorded article work and expose its native stderr and saved response to the parent test. */
 import { z } from "zod";
-import { PLANNER_API_PREFIX, PlannerSavedResponseSchema } from "@idhazh/common-contracts";
+import { PLANNER_API_PATHS, PLANNER_API_PREFIX, PlannerSavedResponseSchema } from "@idhazh/common-contracts";
 import { join } from "node:path";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
@@ -31,7 +31,7 @@ recorded.transport.recordings.responses[feed.url] = [{
 for (const entry of cases) recorded.transport.recordings.responses[entry.url] = entry.responses;
 const app = createPlanTestServer(recorded.inputs, recorded.runtime);
 try {
-  const result = await app.request(`${PLANNER_API_PREFIX}/plan`, {
+  const result = await app.request(`${PLANNER_API_PREFIX}${PLANNER_API_PATHS.plan}`, {
     method: "POST", headers: { "content-type": "application/json" }, body: "{}",
   });
   if (result.status !== 200) throw new Error("Recorded article run did not return its native successful HTTP result");

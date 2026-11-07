@@ -1,6 +1,6 @@
 /** Does the owned feed listener also identify its captured planner runtime or delivery controls? */
 import { z } from "zod";
-import { PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
+import { DELIVERY_API_PATHS, PLANNER_API_PATHS, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
 import { readApiReadiness } from "@idhazh/serve-pipeline-apis/readiness";
 import { PlanError } from "../src/api/plan-request";
 import { PlannerReadySchema } from "../src/config/planner-startup";
@@ -20,7 +20,8 @@ export async function readFeedApiReadiness(input: {
     ...input, expected: readFeedApiIdentity(startup, pid), server: startup.server, context: startup.run.context,
   });
   const mismatch = () => input.failure.create(`${kind}_READY_IDENTITY`, "Readiness does not match the owned child and captured module controls");
-  const response = await fetch(`${origin}${PLANNER_API_PREFIX}/health`, {
+  const healthPath = startup.group === "planning" ? PLANNER_API_PATHS.health : DELIVERY_API_PATHS.health;
+  const response = await fetch(`${origin}${PLANNER_API_PREFIX}${healthPath}`, {
     signal, headers: writeTraceContext(startup.run.context), redirect: "error",
   });
   if (startup.group === "planning") {

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { ArticleFailureDiagnosticSchema, CandidateIdSchema, ParsedFeedBatchSchema, PLANNER_API_PREFIX, RawDocumentFailureSchema, RejectedArticleRowContract, RejectedArticleRowSchema, SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
+import { ArticleFailureDiagnosticSchema, CandidateIdSchema, ParsedFeedBatchSchema, PLANNER_API_PATHS, PLANNER_API_PREFIX, RawDocumentFailureSchema, RejectedArticleRowContract, RejectedArticleRowSchema, SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { recordedPlan } from "./plan-recordings";
 import { createPlanTestServer } from "./plan-test-server";
@@ -49,7 +49,7 @@ async function capture(recorded: Awaited<ReturnType<typeof recordedPlan>>, urls:
     for (const url of urls) {
       const request = { feed_id: "recorded-news",
         fetch_item_type: "article", url };
-      const response = await app.request(`${PLANNER_API_PREFIX}/fetch`, {
+      const response = await app.request(`${PLANNER_API_PREFIX}${PLANNER_API_PATHS.fetch}`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request),
       });
       expect(response.status).toBe(200);
@@ -63,7 +63,7 @@ async function capture(recorded: Awaited<ReturnType<typeof recordedPlan>>, urls:
         expect(held?.candidate_id).toBe(fetched.candidate_id);
         expect(held?.document.candidate_id).toBe(fetched.candidate_id);
         expect(held?.document.attempt_observations.every(value => value.candidate_id === fetched.candidate_id)).toBe(true);
-        const parsed = await app.request(`${PLANNER_API_PREFIX}/parse`, {
+        const parsed = await app.request(`${PLANNER_API_PREFIX}${PLANNER_API_PATHS.parse}`, {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
             links: [operationLink(fetched)],
           }),

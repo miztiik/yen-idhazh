@@ -1,5 +1,5 @@
 /** Complete a bounded recorded collection through its public stages, without choosing or planning. */
-import { createRootContext, ParsedFeedBatchSchema, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
+import { createRootContext, ParsedFeedBatchSchema, PLANNER_API_PATHS, PLANNER_API_PREFIX, writeTraceContext } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../src/load-plan-inputs";
 import type { PlanRuntime } from "../src/run-feed-plan";
 import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-response.schema";
@@ -12,7 +12,7 @@ export async function collectRecordedFeeds(inputs: PlanInputs, runtime: PlanRunt
   const app = createPlanTestServer(inputs, runtime);
   const caller = createRootContext();
   async function post(operation: string, value: unknown) {
-    const response = await app.request(`${PLANNER_API_PREFIX}/${operation}`, {
+    const response = await app.request(`${PLANNER_API_PREFIX}${operation}`, {
       method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(caller) }, body: JSON.stringify(value),
     });
     const body: unknown = await response.json();
@@ -20,26 +20,26 @@ export async function collectRecordedFeeds(inputs: PlanInputs, runtime: PlanRunt
     return body;
   }
   try {
-    await post("collections", { request: {} });
+    await post(PLANNER_API_PATHS.startCollection, { request: {} });
     const collection = getCollection(inputs, caller.traceId);
     for (const feedId of collection.feeds.keys()) {
-      const fetched = FetchResponseSchema.parse(await post("fetch", {
+      const fetched = FetchResponseSchema.parse(await post(PLANNER_API_PATHS.fetch, {
         traceId: caller.traceId, feed_id: feedId, fetch_item_type: "feed",
       }));
-      const parsed = ParseResponseSchema.parse(await post("parse", {
+      const parsed = ParseResponseSchema.parse(await post(PLANNER_API_PATHS.parse, {
         links: [{ traceId: fetched.traceId, spanId: fetched.spanId }],
       }));
       if (parsed.fetch_item_type !== "feed") throw new Error("The recorded source must parse as a feed");
       for (const offer of parsed.offers) {
-        const article = FetchResponseSchema.parse(await post("fetch", {
+        const article = FetchResponseSchema.parse(await post(PLANNER_API_PATHS.fetch, {
           fetch_item_type: "article", links: [{ traceId: parsed.traceId, spanId: parsed.spanId }], candidate_id: offer.candidate_id,
         }));
-        if (article.body_sha256 !== null) await post("parse", {
+        if (article.body_sha256 !== null) await post(PLANNER_API_PATHS.parse, {
           links: [{ traceId: article.traceId, spanId: article.spanId }],
         });
       }
     }
-    const completion = CompletedCollectionSchema.parse(await post("collections/complete", { traceId: caller.traceId }));
+    const completion = CompletedCollectionSchema.parse(await post(PLANNER_API_PATHS.completeCollection, { traceId: caller.traceId }));
     return { collection, completion, batch: stageStore(inputs).read("parsed", completion, ParsedFeedBatchSchema) };
   } finally { await app.close(); }
 }
