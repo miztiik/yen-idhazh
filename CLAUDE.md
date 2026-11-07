@@ -45,13 +45,11 @@ This canonical standard applies to all agent responses, docs, pull requests, com
 Write plain English that a person outside this project understands on one read. Define unavoidable terms in the same sentence.
 
 Whenever you need human help, clarification, a decision or approval, use one message in this order, with no preamble:
-For decision explanations in ordinary chat, use the order below.
-For `ask_user`, use one short plain-text question and options in `choices`; no tables.
 
 1. **Situation.** What is true now.
 2. **Problem.** What is wrong or undecided, in one or two sentences.
 3. **Impact.** What it affects and the cost of leaving it unchanged.
-4. **Options.** Present every worthwhile option or solution, its benefit, cost and what it gives up.
+4. **Options.** Present every worthwhile option or solution in `choices`, its benefit, cost and what it gives up.
 5. **Recommendation.** Recommend one option per table. Mark its row `**Recommended**`. Close by naming each recommended row's id and giving its reason in one sentence.
 
 If a missing fact prevents a sound recommendation, identify it and recommend how to obtain it. Do not invent facts or add filler options.
