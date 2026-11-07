@@ -102,12 +102,12 @@ def test_owned_caller_arguments_are_accepted_by_the_actual_private_entrypoint() 
 @pytest.mark.skipif(
     sys.platform != "linux", reason="Actual owned API-process and start-pin proof runs on Linux"
 )
-@pytest.mark.parametrize("scorer", ["hhem", "unieval", "coverage"])
+@pytest.mark.parametrize("scorer", ["hhem", "unieval"])
 def test_restarting_one_api_preserves_its_sibling_api_worker_and_completed_result(
     scorer: ApiComponent, tmp_path: Path
 ) -> None:
     siblings: dict[ApiComponent, ApiComponent] = {
-        "hhem": "unieval", "unieval": "coverage", "coverage": "hhem"
+        "hhem": "unieval", "unieval": "hhem"
     }
     first_directory, sibling_directory = tmp_path / "first", tmp_path / "sibling"
     first, sibling = start_scorer(scorer, first_directory), start_scorer(
@@ -148,7 +148,7 @@ def test_restarting_one_api_preserves_its_sibling_api_worker_and_completed_resul
         retained_health = retained["health"]
         assert isinstance(retained_health, dict)
         assert retained_health["enabled_routes"] == [siblings[scorer]]
-        for name in ("hhem", "unieval", "coverage"):
+        for name in ("hhem", "unieval"):
             if name != siblings[scorer]:
                 observation = retained_health[name]
                 assert isinstance(observation, dict)

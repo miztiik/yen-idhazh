@@ -1,4 +1,4 @@
-/** How do inference and evaluation phases retain their real results and measurements? */
+/** How does inference retain its generated results and actual measurements? */
 import http from "node:http";
 import https from "node:https";
 import fs from "node:fs";
@@ -24,18 +24,8 @@ import {
   PipelineEventDataSchema,
   PipelineInputError,
   readPipelineEvents,
-  readCurrentEvaluationTelemetry,
-  selectStructuredOutputs,
   type PipelineEvent,
 } from "./read-pipeline-events.ts";
-import {
-  CoverageApiFailure,
-  prepareEvaluationRequest,
-  readEvaluationResponse,
-  type EvaluationRequest,
-} from "./prepare-evaluation-request.ts";
-import { readCoverageSettings } from "./read-coverage-settings.ts";
-import { readBoundedText } from "../../services/summary-generator/src/services/request-completion.service.js";
 import { WORKFLOW_EVENT_SOURCE } from "./declare-workflow-event-source.ts";
 
 // -------------------------------------------------------------
@@ -377,35 +367,6 @@ export interface CompressionAnalysis {
   explanation: string;
 }
 
-export interface SentenceGroundingDetail {
-  sentence_index: number;
-  text: string;
-  score: number;
-  matched_chunk: number;
-  supported: boolean;
-  source_sentence?: string;
-  reason?: string;
-}
-
-export interface UncoveredSectionDetail {
-  chunk_index: number;
-  chunk_total: number;
-  excerpt: string;
-  max_similarity_score: number;
-  reason: string;
-}
-
-export interface QualityEvaluationMetrics {
-  overall_consistency: number;
-  coherence: number;
-  fluency: number;
-  document_chunks_total: number;
-  document_chunks_covered: number;
-  chunk_coverage_percent: number;
-  sentence_breakdown: SentenceGroundingDetail[];
-  uncovered_sections?: UncoveredSectionDetail[];
-}
-
 export interface SummaryStructuredOutput {
   headline: string;
   analytic_synthesis: string;
@@ -428,7 +389,6 @@ export interface SummaryStructuredOutput {
   system_prompt: string;
   user_prompt: string;
   error_flag?: boolean;
-  quality_metrics?: QualityEvaluationMetrics;
 }
 
 // -------------------------------------------------------------
@@ -1146,29 +1106,6 @@ function postOpenAIChatCompletion(urlStr: string, payload: any, timeoutSeconds: 
     req.end();
   });
 }
-async function postPythonEvaluation(payload: EvaluationRequest) {
-  const selected = readCoverageSettings();
-  const encoded = JSON.stringify(payload);
-  if (Buffer.byteLength(encoded, "utf8") > selected.maxRequestBytes) {
-    throw new Error("EVALUATION_REQUEST_TOO_LARGE");
-  }
-  const signal = AbortSignal.timeout(selected.requestTimeoutMs);
-  const response = await fetch(selected.evaluateUrl, {
-    method: "POST",
-    body: encoded,
-    headers: { "Content-Type": "application/json" },
-    redirect: "manual",
-    signal,
-  });
-  const text = await readBoundedText(response.body, selected.maxResponseBytes, signal, "response");
-  let body: unknown;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    throw new Error("INVALID_EVALUATION_RESPONSE");
-  }
-  return { status: response.status, body };
-}
 
 // -------------------------------------------------------------
 // 10. AI EVENT PIPELINE ORCHESTRATOR
@@ -1538,7 +1475,6 @@ export class AIEventPipeline extends EventEmitter {
 // 11. STEP SUMMARY PUBLISHER (DE-DUPLICATED LIFECYCLE)
 // -------------------------------------------------------------
 export function publishStepSummary(
-  phase: "infer" | "eval",
   modelName: string,
   results: SummaryStructuredOutput[],
   events: PipelineEvent[],
@@ -1550,111 +1486,6 @@ export function publishStepSummary(
 
   if (!results || results.length === 0) {
     logStructured("WARN", "No results available to publish in GitHub Step Summary");
-    return;
-  }
-
-  // -------------------------------------------------------------
-  // PHASE 2: APPEND ONLY UNIEVAL AUDIT DATA
-  // -------------------------------------------------------------
-  if (phase === "eval") {
-    const evalLines: string[] = [
-      `# Source-coverage quality audit`,
-      ``,
-      `| Metric Target | Consistency Score | Sectional Coverage | Discourse Coherence | Syntax Fluency |`,
-      `| :--- | :---: | :---: | :---: | :---: |`,
-      ...results.map((res, idx) => {
-        const qm = res.quality_metrics;
-        return `| **#${idx + 1}: ${res.headline.slice(0, 30)}...** | **\`${qm?.overall_consistency ?? "N/A"}\`** | **\`${qm ? `${qm.chunk_coverage_percent}%` : "N/A"}\`** | \`${qm?.coherence ?? "N/A"}\` | \`${qm?.fluency ?? "N/A"}\` |`;
-      }),
-      ``,
-      `---`,
-      ``,
-    ];
-
-    results.forEach((res, idx) => {
-      const qm = res.quality_metrics;
-      if (!qm) {
-        evalLines.push(
-          `## ⚠️ Quality Evaluation Unavailable: *"${res.headline}"* (${idx + 1}/${results.length})`,
-          `> Evaluation failed: source coverage did not return complete metrics. Check the caller's safe failure event and evaluator diagnostics.`,
-          `Machine readings: uncollected for this evaluation phase.`,
-          ``,
-          `---`,
-          ``
-        );
-        return;
-      }
-
-      evalLines.push(
-        `## 🧪 Quality Breakdown: *"${res.headline}"* (${idx + 1}/${results.length})`,
-        `| Quality Dimension | Metric Score | Operational Rating | Evaluation Methodology |`,
-        `| :--- | :---: | :---: | :--- |`,
-        `| **Factual Consistency** | **\`${qm.overall_consistency}\`** | ${qm.overall_consistency >= 0.75 ? "🟢 Fully Supported" : "⚠️ Grounding Variance"} | Chunked BM25 + T5 NLI Entailment |`,
-        `| **Sectional Coverage** | **\`${qm.chunk_coverage_percent}%\`** | ${qm.chunk_coverage_percent >= 60 ? "🟢 High Coverage" : "⚠️ Partial Coverage"} | ${qm.document_chunks_covered}/${qm.document_chunks_total} document chunks represented |`,
-        `| **Discourse Coherence** | **\`${qm.coherence}\`** | ${qm.coherence >= 0.70 ? "🟢 Fluid" : "⚠️ Fragmented"} | Inter-sentence discourse flow |`,
-        `| **Fluency (Syntax)** | **\`${qm.fluency}\`** | ${qm.fluency >= 0.85 ? "🟢 Natural" : "⚠️ Mechanical"} | Grammatical syntax & readability |`,
-        ``
-      );
-
-      const measured = readCurrentEvaluationTelemetry(
-        events, res.source_audit.sourceIdentifier,
-      );
-      if (measured) {
-        evalLines.push(
-          `Historical evaluator measurements: elapsed ${measured.duration_ms} ms; system CPU ${measured.cpu_percent}%; process resident memory ${measured.server_vm_rss_mb} MB; process swap ${measured.server_vm_swap_mb} MB.`,
-          ``
-        );
-      } else {
-        evalLines.push(`Machine readings: uncollected for this evaluation phase.`, ``);
-      }
-
-      if (qm.uncovered_sections === undefined) {
-        evalLines.push(`Uncovered-section details were not recorded in this historical response.`, ``);
-      } else if (qm.uncovered_sections.length > 0) {
-        evalLines.push(
-          `### ⚠️ Uncovered Document Sections (${qm.uncovered_sections.length}/${qm.document_chunks_total} Chunks Omitted)`,
-          `> The following source sections have no supporting claims in the generated summary:`,
-          ``,
-          `| Missing Section | Section Topic / Lead Excerpt | Reason / Diagnostics |`,
-          `| :---: | :--- | :--- |`,
-          ...qm.uncovered_sections.map(
-            (u) =>
-              `| **Chunk ${u.chunk_index} of ${u.chunk_total}** | *"${u.excerpt.replace(/\|/g, "\\|")}"* | ⚠️ ${u.reason.replace(/\|/g, "\\|")} |`
-          ),
-          ``
-        );
-      } else {
-        evalLines.push(
-          `> ✅ **Full Document Grounding:** All ${qm.document_chunks_total}/${qm.document_chunks_total} document sections are represented in the analytic synthesis.`,
-          ``
-        );
-      }
-
-      const failedSentences = qm.sentence_breakdown.filter((s) => !s.supported);
-      if (failedSentences.length > 0) {
-        evalLines.push(
-          `### ❌ Unsupported Claims / Grounding Failures (${failedSentences.length}/${qm.sentence_breakdown.length} Sentences)`,
-          `> The following summary claims fell below the 0.50 factual consistency threshold against the retrieved evidence:`,
-          ``,
-          `| # | Summary Sentence (Generated Claim) | Matched Source Reference Passage | Consistency Score | Diagnostics |`,
-          `| :-: | :--- | :--- | :-: | :--- |`,
-          ...failedSentences.map(
-            (s) =>
-              `| **${s.sentence_index}** | "${s.text.replace(/\|/g, "\\|")}" | *"${(s.source_sentence || "[No direct counterpart found in source text]").replace(/\|/g, "\\|")}"* | **\`${s.score}\`** | ❌ ${s.reason || "Low entailment (< 0.50)"} |`
-          ),
-          ``
-        );
-      } else {
-        evalLines.push(
-          `> ✅ **100% Factually Grounded:** All ${qm.sentence_breakdown.length} summary sentences are verified and supported by source document evidence.`,
-          ``
-        );
-      }
-
-      evalLines.push(`---`, ``);
-    });
-
-    fs.appendFileSync(summaryPath, "\n\n" + evalLines.join("\n"), "utf8");
     return;
   }
 
@@ -1876,7 +1707,17 @@ export function publishStepSummary(
 // -------------------------------------------------------------
 // 12. MAIN RUNTIME
 // -------------------------------------------------------------
+export function resolvePipelinePhase(args: readonly string[]): "infer" {
+  const phase = (args.find(argument => argument.startsWith("--phase="))?.split("=")[1]
+    || "infer").toLowerCase();
+  if (phase !== "infer") {
+    throw new PipelineInputError(phase === "eval" ? "EVALUATION_RETIRED" : "INVALID_PIPELINE_PHASE");
+  }
+  return phase;
+}
+
 async function main() {
+  resolvePipelinePhase(process.argv);
   const modelRuntime = loadModelRuntime(process.env.CONFIG_ROOT);
   const { model, stream, chat_template_kwargs, ...inferenceParams } = modelRuntime.request;
   const runnerMetadata: RunnerMetadata = {
@@ -1890,162 +1731,8 @@ async function main() {
     requestedModelId: modelRuntime.file,
   };
 
-  const phase = (process.argv.find((a) => a.startsWith("--phase="))?.split("=")[1] || "infer").toLowerCase();
   const modelName = modelRuntime.request.model;
   const pipelineEventsPath = process.env.PIPELINE_EVENTS_PATH || "pipeline-events.jsonl";
-
-  // -------------------------------------------------------------
-  // PHASE 2: EVALUATION (SEQUENTIAL DISPATCH & TELEMETRY INGESTION)
-  // -------------------------------------------------------------
-  if (phase === "eval") {
-    logStructured("INFO", "Executing Phase 2: Sequential UniEval Quality Audit");
-    const pipeline = new AIEventPipeline(runnerMetadata, WORKFLOW_EVENT_SOURCE, pipelineEventsPath);
-    pipeline.loadPriorEvents();
-    const structuredEvents = selectStructuredOutputs(pipeline.getEventHistory());
-
-    if (structuredEvents.length === 0) {
-      logStructured("WARN", "No OUTPUT_STRUCTURED events discovered in pipeline events. Exiting.");
-      return;
-    }
-
-    pipeline.logEvent("QUALITY_EVALUATION_STARTED", { articleCount: structuredEvents.length });
-
-    let evalFailedCount = 0;
-    let upstreamSkippedCount = 0;
-    let evaluatedCount = 0;
-    const updatedOutputs: SummaryStructuredOutput[] = [];
-
-    // Dispatch sequentially to avoid HTTP backlog timeout
-    for (let idx = 0; idx < structuredEvents.length; idx++) {
-      const event = structuredEvents[idx];
-      const payload = event.data.result;
-      const output: SummaryStructuredOutput = { ...payload };
-      delete output.quality_metrics;
-      const { context, request } = prepareEvaluationRequest(event, pipeline.context);
-
-      logStructured("INFO", "Evaluating target", {
-        target: idx + 1,
-        total: structuredEvents.length,
-      });
-
-      // Upstream inference failure: skip gracefully without failing the evaluation phase
-      if (payload.error_flag) {
-        upstreamSkippedCount++;
-        logStructured("WARN", "Skipping quality evaluation on target that failed upstream inference", { target: idx + 1 });
-
-        pipeline.logEvent(
-          "QUALITY_EVALUATION_SKIPPED",
-          {
-            sourceIdentifier: output.source_audit?.sourceIdentifier,
-            sourceTitle: output.headline,
-            reason: "Target failed upstream Phase 1 LLM inference",
-          },
-          context
-        );
-
-        if (!output.host_fingerprint) output.host_fingerprint = getHostFingerprint();
-        if (!output.runner_metadata) output.runner_metadata = runnerMetadata;
-        updatedOutputs.push(output);
-        continue;
-      }
-
-      try {
-        const response = await postPythonEvaluation(request);
-        const data = readEvaluationResponse(response.body, response.status);
-
-        evaluatedCount++;
-        output.quality_metrics = data.metrics;
-
-        pipeline.logEvent(
-          "QUALITY_EVALUATION_COMPLETED",
-          {
-            sourceIdentifier: output.source_audit?.sourceIdentifier,
-            sourceTitle: output.headline,
-            metrics: data.metrics,
-          },
-          context
-        );
-
-        // Ingest the evaluation microservice hardware telemetry into the event stream
-        if (data.serverTelemetry) {
-          pipeline.logEvent(
-            "EVALUATION_SERVER_TELEMETRY",
-            {
-              sourceIdentifier: output.source_audit?.sourceIdentifier,
-              serverTelemetry: data.serverTelemetry,
-            },
-            context
-          );
-        }
-
-        pipeline.logEvent(
-          "OUTPUT_ENRICHED",
-          output,
-          context
-        );
-      } catch (error) {
-        evalFailedCount++;
-        const code = error instanceof CoverageApiFailure ? error.code : "EVALUATION_REQUEST_FAILED";
-        pipeline.logEvent(
-          "QUALITY_EVALUATION_FAILED",
-          {
-            sourceIdentifier: output.source_audit.sourceIdentifier,
-            sourceTitle: output.headline,
-            code,
-            httpStatus: error instanceof CoverageApiFailure ? error.httpStatus : null,
-          },
-          context
-        );
-        logStructured("ERROR", "Evaluation service request failed for target", {
-          target: idx + 1,
-          code,
-        });
-      }
-
-      if (!output.host_fingerprint) output.host_fingerprint = getHostFingerprint();
-      if (!output.runner_metadata) output.runner_metadata = runnerMetadata;
-      updatedOutputs.push(output);
-    }
-
-    pipeline.logEvent(
-      "QUALITY_EVALUATION_BATCH_COMPLETED",
-      {
-        totalTargets: structuredEvents.length,
-        evaluatedCount,
-        upstreamSkippedCount,
-        evalFailedCount,
-      }
-    );
-
-    const retainedFeedAudit = updatedOutputs.find((o) => o.source_audit?.feedAudit)?.source_audit?.feedAudit;
-    const activeInferenceParams = updatedOutputs[0]?.inference_params || inferenceParams;
-
-    publishStepSummary(
-      "eval",
-      modelName,
-      updatedOutputs,
-      pipeline.getEventHistory(),
-      activeInferenceParams,
-      retainedFeedAudit
-    );
-
-    // Fail only if the evaluation microservice itself crashed on a valid candidate
-    if (evalFailedCount > 0) {
-      logStructured("ERROR", `Quality evaluation phase encountered ${evalFailedCount} microservice failure(s)`, {
-        failedCount: evalFailedCount,
-        skippedCount: upstreamSkippedCount,
-        evaluatedCount,
-        total: updatedOutputs.length,
-      });
-      process.exit(1);
-    }
-
-    logStructured("INFO", "Quality evaluation phase completed successfully and step summary published.", {
-      evaluatedCount,
-      upstreamSkippedCount,
-    });
-    return;
-  }
 
   // -------------------------------------------------------------
   // PHASE 1: INGESTION & INFERENCE
@@ -2175,7 +1862,7 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
     results.push(result);
   }
 
-  publishStepSummary("infer", modelName, results, pipeline.getEventHistory(), inferenceParams, feedAudit);
+  publishStepSummary(modelName, results, pipeline.getEventHistory(), inferenceParams, feedAudit);
   logStructured("INFO", "Phase 1 inference executed successfully", {
     processedCount: results.length,
     eventsRecorded: pipeline.getEventHistory().length,
