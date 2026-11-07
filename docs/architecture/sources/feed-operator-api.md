@@ -12,7 +12,7 @@ owns their listener and process lifetime, not native API construction.
 
 ## Independent fetch and parse endpoints
 
-`POST /api/2026-11-05/fetch-document` accepts an active configured `feed_id` and
+`POST /api/2026-11-07/fetch-document` accepts an active configured `feed_id` and
 `fetch_item_type` (`feed` or `article`). A feed request uses its configured
 URL. A direct article request also supplies its permitted operator URL.
 These requests may name their owning collection with `traceId`.
@@ -29,8 +29,13 @@ contains a reference and body-free outcome, not fetched bytes. A failed
 fetch remains a typed failure. Article fetch responses include `article_id`
 and the captured `candidate_id`. Feed responses include configured `feed_id`
 and `document_id`, with no article or candidate field.
+Both responses include nullable `body_limit`. An oversized source retains
+`failure: "body-too-large"` and forwards its configured byte limit and observed
+cutoff evidence from the [source diagnostics](feed-failure-diagnostics.md).
+It has no retained body or body hash. Other outcomes carry null size evidence.
+The fetcher never substitutes article text; orchestration handles a failed fetch.
 
-`POST /api/2026-11-05/parse-document` accepts
+`POST /api/2026-11-07/parse-document` accepts
 `links: [{ traceId, spanId }]`, naming exactly one completed fetch operation.
 It claims that live input and checks its expected kind, configuration,
 URL hash, byte limit and business ownership, then parses without any network call.
@@ -48,6 +53,30 @@ parse by copied article ID, candidate ID or URL instead of its held-fetch link.
 Article parse responses include a body-free `warnings` array. The saved
 observation retains actual extraction warnings, quality measurements, fetch
 evidence and typed parse failures; successful parsing does not erase them.
+Article responses also include nullable `word_limit`, declared in
+`document-response.schema.ts`. With an extraction result it records
+`max_input_words`, `original_word_count`, `returned_word_count` and `truncated`.
+The returned count is the smaller of the original count and the ceiling;
+`truncated` is true only when the original count exceeds that ceiling.
+No extraction result means null evidence; an actual empty result records zero
+words. Feed parse responses have no word-limit field.
+
+`harvest.max_input_words` in `config/feed-ingest-plan.json` controls API article
+preparation. Its default is 20000 words; authored configuration must include it.
+After full extraction and quality measurement, the API cuts oversized text at
+the final allowed word before entity and candidate capture. Retained paragraph
+and Markdown whitespace is unchanged, and no marker is appended. Candidate
+text and word count describe that prefix. Quality and token measurements remain
+the original extraction-stage readings, not claims about this word cut.
+The [extraction quality contract](extraction-quality.md) owns those readings.
+This word ceiling is independent of `extract.max_body_bytes` in
+`config/idhazh.json`, which retains its five-MiB decoded HTML limit, and of any
+downstream model's token or request/response-byte limits.
+
+The current API and authored planner configuration use `2026-11-07`.
+Older route families and configuration versions are refused rather than
+silently receiving missing evidence or limits. Existing saved candidate and
+quality fields remain readable; historical bodies are not shortened on read.
 Fetch each offer through its producing feed parse, then parse each captured
 article. Concurrent article parses atomically update owned work and claims.
 Each parse retains its own addressable result. Selection refuses incomplete
@@ -285,7 +314,7 @@ endpoint has no alias and returns ordinary HTTP 404.
 
 ## Safe-persist HTTP delivery
 
-`POST /api/2026-11-05/persist-data` calls the existing verified metadata
+`POST /api/2026-11-07/persist-data` calls the existing verified metadata
 adapter and `safe_persist_data`, not another Git implementation. Its strict
 request contains `runNumber`, `attempt` and `paths`, the exact completed paths
 relative to the run's state directory. The response retains the existing
@@ -304,7 +333,7 @@ or collection inputs; completed partial metadata remains deliverable after
 planner failure. It selects the delivery listener and shared supervision limits from
 `config/hono-server.json`,
 checks owned-child readiness through `/api/2026-11-05/get-api-health` and the
-distinct native `/api/2026-11-05/get-data-delivery-health`, and closes and reaps that child
+distinct native `/api/2026-11-07/get-data-delivery-health`, and closes and reaps that child
 after success, failure or cancellation. Cancellation known before finalization
 skips new Git delivery.
 
@@ -395,14 +424,14 @@ recorded fixtures. The exception does not permit live source fetching in tests.
 ## Request flow
 
 The diagram shows every stage HTTP call made by
-`POST /api/2026-11-05/plan-feed-ingestion` on its trusted local listener. Every stage call
+`POST /api/2026-11-07/plan-feed-ingestion` on its trusted local listener. Every stage call
 uses actual loopback HTTP; no in-process transport substitutes for it. Selection
 uses the run's captured calculations and actual completed work but does not
 write health. The
 `update-feed-health` request can summarize or record a held operation result.
 Shared process readiness uses `/api/2026-11-05/get-api-health` in addition to
 the selected module's native identity checks. The workflow HTTP client checks
-the planner's `/api/2026-11-05/get-feed-planner-health`, then calls
+the planner's `/api/2026-11-07/get-feed-planner-health`, then calls
 `/plan-feed-ingestion`. That one planning
 request captures the actual health summary and releases its collection before
 replying. It uses the selected result when available, otherwise the completed

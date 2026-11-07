@@ -83,6 +83,9 @@ export const FeedSemanticFallbackConfigSchema = z.strictObject({
 export const FeedHarvestConfigSchema = z.strictObject({
   concurrency: PositiveCountSchema,
   fetch_timeout_ms: PositiveCountSchema,
+  max_input_words: PositiveCountSchema.default(20000).describe(
+    "Maximum prepared article words after extraction; independent of HTML bytes and model limits.",
+  ),
   parse_timeout_ms: PositiveCountSchema.default(10000).describe(
     "Parse-request deadline in milliseconds, including worker queue time. The default is unmeasured.",
   ),
@@ -171,10 +174,10 @@ export const FeedIngestConfigSchema = z.strictObject({
 }).meta({
   version: FEED_INGEST_CONFIG_VERSION,
   changelog: [
-    { version: FEED_INGEST_CONFIG_VERSION, change: "Configure optional selected URLs in combined response summaries." },
+    { version: FEED_INGEST_CONFIG_VERSION, change: "Configure the API's prepared article word ceiling." },
+    { version: "2026-11-05", change: "Configure optional selected URLs in combined response summaries." },
     { version: "2026-11-04", change: "Remove optional destructive URL cleanup; resource identity is one fixed protocol." },
     { version: "2026-11-02", change: "Remove article robots policy from target-only ingestion." },
-    { version: "2026-11-02", change: "Use global age, substance and diversity scoring without tier allocation or selection caps." },
     { version: "2026-11-01", change: "Earlier changes are in git." },
   ],
 });

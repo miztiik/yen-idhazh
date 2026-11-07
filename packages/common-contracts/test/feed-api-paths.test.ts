@@ -2,9 +2,9 @@
 import { expect, test } from "bun:test";
 import { DELIVERY_API_PATHS, PLANNER_API_PATHS, PLANNER_API_PREFIX, PLANNER_PROTOCOL_VERSION } from "../src/index";
 
-test("planner and delivery declare suffixes beneath the existing fixed protocol date", () => {
-  expect(PLANNER_PROTOCOL_VERSION).toBe("2026-11-05");
-  expect(PLANNER_API_PREFIX).toBe("/api/2026-11-05");
+test("planner and delivery declare suffixes beneath the current fixed protocol date", () => {
+  expect(PLANNER_PROTOCOL_VERSION).toBe("2026-11-07");
+  expect(PLANNER_API_PREFIX).toBe("/api/2026-11-07");
   expect(PLANNER_API_PATHS).toEqual({
     health: "/get-feed-planner-health",
     plan: "/plan-feed-ingestion",

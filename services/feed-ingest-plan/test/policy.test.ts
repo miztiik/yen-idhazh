@@ -1,8 +1,25 @@
 /** Does one global planner policy substitute cleanly without vertical-specific controls? */
 import { expect, test } from "bun:test";
 import { loadPlanningConfig, resolvePolicy } from "../src/config/resolve-policy";
+import { FeedHarvestConfigSchema } from "@idhazh/common-contracts";
 
 const readInputs = () => Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
+
+test("authored article word ceilings are required and independently configurable", async () => {
+  const config = await readInputs();
+  expect(loadPlanningConfig(config).config.harvest.max_input_words).toBe(20000);
+  expect(FeedHarvestConfigSchema.shape.max_input_words.parse(undefined)).toBe(20000);
+  expect(loadPlanningConfig({
+    ...config, harvest: { ...config.harvest, max_input_words: 1000 },
+  }).config.harvest.max_input_words).toBe(1000);
+  const { max_input_words: _words, ...harvest } = config.harvest;
+  expect(() => loadPlanningConfig({ ...config, harvest })).toThrow("max_input_words");
+  for (const max_input_words of [0, -1, 1.5, null, "20000", Number.MAX_SAFE_INTEGER + 1]) {
+    expect(() => loadPlanningConfig({ ...config, harvest: { ...config.harvest, max_input_words } }))
+      .toThrow("max_input_words");
+  }
+  expect(() => loadPlanningConfig({ ...config, version: "2026-11-05" })).toThrow("version");
+});
 
 test("global policy needs no taxonomy and refuses removed vertical overrides", async () => {
   const config = await readInputs();

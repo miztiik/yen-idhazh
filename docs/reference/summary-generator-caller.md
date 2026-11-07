@@ -36,7 +36,9 @@ after success or failure. Fetch callbacks retain one operation; parsing links
 to that completed fetch. Trace headers are not sent to the source.
 
 Preparation preserves the original source audit and applies the configured word
-cap before generation. The summary API itself has no hidden word cap.
+cap to extracted, direct or fallback text before generation, not to raw HTML.
+Byte and model-context limits remain independent. The summary API itself has
+no hidden word cap.
 
 Full analysis reads `prompts/request-json.txt` as its default base and
 `prompts/analyze-article.txt` as its instruction suffix. The existing `PROMPT`
@@ -61,7 +63,7 @@ Table B - Caller controls
 
 | Id | Setting | Default and meaning |
 | --- | --- | --- |
-| B1 | `max_input_words` | `6000` source words; retains the existing preparation cap and truncation marker. |
+| B1 | `max_input_words` | `20000` source words, increased from `6000`; retains the original source audit and existing truncation marker. |
 | B2 | `base_prompt_file`, `analysis_prompt_file` | `prompts/request-json.txt`, `prompts/analyze-article.txt`; full-analysis composition only. |
 | B3 | `max_native_request_bytes`, `max_native_response_bytes` | One MiB each; full analysis uses the shared native transport, and the summary-only caller bounds its API request/result. |
 | B4 | `body_read_timeout_ms` | Five seconds for summary API response/health-body consumption. |
