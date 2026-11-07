@@ -115,9 +115,6 @@ class EventWriter:
     def unieval_diagnostic(self, data: LifecycleFields) -> None:
         self.component_diagnostic("unieval", data)
 
-    def coverage_diagnostic(self, data: LifecycleFields) -> None:
-        self.component_diagnostic("coverage", data)
-
     def mark_log_unavailable(self) -> None:
         self.log_available = False
         warning = ServerEvent.diagnostic(

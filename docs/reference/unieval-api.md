@@ -14,11 +14,9 @@ the native Pydantic contracts and on-demand schemas. Their version is
 consumers change together, without old-route aliases or historical readers.
 There is no result store, polling API or published-data contract.
 
-The [source-coverage operation](source-coverage-api.md) is a separate legacy
-method and worker in the same distribution. It has retrieved sentence evidence
-and section coverage, not this API's independent-reference relevance.
-The comparison workflow starts separate HHEM and native UniEval APIs. Starting
-`coverage` explicitly constructs another API and resident model, not implicit model sharing.
+The comparison workflow starts separate HHEM and native UniEval APIs.
+Full-source and source-window checks remain part of this native calculation,
+not the retired legacy coverage service. Independent-reference relevance is unchanged.
 
 Table A - Native operations
 

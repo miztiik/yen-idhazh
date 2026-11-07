@@ -1,12 +1,20 @@
 """How is one scorer's committed API configuration resolved without destination overrides?"""
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, get_args
 
 from pydantic import Field, RootModel, ValidationError
 
 from summary_evaluator.serve_http.contracts.api_deployment_settings import ApiDeploymentSettings
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent, ApiSettings
+from summary_evaluator.serve_http.contracts.previous_api_settings import (
+    PreviousApiDeploymentSettings,
+    PreviousApiSettings,
+)
+
+ConfigurationSettings = (
+    ApiDeploymentSettings | PreviousApiDeploymentSettings | ApiSettings | PreviousApiSettings
+)
 
 
 class ApiSettingsLoadError(ValueError):
@@ -14,14 +22,12 @@ class ApiSettingsLoadError(ValueError):
 
 
 class ApiConfiguration(
-    RootModel[
-        Annotated[ApiDeploymentSettings | ApiSettings, Field(union_mode="left_to_right")]
-    ]
+    RootModel[Annotated[ConfigurationSettings, Field(union_mode="left_to_right")]]
 ):
     pass
 
 
-def load_api_configuration(path: Path) -> ApiDeploymentSettings | ApiSettings:
+def load_api_configuration(path: Path) -> ConfigurationSettings:
     try:
         return ApiConfiguration.model_validate_json(path.read_bytes()).root
     except OSError:
@@ -31,20 +37,21 @@ def load_api_configuration(path: Path) -> ApiDeploymentSettings | ApiSettings:
 
 
 def resolve_scorer_api_settings(
-    configuration: ApiDeploymentSettings | ApiSettings, scorer: ApiComponent
+    configuration: ConfigurationSettings, scorer: ApiComponent
 ) -> ApiSettings:
-    if isinstance(configuration, ApiSettings):
-        return ApiSettings.model_validate_json(
-            configuration.model_copy(update={"enabled_routes": (scorer,)}).model_dump_json()
-        )
-    return ApiSettings(
+    if scorer not in get_args(ApiComponent):
+        raise ApiSettingsLoadError("Select a maintained scorer with --routes.")
+    selected = ApiSettings(
         version=configuration.version,
-        listener=configuration.listeners[scorer],
+        listener=configuration.listener
+        if isinstance(configuration, ApiSettings | PreviousApiSettings)
+        else configuration.listeners[scorer],
         enabled_routes=(scorer,),
         logging=configuration.logging,
         log_directory=configuration.log_directory,
         shutdown_timeout_ms=configuration.shutdown_timeout_ms,
     )
+    return ApiSettings.model_validate_json(selected.model_dump_json())
 
 
 def load_scorer_api_settings(path: Path, scorer: ApiComponent) -> ApiSettings:
@@ -58,11 +65,18 @@ def load_selected_api_settings(
 
 
 def resolve_selected_api_settings(
-    configuration: ApiDeploymentSettings | ApiSettings,
+    configuration: ConfigurationSettings,
     routes: tuple[ApiComponent, ...] | None,
 ) -> ApiSettings:
-    if routes is None and isinstance(configuration, ApiSettings):
-        routes = configuration.enabled_routes
+    if routes is None and isinstance(configuration, ApiSettings | PreviousApiSettings):
+        if len(configuration.enabled_routes) != 1:
+            raise ApiSettingsLoadError("Select exactly one scorer with --routes.")
+        selected = configuration.enabled_routes[0]
+        if selected not in get_args(ApiComponent):
+            raise ApiSettingsLoadError("Select a maintained scorer with --routes.")
+        return resolve_scorer_api_settings(
+            configuration, "hhem" if selected == "hhem" else "unieval"
+        )
     if routes is None or len(routes) != 1:
         raise ApiSettingsLoadError("Select exactly one scorer with --routes.")
     return resolve_scorer_api_settings(configuration, routes[0])

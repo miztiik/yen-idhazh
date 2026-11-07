@@ -85,7 +85,6 @@ WORKFLOW_FILES: Final = (
     "yen-ai-pipeline.yml",
     "ai-pipeline-tests.yml",
     "summary-eval-tests.yml",
-    "summary-evaluator-checks.yml",
 )
 WORKFLOW_PATHS: Final = tuple(WORKFLOWS_DIR / name for name in WORKFLOW_FILES)
 
@@ -672,9 +671,6 @@ EXPRESSION_VALUES: Final = {
     ),
     **_read_summary_artifact_paths(
         CONFIG_DIR / "summary-generator" / "workflow.json", "summary", ("output_directory",)
-    ),
-    **_read_summary_artifact_paths(
-        CONFIG_DIR / "summary-evals" / "api.json", "coverage", ("log_directory",)
     ),
     "env.SET_DIRECTORY": "corpus/encoder-comparison-1",
     "matrix.encoder": "fixture-encoder",

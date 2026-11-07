@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "summary_evaluator"
 version = "2026.11.2"
-description = "Local HHEM, native UniEval and legacy source-coverage evaluation."
+description = "Local HHEM and native UniEval evaluation."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "local-api-host",
@@ -13,8 +13,6 @@ dependencies = [
     "fastapi>=0.121,<0.122",
     "uvicorn>=0.38,<1",
     "httpx>=0.28,<1",
-    "rank-bm25==0.2.2",
-    "prettytable==3.16.0",
 ]
 
 [project.optional-dependencies]
@@ -83,7 +81,6 @@ module = [
     "nltk",
     "nltk.*",
     "tokenizers",
-    "rank_bm25",
     "yaml",
 ]
 ignore_missing_imports = true

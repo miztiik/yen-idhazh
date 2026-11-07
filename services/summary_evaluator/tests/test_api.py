@@ -72,6 +72,7 @@ def test_disabled_service_and_native_openapi_do_not_start_or_read_input() -> Non
             assert request.messages[0]["status"] == 404
             assert not service.worker.controls
             assert "llama" not in response.json()
+            assert "coverage" not in response.json()
             schema = (await service.client.get(API_SCHEMA_PATH)).json()
             assert EVALUATE_PATH not in schema["paths"]
             assert "/v1/chat/completions" not in schema["paths"]
@@ -198,6 +199,7 @@ def test_both_recorded_scorers_work_without_generation_configuration_or_routes(
             assert health.status_code == 200
             assert health.json()["enabled_routes"] == ["hhem", "unieval"]
             assert "llama" not in health.json()
+            assert "coverage" not in health.json()
             assert not hasattr(service.app.state, "forwarder")
             schema = (await service.client.get(API_SCHEMA_PATH)).json()
             assert "/v1/chat/completions" not in schema["paths"]
@@ -209,6 +211,8 @@ def test_both_recorded_scorers_work_without_generation_configuration_or_routes(
                 "/api/2026-11-02/summary-eval-unieval",
                 "/api/2026-11-02/summary-eval-unieval/health",
                 "/api/2026-11-02/openapi.json",
+                "/api/2026-11-05/evaluate-summary-coverage",
+                "/api/2026-11-05/get-summary-coverage-health",
             ):
                 request = DirectRequest(b"PrivateRetiredBodyCanary", path=path)
                 await request.run(service.app)

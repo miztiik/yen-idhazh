@@ -9,7 +9,7 @@ live in the [server reference](../../reference/summary-evaluator-api.md).
 ## Explicit composition
 
 Each Uvicorn process binds its scorer's committed loopback listener before model
-startup. HHEM, UniEval and source coverage use separate API processes, not only
+startup. HHEM and UniEval use separate API processes, not only
 separate workers behind one address. Stopping one API does not stop another API
 or its model worker. The neutral
 [local Python API host](../local-api-host.md) owns the listener, FastAPI lifespan,
@@ -30,8 +30,8 @@ callbacks, the native router, worker observations and an opaque controller for
 existing private app-state callers. The evaluator adapter supplies validated
 listener/logging bounds, closed event writers and one service instance identity;
 the neutral host contains no scorer-specific construction, health, admission or
-start/stop branch. HHEM, UniEval and coverage retain their existing private
-state aliases; each selected controller shares its own API instance identity.
+start/stop branch. HHEM and UniEval retain their existing
+private state aliases; each selected controller shares its own API instance identity.
 Typed callbacks also expose the selected worker's configured bounds and observed exit,
 without making the host inspect an opaque controller. Diagnostic callbacks use the same
 declared CloudEvents envelopes, not a new per-API logging implementation.
@@ -64,20 +64,13 @@ HHEM window rule or a generic evaluator plugin. Disabled UniEval neither
 loads its optional dependencies nor reads its configuration. Enabled
 components retain separate observed health and completed results.
 
-Source coverage is an explicitly selected third method with its own bounded
-queue and owned model process. Its [legacy retrieval calculation](source-coverage.md)
-is not native UniEval's independent-reference relevance. The comparison workflow starts HHEM and native UniEval separately;
-unselected coverage reads no configuration/resources and
-constructs no worker. Enabling it adds resident model memory rather than sharing
-a native scorer's model.
-
 The workflow calls the separate native generation server directly and owns
 its acquisition, launch, readiness and exit. The evaluation application does
 not read generation configuration or depend on that process.
 
 The installed package is `summary_evaluator` under
 `services/summary_evaluator/src/`. `serve_http` assembles requests and logs;
-`hhem`, `unieval` and `source_coverage` retain their independent scoring and worker policies.
+`hhem` and `unieval` retain their independent scoring and worker policies.
 `shared` provides strict primitives, bounded transport, queue mechanics and
 process identity, plus the evaluator-specific worker extension of the neutral
 component interface. It imports no scorer or serving package. Each scorer maps a
@@ -129,12 +122,6 @@ its own worker's actual exit. API owners are closed independently; the workflow
 retains original and cleanup causes separately. The TypeScript machine-measurement
 channel remains unchanged.
 
-Coverage returns one complete metric payload or a fixed safe error. Native
-batches are validated before reduction; missing or nonfinite output does not
-become zero or partial success. A failed coverage child does not erase completed
-native scorer work. The caller retains its report/completion event, while the
-API collects no machine readings and writes no duplicate evaluation-event file.
-
 Standard logging formats validated native data as CloudEvents JSONL. The
 same accepted records reach stderr and the role's named file. A failed file
 mirror warns safely and records that the log is unavailable; it does not
@@ -149,6 +136,18 @@ each destination reviewable, while the existing native adapters retain model loa
 at startup, bounded queues, cancellation and worker retirement. Legacy single-listener
 settings are usable only for an unambiguous single-scorer invocation; multiple-server
 callers require the explicit listener table rather than invented ports.
+The current table declares only HHEM and UniEval. A frozen previous
+three-listener declaration remains a read-only input: all authored bindings
+must validate before only the selected maintained listener is resolved.
+Coverage selection is refused, not redirected to generation or another scorer.
+Saved health may project the previous disabled coverage slot only after full
+validation; the original shared or independent process observations stay intact.
+Historical CloudEvents coverage diagnostics retain their separate vocabulary.
+
+The retired retrieval and upstream converter were the sole consumers of
+`rank-bm25` and `prettytable`; neither remains in the frozen environment.
+Native UniEval uses its own model, tokenizer and sentence resources directly.
+Their dependencies and native calculations remain unchanged.
 
 Keeping a dormant generation proxy would retain another API's transport,
 configuration and failure surface without enabling evaluation. The existing
@@ -173,6 +172,5 @@ deleted. New preparation reads only the configured cache and log paths.
 - [../../reference/api-routing.md](../../reference/api-routing.md) - dated first-party routes and the upstream native-protocol exception.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - HHEM scoring and cancellation.
 - [unieval-api.md](unieval-api.md) - independent UniEval scoring and source coverage.
-- [source-coverage.md](source-coverage.md) - distinct legacy retrieval and complete-result boundary.
 - [../../reference/summary-evaluation-workflow.md](../../reference/summary-evaluation-workflow.md) - current caller and machine control.
 - [../../how-to/run-the-gates.md#independent-python-service-contracts](../../how-to/run-the-gates.md#independent-python-service-contracts) - offline composition checks.

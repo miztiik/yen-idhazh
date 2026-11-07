@@ -10,10 +10,6 @@ from summary_evaluator.serve_http.api_settings import (
     load_scorer_api_settings,
 )
 from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
-from summary_evaluator.source_coverage.contracts.service_settings import CoverageSettings
-from summary_evaluator.source_coverage.create_api_component import (
-    load_component_settings as read_coverage_settings,
-)
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
 from summary_evaluator.unieval.create_api_component import (
     load_component_settings as read_unieval_settings,
@@ -34,7 +30,3 @@ def load_hhem_settings(path: Path, api: ApiSettings | None = None) -> ServiceSet
 
 def load_unieval_settings(root: Path, api: ApiSettings) -> UnievalSettings:
     return read_unieval_settings(root, api.listener, api.logging, api.shutdown_timeout_ms)
-
-
-def load_coverage_settings(root: Path, api: ApiSettings) -> CoverageSettings:
-    return read_coverage_settings(root, api.listener, api.logging, api.shutdown_timeout_ms)
