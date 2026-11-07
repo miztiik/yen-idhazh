@@ -1,6 +1,6 @@
 # What optional cache probes measure
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-11-07
 
 The TypeScript host probe separates last-level-cache event counts from a
 controlled working-set latency curve. Neither is the existing memory-copy
@@ -100,7 +100,7 @@ A hardware refusal does not stop CPU/RAM profiling or invent cache counts.
 An ended start request does not own the counter's later lifetime; its task
 handle does.
 
-`POST /api/2026-10-24/cache/latency` accepts only the JSON body `{}`.
+`POST /api/2026-11-05/measure-cache-latency` accepts only the JSON body `{}`.
 It uses `Content-Type: application/json` and rejects browser origins, as the
 task commands do. All benchmark choices come from committed configuration.
 The reply is `CacheLatencySchema`, including its calendar version, status,

@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
@@ -191,7 +191,7 @@ immutable writes and normal ledger settlement chooses the later whole row.
 Dates and timestamps are UTC. Integer inputs must be exactly representable
 JavaScript safe integers; values outside that range fail rather than round.
 
-`POST /api/2026-10-20/fingerprint` takes only `date` and `writer` from that
+`POST /api/2026-11-05/capture-host-fingerprint` takes only `date` and `writer` from that
 example. The four timing/model keys are refused with 400 even when null:
 `model_load_ms`, `job_seconds`, `server_prompt_tokens` and
 `server_prompt_seconds`. API-generated rows leave those existing ledger cells
@@ -205,7 +205,7 @@ request bodies return 413. A collection or persistence failure returns 500,
 never a row or success-shaped paths. The CLI prints JSON only after persistence,
 or exits nonzero and logs the failure on stderr.
 
-`GET /api/2026-10-20/health` reports readiness and the selected instrument
+`GET /api/2026-11-05/get-host-fingerprint-health` reports readiness and the selected instrument
 switch without collection or writes. GET on the write endpoint returns 405.
 Other methods are refused. Neither endpoint is cacheable. No endpoint accepts
 an output path or metadata URL from the request.
@@ -267,7 +267,7 @@ results do not certify Linux collection or live cloud metadata access.
 `services/host-probes` is an opt-in Bun service, separate from the production
 pipeline and the persisted Python instrument. From that directory, run
 `bun run src/index.ts --sample` for one JSON response, or
-`bun run src/index.ts --serve` for `GET /api/2026-10-20/sample`.
+`bun run src/index.ts --serve` for `GET /api/2026-11-05/sample-host`.
 The service does not create hardware identities or write state files.
 
 `config/host-probes.json` owns the sampling interval, listener and read limit.

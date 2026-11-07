@@ -499,6 +499,26 @@ These checks do not dispatch the data-writing workflow or prove live feed
 delivery. The [server reference](../reference/serve-pipeline-apis.md) owns
 configuration, current-task evidence and log semantics.
 
+For host and shared-health route changes, include
+`test/fingerprint.test.ts` in fingerprints, `test/probe.test.ts` in probes,
+`test/api-routing.test.ts` in shared hosting and `test/plan-api.test.ts` in
+the planner selection. Standard in-memory `Request`/`Response` dispatch checks
+bind the exported paths, native payloads, old-path 404s and unchanged method
+refusals. Keep the existing owned-child cases: uncached process identity and
+the selected module's additional native readiness are both required.
+
+Type-check the comparison workflow's native bridge with Node and the probe
+package's explicit locked Bun type binding:
+
+```powershell
+node .\services\host-probes\node_modules\typescript\bin\tsc --noEmit --target ESNext --module ESNext --moduleResolution Bundler --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --noUnusedLocals --noUnusedParameters --verbatimModuleSyntax --skipLibCheck --types .\services\host-probes\node_modules\@types\bun .\.github\scripts\summary-eval-tests\summary_eval_tests\host-profile-bridge.ts
+```
+
+The bridge remains an importer of the native route constants. Its model-free
+Python schema and recorded-measurement cases above exercise the real handler
+and private pipes. The complete Linux gate still covers the actual machine
+child, PID ownership and confirmed cleanup; Windows passes do not replace it.
+
 For native API event changes, use the same declared checks and combine these
 functional cases within each package invocation:
 

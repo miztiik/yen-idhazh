@@ -16,10 +16,12 @@ import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-re
 import { operationLink } from "../src/api/operation-context";
 import { PlannerReadySchema } from "../src/config/planner-startup";
 import { HostSampleSchema } from "../../host-probes/src/probe/sample-host";
-import { ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
+import { API_HEALTH_PATH, ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
 import { serveApiApp } from "@idhazh/serve-pipeline-apis/app";
+import { readApiReadiness } from "@idhazh/serve-pipeline-apis/readiness";
 import { createFeedApiApp } from "../scripts/create-feed-api-app";
 import { loadHonoSettings } from "@idhazh/serve-pipeline-apis/settings";
+import { PlanError } from "../src/api/plan-request";
 
 const json = (body: unknown, carrier = {}) => ({
   method: "POST", headers: { "content-type": "application/json", ...carrier }, body: JSON.stringify(body),
@@ -54,6 +56,7 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
     machine: {
       fingerprint: { config: host.config, settings: host.settings, options: {
         outputRoot: join(host.directory, "state"), inspection: host.inspection,
+        registryPath: new URL("../../../config/ledgers.json", import.meta.url),
       }, diagnostics: { writeEvent: event => { nativeEvents.push(event); } } },
       probes: { config: probe, context: { platform: "win32" },
         diagnostics: { writeEvent: event => { nativeEvents.push(event); } } },
@@ -66,7 +69,23 @@ test("one actual Bun port returns native fingerprint, sample, fetch and parse re
     return Response.json({ code: "UNRELATED_LISTENER" }, { status: 400 });
   } });
   try {
-    expect(await (await fetch(`${origin}/health`)).json()).toEqual({ identity });
+    expect(await (await fetch(`${origin}${API_HEALTH_PATH}`)).json()).toEqual({ identity });
+    const readiness = {
+      server: settings, context: parent, kind: "TYPESCRIPT_API" as const,
+      signal: AbortSignal.timeout(settings.supervision.readiness_timeout_ms),
+      failure: { create: (code: string, message: string) => new PlanError(code, message) },
+    };
+    expect(await readApiReadiness({ ...readiness, message: identity, expected: identity })).toBe(origin);
+    for (const overrides of [
+      { nonce: randomUUID() }, { pid: identity.pid + 1 },
+      { port: identity.port === 65535 ? identity.port - 1 : identity.port + 1 },
+      { group: "delivery", modules: ["delivery"] }, { modules: ["machine"] }, { enabled: false },
+    ]) {
+      const wrong = ApiReadySchema.parse({ ...identity, ...overrides });
+      await expect(readApiReadiness({ ...readiness, message: wrong, expected: wrong }))
+        .rejects.toMatchObject({ code: "TYPESCRIPT_API_READY_IDENTITY" });
+    }
+    expect((await fetch(`${origin}/health`)).status).toBe(404);
     const fingerprint = await fetch(`${origin}${FINGERPRINT_PATH}`, json(host.apiInput, writeTraceContext(parent)));
     expect(fingerprint.status).toBe(200);
     const captured = FingerprintResponseSchema.parse(await fingerprint.json());

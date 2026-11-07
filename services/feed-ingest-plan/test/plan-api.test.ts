@@ -33,7 +33,7 @@ test("HTTP health and refusals cannot start source work", async () => {
     }
     expect((await app.request(`${prefix}/plan`, json({ padding: "x".repeat(recorded.inputs.settings.listener.max_body_bytes) }))).status).toBe(413);
     expect((await app.request(`${prefix}/feeds`)).status).toBe(404);
-    expect((await app.request("/api/2026-10-20/health")).status).toBe(404);
+    expect((await app.request("/api/2026-11-05/get-host-fingerprint-health")).status).toBe(404);
     expect((await app.request("/api/2026-10-31/health")).status).toBe(404);
     expect((await app.request(`${prefix}/feed-health-state`, json({ links: [operationLink(createRootContext())], action: "record" }))).status).toBe(503);
     recorded.inputs.settings.enabled = true;

@@ -29,4 +29,4 @@ export function enabledModules(group: ApiReady["group"]): ApiReady["modules"] {
 }
 
 // This fixed route identifies the shared listener, not any one module's health.
-export const API_HEALTH_PATH = "/health";
+export const API_HEALTH_PATH = "/api/2026-11-05/get-api-health";

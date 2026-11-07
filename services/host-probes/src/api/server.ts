@@ -15,10 +15,10 @@ import type { ProbeEventOutput } from "./create-probe-event";
 export type ProbeDiagnosticOptions = { writeEvent?: ProbeEventOutput; lifetimeContext?: OperationMetadata };
 
 // The calendar-versioned route is an API protocol identifier.
-export const SAMPLE_PATH = "/api/2026-10-20/sample";
-export const START_TASK_PROFILE_PATH = "/api/2026-10-24/start-task-profile";
-export const STOP_TASK_PROFILE_PATH = "/api/2026-10-24/stop-task-profile";
-export const CACHE_LATENCY_PATH = "/api/2026-10-24/cache/latency";
+export const SAMPLE_PATH = "/api/2026-11-05/sample-host";
+export const START_TASK_PROFILE_PATH = "/api/2026-11-05/start-task-profile";
+export const STOP_TASK_PROFILE_PATH = "/api/2026-11-05/stop-task-profile";
+export const CACHE_LATENCY_PATH = "/api/2026-11-05/measure-cache-latency";
 // Bun's zero disables its idle timer; only the configured sampling delay applies.
 const DISABLED_IDLE_TIMEOUT = 0;
 

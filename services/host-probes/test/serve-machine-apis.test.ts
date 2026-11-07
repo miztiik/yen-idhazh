@@ -8,7 +8,7 @@ import { createRootContext, PLANNER_API_PREFIX, writeTraceContext } from "@idhaz
 import { FINGERPRINT_PATH } from "@idhazh/host-fingerprints/api";
 import { FingerprintResponseSchema } from "@idhazh/host-fingerprints/response";
 import { createApiApp, serveApiApp } from "@idhazh/serve-pipeline-apis/app";
-import { ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
+import { API_HEALTH_PATH, ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
 import { loadHonoSettings, apiOrigin } from "@idhazh/serve-pipeline-apis/settings";
 import { fixture as fingerprintFixture } from "../../host-fingerprints/test/fixture";
 import { createMachineApp } from "../src/api/create-machine-app";
@@ -112,7 +112,7 @@ test.skipIf(process.platform !== "linux")("the real machine child writes fingerp
     const result = await superviseMachineApiTask({
       root: fixture.root, startup: fixture.startup,
       request: async (origin, signal) => {
-        const health = await fetch(new URL("/health", origin), { signal });
+        const health = await fetch(new URL(API_HEALTH_PATH, origin), { signal });
         const ready = ApiReadySchema.parse((await health.json()).identity);
         expect(ready).toMatchObject({
           group: "machine", modules: ["machine"], nonce: fixture.startup.nonce, port: fixture.startup.server.port,

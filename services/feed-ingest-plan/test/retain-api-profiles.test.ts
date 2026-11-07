@@ -11,7 +11,7 @@ import { parseProcessStat } from "../../host-probes/src/task-profile/process-sta
 import { recordedPlannerProcess } from "./planner-process-recordings";
 import { renderServerEvidence } from "../scripts/feed-ingest-plan-server-report";
 import { prepareServerArtifacts } from "../scripts/feed-ingest-plan-server-artifacts";
-import { ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
+import { API_HEALTH_PATH, ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
 import { loadHonoSettings } from "@idhazh/serve-pipeline-apis/settings";
 import { readMachineServerEvidence, MachineServerEvidenceSchema } from "@idhazh/host-probes/machine-evidence";
 import { superviseMachineApiTask } from "@idhazh/host-probes/machine-supervisor";
@@ -30,7 +30,7 @@ test("shutdown-only native profile data survives manager cleanup and the owned p
         run,
       },
       request: async (origin, signal) => {
-        const health = await fetch(new URL("/health", origin), { signal });
+        const health = await fetch(new URL(API_HEALTH_PATH, origin), { signal });
         const ready = ApiReadySchema.parse((await health.json()).identity);
         const input = await Bun.file(new URL("../../../tests/fixtures/host-probes/process-inputs.json", import.meta.url)).json();
         const pin = parseProcessStat(ready.pid, input.stat.replace("4242 ", `${ready.pid} `));

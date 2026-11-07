@@ -1,6 +1,6 @@
 # Start and stop a task resource profile
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 
 Which local HTTP commands measure one process for an operator-owned task?
 The Bun host probe includes PID CPU and optional process and machine RAM.
@@ -38,13 +38,13 @@ The operator supplies both the requested PID and its kernel start ticks,
 the process start-time counter in that file.
 The start ticks distinguish a reused PID from the original process.
 
-`GET /api/2026-10-20/sample` remains the independent single-interval machine
+`GET /api/2026-11-05/sample-host` remains the independent single-interval machine
 CPU/RAM command. It neither creates a task handle nor obeys the task-profile
 enable switch. Its existing response and one-shot CLI remain unchanged.
 
 ## Start
 
-`POST /api/2026-10-24/start-task-profile` accepts:
+`POST /api/2026-11-05/start-task-profile` accepts:
 
 ```json
 {
@@ -94,7 +94,7 @@ capacity.
 
 ## Stop
 
-`POST /api/2026-10-24/stop-task-profile` accepts:
+`POST /api/2026-11-05/stop-task-profile` accepts:
 
 ```json
 {
@@ -121,7 +121,7 @@ No close operation signals or kills an observed target or server.
 Start and stop return `cache_counters` beside the unchanged CPU/RAM `profile`.
 Both cache flags default to false. Counter refusal remains explicit and does
 not stop CPU/RAM profiling. The cache result retains its own actual interval.
-`POST /api/2026-10-24/cache/latency` accepts only `{}` and creates no task handle.
+`POST /api/2026-11-05/measure-cache-latency` accepts only `{}` and creates no task handle.
 Its native-tool, concurrency, body-time and working-set bounds are defined in
 the [cache reference](host-cache-probes.md).
 

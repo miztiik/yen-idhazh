@@ -7,7 +7,38 @@ import { ServiceConfigSchema, SelectedSettingsSchema } from "../src/config";
 import { parseCpuIds } from "../src/inspect/cpu-topology";
 import { probeBufferMib } from "../src/inspect/copy-bandwidth";
 import { fingerprintV2 } from "@idhazh/common-contracts";
+import { createFingerprintHandler, FINGERPRINT_PATH, HEALTH_PATH } from "../src/api/server";
 import { fixture } from "./fixture";
+
+test("dated fingerprint routes refuse retired paths and wrong methods before capture", async () => {
+  const f = await fixture();
+  try {
+    const outputRoot = join(f.directory, "never-written");
+    const handler = createFingerprintHandler(f.config, f.settings, { outputRoot, inspection: f.inspection });
+    const health = await handler(new Request(`http://localhost${HEALTH_PATH}`));
+    expect(health.status).toBe(200);
+    expect(health.headers.get("Cache-Control")).toBe("no-store");
+    expect(await health.json()).toEqual({ status: "ok", enabled: true });
+    for (const [path, method, allow] of [[FINGERPRINT_PATH, "GET", "POST"], [HEALTH_PATH, "POST", "GET"]] as const) {
+      const response = await handler(new Request(`http://localhost${path}`, { method }));
+      expect(response.status).toBe(405);
+      expect(response.headers.get("Allow")).toBe(allow);
+      expect(await response.json()).toEqual({ error: "Method not allowed" });
+    }
+    for (const path of [
+      "/api/2026-10-20/fingerprint", "/api/2026-10-20/health",
+      "/api/2026-11-04/capture-host-fingerprint", "/api/2026-11-06/get-host-fingerprint-health",
+      `${FINGERPRINT_PATH}/`, `${HEALTH_PATH}/`,
+    ]) {
+      for (const method of ["GET", "POST"]) {
+        const response = await handler(new Request(`http://localhost${path}`, { method }));
+        expect(response.status).toBe(404);
+        expect(response.headers.get("Location")).toBeNull();
+      }
+    }
+    expect(await Bun.file(outputRoot).exists()).toBe(false);
+  } finally { await f.cleanup(); }
+});
 
 test("full Linux fixture collects hardware, quota, affinity, clocks, placement and task counters", async () => {
   const f = await fixture();
