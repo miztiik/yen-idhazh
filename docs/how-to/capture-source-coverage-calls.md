@@ -66,6 +66,18 @@ calculation parity, not model quality or fresh-run numerical reproducibility.
 The real capture does not replace the complete model-free Linux suites or
 ordinary CI described in the [gate guide](run-the-gates.md).
 
+Verify the real owned child after integration without overwriting the retained
+before-calculation recording:
+
+```powershell
+uv run --project .\services\summary_evaluator --frozen --extra model python .\services\summary_evaluator\scripts\verify-coverage-worker.py --root .
+```
+
+This bounded utility reads one named input, starts the actual coverage worker
+over private byte pipes, validates readiness/completion and confirms its owned
+exit. It opens no HTTP listener and reports actual observations, not a Linux
+model-free inference claim.
+
 Commit only the named inputs and validated recording. Do not commit caches,
 weights, environments or raw upstream diagnostics. In a fresh shell, ordinary
 checks use the evaluator's default model-free environment again.

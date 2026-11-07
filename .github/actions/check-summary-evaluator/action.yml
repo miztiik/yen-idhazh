@@ -30,7 +30,9 @@ runs:
     - name: Prepare named tokenizer and sentence resources
       shell: bash
       working-directory: ${{ github.workspace }}/services/summary_evaluator
-      run: uv run --frozen python scripts/prepare-unieval-resources.py --root ../..
+      run: |
+        uv run --frozen python scripts/prepare-unieval-resources.py --root ../..
+        uv run --frozen python scripts/prepare-coverage-resources.py --root ../..
 
     - name: Verify the model-free environment
       shell: bash
@@ -52,7 +54,7 @@ runs:
     - name: Check evaluator and workflow types
       shell: bash
       working-directory: ${{ github.workspace }}/services/summary_evaluator
-      run: uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline ../../.github/scripts/summary-eval-tests/summary_eval_tests
+      run: uv run --frozen mypy src tests scripts/capture-coverage-recordings.py scripts/prepare-coverage-resources.py scripts/verify-coverage-worker.py ../../.github/scripts/summary-eval-tests/summary_eval_pipeline ../../.github/scripts/summary-eval-tests/summary_eval_tests
 
     - name: Run complete model-free Linux suites
       shell: bash

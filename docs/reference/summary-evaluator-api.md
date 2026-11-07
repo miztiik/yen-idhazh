@@ -1,6 +1,6 @@
 # Summary evaluator API
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 
 Which routes and startup settings the single `summary-evaluator` application exposes.
 This is a local workflow service, not a backend for the published site.
@@ -13,7 +13,7 @@ process ownership and failure handling.
 diagnostic settings and request-body bounds. The frozen native models live
 in `services/summary_evaluator/src/summary_evaluator/serve_http/contracts/`
 and `shared/contracts/`. Shared settings,
-health, generic API errors and CloudEvents schemas have version `2026-11-06`.
+health, generic API errors and CloudEvents schemas have version `2026-11-07`.
 They are current-only: previous application versions and retired generation
 settings are rejected, not read through aliases. Historical logs and model
 recordings remain unchanged. HHEM and native UniEval scoring schemas retain
@@ -26,7 +26,7 @@ Table A - Listener and component selection
 | A1 | `listener.host`, `listener.port` | Loopback `127.0.0.1`, port 3010. The host can also be the literal `::1`. |
 | A2 | `listener.max_body_bytes` | At most 1048576 bytes, or 1 MiB, per input body. |
 | A3 | `listener.body_read_timeout_ms` | An absolute input-read deadline of 5000 milliseconds, or five seconds. |
-| A4 | `enabled_routes` | A distinct list drawn from `hhem` and `unieval`; both are enabled by default. Each task selects only its required scorers. An empty list disables both scoring operations. |
+| A4 | `enabled_routes` | A distinct list drawn from `hhem`, `unieval` and `coverage`. The default remains HHEM plus native UniEval; coverage is selected explicitly and adds its own model process. An empty list disables every scoring operation. |
 | A5 | `shutdown_timeout_ms` | 15000 milliseconds, or fifteen seconds, for Uvicorn's graceful wait. This cannot be shorter than an enabled scorer's worker shutdown wait. Enabled worker cleanups run concurrently. |
 
 Table B - Native operations
@@ -39,6 +39,8 @@ Table B - Native operations
 | B4 | `GET /api/2026-11-05/get-summary-evaluator-schema` | The application's current native schemas. Always registered, without an interactive documentation UI. |
 | B5 | `POST /api/2026-11-05/evaluate-summary-unieval` | The [four-score UniEval operation](unieval-api.md), with an independent reference summary. |
 | B6 | `GET /api/2026-11-05/get-unieval-health` | UniEval's observed model/worker/queue state, independent of HHEM. Registered only with UniEval enabled. |
+| B7 | `POST /api/2026-11-05/evaluate-summary-coverage` | The [legacy source-coverage operation](source-coverage-api.md), without an independent reference or native relevance. Registered only with coverage enabled. |
+| B8 | `GET /api/2026-11-05/get-summary-coverage-health` | Coverage's actual model, owned worker and queue. Registered only with coverage enabled. |
 
 Disabled operation routes return HTTP 404. Shared health explicitly reports
 disabled scorers; it does not claim their models loaded. Browser origins,
@@ -46,19 +48,25 @@ duplicate or unexpected Host headers and slash redirects remain refused.
 
 The standalone default requires only prepared evaluator assets. HHEM-only
 startup reads no UniEval configuration; UniEval-only startup reads no HHEM
-configuration. Disabled scorers construct no controller or worker and import
-no optional model libraries. Neither scorer calls generation or its sibling.
+configuration. Coverage-only startup reads only its named scorer configuration.
+Disabled scorers construct no controller or worker and read no resources.
+No scorer calls generation or another scorer.
 
 The [routing convention](api-routing.md) separates the fixed HTTP date from
 payload schema dates. The old dated evaluator paths, `/health` and the former
 `/v1/chat/completions` proxy return HTTP 404. The native generation server
 keeps its own upstream paths; it is not part of this application.
+The launcher accepts `--routes coverage` without an unrelated HHEM settings argument.
+An omitted `--settings` uses the named HHEM default only when HHEM is enabled.
 The launcher refuses `--routes llama` and the removed `--model-config`
 option. Authored `llama` transport settings are refused, not ignored.
 
 ## Safe local refusals
 
-Scoring routes retain their own native result/error envelopes.
+HHEM and native UniEval retain their own result/error envelopes. Coverage
+returns only complete metrics on success and the fixed generic API error shape
+on failure; it never returns partial scores, duplicate workflow events or
+machine readings. Its [reference](source-coverage-api.md) owns the fixed policy.
 Host/Origin refusals for health, schema and unknown routes instead use
 `serve_http/contracts/error_detail.py` and `serve_http/refuse_request.py`:
 
@@ -109,4 +117,5 @@ returns normally. Its bound socket and diagnostic file still close.
 - [api-routing.md](api-routing.md) - dated operations and the native generation exception.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - unchanged scoring requests, results and worker packets.
 - [unieval-api.md](unieval-api.md) - independent full-source evaluation and four-score results.
+- [source-coverage-api.md](source-coverage-api.md) - separate legacy metrics, resources and safe failures.
 - [../how-to/run-the-gates.md#independent-python-service-contracts](../how-to/run-the-gates.md#independent-python-service-contracts) - focused offline checks.

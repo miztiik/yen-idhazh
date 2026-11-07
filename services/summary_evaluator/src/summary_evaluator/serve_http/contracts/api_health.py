@@ -8,6 +8,7 @@ from summary_evaluator.hhem.contracts.service_health import ServiceHealth
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
 from summary_evaluator.shared.contracts.base import RelativePath, Uuid4
 from summary_evaluator.shared.contracts.server_contract import ServerContract, ServerSchemaVersion
+from summary_evaluator.source_coverage.contracts.service_health import CoverageHealth
 from summary_evaluator.unieval.contracts.unieval_result import UnievalHealth
 
 
@@ -28,12 +29,13 @@ class ApiHealth(ServerContract):
     status: Literal["disabled", "loading", "ready", "failed", "stopping"]
     hhem: ServiceHealth | DisabledEvaluatorHealth
     unieval: UnievalHealth | DisabledEvaluatorHealth
+    coverage: CoverageHealth | DisabledEvaluatorHealth
     log_file: RelativePath | None
     log_available: StrictBool
 
     @model_validator(mode="after")
     def require_enabled_readiness(self) -> Self:
-        components = {"hhem": self.hhem, "unieval": self.unieval}
+        components = {"hhem": self.hhem, "unieval": self.unieval, "coverage": self.coverage}
         states = [components[component].status for component in self.enabled_routes]
         if self.status == "ready" and (not states or any(state != "ready" for state in states)):
             raise ValueError("Ready requires every enabled component to be ready")

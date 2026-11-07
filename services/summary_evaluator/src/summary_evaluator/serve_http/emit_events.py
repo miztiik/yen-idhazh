@@ -105,6 +105,11 @@ class EventWriter:
             ApiDiagnosticData.model_validate({"component": "unieval", **data.model_dump()})
         )
 
+    def coverage_diagnostic(self, data: LifecycleFields) -> None:
+        self.diagnostic(
+            ApiDiagnosticData.model_validate({"component": "coverage", **data.model_dump()})
+        )
+
     def mark_log_unavailable(self) -> None:
         self.log_available = False
         warning = ServerEvent.diagnostic(

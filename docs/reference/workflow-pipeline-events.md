@@ -1,6 +1,6 @@
 # Phased workflow events
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 
 Which saved events does the independent inference and evaluation workflow read?
 
@@ -53,16 +53,25 @@ that input's saved producer, even when inputs came from different executions.
 The explicit operation context stays in the workflow; events carry its W3C
 carrier. No trace runtime or extra artifact is created.
 
-`prepare-evaluation-request.ts` constructs the unchanged Python evaluator
-request from the saved source identifier, headline, extracted source text and
-analytic synthesis. Its separate `correlationId` is a new UUIDv4, not the
-native execution identifier. The Python response remains a foreign protocol:
-quality scores come from `response.metrics`, and machine measurements come
-from `response.event.payload.serverTelemetry`. The native workflow records
-those returned values without relabeling the foreign event.
+`prepare-evaluation-request.ts` constructs only `source_text` and `summary_text`
+from the saved extracted text and unchanged `analytic_synthesis` product.
+URL, headline, runner identity and operation context stay in the caller.
+The selected [coverage operation](source-coverage-api.md) returns
+`{status: "success", metrics: ...}`. Safe native errors retain their code/status
+as failed targets; they do not become successful zero or partial scores.
+
+The reader retains older measured responses at
+`response.event.payload.serverTelemetry` without rewriting their history.
+New evaluator responses collect no machine readings. The report says
+uncollected rather than zero, does not borrow inference measurements, and
+does not reuse telemetry from an earlier evaluation phase. Historical measured
+responses remain reportable when their observations belong to that phase/source.
+The caller owns its completion event and report; there is no second evaluator
+event file or hardware sampler.
 
 Failed inference outputs remain skipped. A failed evaluator request remains
-a failed evaluation target and causes the phase to fail after its batch report.
+a failed evaluation target, clears any stale score on the new target, records
+its safe failure and causes the phase to fail after its batch report.
 The workflow uploads only its existing application and server-log artifacts.
 
 ## Offline verification
@@ -86,8 +95,8 @@ belong to the current fixture, not converted historical events.
 Independent phase processes do not form one enclosing operation. A new phase
 therefore has a fresh root and links each input separately. Existing counters
 remain measurements of logging progress; metadata does not turn them into
-recorded spans. The foreign UUID stays separate because its Python consumer
-has not changed.
+recorded spans. Evaluator input is only scoring text, while the caller retains
+the saved product, source identity and per-input trace link.
 
 ## See also
 
@@ -95,3 +104,4 @@ has not changed.
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md#independent-typescript-packages-and-services) - focused native checks.
 - [../../.github/workflows/ai-pipeline-tests.yml](../../.github/workflows/ai-pipeline-tests.yml) - offline handoff gate and manual live phases.
 - [summary-generator-caller.md](summary-generator-caller.md) - independent full-analysis and summary-only caller capture.
+- [source-coverage-api.md](source-coverage-api.md) - metrics-only native boundary and fixed failures.

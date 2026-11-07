@@ -14,6 +14,13 @@ export type PipelineEventData<T = unknown> = {
 };
 export type PipelineEvent<T = unknown> = CloudEvent<PipelineEventData<T>>;
 
+export type EvaluationServerTelemetry = {
+  duration_ms: number;
+  cpu_percent: number;
+  server_vm_rss_mb: number;
+  server_vm_swap_mb: number;
+};
+
 export class PipelineInputError extends Error {
   constructor(public readonly code: string, public readonly line?: number) {
     super(line === undefined ? code : `${code} at line ${line}`);
@@ -36,6 +43,30 @@ function hasNumbers(value: unknown, fields: readonly string[]): boolean {
 export function readQualityMetrics(value: unknown): QualityEvaluationMetrics {
   if (!isQualityMetrics(value)) throw new Error("INVALID_EVALUATION_METRICS");
   return value;
+}
+
+export function readEvaluationServerTelemetry(value: unknown): EvaluationServerTelemetry {
+  if (!isRecord(value) || !hasNumbers(value, [
+    "duration_ms", "cpu_percent", "server_vm_rss_mb", "server_vm_swap_mb",
+  ])) throw new Error("INVALID_EVALUATION_SERVER_TELEMETRY");
+  return {
+    duration_ms: value.duration_ms as number,
+    cpu_percent: value.cpu_percent as number,
+    server_vm_rss_mb: value.server_vm_rss_mb as number,
+    server_vm_swap_mb: value.server_vm_swap_mb as number,
+  };
+}
+
+export function readCurrentEvaluationTelemetry(
+  events: readonly PipelineEvent[],
+  sourceIdentifier: string,
+): EvaluationServerTelemetry | undefined {
+  const start = events.findLastIndex(event => event.type === "QUALITY_EVALUATION_STARTED");
+  const selected = events.slice(start + 1).findLast(event => event.type === "EVALUATION_SERVER_TELEMETRY"
+    && isRecord(event.data.result) && event.data.result.sourceIdentifier === sourceIdentifier);
+  if (!selected) return undefined;
+  if (!isRecord(selected.data.result)) throw new Error("INVALID_EVALUATION_SERVER_TELEMETRY");
+  return readEvaluationServerTelemetry(selected.data.result.serverTelemetry);
 }
 
 function isQualityMetrics(value: unknown): value is QualityEvaluationMetrics {

@@ -2,6 +2,8 @@
 
 from typing import Protocol
 
+from summary_evaluator.source_coverage.contracts.model_identity import CoverageModelIdentity
+
 
 class ConvertInput(Protocol):
     def __call__(
@@ -22,3 +24,8 @@ class LegacyEvaluator(Protocol):
     def evaluate(
         self, data: list[dict[str, str]], *, dims: list[str], overall: bool
     ) -> list[dict[str, float]]: ...
+
+
+class CoverageRuntimeBackend(CoverageBackend, Protocol):
+    @property
+    def identity(self) -> CoverageModelIdentity: ...

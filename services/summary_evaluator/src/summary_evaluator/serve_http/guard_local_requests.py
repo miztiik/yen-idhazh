@@ -8,7 +8,11 @@ from summary_evaluator.hhem.control_service import EvaluationController
 from summary_evaluator.hhem.dispatch_evaluation import dispatch_evaluation
 from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
 from summary_evaluator.serve_http.refuse_request import refuse_request
-from summary_evaluator.shared.contracts.api_paths import EVALUATE_PATH
+from summary_evaluator.shared.contracts.api_paths import COVERAGE_EVALUATE_PATH, EVALUATE_PATH
+from summary_evaluator.source_coverage.control_evaluation import CoverageController
+from summary_evaluator.source_coverage.dispatch_evaluation import (
+    dispatch_evaluation as dispatch_coverage,
+)
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.control_unieval import UnievalController
 from summary_evaluator.unieval.dispatch_unieval import dispatch_unieval
@@ -24,9 +28,11 @@ class GuardLocalRequests:
         settings: ApiSettings,
         controller: EvaluationController | None,
         unieval: UnievalController | None = None,
+        coverage: CoverageController | None = None,
     ) -> None:
         self.app, self.settings, self.controller = app, settings, controller
         self.unieval = unieval
+        self.coverage = coverage
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -44,6 +50,12 @@ class GuardLocalRequests:
         ):
             error = ErrorDetail.from_code("HOST_FORBIDDEN", "request")
         if error is not None:
+            if scope["path"] == COVERAGE_EVALUATE_PATH and self.coverage is not None:
+                response = await dispatch_coverage(
+                    request, self.coverage, refuse_request, error.code
+                )
+                await response(scope, receive, send)
+                return
             if scope["path"] == UNIEVAL_PATH and self.unieval is not None:
                 response = await dispatch_unieval(
                     request, self.unieval, UnievalError.from_code(error.code)

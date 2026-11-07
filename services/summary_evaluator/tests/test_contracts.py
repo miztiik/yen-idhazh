@@ -209,6 +209,7 @@ def test_actual_evaluator_openapi_has_only_dated_routes_and_resolvable_native_sc
         "status",
         "hhem",
         "unieval",
+        "coverage",
         "log_file",
         "log_available",
     }
@@ -264,7 +265,11 @@ def test_disabled_application_constructs_no_scorers_or_reads_their_configuration
 ) -> None:
     api = load_api_settings(API_SETTINGS_FILE).model_copy(update={"enabled_routes": ()})
     app = create_app(api, None, tmp_path, writer=EventWriter(api.logging, io.StringIO()))
-    assert app.state.controller is None and app.state.unieval is None
+    assert (
+        app.state.controller is None
+        and app.state.unieval is None
+        and app.state.coverage is None
+    )
     assert set(app.openapi()["paths"]) == {API_HEALTH_PATH}
 
 

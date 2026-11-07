@@ -6,7 +6,7 @@ from pydantic import ConfigDict
 
 from summary_evaluator.shared.contracts.base import NativeContract
 
-COVERAGE_VERSION = "2026-11-07"
+COVERAGE_VERSION: Literal["2026-11-07"] = "2026-11-07"
 CoverageVersion = Literal["2026-11-07"]
 
 

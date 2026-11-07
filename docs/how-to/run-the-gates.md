@@ -230,6 +230,7 @@ bun install --frozen-lockfile --cwd .\packages\data-delivery
 Set-Location .\services\summary_evaluator
 uv sync --frozen --group dev
 uv run --frozen python .\scripts\prepare-unieval-resources.py --root '..\..'
+uv run --frozen python .\scripts\prepare-coverage-resources.py --root '..\..'
 uv run --frozen ruff check src tests scripts
 Push-Location ..\..
 uv run --project .\services\summary_evaluator --frozen ruff check .\.github\scripts\summary-eval-tests

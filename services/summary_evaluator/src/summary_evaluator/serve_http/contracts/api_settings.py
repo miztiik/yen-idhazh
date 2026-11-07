@@ -8,7 +8,7 @@ from summary_evaluator.shared.contracts.base import PositiveCount, RelativePath
 from summary_evaluator.shared.contracts.server_contract import ServerContract, ServerSchemaVersion
 from summary_evaluator.shared.contracts.service_settings import ListenerSettings, LoggingSettings
 
-ApiComponent = Literal["hhem", "unieval"]
+ApiComponent = Literal["hhem", "unieval", "coverage"]
 
 
 class ApiSettings(ServerContract):

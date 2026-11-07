@@ -13,6 +13,7 @@ from typing import cast
 from summary_evaluator.shared.load_model_assets import resolve_snapshot
 from summary_evaluator.shared.quiet_model_output import quiet_model_output
 from summary_evaluator.source_coverage.contracts.model_call import ConvertInput, LegacyEvaluator
+from summary_evaluator.source_coverage.contracts.model_identity import CoverageModelIdentity
 from summary_evaluator.source_coverage.contracts.service_settings import CoverageSettings
 from summary_evaluator.source_coverage.load_converter import load_converter
 
@@ -21,6 +22,7 @@ from summary_evaluator.source_coverage.load_converter import load_converter
 class CoverageModel:
     evaluator: LegacyEvaluator
     convert_input: ConvertInput
+    identity: CoverageModelIdentity
     loaded_model_revision: str
     tokenizer_revision: str
     tokenizer_files: dict[str, str]
@@ -104,6 +106,14 @@ def load_model(settings: CoverageSettings, root: Path) -> CoverageModel:
     return CoverageModel(
         evaluator=cast(LegacyEvaluator, evaluator),
         convert_input=load_converter(settings, root),
+        identity=CoverageModelIdentity(
+            reference=selected.reference,
+            configured_revision=selected.revision,
+            loaded_revision=loaded_revision,
+            tokenizer_revision=snapshot.name,
+            code_revision=code.revision,
+            runtime_versions={"python": platform.python_version(), **versions},
+        ),
         loaded_model_revision=loaded_revision,
         tokenizer_revision=snapshot.name,
         tokenizer_files=tokenizer_files,

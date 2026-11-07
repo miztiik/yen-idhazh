@@ -20,9 +20,9 @@ from summary_evaluator.serve_http.serve_api import create_app
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
-    parser.add_argument("--settings", type=Path, required=True)
+    parser.add_argument("--settings", type=Path)
     parser.add_argument("--api-settings", type=Path)
-    parser.add_argument("--routes", nargs="*", choices=("hhem", "unieval"))
+    parser.add_argument("--routes", nargs="*", choices=("hhem", "unieval", "coverage"))
     args = parser.parse_args()
     root = args.root.resolve()
     try:
@@ -33,7 +33,13 @@ def main() -> None:
             )
         app = create_app(
             api,
-            load_settings(args.settings, api) if "hhem" in api.enabled_routes else None,
+            load_settings(
+                args.settings
+                or root / "config" / "summary-evals" / "hhem-evaluator" / "settings.json",
+                api,
+            )
+            if "hhem" in api.enabled_routes
+            else None,
             root,
         )
     except ValueError:
