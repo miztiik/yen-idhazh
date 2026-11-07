@@ -241,6 +241,11 @@ uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test
 
 If Bun cannot copy the local writer dependency on Windows, repeat its locked
 install with `--linker=isolated`; do not change either package manifest or lock.
+After a source merge, a copied local dependency can still expose its earlier
+contract fields. Refresh that package's frozen install with
+`--force --linker=isolated` before diagnosing a missing-field type error as an
+application defect. This refresh changes installed copies, not source limits
+or committed manifests.
 The evaluator's offline suite, strict types and lint are local checks, not jobs
 in `ci.yml`. The dedicated manual `summary-eval-tests.yml` workflow exercises
 the HHEM and UniEval APIs without adding evaluator setup to ordinary CI; the
@@ -489,6 +494,7 @@ bun install --frozen-lockfile --cwd .\packages\data-delivery
 bun install --frozen-lockfile --cwd .\services\host-fingerprints
 bun install --frozen-lockfile --cwd .\services\host-probes
 bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
+bun install --frozen-lockfile --cwd .\services\summary-generator
 bun run --cwd .\services\serve-pipeline-apis check
 bun run --cwd .\services\serve-pipeline-apis test
 bun run --cwd .\services\host-probes check
