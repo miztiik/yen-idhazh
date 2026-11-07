@@ -26,6 +26,11 @@ on:
           - 'url'
           - 'text'
         default: 'feed'
+      feed_url:
+        description: 'Feed URL (feed mode only); blank uses the existing feed list'
+        required: false
+        type: string
+        default: ''
       article_count_goal:
         description: 'Target number of articles to collect from feeds'
         required: false
@@ -42,8 +47,23 @@ on:
         description: 'Input text (used directly if input_source is text, or as fallback)'
         required: false
         default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.'
+      model:
+        description: 'Model declaration under config/ (default: Ornith)'
+        required: false
+        type: choice
+        options:
+          - 'models/ornith-1.5-9b-q5km.json'
+          - 'models/deepseek-v4-pro-qwen3.5-9b-q4km.json'
+          - 'models/gemma-4-12b-it-qat-ud-q4-k-xl.json'
+          - 'models/gemma-4-e4b-qat-no-draft.json'
+          - 'models/gemma-4-e4b-qat.json'
+          - 'models/qwen3.5-9b-kimi-k3-distilled-q4km.json'
+          - 'models/qwen3.5-9b-q4km-thinking.json'
+          - 'models/qwen3.5-9b-q4km.json'
+          - 'models/qwen3.8-9b-q5km-distill.json'
+        default: 'models/ornith-1.5-9b-q5km.json'
       models_file:
-        description: 'Model declaration under config/; blank uses config/idhazh.json.'
+        description: 'Optional model JSON path under config/; overrides the model dropdown'
         required: false
         default: ''
       max_word_length:
@@ -86,7 +106,8 @@ jobs:
     runs-on: ubuntu-latest
     name: Phased LLM Inference & UniEval Audit
     env:
-      CONFIG_ROOT: ${{ inputs.models_file != '' && 'backend/var/candidate-config' || 'config' }}
+      MODELS_FILE: ${{ inputs.models_file || inputs.model }}
+      CONFIG_ROOT: ${{ (inputs.models_file || inputs.model) != '' && 'backend/var/candidate-config' || 'config' }}
       PYTHONPATH: backend
 
     steps:
@@ -123,10 +144,10 @@ jobs:
           python -m pip install -e . --no-deps
 
       - name: Point scratch config at the selected declaration
-        if: inputs.models_file != ''
+        if: env.MODELS_FILE != ''
         uses: ./.github/actions/candidate-config
         with:
-          models_file: ${{ inputs.models_file }}
+          models_file: ${{ env.MODELS_FILE }}
 
       - name: Validate the selected request
         id: request
@@ -200,6 +221,7 @@ jobs:
       - name: Execute Phase 1 Inference
         env:
           INPUT_SOURCE: "${{ github.event.inputs.input_source }}"
+          FEED_URL: "${{ github.event.inputs.feed_url }}"
           ARTICLE_COUNT_GOAL: "${{ github.event.inputs.article_count_goal }}"
           FEED_MAX_AGE_HOURS: "${{ github.event.inputs.feed_max_age_hours }}"
           URL: "${{ github.event.inputs.url }}"
