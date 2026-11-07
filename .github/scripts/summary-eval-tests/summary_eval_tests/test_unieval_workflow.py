@@ -6,30 +6,27 @@ from pathlib import Path
 
 import httpx
 import pytest
-from summary_eval_pipeline.contracts import (
-    PhaseEvidence,
-    PipelineError,
-    ServiceShutdown,
-    text_sha256,
-)
+from summary_eval_pipeline.contracts import PipelineError, text_sha256
 from summary_eval_pipeline.evaluate_pair import EvaluatorOutcomes, evaluate_pair
 from summary_eval_pipeline.evaluation import bind_evaluations, read_owned_health
-from summary_eval_pipeline.phase_result import build_evidence
+from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_eval_pipeline.storage import read_result, write_result
+from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.shared.contracts.api_paths import EVALUATE_PATH
+from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 from summary_evaluator.unieval.load_unieval_resources import load_unieval_resources
 from summary_evaluator.unieval.unieval_router import UNIEVAL_PATH
 from summary_evaluator_cases.contract_examples import REPOSITORY
 from summary_evaluator_cases.replay_predictions import Scenario
-from summary_evaluator_cases.service_cases import running_service, service_settings
+from summary_evaluator_cases.service_cases import service_settings
 from summary_evaluator_cases.unieval_cases import (
-    RecordedUnievalSupervisor,
     UnievalScenario,
     read_unieval_recordings,
     unieval_settings,
 )
 
+from summary_eval_tests.scorer_caller_cases import running_scorers
 from summary_eval_tests.test_generation_handoff import generation_phase
 
 
@@ -90,66 +87,46 @@ def test_same_pair_and_reference_requests_preserve_native_sibling_and_partial_re
                     )
                 }
             )
-        requests = bind_evaluations(prepared, inputs, receipt, previous, 1 << 20)
+        requests = bind_evaluations(
+            prepared, inputs, receipt, previous,
+            generation_sha256=text_sha256(receipt.model_dump_json()),
+        )
         selected_hhem = service_settings()
-        unieval_worker = RecordedUnievalSupervisor(selected_unieval, unieval_scenario)
         outcomes = EvaluatorOutcomes()
         errors: list[PipelineError] = []
         seen: dict[str, dict[str, object]] = {}
-        saved = tmp_path / "evaluation.json"
+        hhem_saved, unieval_saved = tmp_path / "hhem.json", tmp_path / "unieval.json"
         pipeline = load_pipeline_settings(REPOSITORY)
 
         async def record_request(request: httpx.Request) -> None:
             if request.url.path in (EVALUATE_PATH, UNIEVAL_PATH):
                 seen[request.url.path] = json.loads(request.content)
 
-        async with running_service(
+        async with running_scorers(
             selected_hhem,
             (hhem_scenario,) if failure == "unieval" else (hhem_scenario, Scenario()),
-            routes=("hhem", "unieval"),
-            unieval_settings=selected_unieval,
-            unieval_supervisor=unieval_worker,
+            selected_unieval=selected_unieval,
+            unieval_scenario=unieval_scenario,
         ) as service:
             service.client.event_hooks["request"].append(record_request)
-            health = await read_owned_health(
-                service.client,
-                "http://127.0.0.1:3010",
-                service.app.state.service_instance_id,
-                selected_hhem,
-                pipeline,
-                ("hhem", "unieval"),
-                errors=errors,
-            )
-            assert health.hhem.worker is not None and health.unieval.worker is not None
-            assert health.hhem.worker.pid != health.unieval.worker.pid
+            hhem_api, unieval_api = service.apis
+            assert hhem_api.health is not None and unieval_api.health is not None
+            assert hhem_api.health.hhem.worker is not None
+            assert unieval_api.health.unieval.worker is not None
+            assert hhem_api.health.hhem.worker.pid != unieval_api.health.unieval.worker.pid
+            assert hhem_api.origin != unieval_api.origin
 
             def save() -> None:
-                write_result(
-                    saved,
-                    build_evidence(
-                        outcomes.hhem,
-                        None,
-                        None,
-                        ServiceShutdown(
-                            api_stopped=None, host_stopped=None, worker_exit_confirmed=None
-                        ),
-                        errors,
-                        run=prepared.run,
-                        phase="evaluation",
-                        reference_summary_sha256=prepared.reference_summary_sha256,
-                        unieval=outcomes.unieval,
-                        api_health=health,
-                        evaluation_request_id=requests[0].request_id,
-                        evaluation_correlation_id=requests[0].correlation_id,
-                        generation_sha256=text_sha256(receipt.model_dump_json()),
-                    ),
-                )
+                if outcomes.hhem is not None:
+                    write_result(hhem_saved, outcomes.hhem)
+                if outcomes.unieval is not None:
+                    write_result(unieval_saved, outcomes.unieval)
 
             await evaluate_pair(
                 service.client,
-                "http://127.0.0.1:3010",
                 requests,
-                health,
+                hhem_api,
+                unieval_api,
                 selected_hhem,
                 selected_unieval,
                 pipeline,
@@ -157,18 +134,34 @@ def test_same_pair_and_reference_requests_preserve_native_sibling_and_partial_re
                 errors,
                 save,
             )
-            retained = read_result(saved, PhaseEvidence, pipeline.max_response_bytes)
-            assert retained.evaluation == outcomes.hhem and retained.unieval == outcomes.unieval
-            assert retained.status == "partial"
+            assert (
+                read_result(hhem_saved, EvaluationResult, pipeline.max_response_bytes)
+                == outcomes.hhem
+            )
+            assert (
+                read_result(unieval_saved, UnievalResult, pipeline.max_response_bytes)
+                == outcomes.unieval
+            )
+            sent = {
+                request.url.path: (request.url.host, request.url.port)
+                for request in service.transport.requests if request.url.path in seen
+            }
+            assert sent[EVALUATE_PATH] == (
+                hhem_api.api_settings.listener.host, hhem_api.api_settings.listener.port
+            )
+            assert sent[UNIEVAL_PATH] == (
+                unieval_api.api_settings.listener.host, unieval_api.api_settings.listener.port
+            )
             for path in (EVALUATE_PATH, UNIEVAL_PATH):
                 assert seen[path]["source_text"] == inputs.source_text
                 assert seen[path]["summary_text"] == receipt.summary_text
             assert "reference_summary_text" not in seen[EVALUATE_PATH]
             assert seen[UNIEVAL_PATH]["reference_summary_text"] == inputs.reference_summary_text
-            assert inputs.reference_summary_text not in service.log.getvalue()
-            assert inputs.source_text not in service.log.getvalue()
+            logs = service.hhem.log.getvalue() + service.unieval.log.getvalue()
+            assert inputs.reference_summary_text not in logs
+            assert inputs.source_text not in logs
             assert receipt.summary_text is not None
-            assert receipt.summary_text not in service.log.getvalue()
+            assert receipt.summary_text not in logs
             assert outcomes.hhem is not None and outcomes.unieval is not None
             assert outcomes.unieval.reference_summary_sha256 == prepared.reference_summary_sha256
             if failure == "unieval":
@@ -193,7 +186,7 @@ def test_same_pair_and_reference_requests_preserve_native_sibling_and_partial_re
                     assert any(
                         error.code == "INVALID_MODEL_OUTPUT" for error in outcomes.unieval.errors
                     )
-        assert service.worker.exit_confirmed and unieval_worker.exit_confirmed
+        assert service.hhem.worker.exit_confirmed and service.unieval_worker.exit_confirmed
 
     asyncio.run(check())
 
@@ -201,37 +194,36 @@ def test_same_pair_and_reference_requests_preserve_native_sibling_and_partial_re
 def test_a_failed_component_health_does_not_discard_the_ready_sibling() -> None:
     async def check() -> None:
         _, selected_unieval = unieval_settings()
-        worker = RecordedUnievalSupervisor(selected_unieval)
         selected_hhem = service_settings()
         inputs, prepared, receipt, previous = generation_phase()
-        requests = bind_evaluations(prepared, inputs, receipt, previous, 1 << 20)
+        requests = bind_evaluations(
+            prepared, inputs, receipt, previous,
+            generation_sha256=text_sha256(receipt.model_dump_json()),
+        )
         pipeline = load_pipeline_settings(REPOSITORY)
-        async with running_service(
+        async with running_scorers(
             selected_hhem,
-            routes=("hhem", "unieval"),
-            unieval_settings=selected_unieval,
-            unieval_supervisor=worker,
+            selected_unieval=selected_unieval,
         ) as service:
+            worker = service.unieval_worker
             assert worker.lifetime is not None and worker.process is not None
             worker.lifetime.close()
             await asyncio.to_thread(worker.process.join, 5)
             errors: list[PipelineError] = []
-            health = await read_owned_health(
-                service.client,
-                "http://127.0.0.1:3010",
-                service.app.state.service_instance_id,
-                selected_hhem,
-                pipeline,
-                ("hhem", "unieval"),
-                errors=errors,
-            )
-            assert health.hhem.status == "ready" and health.unieval.status == "failed"
+            api = service.apis[1]
+            with pytest.raises(WorkflowError) as failure:
+                await read_owned_health(
+                    service.client, api.origin, service.unieval.app.state.service_instance_id,
+                    api.worker_settings, pipeline, "unieval",
+                    observe=lambda health: setattr(api, "health", health),
+                )
+            api.retain_error(failure.value.error)
+            assert api.health is not None and api.health.unieval.status == "failed"
             outcomes = EvaluatorOutcomes()
             await evaluate_pair(
                 service.client,
-                "http://127.0.0.1:3010",
                 requests,
-                health,
+                *service.apis,
                 selected_hhem,
                 selected_unieval,
                 pipeline,
@@ -242,9 +234,10 @@ def test_a_failed_component_health_does_not_discard_the_ready_sibling() -> None:
             assert outcomes.hhem is not None and outcomes.hhem.status == "complete"
             assert outcomes.unieval is None
             assert any(
-                error.service == "unieval" and error.code == "HEALTH_FAILED" for error in errors
+                error.service == "unieval" and error.code == "HEALTH_FAILED"
+                for error in service.apis[1].errors
             )
-        assert worker.exit_confirmed and service.worker.exit_confirmed
+        assert worker.exit_confirmed and service.hhem.worker.exit_confirmed
 
     asyncio.run(check())
 
@@ -252,35 +245,27 @@ def test_a_failed_component_health_does_not_discard_the_ready_sibling() -> None:
 def test_cancellation_keeps_the_saved_sibling_and_native_interrupted_result() -> None:
     async def check() -> None:
         inputs, prepared, receipt, previous = generation_phase()
-        requests = bind_evaluations(prepared, inputs, receipt, previous, 1 << 20)
+        requests = bind_evaluations(
+            prepared, inputs, receipt, previous,
+            generation_sha256=text_sha256(receipt.model_dump_json()),
+        )
         _, selected_unieval = unieval_settings()
-        worker = RecordedUnievalSupervisor(selected_unieval, UnievalScenario(block_at=0))
         selected_hhem = service_settings()
         pipeline = load_pipeline_settings(REPOSITORY)
         outcomes = EvaluatorOutcomes()
         errors: list[PipelineError] = []
         saved = asyncio.Event()
-        async with running_service(
+        async with running_scorers(
             selected_hhem,
-            routes=("hhem", "unieval"),
-            unieval_settings=selected_unieval,
-            unieval_supervisor=worker,
+            selected_unieval=selected_unieval,
+            unieval_scenario=UnievalScenario(block_at=0),
         ) as service:
-            health = await read_owned_health(
-                service.client,
-                "http://127.0.0.1:3010",
-                service.app.state.service_instance_id,
-                selected_hhem,
-                pipeline,
-                ("hhem", "unieval"),
-                errors=errors,
-            )
+            worker = service.unieval_worker
             work = asyncio.create_task(
                 evaluate_pair(
                     service.client,
-                    "http://127.0.0.1:3010",
                     requests,
-                    health,
+                    *service.apis,
                     selected_hhem,
                     selected_unieval,
                     pipeline,
@@ -291,7 +276,7 @@ def test_cancellation_keeps_the_saved_sibling_and_native_interrupted_result() ->
             )
             async with asyncio.timeout(20):
                 await saved.wait()
-                while service.app.state.unieval.active_task is None:
+                while service.unieval.app.state.unieval.active_task is None:
                     await asyncio.sleep(0)
             work.cancel()
             with pytest.raises(asyncio.CancelledError):
@@ -306,6 +291,6 @@ def test_cancellation_keeps_the_saved_sibling_and_native_interrupted_result() ->
                 and error.http_status == 503
                 for error in errors
             )
-        assert worker.exit_confirmed and service.worker.exit_confirmed
+        assert worker.exit_confirmed and service.hhem.worker.exit_confirmed
 
     asyncio.run(check())

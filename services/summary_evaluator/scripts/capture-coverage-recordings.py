@@ -20,7 +20,7 @@ from idhazh.contracts.coverage_model_recording import (
     CoverageRecordingInputs,
 )
 
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.source_coverage.call_dimensions import DimensionBoundary
 from summary_evaluator.source_coverage.contracts.evaluation_result import CoverageMetrics
 from summary_evaluator.source_coverage.load_model import CoverageModel, load_model
@@ -66,7 +66,7 @@ def main() -> None:
     revision = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=root, text=True
     ).strip()
-    api = load_api_settings(root / "config" / "summary-evals" / "api.json")
+    api = load_scorer_api_settings(root / "config" / "summary-evals" / "api.json", "coverage")
     settings = load_settings(root, api.listener, api.logging)
     model = load_model(settings, root)
     effective = settings.model_dump(mode="json")

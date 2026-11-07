@@ -22,6 +22,8 @@ uv run --project .\services\summary_evaluator --frozen --extra model python .\se
 legacy code, model and tokenizer resources, named sentence files and exact
 preparation defaults. Preparation checks the upstream code digests and
 sentence archive before extracting only the named files.
+The named coverage tools resolve `listeners.coverage` from the API configuration,
+not the HHEM listener or another scorer's worker controls.
 
 The upstream loader accepts a repository name but not a revision argument.
 Preparation binds that name to the verified snapshot in its private cache.
@@ -85,5 +87,5 @@ checks use the evaluator's default model-free environment again.
 ## See also
 
 - [../reference/unieval-api.md](../reference/unieval-api.md) - the independent native method.
-- [../reference/summary-evaluator-api.md](../reference/summary-evaluator-api.md) - shared listener and component selection.
+- [../reference/summary-evaluator-api.md](../reference/summary-evaluator-api.md) - per-scorer listeners and explicit selection.
 - [run-the-gates.md](run-the-gates.md#independent-python-service-contracts) - model-free verification and Linux evidence.

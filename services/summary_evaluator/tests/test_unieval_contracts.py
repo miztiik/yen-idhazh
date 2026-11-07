@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from summary_evaluator_cases.contract_examples import REPOSITORY
 from summary_evaluator_cases.unieval_cases import read_unieval_recordings
 
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
 from summary_evaluator.unieval.contracts.unieval_contract import DIMENSIONS, UNIEVAL_VERSION
 from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
@@ -38,7 +38,9 @@ def test_required_reference_and_optional_controls_preserve_original_text() -> No
 
 
 def test_named_settings_freeze_all_assets_and_source_geometry() -> None:
-    api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
+    api = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
+    )
     settings = load_unieval_settings(REPOSITORY, api)
     assert settings.version == UNIEVAL_VERSION
     assert settings.listener == api.listener

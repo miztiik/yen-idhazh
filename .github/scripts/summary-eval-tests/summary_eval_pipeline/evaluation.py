@@ -2,24 +2,27 @@
 
 import asyncio
 import time
+from collections.abc import Callable
 
 import httpx
 from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
-from summary_evaluator.serve_http.contracts.api_health import ApiHealth
+from summary_evaluator.serve_http.contracts.api_health import ApiHealth, DisabledEvaluatorHealth
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
 from summary_evaluator.shared.contracts.api_paths import API_HEALTH_PATH, EVALUATE_PATH
+from summary_evaluator.shared.contracts.service_settings import WorkerSettings
 from summary_evaluator.shared.create_execution_id import create_execution_id
 from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
 from summary_evaluator.unieval.unieval_router import UNIEVAL_PATH
 
-from .contracts import GenerationReceipt, PhaseEvidence, PipelineError, PreparedRun, text_sha256
+from .contracts import GenerationReceipt, PreparedRun, ServiceName, text_sha256
 from .failures import WorkflowError
 from .http import call_local_api
 from .inputs import ManualInputs, encode_request
+from .phase_contracts import PhaseResult, starts_no_scorers
 from .settings import PipelineSettings
 
 
@@ -27,8 +30,9 @@ def bind_evaluations(
     prepared: PreparedRun,
     inputs: ManualInputs,
     receipt: GenerationReceipt,
-    generation: PhaseEvidence,
-    max_body_bytes: int,
+    generation: PhaseResult,
+    *,
+    generation_sha256: str,
 ) -> tuple[EvaluateRequest, UnievalRequest]:
     if (
         prepared.status != "complete"
@@ -48,9 +52,9 @@ def bind_evaluations(
         or generation.run != prepared.run
         or generation.phase != "generation"
         or generation.shutdown.llama_stopped is not True
-        or generation.shutdown.api_stopped is not None
+        or not starts_no_scorers(generation)
         or generation.shutdown.host_stopped is not True
-        or generation.generation_sha256 != text_sha256(receipt.model_dump_json())
+        or generation.generation_sha256 != generation_sha256
         or generation.reference_summary_sha256 != prepared.reference_summary_sha256
     ):
         raise WorkflowError("RECEIPT_INVALID", "input")
@@ -68,8 +72,6 @@ def bind_evaluations(
         request_id=request.request_id,
         correlation_id=request.correlation_id,
     )
-    if any(len(encode_request(value)) > max_body_bytes for value in (request, unieval)):
-        raise WorkflowError("INPUT_TOO_LARGE", "input")
     return request, unieval
 
 
@@ -77,62 +79,65 @@ async def read_owned_health(
     client: httpx.AsyncClient,
     base_url: str,
     service_instance_id: str,
-    settings: ServiceSettings,
+    settings: WorkerSettings,
     pipeline: PipelineSettings,
-    components: tuple[ApiComponent, ...] = ("hhem",),
-    startup_timeout_ms: int | None = None,
+    scorer: ApiComponent,
     *,
-    errors: list[PipelineError],
+    deadline: float | None = None,
+    observe: Callable[[ApiHealth], None] | None = None,
 ) -> ApiHealth:
-    deadline = (
-        time.monotonic()
-        + (
-            startup_timeout_ms
-            if startup_timeout_ms is not None
-            else settings.worker.startup_timeout_ms
-        )
-        / 1000
+    if deadline is None:
+        deadline = time.monotonic() + settings.startup_timeout_ms / 1000
+    service: ServiceName = (
+        "hhem" if scorer == "hhem" else "unieval" if scorer == "unieval" else "api"
     )
-    last: ApiHealth | None = None
     while (remaining := deadline - time.monotonic()) > 0:
-        try:
-            status, health = await call_local_api(
-                client,
-                "GET",
-                base_url + API_HEALTH_PATH,
-                ApiHealth,
-                pipeline,
-                min(remaining * 1000, pipeline.http_connect_timeout_ms),
-                service="api",
-                phase="health",
+        status, health = await call_local_api(
+            client,
+            "GET",
+            base_url + API_HEALTH_PATH,
+            ApiHealth,
+            pipeline,
+            min(remaining * 1000, pipeline.http_connect_timeout_ms),
+            service=service,
+            phase="health",
+        )
+        observed = getattr(health, scorer)
+        if (
+            health.service_instance_id != service_instance_id
+            or health.enabled_routes != (scorer,)
+            or any(
+                getattr(health, name).status != "disabled"
+                for name in ("hhem", "unieval", "coverage")
+                if name != scorer
             )
-        except WorkflowError as error:
-            if error.error.code != "HTTP_FAILED" or last is None or len(components) < 2:
-                raise
-            errors.append(error.error)
-            return last
-        if health.service_instance_id != service_instance_id or health.enabled_routes != components:
-            raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "health", "api", status)
-        last = health
+            or (
+                observed.status == "ready"
+                and observed.service_instance_id != service_instance_id
+            )
+        ):
+            raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "health", service, status)
+        if observe is not None:
+            observe(health)
         if status == 200 and health.status == "ready":
             return health
         if status != 503 or health.status not in ("loading", "failed", "stopping"):
-            raise WorkflowError("HEALTH_FAILED", "health", "api", status)
-        states = [getattr(health, component).status for component in components]
-        if all(state != "loading" for state in states):
-            if len(components) > 1:
-                return health
-            raise WorkflowError("HEALTH_FAILED", "health", "api", status)
+            raise WorkflowError("HEALTH_FAILED", "health", service, status)
+        if observed.status != "loading":
+            raise WorkflowError(
+                "HEALTH_FAILED", "health", service, status,
+                source_code=(
+                    observed.failure_code
+                    if not isinstance(observed, DisabledEvaluatorHealth) else None
+                ),
+            )
         await asyncio.sleep(
             min(
                 pipeline.poll_interval_ms / 1000,
                 max(0, deadline - time.monotonic()),
             )
         )
-    # One component's load failure or timeout must not erase a ready sibling.
-    if len(components) > 1 and last is not None:
-        return last
-    raise WorkflowError("HEALTH_FAILED", "health", "api")
+    raise WorkflowError("HEALTH_FAILED", "health", service)
 
 
 async def evaluate(
@@ -142,6 +147,9 @@ async def evaluate(
     settings: ServiceSettings,
     pipeline: PipelineSettings,
 ) -> tuple[int, EvaluationResult]:
+    body = encode_request(request)
+    if len(body) > settings.listener.max_body_bytes:
+        raise WorkflowError("INPUT_TOO_LARGE", "evaluation", "hhem")
     # Validate error-status responses too: they can contain a valid partial score.
     return await call_local_api(
         client,
@@ -155,7 +163,7 @@ async def evaluate(
         + pipeline.http_connect_timeout_ms,
         service="hhem",
         phase="evaluation",
-        body=encode_request(request),
+        body=body,
     )
 
 
@@ -166,6 +174,9 @@ async def evaluate_unieval(
     settings: UnievalSettings,
     pipeline: PipelineSettings,
 ) -> tuple[int, UnievalResult]:
+    body = encode_request(request)
+    if len(body) > settings.listener.max_body_bytes:
+        raise WorkflowError("INPUT_TOO_LARGE", "evaluation", "unieval")
     return await call_local_api(
         client,
         "POST",
@@ -178,5 +189,5 @@ async def evaluate_unieval(
         + pipeline.http_connect_timeout_ms,
         service="unieval",
         phase="evaluation",
-        body=encode_request(request),
+        body=body,
     )

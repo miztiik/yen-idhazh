@@ -192,18 +192,20 @@ jobs:
           services/summary_evaluator/.venv/bin/python - <<'PY' >> "$GITHUB_OUTPUT"
           import math
           from pathlib import Path
-          from summary_evaluator.serve_http.api_settings import load_api_settings
+          from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
+          from summary_evaluator.shared.contracts.api_paths import API_HEALTH_PATH
           from summary_evaluator.source_coverage.load_settings import load_settings
           root = Path(".")
-          api = load_api_settings(root / "config" / "summary-evals" / "api.json")
+          api = load_scorer_api_settings(root / "config" / "summary-evals" / "api.json", "coverage")
           selected = load_settings(root, api.listener, api.logging)
           host = f"[{api.listener.host}]" if ":" in api.listener.host else api.listener.host
-          print(f"health_url=http://{host}:{api.listener.port}/api/2026-11-05/get-summary-coverage-health")
+          print(f"health_url=http://{host}:{api.listener.port}{API_HEALTH_PATH}")
           print(f"startup_seconds={math.ceil(selected.worker.startup_timeout_ms / 1000)}")
-          print(f"shutdown_seconds={math.ceil(api.shutdown_timeout_ms / 1000)}")
+          print(f"shutdown_seconds={math.ceil((api.shutdown_timeout_ms + selected.worker.shutdown_timeout_ms + selected.worker.forced_stop_ms) / 1000)}")
           print(f"forced_stop_seconds={math.ceil(selected.worker.forced_stop_ms / 1000)}")
           print(f"health_seconds={math.ceil(api.listener.body_read_timeout_ms / 1000)}")
           print(f"max_identity_bytes={selected.worker.max_proc_identity_bytes}")
+          print(f"max_reply_bytes={selected.worker.max_reply_bytes}")
           print(f"model_revision={selected.assets.model.revision}")
           print(f"code_revision={selected.assets.code.revision}")
           print(f"log_directory={api.log_directory}")
@@ -257,10 +259,12 @@ jobs:
           STARTUP_SECONDS: ${{ steps.coverage.outputs.startup_seconds }}
           HEALTH_SECONDS: ${{ steps.coverage.outputs.health_seconds }}
           MAX_IDENTITY_BYTES: ${{ steps.coverage.outputs.max_identity_bytes }}
+          MAX_REPLY_BYTES: ${{ steps.coverage.outputs.max_reply_bytes }}
           MODEL_REVISION: ${{ steps.coverage.outputs.model_revision }}
           CODE_REVISION: ${{ steps.coverage.outputs.code_revision }}
         run: |
           set -euo pipefail
+          DEADLINE=$((SECONDS + STARTUP_SECONDS))
           services/summary_evaluator/.venv/bin/python -m summary_evaluator \
             --root . --routes coverage > eval_server.log 2>&1 &
           SERVER_PID=$!
@@ -281,30 +285,53 @@ jobs:
           PY
           )
           echo "start_ticks=$PIN" >> "$GITHUB_OUTPUT"
+          export SERVER_START_TICKS="$PIN"
           READY=0
-          DEADLINE=$((SECONDS + STARTUP_SECONDS))
           while [ "$SECONDS" -lt "$DEADLINE" ]; do
             if ! kill -0 "$SERVER_PID" 2>/dev/null; then
               echo "The owned coverage server exited before readiness"
               cat eval_server.log
               exit 1
             fi
-            if curl --silent --fail --max-time "$HEALTH_SECONDS" "$COVERAGE_HEALTH_URL" \
+            REMAINING=$((DEADLINE - SECONDS))
+            if [ "$REMAINING" -le 0 ]; then break; fi
+            HEALTH_WAIT=$((REMAINING < HEALTH_SECONDS ? REMAINING : HEALTH_SECONDS))
+            if curl --silent --fail --max-time "$HEALTH_WAIT" "$COVERAGE_HEALTH_URL" \
               | services/summary_evaluator/.venv/bin/python -c '
-          import json, os, subprocess, sys
+          import os, subprocess, sys
+          from pathlib import Path
+          from summary_evaluator.serve_http.contracts.api_health import ApiHealth
+          from summary_evaluator.source_coverage.contracts.service_health import CoverageHealth
           try:
-              value = json.load(sys.stdin)
-              model, worker = value["model"], value["worker"]
-              pid = worker["pid"]
-              if type(pid) is not int or pid <= 0:
-                  raise ValueError("Invalid owned worker identity")
+              limit = int(os.environ["MAX_REPLY_BYTES"])
+              raw = sys.stdin.buffer.read(limit + 1)
+              if len(raw) > limit:
+                  raise ValueError("Coverage health exceeds its reply bound")
+              value = ApiHealth.model_validate_json(raw)
+              observed = value.coverage
+              if not isinstance(observed, CoverageHealth):
+                  raise ValueError("Coverage was not selected")
+              model, worker = observed.model, observed.worker
+              if model is None or worker is None:
+                  raise ValueError("The owned coverage model is not ready")
+              pid = worker.pid
+              api_pid = int(os.environ["SERVER_PID"])
+              with Path(f"/proc/{api_pid}/stat").open("rb") as source:
+                  identity = source.read(int(os.environ["MAX_IDENTITY_BYTES"]) + 1)
+              if len(identity) > int(os.environ["MAX_IDENTITY_BYTES"]):
+                  raise ValueError("API process identity exceeds its bound")
+              fields = identity.decode().rsplit(")", 1)[1].split()
+              valid = fields[19] == os.environ["SERVER_START_TICKS"] and fields[0] != "Z"
               owner = int(subprocess.check_output(["ps", "-o", "ppid=", "-p", str(pid)], text=True).strip())
-              valid = value["status"] == "ready" and owner == int(os.environ["SERVER_PID"])
-              valid = valid and model["loaded_revision"] == os.environ["MODEL_REVISION"]
-              valid = valid and model["tokenizer_revision"] == os.environ["MODEL_REVISION"]
-              valid = valid and model["code_revision"] == os.environ["CODE_REVISION"]
+              valid = valid and value.enabled_routes == ("coverage",) and value.status == "ready"
+              valid = valid and value.hhem.status == value.unieval.status == "disabled"
+              valid = valid and observed.status == "ready" and pid != api_pid and owner == api_pid
+              valid = valid and observed.service_instance_id == value.service_instance_id
+              valid = valid and model.loaded_revision == os.environ["MODEL_REVISION"]
+              valid = valid and model.tokenizer_revision == os.environ["MODEL_REVISION"]
+              valid = valid and model.code_revision == os.environ["CODE_REVISION"]
               raise SystemExit(0 if valid else 1)
-          except (ValueError, KeyError, TypeError, subprocess.SubprocessError):
+          except (OSError, ValueError, KeyError, TypeError, IndexError, UnicodeError, subprocess.SubprocessError):
               raise SystemExit(1) from None
           '; then
               READY=1

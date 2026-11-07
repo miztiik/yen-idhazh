@@ -10,7 +10,8 @@ from idhazh.contracts.coverage_model_recording import (
 )
 from summary_evaluator_cases.contract_examples import REPOSITORY
 
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
+from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
 from summary_evaluator.source_coverage.contracts.service_settings import CoverageSettings
 from summary_evaluator.source_coverage.load_converter import load_converter
 from summary_evaluator.source_coverage.load_settings import load_settings
@@ -28,8 +29,10 @@ def read_coverage_recordings() -> tuple[CoverageRecordingInputs, CoverageModelRe
     return inputs, recording
 
 
-def coverage_settings() -> CoverageSettings:
-    api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
+def coverage_settings(*, api: ApiSettings | None = None) -> CoverageSettings:
+    api = api or load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "coverage"
+    )
     return load_settings(REPOSITORY, api.listener, api.logging)
 
 

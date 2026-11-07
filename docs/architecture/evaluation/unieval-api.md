@@ -1,6 +1,6 @@
 # How the UniEval API checks a complete source
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-07
 
 How the local evaluator produces four distinct scores without silently
 cutting the article or replacing an unfinished result. The
@@ -73,8 +73,8 @@ All four dimensions and no errors are required for a complete result.
 
 ## Independent ownership
 
-The [shared application](summary-evaluator.md) explicitly registers the
-UniEval router. Its queue and owned process are independent of HHEM and
+The [reusable application](summary-evaluator.md) explicitly registers the
+UniEval router in its own API process. Its listener, queue and owned model process are independent of HHEM and
 native generation. Model loading, tokenization and inference run in the
 worker, not on the HTTP event loop. Body reservations and deadlines still
 apply before reading a request.

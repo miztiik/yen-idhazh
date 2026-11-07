@@ -11,6 +11,7 @@ from recording_json import canonical_bytes
 
 from summary_evaluator.hhem.fail_evaluation import EvaluationFailure
 from summary_evaluator.hhem.load_model import load_model
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
 from summary_evaluator.shared.quiet_model_output import quiet_model_output
 
@@ -21,7 +22,10 @@ def main() -> int:
     args = parser.parse_args()
     root: Path = args.root
     fixture = root / "tests" / "fixtures" / "hhem-evaluator"
-    settings = load_settings(root / "config" / "summary-evals" / "hhem-evaluator" / "settings.json")
+    api = load_scorer_api_settings(root / "config" / "summary-evals" / "api.json", "hhem")
+    settings = load_settings(
+        root / "config" / "summary-evals" / "hhem-evaluator" / "settings.json", api
+    )
     inputs = json.loads((fixture / "model-inputs.json").read_bytes())
     try:
         predictor = load_model(settings, root, local_only=False)

@@ -7,7 +7,7 @@ from summary_evaluator_cases.unieval_cases import (
     unieval_settings,
 )
 
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
 from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
 from summary_evaluator.unieval.load_unieval_resources import load_unieval_resources
@@ -81,7 +81,9 @@ def test_comparison_limit_refuses_matrix_before_materializing_it() -> None:
 
 
 def test_normalized_character_offsets_refuse_impossible_overlap_only_for_consistency() -> None:
-    api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
+    api = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
+    )
     settings = load_unieval_settings(REPOSITORY, api)
     resources = load_unieval_resources(settings, REPOSITORY)
     request = UnievalRequest(

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from recording_json import canonical_bytes
 
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
 from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_VERSION
 from summary_evaluator.unieval.contracts.unieval_recording import (
@@ -34,7 +34,7 @@ def main() -> None:
         (directory / "model-inputs.json").read_bytes()
     )
     settings = load_unieval_settings(
-        root, load_api_settings(root / "config" / "summary-evals" / "api.json")
+        root, load_scorer_api_settings(root / "config" / "summary-evals" / "api.json", "unieval")
     )
     prepare_unieval_resources(root, settings, include_weights=True)
     predictor = load_unieval(settings, root)

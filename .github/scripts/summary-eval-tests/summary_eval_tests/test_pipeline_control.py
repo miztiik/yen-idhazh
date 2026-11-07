@@ -9,9 +9,9 @@ from summary_eval_pipeline.contracts import WORKFLOW_VERSION
 from summary_eval_pipeline.control import ServiceControl, StartupPacket
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.phase_services import PhaseServices
+from summary_eval_pipeline.scorer_control import ScorerControl
 from summary_eval_pipeline.services import CONTROL_PACKET_CAPACITY, OwnedService
 from summary_eval_pipeline.settings import load_pipeline_settings
-from summary_evaluator.serve_http.api_settings import load_api_settings
 from summary_evaluator.shared.contracts.service_settings import StartupContext
 from summary_evaluator_cases.contract_examples import REPOSITORY, REQUEST_ID
 
@@ -52,14 +52,14 @@ def test_exit_after_queue_timeout_prioritizes_three_validated_controls_before_fa
     release, drained = threading.Event(), threading.Event()
     child = start_scheduled_failure(release, drained)
 
-    class TimeoutBoundaryQueue(queue.Queue[ServiceControl | None]):
+    class TimeoutBoundaryQueue(queue.Queue[ServiceControl | ScorerControl | None]):
         observed_entries = 0
 
         def get(
             self,
             block: bool = True,
             timeout: float | None = None,
-        ) -> ServiceControl | None:
+        ) -> ServiceControl | ScorerControl | None:
             try:
                 return super().get(block, timeout)
             except queue.Empty:
@@ -80,13 +80,7 @@ def test_exit_after_queue_timeout_prioritizes_three_validated_controls_before_fa
         assert original.value.error.source_code == "MACHINE_API_STARTUP_INVALID"
         errors = [original.value.error]
         services = PhaseServices(example_run(), host=child)
-        services.close(
-            child.settings,
-            load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json"),
-            errors,
-            False,
-            pipeline=child.manual,
-        )
+        services.close(errors, False, pipeline=child.manual)
         assert [(error.code, error.source_code) for error in errors] == [
             ("STARTUP_FAILED", "MACHINE_API_STARTUP_INVALID"),
             ("SERVICE_STOP_FAILED", "MACHINE_EVIDENCE_INVALID"),
@@ -111,13 +105,7 @@ def test_cleanup_retains_original_startup_failure_first_discovered_without_readi
         assert drained.wait(5)
         errors = [observed.value.error]
         services = PhaseServices(example_run(), host=child)
-        services.close(
-            child.settings,
-            load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json"),
-            errors,
-            False,
-            pipeline=child.manual,
-        )
+        services.close(errors, False, pipeline=child.manual)
         assert child.ready is None and child.process.returncode == 1
         assert [(error.code, error.source_code) for error in errors] == [
             ("CHILD_EXITED", None),

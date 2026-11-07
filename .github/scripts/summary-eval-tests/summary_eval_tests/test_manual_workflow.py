@@ -251,7 +251,7 @@ def test_exact_utf8_input_allowance_and_one_byte_over_are_distinct(
         assert read_manual_inputs(pipeline) == expected
 
 
-def test_current_report_fixture_and_private_control_have_one_native_shape() -> None:
+def test_frozen_parent_report_and_unchanged_private_machine_control_remain_readable() -> None:
     fixture = REPOSITORY / "tests" / "fixtures" / "hhem-evaluator" / "pipeline-evidence.json"
     report = PipelineEvidence.model_validate_json(fixture.read_bytes())
     assert report.version == WORKFLOW_VERSION and report.generation is None

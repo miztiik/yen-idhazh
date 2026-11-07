@@ -21,7 +21,11 @@ from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
 from summary_evaluator.hhem.load_settings import SettingsLoadError
 from summary_evaluator.hhem.resolve_request import RequestResolutionError, resolve_request
-from summary_evaluator.serve_http.api_settings import ApiSettingsLoadError, load_api_settings
+from summary_evaluator.serve_http.api_settings import (
+    ApiSettingsLoadError,
+    load_api_settings,
+    load_scorer_api_settings,
+)
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent, ApiSettings
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
 from summary_evaluator.shared.contracts.service_settings import StartupContext
@@ -76,19 +80,19 @@ def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model
             "-c",
             "import importlib.util; import io; import sys; "
             "from pathlib import Path; "
-            "from summary_evaluator.serve_http.api_settings import load_api_settings; "
+            "from summary_evaluator.serve_http.api_settings import load_scorer_api_settings; "
             "from summary_evaluator.serve_http.emit_events import EventWriter; "
             "from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings; "
             "from summary_evaluator.serve_http.serve_api import create_app; "
             "assert importlib.util.find_spec('idhazh') is None; "
             "assert importlib.util.find_spec('torch') is None; "
-            "api = load_api_settings(Path(sys.argv[1])); "
+            "api = load_scorer_api_settings(Path(sys.argv[1]),'hhem'); "
             "root = Path(sys.argv[2]); "
             "settings = load_hhem_settings(Path(sys.argv[3]), api); "
             "writer = EventWriter(api.logging, io.StringIO()); "
             "app = create_app(api, settings, root, writer=writer); "
             "assert app.state.controller.worker.process is None; "
-            "assert app.state.unieval.worker.process is None; "
+            "assert app.state.unieval is None; "
             "assert not {'torch', 'transformers', 'nltk'} & sys.modules.keys()",
             str(API_SETTINGS_FILE),
             str(REPOSITORY),
@@ -176,7 +180,7 @@ def test_installed_children_import_only_their_declared_dependencies(
 def test_settings_freeze_the_effective_snapshot_not_the_file(tmp_path: Path) -> None:
     path = tmp_path / "settings.json"
     path.write_bytes(SETTINGS_FILE.read_bytes())
-    api = load_api_settings(API_SETTINGS_FILE)
+    api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem")
     settings = load_settings(path, api)
     changed = settings.model_dump(mode="json", exclude={"enabled", "listener", "logging"})
     changed["scoring"]["chunk_words"] = 1500
@@ -318,7 +322,7 @@ def test_full_comparison_never_substitutes_primary_source() -> None:
 def test_invalid_settings_fail_with_the_setting_named(
     path: tuple[str, ...], value: object, tmp_path: Path
 ) -> None:
-    shared = load_api_settings(API_SETTINGS_FILE)
+    shared = load_scorer_api_settings(API_SETTINGS_FILE, "hhem")
     is_shared = path[0] in ("listener", "logging")
     payload = (
         shared.model_dump(mode="json")
@@ -343,7 +347,7 @@ def test_invalid_settings_fail_with_the_setting_named(
 
 
 def test_missing_settings_have_no_source_or_environment_fallback(tmp_path: Path) -> None:
-    shared = load_api_settings(API_SETTINGS_FILE)
+    shared = load_scorer_api_settings(API_SETTINGS_FILE, "hhem")
     payload = load_settings(SETTINGS_FILE).model_dump(
         mode="json", exclude={"enabled", "listener", "logging"}
     )
@@ -360,12 +364,12 @@ def test_missing_settings_have_no_source_or_environment_fallback(tmp_path: Path)
 
 
 @pytest.mark.parametrize("routes", [("hhem",), ()])
-def test_shared_listener_is_the_only_authority_and_disabled_routes_are_explicit(
+def test_selected_listener_is_the_only_authority_and_disabled_snapshots_are_explicit(
     routes: tuple[str, ...],
 ) -> None:
-    shared = load_api_settings(API_SETTINGS_FILE)
+    shared = load_scorer_api_settings(API_SETTINGS_FILE, "hhem")
     assert shared.listener.host == "127.0.0.1" and shared.listener.port == 3010
-    assert shared.enabled_routes == ("hhem", "unieval")
+    assert shared.enabled_routes == ("hhem",)
     selected = ApiSettings.model_validate_json(
         shared.model_copy(
             update={
@@ -392,7 +396,7 @@ def test_shared_listener_is_the_only_authority_and_disabled_routes_are_explicit(
 def test_retired_generation_settings_and_previous_application_version_are_refused(
     change: dict[str, object],
 ) -> None:
-    shared = load_api_settings(API_SETTINGS_FILE)
+    shared = load_scorer_api_settings(API_SETTINGS_FILE, "hhem")
     with pytest.raises(ValidationError):
         ApiSettings.model_validate_json(json.dumps({**shared.model_dump(mode="json"), **change}))
 
@@ -455,7 +459,7 @@ def test_old_authored_listener_and_flag_fields_are_refused(field: str, tmp_path:
     path = tmp_path / "settings.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(SettingsLoadError, match=field):
-        load_settings(path, load_api_settings(API_SETTINGS_FILE))
+        load_settings(path, load_scorer_api_settings(API_SETTINGS_FILE, "hhem"))
 
 
 @pytest.mark.parametrize("value", ["", "two words", "../run", "run\nid", "r" * 129, "\u00e9"])

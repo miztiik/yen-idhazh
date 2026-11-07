@@ -6,11 +6,16 @@ from decimal import ROUND_CEILING, Decimal
 
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
+from summary_evaluator.shared.contracts.process_identity import ProcessIdentity
+from summary_evaluator.shared.contracts.worker_exit import WorkerExit
 
-from .contracts import PhaseEvidence, PhaseName, PipelineError, PipelineEvidence
+from .contracts import PhaseEvidence as LegacyPhaseEvidence
+from .contracts import PhaseName, PipelineError
 from .host_reader import measurement_complete
 from .inputs import ManualInputs
-from .report_models import model_rows
+from .phase_contracts import PhaseResult
+from .report_contracts import PipelineResult
+from .report_models import model_rows, scorer_health
 
 
 def format_seconds(milliseconds: float | None) -> str:
@@ -40,32 +45,60 @@ def table(letter: str, headings: Sequence[str], rows: Sequence[Sequence[object]]
     return "\n".join(lines)
 
 
-def describe_error(error: PipelineError, task: PhaseName | None = None) -> str:
+def describe_error(
+    error: PipelineError, task: PhaseName | None = None, scorer: str | None = None
+) -> str:
     location: list[str] = [task] if task is not None else []
+    if scorer is not None:
+        location.append(scorer)
     if error.phase != task:
         location.append(error.phase)
-    location.append(error.service)
+    if error.service != scorer:
+        location.append(error.service)
     if error.http_status is not None:
         location.append(f"HTTP {error.http_status}")
     cause = f" (cause {error.source_code})" if error.source_code is not None else ""
     return f"- {' / '.join(location)}: {error.code}{cause} - {error.message}"
 
 
-def describe_evaluator(status: str | None, phase: PhaseEvidence | None, service: str) -> str:
+def describe_evaluator(status: str | None, phase: PhaseResult | None, service: str) -> str:
     if status is not None:
         return status
     failures = (
         [
             error
             for error in phase.errors
-            if error.service == service and error.phase == "evaluation"
+            if error.service == service
         ]
         if phase
         else []
     )
+    if phase is not None and not isinstance(phase, LegacyPhaseEvidence):
+        failures.extend(
+            error for api in phase.scorer_apis if api.scorer == service for error in api.errors
+        )
     if any(error.code == "TASK_CANCELLED" for error in failures):
         return "Cancelled - no result"
     return "Failed - no valid result" if failures else "Not run"
+
+
+def describe_api_process(process: ProcessIdentity | None) -> str:
+    if process is None:
+        return "Not recorded"
+    pin = (
+        f"start ticks {process.start_ticks}" if process.start_ticks is not None
+        else f"pin unavailable ({process.pin_unavailable_reason})"
+    )
+    return f"PID {process.pid}; {pin}"
+
+
+def describe_worker_exit(exit_observed: WorkerExit) -> str:
+    if exit_observed.confirmed is None:
+        return "Not recorded"
+    return (
+        f"PID {exit_observed.pid}; exit status {exit_observed.exit_code}; "
+        f"confirmed {exit_observed.confirmed}"
+    )
 
 
 def describe_hhem(result: EvaluationResult | None) -> str:
@@ -84,7 +117,7 @@ def describe_hhem(result: EvaluationResult | None) -> str:
 
 
 def render_report(
-    evidence: PipelineEvidence,
+    evidence: PipelineResult,
     inputs: ManualInputs,
     settings: ServiceSettings,
     config_url: str,
@@ -190,11 +223,12 @@ def render_report(
                     f"kernel start ticks {worker.start_ticks}",
                 )
             )
-        if phase.api_health is not None:
-            readings.extend(
-                (phase.phase, f"{name} startup state", getattr(phase.api_health, name).status)
-                for name in ("hhem", "unieval")
-            )
+        for name in ("hhem", "unieval"):
+            health = scorer_health(phase, name)
+            if health is not None:
+                readings.append(
+                    (phase.phase, f"{name} startup state", getattr(health, name).status)
+                )
         cpu = machine.cpu.value if machine else None
         total = machine.samples[-1].memory_kb.total if machine else None
         available = machine.samples[-1].memory_kb.available if machine else None
@@ -246,21 +280,52 @@ def render_report(
                 ),
             ]
         )
-        if phase.phase == "evaluation":
+        legacy_shutdown = phase.shutdown if isinstance(phase, LegacyPhaseEvidence) else None
+        if legacy_shutdown is not None and phase.phase == "evaluation":
             readings.extend(
                 [
                     (
                         phase.phase,
                         "HHEM worker exit confirmed",
-                        phase.shutdown.worker_exit_confirmed,
+                        legacy_shutdown.worker_exit_confirmed,
                     ),
                     (
                         phase.phase,
                         "UniEval worker exit confirmed",
-                        phase.shutdown.unieval_worker_exit_confirmed,
+                        legacy_shutdown.unieval_worker_exit_confirmed,
                     ),
                 ]
             )
+        if not isinstance(phase, LegacyPhaseEvidence):
+            for api in phase.scorer_apis:
+                errors.extend(
+                    describe_error(error, phase.phase, api.scorer) for error in api.errors
+                )
+                outcome = api.outcome
+                for code, location in (
+                    (outcome.error_code, "api"),
+                    (outcome.cleanup_error_code, "cleanup"),
+                ):
+                    if code is not None:
+                        errors.append(
+                            f"- {phase.phase} / {api.scorer} / {location}: {cell(code)}"
+                        )
+                servers.append(
+                    (
+                        phase.phase,
+                        f"{api.scorer} API",
+                        describe_api_process(api.process),
+                        api.service_instance_id or "Not recorded",
+                        outcome.startup,
+                        format_seconds(outcome.startup_ms),
+                        outcome.shutdown,
+                        outcome.exit_code,
+                        describe_worker_exit(api.worker_exit),
+                        outcome.log_filename or "Not recorded",
+                        "Available" if outcome.log_available else "Unavailable",
+                    )
+                )
+        shared_recorded = False
         for server in phase.servers:
             if server.error_code is not None:
                 errors.append(f"- {phase.phase} / {server.server_name}: {cell(server.error_code)}")
@@ -272,13 +337,46 @@ def render_report(
             servers.append(
                 (
                     phase.phase,
-                    server.server_name,
+                    "Shared scorer API (legacy 2026-11-05)"
+                    if server.server_name == "fastapi-server" else server.server_name,
+                    "Not recorded" if server.server_name == "fastapi-server" else "-",
+                    (
+                        phase.api_health.service_instance_id
+                        if isinstance(phase, LegacyPhaseEvidence) and phase.api_health is not None
+                        else "Not recorded"
+                    ) if server.server_name == "fastapi-server" else "-",
                     server.startup,
                     format_seconds(server.startup_ms),
                     server.shutdown,
                     server.exit_code,
+                    (
+                        f"HHEM confirmed {phase.shutdown.worker_exit_confirmed}; "
+                        f"UniEval confirmed {phase.shutdown.unieval_worker_exit_confirmed}; "
+                        "worker exit PIDs/statuses not recorded"
+                    ) if isinstance(phase, LegacyPhaseEvidence)
+                    and server.server_name == "fastapi-server" else "-",
                     server.log_filename or "Not available",
                     "Available" if server.log_available else "Unavailable",
+                )
+            )
+            shared_recorded = shared_recorded or server.server_name == "fastapi-server"
+        if (
+            isinstance(phase, LegacyPhaseEvidence)
+            and phase.phase == "evaluation"
+            and not shared_recorded
+        ):
+            health = phase.api_health
+            servers.append(
+                (
+                    phase.phase, "Shared scorer API (legacy 2026-11-05)", "Not recorded",
+                    health.service_instance_id if health is not None else "Not recorded",
+                    health.status if health is not None else "Not recorded",
+                    "Not recorded", "Not recorded", "Not recorded",
+                    f"HHEM confirmed {phase.shutdown.worker_exit_confirmed}; "
+                    f"UniEval confirmed {phase.shutdown.unieval_worker_exit_confirmed}; "
+                    "worker exit PIDs/statuses not recorded",
+                    health.log_file if health is not None else "Not recorded",
+                    "Available" if health is not None and health.log_available else "Unavailable",
                 )
             )
     sections = [
@@ -336,10 +434,13 @@ def render_report(
                 (
                     "Phase",
                     "Server",
+                    "API process / start pin",
+                    "Application identity",
                     "Startup",
                     "Startup (seconds)",
                     "Shutdown",
                     "Exit status",
+                    "Model worker exit",
                     "Log file",
                     "Log mirror",
                 ),

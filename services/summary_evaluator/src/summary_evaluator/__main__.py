@@ -1,4 +1,4 @@
-"""How is the shared Python API bound before any enabled model starts?"""
+"""How is exactly one scorer API bound before its model starts?"""
 
 import argparse
 from pathlib import Path
@@ -6,13 +6,14 @@ from typing import get_args
 
 import uvicorn
 
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_selected_api_settings
 from summary_evaluator.serve_http.configure_server import (
     create_server_config,
     report_startup_failure,
 )
-from summary_evaluator.serve_http.contracts.api_settings import ApiComponent, ApiSettings
+from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
 from summary_evaluator.serve_http.contracts.server_event import ApiDiagnosticData
+from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
 from summary_evaluator.serve_http.run_server import run_server
 from summary_evaluator.serve_http.serve_api import create_app
@@ -27,11 +28,10 @@ def main() -> None:
     args = parser.parse_args()
     root = args.root.resolve()
     try:
-        api = load_api_settings(args.api_settings or root / "config" / "summary-evals" / "api.json")
-        if args.routes is not None:
-            api = ApiSettings.model_validate_json(
-                api.model_copy(update={"enabled_routes": tuple(args.routes)}).model_dump_json()
-            )
+        api = load_selected_api_settings(
+            args.api_settings or root / "config" / "summary-evals" / "api.json",
+            tuple(args.routes) if args.routes is not None else None,
+        )
         app = create_app(
             api,
             load_settings(
@@ -42,6 +42,11 @@ def main() -> None:
             if "hhem" in api.enabled_routes
             else None,
             root,
+            writer=EventWriter(
+                api.logging,
+                directory=root / api.log_directory,
+                scorer=api.enabled_routes[0],
+            ),
         )
     except ValueError:
         report_startup_failure("INVALID_SERVER_SETTINGS")

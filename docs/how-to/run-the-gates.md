@@ -275,6 +275,13 @@ pipes and recorded predictions at the model boundary. The primary/full timeout
 case must retain the exact primary maximum, confirm the old PID's exit, keep
 queued identities and deadlines, and load the same replacement identity.
 No ordinary test opens an HTTP listener or downloads model assets.
+The named `test_scorer_api_isolation.py` cases additionally spawn the actual
+owned Uvicorn lifespans with no listening sockets. Native ASGI operations use
+the existing recorded model boundaries. Restarting each selected API must
+change its own process/application identity while the sibling API, worker and
+already saved result remain unchanged. Different worker PIDs behind one API
+cannot pass this check. Run it with the complete model-free Linux suite; a
+Windows skip is not API-process isolation evidence.
 The evaluator application has no generation route or client lifespan.
 Direct native generation cases live with the workflow and replay the named
 model response at the HTTPX boundary; they do not start an evaluation proxy.

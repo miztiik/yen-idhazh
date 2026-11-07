@@ -5,6 +5,7 @@ import contextlib
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -13,11 +14,17 @@ from summary_eval_pipeline.contracts import WORKFLOW_VERSION, PipelineError
 from summary_eval_pipeline.control import HostReady, ServiceStopped, StartupPacket
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.native_log import NativeDiagnosticData, NativeEvent, NativeLog
-from summary_eval_pipeline.phase_services import PhaseServices
+from summary_eval_pipeline.phase_services import PhaseServices, ScorerService
 from summary_eval_pipeline.phases import guard_work
+from summary_eval_pipeline.scorer_control import (
+    SCORER_CONTROL_VERSION,
+    ScorerStartupPacket,
+    ScorerStopped,
+)
 from summary_eval_pipeline.services import OwnedService
 from summary_eval_pipeline.settings import load_pipeline_settings
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
+from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
 from summary_evaluator.shared.contracts.service_settings import StartupContext
 from summary_evaluator_cases.contract_examples import REPOSITORY, REQUEST_ID
 from summary_evaluator_cases.service_cases import service_settings
@@ -30,23 +37,47 @@ CHILD_STARTUP_MS = 60000
 
 
 def start_child(service: Literal["api", "host"], mode: str) -> OwnedService:
+    startup = StartupPacket(
+        version=WORKFLOW_VERSION, startup_id=REQUEST_ID, context=StartupContext()
+    )
+    scorer: ApiComponent = "unieval" if mode == "unconfirmed_unieval_stop" else "hhem"
     return OwnedService(
         service,
         owned_child_command(mode),
         REPOSITORY,
-        StartupPacket(version=WORKFLOW_VERSION, startup_id=REQUEST_ID, context=StartupContext()),
+        ScorerStartupPacket(version=SCORER_CONTROL_VERSION, scorer=scorer, startup=startup)
+        if service == "api"
+        else startup,
         service_settings(
             worker={
                 "stop_grace_ms": 500,
                 "forced_stop_ms": 1000,
                 "shutdown_timeout_ms": 1500,
             }
-        )
+        ).worker
         if service == "api"
         else None,
         load_pipeline_settings(REPOSITORY).model_copy(
             update={"host_stop_grace_ms": 500, "host_forced_stop_ms": 1000}
         ),
+        api_settings=load_scorer_api_settings(
+            REPOSITORY / "config" / "summary-evals" / "api.json", scorer
+        )
+        if service == "api"
+        else None,
+    )
+
+
+def scorer_service(child: OwnedService) -> ScorerService:
+    assert (
+        child.scorer is not None and child.api_settings is not None and child.settings is not None
+    )
+    return ScorerService(
+        scorer=child.scorer,
+        api_settings=child.api_settings,
+        worker_settings=child.settings,
+        owner=child,
+        started=time.monotonic(),
     )
 
 
@@ -111,8 +142,8 @@ def test_inherited_output_cannot_corrupt_a_private_shutdown_receipt(
     child = start_child("api", "raw_inherited_output")
     child.wait_ready(CHILD_STARTUP_MS)
     stopped = child.close(6000)
-    assert stopped.clean and stopped.worker_exit_confirmed is True
-    assert stopped.unieval_worker_exit_confirmed is True
+    assert isinstance(stopped, ScorerStopped)
+    assert stopped.clean and stopped.worker_exit.confirmed is True
     assert child.process.poll() == 0
     output = str(capsys.readouterr())
     assert "PrivateInheritedOutputCanary" not in output
@@ -120,15 +151,15 @@ def test_inherited_output_cannot_corrupt_a_private_shutdown_receipt(
 
 
 @pytest.mark.parametrize(
-    ("mode", "confirmed", "unieval_confirmed"),
+    ("mode", "confirmed"),
     [
-        ("unclean_stop", True, True),
-        ("unconfirmed_stop", False, True),
-        ("unconfirmed_unieval_stop", True, False),
+        ("unclean_stop", True),
+        ("unconfirmed_stop", False),
+        ("unconfirmed_unieval_stop", False),
     ],
 )
 def test_unclean_shutdown_preserves_each_observed_worker_exit(
-    mode: str, confirmed: bool, unieval_confirmed: bool
+    mode: str, confirmed: bool
 ) -> None:
     child = start_child("api", mode)
     child.wait_ready(CHILD_STARTUP_MS)
@@ -136,8 +167,8 @@ def test_unclean_shutdown_preserves_each_observed_worker_exit(
         child.close(6000)
     assert failure.value.error.code == "SERVICE_STOP_FAILED"
     assert child.process.poll() == 0
-    assert child.stopped is not None and child.stopped.worker_exit_confirmed is confirmed
-    assert child.stopped.unieval_worker_exit_confirmed is unieval_confirmed
+    assert isinstance(child.stopped, ScorerStopped)
+    assert child.stopped.worker_exit.confirmed is confirmed
     assert not child.protocol_failed.is_set() and not child.events_failed.is_set()
 
 
@@ -149,23 +180,20 @@ def test_original_work_failure_and_both_real_cleanup_failures_remain_separate() 
         host.wait_ready(CHILD_STARTUP_MS)
     original = WorkflowError("EVALUATION_FAILED", "evaluation", "hhem").error
     errors = [original]
-    services = PhaseServices(example_run(), api=api, host=host)
-    services.close(
-        service_settings(),
-        load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json"),
-        errors,
-        False,
-        pipeline=load_pipeline_settings(REPOSITORY),
-    )
+    api_service = scorer_service(api)
+    services = PhaseServices(example_run(), scorer_apis={"hhem": api_service}, host=host)
+    services.close(errors, False, pipeline=load_pipeline_settings(REPOSITORY))
     assert errors[0] == original
     assert [(error.code, error.service) for error in errors[1:]] == [
         ("SERVICE_STOP_FAILED", "host"),
-        ("SERVICE_STOP_FAILED", "api"),
+    ]
+    assert [(error.code, error.service) for error in api_service.errors] == [
+        ("SERVICE_STOP_FAILED", "hhem")
     ]
     assert api.process.poll() is not None and host.process.poll() is not None
-    assert services.shutdown().worker_exit_confirmed is True
-    assert services.shutdown().unieval_worker_exit_confirmed is True
-    assert services.shutdown().api_stopped is False
+    assert isinstance(api.stopped, ScorerStopped)
+    assert api.stopped.worker_exit.confirmed is True
+    assert api_service.stopped is False
 
 
 def test_host_cleanup_keeps_its_advertised_budget_plus_the_workflow_stop_grace() -> None:
@@ -174,7 +202,9 @@ def test_host_cleanup_keeps_its_advertised_budget_plus_the_workflow_stop_grace()
     class ObservedService(OwnedService):
         def close(self, timeout_ms: int) -> ServiceStopped:
             observed.append(timeout_ms)
-            return super().close(timeout_ms)
+            result = super().close(timeout_ms)
+            assert isinstance(result, ServiceStopped)
+            return result
 
     pipeline = load_pipeline_settings(REPOSITORY)
     host = ObservedService(
@@ -192,13 +222,11 @@ def test_host_cleanup_keeps_its_advertised_budget_plus_the_workflow_stop_grace()
         assert host.forced_stop_ms == pipeline.host_forced_stop_ms
         errors: list[PipelineError] = []
         services = PhaseServices(example_run(), host=host)
-        services.close(None, None, errors, True, pipeline=pipeline)
+        services.close(errors, True, pipeline=pipeline)
         assert observed == [ready.lifecycle_timeout_ms + pipeline.host_stop_grace_ms]
         assert errors == [] and services.host_stopped is True
         assert host.process.poll() == 0
-        assert services.shutdown().api_stopped is None
-        assert services.shutdown().worker_exit_confirmed is None
-        assert services.shutdown().unieval_worker_exit_confirmed is None
+        assert services.scorer_apis == {}
     finally:
         if not host.closed:
             with contextlib.suppress(WorkflowError):
@@ -207,25 +235,26 @@ def test_host_cleanup_keeps_its_advertised_budget_plus_the_workflow_stop_grace()
 
 def test_unieval_cleanup_failure_preserves_the_original_error_and_independent_hhem_exit() -> None:
     api = start_child("api", "unconfirmed_unieval_stop")
+    hhem = start_child("api", "raw_inherited_output")
     api.wait_ready(CHILD_STARTUP_MS)
+    hhem.wait_ready(CHILD_STARTUP_MS)
     original = WorkflowError("EVALUATION_FAILED", "evaluation", "unieval").error
     errors = [original]
-    services = PhaseServices(example_run(), api=api)
-    services.close(
-        service_settings(),
-        load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json"),
-        errors,
-        False,
-        pipeline=load_pipeline_settings(REPOSITORY),
+    unieval_service, hhem_service = scorer_service(api), scorer_service(hhem)
+    services = PhaseServices(
+        example_run(), scorer_apis={"hhem": hhem_service, "unieval": unieval_service}
     )
+    services.close(errors, False, pipeline=load_pipeline_settings(REPOSITORY))
     assert errors[0] == original
-    assert [(error.phase, error.service) for error in errors[1:]] == [
-        ("cleanup", "api"),
+    assert [(error.phase, error.service) for error in unieval_service.errors] == [
         ("cleanup", "unieval"),
     ]
-    assert services.shutdown().worker_exit_confirmed is True
-    assert services.shutdown().unieval_worker_exit_confirmed is False
+    assert isinstance(hhem.stopped, ScorerStopped) and isinstance(api.stopped, ScorerStopped)
+    assert hhem.stopped.worker_exit.confirmed is True and hhem_service.stopped is True
+    assert api.stopped.worker_exit.confirmed is False and unieval_service.stopped is False
+    assert hhem_service.errors == []
     assert api.process.poll() is not None
+    assert hhem.process.poll() is not None
 
 
 @pytest.mark.parametrize("failure", ["open", "write"])

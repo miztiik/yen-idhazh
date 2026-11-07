@@ -10,23 +10,28 @@ from pathlib import Path
 
 import pytest
 from summary_eval_pipeline.contracts import (
-    WORKFLOW_VERSION,
     PipelineError,
-    PipelineEvidence,
     ServerOutcome,
-    ServiceShutdown,
     text_sha256,
 )
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.inputs import ManualInputs
+from summary_eval_pipeline.phase_contracts import PhaseEvidence, PhaseShutdown
 from summary_eval_pipeline.phase_result import build_evidence
 from summary_eval_pipeline.report import describe_hhem, format_seconds, render_report
+from summary_eval_pipeline.report_contracts import PipelineDocument, PipelineEvidence
+from summary_eval_pipeline.scorer_evidence import EVIDENCE_VERSION
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_eval_pipeline.storage import write_result
 from summary_evaluator_cases.contract_examples import REPOSITORY, example_result
 from summary_evaluator_cases.service_cases import service_settings
 
 from summary_eval_tests.generation_cases import handoff_case, selected_root
+from summary_eval_tests.scorer_evidence_cases import (
+    in_memory_pipeline,
+    legacy_pipeline_example,
+    scorer_api_example,
+)
 from summary_eval_tests.test_host_profile_reader_parity import required_bun
 
 
@@ -58,7 +63,7 @@ def test_report_discloses_generated_answer_as_literal_text_and_identifies_models
         }
     )
     evidence = PipelineEvidence(
-        version=WORKFLOW_VERSION,
+        version=EVIDENCE_VERSION,
         status="failed",
         prepared=prepared,
         generation=generation,
@@ -102,7 +107,7 @@ def test_report_discloses_generated_answer_as_literal_text_and_identifies_models
 def test_report_keeps_the_selected_declaration_when_generation_did_not_start() -> None:
     inputs, prepared, _ = handoff_case()
     evidence = PipelineEvidence(
-        version=WORKFLOW_VERSION,
+        version=EVIDENCE_VERSION,
         status="failed",
         prepared=prepared,
         generation=None,
@@ -124,12 +129,7 @@ def test_missing_invalid_response_is_failed_not_reported_as_work_never_started()
         result,
         None,
         None,
-        ServiceShutdown(
-            api_stopped=True,
-            host_stopped=True,
-            worker_exit_confirmed=True,
-            unieval_worker_exit_confirmed=True,
-        ),
+        PhaseShutdown(host_stopped=True),
         [WorkflowError("RESPONSE_INVALID", "evaluation", "unieval", 500).error],
         run=prepared.run,
         phase="evaluation",
@@ -137,9 +137,10 @@ def test_missing_invalid_response_is_failed_not_reported_as_work_never_started()
         generation_sha256=text_sha256(generation.model_dump_json()),
         evaluation_request_id=result.request_id,
         evaluation_correlation_id=result.correlation_id,
+        scorer_apis=(scorer_api_example("hhem", result),),
     )
     evidence = PipelineEvidence(
-        version=WORKFLOW_VERSION,
+        version=EVIDENCE_VERSION,
         status="partial",
         prepared=prepared,
         generation=generation,
@@ -179,7 +180,7 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
     inputs, prepared, generation = handoff_case()
     receipt_hash = text_sha256(generation.model_dump_json())
     generation_cleanup = WorkflowError("SERVICE_STOP_FAILED", "cleanup", "host").error
-    evaluation_cleanup = WorkflowError("SERVICE_STOP_FAILED", "cleanup", "api").error
+    evaluation_cleanup = WorkflowError("SERVICE_STOP_FAILED", "cleanup", "hhem").error
     log_filename = "fastapi-server_2026_11_04_123456_1.log"
     host_log_filename = "hono-server_2026_11_04_123456_1.log"
     server = ServerOutcome(
@@ -196,12 +197,7 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
         None,
         None,
         None,
-        ServiceShutdown(
-            api_stopped=None,
-            host_stopped=False,
-            worker_exit_confirmed=None,
-            llama_stopped=True,
-        ),
+        PhaseShutdown(host_stopped=False, llama_stopped=True),
         [generation_cleanup],
         run=prepared.run,
         phase="generation",
@@ -220,18 +216,23 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
         example_result(),
         None,
         None,
-        ServiceShutdown(api_stopped=False, host_stopped=True, worker_exit_confirmed=True),
-        [WorkflowError("EVALUATION_FAILED", "evaluation", "hhem", 502).error, evaluation_cleanup],
+        PhaseShutdown(host_stopped=True),
+        [WorkflowError("EVALUATION_FAILED", "evaluation", "hhem", 502).error],
         run=prepared.run,
         phase="evaluation",
-        servers=(server,),
+        scorer_apis=(
+            scorer_api_example(
+                "hhem", example_result(), stopped=False, errors=(evaluation_cleanup,),
+                log_file=log_filename,
+            ).model_copy(update={"outcome": server}),
+        ),
         generation_sha256=receipt_hash,
         reference_summary_sha256=prepared.reference_summary_sha256,
         evaluation_request_id=example_result().request_id,
         evaluation_correlation_id=example_result().correlation_id,
     )
     evidence = PipelineEvidence(
-        version=WORKFLOW_VERSION,
+        version=EVIDENCE_VERSION,
         status="partial",
         prepared=prepared,
         generation=generation,
@@ -251,9 +252,9 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
     ]
     assert "evaluation / hhem / HTTP 502: EVALUATION_FAILED" in markdown
     assert "generation / cleanup / host: SERVICE_STOP_FAILED" in markdown
-    assert "evaluation / cleanup / api: SERVICE_STOP_FAILED" in markdown
+    assert "evaluation / hhem / cleanup: SERVICE_STOP_FAILED" in markdown
     assert "generation / cleanup / hono-server: SERVICE_STOP_FAILED" in markdown
-    assert "evaluation / cleanup / fastapi-server: SERVICE_STOP_FAILED" in markdown
+    assert "evaluation / hhem / cleanup: SERVICE_STOP_FAILED" in markdown
     assert "HTTP None" not in markdown
     assert "Artifacts -> summary-eval-tests-server-logs" in markdown
     assert log_filename in markdown
@@ -261,7 +262,8 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
     assert "| generation | fastapi-server |" not in markdown
     assert "| generation | HHEM worker exit confirmed |" not in markdown
     assert "| generation | UniEval worker exit confirmed |" not in markdown
-    assert "| evaluation | HHEM worker exit confirmed |" in markdown
+    assert "| evaluation | hhem API | PID 2100;" in markdown
+    assert "Model worker exit" in markdown
     assert re.findall(r"\*\*Table ([A-Z])\*\*", markdown) == ["A", "B", "C", "D", "E"]
     row_ids = re.findall(r"^\| ([A-Z]\d+) \|", markdown, re.MULTILINE)
     assert len(row_ids) == len(set(row_ids))
@@ -270,7 +272,7 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
 
 def test_safe_machine_cause_is_retained_in_native_evidence_and_visible_in_the_report() -> None:
     fixture = REPOSITORY / "tests" / "fixtures" / "hhem-evaluator" / "pipeline-evidence.json"
-    evidence = PipelineEvidence.model_validate_json(fixture.read_bytes())
+    evidence = PipelineDocument.model_validate_json(fixture.read_bytes()).root
     failure = WorkflowError(
         "STARTUP_FAILED", "startup", "host", source_code="MACHINE_API_STARTUP_INVALID"
     ).error
@@ -328,10 +330,8 @@ def test_report_creator_retains_full_artifact_and_never_promotes_failed_work(
             None,
             None,
             None,
-            ServiceShutdown(
-                api_stopped=None if phase == "generation" else True,
+            PhaseShutdown(
                 host_stopped=True,
-                worker_exit_confirmed=None,
                 llama_stopped=True if phase == "generation" else None,
             ),
             [WorkflowError("HOST_FAILED", "host", "host").error],
@@ -391,3 +391,57 @@ def test_report_creator_retains_full_artifact_and_never_promotes_failed_work(
     retained = PipelineEvidence.model_validate_json((directory / "results.json").read_bytes())
     assert retained.generation is not None and retained.generation.summary_text == answer
     assert retained.status == "failed"
+
+
+@pytest.mark.parametrize("current_outer", [False, True])
+def test_preserved_parent_report_renders_one_shared_api_without_independent_process_rows(
+    current_outer: bool,
+) -> None:
+    from summary_eval_pipeline.contracts import WORKFLOW_VERSION
+
+    evidence = legacy_pipeline_example(current_outer=current_outer)
+    inputs, _ = in_memory_pipeline()
+    markdown = render_report(evidence, inputs, service_settings(), "https://example.test/config")
+    assert markdown.count("| Shared scorer API (legacy 2026-11-05) |") == 1
+    assert "| hhem API |" not in markdown and "| unieval API |" not in markdown
+    assert "PID 2100" not in markdown and "PID 2101" not in markdown
+    assert "worker exit PIDs/statuses not recorded" in markdown
+    assert evidence.generation_phase is not None and evidence.evaluation_phase is not None
+    assert (
+        evidence.generation_phase.version == evidence.evaluation_phase.version == WORKFLOW_VERSION
+    )
+    reread = PipelineDocument.model_validate_json(evidence.model_dump_json()).root
+    assert reread.generation_phase is not None and reread.evaluation_phase is not None
+    assert reread.generation_phase.version == reread.evaluation_phase.version == WORKFLOW_VERSION
+
+
+def test_independent_rows_show_actual_identity_exit_and_scorer_scoped_startup_failure() -> None:
+    inputs, complete = in_memory_pipeline()
+    assert isinstance(complete.evaluation_phase, PhaseEvidence)
+    original = complete.evaluation_phase
+    hhem = original.scorer_apis[0].model_copy(
+        update={
+            "outcome": original.scorer_apis[0].outcome.model_copy(
+                update={"log_filename": "fastapi-server-hhem.log", "log_available": True}
+            )
+        }
+    )
+    failed = scorer_api_example(
+        "unieval", errors=(WorkflowError("HEALTH_FAILED", "health", "unieval", 503).error,),
+    )
+    phase = PhaseEvidence.model_validate_json(
+        original.model_copy(
+            update={"status": "partial", "unieval": None, "scorer_apis": (hhem, failed)}
+        ).model_dump_json()
+    )
+    evidence = complete.model_copy(update={"status": "partial", "evaluation_phase": phase})
+    markdown = render_report(evidence, inputs, service_settings(), "https://example.test/config")
+    assert markdown.count("| hhem API |") == markdown.count("| unieval API |") == 1
+    assert "| hhem API | PID 2100; start ticks 1000 |" in markdown
+    assert "PID 1234; exit status 0; confirmed True" in markdown
+    assert "| unieval API | Not recorded | Not recorded | failed |" in markdown
+    assert "fastapi-server-hhem.log" in markdown
+    assert "evaluation / unieval / health / HTTP 503: HEALTH_FAILED" in markdown
+    assert "evaluation / health / api:" not in markdown
+    assert "| UniEval | Failed - no valid result |" in markdown
+    assert "0.0 source support (0-1)" in markdown

@@ -23,7 +23,7 @@ from summary_evaluator_cases.service_cases import (
 )
 
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.serve_api import create_app
 from summary_evaluator.shared.contracts.api_paths import (
@@ -81,7 +81,9 @@ def test_actual_route_retains_genuine_metrics_and_has_no_legacy_alias_or_machine
 def test_disabled_coverage_constructs_no_worker_or_reads_its_named_resources(
     tmp_path: Path,
 ) -> None:
-    api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
+    api = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "coverage"
+    )
     api = api.model_copy(update={"enabled_routes": ()})
     app = create_app(api, None, tmp_path, writer=EventWriter(api.logging, io.StringIO()))
     assert app.state.coverage is None
@@ -250,11 +252,13 @@ def test_active_disconnect_delivers_no_response_and_confirms_owned_exit() -> Non
 
 def test_failed_coverage_neither_borrows_nor_stops_completed_hhem_work() -> None:
     async def check() -> None:
-        api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
+        api = load_scorer_api_settings(
+            REPOSITORY / "config" / "summary-evals" / "api.json", "hhem"
+        )
         api = api.model_copy(update={"enabled_routes": ("hhem", "coverage")})
         hhem = service_settings()
         hhem_worker = RecordedSupervisor(hhem, (Scenario(),))
-        coverage = coverage_settings()
+        coverage = coverage_settings(api=api)
         worker = RecordedCoverageSupervisor(coverage, CoverageScenario(crash_dimension="fluency"))
         app = create_app(
             api, hhem, REPOSITORY, writer=EventWriter(api.logging, io.StringIO()),
