@@ -88,7 +88,10 @@ def test_each_adapter_validates_shared_bounds_and_closes_construction_logs(
     )
     hhem = service_settings()
     _, unieval = unieval_settings()
-    coverage = coverage_settings()
+    unieval = unieval.model_copy(update={"listener": api.listener, "logging": api.logging})
+    coverage = coverage_settings().model_copy(
+        update={"listener": api.listener, "logging": api.logging}
+    )
     shutdown_wait = {
         "hhem": hhem.worker.shutdown_timeout_ms,
         "unieval": unieval.worker.shutdown_timeout_ms,
@@ -128,7 +131,10 @@ def test_all_registered_scorers_start_before_requests_and_keep_native_health_and
         )
         hhem = service_settings()
         _, unieval = unieval_settings()
-        coverage = coverage_settings()
+        unieval = unieval.model_copy(update={"listener": api.listener, "logging": api.logging})
+        coverage = coverage_settings().model_copy(
+            update={"listener": api.listener, "logging": api.logging}
+        )
         hhem_worker = RecordedSupervisor(hhem, (Scenario(),))
         unieval_worker = RecordedUnievalSupervisor(unieval)
         coverage_worker = RecordedCoverageSupervisor(coverage)
@@ -226,6 +232,10 @@ def test_startup_failure_cleans_all_components_and_retains_native_errors() -> No
             update={"enabled_routes": ("hhem", "unieval", "coverage")}
         )
         _, unieval = unieval_settings()
+        unieval = unieval.model_copy(update={"listener": api.listener, "logging": api.logging})
+        coverage = coverage_settings().model_copy(
+            update={"listener": api.listener, "logging": api.logging}
+        )
         stream = io.StringIO()
         app = create_app(
             api,
@@ -233,7 +243,7 @@ def test_startup_failure_cleans_all_components_and_retains_native_errors() -> No
             REPOSITORY,
             writer=EventWriter(api.logging, stream),
             unieval_settings=unieval,
-            coverage_settings=coverage_settings(),
+            coverage_settings=coverage,
         )
         stream.close()
         with pytest.raises(BaseExceptionGroup) as observed:

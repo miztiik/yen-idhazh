@@ -102,6 +102,8 @@ def main() -> None:
         sys.stdin.buffer.readline(16384)
     )
     mode = sys.argv[1]
+    if mode == "early_exit":
+        return
     if isinstance(packet, ScorerStartupPacket):
         api_transport_case(packet, mode)
         return
@@ -123,8 +125,6 @@ def main() -> None:
         )
         sys.stdout.flush()
         raise SystemExit(1)
-    if mode == "early_exit":
-        return
     ready = HostReady(
         version=WORKFLOW_VERSION, kind="ready", service="host",
         startup_id=create_execution_id() if mode == "mismatch" else packet.startup_id,
