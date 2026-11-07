@@ -95,15 +95,16 @@ def test_documentation_only_changes_run_whitespace_not_application_gates() -> No
     assert not scope.get("if")
 
 
-def test_ci_leaves_summary_evaluation_to_its_manual_workflow() -> None:
+def test_ci_checks_model_free_behavior_without_running_live_summary_evaluation() -> None:
     ci = _load_workflows()["ci.yml"]
     for name in _mapping(ci["jobs"], "CI jobs"):
         for step in _steps(ci, name):
             if "run" in step:
                 command = _script(step, "ordinary CI step")
-                assert "hhem-evaluator" not in command
-                assert "summary_evaluator" not in command
-                assert "summary-eval-tests" not in command
+                assert "--extra model" not in command
+                assert "--include-weights" not in command
+                assert "run.py --root" not in command
+                assert "serve-evaluator.py" not in command
     workflow = _load_workflows()["summary-eval-tests.yml"]
     assert set(_mapping(workflow["on"], "summary evaluation triggers")) == {"workflow_dispatch"}
     defaults = _mapping(_job(workflow, "evaluate")["defaults"], "evaluation defaults")
@@ -112,35 +113,43 @@ def test_ci_leaves_summary_evaluation_to_its_manual_workflow() -> None:
     )
 
 
-def test_model_free_summary_checks_are_manual_read_only_and_complete() -> None:
-    workflow = _load_workflows()["summary-evaluator-checks.yml"]
+def test_ci_model_free_summary_checks_are_read_only_gated_and_complete() -> None:
+    workflow = _load_workflows()["ci.yml"]
     assert set(_mapping(workflow["on"], "model-free triggers")) == {
         "workflow_dispatch",
         "pull_request",
+        "push",
     }
     assert _mapping(workflow["permissions"], "model-free permissions") == {"contents": "read"}
-    assert set(_mapping(workflow["jobs"], "model-free jobs")) == {"model-free"}
     job = _job(workflow, "model-free")
+    assert job["needs"] == "scope"
+    assert job["if"] == "needs.scope.outputs.code == 'true'"
     assert job["runs-on"] == "ubuntu-latest"
     assert not job.get("continue-on-error")
+    checkout = _step(workflow, "model-free", "uses", "actions/checkout@v6")
+    assert _mapping(checkout["with"], "model-free checkout")["persist-credentials"] == "false"
+    action = _step(
+        workflow, "model-free", "uses", "./.github/actions/check-summary-evaluator"
+    )
+    assert not action.get("if") and not action.get("continue-on-error")
     steps = _steps(workflow, "model-free")
     commands = "\n".join(_script(step, "model-free checks") for step in steps if "run" in step)
     assert "uv sync --project services/summary_evaluator --frozen --group dev" in commands
     assert "prepare-unieval-resources.py --root ../.." in commands
-    assert "prepare-coverage-resources.py --root ../.." in commands
     assert (
         "uv run --frozen pytest -c pyproject.toml tests "
         "../../.github/scripts/summary-eval-tests/summary_eval_tests "
         "--junitxml=var/model-free-results.xml"
     ) in commands
     assert (
-        "mypy src tests scripts/capture-coverage-recordings.py "
-        "scripts/prepare-coverage-resources.py scripts/verify-coverage-worker.py "
+        "mypy src tests "
         "../../.github/scripts/summary-eval-tests/summary_eval_pipeline "
         "../../.github/scripts/summary-eval-tests/summary_eval_tests"
     ) in commands
     assert "command -v setpriv" in commands
+    assert "assert importlib.util.find_spec('torch') is None" in commands
     for forbidden in (
+        "coverage",
         "--extra model",
         "--include-weights",
         "run.py --root ../..",
@@ -154,35 +163,30 @@ def test_model_free_summary_checks_are_manual_read_only_and_complete() -> None:
     assert all(
         "GITHUB_TOKEN" not in _mapping(step.get("env", {}), "model-free env") for step in steps
     )
-    assert "summary-evaluator-checks" not in _mapping(
-        _load_workflows()["ci.yml"]["jobs"], "CI jobs"
+    upload = _artifact_upload(workflow, "model-free", "summary-evaluator-model-free-results")
+    assert upload["if"] == "always()"
+    assert _mapping(upload["with"], "model-free result")["path"] == (
+        "services/summary_evaluator/var/model-free-results.xml"
     )
+    assert not (REPO_ROOT / ".github" / "workflows" / "summary-evaluator-checks.yml").exists()
 
 
-def test_legacy_workflow_selects_pinned_coverage_after_generation_and_keeps_one_event_writer() -> None:
+def test_older_workflow_keeps_generation_and_its_artifacts_without_an_evaluation_phase() -> None:
     workflow = _load_workflows()["ai-pipeline-tests.yml"]
     steps = _steps(workflow, "run-pipeline")
     inference = _step(workflow, "run-pipeline", "name", "Execute Phase 1 Inference")
     native_stop = _step(workflow, "run-pipeline", "name", "Stop llama-server (Reclaim Memory)")
-    start = _step(
-        workflow, "run-pipeline", "name", "Start the explicitly selected source-coverage evaluator"
-    )
-    evaluation = _step(workflow, "run-pipeline", "name", "Execute Phase 2 Quality Audit")
-    stop = _step(workflow, "run-pipeline", "name", "Stop the exact owned coverage server")
-    assert steps.index(inference) < steps.index(native_stop) < steps.index(start)
-    assert steps.index(start) < steps.index(evaluation) < steps.index(stop)
-    commands = "\n".join(_script(step, "coverage workflow") for step in steps if "run" in step)
-    assert "uv sync --project services/summary_evaluator --frozen --extra model --no-dev" in commands
-    assert "prepare-coverage-resources.py --root . --include-weights" in commands
-    assert "--root . --routes coverage" in _script(start, "coverage startup")
-    assert 'fields[19] == os.environ["SERVER_START_TICKS"]' in _script(stop, "owned stop")
-    for removed in ("serve-evaluator.py", "9933", "eval-events.jsonl", "/tmp/unieval"):
+    assert steps.index(inference) < steps.index(native_stop)
+    assert native_stop["if"] == "always()"
+    assert "--phase=infer" in _script(inference, "inference")
+    _step(workflow, "run-pipeline", "uses", "./.github/actions/model-server")
+    commands = "\n".join(_script(step, "older workflow") for step in steps if "run" in step)
+    for removed in ("coverage", "summary_evaluator", "--phase=eval", "eval_server.log"):
         assert removed not in commands
     upload = _step(workflow, "run-pipeline", "name", "Upload Logs and JSONL Telemetry")
-    paths = _mapping(upload["with"], "coverage artifacts")["path"]
+    paths = _mapping(upload["with"], "inference artifacts")["path"]
     assert isinstance(paths, str)
-    assert "pipeline-events.jsonl" in paths and "eval-events.jsonl" not in paths
-    assert "${{ steps.coverage.outputs.log_directory }}" in paths
+    assert paths.splitlines() == ["llama-server.log", "pipeline-events.jsonl"]
 
 
 def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs() -> None:

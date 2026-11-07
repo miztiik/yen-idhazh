@@ -14,9 +14,11 @@ class ApiDeploymentSettings(ServerContract):
     model_config = ConfigDict(
         json_schema_extra={
             "version": "2026-11-07",
-            "readCompatibility": "legacy single listener only for one explicitly selected scorer",
+            "readCompatibility": (
+                "read frozen three-listener or single-listener settings for one maintained scorer"
+            ),
             "changelog": [
-                {"version": "2026-11-07", "change": "Declare independent scorer API listeners."}
+                {"version": "2026-11-07", "change": "Separate HHEM and UniEval listeners."}
             ],
         }
     )

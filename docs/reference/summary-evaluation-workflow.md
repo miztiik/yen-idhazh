@@ -155,6 +155,10 @@ Native scoring, API health and machine-result versions remain independent.
 Bounded report readers dispatch by the evidence's own version; unknown versions
 fail. Legacy evidence remains one shared API, without invented independent PIDs
 or shutdowns. These files are not committed ledgers or restart stores.
+Saved shared or independent health with the previous disabled coverage slot
+passes the serving package's strict boundary reader before projection to current
+HHEM/UniEval health. Active coverage and arbitrary extras are rejected.
+This does not change the distinction between shared and independent API evidence.
 
 Table B - Named output under `backend/var/summary-eval-tests/`
 

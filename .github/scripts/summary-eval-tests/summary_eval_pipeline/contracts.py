@@ -7,6 +7,7 @@ from typing import Annotated, Final, Literal, Self
 from pydantic import AfterValidator, AwareDatetime, ConfigDict, Field, model_validator
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.serve_http.contracts.api_health import ApiHealth
+from summary_evaluator.serve_http.read_api_health import ReadableApiHealth
 from summary_evaluator.shared.contracts.base import (
     CommitId,
     ContextIdentity,
@@ -321,7 +322,7 @@ class PhaseEvidence(WorkflowContract):
     status: OutcomeStatus
     evaluation: EvaluationResult | None
     unieval: UnievalResult | None = None
-    api_health: ApiHealth | None = None
+    api_health: ReadableApiHealth | None = None
     evaluation_request_id: Uuid4 | None = None
     evaluation_correlation_id: Uuid4 | None = None
     reference_summary_sha256: Sha256

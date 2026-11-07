@@ -8,8 +8,6 @@ from typing import get_args
 import httpx
 import pytest
 from summary_evaluator_cases.contract_examples import API_SETTINGS_FILE, REPOSITORY
-from summary_evaluator_cases.coverage_cases import RecordedCoverageSupervisor
-from summary_evaluator_cases.coverage_recordings import coverage_settings
 from summary_evaluator_cases.replay_predictions import Scenario
 from summary_evaluator_cases.service_cases import EventLog, RecordedSupervisor, service_settings
 from summary_evaluator_cases.unieval_cases import RecordedUnievalSupervisor, unieval_settings
@@ -22,7 +20,6 @@ from summary_evaluator.hhem.fail_evaluation import EvaluationFailure
 from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.compose_api import ComponentRegistration, compose_app
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
-from summary_evaluator.serve_http.contracts.error_detail import ApiErrorResult
 from summary_evaluator.serve_http.contracts.server_event import (
     ApiDiagnosticData,
     DiagnosticComponent,
@@ -31,8 +28,6 @@ from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.serve_api import create_app
 from summary_evaluator.shared.contracts.api_paths import (
     API_HEALTH_PATH,
-    COVERAGE_EVALUATE_PATH,
-    COVERAGE_HEALTH_PATH,
     EVALUATE_PATH,
     HHEM_HEALTH_PATH,
 )
@@ -63,7 +58,9 @@ def test_registration_requires_the_complete_distinct_declared_vocabulary(tmp_pat
 
 
 @pytest.mark.parametrize("component", ["unieval", "coverage"])
-def test_component_diagnostics_retain_the_native_envelope(component: DiagnosticComponent) -> None:
+def test_historical_component_diagnostics_retain_the_native_envelope(
+    component: DiagnosticComponent,
+) -> None:
     api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem")
     log = EventLog()
     writer = EventWriter(api.logging, log)
@@ -76,7 +73,7 @@ def test_component_diagnostics_retain_the_native_envelope(component: DiagnosticC
     assert envelope.type == f"fastapi-server.{component}.failed"
 
 
-@pytest.mark.parametrize("component", ["hhem", "unieval", "coverage"])
+@pytest.mark.parametrize("component", ["hhem", "unieval"])
 @pytest.mark.parametrize("mismatch", ["listener", "shutdown"])
 def test_each_adapter_validates_shared_bounds_and_closes_construction_logs(
     component: ApiComponent,
@@ -89,13 +86,9 @@ def test_each_adapter_validates_shared_bounds_and_closes_construction_logs(
     hhem = service_settings()
     _, unieval = unieval_settings()
     unieval = unieval.model_copy(update={"listener": api.listener, "logging": api.logging})
-    coverage = coverage_settings().model_copy(
-        update={"listener": api.listener, "logging": api.logging}
-    )
     shutdown_wait = {
         "hhem": hhem.worker.shutdown_timeout_ms,
         "unieval": unieval.worker.shutdown_timeout_ms,
-        "coverage": coverage.worker.shutdown_timeout_ms,
     }[component]
     if mismatch == "listener":
         api = api.model_copy(
@@ -115,7 +108,6 @@ def test_each_adapter_validates_shared_bounds_and_closes_construction_logs(
             tmp_path,
             writer=events,
             unieval_settings=unieval,
-            coverage_settings=coverage,
         )
     assert events.file_handler is not None and events.file_handler.stream is None
 
@@ -127,17 +119,13 @@ def test_all_registered_scorers_start_before_requests_and_keep_native_health_and
 
     async def check() -> None:
         api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem").model_copy(
-            update={"enabled_routes": ("coverage", "unieval", "hhem")}
+            update={"enabled_routes": ("unieval", "hhem")}
         )
         hhem = service_settings()
         _, unieval = unieval_settings()
         unieval = unieval.model_copy(update={"listener": api.listener, "logging": api.logging})
-        coverage = coverage_settings().model_copy(
-            update={"listener": api.listener, "logging": api.logging}
-        )
         hhem_worker = RecordedSupervisor(hhem, (Scenario(),))
         unieval_worker = RecordedUnievalSupervisor(unieval)
-        coverage_worker = RecordedCoverageSupervisor(coverage)
         log = EventLog()
         startup = StartupContext(run_id="component-registration")
         app = create_app(
@@ -149,11 +137,9 @@ def test_all_registered_scorers_start_before_requests_and_keep_native_health_and
             supervisor=hhem_worker,
             unieval_settings=unieval,
             unieval_supervisor=unieval_worker,
-            coverage_settings=coverage,
-            coverage_supervisor=coverage_worker,
         )
         assert set(app.state.components) == set(get_args(ApiComponent))
-        controllers = (app.state.controller, app.state.unieval, app.state.coverage)
+        controllers = (app.state.controller, app.state.unieval)
         assert all(controller.worker.process is None for controller in controllers)
         assert app.state.controller.context == startup
         try:
@@ -175,7 +161,6 @@ def test_all_registered_scorers_start_before_requests_and_keep_native_health_and
                     for name, path in (
                         ("hhem", HHEM_HEALTH_PATH),
                         ("unieval", UNIEVAL_HEALTH_PATH),
-                        ("coverage", COVERAGE_HEALTH_PATH),
                     ):
                         native = await client.get(path)
                         assert native.status_code == 200
@@ -198,7 +183,7 @@ def test_all_registered_scorers_start_before_requests_and_keep_native_health_and
                         (((b"origin", b"https://example.invalid"),), "ORIGIN_FORBIDDEN"),
                         (((b"host", b"example.invalid"),), "HOST_FORBIDDEN"),
                     ):
-                        for path in (EVALUATE_PATH, UNIEVAL_PATH, COVERAGE_EVALUATE_PATH):
+                        for path in (EVALUATE_PATH, UNIEVAL_PATH):
                             request = DirectRequest(
                                 b"PrivateUnreadInputCanary", path=path, headers=headers
                             )
@@ -210,17 +195,14 @@ def test_all_registered_scorers_start_before_requests_and_keep_native_health_and
                                     EvaluationResult.model_validate_json(body).errors[0].code
                                     == code
                                 )
-                            elif path == UNIEVAL_PATH:
+                            else:
                                 assert (
                                     UnievalResult.model_validate_json(body).errors[0].code == code
                                 )
-                            else:
-                                assert ApiErrorResult.model_validate_json(body).error.code == code
                             assert b"PrivateUnreadInputCanary" not in body
                     assert all(controller.queue.depth == 0 for controller in controllers)
         finally:
             hhem_worker.close_controls()
-            coverage_worker.close_controls()
         assert all(controller.worker.exit_confirmed for controller in controllers)
 
     asyncio.run(check())
@@ -229,13 +211,10 @@ def test_all_registered_scorers_start_before_requests_and_keep_native_health_and
 def test_startup_failure_cleans_all_components_and_retains_native_errors() -> None:
     async def check() -> None:
         api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem").model_copy(
-            update={"enabled_routes": ("hhem", "unieval", "coverage")}
+            update={"enabled_routes": ("hhem", "unieval")}
         )
         _, unieval = unieval_settings()
         unieval = unieval.model_copy(update={"listener": api.listener, "logging": api.logging})
-        coverage = coverage_settings().model_copy(
-            update={"listener": api.listener, "logging": api.logging}
-        )
         stream = io.StringIO()
         app = create_app(
             api,
@@ -243,7 +222,6 @@ def test_startup_failure_cleans_all_components_and_retains_native_errors() -> No
             REPOSITORY,
             writer=EventWriter(api.logging, stream),
             unieval_settings=unieval,
-            coverage_settings=coverage,
         )
         stream.close()
         with pytest.raises(BaseExceptionGroup) as observed:
@@ -253,7 +231,7 @@ def test_startup_failure_cleans_all_components_and_retains_native_errors() -> No
         assert observed.value.exceptions[0].code == "LOGGING_FAILED"
         assert len(observed.value.exceptions) == len(app.state.components) + 2
         assert any(isinstance(error, EvaluationFailure) for error in observed.value.exceptions)
-        for controller in (app.state.controller, app.state.unieval, app.state.coverage):
+        for controller in (app.state.controller, app.state.unieval):
             assert controller.stopping and controller.loading_task is None
             assert controller.worker.process is None and controller.worker.exit_confirmed
 

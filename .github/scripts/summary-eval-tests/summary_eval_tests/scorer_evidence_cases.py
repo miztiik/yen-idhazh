@@ -87,7 +87,6 @@ def scorer_api_example(
             if scorer == "hhem" else disabled,
             unieval=UnievalHealth.model_validate({"version": UNIEVAL_VERSION, **common})
             if scorer == "unieval" else disabled,
-            coverage=disabled,
             log_file=log_file,
             log_available=log_file is not None,
         )
@@ -249,6 +248,7 @@ def legacy_pipeline_example(*, current_outer: bool = False) -> PipelineResult:
         })
         if apis:
             shared = apis[0]["health"]
+            shared["coverage"] = {"status": "disabled", "worker": None, "model": None}
             shared["enabled_routes"] = ["hhem", "unieval"]
             shared["unieval"] = apis[1]["health"]["unieval"]
             shared["unieval"]["service_instance_id"] = shared["service_instance_id"]

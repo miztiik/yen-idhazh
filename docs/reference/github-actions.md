@@ -10,7 +10,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 
 | File | Display name | Automatic trigger | Purpose |
 | --- | --- | --- | --- |
-| `ci.yml` | `CI` | Pull request; push to `main` | Code and site checks |
+| `ci.yml` | `CI` | Pull request; push to `main` | Code, site and complete model-free evaluator/workflow checks |
 | `digest.yml` | `Content refresh` | `20 2 * * *`, `20 6 * * *`, `20 10 * * *`, `20 14 * * *`, `20 18 * * *` | Digest and production state |
 | `llm-council.yml` | `LLM-COUNCIL` | `0 22 * * *` | Model judges' verdicts |
 | `pages.yml` | `Pages publication` | Passing push CI; completed Content refresh or assembly recovery | Static site |
@@ -22,7 +22,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `feed-ingest-plan-test.yml` | `Feed ingest plan test` | none | Run the real planner HTTP API and publish its completed planner and host metadata |
 | `summary-eval-tests.yml` | `summary-eval-tests` | none | Generate with one declared model through FastAPI, stop it, score its saved answer with HHEM and all four UniEval dimensions using an independent reference, and report machine/server outcomes without Git delivery |
 | `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
-| `ai-pipeline-tests.yml` | `Yen-Summarizers` | none | Run independent TypeScript inference and its existing audit |
+| `ai-pipeline-tests.yml` | `Yen-Summarizers` | Manual inference; pull-request saved-event checks | Run independent TypeScript inference and preserve generation/event/report checks |
 
 Use filenames for dispatch and API calls. `workflow_run.workflows` matches display
 names instead: update its callers and the workflow tests when renaming a label.
