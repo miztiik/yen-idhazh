@@ -9,7 +9,6 @@ from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.contracts.service_health import ServiceHealth
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
-from summary_evaluator.serve_http.contracts.api_health import ApiHealth
 from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
 from summary_evaluator.unieval.contracts.unieval_result import UnievalHealth, UnievalResult
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
@@ -17,6 +16,7 @@ from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
 from .contracts import PipelineError, text_sha256
 from .evaluation import evaluate, evaluate_unieval
 from .failures import WorkflowError
+from .phase_services import ScorerService, guard_work
 from .settings import PipelineSettings
 
 
@@ -50,15 +50,15 @@ def require_unieval_work(result: UnievalResult, request: UnievalRequest, status:
 
 async def evaluate_pair(
     client: httpx.AsyncClient,
-    origin: str,
     requests: tuple[EvaluateRequest, UnievalRequest],
-    health: ApiHealth,
+    hhem_api: ScorerService,
+    unieval_api: ScorerService,
     settings: ServiceSettings,
     unieval_settings: UnievalSettings,
     pipeline: PipelineSettings,
     outcomes: EvaluatorOutcomes,
     errors: list[PipelineError],
-    save: Callable[[], None],
+    save: Callable[[], object],
 ) -> None:
     hhem_request, unieval_request = requests
     if (
@@ -77,6 +77,15 @@ async def evaluate_pair(
 
     async def hhem() -> None:
         try:
+            health = hhem_api.health
+            if health is None or hhem_api.errors:
+                return
+            if (
+                hhem_api.scorer != "hhem"
+                or health.enabled_routes != ("hhem",)
+                or settings.listener != hhem_api.api_settings.listener
+            ):
+                raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "health", "hhem")
             if health.hhem.status != "ready":
                 raise WorkflowError(
                     "HEALTH_FAILED",
@@ -96,7 +105,11 @@ async def evaluate_pair(
                 or model.foundation_revision != settings.hhem.foundation.revision
             ):
                 raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "health", "hhem")
-            status, result = await evaluate(client, origin, hhem_request, settings, pipeline)
+            operation = evaluate(client, hhem_api.origin, hhem_request, settings, pipeline)
+            status, result = (
+                await guard_work(operation, hhem_api.owner, pipeline)
+                if hhem_api.owner is not None else await operation
+            )
             if (
                 result.request_id != hhem_request.request_id
                 or result.correlation_id != hhem_request.correlation_id
@@ -110,15 +123,29 @@ async def evaluate_pair(
                     WorkflowError("EVALUATION_FAILED", "evaluation", "hhem", status).error
                 )
         except WorkflowError as error:
-            errors.append(error.error)
+            if error.error.service == "api" or error.error.phase == "health":
+                hhem_api.retain_error(error.error)
+            else:
+                errors.append(error.error)
         except asyncio.CancelledError:
             errors.append(WorkflowError("TASK_CANCELLED", "evaluation", "hhem").error)
             raise
+        except (OSError, ValueError, KeyError, TypeError):
+            errors.append(WorkflowError("EVALUATION_FAILED", "evaluation", "hhem").error)
         finally:
             retain()
 
     async def unieval() -> None:
         try:
+            health = unieval_api.health
+            if health is None or unieval_api.errors:
+                return
+            if (
+                unieval_api.scorer != "unieval"
+                or health.enabled_routes != ("unieval",)
+                or unieval_settings.listener != unieval_api.api_settings.listener
+            ):
+                raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "health", "unieval")
             if health.unieval.status != "ready":
                 raise WorkflowError(
                     "HEALTH_FAILED",
@@ -139,8 +166,12 @@ async def evaluate_pair(
                 or model.reference_code_revision != unieval_settings.assets.reference_code_revision
             ):
                 raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "health", "unieval")
-            status, result = await evaluate_unieval(
-                client, origin, unieval_request, unieval_settings, pipeline
+            operation = evaluate_unieval(
+                client, unieval_api.origin, unieval_request, unieval_settings, pipeline
+            )
+            status, result = (
+                await guard_work(operation, unieval_api.owner, pipeline)
+                if unieval_api.owner is not None else await operation
             )
             if (
                 result.request_id != unieval_request.request_id
@@ -167,10 +198,15 @@ async def evaluate_pair(
                     WorkflowError("EVALUATION_FAILED", "evaluation", "unieval", status).error
                 )
         except WorkflowError as error:
-            errors.append(error.error)
+            if error.error.service == "api" or error.error.phase == "health":
+                unieval_api.retain_error(error.error)
+            else:
+                errors.append(error.error)
         except asyncio.CancelledError:
             errors.append(WorkflowError("TASK_CANCELLED", "evaluation", "unieval").error)
             raise
+        except (OSError, ValueError, KeyError, TypeError):
+            errors.append(WorkflowError("EVALUATION_FAILED", "evaluation", "unieval").error)
         finally:
             retain()
 

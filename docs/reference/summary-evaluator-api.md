@@ -2,20 +2,22 @@
 
 **Last Updated**: 2026-11-07
 
-Which routes and startup settings the single `summary-evaluator` application exposes.
+Which routes and startup settings each selected `summary-evaluator` process exposes.
 This is a local workflow service, not a backend for the published site.
 The [architecture](../architecture/evaluation/summary-evaluator.md) explains
 process ownership and failure handling.
 
 ## Configuration and routes
 
-`config/summary-evals/api.json` owns the listener, explicit component selection,
+`config/summary-evals/api.json` owns the per-scorer listeners,
 diagnostic settings and request-body bounds. The frozen native models live
 in `services/summary_evaluator/src/summary_evaluator/serve_http/contracts/`
 and `shared/contracts/`. Shared settings,
 health, generic API errors and CloudEvents schemas have version `2026-11-07`.
-They are current-only: previous application versions and retired generation
-settings are rejected, not read through aliases. Historical logs and model
+Health, errors and event envelopes remain current-only. The authored deployment
+settings also read the strict single-listener shape for one explicitly selected
+scorer. Mixed formats, invalid modern settings and unknown versions are rejected.
+Historical logs and model
 recordings remain unchanged. HHEM and native UniEval scoring schemas retain
 their own versions.
 
@@ -23,17 +25,17 @@ Table A - Listener and component selection
 
 | Id | Setting | Meaning |
 | --- | --- | --- |
-| A1 | `listener.host`, `listener.port` | Loopback `127.0.0.1`, port 3010. The host can also be the literal `::1`. |
-| A2 | `listener.max_body_bytes` | At most 1048576 bytes, or 1 MiB, per input body. |
-| A3 | `listener.body_read_timeout_ms` | An absolute input-read deadline of 5000 milliseconds, or five seconds. |
-| A4 | `enabled_routes` | A distinct list drawn from `hhem`, `unieval` and `coverage`. The default remains HHEM plus native UniEval; coverage is selected explicitly and adds its own model process. An empty list disables every scoring operation. |
-| A5 | `shutdown_timeout_ms` | 15000 milliseconds, or fifteen seconds, for Uvicorn's graceful wait. This cannot be shorter than an enabled scorer's worker shutdown wait. Enabled worker cleanups run concurrently. |
+| A1 | `listeners.<scorer>.host`, `listeners.<scorer>.port` | Each `hhem`, `unieval` and `coverage` entry has a distinct binding. Defaults are loopback `127.0.0.1`: HHEM retains port 3010, UniEval uses 3011 and coverage uses 3012. The host can also be the literal `::1`. |
+| A2 | `listeners.<scorer>.max_body_bytes` | At most 1048576 bytes, or 1 MiB, per input body by default. Each caller uses its intended scorer's bound. |
+| A3 | `listeners.<scorer>.body_read_timeout_ms` | An absolute input-read deadline of 5000 milliseconds, or five seconds, by default. |
+| A4 | `--routes <scorer>` | Resolve exactly one scorer from the declared vocabulary. The comparison workflow starts separate HHEM and UniEval APIs; coverage is selected explicitly. No modern default starts every configured listener. |
+| A5 | `shutdown_timeout_ms` | 15000 milliseconds, or fifteen seconds, for Uvicorn's graceful request wait. This cannot be shorter than the selected scorer's worker shutdown wait. The owned parent-loss/close allowance also includes that worker's shutdown and forced-stop joins. |
 
 Table B - Native operations
 
 | Id | Route | Meaning |
 | --- | --- | --- |
-| B1 | `GET /api/2026-11-05/get-summary-evaluator-health` | Shared readiness, enabled scorers, the actual service instance and diagnostic-file availability. Every enabled scorer must be ready for HTTP 200; otherwise the response is HTTP 503. |
+| B1 | `GET /api/2026-11-05/get-summary-evaluator-health` | This API's selected scorer, actual service instance and diagnostic-file availability. The selected scorer must be ready for HTTP 200; otherwise the response is HTTP 503. Other scorer slots are disabled. |
 | B2 | `GET /api/2026-11-05/get-hhem-health` | HHEM's own observed worker/model state, independent of UniEval. Registered only with HHEM enabled. |
 | B3 | `POST /api/2026-11-05/evaluate-summary-hhem` | The unchanged [native evaluation operation](hhem-evaluation-api.md). Registered only with HHEM enabled. |
 | B4 | `GET /api/2026-11-05/get-summary-evaluator-schema` | The application's current native schemas. Always registered, without an interactive documentation UI. |
@@ -46,7 +48,7 @@ Disabled operation routes return HTTP 404. Shared health explicitly reports
 disabled scorers; it does not claim their models loaded. Browser origins,
 duplicate or unexpected Host headers and slash redirects remain refused.
 
-The standalone default requires only prepared evaluator assets. HHEM-only
+Each standalone invocation requires only its selected evaluator's prepared assets. HHEM-only
 startup reads no UniEval configuration; UniEval-only startup reads no HHEM
 configuration. Coverage-only startup reads only its named scorer configuration.
 Disabled scorers construct no controller or worker and read no resources.
@@ -57,6 +59,11 @@ payload schema dates. The old dated evaluator paths, `/health` and the former
 `/v1/chat/completions` proxy return HTTP 404. The native generation server
 keeps its own upstream paths; it is not part of this application.
 The launcher accepts `--routes coverage` without an unrelated HHEM settings argument.
+Omitting `--routes` is accepted only when a legacy authored `enabled_routes`
+already declares exactly one scorer. Empty or multiple selections fail safely.
+Legacy explicit selection keeps its original listener and bounds; a caller starting
+multiple APIs must migrate to the complete listener table. No reader derives ports
+or tries the legacy shape after accepting invalid modern settings.
 An omitted `--settings` uses the named HHEM default only when HHEM is enabled.
 The launcher refuses `--routes llama` and the removed `--model-config`
 option. Authored `llama` transport settings are refused, not ignored.
@@ -83,7 +90,7 @@ part of the enabled scorers' request path.
 
 Standard Python logging sends accepted CloudEvents JSONL records to stderr
 and an append-only file named
-`fastapi-server_{yyyy_mm_dd}_{run_id}_{attempt}.log`. The date is UTC.
+`fastapi-server_{scorer}_{yyyy_mm_dd}_{run_id}_{attempt}.log`. The date is UTC.
 The workflow launcher supplies its platform run identifier and attempt; a local
 invocation uses its invocation identity and attempt one. A caller can supply
 the run's UTC start instant when creating `EventWriter`.

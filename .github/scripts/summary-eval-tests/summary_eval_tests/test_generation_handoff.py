@@ -11,9 +11,7 @@ from summary_eval_pipeline.contracts import (
     WORKFLOW_VERSION,
     GeneratedAnswer,
     GenerationReceipt,
-    PhaseEvidence,
     PreparedRun,
-    ServiceShutdown,
     text_sha256,
 )
 from summary_eval_pipeline.evaluation import bind_evaluations
@@ -21,10 +19,11 @@ from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.generation import generate_summary
 from summary_eval_pipeline.inputs import ManualInputs
 from summary_eval_pipeline.model_selection import select_model, verify_staged_selection
+from summary_eval_pipeline.phase_contracts import PhaseEvidence, PhaseShutdown
 from summary_eval_pipeline.phase_result import build_evidence
 from summary_eval_pipeline.phases import collect_phase
 from summary_eval_pipeline.settings import load_pipeline_settings
-from summary_eval_pipeline.storage import read_result, write_result
+from summary_eval_pipeline.storage import read_generation_result, read_result, write_result
 from summary_evaluator_cases.contract_examples import REPOSITORY
 
 from idhazh.llm.server import request_payload, server_argv
@@ -35,6 +34,7 @@ from summary_eval_tests.generation_cases import (
     selected_root,
 )
 from summary_eval_tests.native_cases import RecordedLlama
+from summary_eval_tests.scorer_evidence_cases import scorer_api_example
 
 
 def generation_phase() -> tuple[ManualInputs, PreparedRun, GenerationReceipt, PhaseEvidence]:
@@ -43,12 +43,7 @@ def generation_phase() -> tuple[ManualInputs, PreparedRun, GenerationReceipt, Ph
         None,
         None,
         None,
-        ServiceShutdown(
-            api_stopped=None,
-            host_stopped=True,
-            worker_exit_confirmed=None,
-            llama_stopped=True,
-        ),
+        PhaseShutdown(host_stopped=True, llama_stopped=True),
         [],
         run=prepared.run,
         phase="generation",
@@ -185,8 +180,10 @@ def test_same_run_handoff_is_atomic_and_retains_exact_text(tmp_path: Path) -> No
     inputs, prepared, receipt, phase = generation_phase()
     path = tmp_path / "generation.json"
     write_result(path, receipt)
-    saved = read_result(path, GenerationReceipt, 2 << 20)
-    request, unieval = bind_evaluations(prepared, inputs, saved, phase, 1 << 20)
+    saved, saved_hash = read_generation_result(path, 2 << 20)
+    request, unieval = bind_evaluations(
+        prepared, inputs, saved, phase, generation_sha256=saved_hash
+    )
     assert request.source_text == inputs.source_text
     assert request.summary_text == receipt.summary_text
     assert unieval.source_text == request.source_text
@@ -251,14 +248,12 @@ def test_stale_changed_failed_or_unclosed_generation_cannot_reach_either_evaluat
         receipt = receipt.model_copy(update={"status": "failed"})
     elif change == "preparation":
         prepared = prepared.model_copy(update={"status": "pending"})
-    elif change in ("host_unclosed", "invented_api"):
+    elif change == "invented_api":
+        phase = phase.model_copy(update={"scorer_apis": (scorer_api_example("hhem"),)})
+    elif change == "host_unclosed":
         phase = phase.model_copy(
             update={
-                "shutdown": phase.shutdown.model_copy(
-                    update={"host_stopped": False}
-                    if change == "host_unclosed"
-                    else {"api_stopped": True}
-                )
+                "shutdown": phase.shutdown.model_copy(update={"host_stopped": False})
             }
         )
     else:
@@ -266,7 +261,10 @@ def test_stale_changed_failed_or_unclosed_generation_cannot_reach_either_evaluat
             update={"shutdown": phase.shutdown.model_copy(update={"llama_stopped": False})}
         )
     with pytest.raises(WorkflowError) as failure:
-        bind_evaluations(prepared, inputs, receipt, phase, 1 << 20)
+        bind_evaluations(
+            prepared, inputs, receipt, phase,
+            generation_sha256=text_sha256(receipt.model_dump_json()),
+        )
     assert failure.value.error.code == "RECEIPT_INVALID"
 
 
@@ -361,8 +359,7 @@ def test_invalid_generation_never_starts_either_evaluator(
     assert result.status == "failed" and result.evaluation is None and not result.servers
     assert result.unieval is None
     assert not (directory / "logs").exists()
-    assert result.shutdown.worker_exit_confirmed is None
-    assert result.shutdown.unieval_worker_exit_confirmed is None
+    assert result.scorer_apis == ()
 
 
 def test_independent_reference_can_coincidentally_equal_the_generated_answer() -> None:
@@ -378,8 +375,48 @@ def test_independent_reference_can_coincidentally_equal_the_generated_answer() -
             "generation_sha256": text_sha256(receipt.model_dump_json()),
         }
     )
-    hhem, unieval = bind_evaluations(prepared, inputs, receipt, phase, 1 << 20)
+    hhem, unieval = bind_evaluations(
+        prepared, inputs, receipt, phase,
+        generation_sha256=text_sha256(receipt.model_dump_json()),
+    )
     assert hhem.summary_text == unieval.reference_summary_text == unieval.summary_text
+
+
+def test_receipt_hash_uses_original_bytes_without_restamping_or_reserialization(
+    tmp_path: Path,
+) -> None:
+    import hashlib
+
+    inputs, prepared, receipt, phase = generation_phase()
+    path = tmp_path / "generation.json"
+    encoded = (json.dumps(receipt.model_dump(mode="json"), indent=2) + "\n").encode("utf-8")
+    path.write_bytes(encoded)
+    saved, saved_hash = read_generation_result(path, 2 << 20)
+    assert saved.version == receipt.version == WORKFLOW_VERSION
+    assert saved_hash == hashlib.sha256(encoded).hexdigest()
+    assert saved_hash != text_sha256(saved.model_dump_json())
+    bound_phase = phase.model_copy(update={"generation_sha256": saved_hash})
+    hhem, unieval = bind_evaluations(
+        prepared, inputs, saved, bound_phase, generation_sha256=saved_hash
+    )
+    assert hhem.summary_text == receipt.summary_text
+    assert unieval.reference_summary_text == inputs.reference_summary_text
+    assert path.read_bytes() == encoded
+
+
+def test_evaluation_refuses_legacy_listener_before_any_child_launch(tmp_path: Path) -> None:
+    from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
+
+    selected_root(tmp_path)
+    path = tmp_path / "config" / "summary-evals" / "api.json"
+    legacy = load_scorer_api_settings(path, "hhem")
+    path.write_bytes(legacy.model_dump_json().encode("utf-8"))
+    with pytest.raises(WorkflowError) as failure:
+        asyncio.run(collect_phase(tmp_path, "evaluation"))
+    assert failure.value.error.code == "INPUT_INVALID"
+    directory = tmp_path / load_pipeline_settings(tmp_path).output_directory
+    assert not (directory / "evaluation.json").exists()
+    assert not (directory / "logs").exists()
 
 
 @pytest.mark.parametrize(

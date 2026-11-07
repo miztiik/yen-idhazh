@@ -26,7 +26,7 @@ from summary_evaluator.hhem.contracts.evaluation_event import EventDetails
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.emit_events import EventEmitter
 from summary_evaluator.hhem.fail_evaluation import EvaluationFailure
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.contracts.error_detail import ApiErrorResult
 from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
@@ -170,7 +170,9 @@ def test_both_recorded_scorers_work_without_generation_configuration_or_routes(
     async def check() -> None:
         inputs, predictions, _ = read_recordings(REPOSITORY)
         unieval_inputs, _, _ = read_unieval_recordings()
-        _, selected_unieval = unieval_settings()
+        _, selected_unieval = unieval_settings(
+            api=load_scorer_api_settings(API_SETTINGS_FILE, "hhem")
+        )
         unieval_worker = RecordedUnievalSupervisor(selected_unieval, None)
         async with running_service(
             routes=("hhem", "unieval"),
@@ -232,7 +234,9 @@ def test_operational_and_unknown_routes_refuse_unsafe_authority_without_reading_
     path: str, headers: tuple[tuple[bytes, bytes], ...], code: ErrorCode
 ) -> None:
     async def check() -> None:
-        api = load_api_settings(API_SETTINGS_FILE).model_copy(update={"enabled_routes": ()})
+        api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem").model_copy(
+            update={"enabled_routes": ()}
+        )
         stream = io.StringIO()
         app = create_app(api, None, REPOSITORY, writer=EventWriter(api.logging, stream))
         async with app.router.lifespan_context(app):
@@ -276,7 +280,7 @@ def test_excessive_full_plan_is_rejected_before_any_model_call() -> None:
 
 def test_lifespan_preserves_the_original_error_when_cleanup_also_fails() -> None:
     async def check() -> None:
-        api = load_api_settings(API_SETTINGS_FILE)
+        api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem")
         api = api.model_copy(update={"enabled_routes": ()})
         stream = io.StringIO()
         app = create_app(api, None, REPOSITORY, writer=EventWriter(api.logging, stream))

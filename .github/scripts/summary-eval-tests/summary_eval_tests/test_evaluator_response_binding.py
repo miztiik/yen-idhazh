@@ -5,26 +5,26 @@ import json
 
 import httpx
 import pytest
-from summary_eval_pipeline.contracts import PipelineError
+from summary_eval_pipeline.contracts import PipelineError, text_sha256
 from summary_eval_pipeline.evaluate_pair import EvaluatorOutcomes, evaluate_pair
-from summary_eval_pipeline.evaluation import bind_evaluations, read_owned_health
+from summary_eval_pipeline.evaluation import bind_evaluations
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_evaluator.unieval.unieval_router import UNIEVAL_PATH
 from summary_evaluator_cases.contract_examples import REPOSITORY, REQUEST_ID
-from summary_evaluator_cases.service_cases import running_service, service_settings
+from summary_evaluator_cases.service_cases import service_settings
 from summary_evaluator_cases.unieval_cases import (
-    RecordedUnievalSupervisor,
     UnievalScenario,
     unieval_settings,
 )
 
+from summary_eval_tests.scorer_caller_cases import running_scorers
 from summary_eval_tests.test_generation_handoff import generation_phase
 
 
 class AlteredEvaluatorReply(httpx.AsyncBaseTransport):
     """Damage an actual native reply at the HTTP boundary, never fabricate a prediction."""
 
-    def __init__(self, transport: httpx.ASGITransport, fault: str, event: str) -> None:
+    def __init__(self, transport: httpx.AsyncBaseTransport, fault: str, event: str) -> None:
         self.transport, self.fault, self.event = transport, fault, event
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
@@ -68,39 +68,30 @@ class AlteredEvaluatorReply(httpx.AsyncBaseTransport):
 def test_invalid_response_has_no_score_and_preserves_the_actual_hhem_result(fault: str) -> None:
     async def check() -> None:
         inputs, prepared, receipt, previous = generation_phase()
-        requests = bind_evaluations(prepared, inputs, receipt, previous, 1 << 20)
+        requests = bind_evaluations(
+            prepared, inputs, receipt, previous,
+            generation_sha256=text_sha256(receipt.model_dump_json()),
+        )
         _, selected_unieval = unieval_settings()
         selected_hhem = service_settings()
-        worker = RecordedUnievalSupervisor(selected_unieval, UnievalScenario(fail_at=0))
         pipeline = load_pipeline_settings(REPOSITORY)
         outcomes = EvaluatorOutcomes()
         errors: list[PipelineError] = []
-        async with running_service(
+        async with running_scorers(
             selected_hhem,
-            routes=("hhem", "unieval"),
-            unieval_settings=selected_unieval,
-            unieval_supervisor=worker,
+            selected_unieval=selected_unieval,
+            unieval_scenario=UnievalScenario(fail_at=0),
         ) as service:
-            health = await read_owned_health(
-                service.client,
-                "http://127.0.0.1:3010",
-                service.app.state.service_instance_id,
-                selected_hhem,
-                pipeline,
-                ("hhem", "unieval"),
-                errors=errors,
-            )
             transport = AlteredEvaluatorReply(
-                httpx.ASGITransport(service.app), fault, service.log.envelopes[0].model_dump_json()
+                service.transport, fault, service.hhem.log.envelopes[0].model_dump_json()
             )
             async with httpx.AsyncClient(
-                transport=transport, base_url="http://127.0.0.1:3010", trust_env=False
+                transport=transport, trust_env=False
             ) as client:
                 await evaluate_pair(
                     client,
-                    "http://127.0.0.1:3010",
                     requests,
-                    health,
+                    *service.apis,
                     selected_hhem,
                     selected_unieval,
                     pipeline,
@@ -112,6 +103,6 @@ def test_invalid_response_has_no_score_and_preserves_the_actual_hhem_result(faul
             assert outcomes.unieval is None
             expected = "RESPONSE_INVALID" if fault in ("event", "malformed") else "RECEIPT_INVALID"
             assert any(error.code == expected and error.service == "unieval" for error in errors)
-        assert worker.exit_confirmed and service.worker.exit_confirmed
+        assert service.unieval_worker.exit_confirmed and service.hhem.worker.exit_confirmed
 
     asyncio.run(check())

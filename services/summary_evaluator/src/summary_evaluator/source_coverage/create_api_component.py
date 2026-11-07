@@ -14,6 +14,7 @@ from summary_evaluator.shared.create_api_component import (
     ApiComponentRuntime,
     ComponentContext,
     ComponentHealth,
+    observe_worker_exit,
 )
 from summary_evaluator.source_coverage.contracts.service_settings import CoverageSettings
 from summary_evaluator.source_coverage.control_evaluation import CoverageController
@@ -74,4 +75,7 @@ def create_api_component(
         shutdown=controller.shutdown,
         observe_health=observe_health,
         refuse_requests={COVERAGE_EVALUATE_PATH: refuse_forbidden},
+        worker_settings=selected.worker,
+        is_stopping=lambda: controller.stopping,
+        observe_exit=lambda: observe_worker_exit(controller.worker),
     )

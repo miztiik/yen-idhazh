@@ -11,6 +11,7 @@ from summary_evaluator_cases.contract_examples import SETTINGS_FILE, example_eve
 
 from summary_evaluator.hhem.contracts.evaluation_event import EventDetails
 from summary_evaluator.hhem.emit_events import EventEmitter
+from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
 from summary_evaluator.serve_http.contracts.server_event import ApiDiagnosticData, ServerEvent
 from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
@@ -72,6 +73,21 @@ def test_live_records_and_named_file_match_and_restarts_append(tmp_path: Path) -
     assert len(stream.getvalue().splitlines()) == 2
     for line in stream.getvalue().splitlines():
         ServerEvent.model_validate_json(line)
+
+
+def test_independent_scorer_logs_do_not_share_the_same_role_file(tmp_path: Path) -> None:
+    settings = load_settings(SETTINGS_FILE).logging
+    scorers: tuple[ApiComponent, ...] = ("hhem", "unieval", "coverage")
+    for scorer in scorers:
+        writer = EventWriter(
+            settings, io.StringIO(), directory=tmp_path, run_id="123456", attempt=1,
+            started_at=datetime(2026, 11, 7, tzinfo=UTC), scorer=scorer,
+        )
+        writer.diagnostic(ApiDiagnosticData(component="api", action="started", level="INFO"))
+        assert writer.log_file == f"fastapi-server_{scorer}_2026_11_07_123456_1.log"
+        assert writer.log_file is not None
+        writer.close()
+        assert (tmp_path / writer.log_file).is_file()
 
 
 def test_an_unopenable_diagnostic_mirror_warns_without_failing_native_events(

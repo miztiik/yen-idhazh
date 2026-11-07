@@ -5,21 +5,21 @@ from pathlib import Path
 
 import httpx
 import pytest
-from summary_eval_pipeline.contracts import PipelineError, ServiceShutdown, text_sha256
+from summary_eval_pipeline.contracts import PipelineError
 from summary_eval_pipeline.evaluation import evaluate, read_owned_health
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.host_reader import measurement_complete
 from summary_eval_pipeline.http import call_local_api
-from summary_eval_pipeline.phase_result import build_evidence
 from summary_eval_pipeline.settings import load_pipeline_settings
+from summary_eval_pipeline.storage import read_result, write_result
 from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
+from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.contracts.service_health import ServiceHealth
 from summary_evaluator.shared.contracts.api_paths import EVALUATE_PATH, HHEM_HEALTH_PATH
 from summary_evaluator_cases.contract_examples import CORRELATION_ID, REPOSITORY, REQUEST_ID
 from summary_evaluator_cases.replay_predictions import Scenario, read_recordings
 from summary_evaluator_cases.service_cases import running_service
 
-from summary_eval_tests.generation_cases import example_run, handoff_case
 from summary_eval_tests.pipeline_cases import NativeHostPipe, prepare_proc
 
 
@@ -54,17 +54,17 @@ def test_actual_handlers_preserve_scores_including_error_http_results(
                 service.client.event_hooks["request"].append(observe_timeout)
                 await read_owned_health(
                     service.client,
-                    "http://127.0.0.1:3010",
+                    str(service.client.base_url).rstrip("/"),
                     controller.instance_id,
-                    controller.settings,
+                    controller.settings.worker,
                     pipeline,
-                    errors=errors,
+                    "hhem",
                 )
                 if partial:
                     service.log.fail_terminal = True
                 status, result = await evaluate(
                     service.client,
-                    "http://127.0.0.1:3010",
+                    str(service.client.base_url).rstrip("/"),
                     request,
                     controller.settings,
                     pipeline,
@@ -98,33 +98,20 @@ def test_actual_handlers_preserve_scores_including_error_http_results(
                     == 1
                 )
                 assert not any(event.operation == "full" for event in service.log.events)
+                write_result(tmp_path / "hhem.json", result)
                 prepare_proc(tmp_path, closing=True)
                 clean, machine = host.close()
                 assert clean and measurement_complete(machine)
             assert service.worker.exit_confirmed
-            evidence = build_evidence(
-                result,
-                host.hardware,
-                machine,
-                ServiceShutdown(
-                    api_stopped=True,
-                    host_stopped=clean,
-                    worker_exit_confirmed=service.worker.exit_confirmed,
-                ),
-                errors,
-                run=example_run(),
-                phase="evaluation",
-                generation_sha256=text_sha256(handoff_case()[2].model_dump_json()),
-                reference_summary_sha256=handoff_case()[1].reference_summary_sha256,
-                evaluation_request_id=request.request_id,
-                evaluation_correlation_id=request.correlation_id,
+            retained = read_result(
+                tmp_path / "hhem.json", EvaluationResult, pipeline.max_response_bytes
             )
-            assert evidence.status == "partial" and evidence.unieval is None
+            assert retained == result
             assert status == (500 if partial else 200)
-            assert case.source_text not in evidence.model_dump_json()
-            assert case.summary_text not in evidence.model_dump_json()
+            assert case.source_text not in retained.model_dump_json()
+            assert case.summary_text not in retained.model_dump_json()
             if partial:
-                assert evidence.errors[0].http_status == 500
+                assert errors[0].http_status == 500
         finally:
             host.close()
             assert host.process.poll() is not None
@@ -138,11 +125,11 @@ def test_bad_identity_is_rejected_against_real_health() -> None:
             with pytest.raises(WorkflowError) as failure:
                 await read_owned_health(
                     service.client,
-                    "http://127.0.0.1:3010",
+                    str(service.client.base_url).rstrip("/"),
                     REQUEST_ID,
-                    service.app.state.controller.settings,
+                    service.app.state.controller.settings.worker,
                     load_pipeline_settings(REPOSITORY),
-                    errors=[],
+                    "hhem",
                 )
             assert failure.value.error.code == "STARTUP_IDENTITY_MISMATCH"
             assert not any(event.operation == "primary" for event in service.log.events)
@@ -162,11 +149,11 @@ def test_health_waits_for_actual_model_readiness_without_sending_a_score_request
             waiting = asyncio.create_task(
                 read_owned_health(
                     service.client,
-                    "http://127.0.0.1:3010",
+                    str(service.client.base_url).rstrip("/"),
                     controller.instance_id,
-                    controller.settings,
+                    controller.settings.worker,
                     load_pipeline_settings(REPOSITORY),
-                    errors=[],
+                    "hhem",
                 )
             )
             await asyncio.sleep(0)
@@ -183,7 +170,7 @@ def test_health_waits_for_actual_model_readiness_without_sending_a_score_request
 def test_actual_health_response_enforces_the_exact_byte_allowance() -> None:
     async def check() -> None:
         async with running_service() as service:
-            url = "http://127.0.0.1:3010" + HHEM_HEALTH_PATH
+            url = str(service.client.base_url).rstrip("/") + HHEM_HEALTH_PATH
             size = len((await service.client.get(url)).content)
             pipeline = load_pipeline_settings(REPOSITORY)
             for allowance, allowed in ((size, True), (size - 1, False)):

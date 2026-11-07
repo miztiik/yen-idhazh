@@ -15,7 +15,7 @@ import httpx
 from summary_evaluator_cases.contract_examples import REPOSITORY
 
 from scripts.recording_json import canonical_bytes
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
 from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
@@ -73,10 +73,11 @@ def read_unieval_recordings() -> tuple[
     return inputs, predictions, identity
 
 
-def unieval_settings(**scoring: object) -> tuple[ApiSettings, UnievalSettings]:
-    api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
-    api = ApiSettings.model_validate_json(
-        api.model_copy(update={"enabled_routes": ("unieval",)}).model_dump_json()
+def unieval_settings(
+    *, api: ApiSettings | None = None, **scoring: object
+) -> tuple[ApiSettings, UnievalSettings]:
+    api = api or load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
     )
     inputs = read_unieval_inputs()
     settings = load_unieval_settings(REPOSITORY, api)
@@ -200,7 +201,9 @@ async def running_unieval(
         assert (await app.state.unieval.health()).status == "ready", stream.getvalue()
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app),
-            base_url="http://127.0.0.1:3010",
+            base_url=httpx.URL(
+                scheme="http", host=api.listener.host, port=api.listener.port,
+            ),
             trust_env=False,
         ) as client:
             yield client, worker, stream

@@ -18,6 +18,7 @@ from summary_evaluator.shared.create_api_component import (
     ApiComponentRuntime,
     ComponentContext,
     ComponentHealth,
+    observe_worker_exit,
 )
 
 
@@ -63,4 +64,7 @@ def create_api_component(
         shutdown=controller.shutdown,
         observe_health=observe_health,
         refuse_requests={EVALUATE_PATH: refuse_forbidden},
+        worker_settings=settings.worker,
+        is_stopping=lambda: controller.stopping,
+        observe_exit=lambda: observe_worker_exit(controller.worker),
     )

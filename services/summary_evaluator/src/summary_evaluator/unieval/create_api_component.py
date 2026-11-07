@@ -13,6 +13,7 @@ from summary_evaluator.shared.create_api_component import (
     ApiComponentRuntime,
     ComponentContext,
     ComponentHealth,
+    observe_worker_exit,
 )
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
@@ -69,4 +70,7 @@ def create_api_component(
         shutdown=controller.shutdown,
         observe_health=observe_health,
         refuse_requests={UNIEVAL_PATH: refuse_forbidden},
+        worker_settings=selected.worker,
+        is_stopping=lambda: controller.stopping,
+        observe_exit=lambda: observe_worker_exit(controller.worker),
     )

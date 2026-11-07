@@ -4,12 +4,12 @@ import os
 import sys
 from pathlib import Path
 
+from summary_evaluator.shared.contracts.process_identity import ProcessIdentity
 from summary_evaluator.shared.contracts.worker_identity import PinUnavailableReason, WorkerIdentity
 
 
-def read_process_identity(generation: int, max_bytes: int) -> WorkerIdentity:
+def read_owned_process_identity(pid: int, max_bytes: int) -> ProcessIdentity:
     """Read one bounded Linux stat file, or name why its pin is unavailable."""
-    pid = os.getpid()
     reason: PinUnavailableReason | None = None
     ticks: str | None = None
     if sys.platform != "linux":
@@ -36,9 +36,18 @@ def read_process_identity(generation: int, max_bytes: int) -> WorkerIdentity:
             reason = "process_not_found"
         except OSError:
             reason = "process_read_failed"
-    return WorkerIdentity(
-        generation=generation,
+    return ProcessIdentity(
         pid=pid,
         start_ticks=ticks,
         pin_unavailable_reason=reason,
+    )
+
+
+def read_process_identity(generation: int, max_bytes: int) -> WorkerIdentity:
+    observed = read_owned_process_identity(os.getpid(), max_bytes)
+    return WorkerIdentity(
+        generation=generation,
+        pid=observed.pid,
+        start_ticks=observed.start_ticks,
+        pin_unavailable_reason=observed.pin_unavailable_reason,
     )

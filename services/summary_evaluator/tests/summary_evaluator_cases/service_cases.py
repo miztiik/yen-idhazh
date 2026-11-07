@@ -20,7 +20,7 @@ from summary_evaluator_cases.replay_predictions import Scenario, run_recorded_wo
 from summary_evaluator.hhem.contracts.evaluation_event import EvaluationEvent
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
 from summary_evaluator.hhem.maintain_worker import WorkerSupervisor
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent, ApiSettings
 from summary_evaluator.serve_http.contracts.server_event import ServerEvent
 from summary_evaluator.serve_http.emit_events import EventWriter
@@ -186,14 +186,22 @@ async def running_service(
         )
     worker = RecordedSupervisor(selected, scenarios)
     log = EventLog()
-    shared = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
+    shared = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json",
+        routes[0] if routes is not None and len(routes) == 1 else "hhem",
+    )
     api = ApiSettings.model_validate_json(
         shared.model_copy(
             update={
                 "enabled_routes": routes
                 if routes is not None
                 else (("hhem",) if selected.enabled else ()),
-                "listener": selected.listener,
+                "listener": (
+                    unieval_settings.listener
+                    if routes == ("unieval",) and unieval_settings is not None
+                    else shared.listener if routes == ("unieval",)
+                    else selected.listener
+                ),
                 "logging": selected.logging,
             }
         ).model_dump_json()
@@ -217,7 +225,9 @@ async def running_service(
                 assert (await app.state.unieval.health()).status == "ready"
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app),
-                base_url=f"http://{selected.listener.host}:{selected.listener.port}",
+                base_url=httpx.URL(
+                    scheme="http", host=api.listener.host, port=api.listener.port,
+                ),
                 trust_env=False,
                 follow_redirects=False,
             ) as client:

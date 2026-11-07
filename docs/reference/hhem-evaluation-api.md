@@ -1,6 +1,6 @@
 # HHEM evaluation API
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 
 Which fields, identities and startup settings the independent HHEM evaluator
 accepts. The HHEM component serves synchronous local CPU evaluations with one owned
@@ -23,9 +23,9 @@ The HTTP protocol reserves `GET /api/2026-11-05/get-hhem-health`,
 `POST /api/2026-11-05/evaluate-summary-hhem` and the shared
 `GET /api/2026-11-05/get-summary-evaluator-schema`.
 There is no `/evaluate` alias. These HHEM routes are registered only when the
-shared application's explicit component selection includes `hhem`.
+application's explicit component selection is `hhem`.
 The request has no version field. HHEM's scoring schema remains
-`2026-11-02`, independently of the HTTP route date and the shared application's
+`2026-11-02`, independently of the HTTP route date and the reusable application's
 schema. These are protocol names, not listener settings; the
 [routing convention](api-routing.md) owns that distinction. No interactive documentation UI,
 streaming, polling or result-history endpoint is defined.
@@ -196,7 +196,7 @@ Table G - Initial settings and units
 | G3 | `hhem.cache_directory` | `services/summary_evaluator/var/model-cache`, a relative POSIX operator path; never a request control. |
 | G4 | `scoring.chunk_words`, `scoring.chunk_overlap_words`, `scoring.max_windows_per_comparison` | 5000 words per window, 500 words of regular overlap and at most 256 planned windows per comparison. Reject a larger plan; never drop windows. |
 | G5 | `response.hhem_full`, `response.include_window_details` | Both `false`; independent permanent optional API controls. |
-| G6 | `listener.host`, `listener.port` | Read from the shared server configuration: `127.0.0.1`, port 3010. Only configured loopback literals `127.0.0.1` and `::1` validate. |
+| G6 | `listener.host`, `listener.port` | Read from the committed `listeners.hhem` entry: `127.0.0.1`, port 3010. Only configured loopback literals `127.0.0.1` and `::1` validate. Other scorers have separate listeners. |
 | G7 | `listener.max_body_bytes`, `listener.body_read_timeout_ms` | 1048576 bytes (1 MiB) and 5000 milliseconds (five seconds) for bounded input reads. |
 | G8 | `queue.capacity`, `queue.wait_timeout_ms`, `queue.retry_after_seconds` | Eight waiting reservations, 60000 milliseconds (one minute), two seconds. A body being read uses a reservation; the active evaluation is separate. |
 | G9 | `evaluation.timeout_ms` | 120000 milliseconds (two minutes), shared across both comparisons after dequeue. |

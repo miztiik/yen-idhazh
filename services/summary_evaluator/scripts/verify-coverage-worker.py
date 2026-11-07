@@ -9,7 +9,7 @@ from pathlib import Path
 
 from idhazh.contracts.coverage_model_recording import CoverageRecordingInputs
 
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.shared.create_execution_id import create_execution_id
 from summary_evaluator.shared.exchange_packets import JSON_ESCAPE_MAX_BYTES
 from summary_evaluator.source_coverage.contracts.base import COVERAGE_VERSION
@@ -30,7 +30,7 @@ def main() -> None:
     parser.add_argument("--root", type=Path, required=True)
     args = parser.parse_args()
     root = args.root.resolve()
-    api = load_api_settings(root / "config" / "summary-evals" / "api.json")
+    api = load_scorer_api_settings(root / "config" / "summary-evals" / "api.json", "coverage")
     settings = load_settings(root, api.listener, api.logging)
     inputs = CoverageRecordingInputs.model_validate_json(
         (root / "tests" / "fixtures" / "summary-evaluation" / "coverage-recording-inputs.json")

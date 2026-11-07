@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 
 import httpx
 import pytest
-from summary_evaluator_cases.contract_examples import REPOSITORY
+from summary_evaluator_cases.contract_examples import API_SETTINGS_FILE, REPOSITORY
 from summary_evaluator_cases.replay_predictions import Scenario, read_recordings
 from summary_evaluator_cases.service_cases import RecordedSupervisor, service_settings
 from summary_evaluator_cases.unieval_cases import (
@@ -19,6 +19,7 @@ from summary_evaluator_cases.unieval_cases import (
 )
 
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
 from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.serve_api import create_app
@@ -60,7 +61,9 @@ def test_unieval_worker_failure_does_not_close_or_block_the_hhem_component(
     idle_exit: bool,
 ) -> None:
     async def check() -> None:
-        selected_api, selected_unieval = unieval_settings()
+        selected_api, selected_unieval = unieval_settings(
+            api=load_scorer_api_settings(API_SETTINGS_FILE, "hhem")
+        )
         api = ApiSettings.model_validate_json(
             selected_api.model_copy(
                 update={"enabled_routes": ("hhem", "unieval")}
