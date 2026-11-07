@@ -115,7 +115,7 @@ test("the caller's configured native byte bounds reach the shared transport rath
     assert.equal(bus.getEventHistory().some(event => event.type === "OUTPUT_STRUCTURED"), false);
   })));
 
-test("explicitly missing native measurements retain only the full-analysis caller's legacy defaults", { timeout: 120000 }, () =>
+test("explicitly missing native measurements remain unavailable in full analysis", { timeout: 120000 }, () =>
   withConfig(async root => {
     const { loadModelRuntime } = await import("../../../../services/summary-generator/src/config/load-model-runtime.js");
     const runtime = loadModelRuntime(root);
@@ -124,7 +124,7 @@ test("explicitly missing native measurements retain only the full-analysis calle
       async () => new Response(JSON.stringify({
         ...reply, usage: { prompt_tokens: null, completion_tokens: null }, timings: null,
       }), { headers: { "Content-Type": "application/json" } }), loadAnalysisConfig(root));
-    assert.deepEqual(result.usage, { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 });
+    assert.deepEqual(result.usage, { prompt_tokens: null, completion_tokens: null, total_tokens: null });
     assert.deepEqual(result.timings, {});
     assert.equal(result.rawContent, reply.choices[0].message.content);
   }));
