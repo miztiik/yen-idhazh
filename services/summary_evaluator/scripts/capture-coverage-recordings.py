@@ -130,7 +130,7 @@ def main() -> None:
     )
     recording.require_inputs(inputs)
     atomic_write(
-        directory / "coverage-model-recording.json", recording.to_json().encode("utf-8") + b"\n"
+        directory / "coverage-model-recording.json", recording.to_json().encode("utf-8")
     )
     print(
         "Captured genuine legacy dimension inputs, results and final metrics; "

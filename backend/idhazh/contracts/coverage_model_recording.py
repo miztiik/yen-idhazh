@@ -68,8 +68,8 @@ class CoverageDimensionCall(Model):
     index: int = Field(strict=True, ge=0)
     dimension: Dimension
     overall: Literal[False]
-    inputs: tuple[dict[str, str], ...] = Field(min_length=1)
-    results: tuple[dict[str, float], ...] = Field(min_length=1)
+    inputs: tuple[dict[str, str], ...] = Field(min_length=1, strict=False)
+    results: tuple[dict[str, float], ...] = Field(min_length=1, strict=False)
 
     @model_validator(mode="after")
     def require_complete_dimension(self) -> Self:

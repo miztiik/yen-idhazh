@@ -2,9 +2,11 @@
 
 import pytest
 from pydantic import ValidationError
+from support.paths import REPO_ROOT
 
 from idhazh.contracts.coverage_model_recording import (
     CoverageDimensionCall,
+    CoverageModelRecording,
     CoverageRecordingCaseInput,
     CoverageRecordingInputs,
 )
@@ -52,3 +54,18 @@ def test_a_genuine_zero_is_a_complete_recorded_score() -> None:
         results=({"fluency": 0.0},),
     )
     assert call.results[0]["fluency"] == 0.0
+
+
+@pytest.mark.contract
+def test_real_capture_json_round_trip_binds_its_named_inputs() -> None:
+    directory = REPO_ROOT / "tests" / "fixtures" / "summary-evaluation"
+    inputs = CoverageRecordingInputs.model_validate_json(
+        (directory / "coverage-recording-inputs.json").read_bytes()
+    )
+    recording = CoverageModelRecording.model_validate_json(
+        (directory / "coverage-model-recording.json").read_bytes()
+    )
+    recording.require_inputs(inputs)
+    restored = CoverageModelRecording.model_validate_json(recording.to_json())
+    assert restored == recording
+    assert restored.json_schema()["version"] == "2026-11-07"
