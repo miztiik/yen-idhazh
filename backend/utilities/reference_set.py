@@ -44,6 +44,7 @@ from pydantic import ValidationError
 
 from idhazh import config, corpus, summarize
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusRow
+from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -154,7 +155,12 @@ def write_queue(reference_dir: Path, tasks: Sequence[Task]) -> None:
 # --- reading the stratification off a row ----------------------------------
 
 
-def band_prompts(prompt_config: SummarizeConfig) -> list[str]:
+def band_prompts(
+    prompt_config: SummarizeConfig,
+    *,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = config.DEFAULT_CONFIG_DIR,
+) -> list[str]:
     """The rendered system turn for each band, in band order.
 
     Rendered rather than described, so a band's identity here is the exact string
@@ -162,7 +168,12 @@ def band_prompts(prompt_config: SummarizeConfig) -> list[str]:
     of a parse of prose that could drift from the template.
     """
     return [
-        summarize.system_prompt(prompt_config, source_words=band.min_source_words)
+        summarize.system_prompt(
+            prompt_config,
+            source_words=band.min_source_words,
+            prompt_files=prompt_files,
+            config_dir=config_dir,
+        )
         for band in prompt_config.bands
     ]
 
@@ -195,9 +206,15 @@ def stratum(task: Task) -> tuple[str, int, str]:
 # --- queue -----------------------------------------------------------------
 
 
-def _tasks_from_corpus(rows: Sequence[CorpusRow], prompt_config: SummarizeConfig) -> list[Task]:
+def _tasks_from_corpus(
+    rows: Sequence[CorpusRow],
+    prompt_config: SummarizeConfig,
+    *,
+    prompt_files: PromptFilesConfig | None = None,
+    config_dir: Path = config.DEFAULT_CONFIG_DIR,
+) -> list[Task]:
     """Every corpus row that still matches a live band, as an unassigned task."""
-    prompts = band_prompts(prompt_config)
+    prompts = band_prompts(prompt_config, prompt_files=prompt_files, config_dir=config_dir)
     found: list[Task] = []
     for row in rows:
         system, user = row.messages[0].content, row.messages[1].content
@@ -293,7 +310,12 @@ def queue(
     done = {task.url_key: task for task in held}
     candidates = [
         task
-        for task in _tasks_from_corpus(rows, settings.app.summarize)
+        for task in _tasks_from_corpus(
+            rows,
+            settings.app.summarize,
+            prompt_files=settings.app.prompt_files,
+            config_dir=settings.config_dir,
+        )
         if task.url_key not in done
     ]
     picked = spread(candidates, want=max(0, want - len(held)))
@@ -364,7 +386,10 @@ def target_is_shaped_right(
         )
 
     system = summarize.system_prompt(
-        settings.app.summarize, source_words=band.min_source_words
+        settings.app.summarize,
+        source_words=band.min_source_words,
+        prompt_files=settings.app.prompt_files,
+        config_dir=settings.config_dir,
     )
     return (
         CorpusRow(

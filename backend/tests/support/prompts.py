@@ -33,7 +33,8 @@ def a_table(
 
 
 def label_payload(article: Article, *, config_dir: Path = CONFIG_DIR) -> dict[str, Any]:
-    entry = config.load(config_dir).models.summarizer
+    settings = config.load(config_dir)
+    entry = settings.models.summarizer
     return build_label_request(
         article,
         a_table(article, config_dir=config_dir),
@@ -41,4 +42,6 @@ def label_payload(article: Article, *, config_dir: Path = CONFIG_DIR) -> dict[st
         server=entry.server,
         sampling=entry.sampling,
         markers=a_markers(),
+        prompt_files=settings.app.prompt_files,
+        config_dir=settings.config_dir,
     )

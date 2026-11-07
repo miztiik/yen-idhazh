@@ -652,6 +652,7 @@ def run_item(
     summarize_and_plan_cap: int,
     question_tokens: int | None,
     markers: TurnMarkers,
+    config_dir: Path = config.DEFAULT_CONFIG_DIR,
 ) -> Reading:
     article = sample.article
     model = models.summarizer
@@ -664,6 +665,8 @@ def run_item(
         sampling=model.sampling,
         markers=markers,
         prompt_config=app.summarize,
+        prompt_files=app.prompt_files,
+        config_dir=config_dir,
     )
     if label_cap:
         first["n_predict"] = label_cap
@@ -676,6 +679,8 @@ def run_item(
         markers=markers,
         source_words=article.band_source_words,
         brief=article.brief,
+        prompt_files=app.prompt_files,
+        config_dir=config_dir,
     )
     if summarize_and_plan_cap:
         second["n_predict"] = summarize_and_plan_cap
@@ -715,6 +720,7 @@ def pick_samples(
     wanted: int,
     prompt_ceiling: int,
     markers: TurnMarkers,
+    config_dir: Path = config.DEFAULT_CONFIG_DIR,
 ) -> list[tuple[Sample, int]]:
     """The longest corpus articles whose label-call prompt still fits.
 
@@ -735,6 +741,8 @@ def pick_samples(
             sampling=model.sampling,
             markers=markers,
             prompt_config=app.summarize,
+            prompt_files=app.prompt_files,
+            config_dir=config_dir,
         )
         tokens = tokenizer.count(str(request["prompt"]))
         if tokens is None:
@@ -836,6 +844,7 @@ def finish(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--weights", type=Path, required=True)
     # Not spelled `--port`. `test_summarize` holds one function as the only
@@ -892,7 +901,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    settings = config.load(REPO_ROOT / "config")
+    settings = config.load(args.config)
     app = settings.app
     models = settings.models
     model = models.summarizer
@@ -942,14 +951,23 @@ def main(argv: list[str] | None = None) -> int:
         # question's own text, because the difference between the two IS the
         # marker floor row #3e cannot go below - and measuring the report with
         # the rendered number makes that floor come out negative.
-        question = summarize_and_plan_user_turn(app.summarize)
+        question = summarize_and_plan_user_turn(
+            app.summarize, prompt_files=app.prompt_files, config_dir=settings.config_dir
+        )
         rendered_turn = tokenizer.count(markers.turn("user", question))
         question_tokens = tokenizer.tokenize(question)
         if rendered_turn is None or question_tokens is None:
             raise RuntimeError("the server would not tokenise the second call's question")
         trailing = len(question_tokens)
         system_tokens = tokenizer.count(
-            markers.turn("system", label_system_prompt(app.summarize))
+            markers.turn(
+                "system",
+                label_system_prompt(
+                    app.summarize,
+                    prompt_files=app.prompt_files,
+                    config_dir=settings.config_dir,
+                ),
+            )
         )
         label_decode = label_budget_tokens()
         summarize_and_plan_decode = summarize_and_plan_budget_tokens(app.summarize)
@@ -973,6 +991,7 @@ def main(argv: list[str] | None = None) -> int:
                 wanted=wanted,
                 prompt_ceiling=ceiling,
                 markers=markers,
+                config_dir=settings.config_dir,
             )
             if wanted
             else []
@@ -992,6 +1011,8 @@ def main(argv: list[str] | None = None) -> int:
                     sampling=model.sampling,
                     markers=markers,
                     prompt_config=app.summarize,
+                    prompt_files=app.prompt_files,
+                    config_dir=settings.config_dir,
                 )["prompt"]
             )
         )
@@ -1031,6 +1052,7 @@ def main(argv: list[str] | None = None) -> int:
                     summarize_and_plan_cap=args.decode_cap,
                     question_tokens=trailing,
                     markers=markers,
+                    config_dir=settings.config_dir,
                 )
             )
     finally:

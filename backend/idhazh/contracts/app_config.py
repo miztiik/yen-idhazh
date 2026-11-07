@@ -33,7 +33,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Annotated, Any, ClassVar, Final, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract
 from idhazh.contracts.knobs.assist import AssistConfig
@@ -49,6 +49,7 @@ from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
 from idhazh.contracts.knobs.page_weight import PageWeightConfig
 from idhazh.contracts.knobs.placement import AssembleConfig, LensWeightsConfig, PlacementConfig
+from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.contracts.knobs.run import RunConfig
@@ -109,7 +110,17 @@ class AppConfig(Contract):
     """`config/idhazh.json` - every tunable, schema-validated."""
 
     __schema_stem__: ClassVar[str] = "app-config"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "readCompatibility": "additive; absent prompt_files uses the declared task paths"
+        }
+    )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-07",
+            change="prompt_files names the production task instructions under the selected config.",
+            why="Candidate configuration must select its own named prompt files.",
+        ),
         ChangelogEntry(
             version="2026-10-28",
             change="visuals.enabled_kinds includes the whowhat grid family.",
@@ -124,11 +135,6 @@ class AppConfig(Contract):
             version="2026-10-24",
             change="bench.run_model_speed_case removed; the model_speed_case input decides it.",
             why="A knob nothing reads is a second spelling of the dispatch input.",
-        ),
-        ChangelogEntry(
-            version="2026-10-11",
-            change="council removed; its settings live in config/llm_council.json.",
-            why="The council owns its settings and judge list, as the gardener does.",
         ),
         ChangelogEntry(
             version="2026-09-28",
@@ -153,6 +159,7 @@ class AppConfig(Contract):
         ),
     )
     summarize: SummarizeConfig = Field(default_factory=SummarizeConfig)
+    prompt_files: PromptFilesConfig = Field(default_factory=PromptFilesConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     drift: DriftConfig = Field(default_factory=DriftConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)

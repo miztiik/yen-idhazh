@@ -77,6 +77,10 @@ def config_with_finetune(root: Path, **changes: int) -> Path:
     payload = json.loads(read_text(path))
     payload["finetune"].update(changes)
     path.write_text(json.dumps(payload), encoding="utf-8")
+    prompt_file = AppConfig.model_validate(payload).prompt_files.summarize_article
+    target = config_dir / prompt_file
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes((CONFIG_DIR / prompt_file).read_bytes())
     return config_dir
 
 

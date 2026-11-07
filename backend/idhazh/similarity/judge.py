@@ -334,7 +334,9 @@ def read_once(
     entry = entry_of(settings)
     answer = decode_body(
         settings,
-        system=prompt.system_turn(),
+        system=prompt.system_turn(
+            prompt_files=settings.app.prompt_files, config_dir=settings.config_dir
+        ),
         user=prompt.user_turn(left, right),
         markers=markers,
     )

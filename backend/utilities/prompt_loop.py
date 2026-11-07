@@ -26,7 +26,7 @@ happen because of it:
   imported by the pipeline, so it can never sit on the daily critical path.
 - **Nothing it writes reaches a reader.** The winning prompt, the rubric, the
   scores of every candidate and the seed are the artefacts. Promoting a winner
-  into `backend/idhazh/prompts/summarize.txt` is a human act, taken after reading
+  into `config/prompts/summarize-article.txt` is a human act, taken after reading
   the deterministic scores. The loop never edits the live prompt itself.
 """
 
@@ -58,10 +58,10 @@ from idhazh.llm.server import (
     request_timeout_seconds,
     resolve_endpoint,
 )
+from idhazh.load_prompt_text import load_prompt_text
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 RUBRIC_PATH: Final = Path(__file__).parent / "prompt_loop_rubric.md"
-INCUMBENT_PROMPT_PATH: Final = REPO_ROOT / "backend" / "idhazh" / "prompts" / "summarize.txt"
 DEFAULT_FROZEN_SET: Final = REPO_ROOT / "tests" / "fixtures" / "contracts" / "article"
 DEFAULT_OUTPUT_ROOT: Final = REPO_ROOT / "backend" / "var" / "prompt-loop"
 
@@ -304,7 +304,13 @@ def render_system(
     instruction.
     """
     band = ask.band_for(0 if brief else source_words)
-    return Template(template_text).substitute({**ask.model_dump(), **band.model_dump()})
+    return Template(template_text).substitute(
+        {
+            **ask.model_dump(),
+            **band.model_dump(),
+            "paragraph_rule": summarize.paragraph_rule(ask),
+        }
+    )
 
 
 class LiveSummarizer:
@@ -337,6 +343,8 @@ class LiveSummarizer:
                 sampling=sampling,
                 markers=markers,
                 prompt_config=ask,
+                prompt_files=self._settings.app.prompt_files,
+                config_dir=self._settings.config_dir,
             )
             payload["messages"][0]["content"] = render_system(
                 prompt, ask, source_words=article.band_source_words, brief=article.brief
@@ -519,14 +527,14 @@ def _format_verdict(result: LoopResult) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    settings = config.load()
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
+    parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
     parser.add_argument(
         "--iterations",
         type=int,
-        default=settings.app.finetune.prompt_iterations,
+        default=None,
         help="Rounds to run. Defaults to finetune.prompt_iterations.",
     )
     parser.add_argument(
@@ -550,6 +558,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--endpoint", default=None, help="Model server endpoint.")
     args = parser.parse_args(argv)
+    settings = config.load(args.config)
     endpoint: str = args.endpoint or resolve_endpoint(settings.app.model_server.base_url)
 
     articles, items = load_frozen_articles(args.frozen_set, args.article)
@@ -568,7 +577,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
-    incumbent_prompt = INCUMBENT_PROMPT_PATH.read_bytes().decode("utf-8")
+    incumbent_prompt = load_prompt_text(
+        settings.config_dir, settings.app.prompt_files.summarize_article, newline=""
+    )
     rubric = RUBRIC_PATH.read_bytes().decode("utf-8")
     summarizer = LiveSummarizer(settings=settings, articles=articles, endpoint=endpoint)
     judge = ModelJudge(settings=settings, endpoint=endpoint)
@@ -579,7 +590,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         summarizer=summarizer,
         judge=judge,
         rubric=rubric,
-        iterations=args.iterations,
+        iterations=(
+            settings.app.finetune.prompt_iterations
+            if args.iterations is None
+            else args.iterations
+        ),
         seed=args.seed,
     )
 

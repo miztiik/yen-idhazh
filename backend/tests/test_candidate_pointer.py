@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from utilities import candidate_pointer
 
 
@@ -23,6 +24,7 @@ def _scratch(tmp_path: Path) -> Path:
                     "trial_case_dirname": "case",
                 },
                 "summarize": {"truncate_chars": 6000},
+                "prompt_files": PromptFilesConfig().model_dump(),
             },
             indent=2,
         )
@@ -44,6 +46,7 @@ def test_the_pointer_moves_and_so_does_the_trial_state(tmp_path: Path) -> None:
     assert settings["run"]["trial_state_dirname"] == "trial"
     assert settings["run"]["trial_case_dirname"] == "case"
     assert settings["summarize"] == {"truncate_chars": 6000}, "a control the bench reads moved"
+    assert settings["prompt_files"] == PromptFilesConfig().model_dump()
 
 
 def test_a_field_transplanted_onto_the_entry_is_refused(tmp_path: Path) -> None:
@@ -87,3 +90,11 @@ def test_moving_only_the_two_allowed_keys_is_allowed(tmp_path: Path) -> None:
     allowed["run"]["trial_state_dirname"] = "trial"
 
     candidate_pointer.refuse_any_other_move(committed, allowed)
+
+
+def test_a_candidate_cannot_change_a_prompt_pointer(tmp_path: Path) -> None:
+    committed = json.loads((_scratch(tmp_path) / "idhazh.json").read_text(encoding="utf-8"))
+    edited = json.loads(json.dumps(committed))
+    edited["prompt_files"]["summarize_article"] = "prompts/another-article.txt"
+    with pytest.raises(ValueError, match=r"prompt_files\.summarize_article"):
+        candidate_pointer.refuse_any_other_move(committed, edited)

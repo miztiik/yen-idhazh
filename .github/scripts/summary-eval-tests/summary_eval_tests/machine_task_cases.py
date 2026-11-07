@@ -83,6 +83,14 @@ def stage_machine_run(
     (root / "config" / "summary-evals" / "workflow.json").write_bytes(
         (REPOSITORY / "config" / "summary-evals" / "workflow.json").read_bytes()
     )
+    authored = json.loads(
+        (root / "config" / "summary-evals" / "workflow.json").read_bytes()
+    )
+    prompt_file = authored["generation_prompt_file"]
+    (root / "config" / prompt_file).parent.mkdir(parents=True, exist_ok=True)
+    (root / "config" / prompt_file).write_bytes(
+        (REPOSITORY / "config" / prompt_file).read_bytes()
+    )
     runtime = root / pipeline.output_directory
     stage_configuration(REPOSITORY, runtime, select_model(REPOSITORY, ""))
     listener = runtime / "config" / "hono-server.json"

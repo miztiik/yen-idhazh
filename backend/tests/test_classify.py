@@ -28,7 +28,6 @@ from idhazh.classify.calls import (
     CHARS_PER_WORD,
     LABEL_BUDGET_TOKENS,
     LABEL_PASS_VERSION,
-    LABEL_PROMPT_PATH,
     LABELS_MAX,
     MEASURED_REPLY_CHARACTERS,
     MEASURED_REPLY_TOKENS,
@@ -263,7 +262,8 @@ class TestThePromptBytes:
         Top level only. A nested name is a bigger regex for a hazard that has
         not happened, and both real defects were at the left margin.
         """
-        text = LABEL_PROMPT_PATH.read_text(encoding="utf-8")
+        files = config.load(CONFIG_DIR).app.prompt_files
+        text = (CONFIG_DIR / files.generate_labels).read_text(encoding="utf-8")
         named = set(re.findall(r'^"(\w+)" - ', text, re.MULTILINE))
 
         assert label_system_prompt().startswith(text)
