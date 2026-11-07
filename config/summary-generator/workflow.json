@@ -1,6 +1,6 @@
 {
   "version": "2026-11-06",
-  "max_input_words": 6000,
+  "max_input_words": 20000,
   "base_prompt_file": "prompts/request-json.txt",
   "analysis_prompt_file": "prompts/analyze-article.txt",
   "max_native_request_bytes": 1048576,
