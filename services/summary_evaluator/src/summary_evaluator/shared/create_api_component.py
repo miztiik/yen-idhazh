@@ -8,8 +8,8 @@ from typing import Protocol
 
 from local_api_host.create_api_component import (
     ApiComponentRuntime as HostApiComponentRuntime,
+    RefusalHandler,
 )
-from local_api_host.create_api_component import RefusalHandler
 from pydantic import BaseModel
 
 from summary_evaluator.shared.contracts.base import ServiceStatus
@@ -20,6 +20,14 @@ from summary_evaluator.shared.contracts.service_settings import (
     WorkerSettings,
 )
 from summary_evaluator.shared.contracts.worker_exit import WorkerExit
+
+__all__ = [
+    "ApiComponentRuntime",
+    "ComponentContext",
+    "ComponentHealth",
+    "RefusalHandler",
+    "observe_worker_exit",
+]
 
 
 class WorkerOwnership(Protocol):

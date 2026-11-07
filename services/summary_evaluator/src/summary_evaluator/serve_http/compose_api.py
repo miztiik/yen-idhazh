@@ -11,9 +11,7 @@ from local_api_host.compose_api import compose_api
 from local_api_host.contracts import HostSettings, ListenerSettings as HostListenerSettings
 from local_api_host.create_api_component import (
     ApiComponentRuntime as HostApiComponentRuntime,
-)
-from local_api_host.create_api_component import (
-    ComponentShutdownFailures,
+    ComponentShutdownError,
     HealthRenderer,
     HostEventContext,
     HostEventDataFactory,
@@ -36,8 +34,8 @@ from summary_evaluator.shared.contracts.server_contract import SERVER_SCHEMA_VER
 from summary_evaluator.shared.contracts.service_settings import StartupContext
 from summary_evaluator.shared.create_api_component import (
     ApiComponentRuntime,
-    ComponentHealth,
     ComponentContext,
+    ComponentHealth,
     RefusalHandler,
 )
 from summary_evaluator.shared.create_execution_id import create_execution_id
@@ -143,7 +141,7 @@ def compose_app(
         if len(cleanup) == 1:
             raise cleanup[0]
         if cleanup:
-            raise ComponentShutdownFailures(tuple(cleanup))
+            raise ComponentShutdownError(tuple(cleanup))
 
     async def observe_health() -> EvaluatorHealthObservation:
         return EvaluatorHealthObservation(

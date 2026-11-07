@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Generic, Literal, TypeVar
+from typing import Literal
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -11,13 +11,11 @@ from starlette.responses import Response
 
 from local_api_host.propagate_trace_context import OperationMetadata
 
-HealthT = TypeVar("HealthT")
-EventT = TypeVar("EventT")
 HostRefusalCode = Literal["HOST_FORBIDDEN", "ORIGIN_FORBIDDEN"]
 RefusalHandler = Callable[[Request, HostRefusalCode], Awaitable[Response]]
 
 
-class ComponentShutdownFailures(BaseException):
+class ComponentShutdownError(BaseException):
     """Report independent component cleanup failures without nesting them."""
 
     def __init__(self, failures: tuple[BaseException, ...]) -> None:
@@ -49,7 +47,7 @@ class RenderedHealth:
 
 
 @dataclass(frozen=True, slots=True)
-class HealthRenderer(Generic[HealthT]):
+class HealthRenderer[HealthT]:
     """Keep the health schema and response construction service-owned."""
 
     response_model: type[BaseModel]
@@ -64,7 +62,7 @@ class HostFailure:
 
 
 @dataclass(frozen=True, slots=True)
-class HostEventDataFactory(Generic[HealthT, EventT]):
+class HostEventDataFactory[HealthT, EventT]:
     """Build typed service data for lifecycle facts the host observes."""
 
     started: Callable[[], EventT]
@@ -74,7 +72,7 @@ class HostEventDataFactory(Generic[HealthT, EventT]):
 
 
 @dataclass(frozen=True, slots=True)
-class HostEventSink(Generic[HealthT, EventT]):
+class HostEventSink[HealthT, EventT]:
     """Deliver service-owned lifecycle events through async-safe callbacks."""
 
     data: HostEventDataFactory[HealthT, EventT]
@@ -86,7 +84,7 @@ class HostEventSink(Generic[HealthT, EventT]):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ApiComponentRuntime(Generic[HealthT]):
+class ApiComponentRuntime[HealthT]:
     """Bind one service component to neutral host lifecycle and request guards."""
 
     router: APIRouter

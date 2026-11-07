@@ -3,7 +3,7 @@
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, TypeVar
+from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI
@@ -14,7 +14,7 @@ from starlette.types import Receive, Scope, Send
 from local_api_host.contracts import HostSettings
 from local_api_host.create_api_component import (
     ApiComponentRuntime,
-    ComponentShutdownFailures,
+    ComponentShutdownError,
     HealthRenderer,
     HostEventContext,
     HostEventSink,
@@ -28,9 +28,6 @@ from local_api_host.propagate_trace_context import (
     observe_request_operation,
     observe_request_started_at,
 )
-
-HealthT = TypeVar("HealthT")
-EventT = TypeVar("EventT")
 
 
 class _HostedFastAPI(FastAPI):
@@ -63,12 +60,12 @@ class _HostedFastAPI(FastAPI):
 
 
 def _cleanup_failures(error: BaseException) -> list[BaseException]:
-    if isinstance(error, ComponentShutdownFailures):
+    if isinstance(error, ComponentShutdownError):
         return list(error.failures)
     return [error]
 
 
-def compose_api(
+def compose_api[HealthT, EventT](
     settings: HostSettings,
     component: ApiComponentRuntime[HealthT],
     render_health: HealthRenderer[HealthT],

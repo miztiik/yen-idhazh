@@ -21,7 +21,7 @@ class RequestBodySettings(Protocol):
     body_read_timeout_ms: int
 
 
-class RequestBodyFailure(Exception):
+class RequestBodyError(Exception):
     """Name a bounded read failure for the service adapter to render."""
 
     def __init__(self, code: BodyFailureCode) -> None:
@@ -29,7 +29,7 @@ class RequestBodyFailure(Exception):
         self.code = code
 
 
-class ClientDisconnected(Exception):
+class ClientDisconnectedError(Exception):
     """Signal cancellation without constructing an HTTP response."""
 
 
@@ -43,7 +43,7 @@ async def read_request_body(request: Request, settings: RequestBodySettings) -> 
         or media.get_content_charset("utf-8").lower() != "utf-8"
         or request.headers.get("content-encoding", "identity").lower() != "identity"
     ):
-        raise RequestBodyFailure("UNSUPPORTED_MEDIA")
+        raise RequestBodyError("UNSUPPORTED_MEDIA")
     length = request.headers.get("content-length")
     if length is not None:
         if (
@@ -51,28 +51,28 @@ async def read_request_body(request: Request, settings: RequestBodySettings) -> 
             or not length.isascii()
             or not length.isdecimal()
         ):
-            raise RequestBodyFailure("INVALID_REQUEST")
+            raise RequestBodyError("INVALID_REQUEST")
         normalized = length.lstrip("0") or "0"
         if (
             len(normalized) > len(str(settings.max_body_bytes))
             or int(normalized) > settings.max_body_bytes
         ):
-            raise RequestBodyFailure("BODY_TOO_LARGE")
+            raise RequestBodyError("BODY_TOO_LARGE")
     body = bytearray()
     try:
         async with asyncio.timeout(settings.body_read_timeout_ms / 1000):
             async for chunk in request.stream():
                 if len(body) + len(chunk) > settings.max_body_bytes:
-                    raise RequestBodyFailure("BODY_TOO_LARGE")
+                    raise RequestBodyError("BODY_TOO_LARGE")
                 body.extend(chunk)
     except TimeoutError:
-        raise RequestBodyFailure("INPUT_TIMEOUT") from None
+        raise RequestBodyError("INPUT_TIMEOUT") from None
     except ClientDisconnect:
-        raise ClientDisconnected from None
+        raise ClientDisconnectedError from None
     try:
         body.decode("utf-8")
     except UnicodeDecodeError:
-        raise RequestBodyFailure("UNSUPPORTED_MEDIA") from None
+        raise RequestBodyError("UNSUPPORTED_MEDIA") from None
     return bytes(body)
 
 
