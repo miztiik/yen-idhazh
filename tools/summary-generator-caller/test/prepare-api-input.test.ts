@@ -2,11 +2,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createRootContext } from "@idhazh/common-contracts/create-operation-context";
-import { readGeneratorConfig } from "../../../../services/summary-generator/src/config/load-generator-config.js";
-import type { ModelRuntime } from "../../../../services/summary-generator/src/config/load-model-runtime.js";
+import { readGeneratorConfig } from "../../../services/summary-generator/src/config/load-generator-config.js";
+import type { ModelRuntime } from "../../../services/summary-generator/src/config/load-model-runtime.js";
 import {
   BodyLimitError, readBoundedText,
-} from "../../../../services/summary-generator/src/services/request-completion.service.js";
+} from "../../../services/summary-generator/src/services/request-completion.service.js";
 import { callSummaryApi } from "../call-summary-api.js";
 import { loadAnalysisConfig } from "../load-analysis-config.js";
 import { prepareApiInput } from "../prepare-api-input.js";

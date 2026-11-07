@@ -5,12 +5,12 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   SUMMARY_GENERATOR_HEALTH_PATH, summaryGeneratorUrl,
-} from "../../../services/summary-generator/src/api/api-paths.js";
-import { readGeneratorConfig } from "../../../services/summary-generator/src/config/load-generator-config.js";
-import { SummaryHealthSchema } from "../../../services/summary-generator/src/schemas/summary-result.schema.js";
+} from "../../services/summary-generator/src/api/api-paths.js";
+import { readGeneratorConfig } from "../../services/summary-generator/src/config/load-generator-config.js";
+import { SummaryHealthSchema } from "../../services/summary-generator/src/schemas/summary-result.schema.js";
 import {
   cancelResponseBody, readBoundedText, type CompletionFetch,
-} from "../../../services/summary-generator/src/services/request-completion.service.js";
+} from "../../services/summary-generator/src/services/request-completion.service.js";
 import { loadAnalysisConfig } from "./load-analysis-config.js";
 import { SUMMARY_GENERATOR_TESTS_EVENT_SOURCE } from "./declare-event-source.js";
 

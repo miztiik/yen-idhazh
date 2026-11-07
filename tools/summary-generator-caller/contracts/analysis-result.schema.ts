@@ -1,6 +1,6 @@
 /** Which complete summary and classifications belong to a private full-analysis result? */
 import { z } from "zod";
-import { SummaryFieldsSchema } from "../../../../services/summary-generator/src/schemas/summary-result.schema.js";
+import { SummaryFieldsSchema } from "../../../services/summary-generator/src/schemas/summary-result.schema.js";
 import {
   DETAILED_TOKEN_METRICS_VERSION,
   DetailedTokenMetricsSchema,

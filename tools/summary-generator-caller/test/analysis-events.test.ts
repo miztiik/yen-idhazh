@@ -17,7 +17,7 @@ import { runCli } from "../run.js";
 import { loadAnalysisSettings } from "../load-analysis-config.js";
 import {
   repositoryRoot, readJson, withConfig, type RecordedNativeReply,
-} from "../../../../services/summary-generator/test/model-recordings.js";
+} from "../../../services/summary-generator/test/model-recordings.js";
 import { recordOutput, withRecordedModel } from "./pipeline-recordings.js";
 
 function eventContext(event: RecordedPipelineEvent) {
@@ -31,8 +31,8 @@ test("CLI configuration failure exits with no summary and content-free diagnosti
     const configRoot = path.join(root, "missing-config");
     const inputText = "Private input must not appear in startup diagnostics.";
     const run = promisify(execFile)("node", [
-      path.join(repositoryRoot, ".github/scripts/summary-generator-tests/node_modules/tsx/dist/cli.mjs"),
-      path.join(repositoryRoot, ".github/scripts/summary-generator-tests/run.ts"),
+      path.join(repositoryRoot, "tools/summary-generator-caller/node_modules/tsx/dist/cli.mjs"),
+      path.join(repositoryRoot, "tools/summary-generator-caller/run.ts"),
     ], {
       cwd: directory, env: {
         ...process.env, CONFIG_ROOT: configRoot, URL: "", INPUT_TEXT: inputText,
@@ -193,7 +193,7 @@ test("concurrent caller operations retain separate histories and reports inside 
 
 test("the real caller saves nullable measurements without losing independent timings, totals or zero rates", { timeout: 120000 }, () =>
   withConfig(async root => {
-    const { loadModelRuntime } = await import("../../../../services/summary-generator/src/config/load-model-runtime.js");
+    const { loadModelRuntime } = await import("../../../services/summary-generator/src/config/load-model-runtime.js");
     const runtime = loadModelRuntime(root);
     const reply = readJson<RecordedNativeReply>("tests/fixtures/typescript-metadata/summarizer-model-response.json");
     const eventFile = path.join(root, "nullable-events.jsonl"), reportFile = path.join(root, "nullable-report.md");

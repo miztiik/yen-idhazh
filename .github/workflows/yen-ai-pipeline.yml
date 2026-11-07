@@ -78,7 +78,7 @@ jobs:
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
           bun install --frozen-lockfile --cwd services/summary-generator
-          bun install --frozen-lockfile --cwd .github/scripts/summary-generator-tests
+          bun install --frozen-lockfile --cwd tools/summary-generator-caller
 
       - name: Start selected model
         uses: ./.github/actions/model-server
@@ -97,7 +97,7 @@ jobs:
             > services/summary-generator/backend_ts_server_log.log 2>&1 &
           API_PID=$!
           echo "$API_PID" > services/summary-generator/.summary-generator.pid
-          bun run .github/scripts/summary-generator-tests/wait-summary-api.ts "$API_PID"
+          bun run tools/summary-generator-caller/wait-summary-api.ts "$API_PID"
 
       - name: Prepare input, call summary API and publish its report
         id: summary
@@ -107,7 +107,7 @@ jobs:
           SYSTEM_PROMPT: ${{ inputs.prompt }}
         run: |
           set -euo pipefail
-          bun run .github/scripts/summary-generator-tests/run-summary-api.ts \
+          bun run tools/summary-generator-caller/run-summary-api.ts \
             | jq '{success, prompt_source, prompt_sha256, usage}'
 
       - name: Stop local processes

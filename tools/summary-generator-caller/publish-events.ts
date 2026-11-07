@@ -4,7 +4,7 @@ import { EventEmitter } from "node:events";
 import type { Writable } from "node:stream";
 import {
   GeneratorLoggingSchema, type GeneratorConfig,
-} from "../../../services/summary-generator/src/config/load-generator-config.js";
+} from "../../services/summary-generator/src/config/load-generator-config.js";
 import { createCloudEvent } from "@idhazh/common-contracts/create-cloud-event";
 import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
 import {

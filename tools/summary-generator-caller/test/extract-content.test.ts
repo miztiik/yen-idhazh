@@ -10,7 +10,7 @@ import { extractContentFromUrl, parseExtractedDocument } from "../extract-conten
 import { loadAnalysisConfig } from "../load-analysis-config.js";
 import { PipelineEventBus } from "../publish-events.js";
 import { SUMMARY_GENERATOR_TESTS_EVENT_SOURCE } from "../declare-event-source.js";
-import { repositoryRoot, withConfig } from "../../../../services/summary-generator/test/model-recordings.js";
+import { repositoryRoot, withConfig } from "../../../services/summary-generator/test/model-recordings.js";
 
 const sourceHtml = readFileSync(path.join(repositoryRoot, "tests/fixtures/feed-probe/readable-article.html"), "utf8");
 const fixtureDocument = new JSDOM(sourceHtml);

@@ -5,8 +5,8 @@ import path from "node:path";
 import { test } from "node:test";
 import { createCloudEvent } from "@idhazh/common-contracts/create-cloud-event";
 import { createRootContext } from "@idhazh/common-contracts/create-operation-context";
-import type { ModelRuntime } from "../../../../services/summary-generator/src/config/load-model-runtime.js";
-import { withConfig } from "../../../../services/summary-generator/test/model-recordings.js";
+import type { ModelRuntime } from "../../../services/summary-generator/src/config/load-model-runtime.js";
+import { withConfig } from "../../../services/summary-generator/test/model-recordings.js";
 import {
   SummaryStructuredOutputSchema, readSummaryStructuredOutput,
   type LegacySummaryStructuredOutput, type RawModelAnalysis,

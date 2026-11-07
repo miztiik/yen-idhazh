@@ -1,7 +1,7 @@
 /** How does the caller prepare one URL or fallback source without hiding acquisition inside HTTP? */
 import { createChildContext } from "@idhazh/common-contracts/create-operation-context";
 import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
-import type { CompletionFetch } from "../../../services/summary-generator/src/services/request-completion.service.js";
+import type { CompletionFetch } from "../../services/summary-generator/src/services/request-completion.service.js";
 import { SourceInputSchema, type SourceInput } from "./contracts/analysis-request.schema.js";
 import type { SourceAudit } from "./contracts/system-telemetry.schema.js";
 import type { PipelineEventData } from "./contracts/pipeline-event.schema.js";

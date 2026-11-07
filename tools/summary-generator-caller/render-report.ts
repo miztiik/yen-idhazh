@@ -1,9 +1,8 @@
 /** Which summary and saved event identities belong in the private job report? */
 import fs from "node:fs";
 import type { Writable } from "node:stream";
-import type {
-  RecordedSummaryStructuredOutput, RecordedPipelineEvent,
-} from "./contracts/export-analysis-schemas.js";
+import type { RecordedSummaryStructuredOutput } from "./contracts/analysis-result.schema.js";
+import type { RecordedPipelineEvent } from "./contracts/pipeline-event.schema.js";
 
 const NOT_REPORTED = "Not reported";
 

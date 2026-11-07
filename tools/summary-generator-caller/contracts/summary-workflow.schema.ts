@@ -4,10 +4,10 @@ import { createHash } from "node:crypto";
 import { readCloudEvent } from "@idhazh/common-contracts/read-cloud-event";
 import { readTraceContext } from "@idhazh/common-contracts/propagate-trace-context";
 import type { CloudEvent } from "@idhazh/common-contracts/schemas/cloud-event";
-import { SummarizeRequestSchema } from "../../../../services/summary-generator/src/schemas/request-payload.schema.js";
+import { SummarizeRequestSchema } from "../../../services/summary-generator/src/schemas/request-payload.schema.js";
 import {
   SUMMARY_API_VERSION, SummaryResultSchema,
-} from "../../../../services/summary-generator/src/schemas/summary-result.schema.js";
+} from "../../../services/summary-generator/src/schemas/summary-result.schema.js";
 import { SourceAuditSchema } from "./system-telemetry.schema.js";
 import { SUMMARY_GENERATOR_TESTS_EVENT_SOURCE } from "../declare-event-source.js";
 

@@ -7,7 +7,7 @@ import type { PipelineEventData } from "./contracts/pipeline-event.schema.js";
 import { loadAnalysisConfig, type AnalysisConfig } from "./load-analysis-config.js";
 import {
   cancelResponseBody, type CompletionFetch,
-} from "../../../services/summary-generator/src/services/request-completion.service.js";
+} from "../../services/summary-generator/src/services/request-completion.service.js";
 
 export interface ExtractedDocument {
   title: string;

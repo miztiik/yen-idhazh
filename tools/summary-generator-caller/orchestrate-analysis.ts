@@ -4,10 +4,12 @@ import { createChildContext } from "@idhazh/common-contracts/create-operation-co
 import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
 import {
   type SummarizeRequest,
-  type SummaryStructuredOutput,
   SummarizeRequestSchema,
+} from "./contracts/analysis-request.schema.js";
+import {
+  type SummaryStructuredOutput,
   SummaryStructuredOutputSchema,
-} from "./contracts/export-analysis-schemas.js";
+} from "./contracts/analysis-result.schema.js";
 import { prepareApiInput } from "./prepare-api-input.js";
 import {
   getVmstatSwap,
@@ -20,8 +22,8 @@ import {
 } from "./query-analysis.js";
 import { deriveTokenMetrics } from "./derive-token-metrics.js";
 import { PipelineEventBus } from "./publish-events.js";
-import type { ModelRuntime } from "../../../services/summary-generator/src/config/load-model-runtime.js";
-import type { CompletionFetch } from "../../../services/summary-generator/src/services/request-completion.service.js";
+import type { ModelRuntime } from "../../services/summary-generator/src/config/load-model-runtime.js";
+import type { CompletionFetch } from "../../services/summary-generator/src/services/request-completion.service.js";
 import { loadAnalysisSettings, type AnalysisSettings } from "./load-analysis-config.js";
 
 export async function orchestratePipeline(

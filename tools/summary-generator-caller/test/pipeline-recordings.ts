@@ -2,10 +2,10 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Writable } from "node:stream";
-import type { buildModelRequest } from "../../../../services/summary-generator/src/services/model-request.service.js";
-import { loadModelRuntime, type ModelRuntime } from "../../../../services/summary-generator/src/config/load-model-runtime.js";
-import type { CompletionFetch } from "../../../../services/summary-generator/src/services/request-completion.service.js";
-import { repositoryRoot } from "../../../../services/summary-generator/test/model-recordings.js";
+import type { buildModelRequest } from "../../../services/summary-generator/src/services/model-request.service.js";
+import { loadModelRuntime, type ModelRuntime } from "../../../services/summary-generator/src/config/load-model-runtime.js";
+import type { CompletionFetch } from "../../../services/summary-generator/src/services/request-completion.service.js";
+import { repositoryRoot } from "../../../services/summary-generator/test/model-recordings.js";
 
 export type RecordedCall = {
   url: string; headers: Record<string, string>; data: ReturnType<typeof buildModelRequest>;

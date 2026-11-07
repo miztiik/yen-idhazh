@@ -5,8 +5,8 @@ import { z } from "zod";
 import {
   generatorRepositoryRoot, GeneratorLoggingSchema, NativeBoundsSchema, PromptFileSchema,
   RelativeConfigPathSchema, readPromptFile,
-} from "../../../services/summary-generator/src/config/load-generator-config.js";
-import { loadModelRuntime } from "../../../services/summary-generator/src/config/load-model-runtime.js";
+} from "../../services/summary-generator/src/config/load-generator-config.js";
+import { loadModelRuntime } from "../../services/summary-generator/src/config/load-model-runtime.js";
 import { EnvironmentVariablesSchema } from "./contracts/analysis-environment.schema.js";
 
 export const AnalysisConfigSchema = NativeBoundsSchema.extend({

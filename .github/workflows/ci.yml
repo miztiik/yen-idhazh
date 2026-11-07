@@ -250,7 +250,7 @@ jobs:
 
       - name: TypeScript summary-generator callers
         if: needs.scope.outputs.code == 'true'
-        working-directory: .github/scripts/summary-generator-tests
+        working-directory: tools/summary-generator-caller
         run: |
           bun install --frozen-lockfile
           bun run check

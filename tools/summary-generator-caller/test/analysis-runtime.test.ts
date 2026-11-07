@@ -6,8 +6,8 @@ import { test } from "node:test";
 import { createChildContext, createRootContext } from "@idhazh/common-contracts/create-operation-context";
 import { EnvironmentVariablesSchema } from "../contracts/analysis-environment.schema.js";
 import { RawModelAnalysisSchema } from "../contracts/analysis-result.schema.js";
-import { SummaryFieldsSchema } from "../../../../services/summary-generator/src/schemas/summary-result.schema.js";
-import { buildModelRequest } from "../../../../services/summary-generator/src/services/model-request.service.js";
+import { SummaryFieldsSchema } from "../../../services/summary-generator/src/schemas/summary-result.schema.js";
+import { buildModelRequest } from "../../../services/summary-generator/src/services/model-request.service.js";
 import { queryLlamaServer, buildInferencePrompt } from "../query-analysis.js";
 import { orchestratePipeline } from "../orchestrate-analysis.js";
 import { PipelineEventBus } from "../publish-events.js";
@@ -15,7 +15,7 @@ import { SUMMARY_GENERATOR_TESTS_EVENT_SOURCE } from "../declare-event-source.js
 import { loadAnalysisConfig, loadAnalysisSettings, loadEnvConfig } from "../load-analysis-config.js";
 import {
   readJson, withConfig, type RecordedNativeReply,
-} from "../../../../services/summary-generator/test/model-recordings.js";
+} from "../../../services/summary-generator/test/model-recordings.js";
 import { recordOutput, withRecordedModel } from "./pipeline-recordings.js";
 
 test("inference callbacks retain the supplied parent and input link with a recorded full analysis", { timeout: 120000 }, () =>
@@ -117,7 +117,7 @@ test("the caller's configured native byte bounds reach the shared transport rath
 
 test("explicitly missing native measurements remain unavailable in full analysis", { timeout: 120000 }, () =>
   withConfig(async root => {
-    const { loadModelRuntime } = await import("../../../../services/summary-generator/src/config/load-model-runtime.js");
+    const { loadModelRuntime } = await import("../../../services/summary-generator/src/config/load-model-runtime.js");
     const runtime = loadModelRuntime(root);
     const reply = readJson<RecordedNativeReply>("tests/fixtures/typescript-metadata/summarizer-model-response.json");
     const result = await queryLlamaServer(runtime, "system", "input", createRootContext(), undefined,

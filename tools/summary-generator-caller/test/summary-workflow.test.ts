@@ -5,17 +5,17 @@ import path from "node:path";
 import { test } from "node:test";
 import { createHash } from "node:crypto";
 import { readTraceContext } from "@idhazh/common-contracts/propagate-trace-context";
-import { createSummaryHandler } from "../../../../services/summary-generator/src/api/serve-http-api.js";
+import { createSummaryHandler } from "../../../services/summary-generator/src/api/serve-http-api.js";
 import {
   GENERATE_SUMMARY_PATH, SUMMARY_GENERATOR_HEALTH_PATH, summaryGeneratorUrl,
-} from "../../../../services/summary-generator/src/api/api-paths.js";
-import { SUMMARY_GENERATOR_EVENT_SOURCE } from "../../../../services/summary-generator/src/declare-event-source.js";
-import { loadGeneratorConfig } from "../../../../services/summary-generator/src/config/load-generator-config.js";
-import { loadModelRuntime } from "../../../../services/summary-generator/src/config/load-model-runtime.js";
-import { SummaryResultSchema } from "../../../../services/summary-generator/src/schemas/summary-result.schema.js";
+} from "../../../services/summary-generator/src/api/api-paths.js";
+import { SUMMARY_GENERATOR_EVENT_SOURCE } from "../../../services/summary-generator/src/declare-event-source.js";
+import { loadGeneratorConfig } from "../../../services/summary-generator/src/config/load-generator-config.js";
+import { loadModelRuntime } from "../../../services/summary-generator/src/config/load-model-runtime.js";
+import { SummaryResultSchema } from "../../../services/summary-generator/src/schemas/summary-result.schema.js";
 import {
   readJson, repositoryRoot, withConfig, type RecordedNativeReply,
-} from "../../../../services/summary-generator/test/model-recordings.js";
+} from "../../../services/summary-generator/test/model-recordings.js";
 import { loadAnalysisConfig } from "../load-analysis-config.js";
 import { readSummaryWorkflowEvent } from "../contracts/summary-workflow.schema.js";
 import { SUMMARY_GENERATOR_TESTS_EVENT_SOURCE } from "../declare-event-source.js";

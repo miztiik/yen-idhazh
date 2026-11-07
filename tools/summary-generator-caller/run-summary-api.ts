@@ -9,9 +9,9 @@ import { createChildContext, createRootContext } from "@idhazh/common-contracts/
 import { writeTraceContext } from "@idhazh/common-contracts/propagate-trace-context";
 import {
   generatorRepositoryRoot, GeneratorLoggingSchema, readGeneratorConfig,
-} from "../../../services/summary-generator/src/config/load-generator-config.js";
-import { loadModelRuntime } from "../../../services/summary-generator/src/config/load-model-runtime.js";
-import type { CompletionFetch } from "../../../services/summary-generator/src/services/request-completion.service.js";
+} from "../../services/summary-generator/src/config/load-generator-config.js";
+import { loadModelRuntime } from "../../services/summary-generator/src/config/load-model-runtime.js";
+import type { CompletionFetch } from "../../services/summary-generator/src/services/request-completion.service.js";
 import type { SourceInput } from "./contracts/analysis-request.schema.js";
 import {
   SUMMARY_WORKFLOW_VERSION, SUMMARY_WORKFLOW_EVENT_TYPE, SummaryWorkflowDataSchema, type SummaryWorkflowEvent,

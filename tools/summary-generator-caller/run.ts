@@ -2,14 +2,14 @@
 import { createRootContext } from "@idhazh/common-contracts/create-operation-context";
 import { SUMMARY_GENERATOR_TESTS_EVENT_SOURCE } from "./declare-event-source.js";
 import { loadEnvConfig } from "./load-analysis-config.js";
-import { GeneratorLoggingSchema } from "../../../services/summary-generator/src/config/load-generator-config.js";
+import { GeneratorLoggingSchema } from "../../services/summary-generator/src/config/load-generator-config.js";
 import { PipelineEventBus } from "./publish-events.js";
 import { orchestratePipeline } from "./orchestrate-analysis.js";
 import { renderGithubStepSummary } from "./render-report.js";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import type { Writable } from "node:stream";
-import type { CompletionFetch } from "../../../services/summary-generator/src/services/request-completion.service.js";
+import type { CompletionFetch } from "../../services/summary-generator/src/services/request-completion.service.js";
 
 export async function runCli(
   send?: CompletionFetch, output: Pick<Writable, "write"> = process.stdout,

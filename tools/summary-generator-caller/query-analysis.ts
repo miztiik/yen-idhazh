@@ -1,11 +1,11 @@
 /** How is the caller's complete analysis read through the shared native transport? */
 import { z } from "zod";
 import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
-import type { ModelRuntime } from "../../../services/summary-generator/src/config/load-model-runtime.js";
-import { buildModelRequest, readModelContent } from "../../../services/summary-generator/src/services/model-request.service.js";
-import { requestCompletion, type CompletionFetch } from "../../../services/summary-generator/src/services/request-completion.service.js";
+import type { ModelRuntime } from "../../services/summary-generator/src/config/load-model-runtime.js";
+import { buildModelRequest, readModelContent } from "../../services/summary-generator/src/services/model-request.service.js";
+import { requestCompletion, type CompletionFetch } from "../../services/summary-generator/src/services/request-completion.service.js";
 import { RawModelAnalysisSchema, type RawModelAnalysis } from "./contracts/analysis-result.schema.js";
-import type { NativeBounds } from "../../../services/summary-generator/src/config/load-generator-config.js";
+import type { NativeBounds } from "../../services/summary-generator/src/config/load-generator-config.js";
 import { loadAnalysisConfig, loadAnalysisSettings } from "./load-analysis-config.js";
 
 const timings = z.object({

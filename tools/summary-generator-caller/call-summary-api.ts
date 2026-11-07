@@ -3,14 +3,14 @@ import { readTraceContext, writeTraceContext } from "@idhazh/common-contracts/pr
 import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
 import {
   GENERATE_SUMMARY_PATH, summaryGeneratorUrl,
-} from "../../../services/summary-generator/src/api/api-paths.js";
-import type { GeneratorConfig } from "../../../services/summary-generator/src/config/load-generator-config.js";
-import type { ModelRuntime } from "../../../services/summary-generator/src/config/load-model-runtime.js";
-import { SummarizeRequestSchema, type SummarizeRequest } from "../../../services/summary-generator/src/schemas/request-payload.schema.js";
-import { SummaryErrorSchema, SummaryResultSchema } from "../../../services/summary-generator/src/schemas/summary-result.schema.js";
+} from "../../services/summary-generator/src/api/api-paths.js";
+import type { GeneratorConfig } from "../../services/summary-generator/src/config/load-generator-config.js";
+import type { ModelRuntime } from "../../services/summary-generator/src/config/load-model-runtime.js";
+import { SummarizeRequestSchema, type SummarizeRequest } from "../../services/summary-generator/src/schemas/request-payload.schema.js";
+import { SummaryErrorSchema, SummaryResultSchema } from "../../services/summary-generator/src/schemas/summary-result.schema.js";
 import {
   BodyLimitError, cancelResponseBody, readBoundedText, type CompletionFetch,
-} from "../../../services/summary-generator/src/services/request-completion.service.js";
+} from "../../services/summary-generator/src/services/request-completion.service.js";
 import type { AnalysisConfig } from "./load-analysis-config.js";
 
 export async function callSummaryApi(
