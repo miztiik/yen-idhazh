@@ -33,13 +33,16 @@ class EvaluationController:
         *,
         supervisor: WorkerSupervisor | None = None,
         writer: Callable[[EvaluationEvent], None],
+        service_instance_id: str | None = None,
     ) -> None:
         self.settings = settings
         self.context = context
         self.worker = supervisor or WorkerSupervisor(settings, context, root)
         self.writer = writer
         self.queue = EvaluationQueue(settings.queue)
-        self.instance_id = create_execution_id()
+        self.instance_id = (
+            create_execution_id() if service_instance_id is None else service_instance_id
+        )
         self.status: ServiceStatus = "loading" if settings.enabled else "disabled"
         self.failure_code: ErrorCode | None = None
         self.lifecycle = EventEmitter(self.writer, context, settings.logging)

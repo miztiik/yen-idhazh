@@ -9,11 +9,34 @@ live in the [server reference](../../reference/summary-evaluator-api.md).
 ## Explicit composition
 
 One Uvicorn process binds the configured loopback listener before model
-startup. The application registers only its explicitly enabled routers.
+startup. A fixed registration list binds each declared scorer to its module's
+`create_api_component` adapter. The shared host invokes setup only for the
+enabled selection, then includes each adapter's native FastAPI router.
 Each scorer's router delegates to its own evaluation controller. Neither
 scorer generates a summary, calls the other scorer or chooses a model from
 request text. The listener has no generation router, forwarder, upstream
 health polling or generation-client lifespan.
+
+An adapter owns its settings validation, controller construction, startup,
+shutdown, native health observation and refusal of unsafe Host/Origin headers.
+The common interface carries those typed callbacks, the native router and an
+opaque controller for existing private app-state callers. The host supplies
+validated listener/logging bounds, closed event writers and one service
+instance identity; it contains no scorer-specific construction, health,
+admission or start/stop branch. HHEM, UniEval and coverage retain their existing
+private state aliases and shared identity. Diagnostic callbacks use the same
+declared CloudEvents envelopes, not a new per-API logging implementation.
+
+Adding an API means its implementation adapter plus one deliberate registration
+entry. Its configuration and public component vocabulary, native request/result
+and health declarations, diagnostics, tests and owning documentation must also
+be supplied as needed. Registration must match the declared component
+vocabulary; it cannot bypass payload validation or invent a new public health
+field. The CLI's accepted route choices come from that same declaration.
+There is no directory scan, request-selected import or live discovery,
+and adding an API requires no new shared lifecycle or request-guard branch.
+The existing `create_app` arguments remain compatible; scorer-specific
+snapshot overrides are private caller inputs, not another execution path.
 
 The HHEM scoring controller, queue, recorded-output validation and owned
 worker remain [separate from app construction](hhem-evaluation-api.md).
@@ -47,7 +70,8 @@ The installed package is `summary_evaluator` under
 `services/summary_evaluator/src/`. `serve_http` assembles requests and logs;
 `hhem`, `unieval` and `source_coverage` retain their independent scoring and worker policies.
 `shared` provides strict primitives, bounded transport, queue mechanics and
-process identity. It imports no scorer or serving package. Each scorer maps a
+process identity, plus the small in-memory HTTP component interface. It imports
+no scorer or serving package. Each scorer maps a
 shared code-only failure to its existing public error. Event writers are
 closed functions supplied by the serving package, not scorer imports of it.
 
@@ -63,9 +87,14 @@ erase its sibling's readiness or completed result. An empty selection exposes
 only application health and schema and constructs no model worker.
 
 Enabled scorers perform heavy work in their own model processes, not on the HTTP
-event loop. Each finite queue reserves capacity before body reading.
+event loop. Every enabled adapter starts its controller in the application
+lifespan, so model loading begins at service startup, not on the first request.
+Each finite queue reserves capacity before body reading.
 Host/Origin checks, bounded input reads, disconnect handling and absolute
 input, queue and evaluation deadlines remain in the actual scoring path.
+The shared guard selects an enabled adapter's refusal callback by its native
+operation path. That callback uses the same dispatcher and native error shape
+as ordinary admission; disabled or unknown paths use the generic refusal.
 Generic operational and unknown-route refusals use the independent
 `serve_http/refuse_request.py` renderer and declared `serve_http/contracts/error_detail.py` shape.
 
@@ -106,8 +135,11 @@ common restart boundary.
 
 Keeping a dormant generation proxy would retain another API's transport,
 configuration and failure surface without enabling evaluation. The existing
-workflow already speaks the native protocol directly. Explicit scorer routers
-need no plugin registry or generic worker framework. HTTPX remains in the
+workflow already speaks the native protocol directly. A fixed registration list
+keeps every integration visible without a plugin framework or another worker
+implementation. The common host owns orchestration while the scorer adapter
+owns all native HTTP behavior; this prevents a new router from silently missing
+health, safe refusal or cleanup integration. HTTPX remains in the
 frozen environment for resource preparation and offline ASGI boundaries.
 Scoring snapshots, model identities, event seeds and recordings are unchanged.
 The package split changes ownership, not those wire identities. Existing

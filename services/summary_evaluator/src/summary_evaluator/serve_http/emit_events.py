@@ -11,7 +11,11 @@ from typing import TextIO
 from pydantic import TypeAdapter
 
 from summary_evaluator.hhem.contracts.evaluation_event import EvaluationEvent
-from summary_evaluator.serve_http.contracts.server_event import ApiDiagnosticData, ServerEvent
+from summary_evaluator.serve_http.contracts.server_event import (
+    ApiDiagnosticData,
+    DiagnosticComponent,
+    ServerEvent,
+)
 from summary_evaluator.shared.contracts.base import ContextIdentity
 from summary_evaluator.shared.contracts.diagnostic_data import LifecycleFields
 from summary_evaluator.shared.contracts.service_settings import LoggingSettings
@@ -100,15 +104,16 @@ class EventWriter:
     def diagnostic(self, data: ApiDiagnosticData) -> None:
         self.write_server_event(ServerEvent.diagnostic(data))
 
-    def unieval_diagnostic(self, data: LifecycleFields) -> None:
+    def component_diagnostic(self, component: DiagnosticComponent, data: LifecycleFields) -> None:
         self.diagnostic(
-            ApiDiagnosticData.model_validate({"component": "unieval", **data.model_dump()})
+            ApiDiagnosticData.model_validate({"component": component, **data.model_dump()})
         )
 
+    def unieval_diagnostic(self, data: LifecycleFields) -> None:
+        self.component_diagnostic("unieval", data)
+
     def coverage_diagnostic(self, data: LifecycleFields) -> None:
-        self.diagnostic(
-            ApiDiagnosticData.model_validate({"component": "coverage", **data.model_dump()})
-        )
+        self.component_diagnostic("coverage", data)
 
     def mark_log_unavailable(self) -> None:
         self.log_available = False
