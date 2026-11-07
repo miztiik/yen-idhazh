@@ -20,7 +20,7 @@ consumers. The local seven-day window is not the article-age limit.
 `listener.parser_concurrency` controls the shared feed XML and article HTML
 parser workers, not the number of feeds fetched.
 
-`GET /api/2026-11-05/get-feed-planner-health` reports listener availability and enablement.
+`GET /api/2026-11-07/get-feed-planner-health` reports listener availability and enablement.
 The workflow child also reports its startup nonce, process ID and run identity.
 The service owns its API code and workflow adapters. GitHub workflow YAML
 calls `services/feed-ingest-plan/scripts/`; no native API depends on
@@ -86,7 +86,7 @@ killing only its owned child. Defaults allow 30 seconds for readiness, 10 second
 for drain and 5 seconds to confirm forced exit. The child also applies its own
 drain bound if its supervisor disappears. No process is detached, no process
 name is used for cleanup, and runner process tracking remains enabled.
-`POST /api/2026-11-05/plan-feed-ingestion` accepts optional numeric `article_limit` and `shards`,
+`POST /api/2026-11-07/plan-feed-ingestion` accepts optional numeric `article_limit` and `shards`,
 a configured `partition_strategy`, and the boolean `include_selected_urls`.
 Unknown fields, strings in numeric or boolean API fields, invalid counts and
 null controls fail before work. Blank limit and partition CLI values mean

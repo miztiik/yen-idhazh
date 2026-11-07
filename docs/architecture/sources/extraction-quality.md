@@ -1,6 +1,6 @@
 # Measured extraction quality
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-07
 
 Which article-shape signals did the TypeScript parser measure, and what do
 they change? The shared `parseDocument` stage serves both `/parse` and `/plan`.
@@ -17,8 +17,11 @@ Publisher access refusal precedes quality, as in Python: paywalled pages carry
 no quality verdict and retain the existing later paywall rejection.
 
 `source_word_count` counts the complete sanitized extracted body before any
-worker cap. `word_count` counts the returned body. They agree here because
-harvesting retains full text for dispatch. `token_count`, `truncated` and
+worker cap. `word_count` counts the extractor's returned body. They agree at
+this extraction boundary. The [operator API](feed-operator-api.md) may then
+shorten prepared candidate text and reports that separate cut through
+`word_limit`; it does not replace these extraction measurements.
+`token_count`, `truncated` and
 `truncated_at_tokens` are null: this stage neither runs a tokenizer nor cuts
 the worker's model input. `truncation_cap_tokens` records the configured
 downstream cap, not a claim that it ran. Worker extraction retains ownership
@@ -94,6 +97,8 @@ The list includes the shared article word counter so a change to its definition
 also changes extraction provenance.
 `sanitizer_version` identifies the TypeScript sanitizer implementation and its
 source fingerprint, not a claim that Python executed.
+The named fingerprint also includes API word shortening because it changes
+prepared candidate content without changing the extractor's source readings.
 Source line endings are normalized before hashing so identical behavior has
 the same identity on Windows and Ubuntu. Provenance participates in the
 harvest configuration fingerprint and durable operation configuration check.

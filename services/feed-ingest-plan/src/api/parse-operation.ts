@@ -36,6 +36,7 @@ import type { RunContext } from "../resolve-run-context";
 import { operationKey, operationMetadata, stageContext } from "./operation-context";
 import { retainCollectionParse } from "./collection-batch";
 import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
+import { prepareArticleInput } from "./prepare-article-input";
 
 export async function parseFetchedDocument(
   fetched: FetchedDocumentReference, context: RunContext,
@@ -153,8 +154,10 @@ export async function parseFetchedDocument(
     throw error;
   } finally { if (runtime.parser_pool === undefined) pool.close(); }
   const extractionMs = Math.round(performance.now() - parseStarted);
+  const prepared = parsed.parsed === null ? null
+    : prepareArticleInput(parsed.parsed, inputs.harvest.config.harvest.max_input_words);
   const title = resolveArticleTitle(offer?.entry.title ?? null, parsed.parsed?.page_title ?? null);
-  await recordEntities(title, parsed.parsed?.article_text ?? null);
+  await recordEntities(title, prepared?.article_text ?? null);
   const extractionFailure = parsed.failure === "malformed-feed" ? null : parsed.failure
     ?? (parsed.parsed?.article_text ? title ? null : "missing-title" : "empty-content");
   const qualityFailure = parsed.parsed?.quality?.failure_code ?? null;
@@ -184,12 +187,12 @@ export async function parseFetchedDocument(
     candidate_id: candidateId, canonical_url: artifact.canonical_url, url_key: artifact.document_id,
     title, categories: offer?.entry.categories ?? [],
   });
-  if (rejection === null && parsed.parsed !== null) candidate = FeedIngestCandidateSchema.parse({
+  if (rejection === null && parsed.parsed !== null && prepared !== null) candidate = FeedIngestCandidateSchema.parse({
     date: artifact.observation.occurred_at.slice(0, 10), fetched_at: artifact.observation.occurred_at,
     traceId: context.traceId, run_id: state.context.run_id,
     candidate_id: candidateId, entry_ordinal: artifact.entry_ordinal, feed_id: source.id,
     source: sourceSnapshot(source), canonical_url: artifact.canonical_url, url_key: artifact.document_id,
-    title, categories: offer?.entry.categories ?? [], article_text: parsed.parsed.article_text, word_count: parsed.parsed.word_count,
+    title, categories: offer?.entry.categories ?? [], article_text: prepared.article_text, word_count: prepared.word_count,
     author: parsed.parsed.author ?? offer?.entry.author ?? null, published_at: offer?.entry.published_at ?? null,
   });
   const result = HarvestArticleResultSchema.parse({ candidate, rejection, observation });
@@ -240,6 +243,7 @@ export async function parseFetchedDocument(
     article_id: artifact.document_id, candidate_id: candidateId,
     parsed_count: candidate === null ? 0 : 1, failure: rejected,
     warnings: diagnostics.warnings,
+    word_limit: prepared?.word_limit ?? null,
     pending_offers: pendingOffers,
   }) };
 }

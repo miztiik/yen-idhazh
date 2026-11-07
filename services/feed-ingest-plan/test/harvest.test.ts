@@ -376,6 +376,7 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   for (const name of [
     "dom-extractor.ts", "../count-article-words.ts", "corroborated-words.ts", "extraction-quality.ts", "extraction-controls.ts",
     "parse-document.ts", "extraction-provenance.ts", "semantic-extractor.ts", "sanitize-dom.ts", "content-evidence.ts",
+    "../api/prepare-article-input.ts",
   ]) {
     implementation.update(name).update("\0").update(
       (await Bun.file(new URL(`../src/harvest-feeds/${name}`, import.meta.url)).text()).replace(/\r\n/g, "\n"),

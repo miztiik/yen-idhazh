@@ -44,6 +44,10 @@ test("article byte cutoffs retain the native lower bound, response bytes and pro
     expect(result.status).toBe(200);
     const response = FetchResponseSchema.parse(await result.json());
     expect(response.failure).toBe("body-too-large");
+    expect(response.body_limit).toEqual({
+      configured_limit_bytes: 1024,
+      observed_at_least_bytes: Buffer.byteLength(f.transport.recordings.bodies.article),
+    });
     expect(response).not.toHaveProperty("diagnostics");
     const [diagnostic] = f.events.flatMap(event => {
       const parsed = ArticleFailureDiagnosticSchema.safeParse(event);

@@ -107,7 +107,11 @@ test("full typed detail explains native causes once and missing title never beco
   const { document } = parseHTML(Bun.markdown.html(report.markdown));
   const rows = [...document.querySelectorAll("tbody tr")].map(node => node.textContent);
   expect(rows.filter(row => row?.includes("too short"))).toHaveLength(1);
-  expect(rows.find(row => row?.includes("too short"))).toContain("45 extracted body words before the cap");
+  if (diagnostic.quality === null) throw new Error("Detailed quality evidence requires recorded word measurements");
+  const qualityRow = rows.find(row => row?.includes("too short"));
+  expect(qualityRow).toContain(`${diagnostic.quality.source_word_count} source words measured during extraction`);
+  expect(qualityRow).toContain(`${diagnostic.quality.word_count} body words measured during extraction`);
+  expect(qualityRow).not.toContain("after the cap");
   expect(rows.filter(row => row?.includes("missing title"))).toHaveLength(1);
   expect(rows.find(row => row?.includes("missing title"))).toContain("not an additional health failure");
   expect(rows.join(" ")).not.toContain("recorded article failure");

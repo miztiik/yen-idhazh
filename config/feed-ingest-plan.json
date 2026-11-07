@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-05",
+  "version": "2026-11-07",
   "response": {
     "include_selected_urls": false
   },
@@ -13,6 +13,7 @@
   "harvest": {
     "concurrency": 24,
     "fetch_timeout_ms": 6000,
+    "max_input_words": 20000,
     "parse_timeout_ms": 10000,
     "request_headers": {
       "primary": {
