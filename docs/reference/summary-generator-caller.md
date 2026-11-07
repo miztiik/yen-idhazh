@@ -1,6 +1,6 @@
 # Summary generator callers
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-07
 
 Which analysis and summary-only outputs does the independent private caller
 retain outside the generation API?
@@ -76,11 +76,18 @@ The summary-only caller writes named `summary-response.json`,
 `summary-events.jsonl` and `summary-report.md` files with temp-file-plus-rename.
 Its step summary is caller-owned. The saved event uses the shared metadata
 envelope, with nested response validation against the API contract.
-Its data version/changelog is `2026-11-06`, with current-only reading.
+Its data version/changelog is `2026-11-07`. The reader also accepts
+`2026-11-06` captures without changing their version, identity or original
+contents; their omitted `result.model` remains unknown.
 Input hashes and supplied prompt hashes are checked against their captured text;
 the API response and caller carriers must belong to the same request trace.
 Absent native usage stays `null`; actual zero counts remain zero counts.
 No missing classification, score or machine reading is fabricated.
+
+The report separates configured `model_name` from the API's server-reported
+`result.model`. A missing reported name is labelled as not reported, never
+replaced with the configured name. The [API contract](summary-generator-api.md#request-and-response)
+owns the reported name's meaning and validation.
 
 ## Full-analysis saved events
 

@@ -1,13 +1,17 @@
-/** Which fields belong to a summary, its effective prompt and actual native token counts? */
+/** Which fields belong to a summary and its native generation metadata? */
 import { z } from "zod";
 
 // Payload metadata is independent of the dated HTTP family.
-export const SUMMARY_API_VERSION = "2026-11-06";
+export const SUMMARY_API_VERSION = "2026-11-07";
 export const SUMMARY_API_CHANGELOG = [
-  { version: SUMMARY_API_VERSION, change: "Separate summary generation from full analysis." },
+  { version: SUMMARY_API_VERSION, change: "Report the native server's model name without enforcing model selection." },
+  { version: "2026-11-06", change: "Separate summary generation from full analysis." },
 ] as const;
 const nonempty = z.string().min(1);
 
+export const SummaryReportedModelSchema = z.string()
+  .refine(value => value.trim().length > 0, "The server-reported model name must not be blank.")
+  .nullable();
 export const SummaryFieldsSchema = z.object({
   headline: nonempty,
   executive_summary: nonempty,
@@ -20,6 +24,8 @@ export const SummaryUsageSchema = z.object({
 export const SummaryResultSchema = z.object({
   success: z.literal(true),
   data: SummaryFieldsSchema.strict(),
+  model: SummaryReportedModelSchema.optional()
+    .describe("Server-reported model name, not verified weights; omitted only in older saved results."),
   prompt_sha256: z.string().regex(/^[a-f0-9]{64}$/),
   prompt_source: z.enum(["default", "override"]),
   usage: SummaryUsageSchema,

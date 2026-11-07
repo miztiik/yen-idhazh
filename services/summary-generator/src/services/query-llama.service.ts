@@ -2,7 +2,9 @@
 import { z } from "zod";
 import type { ModelRuntime } from "../config/load-model-runtime.js";
 import type { NativeBounds } from "../config/load-generator-config.js";
-import { SummaryFieldsSchema, SummaryUsageSchema } from "../schemas/summary-result.schema.js";
+import {
+  SummaryFieldsSchema, SummaryReportedModelSchema, SummaryUsageSchema,
+} from "../schemas/summary-result.schema.js";
 import { buildModelRequest, readModelContent } from "./model-request.service.js";
 import { requestCompletion, type CompletionFetch } from "./request-completion.service.js";
 
@@ -16,6 +18,7 @@ const primaryChoice = z.object({
 }).passthrough();
 const nativeReply = z.object({
   choices: z.array(z.unknown()).min(1),
+  model: SummaryReportedModelSchema.optional().catch(null),
   usage: z.object({
     prompt_tokens: z.number().int().nonnegative().nullable().optional(),
     completion_tokens: z.number().int().nonnegative().nullable().optional(),
@@ -39,5 +42,5 @@ export async function queryLlamaServer(
     prompt_tokens: response.usage?.prompt_tokens ?? response.timings?.prompt_n ?? null,
     completion_tokens: response.usage?.completion_tokens ?? response.timings?.predicted_n ?? null,
   });
-  return { data, usage };
+  return { data, model: response.model ?? null, usage };
 }
