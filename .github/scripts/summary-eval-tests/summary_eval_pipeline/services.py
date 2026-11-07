@@ -11,11 +11,13 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import ValidationError
-from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
+from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
 from summary_evaluator.serve_http.contracts.server_event import ServerEvent
+from summary_evaluator.shared.contracts.process_identity import ProcessIdentity
+from summary_evaluator.shared.contracts.service_settings import WorkerSettings
+from summary_evaluator.shared.read_process_identity import read_owned_process_identity
 
 from .control import (
-    ApiReady,
     HostReady,
     ServiceControl,
     ServiceStartFailed,
@@ -23,6 +25,13 @@ from .control import (
     StartupPacket,
 )
 from .failures import WorkflowError
+from .scorer_control import (
+    ScorerControl,
+    ScorerReady,
+    ScorerStartFailed,
+    ScorerStartupPacket,
+    ScorerStopped,
+)
 from .settings import PipelineSettings
 
 # The private protocol emits ready or failed, then stopped and EOF.
@@ -35,28 +44,42 @@ class OwnedService:
         service: Literal["api", "host"],
         command: list[str],
         root: Path,
-        packet: StartupPacket,
-        settings: ServiceSettings | None,
+        packet: StartupPacket | ScorerStartupPacket,
+        settings: WorkerSettings | None,
         manual: PipelineSettings,
+        *,
+        api_settings: ApiSettings | None = None,
     ) -> None:
         self.service, self.packet, self.settings, self.manual = service, packet, settings, manual
+        self.scorer = packet.scorer if isinstance(packet, ScorerStartupPacket) else None
+        self.api_settings = api_settings
+        self.expected_process: ProcessIdentity | None = None
         self.stop_grace_ms = manual.host_stop_grace_ms
         self.forced_stop_ms = manual.host_forced_stop_ms
         self.max_event_bytes: int | None = None
         if service == "api":
-            if settings is None:
+            if (
+                settings is None
+                or not isinstance(packet, ScorerStartupPacket)
+                or api_settings is None
+                or api_settings.enabled_routes != (packet.scorer,)
+            ):
                 raise ValueError("An evaluator child requires its validated service settings")
-            self.stop_grace_ms = settings.worker.stop_grace_ms
-            self.forced_stop_ms = settings.worker.forced_stop_ms
-            self.max_event_bytes = settings.logging.max_event_bytes
-        self.messages: queue.Queue[ServiceControl | None] = queue.Queue(CONTROL_PACKET_CAPACITY)
+            self.stop_grace_ms = settings.stop_grace_ms
+            self.forced_stop_ms = settings.forced_stop_ms
+            self.max_event_bytes = api_settings.logging.max_event_bytes
+        elif not isinstance(packet, StartupPacket):
+            raise ValueError("A machine child requires its unchanged startup contract")
+        self.messages: queue.Queue[ServiceControl | ScorerControl | None] = queue.Queue(
+            CONTROL_PACKET_CAPACITY
+        )
         self.protocol_failed = threading.Event()
         self.events_failed = threading.Event()
-        self.ready: ApiReady | HostReady | None = None
-        self.stopped: ServiceStopped | None = None
+        self.ready: ScorerReady | HostReady | None = None
+        self.stopped: ScorerStopped | ServiceStopped | None = None
         self.closed = False
         self.finish_sent = False
-        self.startup_failure: ServiceStartFailed | None = None
+        self.startup_failure: ScorerStartFailed | ServiceStartFailed | None = None
         try:
             self.process = subprocess.Popen(
                 command,
@@ -67,6 +90,10 @@ class OwnedService:
             )
         except OSError:
             raise WorkflowError("STARTUP_FAILED", "startup", service) from None
+        if service == "api" and settings is not None:
+            self.expected_process = read_owned_process_identity(
+                self.process.pid, settings.max_proc_identity_bytes
+            )
         self.readers = [threading.Thread(target=self._read_control, daemon=True)]
         if service == "api":
             self.readers.append(threading.Thread(target=self._read_events, daemon=True))
@@ -94,7 +121,11 @@ class OwnedService:
                 if len(line) > self.manual.control_max_bytes or not line.endswith(b"\n"):
                     self.protocol_failed.set()
                     return
-                self.messages.put_nowait(ServiceControl.model_validate_json(line))
+                self.messages.put_nowait(
+                    ScorerControl.model_validate_json(line)
+                    if self.service == "api"
+                    else ServiceControl.model_validate_json(line)
+                )
         except (OSError, ValueError, ValidationError, queue.Full):
             self.protocol_failed.set()
         finally:
@@ -121,7 +152,7 @@ class OwnedService:
         except (OSError, ValueError, ValidationError):
             self.events_failed.set()
 
-    def wait_ready(self, timeout_ms: int) -> ApiReady | HostReady:
+    def wait_ready(self, timeout_ms: int) -> ScorerReady | HostReady:
         deadline = time.monotonic() + timeout_ms / 1000
         while True:
             if self.protocol_failed.is_set():
@@ -155,9 +186,16 @@ class OwnedService:
             packet.startup_id != self.packet.startup_id
             or packet.pid != self.process.pid
             or packet.service != self.service
+            or (
+                self.service == "api"
+                and (
+                    not isinstance(packet, ScorerReady | ScorerStopped | ScorerStartFailed)
+                    or packet.scorer != self.scorer
+                )
+            )
         ):
             raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", self.service)
-        if isinstance(packet, ServiceStartFailed):
+        if isinstance(packet, ServiceStartFailed | ScorerStartFailed):
             self.startup_failure = packet
             raise WorkflowError(
                 "STARTUP_FAILED",
@@ -168,8 +206,10 @@ class OwnedService:
             )
         if self.process.poll() is not None:
             raise WorkflowError("CHILD_EXITED", "startup", self.service)
-        if not isinstance(packet, ApiReady | HostReady):
+        if not isinstance(packet, ScorerReady | HostReady):
             raise WorkflowError("STARTUP_FAILED", "startup", self.service)
+        if isinstance(packet, ScorerReady) and packet.process != self.expected_process:
+            raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", self.service)
         self.ready = packet
         return packet
 
@@ -196,7 +236,7 @@ class OwnedService:
         except OSError:
             raise WorkflowError("SERVICE_STOP_FAILED", "cleanup", self.service) from None
 
-    def close(self, timeout_ms: int) -> ServiceStopped:
+    def close(self, timeout_ms: int) -> ServiceStopped | ScorerStopped:
         if self.closed:
             raise WorkflowError("SERVICE_STOP_FAILED", "cleanup", self.service)
         self.closed = True
@@ -223,23 +263,35 @@ class OwnedService:
             reader.join(timeout=self.forced_stop_ms / 1000)
         while not self.messages.empty():
             message = self.messages.get_nowait()
-            if message is not None and isinstance(message.root, ServiceStartFailed):
+            if message is not None and isinstance(
+                message.root, ServiceStartFailed | ScorerStartFailed
+            ):
                 failed = message.root
                 if (
                     failed.startup_id != self.packet.startup_id
                     or failed.pid != self.process.pid
                     or failed.service != self.service
+                    or (
+                        isinstance(failed, ScorerStartFailed) and failed.scorer != self.scorer
+                    )
                 ):
                     self.protocol_failed.set()
                 else:
                     self.startup_failure = failed
-            if message is not None and isinstance(message.root, ServiceStopped):
+            if message is not None and isinstance(message.root, ServiceStopped | ScorerStopped):
                 observed = message.root
                 if (
                     observed.startup_id != self.packet.startup_id
                     or observed.pid != self.process.pid
                     or observed.service != self.service
                     or self.stopped is not None
+                    or (
+                        isinstance(observed, ScorerStopped)
+                        and (
+                            observed.scorer != self.scorer
+                            or observed.process != self.expected_process
+                        )
+                    )
                 ):
                     self.protocol_failed.set()
                 else:
@@ -259,10 +311,9 @@ class OwnedService:
             or stopped.service != self.service
             or (
                 self.service == "api"
-                and self.packet.phase == "evaluation"
                 and (
-                    stopped.worker_exit_confirmed is not True
-                    or stopped.unieval_worker_exit_confirmed is not True
+                    not isinstance(stopped, ScorerStopped)
+                    or stopped.worker_exit.confirmed is False
                 )
             )
             or self.protocol_failed.is_set()

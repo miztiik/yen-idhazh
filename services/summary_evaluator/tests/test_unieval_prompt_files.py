@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from summary_evaluator_cases.contract_examples import REPOSITORY
 from summary_evaluator_cases.unieval_cases import read_unieval_recordings
 
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
 from summary_evaluator.unieval.contracts.unieval_settings import (
     AUTHORED_UNIEVAL_VERSION,
@@ -56,7 +56,9 @@ def test_authored_paths_are_validated_without_reading_question_files(named: str)
 
 
 def test_authored_version_changes_without_restamping_native_settings() -> None:
-    api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
+    api = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
+    )
     settings = load_unieval_settings(REPOSITORY, api)
     schema = AuthoredUnievalSettings.model_json_schema()
     assert schema["version"] == AUTHORED_UNIEVAL_VERSION
@@ -73,7 +75,9 @@ def test_authored_version_changes_without_restamping_native_settings() -> None:
 def test_each_resolved_question_retains_exact_file_text_and_answer_tokens(tmp_path: Path) -> None:
     path = authored_root(tmp_path)
     authored = AuthoredUnievalSettings.model_validate_json(path.read_bytes())
-    api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
+    api = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
+    )
     settings = load_unieval_settings(tmp_path, api)
     assert settings.prompts.positive_answer == authored.prompts.positive_answer
     assert settings.prompts.negative_answer == authored.prompts.negative_answer
@@ -87,7 +91,9 @@ def test_each_resolved_question_retains_exact_file_text_and_answer_tokens(tmp_pa
 
 
 def test_selected_roots_and_file_edits_change_only_the_intended_dimension(tmp_path: Path) -> None:
-    api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
+    api = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
+    )
     original = load_unieval_settings(REPOSITORY, api)
     for label in ("first", "second"):
         root = tmp_path / label
@@ -126,13 +132,17 @@ def test_bad_named_question_fails_before_worker_handoff(
         target.unlink()
     else:
         target.write_bytes(body)
-    api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
+    api = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
+    )
     with pytest.raises(ValueError, match=field):
         load_unieval_settings(tmp_path, api)
 
 
 def test_actual_moved_questions_match_every_recorded_comparison() -> None:
-    api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
+    api = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
+    )
     selected = load_unieval_settings(REPOSITORY, api)
     resources = load_unieval_resources(selected, REPOSITORY)
     inputs, predictions, _ = read_unieval_recordings()

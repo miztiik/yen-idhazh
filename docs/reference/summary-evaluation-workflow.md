@@ -72,7 +72,7 @@ Table A - Task order
 | --- | --- | --- |
 | A1 | Prepare | Install frozen Bun and Python model dependencies, validate source/reference/model inputs, capture the reference hash, copy named configuration inputs, and acquire pinned native and UniEval assets, tokenizer and sentence resources. |
 | A2 | Generate | Start the native model and host collector, verify native health and loaded identity, call native generation directly, atomically save the answer, then close and reap both. No Python evaluation application starts. |
-| A3 | Evaluate | Re-read the bounded event and generation. Require the current run, attempt, revision, source, answer, model, reference and confirmed native shutdown. Start HHEM and UniEval on the same FastAPI address; score the saved pair independently. |
+| A3 | Evaluate | Re-read the bounded event and generation. Require the current run, attempt, revision, source, answer, model, reference and confirmed native shutdown. Start separate HHEM and UniEval API processes at their committed addresses; score the saved pair independently. |
 | A4 | Report | Read saved results only. Write combined JSON and escaped Markdown; append that exact Markdown to the step summary. Do not start a server or repeat generation. |
 | A5 | Retain | Upload available results/report on success or failure. Upload server diagnostics after errors or cancellation, with platform-default retention. |
 
@@ -111,8 +111,11 @@ grace and forced-stop joins.
 Invalid shared listener controls retain `MACHINE_API_STARTUP_INVALID`;
 invalid probe settings retain `MACHINE_SETTINGS_INVALID`.
 The native Hono supervisor verifies its startup nonce, spawned PID, uncached
-health and enabled module group. During evaluation, FastAPI's private readiness and shared health
-must identify the actual application instance and selected component. Native
+health and enabled module group. During evaluation, each FastAPI child's private
+readiness must identify its selected scorer, startup nonce, actual PID and bounded
+kernel start pin. Its application health must identify that same instance and only
+that scorer; model readiness also verifies the native owned worker and loaded identity.
+Private listener readiness alone does not mean the model is ready. Native
 readiness checks the owned process's listening socket and its observed
 model path and alias against the verified selected files, as well as native
 health. Template rendering and completion call that same committed origin.
@@ -127,26 +130,31 @@ bootstrap then verifies that its parent still matches the expected launching
 PID before it executes the native binary. A parent lost before protection was
 armed therefore cannot leave an adopted model running. No detached production
 launcher, PID database,
-process-name kill, separate per-API listener or cross-step ownership is used.
+process-name kill or cross-step ownership is used.
 The native model is stopped before either evaluator loads. Each evaluator has
-its own worker. Shared health keeps their states separate; one failed or
-unfinished component does not prevent a ready sibling from returning its
+its own API listener and worker. Each scorer's readiness wait and request have their
+own process guard; one failed API or unfinished model does not prevent a ready sibling from returning its
 actual result. A failed request does not cancel its sibling, retry scoring or
 regenerate the answer.
 
-If a later shared-health transport request fails, the caller retains its last
-identity-validated component observations and records that actual failure.
+If a scorer's health transport fails, the caller retains independent observations
+already validated for its siblings and records that actual failure under the owning scorer.
 Only a component already observed ready may score. Identity or response
 validation failures remain hard refusals, and the health failure prevents
 overall completion even when a sibling returns a score.
 
 ## Same-run files and status
 
-`summary_eval_pipeline/contracts.py` owns version `2026-11-05` of these
-disposable native results. Readers accept the current shape only; these files
-are not committed ledgers or restart stores. The Bun machine bridge uses the
-same workflow-control version and rejects earlier startup packets; native
-machine-result versions remain independent.
+`summary_eval_pipeline/contracts.py` retains the unchanged `2026-11-05`
+generation/preparation contracts and frozen shared-API evidence. Current
+`phase_contracts.py`, `report_contracts.py` and `scorer_evidence.py` declare
+`2026-11-07` phase/report evidence with independent API observations.
+`scorer_control.py` declares the separate current-only `2026-11-07` private API
+packets. The Bun machine bridge still uses `2026-11-05` and accepts no scorer fields.
+Native scoring, API health and machine-result versions remain independent.
+Bounded report readers dispatch by the evidence's own version; unknown versions
+fail. Legacy evidence remains one shared API, without invented independent PIDs
+or shutdowns. These files are not committed ledgers or restart stores.
 
 Table B - Named output under `backend/var/summary-eval-tests/`
 
@@ -155,7 +163,7 @@ Table B - Named output under `backend/var/summary-eval-tests/`
 | B1 | `run.json` | Platform run/attempt, UTC start, source revision, selected declaration, exact source and independent reference hashes captured before startup; preparation status and safe errors are atomically updated here. |
 | B2 | `generation.json` | The same identities, observed loaded model, source/reference hashes, validated final `summary_text`, answer hash, generation status and safe errors. This is the one answer handoff. |
 | B3 | `generation-phase.json` | Generation measurements, server observations, cleanup and errors, bound to the exact saved receipt. |
-| B4 | `evaluation.json` | Imported native HHEM and UniEval results, actual per-worker readiness, request identities, reference hash, machine readings and independent shutdown observations, bound to that receipt. |
+| B4 | `evaluation.json` | Imported native HHEM and UniEval results, per-scorer API process/application identities, native readiness, request/reference hashes, machine readings and each API/worker shutdown outcome, bound to that receipt. |
 | B5 | `results.json`, `report.md` | Combined native outcome and its escaped human report. |
 | B6 | `logs/` | Append-only per-role CloudEvents JSONL files and current native Hono server evidence. Not Git or site output. |
 
@@ -168,8 +176,8 @@ phases require completed preparation. Reporting can read failed or unfinished
 preparation without requiring generation or evaluation files that were never
 written; it shows those phases as not run, not as mismatched receipts. No server
 logs are expected when preparation stops the run before either model phase.
-Same-day snapshots without this preparation state are not assumed complete:
-the disposable-file readers are current-only.
+Snapshots without this required preparation state are not assumed complete,
+including legacy evidence.
 
 Generation saves the accepted answer before measurement or shutdown. Evaluation
 checks the exact run, attempt, revision, source and declaration, the receipt's
@@ -190,11 +198,16 @@ oversized UniEval dimensions remain null with their native errors; completed
 dimensions and the other evaluator's result survive. Error HTTP responses are
 validated and read, not discarded.
 
-Phase shutdown distinguishes `api_stopped`, the shared FastAPI application's
-exit, from HHEM's `worker_exit_confirmed` and the independent
-`unieval_worker_exit_confirmed`. Neither worker flag stands for the other.
-Generation sets all three evaluator shutdown fields to null because neither
-the application nor its workers started. Its report contains only the native
+Current `scorer_apis` records contain each scorer's committed listener, actual
+API process and application identity, validated health, observed worker exit,
+server outcome and scoped errors. API outcomes and errors are not duplicated in
+the phase's non-API server/error collections. A confirmed worker exit names its
+actual PID and exit code; never-started observations stay null. Each API close
+uses its own graceful request, worker shutdown and forced-stop bounds. Closing
+one owner never requires another scorer's worker-exit confirmation.
+
+Current phase shutdown records host/native outcomes only. Generation has no scorer
+API records because neither application nor model worker started. Its report contains only the native
 model and host server outcomes, with no invented evaluator startup time or
 exit. Completion requires the native model and host collector to stop; failed
 generation cleanup cannot start evaluation.
@@ -207,7 +220,9 @@ Missing readings keep their native reasons, not invented zeroes.
 ## Diagnostics and disclosures
 
 Roles write brief startup, readiness, stop and safe error facts to live stderr
-and `{server_name}_{yyyy_mm_dd}_{run_id}_{attempt}.log`. The date is the UTC
+and `{server_name}_{yyyy_mm_dd}_{run_id}_{attempt}.log`. Scorer API files are
+`fastapi-server_{scorer}_{yyyy_mm_dd}_{run_id}_{attempt}.log`, so concurrent APIs
+do not share a diagnostic file. The date is the UTC
 run-start day. Restarting a role appends to its file. Private control packets
 are separate. Source, prompts, model output and secrets never enter diagnostic
 records; native raw output is suppressed with the configured quiet flags.
@@ -274,7 +289,7 @@ it before request construction preserves fresh calls and independently supplied
 references while keeping orchestration controls in the workflow.
 
 The workflow adds no Python model binding, collector dependency or root
-workspace. The shared FastAPI/Hono applications, frozen dependencies, native
+workspace. The reusable FastAPI composition, unchanged Hono application, frozen dependencies, native
 asset tools and request/final-answer readers do the actual work.
 The evaluation application is not a generation proxy: the workflow already
 owns the native model, so a second forwarding process would add a readiness

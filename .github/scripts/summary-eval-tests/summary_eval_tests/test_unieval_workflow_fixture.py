@@ -7,7 +7,7 @@ from summary_eval_pipeline.contracts import text_sha256
 from summary_eval_pipeline.evaluate_pair import require_unieval_work
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.inputs import ManualInputs
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
 from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
@@ -25,7 +25,9 @@ def test_named_source_alone_exceeds_the_original_coherence_cutoff_and_covers_its
             REPOSITORY / "tests" / "fixtures" / "unieval-evaluator" / "workflow-inputs.json"
         ).read_bytes()
     )
-    api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
+    api = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
+    )
     settings = load_unieval_settings(REPOSITORY, api)
     resources = load_unieval_resources(settings, REPOSITORY)
     source_only = resources.token_count(

@@ -22,7 +22,7 @@ from summary_evaluator_cases.coverage_recordings import (
     read_coverage_recordings,
 )
 
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.serve_api import create_app
 from summary_evaluator.shared.exchange_packets import ByteChannel
@@ -208,8 +208,9 @@ async def running_coverage(
     log_directory: Path | None = None,
     wait_ready: bool = True,
 ) -> AsyncIterator[tuple[httpx.AsyncClient, RecordedCoverageSupervisor, io.StringIO, FastAPI]]:
-    api = load_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json")
-    api = api.model_copy(update={"enabled_routes": ("coverage",)})
+    api = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "coverage"
+    )
     selected = settings or coverage_settings()
     api = api.model_copy(update={"listener": selected.listener, "logging": selected.logging})
     worker = RecordedCoverageSupervisor(selected, scenario)
@@ -226,7 +227,9 @@ async def running_coverage(
                 assert (await app.state.coverage.health()).status == "ready", stream.getvalue()
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app),
-                base_url=f"http://{api.listener.host}:{api.listener.port}",
+                base_url=httpx.URL(
+                    scheme="http", host=api.listener.host, port=api.listener.port,
+                ),
                 trust_env=False,
             ) as client:
                 yield client, worker, stream, app

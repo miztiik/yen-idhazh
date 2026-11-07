@@ -9,9 +9,10 @@ owns retrieval order, rounding and method differences.
 
 ## Selection and native routes
 
-`config/summary-evals/api.json` owns the shared loopback listener and explicit
-`enabled_routes`. The default remains HHEM plus native UniEval. Select
-`coverage` only for a run that needs the legacy method; a disabled component
+`config/summary-evals/api.json` owns the distinct `listeners.coverage` binding,
+with default loopback port 3012. The comparison workflow starts only separate HHEM
+and native UniEval APIs. Select `--routes coverage`
+only for a run that needs the legacy method; an unselected component
 reads no coverage configuration/resources and constructs no controller or worker.
 
 Table A - Operations
@@ -20,12 +21,13 @@ Table A - Operations
 | --- | --- | --- |
 | A1 | `POST /api/2026-11-05/evaluate-summary-coverage` | Return complete legacy metrics for supplied prepared text. |
 | A2 | `GET /api/2026-11-05/get-summary-coverage-health` | Observe the actual model, owned process, queue and safe failure state. |
-| A3 | `GET /api/2026-11-05/get-summary-evaluator-health` | Aggregate readiness while retaining each enabled scorer's independent state. |
+| A3 | `GET /api/2026-11-05/get-summary-evaluator-health` | This coverage API's readiness and application identity; other scorers are disabled. |
 
 The first-party HTTP date remains `2026-11-05`. Coverage's transient native
 contracts are independently stamped `2026-11-07` under
 `source_coverage/contracts/`. The old `/v1/evaluate`, camelCase request aliases
-and separate listener are removed, not redirected.
+are removed, not redirected. The selected coverage API now owns its own configured
+listener and lifetime; stopping it does not restart another scorer.
 
 ## Request and result
 

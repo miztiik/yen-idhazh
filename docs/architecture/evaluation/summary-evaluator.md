@@ -1,17 +1,19 @@
-# How one Python API serves summary evaluation
+# How independent Python APIs serve summary evaluation
 
 **Last Updated**: 2026-11-07
 
-How the shared `summary-evaluator` application serves independent evaluation methods
-with independent queues and model workers. Exact routes, settings and diagnostics
+How each `summary-evaluator` process serves one selected evaluation method
+with its own listener, queue and model worker. Exact routes, settings and diagnostics
 live in the [server reference](../../reference/summary-evaluator-api.md).
 
 ## Explicit composition
 
-One Uvicorn process binds the configured loopback listener before model
-startup. A fixed registration list binds each declared scorer to its module's
-`create_api_component` adapter. The shared host invokes setup only for the
-enabled selection, then includes each adapter's native FastAPI router.
+Each Uvicorn process binds its scorer's committed loopback listener before model
+startup. HHEM, UniEval and source coverage use separate API processes, not only
+separate workers behind one address. Stopping one API does not stop another API
+or its model worker. A fixed registration list binds each declared scorer to its
+module's `create_api_component` adapter. The same host composition invokes setup
+only for the selected scorer, then includes its native FastAPI router.
 Each scorer's router delegates to its own evaluation controller. Neither
 scorer generates a summary, calls the other scorer or chooses a model from
 request text. The listener has no generation router, forwarder, upstream
@@ -24,7 +26,9 @@ opaque controller for existing private app-state callers. The host supplies
 validated listener/logging bounds, closed event writers and one service
 instance identity; it contains no scorer-specific construction, health,
 admission or start/stop branch. HHEM, UniEval and coverage retain their existing
-private state aliases and shared identity. Diagnostic callbacks use the same
+private state aliases; each selected controller shares its own API instance identity.
+Typed callbacks also expose the selected worker's configured bounds and observed exit,
+without making the host inspect an opaque controller. Diagnostic callbacks use the same
 declared CloudEvents envelopes, not a new per-API logging implementation.
 
 Adding an API means its implementation adapter plus one deliberate registration
@@ -40,7 +44,7 @@ snapshot overrides are private caller inputs, not another execution path.
 
 The HHEM scoring controller, queue, recorded-output validation and owned
 worker remain [separate from app construction](hhem-evaluation-api.md).
-The serving package reads shared configuration and supplies listener, logging
+The serving package resolves the explicitly selected committed listener and supplies logging
 and component selection to each scorer's reader. HHEM validates its existing
 frozen private-worker snapshot. Old authored copies of `enabled`,
 `listener` and `logging` are rejected, not used as competing authorities.
@@ -57,8 +61,8 @@ components retain separate observed health and completed results.
 
 Source coverage is an explicitly selected third method with its own bounded
 queue and owned model process. Its [legacy retrieval calculation](source-coverage.md)
-is not native UniEval's independent-reference relevance. The default remains
-HHEM plus native UniEval; disabled coverage reads no configuration/resources and
+is not native UniEval's independent-reference relevance. The comparison workflow starts HHEM and native UniEval separately;
+unselected coverage reads no configuration/resources and
 constructs no worker. Enabling it adds resident model memory rather than sharing
 a native scorer's model.
 
@@ -77,14 +81,17 @@ closed functions supplied by the serving package, not scorer imports of it.
 
 ## Real readiness and independent work
 
-Shared health reports the exact application instance, each scorer's state
+Application health reports the exact application instance, the selected scorer's state
 and diagnostic-file availability. HHEM readiness still requires its observed
 model and owned worker identities; UniEval reports its own observed model and
 worker. No generation observation appears in evaluator health or OpenAPI.
 
-Aggregate readiness requires every enabled scorer. A failed scorer does not
-erase its sibling's readiness or completed result. An empty selection exposes
-only application health and schema and constructs no model worker.
+An independent API reports readiness only for its selected scorer; other scorer
+slots are explicitly disabled. The caller validates its startup nonce, actual API
+PID/start pin, application instance and native worker/model identity. A failed API
+or readiness wait does not cancel a sibling's request or erase its completed result.
+Generic in-memory composition still supports an empty selection for health/schema
+boundaries, but a real scorer launcher must resolve exactly one scorer.
 
 Enabled scorers perform heavy work in their own model processes, not on the HTTP
 event loop. Every enabled adapter starts its controller in the application
@@ -100,7 +107,7 @@ Generic operational and unknown-route refusals use the independent
 
 ## Owned shutdown and diagnostics
 
-The application lifespan closes each enabled scorer through its existing
+The application lifespan closes its selected scorer through its existing
 worker controller. Disconnect cancels admitted scoring work and follows its
 bounded owned-child retirement policy. There is no generation client to
 close and no invented generation shutdown outcome.
@@ -111,8 +118,11 @@ Every cleanup still runs when another fails. A single failure
 keeps its native exception type; multiple original and cleanup failures are
 retained separately in the raised group.
 HHEM's existing parent-loss watcher, bounded worker replacement and confirmed
-exit rules are unchanged. The current workflow's private control and
-TypeScript machine-measurement channels are unchanged.
+exit rules are unchanged. Each owned API also observes its private parent pipe,
+with a bounded whole-lifespan deadline. Its private stopped packet reports only
+its own worker's actual exit. API owners are closed independently; the workflow
+retains original and cleanup causes separately. The TypeScript machine-measurement
+channel remains unchanged.
 
 Coverage returns one complete metric payload or a fixed safe error. Native
 batches are validated before reduction; missing or nonfinite output does not
@@ -128,10 +138,12 @@ receipts, not a search through terminal output, establish success.
 
 ## Design rationale
 
-One evaluation address serves related scoring operations while separate
-workers and queues retain their independent work. Separate HTTP deployments
-would add another listener and lifecycle; the shared HTTP process remains a
-common restart boundary.
+Separate API processes remove the shared restart boundary without duplicating
+application construction or scoring behavior. Committed listener settings make
+each destination reviewable, while the existing native adapters retain model loading
+at startup, bounded queues, cancellation and worker retirement. Legacy single-listener
+settings are usable only for an unambiguous single-scorer invocation; multiple-server
+callers require the explicit listener table rather than invented ports.
 
 Keeping a dormant generation proxy would retain another API's transport,
 configuration and failure surface without enabling evaluation. The existing

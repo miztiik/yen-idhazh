@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 import pytest
-from summary_eval_pipeline.control import HostReady
+from summary_eval_pipeline.control import HostReady, ServiceStopped
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.host_reader import MachineUsage, measurement_complete
 from summary_eval_pipeline.services import OwnedService
@@ -51,6 +51,7 @@ def test_serialized_python_packet_starts_stops_and_retains_native_http_machine_r
         time.sleep(controls["task_profile"]["cpu_window_ms"] / 1000)
         child.finish_measurement("success")
         stopped = child.close(ready.lifecycle_timeout_ms + pipeline.host_stop_grace_ms)
+        assert isinstance(stopped, ServiceStopped)
         assert stopped.clean and child.process.returncode == 0
         assert measurement_complete(stopped.machine)
         assert stopped.machine is not None and stopped.machine.outcome == "success"
@@ -120,6 +121,7 @@ def test_real_helper_startup_failure_retains_safe_cause_without_adopting_another
                 with pytest.raises(WorkflowError):
                     child.close(pipeline.host_shutdown_timeout_ms)
         assert child.process.returncode == 1 and child.stopped is not None
+        assert isinstance(child.stopped, ServiceStopped)
         assert child.stopped.error_code == original.value.error.source_code
         assert unrelated.poll() is None
     captured = capfd.readouterr()
@@ -155,7 +157,7 @@ def test_invalid_private_close_retains_native_cancelled_measurement_and_safe_fai
         with pytest.raises(WorkflowError) as failure:
             child.close(pipeline.host_shutdown_timeout_ms + pipeline.host_forced_stop_ms)
         assert failure.value.error.source_code
-        assert child.stopped is not None and child.stopped.error_code
+        assert isinstance(child.stopped, ServiceStopped) and child.stopped.error_code
         assert child.stopped.machine is not None
         assert child.stopped.machine.outcome == "cancelled"
         assert child.stopped.machine.end_reason == "service_stopped"
@@ -170,15 +172,19 @@ def test_invalid_private_close_retains_native_cancelled_measurement_and_safe_fai
     assert "PrivateInvalidCloseCanary" not in captured.err
 
 
-def test_real_machine_bridge_rejects_the_previous_serialized_python_workflow_version(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    "change",
+    [{"version": "2026-11-04"}, {"version": "2026-11-07"}, {"scorer": "hhem"}],
+)
+def test_real_machine_bridge_rejects_other_families_and_scorer_fields(
+    tmp_path: Path, change: dict[str, str],
 ) -> None:
     packet, pipeline = stage_machine_run(tmp_path)
-    previous = packet.model_copy(update={"version": "2026-11-04"})
+    previous = {**packet.model_dump(mode="json"), **change}
     script = REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "machine-task.ts"
     result = subprocess.run(
         [required_bun(), "run", "--no-install", str(script), str(tmp_path)],
-        input=(previous.model_dump_json() + "\n").encode("utf-8"),
+        input=(json.dumps(previous) + "\n").encode("utf-8"),
         capture_output=True,
         timeout=30,
         check=False,

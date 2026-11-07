@@ -51,7 +51,8 @@ from summary_evaluator.hhem.contracts.worker_message import (
     validate_window_reply,
 )
 from summary_evaluator.hhem.resolve_ids import create_event_id
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
+from summary_evaluator.serve_http.contracts.api_deployment_settings import ApiDeploymentSettings
 from summary_evaluator.serve_http.contracts.api_health import ApiHealth, DisabledEvaluatorHealth
 from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
 from summary_evaluator.serve_http.contracts.error_detail import ApiErrorDetail, ApiErrorResult
@@ -150,6 +151,7 @@ def test_fastapi_openapi_matches_native_omission_and_null_rules() -> None:
     "contract",
     [
         ApiSettings,
+        ApiDeploymentSettings,
         ApiHealth,
         DisabledEvaluatorHealth,
         ApiErrorDetail,
@@ -181,7 +183,9 @@ def test_local_refusal_keeps_the_declared_safe_shape_and_http_status(code: Error
 
 
 def test_actual_evaluator_openapi_has_only_dated_routes_and_resolvable_native_schemas() -> None:
-    api = load_api_settings(API_SETTINGS_FILE)
+    api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem").model_copy(
+        update={"enabled_routes": ("hhem", "unieval")}
+    )
     app = create_app(
         api,
         load_settings(SETTINGS_FILE, api),
@@ -235,7 +239,7 @@ def test_actual_evaluator_openapi_has_only_dated_routes_and_resolvable_native_sc
 def test_hhem_only_construction_reads_no_other_scorer_or_generation_configuration(
     tmp_path: Path,
 ) -> None:
-    api = load_api_settings(API_SETTINGS_FILE).model_copy(update={"enabled_routes": ("hhem",)})
+    api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem")
     app = create_app(
         api,
         load_settings(SETTINGS_FILE, api),
@@ -261,7 +265,7 @@ def test_unieval_only_construction_reads_only_its_named_configuration(tmp_path: 
         target = tmp_path / "config" / named
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes((REPOSITORY / "config" / named).read_bytes())
-    api = load_api_settings(API_SETTINGS_FILE).model_copy(update={"enabled_routes": ("unieval",)})
+    api = load_scorer_api_settings(API_SETTINGS_FILE, "unieval")
     app = create_app(api, None, tmp_path, writer=EventWriter(api.logging, io.StringIO()))
     assert app.state.controller is None and app.state.unieval.worker.process is None
     assert set(app.openapi()["paths"]) == {UNIEVAL_PATH, UNIEVAL_HEALTH_PATH, API_HEALTH_PATH}
@@ -270,7 +274,9 @@ def test_unieval_only_construction_reads_only_its_named_configuration(tmp_path: 
 def test_disabled_application_constructs_no_scorers_or_reads_their_configuration(
     tmp_path: Path,
 ) -> None:
-    api = load_api_settings(API_SETTINGS_FILE).model_copy(update={"enabled_routes": ()})
+    api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem").model_copy(
+        update={"enabled_routes": ()}
+    )
     app = create_app(api, None, tmp_path, writer=EventWriter(api.logging, io.StringIO()))
     assert (
         app.state.controller is None

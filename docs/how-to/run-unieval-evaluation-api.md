@@ -1,6 +1,6 @@
 # Run the local UniEval API
 
-**Last Updated**: 2026-11-04
+**Last Updated**: 2026-11-07
 
 How to prepare the named resources, start the real evaluator and retain its
 actual four-score response. This is separate from workflow generation.
@@ -30,12 +30,14 @@ Use a separate environment so ordinary model-free checks remain separate:
 $env:UV_PROJECT_ENVIRONMENT = Join-Path (Get-Location) 'var\unieval-model-venv'
 uv sync --frozen --extra model --group dev
 uv run --frozen --extra model python .\scripts\prepare-unieval-resources.py --root '..\..' --include-weights
-uv run --frozen --extra model python -m summary_evaluator --root '..\..' --settings '..\..\config\summary-evals\hhem-evaluator\settings.json' --routes unieval
+uv run --frozen --extra model python -m summary_evaluator --root '..\..' --routes unieval
 ```
 
-The shared config owns the loopback address. This invocation loads no HHEM
+The committed `listeners.unieval` configuration owns this API's loopback address,
+with default port 3011. This invocation loads no HHEM
 model and starts no native llama process. Check UniEval's component health,
-not only its listening socket.
+not only its listening socket. Stopping this API does not stop a separately
+running HHEM or coverage API or worker.
 
 Write a bounded JSON request with the exact source, generated summary and
 independently supplied reference summary. Send that file as JSON data to the
@@ -68,5 +70,5 @@ not prove live workflow integration, resource capacity or judging accuracy.
 
 - [../reference/unieval-api.md](../reference/unieval-api.md) - requests, results and error meanings.
 - [../architecture/evaluation/unieval-api.md](../architecture/evaluation/unieval-api.md) - complete-source calculation.
-- [../reference/summary-evaluator-api.md](../reference/summary-evaluator-api.md) - shared listener and logging.
+- [../reference/summary-evaluator-api.md](../reference/summary-evaluator-api.md) - per-scorer listeners and logging.
 - [run-the-gates.md](run-the-gates.md) - normal selected checks.

@@ -17,8 +17,8 @@ There is no result store, polling API or published-data contract.
 The [source-coverage operation](source-coverage-api.md) is a separate legacy
 method and worker in the same distribution. It has retrieved sentence evidence
 and section coverage, not this API's independent-reference relevance.
-The normal invocation still selects only HHEM and native UniEval; adding
-`coverage` constructs another resident model, not implicit model sharing.
+The comparison workflow starts separate HHEM and native UniEval APIs. Starting
+`coverage` explicitly constructs another API and resident model, not implicit model sharing.
 
 Table A - Native operations
 
@@ -26,10 +26,10 @@ Table A - Native operations
 | --- | --- | --- |
 | A1 | `POST /api/2026-11-05/evaluate-summary-unieval` | Perform one synchronous four-dimension evaluation. |
 | A2 | `GET /api/2026-11-05/get-unieval-health` | Observe this component's actual model, worker, queue and failure state. |
-| A3 | `GET /api/2026-11-05/get-summary-evaluator-health` | Shared application readiness, with independent HHEM and UniEval observations. |
+| A3 | `GET /api/2026-11-05/get-summary-evaluator-health` | This UniEval application's readiness and identity; other scorer slots are disabled. |
 
-`config/summary-evals/api.json` owns the listener, logging and explicit
-`enabled_routes`. Add `unieval` for the invocation that needs it. Disabled
+`config/summary-evals/api.json` owns `listeners.unieval` and logging. Select
+`--routes unieval` for this independent process. Disabled
 operation routes return HTTP 404 and no model/configuration is loaded.
 The API prefix is a protocol path, not another listener. The
 [routing convention](api-routing.md) separates its date from the unchanged
@@ -80,7 +80,7 @@ result; clients must validate and retain them rather than discard their body.
 `config/summary-evals/unieval-evaluator/settings.json` owns the selected assets,
 question-file paths, answer tokens, source-processing defaults, queue, request
 and worker deadlines.
-The shared listener/logging snapshot is supplied by the app, not duplicated
+The selected listener/logging snapshot is supplied by the app, not duplicated
 in the evaluator file. The named file is loaded once per invocation.
 
 The authored config family is version `2026-11-07`, current-only: old inline
@@ -116,7 +116,7 @@ The model-extra adds NLTK for native sentence boundaries; the resource
 dependency group supplies the tokenizer and splitter without Torch.
 
 The [run guide](../how-to/run-unieval-evaluation-api.md) owns preparation and
-execution commands. The shared listener is not another evaluator setting.
+execution commands. The committed API listener is not another evaluator setting.
 Cache paths remain local operator configuration, never HTTP controls.
 
 `scripts/capture-unieval-recordings.py` runs the real selected model on the

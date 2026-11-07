@@ -19,7 +19,7 @@ from summary_evaluator.hhem.create_api_component import (
     create_api_component as create_hhem_component,
 )
 from summary_evaluator.hhem.fail_evaluation import EvaluationFailure
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.compose_api import ComponentRegistration, compose_app
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
 from summary_evaluator.serve_http.contracts.error_detail import ApiErrorResult
@@ -44,7 +44,9 @@ from summary_evaluator.unieval.unieval_router import UNIEVAL_HEALTH_PATH, UNIEVA
 
 
 def test_registration_requires_the_complete_distinct_declared_vocabulary(tmp_path: Path) -> None:
-    api = load_api_settings(API_SETTINGS_FILE).model_copy(update={"enabled_routes": ()})
+    api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem").model_copy(
+        update={"enabled_routes": ()}
+    )
     registration = ComponentRegistration(
         "hhem",
         "controller",
@@ -62,7 +64,7 @@ def test_registration_requires_the_complete_distinct_declared_vocabulary(tmp_pat
 
 @pytest.mark.parametrize("component", ["unieval", "coverage"])
 def test_component_diagnostics_retain_the_native_envelope(component: DiagnosticComponent) -> None:
-    api = load_api_settings(API_SETTINGS_FILE)
+    api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem")
     log = EventLog()
     writer = EventWriter(api.logging, log)
     data = LifecycleFields(action="failed", level="ERROR", code="WORKER_EXITED")
@@ -81,10 +83,15 @@ def test_each_adapter_validates_shared_bounds_and_closes_construction_logs(
     mismatch: str,
     tmp_path: Path,
 ) -> None:
-    api = load_api_settings(API_SETTINGS_FILE).model_copy(update={"enabled_routes": (component,)})
+    api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem").model_copy(
+        update={"enabled_routes": (component,)}
+    )
     hhem = service_settings()
     _, unieval = unieval_settings()
-    coverage = coverage_settings()
+    unieval = unieval.model_copy(update={"listener": api.listener, "logging": api.logging})
+    coverage = coverage_settings().model_copy(
+        update={"listener": api.listener, "logging": api.logging}
+    )
     shutdown_wait = {
         "hhem": hhem.worker.shutdown_timeout_ms,
         "unieval": unieval.worker.shutdown_timeout_ms,
@@ -119,12 +126,15 @@ def test_all_registered_scorers_start_before_requests_and_keep_native_health_and
     from summary_evaluator_cases.service_cases import DirectRequest
 
     async def check() -> None:
-        api = load_api_settings(API_SETTINGS_FILE).model_copy(
+        api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem").model_copy(
             update={"enabled_routes": ("coverage", "unieval", "hhem")}
         )
         hhem = service_settings()
         _, unieval = unieval_settings()
-        coverage = coverage_settings()
+        unieval = unieval.model_copy(update={"listener": api.listener, "logging": api.logging})
+        coverage = coverage_settings().model_copy(
+            update={"listener": api.listener, "logging": api.logging}
+        )
         hhem_worker = RecordedSupervisor(hhem, (Scenario(),))
         unieval_worker = RecordedUnievalSupervisor(unieval)
         coverage_worker = RecordedCoverageSupervisor(coverage)
@@ -218,10 +228,14 @@ def test_all_registered_scorers_start_before_requests_and_keep_native_health_and
 
 def test_startup_failure_cleans_all_components_and_retains_native_errors() -> None:
     async def check() -> None:
-        api = load_api_settings(API_SETTINGS_FILE).model_copy(
+        api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem").model_copy(
             update={"enabled_routes": ("hhem", "unieval", "coverage")}
         )
         _, unieval = unieval_settings()
+        unieval = unieval.model_copy(update={"listener": api.listener, "logging": api.logging})
+        coverage = coverage_settings().model_copy(
+            update={"listener": api.listener, "logging": api.logging}
+        )
         stream = io.StringIO()
         app = create_app(
             api,
@@ -229,7 +243,7 @@ def test_startup_failure_cleans_all_components_and_retains_native_errors() -> No
             REPOSITORY,
             writer=EventWriter(api.logging, stream),
             unieval_settings=unieval,
-            coverage_settings=coverage_settings(),
+            coverage_settings=coverage,
         )
         stream.close()
         with pytest.raises(BaseExceptionGroup) as observed:

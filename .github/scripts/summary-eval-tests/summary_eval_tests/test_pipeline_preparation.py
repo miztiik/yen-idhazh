@@ -10,12 +10,13 @@ from typing import Literal
 
 import pytest
 from pydantic import ValidationError
-from summary_eval_pipeline.contracts import PipelineEvidence, PreparedRun, text_sha256
+from summary_eval_pipeline.contracts import PreparedRun, text_sha256
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.inputs import ManualInputs
 from summary_eval_pipeline.model_selection import select_model, stage_configuration
 from summary_eval_pipeline.phases import collect_phase
 from summary_eval_pipeline.preparation import prepare_assets, prepare_run, read_prepared
+from summary_eval_pipeline.report_contracts import PipelineEvidence
 from summary_eval_pipeline.report_task import collect_results
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_evaluator_cases.contract_examples import REPOSITORY

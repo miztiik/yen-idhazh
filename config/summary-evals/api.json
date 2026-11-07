@@ -1,15 +1,25 @@
 {
   "version": "2026-11-07",
-  "listener": {
-    "host": "127.0.0.1",
-    "port": 3010,
-    "max_body_bytes": 1048576,
-    "body_read_timeout_ms": 5000
+  "listeners": {
+    "hhem": {
+      "host": "127.0.0.1",
+      "port": 3010,
+      "max_body_bytes": 1048576,
+      "body_read_timeout_ms": 5000
+    },
+    "unieval": {
+      "host": "127.0.0.1",
+      "port": 3011,
+      "max_body_bytes": 1048576,
+      "body_read_timeout_ms": 5000
+    },
+    "coverage": {
+      "host": "127.0.0.1",
+      "port": 3012,
+      "max_body_bytes": 1048576,
+      "body_read_timeout_ms": 5000
+    }
   },
-  "enabled_routes": [
-    "hhem",
-    "unieval"
-  ],
   "logging": {
     "level": "INFO",
     "max_event_bytes": 4096

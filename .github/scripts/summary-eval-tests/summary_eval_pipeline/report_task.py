@@ -8,20 +8,20 @@ from pathlib import Path
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
 
 from .contracts import (
-    WORKFLOW_VERSION,
     GenerationReceipt,
-    PhaseEvidence,
     PipelineError,
-    PipelineEvidence,
     has_completed_score,
     text_sha256,
 )
 from .failures import WorkflowError
 from .inputs import read_manual_inputs
+from .phase_contracts import PhaseResult, starts_no_scorers
 from .preparation import read_prepared
 from .report import render_report
+from .report_contracts import PipelineEvidence
+from .scorer_evidence import EVIDENCE_VERSION
 from .settings import load_pipeline_settings
-from .storage import read_result, write_result
+from .storage import read_generation_result, read_phase_result, write_result
 
 # The platform refuses a step summary larger than one MiB.
 MAX_STEP_SUMMARY_BYTES = 1 << 20
@@ -33,7 +33,7 @@ def collect_results(root: Path) -> PipelineEvidence:
     prepared, _ = read_prepared(root)
     if prepared.status != "complete":
         return PipelineEvidence(
-            version=WORKFLOW_VERSION,
+            version=EVIDENCE_VERSION,
             status="failed",
             prepared=prepared,
             generation=None,
@@ -42,12 +42,13 @@ def collect_results(root: Path) -> PipelineEvidence:
             errors=(),
         )
     errors: list[PipelineError] = []
-    generation = None
-    generated_phase = None
-    evaluation_phase = None
+    generation: GenerationReceipt | None = None
+    generation_sha256: str | None = None
+    generated_phase: PhaseResult | None = None
+    evaluation_phase: PhaseResult | None = None
     try:
-        generation = read_result(
-            directory / "generation.json", GenerationReceipt, pipeline.max_response_bytes
+        generation, generation_sha256 = read_generation_result(
+            directory / "generation.json", pipeline.max_response_bytes
         )
         if (
             generation.run != prepared.run
@@ -64,14 +65,14 @@ def collect_results(root: Path) -> PipelineEvidence:
         ("evaluation.json", "evaluation"),
     ):
         try:
-            result = read_result(directory / filename, PhaseEvidence, pipeline.max_response_bytes)
+            result = read_phase_result(directory / filename, pipeline.max_response_bytes)
             if (
                 result.run != prepared.run
                 or result.phase != phase
                 or result.reference_summary_sha256 != prepared.reference_summary_sha256
                 or (
                     generation is not None
-                    and result.generation_sha256 != text_sha256(generation.model_dump_json())
+                    and result.generation_sha256 != generation_sha256
                 )
             ):
                 raise WorkflowError("RECEIPT_INVALID", "report")
@@ -83,7 +84,7 @@ def collect_results(root: Path) -> PipelineEvidence:
                     or generation.status != "complete"
                     or generated_phase is None
                     or generated_phase.shutdown.llama_stopped is not True
-                    or generated_phase.shutdown.api_stopped is not None
+                    or not starts_no_scorers(generated_phase)
                 )
             ):
                 raise WorkflowError("RECEIPT_INVALID", "report")
@@ -105,14 +106,17 @@ def collect_results(root: Path) -> PipelineEvidence:
     score = evaluation_phase is not None and has_completed_score(
         evaluation_phase.evaluation, evaluation_phase.unieval
     )
-    return PipelineEvidence(
-        version=WORKFLOW_VERSION,
-        status="complete" if complete else "partial" if score else "failed",
-        prepared=prepared,
-        generation=generation,
-        generation_phase=generated_phase,
-        evaluation_phase=evaluation_phase,
-        errors=tuple(errors),
+    return PipelineEvidence.model_validate(
+        {
+            "version": EVIDENCE_VERSION,
+            "status": "complete" if complete else "partial" if score else "failed",
+            "prepared": prepared,
+            "generation": generation,
+            "generation_phase": generated_phase,
+            "evaluation_phase": evaluation_phase,
+            "errors": tuple(errors),
+        },
+        context={"generation_sha256": generation_sha256},
     )
 
 

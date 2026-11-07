@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import UUID
 
 import httpx
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
 from summary_evaluator.shared.create_execution_id import create_execution_id
 from summary_evaluator.shared.quiet_model_output import quiet_model_output
@@ -89,7 +89,7 @@ def prepare_assets(root: Path, *, artifact_output: Path | None = None) -> None:
         configuration = Path(load_pipeline_settings(root).output_directory) / "config"
         download_model_files(configuration)
         verify_model_files(configuration)
-        shared = load_api_settings(root / "config" / "summary-evals" / "api.json")
+        shared = load_scorer_api_settings(root / "config" / "summary-evals" / "api.json", "unieval")
         with quiet_model_output():
             prepare_unieval_resources(
                 root, load_unieval_settings(root, shared), include_weights=True

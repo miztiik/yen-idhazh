@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
 from summary_evaluator.unieval.prepare_unieval_resources import prepare_unieval_resources
 
@@ -15,7 +15,7 @@ def main() -> None:
     args = parser.parse_args()
     root = args.root.resolve()
     settings = load_unieval_settings(
-        root, load_api_settings(root / "config" / "summary-evals" / "api.json")
+        root, load_scorer_api_settings(root / "config" / "summary-evals" / "api.json", "unieval")
     )
     prepare_unieval_resources(root, settings, include_weights=args.include_weights)
     print("Declared UniEval resources prepared; no model execution was claimed.")

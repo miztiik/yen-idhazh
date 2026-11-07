@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from summary_evaluator_cases.contract_examples import API_SETTINGS_FILE, REPOSITORY
 from uvicorn.lifespan.on import LifespanOn
 
-from summary_evaluator.serve_http.api_settings import load_api_settings
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.configure_server import create_server_config
 from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.run_server import has_clean_lifespan, run_server
@@ -21,7 +21,9 @@ from summary_evaluator.serve_http.serve_api import create_app
 def test_standalone_exit_matches_the_actual_lifespan_without_opening_a_listener(
     cleanup_failure: bool,
 ) -> None:
-    api = load_api_settings(API_SETTINGS_FILE).model_copy(update={"enabled_routes": ()})
+    api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem").model_copy(
+        update={"enabled_routes": ()}
+    )
     stream = io.StringIO()
     evaluator = create_app(
         api,

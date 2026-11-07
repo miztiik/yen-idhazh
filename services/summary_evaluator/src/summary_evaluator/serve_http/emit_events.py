@@ -11,6 +11,7 @@ from typing import TextIO
 from pydantic import TypeAdapter
 
 from summary_evaluator.hhem.contracts.evaluation_event import EvaluationEvent
+from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
 from summary_evaluator.serve_http.contracts.server_event import (
     ApiDiagnosticData,
     DiagnosticComponent,
@@ -60,6 +61,7 @@ class EventWriter:
         run_id: str | None = None,
         attempt: int = 1,
         started_at: datetime | None = None,
+        scorer: ApiComponent | None = None,
     ) -> None:
         self.settings = settings
         self.logger = logging.Logger(
@@ -81,7 +83,8 @@ class EventWriter:
             if offset is None or offset.total_seconds() != 0:
                 raise ValueError("The log start instant must use UTC")
             day = instant.strftime("%Y_%m_%d")
-            self.log_file = f"fastapi-server_{day}_{identity}_{attempt}.log"
+            role = f"fastapi-server_{scorer}" if scorer is not None else "fastapi-server"
+            self.log_file = f"{role}_{day}_{identity}_{attempt}.log"
             try:
                 directory.mkdir(parents=True, exist_ok=True)
                 self.file_handler = DiagnosticFileHandler(directory / self.log_file, self)

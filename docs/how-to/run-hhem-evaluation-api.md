@@ -1,6 +1,6 @@
 # Generate and evaluate one summary
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-07
 
 How to dispatch `summary-eval-tests.yml` and inspect the generated answer,
 actual HHEM and four UniEval scores, machine readings and owned-process cleanup. This procedure
@@ -70,7 +70,7 @@ original 1024-token cutoff. Inspect the actual generated answer's native
 coherence prompt: it must exceed that cutoff and fit the configured total
 allowance without clipping. Require all four actual scores, every planned
 sentence/window comparison, source spans from zero through the source's final
-character, and both joined worker exits. Three completed dimensions, an
+character, both independently stopped API processes and their joined worker exits. Three completed dimensions, an
 unexercised larger setting or an offline recording cannot close live proof.
 
 The report contains separate phase and server outcomes, actual startup times,
@@ -105,8 +105,8 @@ and `uv --frozen --extra model --no-dev`. Its native executable and assets targe
 the stock Ubuntu runner. Do not relax ordinary test socket guards to run the
 Linux ASGI coverage on Windows.
 
-The visible tasks prepare named native assets, generate once through FastAPI,
-stop the native model, evaluate through FastAPI and create the report.
+The visible tasks prepare named native assets, generate once through the native server,
+stop the native model, evaluate through separate scorer APIs and create the report.
 Machine preparation installs shared hosting, fingerprinting and probes without
 feed-ingest-plan or data-delivery. It copies only named machine configuration;
 `config/hono-server.json` owns the listener and supervision waits.

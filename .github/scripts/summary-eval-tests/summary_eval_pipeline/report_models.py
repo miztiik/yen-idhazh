@@ -1,20 +1,35 @@
 """Which selected and observed model identities explain this run's results?"""
 
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
+from summary_evaluator.serve_http.contracts.api_health import ApiHealth
+from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
 
-from .contracts import PipelineEvidence
+from .contracts import PhaseEvidence as LegacyPhaseEvidence
+from .phase_contracts import PhaseResult
+from .report_contracts import PipelineResult
 
 
-def model_rows(evidence: PipelineEvidence, settings: ServiceSettings) -> list[tuple[object, ...]]:
+def scorer_health(phase: PhaseResult | None, scorer: ApiComponent) -> ApiHealth | None:
+    if isinstance(phase, LegacyPhaseEvidence):
+        return phase.api_health
+    return next(
+        (api.health for api in phase.scorer_apis if api.scorer == scorer), None
+    ) if phase is not None else None
+
+
+def model_rows(evidence: PipelineResult, settings: ServiceSettings) -> list[tuple[object, ...]]:
     generation, phase = evidence.generation, evidence.evaluation_phase
     result = phase.evaluation if phase else None
     unieval = phase.unieval if phase else None
     selected = evidence.prepared.selected if evidence.prepared else None
     loaded = generation.loaded if generation else None
-    health = phase.api_health if phase else None
-    hhem_model = (result.model if result else None) or (health.hhem.model if health else None)
+    hhem_health = scorer_health(phase, "hhem")
+    unieval_health = scorer_health(phase, "unieval")
+    hhem_model = (result.model if result else None) or (
+        hhem_health.hhem.model if hhem_health else None
+    )
     unieval_model = (unieval.model if unieval else None) or (
-        health.unieval.model if health else None
+        unieval_health.unieval.model if unieval_health else None
     )
     controls = unieval.effective_settings if unieval else None
     work = unieval.work if unieval else None

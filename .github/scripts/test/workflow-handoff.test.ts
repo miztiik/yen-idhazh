@@ -17,7 +17,11 @@ import {
   prepareEvaluationRequest,
   readEvaluationResponse,
 } from "../prepare-evaluation-request.ts";
-import { readCoverageSettings } from "../read-coverage-settings.ts";
+import {
+  CoverageApiConfigurationSchema,
+  readCoverageSettings,
+  resolveCoverageApiSettings,
+} from "../read-coverage-settings.ts";
 
 const fixtures = new URL("../../../tests/fixtures/typescript-metadata/", import.meta.url);
 const outputPath = fileURLToPath(new URL("workflow-output-event.json", fixtures));
@@ -174,6 +178,91 @@ test("the caller resolves the actual committed listener and complete transport b
   expect(settings.requestTimeoutMs).toBeGreaterThan(0);
   expect(settings.evaluateUrl).not.toContain(":9933");
 });
+
+function apiConfiguration() {
+  const listener = {
+    host: "127.0.0.1" as const, port: 4010, max_body_bytes: 1200, body_read_timeout_ms: 30,
+  };
+  return {
+    version: "2026-11-07" as const,
+    listeners: {
+      hhem: listener,
+      unieval: { ...listener, port: 4011 },
+      coverage: { ...listener, host: "::1" as const, port: 4012, max_body_bytes: 2400 },
+    },
+    logging: { level: "INFO" as const, max_event_bytes: 3200 },
+    log_directory: "backend/var/scorer-logs",
+    shutdown_timeout_ms: 20000,
+  };
+}
+
+test("coverage resolves its authored modern origin and preserves an explicit legacy listener", () => {
+  const modern = apiConfiguration();
+  const selected = resolveCoverageApiSettings(modern);
+  expect(selected.listener).toEqual(modern.listeners.coverage);
+  expect(selected.enabled_routes).toEqual(["coverage"]);
+  const legacy = {
+    version: modern.version,
+    listener: modern.listeners.hhem,
+    enabled_routes: ["hhem", "unieval"],
+    logging: modern.logging,
+    log_directory: modern.log_directory,
+    shutdown_timeout_ms: modern.shutdown_timeout_ms,
+  };
+  expect(resolveCoverageApiSettings(legacy)).toEqual({
+    ...legacy, enabled_routes: ["coverage"],
+  });
+});
+
+test.each(["missing", "unknown", "collision", "mixed", "version", "bound", "routes"])(
+  "invalid %s API settings fail without selecting another scorer or destination",
+  fault => {
+    const modern = apiConfiguration();
+    let value: unknown = modern;
+    if (fault === "missing") {
+      const { coverage: _removed, ...listeners } = modern.listeners;
+      value = { ...modern, listeners };
+    } else if (fault === "unknown") {
+      value = { ...modern, listeners: { ...modern.listeners, other: modern.listeners.hhem } };
+    } else if (fault === "collision") {
+      value = { ...modern, listeners: { ...modern.listeners, coverage: modern.listeners.hhem } };
+    } else if (fault === "mixed") {
+      value = { ...modern, listener: modern.listeners.coverage, enabled_routes: ["coverage"] };
+    } else if (fault === "version") {
+      value = { ...modern, version: "2026-11-05" };
+    } else if (fault === "bound") {
+      value = { ...modern, listeners: { ...modern.listeners,
+        coverage: { ...modern.listeners.coverage, max_body_bytes: 0 } } };
+    } else {
+      const { listeners: _removed, ...shared } = modern;
+      value = { ...shared, listener: modern.listeners.coverage, enabled_routes: ["coverage", "coverage"] };
+    }
+    expect(CoverageApiConfigurationSchema.safeParse(value).success).toBe(false);
+    expect(() => resolveCoverageApiSettings(value)).toThrow();
+  },
+);
+
+test("the real coverage reader follows changed committed listener and transport bounds", async () =>
+  withDirectory(async directory => {
+    const api = apiConfiguration();
+    await mkdir(join(directory, "config", "summary-evals", "unieval-evaluator"), { recursive: true });
+    await writeFile(join(directory, "config", "summary-evals", "api.json"), JSON.stringify(api));
+    await writeFile(join(directory, "config", "summary-evals", "unieval-evaluator", "coverage.json"),
+      JSON.stringify({
+        evaluation: { timeout_ms: 40 }, queue: { wait_timeout_ms: 50 },
+        worker: { shutdown_timeout_ms: 60, max_reply_bytes: 4800 },
+      }));
+    expect(readCoverageSettings(directory)).toEqual({
+      evaluateUrl: "http://[::1]:4012/api/2026-11-05/evaluate-summary-coverage",
+      maxRequestBytes: 2400, maxResponseBytes: 4800, requestTimeoutMs: 180,
+    });
+    api.listeners.coverage.port = 4022;
+    api.listeners.coverage.max_body_bytes = 2500;
+    await writeFile(join(directory, "config", "summary-evals", "api.json"), JSON.stringify(api));
+    const changed = readCoverageSettings(directory);
+    expect(changed.evaluateUrl).toBe("http://[::1]:4022/api/2026-11-05/evaluate-summary-coverage");
+    expect(changed.maxRequestBytes).toBe(2500);
+  }));
 
 test("metrics-only reporting preserves scores and explicitly leaves machine readings uncollected", async () =>
   withDirectory(async directory => {

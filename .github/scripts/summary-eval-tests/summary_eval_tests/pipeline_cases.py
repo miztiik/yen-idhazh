@@ -20,14 +20,14 @@ from summary_eval_tests.test_host_profile_reader_parity import (
 )
 
 
-def owned_child_command(mode: str) -> list[str]:
+def owned_child_command(mode: str, *, script_path: Path | None = None) -> list[str]:
     interpreter = getattr(sys, "_base_executable", None)
     if not isinstance(interpreter, str):
         raise AssertionError("The lifetime case requires the actual CPython executable.")
     script = (
         "import runpy,site,sys; packages=sys.argv.pop(1); support=sys.argv.pop(1); "
-        "pipeline=sys.argv.pop(1); backend=sys.argv.pop(1); "
-        "sys.path[:0]=[support,pipeline,backend,packages]; "
+        "pipeline=sys.argv.pop(1); backend=sys.argv.pop(1); service=sys.argv.pop(1); "
+        "sys.path[:0]=[support,pipeline,backend,service,packages]; "
         "site.addsitedir(packages); runpy.run_path(sys.argv.pop(1),run_name='__main__')"
     )
     return [
@@ -38,7 +38,8 @@ def owned_child_command(mode: str) -> list[str]:
         str(REPOSITORY / "services" / "summary_evaluator" / "tests"),
         str(REPOSITORY / ".github" / "scripts" / "summary-eval-tests"),
         str(REPOSITORY / "backend"),
-        str(Path(__file__).with_name("owned_service_child.py")),
+        str(REPOSITORY / "services" / "summary_evaluator"),
+        str(script_path or Path(__file__).with_name("owned_service_child.py")),
         mode,
     ]
 

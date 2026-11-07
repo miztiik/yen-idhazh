@@ -137,7 +137,7 @@ def example_window_outcome() -> WindowOutcome:
 
 def example_unieval_result(reference_hash: str) -> UnievalResult:
     """Supply zero-valued contract examples, not model prediction evidence."""
-    from summary_evaluator.serve_http.api_settings import load_api_settings
+    from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
     from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
     from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_VERSION
     from summary_evaluator.unieval.contracts.unieval_request import EffectiveUnievalControls
@@ -150,7 +150,7 @@ def example_unieval_result(reference_hash: str) -> UnievalResult:
         UnievalWork,
     )
 
-    api = load_api_settings(API_SETTINGS_FILE)
+    api = load_scorer_api_settings(API_SETTINGS_FILE, "unieval")
     settings = load_unieval_settings(REPOSITORY, api)
     model = UnievalModelIdentity.model_validate_json(
         (
