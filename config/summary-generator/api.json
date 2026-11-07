@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-06",
+  "version": "2026-11-07",
   "hostname": "127.0.0.1",
   "port": 9932,
   "prompt_file": "prompts/generate-summary.txt",
