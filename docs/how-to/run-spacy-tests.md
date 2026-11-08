@@ -16,7 +16,7 @@ and verifies that exact immutable commit.
 
 Do not treat registration or ordinary pull-request checks as live
 text-analysis evidence. The checked commit must contain the complete
-`services/text_analysis/` implementation and scripts.
+`services/text_analysis/spacy/` implementation and scripts.
 
 ## Select the exact ref and inputs
 

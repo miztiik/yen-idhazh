@@ -239,7 +239,7 @@ wheels = [
 [[package]]
 name = "local-api-host"
 version = "2026.11.7"
-source = { directory = "../local_api_host" }
+source = { directory = "../../local_api_host" }
 dependencies = [
     { name = "fastapi" },
     { name = "opentelemetry-api" },
@@ -624,7 +624,7 @@ verification = [
 requires-dist = [
     { name = "anyio", specifier = ">=4.11,<5" },
     { name = "fastapi", specifier = ">=0.121,<0.122" },
-    { name = "local-api-host", directory = "../local_api_host" },
+    { name = "local-api-host", directory = "../../local_api_host" },
     { name = "opentelemetry-api", specifier = "==1.45.1" },
     { name = "pydantic", specifier = ">=2.12,<3" },
     { name = "spacy", specifier = "==3.8.18" },

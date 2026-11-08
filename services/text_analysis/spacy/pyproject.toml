@@ -27,7 +27,7 @@ verification = [
 default-groups = ["verification"]
 
 [tool.uv.sources]
-local-api-host = { path = "../local_api_host" }
+local-api-host = { path = "../../local_api_host" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/text_analysis"]
