@@ -36,8 +36,9 @@ the one receiving `OperationMetadata` at `request.state.operation_metadata` and
 the monotonic start at `request.state.request_started_at` before guards run.
 `OperationMetadata` carries `traceId`, `spanId`, optional `parentSpanId`, a
 required `links` JSON array and optional canonical `traceState`. Root and
-receiving-operation factories emit an empty link array. Trace data is not
-inserted into a JSON body.
+receiving-operation factories emit an empty link array. Optional fields are
+omitted rather than serialized or accepted as null. Its native schema metadata
+has version `2026-11-03`. Trace data is not inserted into a JSON body.
 
 The next layer refuses any browser `Origin`, duplicate `Host` or `Host` outside
 the configured loopback binding before reading the request body. The selected

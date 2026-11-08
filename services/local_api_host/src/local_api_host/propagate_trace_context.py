@@ -1,9 +1,11 @@
 """How does one local request retain valid W3C context and receive a fresh API span?"""
 
 import time
+from collections.abc import Mapping
 from secrets import token_hex
-from typing import Self
+from typing import Final, Self, cast
 
+from opentelemetry.context import Context
 from opentelemetry.trace import (
     NonRecordingSpan,
     SpanContext,
@@ -13,12 +15,21 @@ from opentelemetry.trace import (
     set_span_in_context,
 )
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 _TRACE_PROPAGATOR = TraceContextTextMapPropagator()
+OPERATION_METADATA_VERSION: Final = "2026-11-03"
 
 
 class OperationLink(BaseModel):
@@ -53,6 +64,17 @@ class OperationMetadata(BaseModel):
         validate_by_alias=True,
         validate_by_name=True,
         serialize_by_alias=True,
+        json_schema_extra={
+            "version": OPERATION_METADATA_VERSION,
+            "changelog": [
+                {
+                    "version": OPERATION_METADATA_VERSION,
+                    "change": (
+                        "Declare native execution, operation, parent and input-link metadata."
+                    ),
+                }
+            ],
+        },
     )
 
     trace_id: str = Field(alias="traceId", pattern=r"^[0-9a-f]{32}$")
@@ -64,6 +86,20 @@ class OperationMetadata(BaseModel):
     )
     links: tuple[OperationLink, ...]
     trace_state: str | None = Field(default=None, alias="traceState", min_length=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def refuse_explicit_null_optional_fields(cls, value: object) -> object:
+        if isinstance(value, Mapping):
+            optional_names = (
+                "parentSpanId",
+                "parent_span_id",
+                "traceState",
+                "trace_state",
+            )
+            if any(name in value and value[name] is None for name in optional_names):
+                raise ValueError("Optional operation metadata must be omitted instead of null")
+        return value
 
     @field_validator("trace_state")
     @classmethod
@@ -82,6 +118,14 @@ class OperationMetadata(BaseModel):
             raise ValueError("An operation cannot be its own parent")
         return self
 
+    @model_serializer(mode="wrap")
+    def serialize_without_nulls(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, object]:
+        serialized = cast(dict[str, object], handler(self))
+        return {key: value for key, value in serialized.items() if value is not None}
+
 
 def _create_nonzero_identifier(byte_length: int, excluded: str | None = None) -> str:
     zero = "0" * (byte_length * 2)
@@ -97,9 +141,13 @@ def create_root_operation(
     trace_state: str | None = None,
 ) -> OperationMetadata:
     """Create one unsampled operation root."""
+    trace_id = _create_nonzero_identifier(16)
+    span_id = _create_nonzero_identifier(8)
+    if trace_state is None:
+        return OperationMetadata(trace_id=trace_id, span_id=span_id, links=links)
     return OperationMetadata(
-        trace_id=_create_nonzero_identifier(16),
-        span_id=_create_nonzero_identifier(8),
+        trace_id=trace_id,
+        span_id=span_id,
         links=links,
         trace_state=trace_state,
     )
@@ -111,9 +159,17 @@ def create_child_operation(
     links: tuple[OperationLink, ...] = (),
 ) -> OperationMetadata:
     """Create one fresh operation inside an existing trace."""
+    span_id = _create_nonzero_identifier(8, parent.span_id)
+    if parent.trace_state is None:
+        return OperationMetadata(
+            trace_id=parent.trace_id,
+            span_id=span_id,
+            parent_span_id=parent.span_id,
+            links=links,
+        )
     return OperationMetadata(
         trace_id=parent.trace_id,
-        span_id=_create_nonzero_identifier(8, parent.span_id),
+        span_id=span_id,
         parent_span_id=parent.span_id,
         links=links,
         trace_state=parent.trace_state,
@@ -133,11 +189,17 @@ def read_trace_context(headers: Headers) -> OperationMetadata | None:
     if not incoming.is_valid:
         return None
     canonical_state = incoming.trace_state.to_header()
+    if not canonical_state:
+        return OperationMetadata(
+            trace_id=f"{incoming.trace_id:032x}",
+            span_id=f"{incoming.span_id:016x}",
+            links=(),
+        )
     return OperationMetadata(
         trace_id=f"{incoming.trace_id:032x}",
         span_id=f"{incoming.span_id:016x}",
         links=(),
-        trace_state=canonical_state or None,
+        trace_state=canonical_state,
     )
 
 
@@ -163,7 +225,7 @@ def write_trace_context(operation: OperationMetadata) -> dict[str, str]:
     carrier: dict[str, str] = {}
     _TRACE_PROPAGATOR.inject(
         carrier,
-        context=set_span_in_context(NonRecordingSpan(span_context)),
+        context=set_span_in_context(NonRecordingSpan(span_context), Context()),
     )
     return carrier
 
