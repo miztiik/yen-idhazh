@@ -8,17 +8,18 @@ from pathlib import Path
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
 
 from .contracts import (
-    GenerationReceipt,
     PipelineError,
     has_completed_score,
     text_sha256,
 )
 from .failures import WorkflowError
 from .inputs import read_manual_inputs
-from .phase_contracts import PhaseResult, starts_no_scorers
+from .phase_contracts import PhaseEvidence, PhaseResult, starts_no_scorers
 from .preparation import read_prepared
+from .previous_report_contracts import PipelineEvidence as PreviousPipelineEvidence
 from .report import render_report
-from .report_contracts import PipelineEvidence
+from .report_contracts import REPORT_VERSION, PipelineEvidence, PipelineResult
+from .run_contracts import GenerationReceipt, GenerationResult, PreparedRun
 from .scorer_evidence import EVIDENCE_VERSION
 from .settings import load_pipeline_settings
 from .storage import read_generation_result, read_phase_result, write_result
@@ -27,22 +28,21 @@ from .storage import read_generation_result, read_phase_result, write_result
 MAX_STEP_SUMMARY_BYTES = 1 << 20
 
 
-def collect_results(root: Path) -> PipelineEvidence:
+def collect_results(root: Path) -> PipelineResult:
     pipeline = load_pipeline_settings(root)
     directory = root / pipeline.output_directory
     prepared, _ = read_prepared(root)
+    current = isinstance(prepared, PreparedRun)
+    contract = PipelineEvidence if current else PreviousPipelineEvidence
+    version = REPORT_VERSION if current else EVIDENCE_VERSION
     if prepared.status != "complete":
-        return PipelineEvidence(
-            version=EVIDENCE_VERSION,
-            status="failed",
-            prepared=prepared,
-            generation=None,
-            generation_phase=None,
-            evaluation_phase=None,
-            errors=(),
-        )
+        return contract.model_validate({
+            "version": version, "status": "failed", "prepared": prepared,
+            "generation": None, "generation_phase": None, "evaluation_phase": None,
+            "errors": (),
+        })
     errors: list[PipelineError] = []
-    generation: GenerationReceipt | None = None
+    generation: GenerationResult | None = None
     generation_sha256: str | None = None
     generated_phase: PhaseResult | None = None
     evaluation_phase: PhaseResult | None = None
@@ -55,6 +55,11 @@ def collect_results(root: Path) -> PipelineEvidence:
             or generation.selected != prepared.selected
             or generation.source_sha256 != prepared.source_sha256
             or generation.reference_summary_sha256 != prepared.reference_summary_sha256
+            or isinstance(generation, GenerationReceipt) != current
+            or (
+                isinstance(prepared, PreparedRun) and isinstance(generation, GenerationReceipt)
+                and generation.evaluate_relevance != prepared.evaluate_relevance
+            )
         ):
             generation = None
             raise WorkflowError("RECEIPT_INVALID", "report")
@@ -70,6 +75,11 @@ def collect_results(root: Path) -> PipelineEvidence:
                 result.run != prepared.run
                 or result.phase != phase
                 or result.reference_summary_sha256 != prepared.reference_summary_sha256
+                or isinstance(result, PhaseEvidence) != current
+                or (
+                    isinstance(prepared, PreparedRun) and isinstance(result, PhaseEvidence)
+                    and result.evaluate_relevance != prepared.evaluate_relevance
+                )
                 or (
                     generation is not None
                     and result.generation_sha256 != generation_sha256
@@ -106,9 +116,9 @@ def collect_results(root: Path) -> PipelineEvidence:
     score = evaluation_phase is not None and has_completed_score(
         evaluation_phase.evaluation, evaluation_phase.unieval
     )
-    return PipelineEvidence.model_validate(
+    return contract.model_validate(
         {
-            "version": EVIDENCE_VERSION,
+            "version": version,
             "status": "complete" if complete else "partial" if score else "failed",
             "prepared": prepared,
             "generation": generation,
@@ -131,12 +141,16 @@ def main() -> None:
         )
         directory = root / pipeline.output_directory
         evidence = collect_results(root)
-        write_result(directory / "results.json", evidence)
+        if isinstance(evidence, PipelineEvidence):
+            write_result(directory / "results.json", evidence)
         inputs = read_manual_inputs(pipeline)
         if evidence.prepared is not None and (
             text_sha256(inputs.source_text) != evidence.prepared.source_sha256
-            or text_sha256(inputs.reference_summary_text)
-            != evidence.prepared.reference_summary_sha256
+            or inputs.reference_summary_sha256 != evidence.prepared.reference_summary_sha256
+            or (
+                isinstance(evidence.prepared, PreparedRun)
+                and inputs.evaluate_relevance != evidence.prepared.evaluate_relevance
+            )
         ):
             raise WorkflowError("RECEIPT_INVALID", "report")
         config_url = (

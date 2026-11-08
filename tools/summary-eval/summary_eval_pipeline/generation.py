@@ -19,11 +19,8 @@ from idhazh.llm.server import (
 )
 
 from .contracts import (
-    WORKFLOW_VERSION,
     GeneratedAnswer,
-    GenerationReceipt,
     LoadedModel,
-    PreparedRun,
     text_sha256,
 )
 from .failures import WorkflowError
@@ -31,6 +28,7 @@ from .http import call_local_api
 from .inputs import ManualInputs
 from .model_selection import SelectedModel
 from .native_response import NativeCompletion, NativeReply
+from .run_contracts import RUN_VERSION, GenerationReceipt, PreparedRun
 from .settings import PipelineSettings
 
 
@@ -114,7 +112,8 @@ async def generate_summary(
         prepared.status != "complete"
         or selected.identity != prepared.selected
         or text_sha256(inputs.source_text) != prepared.source_sha256
-        or text_sha256(inputs.reference_summary_text) != prepared.reference_summary_sha256
+        or inputs.reference_summary_sha256 != prepared.reference_summary_sha256
+        or inputs.evaluate_relevance != prepared.evaluate_relevance
         or loaded.sha256 != selected.identity.sha256
         or loaded.model_id != selected.identity.model_id
         or loaded.weights_path != f"backend/models/{selected.identity.filename}"
@@ -163,12 +162,13 @@ async def generate_summary(
     except (ValueError, KeyError, TypeError):
         raise WorkflowError("GENERATION_FAILED", "generation", "llama", status) from None
     return GenerationReceipt(
-        version=WORKFLOW_VERSION,
+        version=RUN_VERSION,
         run=prepared.run,
         selected=prepared.selected,
         loaded=loaded,
         source_sha256=prepared.source_sha256,
         reference_summary_sha256=prepared.reference_summary_sha256,
+        evaluate_relevance=prepared.evaluate_relevance,
         summary_sha256=text_sha256(answer.summary),
         summary_text=answer.summary,
         status="complete",

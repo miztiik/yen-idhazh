@@ -126,8 +126,8 @@ cleanup, not a service failure. New receipts expose no raw exit code.
 ## Local execution boundary
 
 Do not install, import, start or load the text-analysis service locally for
-this verification. Existing CI checks workflow structure; this manual workflow
-is the live functional check.
+this verification. CI does not test the workflow declaration or execute the
+service; this manual workflow is the live functional check.
 
 Production pipelines use their own process supervisor and call the health and
 analyze routes directly. They do not reuse this verification runner.

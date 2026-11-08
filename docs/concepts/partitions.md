@@ -109,8 +109,7 @@ A partition says which period a file holds. **A class says who may write it, and
 how two runs writing at once end.** Both are properties of the layout, so both
 are on this page, and the classes are declared in
 [`backend/idhazh/path_classes.py`](../../backend/idhazh/path_classes.py) rather than in a
-workflow string - a list a workflow carries is a list the tests keep a second
-copy of.
+workflow string, so there is one source for the path classes.
 
 | Class | What the name means | How a race on it ends |
 | --- | --- | --- |

@@ -139,7 +139,7 @@ Build-independent machine arithmetic (`console-host-spans`, `console-machine-car
 no canary build or preview server. Logic checks generate any temporary fixture
 they read; they never depend on an earlier site or canary build.
 The selector job and the backend test job declare the same Node version,
-because the workflow tests execute that TypeScript selector. The backend job
+because backend selector tests execute that TypeScript selector. The backend job
 does not install frontend packages for it; the selector uses Node's built-ins.
 Full and `-m contract` backend runs also require Node on PATH for the real
 Python/browser CSV reader comparison in `test_cell_shapes.py`. Use the Node
@@ -281,7 +281,7 @@ workflow exercises live HHEM and UniEval scoring separately; the
 The model-free environment installs neither the backend nor the model extra.
 The `src` package is installed from this project, not supplied through pytest's
 source path. Shared test support is `tests/summary_evaluator_cases`; the
-comparison workflow's independent tests are under
+comparison tool's independent tests are under
 `tools/summary-eval/summary_eval_tests`. The explicit pytest configuration names
 both suites and the tool's Python import root; it does not install a separate
 caller distribution. The three tool launchers still establish backend imports
@@ -370,9 +370,14 @@ committed registry from the caller's root, not an installed package location;
 safe stage/status diagnostics retain a failed native boundary.
 The backend artifact guard resolves the workflow's two configured directories
 from that named settings file, so a path change cannot hide behind a fixed test value.
-The generation checks bind the
-source, answer, independent reference, model and run before either evaluator
-can start. Direct native generation checks use the recorded HTTP boundary,
+The generation checks bind source, answer, nullable reference identity,
+relevance selection, model and run before either evaluator can start.
+Named readers preserve the prior four-score native result and both shared and
+independent phase/report evidence without relabelling bytes or hashes. Current
+invalid data never retries as historical. The reference-free native-pair oracle
+uses the real ASGI worker and unchanged captured prompt predictions, requiring
+three applicable scores, an authorized skip and no relevance work. Direct native
+generation checks use the recorded HTTP boundary,
 without evaluator configuration or a forwarding application. They cover exact
 UTF-8 request/response byte limits and one byte above each limit, refused
 redirects and encodings, cancellation, unchanged sampling pass-through and fresh
@@ -442,9 +447,8 @@ candidate needs new evidence; unchanged tested inputs reuse their passed run.
 The result artifact remains `summary-evaluator-model-free-results`; a failed
 check propagates failure rather than selecting a smaller suite.
 The complete pytest roots retain both native scorer/API/process suites,
-strict previous-settings and disabled-coverage health reading, both API
-isolation directions and Linux-only named workflow-syntax checks.
-Windows portable records must list the omitted ASGI/control and Linux syntax
+strict previous-settings and disabled-coverage health reading, and both API
+isolation directions. Windows portable records must list omitted ASGI/control
 cases rather than count them as Linux proof.
 
 Owned-process fixtures launch the actual CPython executable with the same
@@ -453,12 +457,9 @@ has a different PID. The runtime ownership check stays strict.
 The local caller checks require the host's locked dependencies, not model packages.
 Ordinary evaluator preparation
 installs neither feed-ingest-plan nor data-delivery.
-Workflow changes also select
-`backend/tests/workflows/test_ci_selection.py`,
-`backend/tests/workflows/test_workflow_inputs.py` and
-`backend/tests/workflows/test_triggers.py`. Keep full suites in CI.
-Input checks read actual Actions expressions, including implicit job and step
-conditions, not filenames or quoted expression literals.
+Workflow files have no dedicated content tests. Keep the existing full suites
+in CI; tests of application programs remain focused on those programs rather
+than declarations that call them.
 The [manual procedure](run-hhem-evaluation-api.md) owns registration and real
 hosted evidence; offline results do not close that check.
 
@@ -475,8 +476,8 @@ uv lock --locked --project .\services\text_analysis\spacy
 Do not install, import, lint, type-check, start or load this service locally.
 The registered manual workflow is its functional gate and the
 [operator guide](run-spacy-tests.md) owns dispatch and evidence inspection.
-Ordinary CI checks the changed workflow declarations and repository-wide
-source rules without claiming spaCy behavior.
+Ordinary CI runs repository-wide source checks without claiming spaCy behavior
+or testing workflow execution.
 
 The workflow syncs the frozen environment, installs only the selected
 configured model wheel, starts one owned process group, and validates live
@@ -722,8 +723,8 @@ Existing Python scheduler cases remain applicable: select
 `gardener/tasks/test_compaction_planner_siblings.py`, `gardener/test_period_inputs.py`,
 `gardener/test_sparse_shard.py`, `gardener/test_publish.py` and
 `workflows/test_gardener_workflow.py` under `backend/tests/`.
-They retain planner-only, mixed-family, original-source replacement/deletion
-and workflow-boundary evidence. Local planner task transfer is zero because
+They retain planner-only, mixed-family and original-source replacement/deletion
+coverage. Local planner task transfer is zero because
 initial checkout already supplied its files; this is not a measurement of
 checkout download size or time. Keep full merge-candidate suites in CI.
 
@@ -909,10 +910,6 @@ so the new test passes on "the base commit" while it ran the branch. Measured
 The tell is a `rootdir:` line in the output naming a folder outside the copy;
 the copy's own `-q` hides that line when its settings were read.
 
-**A copied test that reads a workflow file needs the base commit's `.github` in
-the copy too:** add it to the archive, or the test fails on a missing file, a
-failure the base commit did not cause (2026-10-07).
-
 **In a copy of an older commit, one test module that cannot load stops the
 whole pytest run at collection:** add `--continue-on-collection-errors` so the
 cases that load still run, and name the module that did not load when you
@@ -1040,7 +1037,7 @@ anywhere has to be repointed.
 | --- | --- |
 | `-m contract` | The persisted shapes: the models and their fixtures, the two config contracts, the append-only ledgers, the committed digest tree, and the frontend binding tests listed in the [contract guide](../architecture/contracts/schemas.md#what-holds-the-copy-in-step) |
 | `-m visual` | The picture's gate and ladder, its validator, the compiler that turns a plan into published marks, and the planted attacks aimed at the picture |
-| `-m workflow` | Workflow YAML, inline shell, and programs called by workflows |
+| `-m workflow` | Standalone programs and application behavior used by automation, plus local action integration |
 | `-m slow` | Every module whose average test runs over a second |
 | `-m "not slow"` | Everything else, which is most of the tests |
 | nothing | The whole suite, which is what CI runs |
@@ -1145,9 +1142,10 @@ which `pytest` above runs.
 `.github/scripts/` on 2026-09-23. That directory now holds only the retained
 TypeScript generation experiment; caller support and tests live under
 `tools/`. No linter reads a workflow's inline shell, because a
-`run:` body is a string inside YAML rather than a file; the contract tests in
-`backend/tests/workflows/` execute the real steps instead
-([../reference/ci-dispatch-inputs.md](../reference/ci-dispatch-inputs.md#nothing-lints-a-run-body)).
+`run:` body is a string inside YAML rather than a file. Tests under
+`backend/tests/workflows/` cover standalone programs and application behavior
+without reading workflow declarations
+([../reference/ci-dispatch-inputs.md](../reference/ci-dispatch-inputs.md#inline-shell-is-not-linted)).
 
 **`ruff format` is not a gate.** `ruff format --check .` reports dozens of files
 it would rewrite, all of them

@@ -44,6 +44,21 @@ class AlteredEvaluatorReply(httpx.AsyncBaseTransport):
         elif self.fault == "source":
             data["work"]["source_characters"] += 1
             data["work"]["source_spans"][-1]["end"] += 1
+        elif self.fault == "controls":
+            data["effective_settings"]["max_input_tokens"] += 1
+        elif self.fault in ("selection", "skip"):
+            data["relevance_skip_reason"] = (
+                "disabled" if self.fault == "selection" else "reference_not_supplied"
+            )
+            if self.fault == "selection":
+                data["effective_settings"]["evaluate_relevance"] = False
+            else:
+                data["reference_summary_sha256"] = None
+            data["scores"]["relevance"] = None
+            data["work"]["relevance"] = {"planned": None, "completed": 0}
+            data["errors"] = [
+                error for error in data["errors"] if error["dimension"] != "relevance"
+            ]
         encoded = (
             self.event.encode()
             if self.fault == "event"
@@ -63,7 +78,11 @@ class AlteredEvaluatorReply(httpx.AsyncBaseTransport):
 
 
 @pytest.mark.parametrize(
-    "fault", ["request", "reference", "model", "mode", "source", "event", "malformed"]
+    "fault",
+    [
+        "request", "reference", "model", "mode", "source", "event", "malformed",
+        "controls", "selection", "skip",
+    ],
 )
 def test_invalid_response_has_no_score_and_preserves_the_actual_hhem_result(fault: str) -> None:
     async def check() -> None:

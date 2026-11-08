@@ -8,6 +8,7 @@ from summary_evaluator.shared.contracts.base import Count, PositiveCount, Score,
 from summary_evaluator.shared.contracts.worker_identity import WorkerIdentity
 from summary_evaluator.unieval.contracts.unieval_contract import (
     Dimension,
+    RelevanceSkipReason,
 )
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_request import (
@@ -50,6 +51,7 @@ class RequestPacket(UnievalWorkerContract):
 class UnievalPrepared(RequestPacket):
     kind: Literal["planned"] = "planned"
     effective_settings: EffectiveUnievalControls
+    relevance_skip_reason: RelevanceSkipReason | None
     work: UnievalWork
     errors: tuple[UnievalError, ...]
 

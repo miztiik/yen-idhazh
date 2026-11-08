@@ -18,6 +18,7 @@ from summary_evaluator_cases.service_cases import (
 from summary_evaluator_cases.unieval_cases import (
     RecordedUnievalSupervisor,
     read_unieval_recordings,
+    recorded_unieval_request,
     unieval_settings,
 )
 
@@ -195,7 +196,8 @@ def test_both_recorded_scorers_work_without_generation_configuration_or_routes(
             hhem_result = EvaluationResult.model_validate_json(hhem.content)
             assert hhem.status_code == 200 and hhem_result.hhem == predictions.cases[0].score
             unieval = await service.client.post(
-                UNIEVAL_PATH, json=unieval_inputs.cases[0].request.model_dump()
+                UNIEVAL_PATH,
+                json=recorded_unieval_request(unieval_inputs.cases[0].request).model_dump(),
             )
             unieval_result = UnievalResult.model_validate_json(unieval.content)
             assert unieval.status_code == 200 and unieval_result.status == "complete"

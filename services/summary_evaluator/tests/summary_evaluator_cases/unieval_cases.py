@@ -22,9 +22,18 @@ from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
 from summary_evaluator.serve_http.serve_api import create_app
 from summary_evaluator.shared.exchange_packets import ByteChannel
+from summary_evaluator.unieval.contracts.previous_unieval_recording import PreviousUnievalRequest
+from summary_evaluator.unieval.contracts.previous_unieval_result import (
+    PreviousEffectiveUnievalControls,
+)
 from summary_evaluator.unieval.contracts.unieval_recording import (
     UnievalRecordingInputs,
     UnievalRecordingPredictions,
+)
+from summary_evaluator.unieval.contracts.unieval_request import (
+    EffectiveUnievalControls,
+    UnievalControls,
+    UnievalRequest,
 )
 from summary_evaluator.unieval.contracts.unieval_result import UnievalModelIdentity
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
@@ -82,11 +91,28 @@ def unieval_settings(
     )
     inputs = read_unieval_inputs()
     settings = load_unieval_settings(REPOSITORY, api)
-    controls = inputs.cases[0].controls.model_copy(update=scoring)
+    controls = UnievalControls.model_validate({
+        **inputs.cases[0].controls.model_dump(), "evaluate_relevance": True, **scoring,
+    })
     settings = UnievalSettings.model_validate_json(
         settings.model_copy(update={"scoring": controls}).model_dump_json()
     )
     return api, settings
+
+
+def recorded_unieval_request(request: PreviousUnievalRequest) -> UnievalRequest:
+    """Select the recording's original four-score execution without changing its bytes."""
+    return UnievalRequest.model_validate({
+        **request.model_dump(), "evaluate_relevance": True,
+    })
+
+
+def recorded_unieval_controls(
+    controls: PreviousEffectiveUnievalControls,
+) -> EffectiveUnievalControls:
+    return EffectiveUnievalControls.model_validate({
+        **controls.model_dump(), "evaluate_relevance": True,
+    })
 
 
 @dataclass(frozen=True)

@@ -9,9 +9,8 @@ joins this package in the same change that gives a ledger its first row
 written; this module writes it down instead of re-deriving it on every test
 run.
 
-A row here is a fact about one `LedgerName`, so it is written once and read by
-`backend/tests/workflows/test_ledger_staging.py` and
-`backend/tests/workflows/test_ledger_door_jobs.py`. Nothing here is a persisted
+A row here is a fact about one `LedgerName`, so it is written once and covered
+by `backend/tests/workflows/test_ledger_staging.py`. Nothing here is a persisted
 payload: it ships inside this package and is replaced the day the code it
 describes changes, so CLAUDE.md section 11's versioning does not apply to it -
 that section is scoped to a file a later run reads back, and nothing writes

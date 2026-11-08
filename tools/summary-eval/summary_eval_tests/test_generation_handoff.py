@@ -8,10 +8,7 @@ import httpx
 import pytest
 from pydantic import ValidationError
 from summary_eval_pipeline.contracts import (
-    WORKFLOW_VERSION,
     GeneratedAnswer,
-    GenerationReceipt,
-    PreparedRun,
     text_sha256,
 )
 from summary_eval_pipeline.evaluation import bind_evaluations
@@ -22,6 +19,7 @@ from summary_eval_pipeline.model_selection import select_model, verify_staged_se
 from summary_eval_pipeline.phase_contracts import PhaseEvidence, PhaseShutdown
 from summary_eval_pipeline.phase_result import build_evidence
 from summary_eval_pipeline.phases import collect_phase
+from summary_eval_pipeline.run_contracts import RUN_VERSION, GenerationReceipt, PreparedRun
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_eval_pipeline.storage import read_generation_result, read_result, write_result
 from summary_evaluator_cases.contract_examples import REPOSITORY
@@ -49,6 +47,7 @@ def generation_phase() -> tuple[ManualInputs, PreparedRun, GenerationReceipt, Ph
         phase="generation",
         generation_sha256=text_sha256(receipt.model_dump_json()),
         reference_summary_sha256=prepared.reference_summary_sha256,
+        evaluate_relevance=prepared.evaluate_relevance,
     )
     return inputs, prepared, receipt, phase
 
@@ -207,6 +206,9 @@ def test_same_run_handoff_is_atomic_and_retains_exact_text(tmp_path: Path) -> No
         "model",
         "source",
         "reference",
+        "selection",
+        "receipt_selection",
+        "phase_selection",
         "summary",
         "failed",
         "unclosed",
@@ -238,9 +240,16 @@ def test_stale_changed_failed_or_unclosed_generation_cannot_reach_either_evaluat
     elif change == "source":
         inputs = inputs.model_copy(update={"source_text": inputs.source_text + "\n"})
     elif change == "reference":
+        assert inputs.reference_summary_text is not None
         inputs = inputs.model_copy(
             update={"reference_summary_text": inputs.reference_summary_text + "\n"}
         )
+    elif change == "selection":
+        inputs = inputs.model_copy(update={"evaluate_relevance": False})
+    elif change == "receipt_selection":
+        receipt = receipt.model_copy(update={"evaluate_relevance": False})
+    elif change == "phase_selection":
+        phase = phase.model_copy(update={"evaluate_relevance": False})
     elif change == "summary":
         assert receipt.summary_text is not None
         receipt = receipt.model_copy(update={"summary_text": receipt.summary_text + "\n"})
@@ -321,12 +330,13 @@ def test_invalid_generation_never_starts_either_evaluator(
     failure = WorkflowError("GENERATION_FAILED", "generation", "llama").error
     if failure_kind == "failed":
         receipt = GenerationReceipt(
-            version=WORKFLOW_VERSION,
+            version=RUN_VERSION,
             run=receipt.run,
             selected=receipt.selected,
             loaded=receipt.loaded,
             source_sha256=receipt.source_sha256,
             reference_summary_sha256=receipt.reference_summary_sha256,
+            evaluate_relevance=receipt.evaluate_relevance,
             summary_sha256=None,
             summary_text=None,
             status="failed",
@@ -392,7 +402,7 @@ def test_receipt_hash_uses_original_bytes_without_restamping_or_reserialization(
     encoded = (json.dumps(receipt.model_dump(mode="json"), indent=2) + "\n").encode("utf-8")
     path.write_bytes(encoded)
     saved, saved_hash = read_generation_result(path, 2 << 20)
-    assert saved.version == receipt.version == WORKFLOW_VERSION
+    assert saved.version == receipt.version == RUN_VERSION
     assert saved_hash == hashlib.sha256(encoded).hexdigest()
     assert saved_hash != text_sha256(saved.model_dump_json())
     bound_phase = phase.model_copy(update={"generation_sha256": saved_hash})
@@ -485,9 +495,7 @@ def test_direct_native_generation_uses_selected_request_and_excludes_reasoning(
                 assert receipt.status == "complete" and receipt.summary_text
                 assert "Let me reason" not in receipt.summary_text
                 assert receipt.source_sha256 == text_sha256(inputs.source_text)
-                assert receipt.reference_summary_sha256 == text_sha256(
-                    inputs.reference_summary_text
-                )
+                assert receipt.reference_summary_sha256 == inputs.reference_summary_sha256
             assert len(recorded.requests) == 1
             native_url, encoded, _ = recorded.requests[0]
             body = json.loads(encoded)
@@ -500,6 +508,7 @@ def test_direct_native_generation_uses_selected_request_and_excludes_reasoning(
             assert body["chat_template_kwargs"]["enable_thinking"] is False
             for key, value in selected.entry.sampling.items():
                 assert body[key] == value
+            assert inputs.reference_summary_text is not None
             assert inputs.reference_summary_text not in encoded.decode()
 
     asyncio.run(check())

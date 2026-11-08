@@ -7,10 +7,11 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 from summary_evaluator_cases.contract_examples import REPOSITORY
-from summary_evaluator_cases.unieval_cases import read_unieval_recordings
+from summary_evaluator_cases.unieval_cases import read_unieval_recordings, recorded_unieval_request
 
 from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
+from summary_evaluator.unieval.contracts.unieval_request import UnievalControls
 from summary_evaluator.unieval.contracts.unieval_settings import (
     AUTHORED_UNIEVAL_VERSION,
     AuthoredUnievalSettings,
@@ -55,7 +56,7 @@ def test_authored_paths_are_validated_without_reading_question_files(named: str)
         AuthoredUnievalSettings.model_validate_json(json.dumps(raw))
 
 
-def test_authored_version_changes_without_restamping_native_settings() -> None:
+def test_scoring_versions_advance_without_restamping_health_or_recordings() -> None:
     api = load_scorer_api_settings(
         REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
     )
@@ -63,7 +64,12 @@ def test_authored_version_changes_without_restamping_native_settings() -> None:
     schema = AuthoredUnievalSettings.model_json_schema()
     assert schema["version"] == AUTHORED_UNIEVAL_VERSION
     assert "current_only" in schema["readCompatibility"]
-    assert settings.version == UnievalSettings.model_json_schema()["version"] == "2026-11-04"
+    assert settings.version == UnievalSettings.model_json_schema()["version"] == "2026-11-08"
+    from summary_evaluator.unieval.contracts.unieval_recording import UnievalRecordingInputs
+    from summary_evaluator.unieval.contracts.unieval_result import UnievalHealth
+
+    assert UnievalHealth.model_json_schema()["version"] == "2026-11-04"
+    assert UnievalRecordingInputs.model_json_schema()["version"] == "2026-11-04"
     assert "prompt_files" not in settings.model_dump()
     path = REPOSITORY / "config" / "summary-evals" / "unieval-evaluator" / "settings.json"
     raw = json.loads(path.read_bytes())
@@ -148,9 +154,13 @@ def test_actual_moved_questions_match_every_recorded_comparison() -> None:
     inputs, predictions, _ = read_unieval_recordings()
     for case, recorded in zip(inputs.cases, predictions.cases, strict=True):
         settings = UnievalSettings.model_validate_json(
-            selected.model_copy(update={"scoring": case.controls}).model_dump_json()
+            selected.model_copy(update={
+                "scoring": UnievalControls(
+                    **case.controls.model_dump(), evaluate_relevance=True
+                ),
+            }).model_dump_json()
         )
-        plan = prepare_unieval(case.request, settings, resources)
+        plan = prepare_unieval(recorded_unieval_request(case.request), settings, resources)
         assert plan.work == recorded.work
         assert len(plan.comparisons) == len(recorded.comparisons)
         for comparison, captured in zip(plan.comparisons, recorded.comparisons, strict=True):

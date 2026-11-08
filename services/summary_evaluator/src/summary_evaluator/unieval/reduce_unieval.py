@@ -11,8 +11,9 @@ from summary_evaluator.shared.contracts.worker_identity import WorkerIdentity
 from summary_evaluator.shared.create_execution_id import create_execution_id
 from summary_evaluator.unieval.contracts.unieval_contract import (
     DIMENSIONS,
-    UNIEVAL_VERSION,
+    UNIEVAL_SCORING_VERSION,
     Dimension,
+    RelevanceSkipReason,
 )
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_request import (
@@ -34,6 +35,7 @@ from summary_evaluator.unieval.contracts.unieval_worker_message import (
     UnievalPrepared,
 )
 from summary_evaluator.unieval.fail_unieval import UnievalFailure
+from summary_evaluator.unieval.resolve_unieval_selection import resolve_unieval_selection
 
 
 @dataclass
@@ -43,6 +45,7 @@ class UnievalState:
     received_at: float = field(default_factory=time.monotonic)
     request: UnievalRequest | None = None
     reference_hash: str | None = None
+    relevance_skip_reason: RelevanceSkipReason | None = None
     model: UnievalModelIdentity | None = None
     worker: WorkerIdentity | None = None
     effective: EffectiveUnievalControls | None = None
@@ -64,19 +67,23 @@ class UnievalState:
                 "correlation_id": request.correlation_id or create_execution_id(),
             }
         )
-        self.reference_hash = hashlib.sha256(
-            request.reference_summary_text.encode("utf-8")
-        ).hexdigest()
+        self.reference_hash = (
+            hashlib.sha256(request.reference_summary_text.encode("utf-8")).hexdigest()
+            if request.reference_summary_text is not None else None
+        )
 
     def accept_plan(self, packet: UnievalPrepared, settings: UnievalSettings) -> None:
         self.require_issued_operation(packet)
         if self.prepared or self.request is None:
             raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
-        controls = settings.scoring.model_dump()
-        controls["consistency_source_mode"] = (
-            self.request.consistency_source_mode or settings.scoring.consistency_source_mode
+        controls, relevance_skip_reason = resolve_unieval_selection(
+            self.request, settings.scoring
         )
-        if packet.effective_settings.model_dump(exclude={"source_budget_tokens"}) != controls:
+        if (
+            packet.effective_settings.model_dump(exclude={"source_budget_tokens"})
+            != controls.model_dump()
+            or packet.relevance_skip_reason != relevance_skip_reason
+        ):
             raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
         work = packet.work
         total = 0
@@ -85,6 +92,12 @@ class UnievalState:
             if dimension_work.completed:
                 raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
             planned = dimension_work.planned
+            if dimension == "relevance" and relevance_skip_reason is not None:
+                if planned is not None or any(
+                    error.dimension == "relevance" for error in packet.errors
+                ):
+                    raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
+                continue
             if planned is None:
                 if not any(error.dimension in (dimension, None) for error in packet.errors):
                     raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
@@ -121,6 +134,7 @@ class UnievalState:
         ):
             raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
         self.work, self.effective = work, packet.effective_settings
+        self.relevance_skip_reason = relevance_skip_reason
         self.errors.extend(packet.errors)
         self.values = {dimension: [] for dimension in DIMENSIONS}
         self.processed = dict.fromkeys(DIMENSIONS, 0)
@@ -185,7 +199,10 @@ class UnievalState:
             raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
 
     def result(self) -> UnievalResult:
-        completed = [getattr(self.scores, dimension) is not None for dimension in DIMENSIONS]
+        completed = [
+            getattr(self.scores, dimension) is not None for dimension in DIMENSIONS
+            if dimension != "relevance" or self.relevance_skip_reason is None
+        ]
         status: OutcomeStatus = (
             "complete"
             if all(completed) and not self.errors
@@ -194,12 +211,13 @@ class UnievalState:
             else "failed"
         )
         return UnievalResult(
-            version=UNIEVAL_VERSION,
+            version=UNIEVAL_SCORING_VERSION,
             status=status,
             execution_id=self.execution_id,
             request_id=self.request.request_id if self.request else None,
             correlation_id=self.request.correlation_id if self.request else None,
             reference_summary_sha256=self.reference_hash,
+            relevance_skip_reason=self.relevance_skip_reason,
             model=self.model,
             worker=self.worker,
             effective_settings=self.effective,

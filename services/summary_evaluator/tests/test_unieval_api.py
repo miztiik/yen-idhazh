@@ -14,6 +14,7 @@ from summary_evaluator_cases.unieval_cases import (
     RecordedUnievalSupervisor,
     UnievalScenario,
     read_unieval_recordings,
+    recorded_unieval_request,
     running_unieval,
     unieval_settings,
 )
@@ -43,7 +44,9 @@ def test_real_component_health_and_reference_identity_are_bound_to_actual_work()
             assert shared.json()["unieval"]["worker"]["pid"] == worker.worker.pid
             assert shared.json()["hhem"]["status"] == "disabled"
             assert (await client.get(HHEM_HEALTH_PATH)).status_code == 404
-            response = await client.post(UNIEVAL_PATH, json=inputs.cases[1].request.model_dump())
+            response = await client.post(
+                UNIEVAL_PATH, json=recorded_unieval_request(inputs.cases[1].request).model_dump()
+            )
             result = UnievalResult.model_validate_json(response.content)
             assert result.model == identity
             assert (
@@ -108,7 +111,8 @@ def test_unieval_worker_failure_does_not_close_or_block_the_hhem_component(
                     else:
                         inputs, _, _ = read_unieval_recordings()
                         response = await client.post(
-                            UNIEVAL_PATH, json=inputs.cases[0].request.model_dump()
+                            UNIEVAL_PATH,
+                            json=recorded_unieval_request(inputs.cases[0].request).model_dump(),
                         )
                         assert response.status_code == 500
                     assert unieval_worker.exit_confirmed
@@ -166,7 +170,11 @@ def test_idle_exit_refuses_admission_before_reading_input_and_joins_the_child() 
 @pytest.mark.parametrize(
     ("body", "headers", "status"),
     [
-        (b'{"source_text":"Source","summary_text":"Answer"}', {}, 400),
+        (
+            b'{"source_text":"Source","summary_text":"Answer","reference_summary_text":null}',
+            {},
+            400,
+        ),
         (b'{"PrivateUnknownCanary": "PrivateValueCanary"}', {}, 400),
         (b"not-json", {}, 400),
         (b"{}", {"Origin": "https://example.test"}, 403),
