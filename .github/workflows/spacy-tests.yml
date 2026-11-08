@@ -1,0 +1,147 @@
+name: spacy-tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      code_ref:
+        description: Immutable lowercase 40-character commit SHA to test
+        required: true
+        type: string
+      language:
+        description: Configured language to test
+        required: false
+        type: choice
+        options:
+          - en
+          - zh
+      profile:
+        description: Configured spaCy model profile
+        required: false
+        default: md
+        type: choice
+        options:
+          - sm
+          - md
+          - lg
+      feature_mode:
+        description: Feature selection mode
+        required: false
+        type: choice
+        options:
+          - default
+          - all
+          - custom
+      custom_features:
+        description: Comma-separated feature names used only in custom mode
+        required: false
+        type: string
+      text:
+        description: Text to analyze; retained in dispatch and result evidence
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Initialize workflow evidence
+        env:
+          EVIDENCE_DIRECTORY: ${{ runner.temp }}/spacy-tests
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIRECTORY"
+          printf '{"workflow_sha":"%s","run_id":"%s","run_attempt":"%s"}\n' \
+            "$WORKFLOW_SHA" "$RUN_ID" "$RUN_ATTEMPT" \
+            > "$EVIDENCE_DIRECTORY/workflow-context.json"
+
+      - name: Validate immutable code ref
+        env:
+          CODE_REF: ${{ inputs.code_ref }}
+          EVIDENCE_DIRECTORY: ${{ runner.temp }}/spacy-tests
+        run: |
+          set -euo pipefail
+          if [[ ! "$CODE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "code_ref must be a lowercase 40-character commit SHA" >&2
+            exit 1
+          fi
+          printf '%s\n' "$CODE_REF" > "$EVIDENCE_DIRECTORY/requested-code-ref.txt"
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.code_ref }}
+          persist-credentials: false
+
+      - name: Record the tested checkout
+        id: checkout
+        env:
+          CODE_REF: ${{ inputs.code_ref }}
+          EVIDENCE_DIRECTORY: ${{ runner.temp }}/spacy-tests
+        run: |
+          set -euo pipefail
+          TESTED_COMMIT="$(git rev-parse HEAD)"
+          if [[ "$TESTED_COMMIT" != "$CODE_REF" ]]; then
+            echo "checked out commit does not match code_ref" >&2
+            exit 1
+          fi
+          printf '%s\n' "$TESTED_COMMIT" > "$EVIDENCE_DIRECTORY/tested-commit.txt"
+          printf 'tested_commit=%s\n' "$TESTED_COMMIT" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.9.7'
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Install the shared TypeScript contracts
+        run: bun install --frozen-lockfile --cwd packages/common-contracts
+
+      - name: Sync the text-analysis environment
+        working-directory: services/text_analysis
+        run: uv sync --frozen
+
+      - name: Prepare the selected spaCy model
+        env:
+          TEXT_ANALYSIS_LANGUAGE: ${{ inputs.language }}
+          TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
+        run: >-
+          uv run --project services/text_analysis --no-sync python
+          services/text_analysis/scripts/prepare-selected-model.py
+
+      - name: Run live text-analysis verification
+        env:
+          TEXT_ANALYSIS_LANGUAGE: ${{ inputs.language }}
+          TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
+          TEXT_ANALYSIS_FEATURE_MODE: ${{ inputs.feature_mode }}
+          TEXT_ANALYSIS_CUSTOM_FEATURES: ${{ inputs.custom_features }}
+          TEXT_ANALYSIS_TEXT: ${{ inputs.text }}
+          TEXT_ANALYSIS_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          TEXT_ANALYSIS_TESTED_COMMIT: ${{ steps.checkout.outputs.tested_commit }}
+          TEXT_ANALYSIS_EVIDENCE_DIRECTORY: ${{ runner.temp }}/spacy-tests
+          TEXT_ANALYSIS_RUN_ID: ${{ github.run_id }}
+          TEXT_ANALYSIS_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: >-
+          uv run --project services/text_analysis --no-sync python
+          services/text_analysis/scripts/run-spacy-test.py
+
+      - name: Upload text-analysis evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: spacy-tests-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/spacy-tests/
+          include-hidden-files: false
+          if-no-files-found: error
+          retention-days: 90

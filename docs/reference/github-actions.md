@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -21,6 +21,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |
 | `feed-ingest-plan-test.yml` | `Feed ingest plan test` | none | Run the real planner HTTP API and publish its completed planner and host metadata |
 | `summary-eval-tests.yml` | `summary-eval-tests` | none | Generate with one declared model through FastAPI, stop it, score its saved answer with HHEM and all four UniEval dimensions using an independent reference, and report machine/server outcomes without Git delivery |
+| `spacy-tests.yml` | `spacy-tests` | none | Verify the multilingual text-analysis API at an immutable commit |
 | `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
 | `ai-pipeline-tests.yml` | `Yen-Summarizers` | Manual inference; pull-request saved-event checks | Run independent TypeScript inference and preserve generation/event/report checks |
 
@@ -157,6 +158,27 @@ host-probe checks remain in CI and are not part of this manual workflow.
 The [manual workflow guide](../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures)
 defines the artifact layout and cleanup conditions.
 See [host metrics](host-metrics.md) for the fingerprint and its unavailable reasons.
+
+## Manual text analysis
+
+`spacy-tests.yml` is a read-only manual workflow. Its default-branch definition
+validates a lowercase 40-character `code_ref` before checkout, checks out that
+exact commit with credentials disabled and records both the workflow SHA and
+tested commit.
+
+One stock Ubuntu job uses CPython 3.12, pinned uv and Bun, and the locked
+`packages/common-contracts` toolchain. It syncs the selected commit's
+text-analysis environment, prepares only the selected configured model and
+runs only the service-local preparation and verification scripts. Dispatch
+text and custom feature names reach the runner through environment values,
+never inline shell or command arguments.
+
+The runner owns the API process group, live route and concurrency probes,
+TypeScript trace/event validation, escaped summary and cleanup. Evidence stays
+under the runner temporary directory and uploads as one run/attempt-named
+artifact after ordinary failure, with 90-day retention. Cleanup or upload
+failure fails the 60-minute job. See the
+[manual text-analysis guide](../how-to/run-spacy-tests.md).
 
 ## Pages publication
 

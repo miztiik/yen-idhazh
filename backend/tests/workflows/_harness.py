@@ -75,6 +75,7 @@ EXPECTED_WORKFLOWS: Final = {
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),
     ),
+    "spacy-tests.yml": ("spacy-tests", frozenset({"workflow_dispatch"})),
     "idhazh-gardener.yml": ("Idhazh Gardener", frozenset({"schedule", "workflow_dispatch"})),
 }
 
@@ -162,6 +163,12 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
     ("idhazh-pipeline-tests.yaml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
+    ("spacy-tests.yml", "code_ref"): "^[0-9a-f]{40}$",
+    ("spacy-tests.yml", "language"): DISPATCH_CHOICE,
+    ("spacy-tests.yml", "profile"): DISPATCH_CHOICE,
+    ("spacy-tests.yml", "feature_mode"): DISPATCH_CHOICE,
+    ("spacy-tests.yml", "custom_features"): DISPATCH_READ_BY_NAME,
+    ("spacy-tests.yml", "text"): DISPATCH_READ_BY_NAME,
     # The planner checks both the date pattern and real UTC calendar day before
     # resolving selected judges; the workflow passes it through env, not script source.
     ("llm-council.yml", "date"): DISPATCH_READ_BY_NAME,
@@ -690,6 +697,7 @@ EXPRESSION_VALUES: Final = {
     "github.sha": SUBSTITUTED_SHA,
     "github.run_id": SUBSTITUTED_EXECUTION,
     "github.run_attempt": SUBSTITUTED_ATTEMPT,
+    "runner.temp": "/tmp/runner",
     "matrix.shard": SUBSTITUTED_SHARD,
     "matrix.shards": SUBSTITUTED_SHARDS,
     "matrix.tenant": SUBSTITUTED_TENANT,
