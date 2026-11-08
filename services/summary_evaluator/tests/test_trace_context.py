@@ -233,6 +233,8 @@ def test_native_metadata_values_and_factories_match_the_typescript_authority(
         except ValidationError:
             observed.append({"name": vector["name"], "accepted": False})
         else:
+            assert isinstance(operation.links, tuple)
+            assert all(isinstance(link, OperationLink) for link in operation.links)
             observed.append(
                 {
                     "name": vector["name"],

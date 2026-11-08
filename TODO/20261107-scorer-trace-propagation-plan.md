@@ -205,7 +205,7 @@ flowchart LR
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| H1 | 1 | Accept trace-aware scorer envelopes without changing old records | - | A | IN-FLIGHT | fuzzy-parakeet | - | Trace envelope readers |
+| H1 | 1 | Accept trace-aware scorer envelopes without changing old records | - | A | DONE | fuzzy-parakeet | - | Trace envelope readers |
 | H2 | 2 | Enable actual scorer API and worker trace propagation | 1 | B | PENDING | - | - | - |
 | H3 | 3 | Connect retained callers and process diagnostics to scorer traces | 2 | C | PENDING | - | - | - |
 
@@ -218,6 +218,8 @@ flowchart LR
   - `services/summary_evaluator/tests/test_server_events.py`
   - `services/summary_evaluator/tests/test_trace_context.py` (new)
   - `services/summary_evaluator/tests/check_trace_context.ts` (new)
+  - `services/local_api_host/src/local_api_host/propagate_trace_context.py`
+  - `docs/architecture/local-api-host.md`
   - `docs/architecture/contracts/identity.md`
   - `docs/reference/summary-evaluator-api.md`
   - `docs/concepts/telemetry.md`
