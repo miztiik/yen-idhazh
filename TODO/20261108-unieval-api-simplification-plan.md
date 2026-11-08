@@ -33,7 +33,7 @@
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Optional relevance across API and saved workflow | - | A | DONE | fantastic-happiness | - | Optional UniEval relevance |
-| C2 | 2 | Full-source consistency by default | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Full-source consistency by default | 1 | B | DONE | legendary-train | - | Full-source UniEval defaults |
 | C3 | 3 | Specific model-input and window-budget errors | 2 | C | PENDING | - | - | - |
 
 ## 2 - Row #1 - Optional relevance across API and saved workflow
@@ -168,6 +168,7 @@
   - `tools/summary-eval/summary_eval_tests/test_manual_workflow.py`
   - `tools/summary-eval/summary_eval_tests/test_unieval_workflow.py`
   - `tools/summary-eval/summary_eval_tests/test_unieval_workflow_fixture.py`
+  - `tools/summary-eval/summary_eval_tests/test_workflow_outcomes.py`
   - `tools/summary-eval/summary_eval_tests/test_evaluator_response_binding.py`
   - `.github/workflows/summary-eval-tests.yml`
   - `docs/reference/unieval-api.md`
