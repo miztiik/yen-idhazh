@@ -28,7 +28,7 @@ const json = (body: unknown, carrier = {}) => ({
 });
 
 test("machine startup requires shared supervision without a legacy feed or top-level fallback", async () => {
-  const server = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)));
+  const server = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)), "machine");
   const startup = MachineApiStartupSchema.parse({
     group: "machine", nonce: randomUUID(), state_root: "state", directory: "logs", server,
     run: { run_id: "700", attempt: 3, started_at: "2026-11-04T00:00:00Z", context: createRootContext() },
@@ -43,7 +43,7 @@ test("machine startup requires shared supervision without a legacy feed or top-l
 
 test("machine-only shutdown waits for its real profile worker and asynchronous report", async () => {
   const host = await fingerprintFixture();
-  const settings = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)));
+  const settings = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)), "machine");
   const reservation = Bun.serve({ hostname: settings.hostname, port: 0, fetch: () => new Response() });
   settings.port = reservation.port!;
   await reservation.stop(true);

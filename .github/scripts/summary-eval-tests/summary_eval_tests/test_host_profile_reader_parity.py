@@ -117,7 +117,8 @@ def compare_projection(
         compare_projection(native["items"], reader["items"], native_root, reader_root, path + "[]")
 
 
-def test_consumed_host_fields_match_actual_native_schemas() -> None:
+@pytest.fixture(scope="module")
+def native_host_schemas() -> dict[str, object]:
     result = subprocess.run(
         [required_bun(), "run", "--no-install", str(bridge_path()), "schemas"],
         cwd=REPOSITORY,
@@ -129,15 +130,54 @@ def test_consumed_host_fields_match_actual_native_schemas() -> None:
     assert result.returncode == 0, (
         "The native host schema export failed; prepare its locked dependencies. " + result.stderr
     )
-    native = mapping(json.loads(result.stdout))
+    return mapping(json.loads(result.stdout))
+
+
+def test_consumed_host_fields_match_actual_native_schemas(
+    native_host_schemas: dict[str, object],
+) -> None:
     for name, contract in (
         ("hardware", HardwareRow),
         ("machine", MachineUsage),
         ("server", HonoServerReader),
     ):
-        native_schema = mapping(native[name])
+        native_schema = mapping(native_host_schemas[name])
         reader_schema: dict[str, object] = contract.model_json_schema()
         compare_projection(native_schema, reader_schema, native_schema, reader_schema, name)
+
+
+def test_consumed_machine_identity_vocabularies_match_native_schema(
+    native_host_schemas: dict[str, object],
+) -> None:
+    native = mapping(native_host_schemas["server"])
+    reader: dict[str, object] = HonoServerReader.model_json_schema()
+    native_fields = mapping(resolve(native, native)["properties"])
+    reader_fields = mapping(resolve(reader, reader)["properties"])
+    assert literals(resolve(native_fields["group"], native)) == literals(
+        resolve(reader_fields["group"], reader)
+    )
+    native_variants = variants(resolve(native_fields["identity"], native))
+    reader_variants = variants(resolve(reader_fields["identity"], reader))
+    assert native_variants is not None and reader_variants is not None
+    native_identity = next(
+        resolve(value, native) for value in native_variants
+        if resolve(value, native).get("type") == "object"
+    )
+    reader_identity = next(
+        resolve(value, reader) for value in reader_variants
+        if resolve(value, reader).get("type") == "object"
+    )
+    native_properties = mapping(native_identity["properties"])
+    reader_properties = mapping(reader_identity["properties"])
+    for field in ("event", "group"):
+        assert literals(resolve(native_properties[field], native)) == literals(
+            resolve(reader_properties[field], reader)
+        )
+    native_modules = resolve(native_properties["modules"], native)
+    reader_modules = resolve(reader_properties["modules"], reader)
+    assert literals(resolve(native_modules["items"], native)) == literals(
+        resolve(reader_modules["items"], reader)
+    )
 
 
 @pytest.mark.parametrize("change", ["type", "required", "nullability", "vocabulary"])

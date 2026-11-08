@@ -20,12 +20,12 @@ The listener accepts only configured loopback addresses, `127.0.0.1` or
 backend. Requests with a browser `Origin` header are refused.
 
 The feed workflow uses the same native handlers through the
-[shared pipeline API server](serve-pipeline-apis.md), alongside
-fingerprint and planning routes. The probe package's
+[independent machine API server](serve-pipeline-apis.md), alongside
+fingerprint routes but separate from planning. The probe package's
 `src/api/serve-machine-apis.ts` also assembles the machine-only application for
 summary evaluation without feed source or feed settings. It composes the real
 fingerprint and profiling implementations; shared hosting owns only their
-listener and process lifetime. The single loopback address and supervision
+listener and process lifetime. The explicit machine listener and shared supervision
 waits come from `config/hono-server.json`. The standalone command above retains
 its own listener controls.
 

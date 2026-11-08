@@ -11,6 +11,7 @@ import {
   PlannerRunResponseSchema, readCloudEvent, readFeedIngestEvent, writeTraceContext,
 } from "@idhazh/common-contracts";
 import { ServerEventDataSchema, serverLogFilename } from "@idhazh/serve-pipeline-apis/evidence";
+import { HonoServerConfigSchema } from "@idhazh/serve-pipeline-apis/settings";
 import type { ApiGroup, ServerRun } from "@idhazh/serve-pipeline-apis/evidence";
 import { MachineServerEvidenceSchema as ServerEvidenceSchema } from "@idhazh/host-probes/machine-evidence";
 import { MetadataDeliveryResultSchema } from "../scripts/feed-ingest-plan-delivery-result";
@@ -24,6 +25,10 @@ import { readReportFailureEvidence } from "../scripts/feed-ingest-plan-report-ev
 import { renderWorkflowPlanMarkdown } from "../scripts/feed-ingest-plan-report";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
 import { readArticleFailureDiagnostics } from "../scripts/read-article-failure-diagnostics";
+
+const listeners = HonoServerConfigSchema.parse(await Bun.file(
+  new URL("../../../config/hono-server.json", import.meta.url),
+).json()).listeners;
 
 async function writeEvents(directory: string, run: ServerRun, moduleLine?: string, moduleLines?: string[], group?: ApiGroup) {
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL("./write-feed-api-events.ts", import.meta.url))], {
@@ -103,9 +108,10 @@ test("native delivery and machine events retain their exact producer envelopes t
     expect(readback.filter(event => event.type !== "hono.server")).toEqual(events);
     expect(readback.filter(event => event.type === "hono.server" && event.data.code === "CHILD_DIAGNOSTIC_INVALID"))
       .toHaveLength(0);
-    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(projected.error);
+    expect(await readFile(join(directory, serverLogFilename("delivery", run)), "utf8")).toBe(projected.error);
     const server = ServerEvidenceSchema.parse({
-      version: "2026-11-04", server_name: "hono-server", group: "delivery",
+      version: "2026-11-07", server_name: "hono-server", group: "delivery",
+      listener: listeners.delivery, identity: null, reported_profiles: [],
       run_id: run.run_id, attempt: run.attempt, started_at: run.started_at,
       pid: projected.pid, startup: "not_started", startup_ms: null, shutdown: "stopped", exit_code: 0,
       log_filename: projected.result.filename, log_available: projected.result.available,
@@ -145,7 +151,7 @@ test("native delivery carrier conflicts and unsafe extra fields yield warnings w
     expect(readback.filter(event => event.data.phase === "module_failed")
       .every(event => event.data.code === "CHILD_DIAGNOSTIC_INVALID")).toBe(true);
     expect(projected.error).not.toContain("PRIVATE_");
-    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(projected.error);
+    expect(await readFile(join(directory, serverLogFilename("delivery", run)), "utf8")).toBe(projected.error);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -172,7 +178,7 @@ test("terminal article diagnostics retain their original occurrence and operatio
     const lines = result.error.trim().split("\n").map(line => JSON.parse(line));
     expect(lines[1]).toEqual(event);
     expect(lines).toHaveLength(3);
-    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(result.error);
+    expect(await readFile(join(directory, serverLogFilename("planning", run)), "utf8")).toBe(result.error);
     expect(result.result.available).toBe(true);
     const invalid = await writeEvents(directory, run, JSON.stringify(prepareProgressEvent({
       ...event, data: { ...event.data, details: { ...event.data.details, title: "PRIVATE_TITLE" } },
@@ -180,7 +186,7 @@ test("terminal article diagnostics retain their original occurrence and operatio
     expect(invalid.error).not.toContain("PRIVATE_TITLE");
     expect(invalid.error).toContain("CHILD_DIAGNOSTIC_INVALID");
     const blocked = join(directory, "blocked");
-    await mkdir(join(blocked, serverLogFilename(run)), { recursive: true });
+    await mkdir(join(blocked, serverLogFilename("planning", run)), { recursive: true });
     const unavailable = await writeEvents(blocked, run, JSON.stringify(event));
     expect(unavailable.result.available).toBe(false);
     expect(unavailable.error.trim().split("\n").map(line => JSON.parse(line))).toContainEqual(event);
@@ -214,9 +220,10 @@ test("real parser, empty, quality, missing-title and fetch failures survive stde
       return parsed.success ? [parsed.data] : [];
     });
     expect(readback).toEqual(native);
-    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(mirrored.error);
+    expect(await readFile(join(directory, serverLogFilename("planning", run)), "utf8")).toBe(mirrored.error);
     await writeFile(join(directory, "hono-server-planning.json"), JSON.stringify(ServerEvidenceSchema.parse({
-      version: "2026-11-04", server_name: "hono-server", group: "planning",
+      version: "2026-11-07", server_name: "hono-server", group: "planning",
+      listener: listeners.planning, identity: null, reported_profiles: [],
       run_id: run.run_id, attempt: run.attempt, started_at: run.started_at,
       pid: mirrored.pid, startup: "not_started", startup_ms: null,
       shutdown: "stopped", exit_code: 0, log_filename: mirrored.result.filename, log_available: mirrored.result.available,

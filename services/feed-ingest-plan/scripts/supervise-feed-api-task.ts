@@ -6,13 +6,14 @@ import type { FailureCaptureOptions } from "../src/api/plan-failure";
 import { captureFeedApiFailure } from "./capture-feed-api-failure";
 import { FeedApiStartupSchema } from "./read-feed-api-startup";
 import type { FeedApiStartup } from "./read-feed-api-startup";
+import type { ApiReady } from "@idhazh/serve-pipeline-apis/startup";
 import { readFeedApiReadiness } from "./read-feed-api-readiness";
 import { readFeedApiDiagnostic } from "./read-feed-api-diagnostic";
 
 export function superviseFeedApiTask<T>(input: {
   root: string; startup: FeedApiStartup; capture: FailureCaptureOptions;
   serverEntry?: string; signal?: AbortSignal;
-  request: (origin: string, signal: AbortSignal) => Promise<T>;
+  request: (origin: string, signal: AbortSignal, identity: ApiReady) => Promise<T>;
 }): Promise<T> {
   const startup = FeedApiStartupSchema.parse(input.startup);
   const kind = startup.group === "planning" ? "PLANNER" : "SAFE_PERSIST";

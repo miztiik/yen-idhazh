@@ -19,7 +19,7 @@ import { fixture } from "../../../../services/host-fingerprints/test/fixture";
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { projectMachineProfile, HardwareSchema } from "../machine-results";
-import { MachineServerEvidenceSchema } from "../../../../services/host-probes/src/api/create-machine-server-evidence";
+import { CurrentMachineServerEvidenceSchema } from "../../../../services/host-probes/src/api/create-machine-server-evidence";
 
 function emit(value: unknown): void { process.stdout.write(JSON.stringify(value) + "\n"); }
 
@@ -27,7 +27,7 @@ if (Bun.argv[2] === "schemas") {
   emit({
     hardware: z.toJSONSchema(HostFingerprintRowSchema),
     machine: z.toJSONSchema(TaskProfileSchema),
-    server: z.toJSONSchema(MachineServerEvidenceSchema),
+    server: z.toJSONSchema(CurrentMachineServerEvidenceSchema),
   });
 } else if (Bun.argv[2] === "workflow") {
   emit(Bun.YAML.parse(await Bun.file(new URL(

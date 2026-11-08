@@ -25,28 +25,51 @@ export const WorkflowHostFingerprintSchema = z.strictObject({
 });
 export type WorkflowHostFingerprint = z.infer<typeof WorkflowHostFingerprintSchema>;
 
+function hostRequest(identity: ExecutionIdentity) {
+  const captured = ExecutionIdentitySchema.parse(identity);
+  return FingerprintRequestSchema.parse({
+    date: captured.run_id.slice(0, 10), writer: hostWriter(captured),
+  });
+}
+
+function writeHostEvidence(directory: string, evidence: WorkflowHostFingerprint) {
+  return writeFile(join(directory, "host-fingerprint.json"), JSON.stringify(WorkflowHostFingerprintSchema.parse(evidence)));
+}
+
+function failedHostEvidence(input: { root: string; directory: string }, error: unknown) {
+  const failure = describePlanError(error, input.root);
+  const reason = failure.issues.map(issue => issue.message).join("; ")
+    .replaceAll(input.directory.replaceAll("\\", "/"), "feed-ingest-plan");
+  writeJsonLine({ event: "planner_host_fingerprint_failed", code: failure.code, reason });
+  return UnrecordedSchema.parse({ status: "failed", reason: `Collection failed (${failure.code}): ${reason}` });
+}
+
+export async function retainWorkflowHostFailure(
+  input: { root: string; directory: string; identity: ExecutionIdentity }, error: unknown,
+) {
+  const request = hostRequest(input.identity);
+  const file = Bun.file(join(input.directory, "host-fingerprint.json"));
+  if (await file.exists()) {
+    const previous = WorkflowHostFingerprintSchema.parse(await file.json());
+    if (JSON.stringify(previous.host_request) !== JSON.stringify(request)) {
+      throw new Error("Fingerprint evidence belongs to another invocation");
+    }
+    return;
+  }
+  await writeHostEvidence(input.directory, { host_request: request, host: failedHostEvidence(input, error) });
+}
+
 export async function captureWorkflowHostFingerprint(input: {
   root: string; directory: string; stateRoot: string;
   identity: ExecutionIdentity; registrations: MetadataRegistrations;
-  origin: string; signal?: AbortSignal;
+  origin?: string; signal?: AbortSignal;
 }) {
   const identity = ExecutionIdentitySchema.parse(input.identity);
   const settings = SelectedSettingsSchema.parse(await Bun.file(join(input.root, "config", "idhazh.json")).json());
-  const request = FingerprintRequestSchema.parse({
-    date: identity.run_id.slice(0, 10), writer: hostWriter(identity),
-  });
+  const request = hostRequest(identity);
   const evidence: WorkflowHostFingerprint = {
     host_request: request,
     host: { status: "unavailable", reason: "Host collection has not finished" },
-  };
-  const save = () => writeFile(join(input.directory, "host-fingerprint.json"),
-    JSON.stringify(WorkflowHostFingerprintSchema.parse(evidence)));
-  const fail = (error: unknown) => {
-    const failure = describePlanError(error, input.root);
-    const reason = failure.issues.map(issue => issue.message).join("; ")
-      .replaceAll(input.directory.replaceAll("\\", "/"), "feed-ingest-plan");
-    evidence.host = { status: "failed", reason: `Collection failed (${failure.code}): ${reason}` };
-    writeJsonLine({ event: "planner_host_fingerprint_failed", code: failure.code, reason });
   };
   if (!settings.observability.host_telemetry_enabled || !settings.observability.host_fingerprint) {
     evidence.host = {
@@ -56,15 +79,16 @@ export async function captureWorkflowHostFingerprint(input: {
     };
   } else {
     try {
+      if (input.origin === undefined) throw new Error("Enabled fingerprint capture requires its owned listener");
       const config = await loadFingerprintConfig(join(input.root, "config", "host-fingerprints.json"));
       const result = await requestFingerprint(input.origin, request, config, settings, input.signal);
       if (result.status !== "written") throw new Error("Enabled host instrument did not persist a fingerprint");
       await verifyHostFingerprint(input.stateRoot, result, input.registrations, identity);
       evidence.host = { ...result, status: "recorded" };
     } catch (error) {
-      fail(error);
+      evidence.host = failedHostEvidence(input, error);
     }
   }
-  await save();
+  await writeHostEvidence(input.directory, evidence);
   return WorkflowHostFingerprintSchema.parse(evidence);
 }

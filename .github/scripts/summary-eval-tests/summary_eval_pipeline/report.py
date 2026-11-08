@@ -11,7 +11,7 @@ from summary_evaluator.shared.contracts.worker_exit import WorkerExit
 
 from .contracts import PhaseEvidence as LegacyPhaseEvidence
 from .contracts import PhaseName, PipelineError
-from .host_reader import measurement_complete
+from .host_reader import HonoServerReader, measurement_complete
 from .inputs import ManualInputs
 from .phase_contracts import PhaseResult
 from .report_contracts import PipelineResult
@@ -327,6 +327,7 @@ def render_report(
                 )
         shared_recorded = False
         for server in phase.servers:
+            native = server if isinstance(server, HonoServerReader) else None
             if server.error_code is not None:
                 errors.append(f"- {phase.phase} / {server.server_name}: {cell(server.error_code)}")
             if server.cleanup_error_code is not None:
@@ -338,13 +339,25 @@ def render_report(
                 (
                     phase.phase,
                     "Shared scorer API (legacy 2026-11-05)"
-                    if server.server_name == "fastapi-server" else server.server_name,
-                    "Not recorded" if server.server_name == "fastapi-server" else "-",
+                    if server.server_name == "fastapi-server" else (
+                        f"{native.group} API ({native.listener.hostname}:{native.listener.port})"
+                        if native is not None else server.server_name
+                    ),
+                    (
+                        f"PID {native.pid}" if native.pid is not None else "Not recorded"
+                    ) if native is not None else (
+                        "Not recorded"
+                        if server.server_name in ("fastapi-server", "hono-server") else "-"
+                    ),
                     (
                         phase.api_health.service_instance_id
                         if isinstance(phase, LegacyPhaseEvidence) and phase.api_health is not None
                         else "Not recorded"
-                    ) if server.server_name == "fastapi-server" else "-",
+                    ) if server.server_name == "fastapi-server" else (
+                        str(native.identity.nonce)
+                        if native is not None and native.identity is not None
+                        else "Not recorded" if server.server_name == "hono-server" else "-"
+                    ),
                     server.startup,
                     format_seconds(server.startup_ms),
                     server.shutdown,

@@ -14,7 +14,10 @@ import { PLANNER_API_PATHS, PLANNER_API_PREFIX, PlannerFailureSchema } from "@id
 import { readMachineServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { writeWorkflowReport } from "../scripts/feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
-import { HonoServerSettingsSchema, loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
+import { HonoServerConfigSchema, HonoServerSettingsSchema, loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
+import { superviseFeedApiTask } from "../scripts/supervise-feed-api-task";
+import { relative } from "node:path";
+import { operationMetadata } from "../src/api/operation-context";
 
 function assertReleased(port: number) {
   const probe = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response() });
@@ -78,9 +81,10 @@ test("a real child with missing authored inputs exits before readiness and is re
 test("expired readiness cancels startup and leaves no listener", async () => {
   const fixture = await recordedPlannerProcess();
   try {
-    const server = await loadHonoSettings(fixture.directory);
-    server.supervision.readiness_timeout_ms = 1;
-    await writeFile(join(fixture.directory, "config", "hono-server.json"), JSON.stringify(server));
+    const path = join(fixture.directory, "config", "hono-server.json");
+    const config = HonoServerConfigSchema.parse(await Bun.file(path).json());
+    config.supervision.readiness_timeout_ms = 1;
+    await writeFile(path, JSON.stringify(config));
     await expect(invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
       serverEntry: fixture.serverEntry,
     })).rejects.toThrow("PLANNER_READY_TIMEOUT");
@@ -107,9 +111,12 @@ test("cancellation during real recorded feed work reaps the child and releases i
   const cancellation = new AbortController();
   let pending: ReturnType<typeof invokePlannerHttp> | undefined;
   try {
-    const server = await loadHonoSettings(fixture.directory);
+    const server = await loadHonoSettings(fixture.directory, "planning");
     server.supervision.shutdown_timeout_ms = 200;
-    await writeFile(join(fixture.directory, "config", "hono-server.json"), JSON.stringify(server));
+    const path = join(fixture.directory, "config", "hono-server.json");
+    const config = HonoServerConfigSchema.parse(await Bun.file(path).json());
+    config.supervision = server.supervision;
+    await writeFile(path, JSON.stringify(config));
     pending = invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
       serverEntry: fixture.serverEntry, signal: cancellation.signal,
     });
@@ -137,9 +144,12 @@ test("cancellation during real recorded feed work reaps the child and releases i
 
 test("parent disappearance closes the child pipe and the child bounds its own drain", async () => {
   const fixture = await recordedPlannerProcess([source({ url: "https://news.example/timeout" })]);
-  const server = await loadHonoSettings(fixture.directory);
+  const server = await loadHonoSettings(fixture.directory, "planning");
   server.supervision.shutdown_timeout_ms = 200;
-  await writeFile(join(fixture.directory, "config", "hono-server.json"), JSON.stringify(server));
+  const path = join(fixture.directory, "config", "hono-server.json");
+  const config = HonoServerConfigSchema.parse(await Bun.file(path).json());
+  config.supervision = server.supervision;
+  await writeFile(path, JSON.stringify(config));
   const parent = Bun.spawn([process.execPath, fileURLToPath(new URL("./planner-supervisor-recording.ts", import.meta.url))], {
     cwd: fixture.directory, stdin: new Blob([JSON.stringify(fixture.startup)]), stdout: "ignore", stderr: "inherit",
   });
@@ -200,9 +210,17 @@ test("a real caller failure retains a separate nonzero child cleanup failure", a
     await writeFile(join(fixture.directory, "recorded-cleanup-failure"), "Fail a real post-stop input read");
     let failure: unknown;
     try {
-      await invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
+      await superviseFeedApiTask({
+        root: fixture.directory,
+        startup: {
+          group: "planning", planner: fixture.startup, server: await loadHonoSettings(fixture.directory, "planning"),
+          directory: relative(fixture.directory, fixture.evidence).replaceAll("\\", "/"),
+          run: { run_id: fixture.startup.runtime.run_number, attempt: fixture.startup.runtime.attempt,
+            started_at: fixture.startup.runtime.captured_at, context: operationMetadata(fixture.startup.runtime) },
+        },
+        capture: { operation: "workflow" },
         serverEntry: fixture.serverEntry,
-        beforePlan: async () => {
+        request: async () => {
           await Bun.file(join(fixture.evidence, "missing-caller-input.json")).json();
         },
       });
@@ -224,7 +242,7 @@ test("startup rejects executable runtime members, unknown controls and non-loopb
       ...fixture.startup, runtime: { ...fixture.startup.runtime, clock: () => new Date() },
     }).success).toBe(false);
     expect(HonoServerSettingsSchema.safeParse({
-      ...await loadHonoSettings(fixture.inputs.root), hostname: "0.0.0.0",
+      ...await loadHonoSettings(fixture.inputs.root, "planning"), hostname: "0.0.0.0",
     }).success).toBe(false);
     expect(PlannerStartupSchema.safeParse({ ...fixture.startup, output_root: "C:\\state" }).success).toBe(false);
 });
