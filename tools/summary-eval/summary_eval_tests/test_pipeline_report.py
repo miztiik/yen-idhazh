@@ -20,10 +20,19 @@ from summary_eval_pipeline.inputs import ManualInputs
 from summary_eval_pipeline.phase_contracts import PhaseEvidence, PhaseShutdown
 from summary_eval_pipeline.phase_result import build_evidence
 from summary_eval_pipeline.report import describe_hhem, format_seconds, render_report
-from summary_eval_pipeline.report_contracts import PipelineDocument, PipelineEvidence
-from summary_eval_pipeline.scorer_evidence import EVIDENCE_VERSION
+from summary_eval_pipeline.report_contracts import (
+    REPORT_VERSION,
+    PipelineDocument,
+    PipelineEvidence,
+)
 from summary_eval_pipeline.settings import load_pipeline_settings
-from summary_eval_pipeline.storage import write_result
+from summary_eval_pipeline.storage import (
+    read_generation_result,
+    read_phase_result,
+    read_pipeline_result,
+    read_prepared_result,
+    write_result,
+)
 from summary_evaluator_cases.contract_examples import REPOSITORY, example_result
 from summary_evaluator_cases.service_cases import service_settings
 
@@ -31,6 +40,7 @@ from summary_eval_tests.generation_cases import handoff_case, selected_root
 from summary_eval_tests.scorer_evidence_cases import (
     in_memory_pipeline,
     legacy_pipeline_example,
+    previous_pipeline_example,
     scorer_api_example,
 )
 from summary_eval_tests.test_host_profile_reader_parity import required_bun
@@ -64,7 +74,7 @@ def test_report_discloses_generated_answer_as_literal_text_and_identifies_models
         }
     )
     evidence = PipelineEvidence(
-        version=EVIDENCE_VERSION,
+        version=REPORT_VERSION,
         status="failed",
         prepared=prepared,
         generation=generation,
@@ -82,6 +92,7 @@ def test_report_discloses_generated_answer_as_literal_text_and_identifies_models
     assert "<pre>" + html.escape(answer) + "</pre>" in markdown
     assert inputs.source_text not in markdown and answer not in markdown
     assert "<script>" not in markdown and "<img" not in markdown
+    assert inputs.reference_summary_text is not None
     assert "<pre>" + html.escape(inputs.reference_summary_text) + "</pre>" in markdown
     assert markdown.count("<details>") == markdown.count("</details>") == 3
     assert link in markdown and generation.selected.models_file in markdown
@@ -108,7 +119,7 @@ def test_report_discloses_generated_answer_as_literal_text_and_identifies_models
 def test_report_keeps_the_selected_declaration_when_generation_did_not_start() -> None:
     inputs, prepared, _ = handoff_case()
     evidence = PipelineEvidence(
-        version=EVIDENCE_VERSION,
+        version=REPORT_VERSION,
         status="failed",
         prepared=prepared,
         generation=None,
@@ -135,13 +146,14 @@ def test_missing_invalid_response_is_failed_not_reported_as_work_never_started()
         run=prepared.run,
         phase="evaluation",
         reference_summary_sha256=prepared.reference_summary_sha256,
+        evaluate_relevance=prepared.evaluate_relevance,
         generation_sha256=text_sha256(generation.model_dump_json()),
         evaluation_request_id=result.request_id,
         evaluation_correlation_id=result.correlation_id,
         scorer_apis=(scorer_api_example("hhem", result),),
     )
     evidence = PipelineEvidence(
-        version=EVIDENCE_VERSION,
+        version=REPORT_VERSION,
         status="partial",
         prepared=prepared,
         generation=generation,
@@ -212,6 +224,7 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
         ),
         generation_sha256=receipt_hash,
         reference_summary_sha256=prepared.reference_summary_sha256,
+        evaluate_relevance=prepared.evaluate_relevance,
     )
     evaluation_phase = build_evidence(
         example_result(),
@@ -229,11 +242,12 @@ def test_report_leads_with_work_and_preserves_service_http_and_owning_cleanup_ph
         ),
         generation_sha256=receipt_hash,
         reference_summary_sha256=prepared.reference_summary_sha256,
+        evaluate_relevance=prepared.evaluate_relevance,
         evaluation_request_id=example_result().request_id,
         evaluation_correlation_id=example_result().correlation_id,
     )
     evidence = PipelineEvidence(
-        version=EVIDENCE_VERSION,
+        version=REPORT_VERSION,
         status="partial",
         prepared=prepared,
         generation=generation,
@@ -340,6 +354,7 @@ def test_report_creator_retains_full_artifact_and_never_promotes_failed_work(
             phase="generation" if phase == "generation" else "evaluation",
             generation_sha256=text_sha256(generation.model_dump_json()),
             reference_summary_sha256=prepared.reference_summary_sha256,
+            evaluate_relevance=prepared.evaluate_relevance,
         )
         write_result(directory / name, phase_evidence)
     event = tmp_path / "event.json"
@@ -350,6 +365,7 @@ def test_report_creator_retains_full_artifact_and_never_promotes_failed_work(
                     "source_text": source,
                     "models_file": "",
                     "reference_summary_text": inputs.reference_summary_text,
+                    "evaluate_relevance": inputs.evaluate_relevance,
                 }
             }
         ),
@@ -437,6 +453,83 @@ def test_previous_disabled_health_keeps_independent_api_observations_unchanged()
     payload["health"]["coverage"]["status"] = "ready"
     with pytest.raises(ValidationError):
         ScorerApiEvidence.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize("previous", [False, True])
+def test_named_saved_readers_preserve_versions_bytes_hashes_and_process_evidence(
+    tmp_path: Path, previous: bool,
+) -> None:
+    from summary_eval_pipeline.contracts import PhaseEvidence as LegacyPhaseEvidence
+
+    _, evidence = previous_pipeline_example() if previous else in_memory_pipeline()
+    assert evidence.prepared is not None and evidence.generation is not None
+    assert evidence.evaluation_phase is not None
+    prepared_path = tmp_path / "run.json"
+    receipt_path = tmp_path / "generation.json"
+    phase_path = tmp_path / "evaluation.json"
+    combined_path = tmp_path / "results.json"
+    for path, value in (
+        (prepared_path, evidence.prepared), (receipt_path, evidence.generation),
+        (phase_path, evidence.evaluation_phase), (combined_path, evidence),
+    ):
+        write_result(path, value)
+    before = (
+        prepared_path.read_bytes(), receipt_path.read_bytes(),
+        phase_path.read_bytes(), combined_path.read_bytes(),
+    )
+    prepared = read_prepared_result(prepared_path, 2 << 20)
+    receipt, receipt_hash = read_generation_result(receipt_path, 2 << 20)
+    phase = read_phase_result(phase_path, 2 << 20)
+    combined = read_pipeline_result(combined_path, 2 << 20)
+    assert prepared == evidence.prepared and receipt == evidence.generation
+    assert phase == evidence.evaluation_phase and combined == evidence
+    assert receipt_hash == text_sha256(before[1].decode("utf-8"))
+    assert phase.generation_sha256 == receipt_hash
+    assert not isinstance(phase, LegacyPhaseEvidence)
+    assert not isinstance(evidence.evaluation_phase, LegacyPhaseEvidence)
+    assert phase.scorer_apis == evidence.evaluation_phase.scorer_apis
+    assert before == (
+        prepared_path.read_bytes(), receipt_path.read_bytes(),
+        phase_path.read_bytes(), combined_path.read_bytes(),
+    )
+    if previous:
+        assert prepared.version == receipt.version == "2026-11-05"
+        assert phase.version == combined.version == "2026-11-07"
+        assert phase.unieval is not None and phase.unieval.version == "2026-11-04"
+        assert "evaluate_relevance" not in receipt.model_dump()
+        assert "relevance_skip_reason" not in phase.unieval.model_dump()
+
+
+@pytest.mark.parametrize(
+    "filename", ["run.json", "generation.json", "evaluation.json", "results.json"]
+)
+def test_invalid_current_saved_data_cannot_retry_as_historical(
+    tmp_path: Path, filename: str,
+) -> None:
+    _, evidence = in_memory_pipeline()
+    assert evidence.prepared is not None and evidence.generation is not None
+    assert evidence.evaluation_phase is not None
+    document = {
+        "run.json": evidence.prepared, "generation.json": evidence.generation,
+        "evaluation.json": evidence.evaluation_phase, "results.json": evidence,
+    }[filename]
+    payload = document.model_dump(mode="json")
+    if filename == "results.json":
+        del payload["prepared"]["evaluate_relevance"]
+    else:
+        del payload["evaluate_relevance"]
+    path = tmp_path / filename
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(WorkflowError) as failure:
+        if filename == "run.json":
+            read_prepared_result(path, 2 << 20)
+        elif filename == "generation.json":
+            read_generation_result(path, 2 << 20)
+        elif filename == "evaluation.json":
+            read_phase_result(path, 2 << 20)
+        else:
+            read_pipeline_result(path, 2 << 20)
+    assert failure.value.error.code == "RECEIPT_INVALID"
 
 
 def test_independent_rows_show_actual_identity_exit_and_scorer_scoped_startup_failure() -> None:

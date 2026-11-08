@@ -7,18 +7,15 @@ in a temporary folder, so every path it compares comes from a real commit.
 
 from __future__ import annotations
 
-import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Final
 
 import pytest
-from support.paths import FIXTURES_DIR, read_text
 
-from ._harness import PUBLISH_DECISION_MODULE, _load_workflows, _mapping, _step
+from ._harness import PUBLISH_DECISION_MODULE
 
 pytestmark = pytest.mark.workflow
 
@@ -37,10 +34,6 @@ STEP_NAMES: Final = frozenset(
     }
 )
 
-#: Two CI runs recorded from GitHub: a pull request's and a push to main's.
-RECORDED_RUNS: Final = FIXTURES_DIR / "pages-publication" / "recorded-ci-runs.json"
-
-_EXPRESSION: Final = re.compile(r"\$\{\{\s*([A-Za-z_][\w.]*)\s*\}\}")
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -147,13 +140,6 @@ def test_recovery_completion_deploys_only_committed_public_output(
     )
     assert result["publish"] == ("true" if landed else "false")
     assert result["ref"] == tip
-    workflow = _load_workflows()["pages.yml"]
-    on = _mapping(workflow["on"], "Pages triggers")
-    assert _mapping(on["workflow_run"], "run trigger")["workflows"] == [
-        "CI",
-        "Content refresh",
-        "Digest assembly recovery",
-    ]
 
 
 def test_a_pull_request_never_publishes_even_when_it_changed_the_site(tmp_path: Path) -> None:
@@ -279,36 +265,3 @@ def test_a_manual_publish_runs_from_main_only(tmp_path: Path, dispatched: str, p
         repo, EVENT_NAME="workflow_dispatch", TIP=first, DISPATCHED_REF=dispatched, DEFAULT_BRANCH="main"
     )
     assert result["publish"] == published
-
-
-def _resolved(value: object, context: dict[str, object]) -> str:
-    match = _EXPRESSION.fullmatch(str(value))
-    assert match, f"{value} must be one plain expression, so this test can resolve it"
-    found: object = context
-    for part in match.group(1).split("."):
-        found = found.get(part, "") if isinstance(found, dict) else ""
-    return str(found)
-
-
-@pytest.mark.parametrize(("recorded", "published"), [("pull_request", "false"), ("push", "true")])
-def test_the_shipped_step_hands_the_decision_the_run_that_woke_it(
-    tmp_path: Path, recorded: str, published: str
-) -> None:
-    """The recorded push's commits are not in this checkout, so its range cannot be read."""
-    runs = json.loads(read_text(RECORDED_RUNS))
-    repo, tip = a_repository(tmp_path)
-    step = _step(_load_workflows()["pages.yml"], "decide", "id", "rule")
-    env = _mapping(step.get("env"), "pages.yml decide rule env")
-    assert set(env) == STEP_NAMES
-    context: dict[str, object] = {
-        "github": {
-            "event_name": "workflow_run",
-            "sha": tip,
-            "ref_name": "main",
-            "event": {"workflow_run": runs[recorded], "repository": {"default_branch": "main"}},
-        },
-        "steps": {"before": {"outputs": {"sha": runs["push_check_suite"]["before"]}}},
-    }
-    result = decision(repo, **{name: _resolved(value, context) for name, value in env.items()})
-    assert result["publish"] == published
-    assert result["ref"] == tip

@@ -27,6 +27,7 @@ def command_byte_limit(settings: UnievalSettings, generation: int) -> int:
         source_text="x",
         summary_text="x",
         reference_summary_text="x",
+        evaluate_relevance=False,
         consistency_source_mode=mode,
         request_id=UUID4_EXAMPLE,
         correlation_id=UUID4_EXAMPLE,
@@ -41,6 +42,7 @@ def command_byte_limit(settings: UnievalSettings, generation: int) -> int:
     metadata_bytes = len(example.model_dump_json().encode("utf-8")) - sum(
         len(text.encode("utf-8"))
         for text in (request.source_text, request.summary_text, request.reference_summary_text)
+        if text is not None
     )
     return max(
         len(bootstrap.model_dump_json().encode("utf-8")),

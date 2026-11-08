@@ -1,8 +1,8 @@
 """Which work and independently owned API lifetimes make one phase complete?"""
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Final, Literal, Self
 
-from pydantic import ConfigDict, Field, RootModel, model_validator
+from pydantic import ConfigDict, Field, RootModel, StrictBool, model_validator
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.shared.contracts.base import OutcomeStatus, Sha256, Uuid4
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
@@ -18,7 +18,10 @@ from .contracts import (
 )
 from .contracts import PhaseEvidence as LegacyPhaseEvidence
 from .host_reader import HonoServerReader, MachineUsage, measurement_complete
+from .previous_phase_contracts import PhaseEvidence as PreviousPhaseEvidence
 from .scorer_evidence import EvidenceContract, ScorerApiEvidence
+
+PHASE_VERSION: Final = "2026-11-08"
 
 
 class PhaseShutdown(EvidenceContract):
@@ -70,15 +73,19 @@ def phase_status(
 class PhaseEvidence(EvidenceContract):
     model_config = ConfigDict(
         json_schema_extra={
-            "version": "2026-11-07",
-            "readCompatibility": "read older phases without inventing process identity",
+            "version": PHASE_VERSION,
+            "readCompatibility": "read frozen phases by exact version without inventing selection",
             "changelog": [
+                {
+                    "version": PHASE_VERSION,
+                    "change": "Bind optional reference and relevance selection.",
+                },
                 {"version": "2026-11-07", "change": "Record independent API lifetimes."}
             ],
         }
     )
 
-    version: Literal["2026-11-07"]
+    version: Literal["2026-11-08"]
     run: RunIdentity
     phase: PhaseName
     status: OutcomeStatus
@@ -87,7 +94,8 @@ class PhaseEvidence(EvidenceContract):
     scorer_apis: tuple[ScorerApiEvidence, ...] = ()
     evaluation_request_id: Uuid4 | None = None
     evaluation_correlation_id: Uuid4 | None = None
-    reference_summary_sha256: Sha256
+    reference_summary_sha256: Sha256 | None
+    evaluate_relevance: StrictBool
     hardware: Hardware | None
     machine: MachineUsage | None
     shutdown: PhaseShutdown
@@ -164,12 +172,16 @@ class PhaseEvidence(EvidenceContract):
             raise ValueError("Each model worker must be independently owned")
         if self.unieval is not None and (
             self.unieval.reference_summary_sha256 != self.reference_summary_sha256
+            or (
+                self.unieval.effective_settings is not None
+                and self.unieval.effective_settings.evaluate_relevance != self.evaluate_relevance
+            )
         ):
-            raise ValueError("UniEval must identify the independent reference")
+            raise ValueError("UniEval must retain the exact reference and relevance selection")
         return self
 
 
-PhaseResult = PhaseEvidence | LegacyPhaseEvidence
+PhaseResult = PhaseEvidence | PreviousPhaseEvidence | LegacyPhaseEvidence
 
 
 class PhaseDocument(

@@ -7,8 +7,9 @@ Which inputs, saved results and process outcomes belong to the manual
 `tools/summary-eval/`; evaluator calculations remain native API
 operations.
 
-Workflow tests live in `tools/summary-eval/summary_eval_tests`, beside the
-task programs. Service tests remain under `services/summary_evaluator/tests`;
+Application behavior tests live in `tools/summary-eval/summary_eval_tests`,
+beside the task programs; they do not read GitHub workflow declarations.
+Service tests remain under `services/summary_evaluator/tests`;
 `summary_evaluator_cases` there contains their single shared recording and
 process harness. The service pytest configuration names both suites in one
 locked model-free environment. Tests keep the original fixture provenance.
@@ -38,7 +39,11 @@ own model-free preparation and verification; the
 
 ## One model and one generated answer
 
-The form requires `source_text` and `reference_summary_text`. Optional
+The form requires `source_text`. Optional `reference_summary_text` preserves an
+independent reference; optional boolean `evaluate_relevance` defaults false.
+Only the exactly empty form reference means absent; whitespace-only or null
+references are invalid. The platform reader accepts only native booleans or
+canonical `true`/`false` strings before strict validation. Optional
 `models_file` is a JSON path relative
 to `config/`, such as `models/ornith-1.5-9b-q5km.json`. The form default matches
 `config/idhazh.json.models_file`; blank uses that committed pointer. The existing
@@ -56,7 +61,8 @@ reading that one file; the caller preserves every UTF-8 space and newline.
 The default has no final newline, matching its former inline value.
 This authored settings family is version `2026-11-07`, current-only, without
 an inline-instruction fallback. Resolution yields the existing effective
-generation instruction; saved workflow/result contracts retain `2026-11-05`.
+generation instruction. Current saved preparation, receipt, phase and report
+contracts use `2026-11-08`; machine and scorer-control protocols remain independent.
 Neither scorer reads this workflow configuration.
 
 The file also owns the input, generation-request and generation-response byte
@@ -78,14 +84,17 @@ title and summary fields. The final-answer reader excludes reasoning and
 refuses missing, empty, invalid or unfinished answers, including output stopped
 by its token limit. Both evaluators receive the validated summary field unchanged.
 
-The operator supplies the reference independently for this source before
+When supplied, the reference is independent of generation and captured before
 generation. The bounded event reader preserves its exact UTF-8 bytes and
 preparation saves its SHA-256 identity. Its text goes only to UniEval and the
 escaped report, never generation, HHEM, diagnostic logs or process controls.
-Missing, invalid or oversized reference input blocks preparation; the input
+Missing reference is allowed. Invalid or oversized supplied reference blocks preparation; the input
 object must fit the workflow's `max_input_bytes` allowance before generation. Independence comes from
 input provenance, not string inequality: an independently supplied reference
 may happen to equal the answer. There is no generated or substituted reference.
+Selection remains independent of presence. Every valid supplied reference is
+hashed even when unused; disabled relevance takes precedence over absence.
+Enabled relevance without a reference is skipped with its own reason.
 
 ## Visible tasks and owned children
 
@@ -93,7 +102,7 @@ Table A - Task order
 
 | Id | Task | Work and ownership |
 | --- | --- | --- |
-| A1 | Prepare | Install frozen Bun and Python model dependencies, validate source/reference/model inputs, capture the reference hash, copy named configuration inputs, and acquire pinned native and UniEval assets, tokenizer and sentence resources. |
+| A1 | Prepare | Install frozen Bun and Python model dependencies, validate source/optional-reference/model inputs, capture nullable reference identity and resolved relevance selection, copy named configuration inputs, and acquire pinned native and UniEval assets, tokenizer and sentence resources. |
 | A2 | Generate | Start the native model and host collector, verify native health and loaded identity, call native generation directly, atomically save the answer, then close and reap both. No Python evaluation application starts. |
 | A3 | Evaluate | Re-read the bounded event and generation. Require the current run, attempt, revision, source, answer, model, reference and confirmed native shutdown. Start separate HHEM and UniEval API processes at their committed addresses; score the saved pair independently. |
 | A4 | Report | Read saved results only. Write combined JSON and escaped Markdown; append that exact Markdown to the step summary. Do not start a server or repeat generation. |
@@ -194,9 +203,12 @@ overall completion even when a sibling returns a score.
 ## Same-run files and status
 
 `summary_eval_pipeline/contracts.py` retains the unchanged `2026-11-05`
-generation/preparation contracts and frozen shared-API evidence. Current
-`phase_contracts.py`, `report_contracts.py` and `scorer_evidence.py` declare
-`2026-11-07` phase/report evidence with independent API observations.
+generation/preparation contracts and frozen shared-API evidence.
+`run_contracts.py`, `phase_contracts.py` and `report_contracts.py` declare current
+`2026-11-08` handoffs with relevance selection and nullable reference identity.
+`previous_phase_contracts.py` and `previous_report_contracts.py` preserve
+`2026-11-07` independent evidence and its supported shared phases.
+`scorer_evidence.py` keeps the unchanged `2026-11-07` process observations.
 `scorer_control.py` declares the separate `2026-11-08` private API packets.
 Startup carries the issued launch operation; replies echo that complete value
 and carry the actual service child. The API supplies that service operation to
@@ -217,7 +229,10 @@ behavior. The Bun ready/stopped controls and global workflow version still use
 `2026-11-05` and accept no scorer fields.
 Native scoring, API health and machine-result versions remain independent.
 Bounded report readers dispatch by the evidence's own version; unknown versions
-fail. Legacy evidence remains one shared API, without invented independent PIDs
+fail, and invalid current data cannot retry as historical. Named preparation
+and receipt readers also dispatch exactly by version and retain original bytes
+and receipt hashes. Historical data is read-only, not relabelled or resumed as
+a current execution. Legacy evidence remains one shared API, without invented independent PIDs
 or shutdowns. These files are not committed ledgers or restart stores.
 Saved shared or independent health with the previous disabled coverage slot
 passes the serving package's strict boundary reader before projection to current
@@ -228,10 +243,10 @@ Table B - Named output under `backend/var/summary-eval-tests/`
 
 | Id | File | Meaning |
 | --- | --- | --- |
-| B1 | `run.json` | Platform run/attempt, UTC start, source revision, selected declaration, exact source and independent reference hashes captured before startup; preparation status and safe errors are atomically updated here. |
-| B2 | `generation.json` | The same identities, observed loaded model, source/reference hashes, validated final `summary_text`, answer hash, generation status and safe errors. This is the one answer handoff. |
+| B1 | `run.json` | Platform run/attempt, UTC start, source revision, selected declaration, exact source hash, nullable reference hash and relevance boolean captured before startup; preparation status and safe errors are atomically updated here. |
+| B2 | `generation.json` | The same identities and relevance selection, observed loaded model, source/nullable-reference hashes, validated final `summary_text`, answer hash, generation status and safe errors. This is the one answer handoff. |
 | B3 | `generation-phase.json` | Generation measurements, server observations, cleanup and errors, bound to the exact saved receipt. |
-| B4 | `evaluation.json` | Imported native HHEM and UniEval results, per-scorer API process/application identities, native readiness, request/reference hashes, machine readings and each API/worker shutdown outcome, bound to that receipt. |
+| B4 | `evaluation.json` | Imported native HHEM and UniEval results, per-scorer API process/application identities, native readiness, request/nullable-reference hashes and relevance selection, machine readings and each API/worker shutdown outcome, bound to that receipt. |
 | B5 | `results.json`, `report.md` | Combined native outcome and its escaped human report. |
 | B6 | `logs/` | Append-only per-role CloudEvents JSONL files and current native Hono server evidence. Not Git or site output. |
 
@@ -251,20 +266,24 @@ Generation saves the accepted answer before measurement or shutdown. Evaluation
 checks the exact run, attempt, revision, source and declaration, the receipt's
 answer and reference hashes, both native response request identities and the
 generation phase's receipt hash. Only UniEval receives the reference, unchanged.
+Changing reference presence, exact bytes or relevance selection after preparation
+fails the handoff. A disabled reference never enters model generation or HHEM.
 Failed, stale, absent or
 incomplete generation cannot start a scorer. There is no regeneration,
 supplied-answer fallback or zero score for work not run.
 
 A completed score survives a later measurement, shutdown or report error.
 Original API/process errors and cleanup failures remain separate. Combined
-completion requires completed generation, complete HHEM and all four UniEval
-dimensions, collected hardware,
+completion requires completed generation, complete HHEM and every applicable
+UniEval dimension without errors, collected hardware,
 actual CPU/RAM observations, an uninterrupted explicit profile close and clean
 confirmed shutdown. Any completed evaluator score with a required failure is partial.
 Without a completed score, the workflow is failed. A genuine computed zero is retained. Failed or
 oversized UniEval dimensions remain null with their native errors; completed
 dimensions and the other evaluator's result survive. Error HTTP responses are
 validated and read, not discarded.
+Authorized skipped relevance has a null score, no planned or completed work
+and no relevance error. It does not prevent completion; attempted failures do.
 
 Current `scorer_apis` records contain each scorer's committed listener, actual
 API process and application identity, validated health, observed worker exit,
@@ -336,9 +355,12 @@ fails explicitly while retaining the complete report artifact.
 Validated HTTP results and actual exits establish success, not terminal-log
 matching.
 
-The report leads with actual work and failures before the four named scores,
+The report leads with actual work and failures before the four named score fields,
 their plain meanings, actual consistency mode, source spans, sentence and
-comparison counts, model identities and hardware evidence. The
+comparison counts, model identities and hardware evidence. Its completion
+denominator counts applicable dimensions, not always four. Each row distinguishes
+complete, skipped and failed work. A supplied but unused reference is disclosed
+as unused; its hash alone never implies scoring. The
 [native UniEval reference](unieval-api.md) owns score meanings and limitations.
 There is no overall grade or publication rule. Each failure names its service and any observed HTTP status;
 cleanup errors also name the generation or evaluation phase that owned them.
@@ -356,6 +378,9 @@ text equality. Independent native results retain useful work when a sibling
 fails. Named run-local configuration copies reuse
 the current model and machine readers without editing shared defaults or
 adding another server configuration authority.
+Binding a separate relevance boolean and nullable reference identity preserves
+the same-run guarantee without forcing a reference into ordinary source/summary
+evaluation. Earlier four-score evidence keeps its original validators and meaning.
 
 A named instruction file makes the task independently editable without mixing
 its title/summary answer with the generator API's different product. Resolving

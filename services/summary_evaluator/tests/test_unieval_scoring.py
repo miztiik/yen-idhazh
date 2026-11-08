@@ -6,11 +6,13 @@ import pytest
 from summary_evaluator_cases.unieval_cases import (
     UnievalScenario,
     read_unieval_recordings,
+    recorded_unieval_request,
     running_unieval,
     unieval_settings,
 )
 
 from summary_evaluator.shared.contracts.api_paths import API_HEALTH_PATH
+from summary_evaluator.unieval.contracts.unieval_request import UnievalControls
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
 from summary_evaluator.unieval.unieval_router import UNIEVAL_PATH
@@ -23,7 +25,7 @@ def test_four_scores_use_sentence_maxima_not_one_best_whole_summary_window() -> 
         async with running_unieval() as (client, worker, log):
             response = await client.post(
                 UNIEVAL_PATH,
-                content=case.request.model_dump_json(),
+                content=recorded_unieval_request(case.request).model_dump_json(),
                 headers={"Content-Type": "application/json"},
             )
             result = UnievalResult.model_validate_json(response.content)
@@ -58,10 +60,16 @@ def test_normalization_planning_error_keeps_recorded_independent_dimensions() ->
         )
         _, selected = unieval_settings()
         settings = UnievalSettings.model_validate_json(
-            selected.model_copy(update={"scoring": case.controls}).model_dump_json()
+            selected.model_copy(update={
+                "scoring": UnievalControls(
+                    **case.controls.model_dump(), evaluate_relevance=True
+                ),
+            }).model_dump_json()
         )
         async with running_unieval(settings=settings) as (client, worker, _):
-            response = await client.post(UNIEVAL_PATH, json=case.request.model_dump())
+            response = await client.post(
+                UNIEVAL_PATH, json=recorded_unieval_request(case.request).model_dump()
+            )
             result = UnievalResult.model_validate_json(response.content)
             assert response.status_code == 400 and result.status == "partial"
             assert result.scores.consistency is None
@@ -89,7 +97,9 @@ def test_failed_matrix_cell_keeps_completed_dimensions_but_has_no_consistency(
     async def check() -> None:
         inputs, _, _ = read_unieval_recordings()
         async with running_unieval(scenario=scenario) as (client, _, _):
-            response = await client.post(UNIEVAL_PATH, json=inputs.cases[0].request.model_dump())
+            response = await client.post(
+                UNIEVAL_PATH, json=recorded_unieval_request(inputs.cases[0].request).model_dump()
+            )
             result = UnievalResult.model_validate_json(response.content)
             assert response.status_code == 500 and result.status == "partial"
             assert result.scores.consistency is None

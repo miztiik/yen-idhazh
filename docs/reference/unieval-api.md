@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-11-08
 
-Which requests, results and settings belong to the local four-score API.
+Which requests, applicable scores and settings belong to the local API.
 The [architecture](../architecture/evaluation/unieval-api.md) defines score
 meaning, complete-source processing and process ownership.
 
@@ -10,20 +10,25 @@ meaning, complete-source processing and process ownership.
 
 `services/summary_evaluator/src/summary_evaluator/unieval/contracts/` owns
 the native Pydantic contracts and on-demand schemas. Their version is
-`2026-11-04` for native scoring and recordings. Private worker packets use
-their separate `2026-11-08` version. They are transient, current-only contracts: producers and
-consumers change together, without old-route aliases or historical readers.
+`2026-11-08` for requests, scoring results and effective controls.
+Health, model identity, work and genuine recordings retain `2026-11-04`.
+Private worker packets use their separate `2026-11-08` version and require the
+resolved relevance skip. Live producers and consumers change together.
+Frozen readers preserve original four-score results and recordings without
+rewriting their versions, hashes or meaning; invalid current data never selects
+an older reader. There are no old-route aliases.
 There is no result store, polling API or published-data contract.
 
 The comparison workflow starts separate HHEM and native UniEval APIs.
 Full-source and source-window checks remain part of this native calculation,
-not the retired legacy coverage service. Independent-reference relevance is unchanged.
+not the retired legacy coverage service. Independent-reference relevance keeps
+its meaning but runs only when selected and a reference is supplied.
 
 Table A - Native operations
 
 | Id | Route | Meaning |
 | --- | --- | --- |
-| A1 | `POST /api/2026-11-05/evaluate-summary-unieval` | Perform one synchronous four-dimension evaluation. |
+| A1 | `POST /api/2026-11-05/evaluate-summary-unieval` | Perform one synchronous evaluation of every applicable dimension. |
 | A2 | `GET /api/2026-11-05/get-unieval-health` | Observe this component's actual model, worker, queue and failure state. |
 | A3 | `GET /api/2026-11-05/get-summary-evaluator-health` | This UniEval application's readiness and identity; other scorer slots are disabled. |
 
@@ -44,9 +49,14 @@ Table B - Inputs
 | Id | Field | Contract |
 | --- | --- | --- |
 | B1 | `source_text`, `summary_text` | Required nonblank UTF-8 source and generated summary. |
-| B2 | `reference_summary_text` | Required independent reference summary for the same source. The API does not generate or substitute it. |
+| B2 | `reference_summary_text` | Omittable independent reference for the same source. Supplied null or blank text is invalid; exact UTF-8 bytes are preserved. The API generates or substitutes no reference. |
 | B3 | `consistency_source_mode` | Omittable `all_source_windows` or `full_source_prompt`; omission uses the committed scoring default. |
 | B4 | `request_id`, `correlation_id` | Omittable native UUIDv4 strings; supplied spelling is retained. The API creates its own execution identity. |
+| B5 | `evaluate_relevance` | Omittable strict boolean; omission uses validated `scoring.evaluate_relevance`, default false. Explicit false overrides a configured true. Reference presence never selects work. |
+
+Fluency, coherence and consistency remain required. Disabled relevance takes
+precedence over reference absence. Enabled relevance without a reference is
+also skipped, not a failed evaluation.
 
 `all_source_windows` scores every summary sentence against every planned
 source span, then averages per-sentence maxima. `full_source_prompt` retains
@@ -59,15 +69,16 @@ Table C - Output
 
 | Id | Field | Meaning |
 | --- | --- | --- |
-| C1 | `version`, `status` | Current version and `complete`, `partial` or `failed`. Complete requires all four valid dimensions and no errors. |
+| C1 | `version`, `status` | Current version and `complete`, `partial` or `failed`. Complete requires every applicable numeric score and no errors, including three scores with an authorized relevance skip. |
 | C2 | `execution_id`, `request_id`, `correlation_id` | Actual request identity and nullable unresolved caller identities. |
-| C3 | `reference_summary_sha256` | SHA-256 of exact reference UTF-8 bytes after valid input; null before validation. |
+| C3 | `reference_summary_sha256` | SHA-256 of every valid supplied reference's exact UTF-8 bytes, even when unused. Null when reference is absent or input is not validated; the hash alone is not scoring evidence. |
 | C4 | `model`, `worker` | Configured/loaded immutable asset and tokenizer revisions, reference-code revision, observed runtime versions and the actual owned worker identity. Null until observed. |
-| C5 | `effective_settings` | Resolved mode, prompt allowance, source target/overlap, finite plan limits and effective source budget. |
+| C5 | `effective_settings` | Resolved relevance boolean, mode, prompt allowance, source target/overlap, finite plan limits and effective source budget. |
 | C6 | `scores` | Nullable finite `fluency`, `coherence`, `consistency` and `relevance`, each from zero to one. No scoring-time rounding or overall aggregate. |
 | C7 | `work` | Per-dimension planned/completed counts, summary-sentence count, source-character count and complete source-span plan. Span offsets are zero-based, end-exclusive Unicode code-point offsets into the original source. |
 | C8 | `timings_ms` | Nullable queue-wait, scoring and total durations, in milliseconds measured with a monotonic clock. |
 | C9 | `errors` | Closed safe codes, nullable dimension/index and fixed message. No exception, raw validation value, source passage or model body. |
+| C10 | `relevance_skip_reason` | Required nullable `disabled` or `reference_not_supplied`. A skip has no relevance score, plan, completed comparison or relevance error. Attempted relevance failures and invalid requests have no skip reason. |
 
 A numeric dimension requires every planned comparison and its observed
 model/worker. Partial retains completed dimensions when required work fails.
@@ -82,13 +93,13 @@ and worker deadlines.
 The selected listener/logging snapshot is supplied by the app, not duplicated
 in the evaluator file. The named file is loaded once per invocation.
 
-The authored config family is version `2026-11-07`, current-only: old inline
+The authored config family is version `2026-11-08`, current-only: old inline
 question settings are refused rather than retained as another active default.
 Its `prompt_files` values are safe relative POSIX `.txt` paths under `prompts/`
 in the invocation's `config/` root. The loader reads the four declared files,
 preserves all UTF-8 whitespace, and builds the existing effective `prompts`
 model before placeholder validation, worker handoff or model input hashing.
-The effective settings and all scoring/recording contracts retain `2026-11-04`.
+Effective scoring settings use `2026-11-08`; recordings retain `2026-11-04`.
 No file path is hashed as though it changed question wording.
 
 Table D - Native question files
@@ -128,6 +139,10 @@ The Windows asyncio/socket-guard limitation in the
 [gate guide](../how-to/run-the-gates.md#independent-python-service-contracts)
 still applies to ASGI cases.
 
+The capture/replay boundary reads frozen original requests and controls, then
+selects an explicit current four-score execution. It does not add selection to
+old recordings or change their captured prompt hashes.
+
 ## Safe refusal and failures
 
 Existing native body, media, origin/host, input-read, queue and process
@@ -157,7 +172,7 @@ Table E - Issued worker operations
 | E1 | `bootstrap` | Current private `version`, frozen `settings` and required `operation_metadata` for the actual service-load operation. |
 | E2 | `ready`, `startup_failed` | Current private `version`, the unchanged ready/error fields and that same required load metadata. Readiness still requires the actual owned worker/model identity. |
 | E3 | `evaluate` | Current private `version`, `execution_id`, `generation`, native `request` and required metadata for the actual worker evaluation child of the receiving request. |
-| E4 | `planned` | Current request identity/metadata, `effective_settings`, native `work` and `errors`. |
+| E4 | `planned` | Current request identity/metadata, `effective_settings`, required nullable `relevance_skip_reason`, native `work` and `errors`. |
 | E5 | `prediction` | Current request identity/metadata, `dimension`, `index`, `sentence_index`, `source_index`, `score` and `error`. Existing indexing and reduction are unchanged. |
 | E6 | `finished` | Current request identity and the same issued evaluation metadata; it does not manufacture per-item work. |
 
@@ -165,6 +180,8 @@ The single [native operation contract](../architecture/contracts/identity.md)
 owns metadata fields and codec rules. The parent validates exact operation,
 execution and generation equality before accepting existing plan/progress
 rules; repeated or crossed replies fail the real protocol validator.
+The parent derives selection from its validated request and settings, rejecting
+changed controls, unauthorized skips and any relevance work for a skipped dimension.
 Producers and consumers upgrade together after old owned processes are
 retired, without live old-packet fallback or historical rewriting.
 Complete command metadata and escaping contribute to derived command bounds.

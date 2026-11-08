@@ -26,7 +26,6 @@ from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
 
 from .contracts import (
     WORKFLOW_VERSION,
-    GenerationReceipt,
     Hardware,
     PhaseName,
     PipelineError,
@@ -44,6 +43,7 @@ from .phase_result import build_evidence
 from .phase_services import PhaseServices, ScorerService
 from .phase_services import guard_work as guard_work
 from .preparation import read_prepared
+from .run_contracts import RUN_VERSION, GenerationReceipt, PreparedRun
 from .scorer_control import SCORER_CONTROL_VERSION, ScorerReady, ScorerStartupPacket
 from .services import OwnedService
 from .settings import load_pipeline_settings
@@ -69,6 +69,8 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
         else None
     )
     prepared, selected = read_prepared(root)
+    if not isinstance(prepared, PreparedRun):
+        raise WorkflowError("RECEIPT_INVALID", "input")
     if prepared.status != "complete":
         if prepared.errors:
             error = prepared.errors[0]
@@ -102,6 +104,7 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
             servers=tuple(services.servers),
             generation_sha256=receipt_sha256,
             reference_summary_sha256=prepared.reference_summary_sha256,
+            evaluate_relevance=prepared.evaluate_relevance,
             unieval=outcomes.unieval,
             scorer_apis=tuple(api.evidence() for api in services.scorer_apis.values()),
             evaluation_request_id=requests[0].request_id if requests else None,
@@ -112,9 +115,12 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
         if phase == "evaluation":
             if settings is None or hhem_api is None or unieval_api is None:
                 raise WorkflowError("RECEIPT_INVALID", "input")
-            receipt, receipt_sha256 = read_generation_result(
+            saved_receipt, receipt_sha256 = read_generation_result(
                 directory / "generation.json", pipeline.max_response_bytes
             )
+            if not isinstance(saved_receipt, GenerationReceipt):
+                raise WorkflowError("RECEIPT_INVALID", "input")
+            receipt = saved_receipt
             previous = read_phase_result(
                 directory / "generation-phase.json", pipeline.max_response_bytes
             )
@@ -308,12 +314,13 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
     finally:
         if phase == "generation" and (receipt is None or receipt.status != "complete"):
             receipt = GenerationReceipt(
-                version=WORKFLOW_VERSION,
+                version=RUN_VERSION,
                 run=prepared.run,
                 selected=prepared.selected,
                 loaded=services.native.loaded if services.native is not None else None,
                 source_sha256=prepared.source_sha256,
                 reference_summary_sha256=prepared.reference_summary_sha256,
+                evaluate_relevance=prepared.evaluate_relevance,
                 summary_sha256=None,
                 summary_text=None,
                 status="failed",

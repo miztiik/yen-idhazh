@@ -21,7 +21,7 @@ class UnievalWorkerContract(NativeContract):
             "changelog": [
                 {
                     "version": UNIEVAL_WORKER_VERSION,
-                    "change": "Require actual operations on load, evaluation and progress packets.",
+                    "change": "Bind actual operations and optional relevance selection.",
                 }
             ],
         }

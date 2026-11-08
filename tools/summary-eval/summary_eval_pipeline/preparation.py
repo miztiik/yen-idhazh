@@ -16,12 +16,13 @@ from summary_evaluator.unieval.prepare_unieval_resources import prepare_unieval_
 from utilities.model_runtime import download_model_files, install_runtime, verify_model_files
 
 from .artifact_paths import write_artifact_paths
-from .contracts import WORKFLOW_VERSION, PreparedRun, RunIdentity, text_sha256
+from .contracts import RunIdentity, text_sha256
 from .failures import WorkflowError
 from .inputs import read_manual_inputs
 from .model_selection import SelectedModel, select_model, stage_configuration
+from .run_contracts import RUN_VERSION, PreparedResult, PreparedRun
 from .settings import load_pipeline_settings
-from .storage import read_result, write_result
+from .storage import read_prepared_result, write_result
 
 
 def prepare_run(root: Path) -> tuple[PreparedRun, SelectedModel]:
@@ -33,7 +34,7 @@ def prepare_run(root: Path) -> tuple[PreparedRun, SelectedModel]:
         or subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     )
     prepared = PreparedRun(
-        version=WORKFLOW_VERSION,
+        version=RUN_VERSION,
         run=RunIdentity(
             run_id=os.environ.get("GITHUB_RUN_ID") or str(UUID(create_execution_id()).int),
             attempt=int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")),
@@ -42,7 +43,8 @@ def prepare_run(root: Path) -> tuple[PreparedRun, SelectedModel]:
         ),
         selected=selected.identity,
         source_sha256=text_sha256(inputs.source_text),
-        reference_summary_sha256=text_sha256(inputs.reference_summary_text),
+        reference_summary_sha256=inputs.reference_summary_sha256,
+        evaluate_relevance=inputs.evaluate_relevance,
         status="pending",
         errors=(),
     )
@@ -51,10 +53,10 @@ def prepare_run(root: Path) -> tuple[PreparedRun, SelectedModel]:
     return prepared, selected
 
 
-def read_prepared(root: Path) -> tuple[PreparedRun, SelectedModel]:
+def read_prepared(root: Path) -> tuple[PreparedResult, SelectedModel]:
     pipeline = load_pipeline_settings(root)
-    prepared = read_result(
-        root / pipeline.output_directory / "run.json", PreparedRun, pipeline.max_response_bytes
+    prepared = read_prepared_result(
+        root / pipeline.output_directory / "run.json", pipeline.max_response_bytes
     )
     inputs = read_manual_inputs(pipeline)
     selected = select_model(root, inputs.models_file)
@@ -67,7 +69,11 @@ def read_prepared(root: Path) -> tuple[PreparedRun, SelectedModel]:
         expected != (prepared.run.run_id, prepared.run.attempt, prepared.run.git_sha)
         or selected.identity != prepared.selected
         or text_sha256(inputs.source_text) != prepared.source_sha256
-        or text_sha256(inputs.reference_summary_text) != prepared.reference_summary_sha256
+        or inputs.reference_summary_sha256 != prepared.reference_summary_sha256
+        or (
+            isinstance(prepared, PreparedRun)
+            and inputs.evaluate_relevance != prepared.evaluate_relevance
+        )
     ):
         raise WorkflowError("RECEIPT_INVALID", "input")
     return prepared, selected

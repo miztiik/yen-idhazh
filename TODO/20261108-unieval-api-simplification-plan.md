@@ -32,7 +32,7 @@
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Optional relevance across API and saved workflow | - | A | PENDING | - | - | - |
+| C1 | 1 | Optional relevance across API and saved workflow | - | A | DONE | fantastic-happiness | - | Optional UniEval relevance |
 | C2 | 2 | Full-source consistency by default | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Specific model-input and window-budget errors | 2 | C | PENDING | - | - | - |
 

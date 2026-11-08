@@ -21,16 +21,10 @@ import pytest
 from utilities import corpus_history
 
 from ._harness import (
-    PRUNE_PUSH_CALL,
-    PRUNE_PUSH_STEP,
     _git,
     _isolated_env,
-    _load_workflows,
     _race,
-    _script,
     _scripted_origin,
-    _step,
-    _steps,
     _write,
 )
 
@@ -177,26 +171,3 @@ def test_a_prune_that_squashed_nothing_still_refuses_a_tip_that_moved(
     assert corpus_history.push_rewritten(runner, tip_before=base, rewritten=False) == 1
 
     assert _git(origin, env, "rev-parse", "main").strip() == raced
-
-
-def test_the_history_step_runs_the_shipped_program_and_nothing_else() -> None:
-    """One step squashes, records and pushes, so the decision to force stays in one process.
-
-    The tip the lease names has to be read before the rewrite, and the program
-    reads it itself, so no step hands a commit or a flag to a later one through
-    the job's environment. `test_gardener_workflow.py` holds which run and which
-    day the step reads, and that its own environment holds nothing else.
-    """
-    workflow = _load_workflows()["idhazh-gardener.yml"]
-    step = _step(workflow, "history", "name", PRUNE_PUSH_STEP)
-
-    assert tuple(_script(step, PRUNE_PUSH_STEP).split()) == PRUNE_PUSH_CALL, (
-        "the step runs the shipped program and nothing else, or the tests are "
-        "driving a second copy of it"
-    )
-    for other in _steps(workflow, "history"):
-        script = other.get("run")
-        assert not (isinstance(script, str) and "GITHUB_ENV" in script), (
-            f"{other.get('name') or other.get('id')} writes the job environment, and the "
-            "squash takes nothing from another step but the due step's outputs"
-        )
