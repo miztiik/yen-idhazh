@@ -23,6 +23,12 @@ The API writes no result, event or source file. Results leave through HTTP and
 validated CloudEvents leave through stderr. The manual workflow may redirect
 those streams into its runner-owned evidence directory.
 
+The workflow owns that persisted evidence contract. Its receipt records only
+the immutable run identity, conclusion and semantic cleanup. The exact
+validated request, ready health response and selected analysis response stay in
+three separate native payload files. Trace correlation and lifecycle metadata
+stay only in the bounded `events.jsonl` stream.
+
 ## Admission precedes executor submission
 
 The parent process owns one event-loop `CapacityLimiter` and one

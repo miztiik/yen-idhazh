@@ -21,7 +21,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |
 | `feed-ingest-plan-test.yml` | `Feed ingest plan test` | none | Run the real planner HTTP API and publish its completed planner and host metadata |
 | `summary-eval-tests.yml` | `summary-eval-tests` | none | Generate natively with one declared model, stop it, score the saved answer through independent HHEM and UniEval APIs using an independent reference, and report machine/server outcomes without Git delivery |
-| `spacy-tests.yml` | `spacy-tests` | none | Verify the multilingual text-analysis API at an immutable commit |
+| `spacy-tests.yml` | `Text-Analysis-spaCy-tests` | none | Verify the multilingual text-analysis API at an immutable commit |
 | `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
 | `ai-pipeline-tests.yml` | `Yen-Summarizers` | Manual inference; pull-request saved-event checks | Run independent TypeScript inference and preserve generation/event/report checks |
 
@@ -163,8 +163,7 @@ See [host metrics](host-metrics.md) for the fingerprint and its unavailable reas
 
 `spacy-tests.yml` is a read-only manual workflow. The dispatch selects a branch
 or tag; GitHub resolves it to `github.sha`. The workflow checks out that exact
-commit with credentials disabled and records the selected ref, selected SHA,
-workflow SHA and tested commit.
+commit with credentials disabled and verifies the checkout before execution.
 
 One stock Ubuntu job uses CPython 3.12, pinned uv and Bun, and the locked
 `packages/common-contracts` toolchain. It syncs the selected commit's
@@ -177,17 +176,20 @@ argument.
 The runner owns the API process group, live route and concurrency probes,
 TypeScript trace/event validation, escaped summary and cleanup. Evidence stays
 under the runner temporary directory and uploads as one run/attempt-named
-artifact after ordinary failure, with 90-day retention. Cleanup or upload
+artifact after ordinary failure, with 90-day retention. Upload names only the
+six files declared by the verification contract rather than the directory.
+The minimal receipt carries run identity and semantic cleanup; the native
+request, health and analysis payloads remain separate. Cleanup or upload
 failure fails the 60-minute job. See the
 [manual text-analysis guide](../how-to/run-spacy-tests.md).
 
-The one verification step deliberately keeps startup, readiness, HTTP exercise
+The one verification step deliberately keeps startup, readiness, HTTP verification
 and cleanup under `run-spacy-test.py`, which retains the exact child process and
 process group through one `try/finally`. Its fixed workflow log groups expose
 those phases. `probe-text-analysis.ts` receives only `base_url` and remains an
-independent HTTP verifier. The runner writes the original server stderr bytes
-to `events.jsonl` while mirroring only events accepted by the native strict
-text-analysis CloudEvents contract to live workflow stderr. Production
+independent HTTP verifier. The runner streams records within the configured
+event byte limit, writes canonical validated events to `events.jsonl` and
+mirrors those same bytes to live workflow stderr. Production
 pipelines use their own supervisor with the health and analyze routes rather
 than this verification runner.
 

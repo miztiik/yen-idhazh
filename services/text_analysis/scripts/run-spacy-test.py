@@ -1,6 +1,5 @@
 """Own one live text-analysis process group and write bounded workflow evidence."""
 
-import html
 import json
 import os
 import signal
@@ -8,13 +7,30 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, BinaryIO, Literal, cast
+from typing import Any, BinaryIO
 
 import httpx
+from declare_spacy_verification import (
+    CleanupOutcome,
+    FailedVerificationReport,
+    FailureCode,
+    LiveCheckEvidence,
+    NativeEvidence,
+    SuccessfulVerificationReport,
+    SummaryLimitExceededError,
+    VerificationReport,
+    classify_cleanup,
+    render_oversized_failure_summary,
+    render_summary,
+    validate_live_checks,
+    validate_native_evidence,
+    write_bytes_atomic,
+    write_json_atomic,
+)
 from text_analysis.declare_api_contracts import HEALTH_PATH, TextAnalysisEvent
 from text_analysis.declare_service_settings import ServiceSettings
 from text_analysis.load_service_settings import load_service_settings
@@ -23,19 +39,21 @@ ROOT = Path(__file__).resolve().parents[3]
 PROBE_PATH = "./services/text_analysis/scripts/probe-text-analysis.ts"
 READINESS_POLL_SECONDS = 0.1
 OWNER_EXIT_GRACE_SECONDS = 5
+EXPECTED_SERVICE_EVENT_COUNT = 3
 
 
 class VerificationError(RuntimeError):
     """Keep workflow failure reports fixed and free of request content."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: FailureCode) -> None:
         super().__init__(code)
         self.code = code
 
 
 @dataclass(slots=True)
 class _EventDrainResult:
-    failure_code: str | None = None
+    failure_code: FailureCode | None = None
+    record_count: int = 0
     artifact_bytes: int = 0
     mirrored_bytes: int = 0
     completed: bool = False
@@ -77,24 +95,27 @@ def _write_all(destination: BinaryIO, content: bytes) -> None:
         offset += written
 
 
-def _mirror_valid_event(
+def _capture_valid_event(
     record: bytes,
+    artifact: BinaryIO,
     mirror: BinaryIO,
+    max_event_records: int,
     result: _EventDrainResult,
 ) -> None:
     try:
         record.decode("utf-8")
         TextAnalysisEvent.model_validate_json(record)
-    except (UnicodeDecodeError, ValueError):
-        _mark_event_capture_failed(result)
-        return
-    try:
+        if result.record_count >= max_event_records:
+            raise ValueError("event record count exceeded its bound")
+        _write_all(artifact, record)
+        artifact.flush()
+        result.record_count += 1
+        result.artifact_bytes += len(record)
         _write_all(mirror, record)
         mirror.flush()
+        result.mirrored_bytes += len(record)
     except (OSError, UnicodeError, ValueError):
         _mark_event_capture_failed(result)
-        return
-    result.mirrored_bytes += len(record)
 
 
 def _drain_events(
@@ -102,6 +123,7 @@ def _drain_events(
     artifact: BinaryIO,
     mirror: BinaryIO,
     max_event_bytes: int,
+    max_event_records: int,
     result: _EventDrainResult,
 ) -> None:
     discarding_oversized_record = False
@@ -114,27 +136,21 @@ def _drain_events(
                 break
             if not fragment:
                 break
-
-            artifact_written = False
-            try:
-                _write_all(artifact, fragment)
-                result.artifact_bytes += len(fragment)
-                artifact_written = True
-            except (OSError, ValueError):
-                _mark_event_capture_failed(result)
-
             if discarding_oversized_record:
                 if fragment.endswith(b"\n"):
                     discarding_oversized_record = False
                 continue
-
             if len(fragment) > max_event_bytes or not fragment.endswith(b"\n"):
                 _mark_event_capture_failed(result)
                 discarding_oversized_record = not fragment.endswith(b"\n")
                 continue
-
-            if artifact_written:
-                _mirror_valid_event(fragment, mirror, result)
+            _capture_valid_event(
+                fragment,
+                artifact,
+                mirror,
+                max_event_records,
+                result,
+            )
     finally:
         try:
             source.close()
@@ -212,6 +228,7 @@ def _workflow_inputs() -> dict[str, str]:
 
 def _run_probe(
     payload: dict[str, Any],
+    failure_code: FailureCode,
     *,
     echo_failure: bool = True,
 ) -> dict[str, Any]:
@@ -226,13 +243,13 @@ def _run_probe(
     if completed.returncode != 0:
         if echo_failure and completed.stderr:
             sys.stderr.write(completed.stderr)
-        raise VerificationError("LIVE_PROBE_FAILED")
+        raise VerificationError(failure_code)
     try:
         result = json.loads(completed.stdout)
     except json.JSONDecodeError:
-        raise VerificationError("LIVE_PROBE_FAILED") from None
+        raise VerificationError(failure_code) from None
     if not isinstance(result, dict):
-        raise VerificationError("LIVE_PROBE_FAILED")
+        raise VerificationError(failure_code)
     return result
 
 
@@ -242,8 +259,7 @@ def _wait_for_readiness(
 ) -> None:
     base_url = f"http://{settings.listener.host}:{settings.listener.port}"
     deadline = (
-        time.monotonic()
-        + settings.listener.shutdown_timeout_ms / 1000 * 4
+        time.monotonic() + settings.listener.shutdown_timeout_ms / 1000 * 4
     )
     timeout = settings.listener.body_read_timeout_ms / 1000
     with httpx.Client(timeout=timeout, trust_env=False) as client:
@@ -271,13 +287,24 @@ def _wait_for_readiness(
 
 
 def _stop_owned_process(
-    process: subprocess.Popen[bytes],
+    process: subprocess.Popen[bytes] | None,
     shutdown_timeout_ms: int,
-) -> dict[str, Any]:
-    forced = False
+) -> CleanupOutcome:
+    if process is None:
+        return classify_cleanup(
+            process_started=False,
+            terminate_sent=False,
+            kill_sent=False,
+            exit_confirmed=False,
+            exit_code=None,
+        )
+
+    terminate_sent = False
+    kill_sent = False
     if process.poll() is None:
         try:
             os.killpg(process.pid, signal.SIGTERM)
+            terminate_sent = True
         except ProcessLookupError:
             pass
         try:
@@ -285,122 +312,125 @@ def _stop_owned_process(
                 timeout=shutdown_timeout_ms / 1000 + OWNER_EXIT_GRACE_SECONDS
             )
         except subprocess.TimeoutExpired:
-            forced = True
             try:
                 os.killpg(process.pid, signal.SIGKILL)
+                kill_sent = True
             except ProcessLookupError:
                 pass
             try:
                 process.wait(timeout=OWNER_EXIT_GRACE_SECONDS)
             except subprocess.TimeoutExpired:
-                raise VerificationError("PROCESS_GROUP_NOT_STOPPED") from None
+                return classify_cleanup(
+                    process_started=True,
+                    terminate_sent=terminate_sent,
+                    kill_sent=kill_sent,
+                    exit_confirmed=False,
+                    exit_code=None,
+                )
     exit_code = process.poll()
-    if exit_code is None:
-        raise VerificationError("PROCESS_GROUP_NOT_STOPPED")
-    return {
-        "confirmed": True,
-        "forced": forced,
-        "exit_code": exit_code,
-    }
-
-
-def _escaped_summary(
-    conclusion: Literal["success", "failure"],
-    inputs: dict[str, str],
-    selected_ref: str,
-    tested_commit: str,
-    workflow_sha: str,
-) -> str:
-    values = {
-        "Conclusion": conclusion,
-        "Selected ref": selected_ref,
-        "Tested commit": tested_commit,
-        "Workflow revision": workflow_sha,
-        "Language": inputs["language"],
-        "Profile": inputs["profile"],
-        "Feature mode": inputs["feature_mode"],
-    }
-    lines = ["## Text-analysis verification", ""]
-    lines.extend(
-        f"- **{label}:** {html.escape(value, quote=True)}"
-        for label, value in values.items()
+    return classify_cleanup(
+        process_started=True,
+        terminate_sent=terminate_sent,
+        kill_sent=kill_sent,
+        exit_confirmed=exit_code is not None,
+        exit_code=exit_code,
     )
-    lines.append("")
-    lines.append(
-        "Machine-readable results and validated events are in the uploaded artifact."
+
+
+def _expected_event_record_bound(verification: Mapping[str, object]) -> int:
+    expected_events = verification.get("expected_events")
+    if not isinstance(expected_events, list):
+        raise VerificationError("EVENT_VALIDATION_FAILED")
+    return len(expected_events) + EXPECTED_SERVICE_EVENT_COUNT
+
+
+def _event_record_bound(language: str) -> int:
+    request_events = 6 + (1 if language == "zh" else 0)
+    return request_events + EXPECTED_SERVICE_EVENT_COUNT
+
+
+def _merged_live_checks(
+    verification: Mapping[str, object],
+    event_validation: Mapping[str, object],
+) -> LiveCheckEvidence:
+    live_checks = verification.get("live_checks")
+    if not isinstance(live_checks, dict):
+        raise VerificationError("LIVE_PROBE_FAILED")
+    return validate_live_checks(
+        {
+            **live_checks,
+            "warm_model_load_ms": event_validation.get("warm_model_load_ms"),
+        }
     )
-    return "\n".join(lines) + "\n"
 
 
-def _write_report(path: Path, report: dict[str, Any]) -> None:
-    path.write_text(
-        json.dumps(
-            report,
-            ensure_ascii=True,
-            indent=2,
-            sort_keys=True,
+def _build_report(
+    *,
+    failure_code: FailureCode | None,
+    commit_sha: str,
+    run_id: str,
+    run_attempt: int,
+    cleanup: CleanupOutcome,
+) -> VerificationReport:
+    if failure_code is None and cleanup.status == "confirmed":
+        return SuccessfulVerificationReport(
+            commit_sha=commit_sha,
+            run_id=run_id,
+            run_attempt=run_attempt,
         )
-        + "\n",
-        encoding="utf-8",
-        newline="\n",
+    return FailedVerificationReport(
+        commit_sha=commit_sha,
+        run_id=run_id,
+        run_attempt=run_attempt,
+        cleanup=cleanup.status,
+        failure_code=failure_code or cleanup.failure_code or "VERIFICATION_FAILED",
     )
 
 
 def main() -> None:
     inputs = _workflow_inputs()
-    workflow_sha = _required_environment("TEXT_ANALYSIS_WORKFLOW_SHA")
-    selected_ref = _required_environment("TEXT_ANALYSIS_SELECTED_REF")
-    selected_sha = _required_environment("TEXT_ANALYSIS_SELECTED_SHA")
-    tested_commit = _required_environment("TEXT_ANALYSIS_TESTED_COMMIT")
+    commit_sha = _required_environment("TEXT_ANALYSIS_COMMIT_SHA")
     run_id = _required_environment("TEXT_ANALYSIS_RUN_ID")
-    run_attempt = _required_environment("TEXT_ANALYSIS_RUN_ATTEMPT")
+    run_attempt_text = _required_environment("TEXT_ANALYSIS_RUN_ATTEMPT")
+    server_url = _required_environment("GITHUB_SERVER_URL")
+    repository = _required_environment("GITHUB_REPOSITORY")
     evidence_directory = Path(
         _required_environment("TEXT_ANALYSIS_EVIDENCE_DIRECTORY")
     ).resolve()
     summary_path = Path(_required_environment("GITHUB_STEP_SUMMARY")).resolve()
+    try:
+        run_attempt = int(run_attempt_text)
+    except ValueError:
+        raise VerificationError("INVALID_WORKFLOW_INPUT") from None
+    if (
+        len(commit_sha) != 40
+        or any(character not in "0123456789abcdef" for character in commit_sha)
+    ):
+        raise VerificationError("TESTED_COMMIT_MISMATCH")
+
     evidence_directory.mkdir(parents=True, exist_ok=True)
     events_path = evidence_directory / "events.jsonl"
     report_path = evidence_directory / "report.json"
-    job_summary_path = evidence_directory / "job-summary.md"
+    request_path = evidence_directory / "analysis-request.json"
+    health_path = evidence_directory / "health-response.json"
+    analysis_path = evidence_directory / "analysis-response.json"
+    report_markdown_path = evidence_directory / "report.md"
     settings = load_service_settings(ROOT)
-    if (
-        len(selected_sha) != 40
-        or any(character not in "0123456789abcdef" for character in selected_sha)
-        or selected_sha != tested_commit
-    ):
-        raise VerificationError("TESTED_COMMIT_MISMATCH")
     base_url = f"http://{settings.listener.host}:{settings.listener.port}"
-    report: dict[str, Any] = {
-        "version": "2026-11-07",
-        "conclusion": "failure",
-        "workflow_sha": workflow_sha,
-        "selected_ref": selected_ref,
-        "selected_sha": selected_sha,
-        "tested_commit": tested_commit,
-        "run_id": run_id,
-        "run_attempt": run_attempt,
-        "inputs": {
-            "language": inputs["language"],
-            "profile": inputs["profile"],
-            "feature_mode": inputs["feature_mode"],
-            "custom_features": inputs["custom_features"],
-            "text_codepoint_count": len(inputs["text"]),
-            "text_utf8_byte_count": len(inputs["text"].encode("utf-8")),
-        },
-    }
-    failure_code: str | None = None
-    exercise_result: dict[str, Any] = {
-        "expected_events": [],
-        "no_event_traceparents": [],
-        "evidence_texts": [],
-    }
-    cleanup: dict[str, Any] | None = None
+    event_record_bound = _event_record_bound(inputs["language"])
 
-    events = events_path.open("wb")
+    failure_code: FailureCode | None = None
+    verification_state: dict[str, Any] | None = None
+    event_validation: dict[str, Any] | None = None
+    native: NativeEvidence | None = None
+    checks: LiveCheckEvidence | None = None
+    cleanup = CleanupOutcome(status="not_started")
     process: subprocess.Popen[bytes] | None = None
     drain: threading.Thread | None = None
     drain_completed = False
     drain_result = _EventDrainResult()
+    events = events_path.open("wb")
+
     try:
         try:
             with _workflow_group("Start server"):
@@ -433,6 +463,7 @@ def main() -> None:
                         events,
                         mirror,
                         settings.logging.max_event_bytes,
+                        event_record_bound,
                         drain_result,
                     ),
                     name="text-analysis-event-drain",
@@ -446,15 +477,22 @@ def main() -> None:
                 drain = event_drain
             with _workflow_group("Wait for readiness"):
                 _wait_for_readiness(process, settings)
-            with _workflow_group("Exercise HTTP API"):
-                exercise_result = _run_probe(
+            with _workflow_group("Verify HTTP API"):
+                verification_state = _run_probe(
                     {
-                        "mode": "exercise",
+                        "mode": "verify_api",
                         "base_url": base_url,
                         **inputs,
-                    }
+                    },
+                    "LIVE_PROBE_FAILED",
                 )
-                report["exercise"] = exercise_result
+                try:
+                    native = validate_native_evidence(verification_state)
+                    write_json_atomic(request_path, native.request)
+                    write_json_atomic(health_path, native.health)
+                    write_json_atomic(analysis_path, native.analysis)
+                except (KeyError, OSError, TypeError, ValueError):
+                    raise VerificationError("NATIVE_EVIDENCE_INVALID") from None
         except VerificationError as failure:
             failure_code = failure.code
         except OSError:
@@ -463,20 +501,21 @@ def main() -> None:
             failure_code = "VERIFICATION_FAILED"
         finally:
             with _workflow_group("Stop server"):
-                if process is not None:
-                    try:
-                        cleanup = _stop_owned_process(
-                            process,
-                            settings.listener.shutdown_timeout_ms,
-                        )
-                    except (OSError, VerificationError):
-                        cleanup = {
-                            "confirmed": False,
-                            "forced": True,
-                            "exit_code": process.poll(),
-                        }
-                        failure_code = failure_code or "PROCESS_GROUP_NOT_STOPPED"
-                if drain is not None and process is not None and process.stderr is not None:
+                try:
+                    cleanup = _stop_owned_process(
+                        process,
+                        settings.listener.shutdown_timeout_ms,
+                    )
+                except OSError:
+                    cleanup = CleanupOutcome(
+                        status="unconfirmed",
+                        failure_code="PROCESS_GROUP_NOT_STOPPED",
+                    )
+                if (
+                    drain is not None
+                    and process is not None
+                    and process.stderr is not None
+                ):
                     drain_completed = _join_event_drain(
                         drain,
                         settings.listener.shutdown_timeout_ms / 1000
@@ -504,62 +543,116 @@ def main() -> None:
             except (OSError, ValueError):
                 _mark_event_capture_failed(drain_result)
 
-    report["cleanup"] = cleanup
-    event_validation: dict[str, Any] | None = None
     with _workflow_group("Validate evidence"):
         capture_failed = drain_result.failure_code is not None
         if drain is not None and not drain_completed:
             _mark_event_capture_failed(drain_result)
-            failure_code = "EVENT_CAPTURE_FAILED"
             capture_failed = True
-        elif drain_result.failure_code is not None:
+        if drain_result.failure_code is not None:
             failure_code = "EVENT_CAPTURE_FAILED"
-        elif failure_code is None and (
-            drain_result.artifact_bytes == 0
-            or drain_result.mirrored_bytes != drain_result.artifact_bytes
+        elif (
+            drain_completed
+            and (
+                drain_result.artifact_bytes == 0
+                or drain_result.mirrored_bytes != drain_result.artifact_bytes
+            )
         ):
             _mark_event_capture_failed(drain_result)
             failure_code = "EVENT_CAPTURE_FAILED"
             capture_failed = True
-        if drain_completed and drain_result.artifact_closed:
+
+        if (
+            verification_state is not None
+            and drain_completed
+            and drain_result.artifact_closed
+        ):
             try:
+                expected_record_bound = _expected_event_record_bound(
+                    verification_state
+                )
+                if expected_record_bound != event_record_bound:
+                    raise VerificationError("EVENT_VALIDATION_FAILED")
                 event_validation = _run_probe(
                     {
                         "mode": "validate_events",
                         "events_path": str(events_path),
                         "text": inputs["text"],
-                        "exercise": exercise_result,
+                        "verification": verification_state,
+                        "max_event_bytes": settings.logging.max_event_bytes,
+                        "max_event_records": expected_record_bound,
                     },
+                    "EVENT_VALIDATION_FAILED",
                     echo_failure=not capture_failed,
                 )
-                report["event_validation"] = event_validation
-            except VerificationError as failure:
-                failure_code = failure_code or failure.code
+                checks = _merged_live_checks(
+                    verification_state,
+                    event_validation,
+                )
+            except (TypeError, ValueError, VerificationError) as failure:
+                failure_code = (
+                    failure.code
+                    if isinstance(failure, VerificationError)
+                    else "EVENT_VALIDATION_FAILED"
+                )
 
-    if (
-        failure_code is None
-        and cleanup is not None
-        and cleanup["confirmed"] is True
-        and cleanup["forced"] is False
-        and cleanup["exit_code"] in (0, -signal.SIGTERM)
-        and event_validation is not None
-    ):
-        report["conclusion"] = "success"
-    else:
-        report["failure_code"] = failure_code or "CLEANUP_FAILED"
+    if cleanup.failure_code is not None:
+        failure_code = cleanup.failure_code
+    if native is None or event_validation is None or checks is None:
+        failure_code = failure_code or "VERIFICATION_FAILED"
 
-    summary = _escaped_summary(
-        cast(Literal["success", "failure"], report["conclusion"]),
-        inputs,
-        selected_ref,
-        tested_commit,
-        workflow_sha,
+    report = _build_report(
+        failure_code=failure_code,
+        commit_sha=commit_sha,
+        run_id=run_id,
+        run_attempt=run_attempt,
+        cleanup=cleanup,
     )
-    job_summary_path.write_text(summary, encoding="utf-8", newline="\n")
-    with summary_path.open("a", encoding="utf-8", newline="\n") as destination:
-        destination.write(summary)
-    _write_report(report_path, report)
-    if report["conclusion"] != "success":
+    try:
+        summary = render_summary(
+            conclusion=report.conclusion,
+            failure_code=getattr(report, "failure_code", None),
+            commit_sha=commit_sha,
+            run_id=run_id,
+            cleanup=cleanup.status,
+            source_text=inputs["text"],
+            server_url=server_url,
+            repository=repository,
+            native=native,
+            checks=checks,
+        )
+    except SummaryLimitExceededError:
+        failure_code = "SUMMARY_TOO_LARGE"
+        report = _build_report(
+            failure_code=failure_code,
+            commit_sha=commit_sha,
+            run_id=run_id,
+            run_attempt=run_attempt,
+            cleanup=cleanup,
+        )
+        summary = render_oversized_failure_summary(
+            commit_sha=commit_sha,
+            run_id=run_id,
+            cleanup=cleanup.status,
+            source_text=inputs["text"],
+            server_url=server_url,
+            repository=repository,
+            native=native,
+            checks=checks,
+        )
+
+    try:
+        write_json_atomic(report_path, report)
+        write_bytes_atomic(report_markdown_path, summary)
+        if summary_path.exists() and summary_path.stat().st_size != 0:
+            raise OSError("GitHub step summary already contains bytes")
+        with summary_path.open("ab") as destination:
+            destination.write(summary)
+            destination.flush()
+            os.fsync(destination.fileno())
+    except OSError:
+        raise VerificationError("ARTIFACT_WRITE_FAILED") from None
+
+    if report.conclusion != "success":
         raise SystemExit(1)
 
 

@@ -146,19 +146,19 @@ def test_spacy_workflow_dispatch_inputs_match_the_manual_contract() -> None:
 
 def test_spacy_workflow_checks_out_the_selected_github_sha() -> None:
     workflow = _load_workflows()["spacy-tests.yml"]
-    steps = _steps(workflow, "verify")
-    initialized = next(
-        step for step in steps if step.get("name") == "Initialize workflow evidence"
-    )
+    jobs = _mapping(workflow.get("jobs"), "spacy workflow jobs")
+    assert set(jobs) == {"spacy_live_test"}
+    job = _mapping(jobs["spacy_live_test"], "spacy live-test job")
+    assert job["name"] == "spaCy live test - ${{ inputs.language }} / ${{ inputs.profile }}"
+    steps = _steps(workflow, "spacy_live_test")
     checkout = next(step for step in steps if step.get("uses") == "actions/checkout@v6")
-    recorded = next(step for step in steps if step.get("name") == "Record the tested checkout")
+    recorded = next(
+        step for step in steps if step.get("name") == "Verify the tested checkout"
+    )
 
-    assert steps.index(initialized) < steps.index(checkout) < steps.index(recorded)
+    assert steps.index(checkout) < steps.index(recorded)
+    assert all(step.get("name") != "Initialize workflow evidence" for step in steps)
     assert all(step.get("name") != "Validate immutable code ref" for step in steps)
-    initialized_env = _mapping(initialized.get("env"), "workflow evidence env")
-    assert initialized_env["SELECTED_REF"] == "${{ github.ref }}"
-    assert initialized_env["SELECTED_SHA"] == "${{ github.sha }}"
-    assert "selected-ref.txt" in str(initialized.get("run"))
 
     checkout_settings = _mapping(checkout.get("with"), "spacy checkout settings")
     assert checkout_settings["ref"] == "${{ github.sha }}"
@@ -176,15 +176,47 @@ def test_spacy_workflow_checks_out_the_selected_github_sha() -> None:
         if step.get("name") == "Run live text-analysis verification"
     )
     runner_env = _mapping(runner.get("env"), "text-analysis runner env")
-    assert runner_env["TEXT_ANALYSIS_SELECTED_REF"] == "${{ github.ref }}"
-    assert runner_env["TEXT_ANALYSIS_SELECTED_SHA"] == "${{ github.sha }}"
+    assert runner_env["TEXT_ANALYSIS_COMMIT_SHA"] == "${{ github.sha }}"
+
+
+def test_spacy_workflow_uploads_only_the_six_declared_artifacts() -> None:
+    workflow = _load_workflows()["spacy-tests.yml"]
+    steps = _steps(workflow, "spacy_live_test")
+    upload = next(
+        step for step in steps if step.get("uses") == "actions/upload-artifact@v7"
+    )
+    settings = _mapping(upload.get("with"), "spacy artifact settings")
+    assert settings["name"] == (
+        "text-analysis-spacy-evidence-"
+        "${{ github.run_id }}-${{ github.run_attempt }}"
+    )
+    assert [
+        line.strip()
+        for line in str(settings["path"]).splitlines()
+        if line.strip()
+    ] == [
+        "${{ runner.temp }}/spacy-tests/report.json",
+        "${{ runner.temp }}/spacy-tests/analysis-request.json",
+        "${{ runner.temp }}/spacy-tests/health-response.json",
+        "${{ runner.temp }}/spacy-tests/analysis-response.json",
+        "${{ runner.temp }}/spacy-tests/events.jsonl",
+        "${{ runner.temp }}/spacy-tests/report.md",
+    ]
+    serialized = str(workflow)
+    for removed in (
+        "workflow-context.json",
+        "selected-ref.txt",
+        "tested-commit.txt",
+        "job-summary.md",
+    ):
+        assert removed not in serialized
 
 
 def test_spacy_workflow_passes_free_text_only_through_runner_stdin() -> None:
     workflow = _load_workflows()["spacy-tests.yml"]
     runner = next(
         step
-        for step in _steps(workflow, "verify")
+        for step in _steps(workflow, "spacy_live_test")
         if step.get("name") == "Run live text-analysis verification"
     )
     env = _mapping(runner.get("env"), "text-analysis runner env")
