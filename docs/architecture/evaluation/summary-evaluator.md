@@ -161,6 +161,10 @@ The retired retrieval and upstream converter were the sole consumers of
 Native UniEval uses its own model, tokenizer and sentence resources directly.
 Their dependencies and native calculations remain unchanged.
 
+Retiring coverage removes its dedicated tests, not shared API or workflow checks.
+Native UniEval's full-source validation remains part of its own scoring contract;
+the word coverage in a test name does not make the test obsolete.
+
 Keeping a dormant generation proxy would retain another API's transport,
 configuration and failure surface without enabling evaluation. The existing
 workflow already speaks the native protocol directly. A fixed registration list
