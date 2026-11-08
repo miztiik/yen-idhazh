@@ -10,7 +10,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 
 | File | Display name | Automatic trigger | Purpose |
 | --- | --- | --- | --- |
-| `ci.yml` | `CI` | Pull request; push to `main` | Code, site and complete model-free evaluator checks |
+| `ci.yml` | `CI` | Pull request; push to `main` | Backend, native TypeScript, site and browser checks |
 | `digest.yml` | `Content refresh` | `20 2 * * *`, `20 6 * * *`, `20 10 * * *`, `20 14 * * *`, `20 18 * * *` | Digest and production state |
 | `llm-council.yml` | `LLM-COUNCIL` | `0 22 * * *` | Model judges' verdicts |
 | `pages.yml` | `Pages publication` | Passing push CI; completed Content refresh or assembly recovery | Static site |

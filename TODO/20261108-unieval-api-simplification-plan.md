@@ -177,7 +177,7 @@
   - `docs/how-to/run-hhem-evaluation-api.md`
   - `docs/how-to/run-the-gates.md`
 - **Acceptance gates - local:** Use the shared selector and unchanged frozen lint/type procedures from row #1; select the named source-plan, reduction and caller-binding tests when debugging.
-- **Acceptance gates - CI:** Existing complete Linux model-free service/workflow suites; contract default binding, explicit override, no truncation, source-end coverage and preserved failed-dimension/sibling outcomes.
+- **Acceptance gates - native verification:** Explicitly run the complete offline service/workflow suites on Linux using [the gate guide](../docs/how-to/run-the-gates.md#independent-python-service-contracts); verify contract default binding, explicit override, no truncation, source-end coverage and preserved failed-dimension/sibling outcomes. The remaining backend CI suite does not provide evaluator runtime evidence.
 - **Acceptance gates - operator surface:** The existing report displays the actual selected mode and comparison counts. The manual form exposes the override defined in F3. No benchmark or additional model download is a prerequisite for switching to the already implemented mode.
 - **Oracle:** Add `test_default_full_source_has_one_consistency_comparison_per_summary_sentence` to the existing window/planning tests. Use a bounded in-memory article whose actual tokenized source exceeds the configured window target but whose full comparisons fit the configured allowance; require one full-source span and the native sentence comparison count, then require the explicit window override to retain its complete-source plan. This proves selection and work geometry, not that full-source inference is faster or more accurate.
 
@@ -230,7 +230,7 @@
   - `docs/how-to/run-unieval-evaluation-api.md`
   - `docs/how-to/run-hhem-evaluation-api.md`
 - **Acceptance gates - local:** Use the existing frozen lint/type checks and the shared selector. Selected tokenizer-boundary and error-projection tests may run locally for debugging; no live model or network is necessary to verify a refused input.
-- **Acceptance gates - CI:** Complete existing Linux model-free suites, including intact byte-bound and worker-identity checks. Version-bound old artifact readers from row #1 must still accept previously valid errors and reject invalid current packets.
+- **Acceptance gates - native verification:** Explicitly run the complete offline service/workflow suites on Linux using the gate guide, including intact byte-bound and worker-identity checks. Version-bound old artifact readers from row #1 must still accept previously valid errors and reject invalid current packets; the remaining backend CI suite does not provide evaluator runtime evidence.
 - **Acceptance gates - operator surface:** The report displays actual input tokens against the configured allowance beside the affected score; an absent historical measurement is unavailable, not reconstructed. Fixed messages describe which text was involved without including source, summary, reference, prompt contents or raw exceptions.
 - **Oracle:** Add a parameterized real-tokenizer regression to the existing window/planning tests for an input exactly at its configured allowance and one token over it, across each applicable dimension. Exercise the shared refusal helper and worker projection as well as planning; require the same measured sizes and the correct dimension after bounded packet round trip. This does not measure feasible memory use or judging quality above the current allowance.
 
