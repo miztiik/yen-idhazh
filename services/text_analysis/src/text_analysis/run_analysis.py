@@ -122,6 +122,7 @@ class AnalysisRuntime:
         self.pool_exited = not settings.enabled
         self.failure_reported = False
         self.logging_failed = False
+        self.background_tasks: set[asyncio.Task[None]] = set()
 
     @property
     def active_requests(self) -> int:
@@ -152,6 +153,11 @@ class AnalysisRuntime:
     async def _report_pool_failure(self) -> None:
         if self._latch_pool_failure():
             await self.on_pool_failure()
+
+    def _schedule_pool_failure(self) -> None:
+        task = asyncio.create_task(self.on_pool_failure())
+        self.background_tasks.add(task)
+        task.add_done_callback(self.background_tasks.discard)
 
     async def start(self) -> None:
         if not self.settings.enabled:
@@ -201,7 +207,7 @@ class AnalysisRuntime:
         except (BrokenProcessPool, OSError, RuntimeError):
             self.limiter.release_on_behalf_of(lease)
             self._latch_pool_failure()
-            asyncio.create_task(self.on_pool_failure())
+            self._schedule_pool_failure()
             raise RuntimeAdmissionError("ANALYSIS_FAILED") from None
 
         completion_task = asyncio.create_task(
@@ -276,6 +282,10 @@ class AnalysisRuntime:
         """Close the pool and completion tasks under one absolute deadline."""
         self.admission_enabled = False
         if self.executor is None:
+            if self.background_tasks:
+                await asyncio.gather(
+                    *(asyncio.shield(task) for task in tuple(self.background_tasks))
+                )
             if self.settings.enabled and self.status != "failed":
                 self.status = "stopping"
             return
@@ -301,6 +311,10 @@ class AnalysisRuntime:
                             asyncio.shield(record.completion_task)
                             for record in active
                         )
+                    )
+                if self.background_tasks:
+                    await asyncio.gather(
+                        *(asyncio.shield(task) for task in tuple(self.background_tasks))
                     )
         except BaseException:
             self._latch_pool_failure()

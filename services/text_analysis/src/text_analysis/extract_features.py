@@ -13,15 +13,15 @@ from text_analysis.declare_api_contracts import (
     DocumentMetricsData,
     EntitiesData,
     EntityMention,
-    EvidenceSpan,
     ErrorDetail,
+    EvidenceSpan,
     FeatureData,
     FeatureResult,
     LinguisticTokensData,
     NounPhrasesData,
     RelationsData,
-    SentenceSpan,
     SentencesData,
+    SentenceSpan,
     TokenRecord,
 )
 from text_analysis.declare_service_settings import FeatureName

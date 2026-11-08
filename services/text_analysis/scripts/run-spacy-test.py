@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import httpx
-
 from text_analysis.declare_api_contracts import HEALTH_PATH
 from text_analysis.declare_service_settings import ServiceSettings
 from text_analysis.load_service_settings import load_service_settings
@@ -22,7 +21,7 @@ READINESS_POLL_SECONDS = 0.1
 OWNER_EXIT_GRACE_SECONDS = 5
 
 
-class VerificationFailure(RuntimeError):
+class VerificationError(RuntimeError):
     """Keep workflow failure reports fixed and free of request content."""
 
     def __init__(self, code: str) -> None:
@@ -33,7 +32,7 @@ class VerificationFailure(RuntimeError):
 def _required_environment(name: str) -> str:
     value = os.environ.get(name)
     if value is None or not value:
-        raise VerificationFailure("INVALID_WORKFLOW_INPUT")
+        raise VerificationError("INVALID_WORKFLOW_INPUT")
     return value
 
 
@@ -44,16 +43,16 @@ def _workflow_inputs() -> dict[str, str]:
     custom_features = os.environ.get("TEXT_ANALYSIS_CUSTOM_FEATURES", "")
     request_text = _required_environment("TEXT_ANALYSIS_TEXT")
     if language not in ("en", "zh"):
-        raise VerificationFailure("INVALID_WORKFLOW_INPUT")
+        raise VerificationError("INVALID_WORKFLOW_INPUT")
     if profile not in ("sm", "md", "lg"):
-        raise VerificationFailure("INVALID_WORKFLOW_INPUT")
+        raise VerificationError("INVALID_WORKFLOW_INPUT")
     if feature_mode not in ("default", "all", "custom"):
-        raise VerificationFailure("INVALID_WORKFLOW_INPUT")
+        raise VerificationError("INVALID_WORKFLOW_INPUT")
     if feature_mode == "custom":
         if not custom_features:
-            raise VerificationFailure("INVALID_WORKFLOW_INPUT")
+            raise VerificationError("INVALID_WORKFLOW_INPUT")
     elif custom_features:
-        raise VerificationFailure("INVALID_WORKFLOW_INPUT")
+        raise VerificationError("INVALID_WORKFLOW_INPUT")
     return {
         "language": language,
         "profile": profile,
@@ -75,13 +74,13 @@ def _run_probe(payload: dict[str, Any]) -> dict[str, Any]:
     if completed.returncode != 0:
         if completed.stderr:
             sys.stderr.write(completed.stderr)
-        raise VerificationFailure("LIVE_PROBE_FAILED")
+        raise VerificationError("LIVE_PROBE_FAILED")
     try:
         result = json.loads(completed.stdout)
     except json.JSONDecodeError:
-        raise VerificationFailure("LIVE_PROBE_FAILED") from None
+        raise VerificationError("LIVE_PROBE_FAILED") from None
     if not isinstance(result, dict):
-        raise VerificationFailure("LIVE_PROBE_FAILED")
+        raise VerificationError("LIVE_PROBE_FAILED")
     return result
 
 
@@ -98,7 +97,7 @@ def _wait_for_readiness(
     with httpx.Client(timeout=timeout, trust_env=False) as client:
         while time.monotonic() < deadline:
             if process.poll() is not None:
-                raise VerificationFailure("SERVER_EXITED_BEFORE_READY")
+                raise VerificationError("SERVER_EXITED_BEFORE_READY")
             try:
                 response = client.get(f"{base_url}{HEALTH_PATH}")
             except httpx.HTTPError:
@@ -108,7 +107,7 @@ def _wait_for_readiness(
                 try:
                     body = response.json()
                 except ValueError:
-                    raise VerificationFailure("INVALID_HEALTH_RESPONSE") from None
+                    raise VerificationError("INVALID_HEALTH_RESPONSE") from None
                 if (
                     isinstance(body, dict)
                     and body.get("status") == "ready"
@@ -116,7 +115,7 @@ def _wait_for_readiness(
                 ):
                     return
             time.sleep(READINESS_POLL_SECONDS)
-    raise VerificationFailure("SERVER_NOT_READY")
+    raise VerificationError("SERVER_NOT_READY")
 
 
 def _stop_owned_process(
@@ -142,10 +141,10 @@ def _stop_owned_process(
             try:
                 process.wait(timeout=OWNER_EXIT_GRACE_SECONDS)
             except subprocess.TimeoutExpired:
-                raise VerificationFailure("PROCESS_GROUP_NOT_STOPPED") from None
+                raise VerificationError("PROCESS_GROUP_NOT_STOPPED") from None
     exit_code = process.poll()
     if exit_code is None:
-        raise VerificationFailure("PROCESS_GROUP_NOT_STOPPED")
+        raise VerificationError("PROCESS_GROUP_NOT_STOPPED")
     return {
         "confirmed": True,
         "forced": forced,
@@ -217,7 +216,7 @@ def main() -> None:
         or any(character not in "0123456789abcdef" for character in selected_sha)
         or selected_sha != tested_commit
     ):
-        raise VerificationFailure("TESTED_COMMIT_MISMATCH")
+        raise VerificationError("TESTED_COMMIT_MISMATCH")
     base_url = f"http://{settings.listener.host}:{settings.listener.port}"
     report: dict[str, Any] = {
         "version": "2026-11-07",
@@ -271,7 +270,7 @@ def main() -> None:
                 }
             )
             report["exercise"] = exercise_result
-        except VerificationFailure as failure:
+        except VerificationError as failure:
             failure_code = failure.code
         except OSError:
             failure_code = "SERVER_START_FAILED"
@@ -284,7 +283,7 @@ def main() -> None:
                         process,
                         settings.listener.shutdown_timeout_ms,
                     )
-                except VerificationFailure as failure:
+                except VerificationError as failure:
                     cleanup = {
                         "confirmed": False,
                         "forced": True,
@@ -307,7 +306,7 @@ def main() -> None:
             }
         )
         report["event_validation"] = event_validation
-    except VerificationFailure as failure:
+    except VerificationError as failure:
         failure_code = failure_code or failure.code
 
     if (

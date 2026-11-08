@@ -4,7 +4,7 @@ import asyncio
 import logging
 import sys
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TextIO
 from uuid import uuid4
 
@@ -81,7 +81,7 @@ class EventEmitter:
                 "id": str(uuid4()),
                 "source": "/services/text-analysis",
                 "type": event_type,
-                "time": datetime.now(timezone.utc)
+                "time": datetime.now(UTC)
                 .isoformat(timespec="milliseconds")
                 .replace("+00:00", "Z"),
                 "datacontenttype": "application/json",
