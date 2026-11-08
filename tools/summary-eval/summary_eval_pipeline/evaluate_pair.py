@@ -5,6 +5,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
+from local_api_host.propagate_trace_context import (
+    OperationMetadata,
+    create_child_operation,
+    create_root_operation,
+)
 from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.contracts.service_health import ServiceHealth
@@ -18,12 +23,17 @@ from .evaluation import evaluate, evaluate_unieval
 from .failures import WorkflowError
 from .phase_services import ScorerService, guard_work
 from .settings import PipelineSettings
+from .trace_context import ResponseTraceObservation
 
 
 @dataclass
 class EvaluatorOutcomes:
     hhem: EvaluationResult | None = None
     unieval: UnievalResult | None = None
+    hhem_operation: OperationMetadata | None = None
+    unieval_operation: OperationMetadata | None = None
+    hhem_trace: ResponseTraceObservation | None = None
+    unieval_trace: ResponseTraceObservation | None = None
 
 
 def require_unieval_work(result: UnievalResult, request: UnievalRequest, status: int) -> None:
@@ -59,6 +69,8 @@ async def evaluate_pair(
     outcomes: EvaluatorOutcomes,
     errors: list[PipelineError],
     save: Callable[[], object],
+    *,
+    operation_metadata: OperationMetadata | None = None,
 ) -> None:
     hhem_request, unieval_request = requests
     if (
@@ -68,6 +80,13 @@ async def evaluate_pair(
         or hhem_request.correlation_id != unieval_request.correlation_id
     ):
         raise WorkflowError("RECEIPT_INVALID", "input")
+    phase_operation = operation_metadata or create_root_operation()
+
+    def observe_hhem(value: ResponseTraceObservation) -> None:
+        outcomes.hhem_trace = value
+
+    def observe_unieval(value: ResponseTraceObservation) -> None:
+        outcomes.unieval_trace = value
 
     def retain() -> None:
         try:
@@ -105,7 +124,11 @@ async def evaluate_pair(
                 or model.foundation_revision != settings.hhem.foundation.revision
             ):
                 raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "health", "hhem")
-            operation = evaluate(client, hhem_api.origin, hhem_request, settings, pipeline)
+            outcomes.hhem_operation = create_child_operation(phase_operation)
+            operation = evaluate(
+                client, hhem_api.origin, hhem_request, settings, pipeline,
+                operation_metadata=outcomes.hhem_operation, observe_trace=observe_hhem,
+            )
             status, result = (
                 await guard_work(operation, hhem_api.owner, pipeline)
                 if hhem_api.owner is not None else await operation
@@ -166,8 +189,10 @@ async def evaluate_pair(
                 or model.reference_code_revision != unieval_settings.assets.reference_code_revision
             ):
                 raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "health", "unieval")
+            outcomes.unieval_operation = create_child_operation(phase_operation)
             operation = evaluate_unieval(
-                client, unieval_api.origin, unieval_request, unieval_settings, pipeline
+                client, unieval_api.origin, unieval_request, unieval_settings, pipeline,
+                operation_metadata=outcomes.unieval_operation, observe_trace=observe_unieval,
             )
             status, result = (
                 await guard_work(operation, unieval_api.owner, pipeline)

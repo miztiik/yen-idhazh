@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 from typing import Literal
 
+from local_api_host.propagate_trace_context import OperationMetadata
 from pydantic import ValidationError
 from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
 from summary_evaluator.serve_http.contracts.server_event import ServerEvent
@@ -19,10 +20,12 @@ from summary_evaluator.shared.read_process_identity import read_owned_process_id
 
 from .control import (
     HostReady,
+    MachineStartupPacket,
     ServiceControl,
     ServiceStartFailed,
     ServiceStopped,
     StartupPacket,
+    encode_control_packet,
 )
 from .failures import WorkflowError
 from .scorer_control import (
@@ -44,7 +47,7 @@ class OwnedService:
         service: Literal["api", "host"],
         command: list[str],
         root: Path,
-        packet: StartupPacket | ScorerStartupPacket,
+        packet: StartupPacket | ScorerStartupPacket | MachineStartupPacket,
         settings: WorkerSettings | None,
         manual: PipelineSettings,
         *,
@@ -54,6 +57,7 @@ class OwnedService:
         self.scorer = packet.scorer if isinstance(packet, ScorerStartupPacket) else None
         self.api_settings = api_settings
         self.expected_process: ProcessIdentity | None = None
+        self.observed_service_operation: OperationMetadata | None = None
         self.stop_grace_ms = manual.host_stop_grace_ms
         self.forced_stop_ms = manual.host_forced_stop_ms
         self.max_event_bytes: int | None = None
@@ -68,8 +72,12 @@ class OwnedService:
             self.stop_grace_ms = settings.stop_grace_ms
             self.forced_stop_ms = settings.forced_stop_ms
             self.max_event_bytes = api_settings.logging.max_event_bytes
-        elif not isinstance(packet, StartupPacket):
-            raise ValueError("A machine child requires its unchanged startup contract")
+        elif not isinstance(packet, StartupPacket | MachineStartupPacket):
+            raise ValueError("A machine child requires its declared startup contract")
+        try:
+            encoded_startup = encode_control_packet(packet, manual.control_max_bytes)
+        except (ValueError, UnicodeError):
+            raise WorkflowError("CHILD_PROTOCOL_FAILED", "startup", service) from None
         self.messages: queue.Queue[ServiceControl | ScorerControl | None] = queue.Queue(
             CONTROL_PACKET_CAPACITY
         )
@@ -102,7 +110,7 @@ class OwnedService:
         try:
             if self.process.stdin is None:
                 raise OSError("Missing owned startup pipe")
-            self.process.stdin.write(packet.model_dump_json().encode() + b"\n")
+            self.process.stdin.write(encoded_startup)
             self.process.stdin.flush()
         except OSError:
             # The object already owns a child; the caller must still close it.
@@ -147,10 +155,22 @@ class OwnedService:
                     self.events_failed.set()
                     return
                 event = ServerEvent.model_validate_json(line)
-                sys.stderr.write(event.model_dump_json() + "\n")
+                sys.stderr.write(event.encode_json_line(limit).decode("utf-8"))
                 sys.stderr.flush()
         except (OSError, ValueError, ValidationError):
             self.events_failed.set()
+
+    def _matches_scorer_operation(
+        self, packet: ScorerReady | ScorerStopped | ScorerStartFailed
+    ) -> bool:
+        return (
+            isinstance(self.packet, ScorerStartupPacket)
+            and packet.launch_operation_metadata == self.packet.operation_metadata
+            and (
+                self.observed_service_operation is None
+                or packet.operation_metadata == self.observed_service_operation
+            )
+        )
 
     def wait_ready(self, timeout_ms: int) -> ScorerReady | HostReady:
         deadline = time.monotonic() + timeout_ms / 1000
@@ -191,11 +211,14 @@ class OwnedService:
                 and (
                     not isinstance(packet, ScorerReady | ScorerStopped | ScorerStartFailed)
                     or packet.scorer != self.scorer
+                    or not self._matches_scorer_operation(packet)
                 )
             )
         ):
             raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", self.service)
         if isinstance(packet, ServiceStartFailed | ScorerStartFailed):
+            if isinstance(packet, ScorerStartFailed):
+                self.observed_service_operation = packet.operation_metadata
             self.startup_failure = packet
             raise WorkflowError(
                 "STARTUP_FAILED",
@@ -210,6 +233,8 @@ class OwnedService:
             raise WorkflowError("STARTUP_FAILED", "startup", self.service)
         if isinstance(packet, ScorerReady) and packet.process != self.expected_process:
             raise WorkflowError("STARTUP_IDENTITY_MISMATCH", "startup", self.service)
+        if isinstance(packet, ScorerReady):
+            self.observed_service_operation = packet.operation_metadata
         self.ready = packet
         return packet
 
@@ -263,6 +288,24 @@ class OwnedService:
             reader.join(timeout=self.forced_stop_ms / 1000)
         while not self.messages.empty():
             message = self.messages.get_nowait()
+            if self.service == "api" and message is not None and (
+                not isinstance(message.root, ScorerReady | ScorerStopped | ScorerStartFailed)
+                or not self._matches_scorer_operation(message.root)
+            ):
+                self.protocol_failed.set()
+                continue
+            if message is not None and isinstance(message.root, ScorerReady):
+                ready = message.root
+                if (
+                    ready.startup_id != self.packet.startup_id
+                    or ready.pid != self.process.pid
+                    or ready.service != self.service
+                    or ready.scorer != self.scorer
+                    or ready.process != self.expected_process
+                ):
+                    self.protocol_failed.set()
+                else:
+                    self.observed_service_operation = ready.operation_metadata
             if message is not None and isinstance(
                 message.root, ServiceStartFailed | ScorerStartFailed
             ):
@@ -277,6 +320,8 @@ class OwnedService:
                 ):
                     self.protocol_failed.set()
                 else:
+                    if isinstance(failed, ScorerStartFailed):
+                        self.observed_service_operation = failed.operation_metadata
                     self.startup_failure = failed
             if message is not None and isinstance(message.root, ServiceStopped | ScorerStopped):
                 observed = message.root
@@ -295,6 +340,8 @@ class OwnedService:
                 ):
                     self.protocol_failed.set()
                 else:
+                    if isinstance(observed, ScorerStopped):
+                        self.observed_service_operation = observed.operation_metadata
                     self.stopped = observed
         for stream in (self.process.stdout, self.process.stderr):
             if stream is not None:

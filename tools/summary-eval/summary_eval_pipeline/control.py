@@ -1,8 +1,9 @@
 """Which private packets identify a phase's shared API and machine supervisor?"""
 
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 
-from pydantic import Field, RootModel
+from local_api_host.propagate_trace_context import OperationMetadata
+from pydantic import BaseModel, ConfigDict, Field, RootModel
 from summary_evaluator.shared.contracts.base import CommitId, PositiveCount, Uuid4
 from summary_evaluator.shared.contracts.service_settings import StartupContext
 
@@ -28,6 +29,52 @@ class StartupPacket(WorkflowContract):
     correlation_id: Uuid4 | None = None
     phase: PhaseName = "evaluation"
     run: RunIdentity | None = None
+
+
+MACHINE_STARTUP_VERSION: Final = "2026-11-08"
+
+
+class MachineStartupPacket(WorkflowContract):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": MACHINE_STARTUP_VERSION,
+            "readCompatibility": "read legacy flat 2026-11-05 startup without adding metadata",
+            "changelog": [
+                {
+                    "version": MACHINE_STARTUP_VERSION,
+                    "change": "Carry the issued machine launch operation in a transient wrapper.",
+                }
+            ],
+        }
+    )
+    version: Literal["2026-11-08"]
+    startup: StartupPacket
+    operation_metadata: OperationMetadata
+
+    @property
+    def startup_id(self) -> str:
+        return self.startup.startup_id
+
+    @property
+    def phase(self) -> PhaseName:
+        return self.startup.phase
+
+
+class MachineStartup(
+    RootModel[
+        Annotated[MachineStartupPacket | StartupPacket, Field(discriminator="version")]
+    ]
+):
+    model_config = ConfigDict(
+        json_schema_extra=MachineStartupPacket.model_config["json_schema_extra"]
+    )
+
+
+def encode_control_packet(packet: BaseModel, max_bytes: int) -> bytes:
+    line = packet.model_dump_json().encode("utf-8") + b"\n"
+    if len(line) > max_bytes:
+        raise ValueError("The complete private packet exceeds its byte allowance")
+    return line
 
 
 class ControlPacket(WorkflowContract):

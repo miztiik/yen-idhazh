@@ -5,6 +5,7 @@ import time
 from collections.abc import Callable
 
 import httpx
+from local_api_host.propagate_trace_context import OperationMetadata, create_child_operation
 from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
@@ -24,6 +25,7 @@ from .http import call_local_api
 from .inputs import ManualInputs, encode_request
 from .phase_contracts import PhaseResult, starts_no_scorers
 from .settings import PipelineSettings
+from .trace_context import ResponseTraceObserver
 
 
 def bind_evaluations(
@@ -85,6 +87,8 @@ async def read_owned_health(
     *,
     deadline: float | None = None,
     observe: Callable[[ApiHealth], None] | None = None,
+    operation_metadata: OperationMetadata | None = None,
+    observe_trace: ResponseTraceObserver | None = None,
 ) -> ApiHealth:
     if deadline is None:
         deadline = time.monotonic() + settings.startup_timeout_ms / 1000
@@ -99,6 +103,11 @@ async def read_owned_health(
             min(remaining * 1000, pipeline.http_connect_timeout_ms),
             service=service,
             phase="health",
+            operation_metadata=(
+                create_child_operation(operation_metadata)
+                if operation_metadata is not None else None
+            ),
+            observe_trace=observe_trace,
         )
         observed = getattr(health, scorer)
         if (
@@ -144,6 +153,9 @@ async def evaluate(
     request: EvaluateRequest,
     settings: ServiceSettings,
     pipeline: PipelineSettings,
+    *,
+    operation_metadata: OperationMetadata | None = None,
+    observe_trace: ResponseTraceObserver | None = None,
 ) -> tuple[int, EvaluationResult]:
     body = encode_request(request)
     if len(body) > settings.listener.max_body_bytes:
@@ -162,6 +174,8 @@ async def evaluate(
         service="hhem",
         phase="evaluation",
         body=body,
+        operation_metadata=operation_metadata,
+        observe_trace=observe_trace,
     )
 
 
@@ -171,6 +185,9 @@ async def evaluate_unieval(
     request: UnievalRequest,
     settings: UnievalSettings,
     pipeline: PipelineSettings,
+    *,
+    operation_metadata: OperationMetadata | None = None,
+    observe_trace: ResponseTraceObserver | None = None,
 ) -> tuple[int, UnievalResult]:
     body = encode_request(request)
     if len(body) > settings.listener.max_body_bytes:
@@ -188,4 +205,6 @@ async def evaluate_unieval(
         service="unieval",
         phase="evaluation",
         body=body,
+        operation_metadata=operation_metadata,
+        observe_trace=observe_trace,
     )

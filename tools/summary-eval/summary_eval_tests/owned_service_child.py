@@ -6,6 +6,7 @@ import sys
 import threading
 from pathlib import Path
 
+from local_api_host.propagate_trace_context import create_child_operation
 from pydantic import RootModel
 from summary_eval_pipeline.channels import open_owned_channels
 from summary_eval_pipeline.contracts import WORKFLOW_VERSION, Hardware
@@ -22,7 +23,8 @@ from summary_eval_pipeline.scorer_control import (
     ScorerStopped,
 )
 from summary_eval_pipeline.serve_api import emit_control, watch_parent_lifetime
-from summary_evaluator.serve_http.contracts.server_event import ApiDiagnosticData
+from summary_eval_pipeline.settings import load_pipeline_settings
+from summary_evaluator.serve_http.contracts.server_event import ApiDiagnosticData, ServerEvent
 from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings
 from summary_evaluator.shared.contracts.worker_exit import WorkerExit
@@ -36,7 +38,16 @@ def api_transport_case(packet: ScorerStartupPacket, mode: str) -> None:
         settings = load_hhem_settings(
             root / "config" / "summary-evals" / "hhem-evaluator" / "settings.json"
         )
-        events = EventWriter(settings.logging, channels.events, scorer=packet.scorer)
+        launch = (
+            create_child_operation(packet.operation_metadata)
+            if mode == "crossed_launch" else packet.operation_metadata
+        )
+        operation = create_child_operation(launch)
+        controls = load_pipeline_settings(root)
+        events = EventWriter(
+            settings.logging, channels.events, scorer=packet.scorer,
+            service_operation=operation, propagate_trace_context=True,
+        )
         process = read_owned_process_identity(
             os.getpid(), settings.worker.max_proc_identity_bytes
         )
@@ -45,12 +56,19 @@ def api_transport_case(packet: ScorerStartupPacket, mode: str) -> None:
             ScorerReady(
                 version=SCORER_CONTROL_VERSION, kind="ready", service="api",
                 scorer=packet.scorer, startup_id=packet.startup_id, process=process,
+                launch_operation_metadata=launch, operation_metadata=operation,
                 service_instance_id=create_execution_id(), log_file=None, log_available=False,
             ),
             channels.control,
+            controls.control_max_bytes,
         )
         if mode == "invalid_event":
             channels.events.write("PrivateRawChildCanary\n")
+            channels.events.flush()
+        if mode == "replay_event":
+            line = sys.stdin.buffer.readline(settings.logging.max_event_bytes + 1)
+            saved = ServerEvent.model_validate_json(line)
+            channels.events.write(saved.encode_json_line(settings.logging.max_event_bytes).decode())
             channels.events.flush()
         sys.stdin.buffer.read(1)
         worker: subprocess.Popen[bytes] | None = None
@@ -78,10 +96,15 @@ def api_transport_case(packet: ScorerStartupPacket, mode: str) -> None:
                 ScorerStopped(
                     version=SCORER_CONTROL_VERSION, kind="stopped", service="api",
                     scorer=packet.scorer, startup_id=packet.startup_id, process=process,
+                    launch_operation_metadata=launch,
+                    operation_metadata=(
+                        create_child_operation(launch) if mode == "crossed_service" else operation
+                    ),
                     clean=mode != "unclean_stop", worker_exit=observed,
                     log_file=None, log_available=False,
                 ),
                 channels.control,
+                controls.control_max_bytes,
             )
         finally:
             if worker is not None:

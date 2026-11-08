@@ -5,6 +5,12 @@ import time
 from pathlib import Path
 
 import pytest
+from local_api_host.propagate_trace_context import (
+    OperationMetadata,
+    create_root_operation,
+    read_trace_context,
+)
+from starlette.datastructures import Headers
 from summary_eval_pipeline.contracts import PipelineError, text_sha256
 from summary_eval_pipeline.evaluate_pair import EvaluatorOutcomes, evaluate_pair
 from summary_eval_pipeline.evaluation import bind_evaluations, read_owned_health
@@ -12,6 +18,7 @@ from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.inputs import encode_request
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_eval_pipeline.storage import write_result
+from summary_eval_pipeline.trace_context import ResponseTraceObservation
 from summary_evaluator.shared.contracts.api_paths import EVALUATE_PATH
 from summary_evaluator.unieval.unieval_router import UNIEVAL_PATH
 from summary_evaluator_cases.contract_examples import REPOSITORY
@@ -116,6 +123,8 @@ def test_readiness_refuses_crossed_identity_and_does_not_reset_an_expired_worker
             hhem, unieval = service.apis
             assert hhem.health is not None and unieval.health is not None
             before = len(service.transport.requests)
+            phase = create_root_operation(trace_state="first=value")
+            traces: list[ResponseTraceObservation] = []
             with pytest.raises(WorkflowError) as failure:
                 await read_owned_health(
                     service.client, hhem.origin,
@@ -124,12 +133,25 @@ def test_readiness_refuses_crossed_identity_and_does_not_reset_an_expired_worker
                     hhem.worker_settings, load_pipeline_settings(REPOSITORY),
                     "unieval" if fault == "scorer" else "hhem",
                     deadline=time.monotonic() if fault == "deadline" else None,
+                    operation_metadata=phase, observe_trace=traces.append,
                 )
             assert failure.value.error.code == (
                 "HEALTH_FAILED" if fault == "deadline" else "STARTUP_IDENTITY_MISMATCH"
             )
             if fault == "deadline":
                 assert len(service.transport.requests) == before
+                assert traces == []
+            else:
+                caller = read_trace_context(
+                    Headers(raw=service.transport.requests[-1].headers.raw)
+                )
+                assert isinstance(caller, OperationMetadata)
+                assert caller.span_id != phase.span_id and caller.trace_id == phase.trace_id
+                assert isinstance(traces[-1], OperationMetadata)
+                actual = service.transport.receiving[-1]
+                assert actual.parent_span_id == caller.span_id
+                assert actual.span_id == traces[-1].span_id
+                assert actual.trace_state == phase.trace_state
             assert not hhem.errors and not unieval.errors
             assert not any(
                 request.url.path in (EVALUATE_PATH, UNIEVAL_PATH)

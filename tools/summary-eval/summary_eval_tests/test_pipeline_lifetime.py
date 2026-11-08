@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Literal
 
 import pytest
+from local_api_host.propagate_trace_context import create_child_operation, create_root_operation
 from summary_eval_pipeline.contracts import WORKFLOW_VERSION, PipelineError
 from summary_eval_pipeline.control import HostReady, ServiceStopped, StartupPacket
 from summary_eval_pipeline.failures import WorkflowError
@@ -25,8 +26,9 @@ from summary_eval_pipeline.services import OwnedService
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
+from summary_evaluator.serve_http.contracts.server_event import ServerEvent
 from summary_evaluator.shared.contracts.service_settings import StartupContext
-from summary_evaluator_cases.contract_examples import REPOSITORY, REQUEST_ID
+from summary_evaluator_cases.contract_examples import REPOSITORY, REQUEST_ID, example_event
 from summary_evaluator_cases.service_cases import service_settings
 
 from summary_eval_tests.generation_cases import example_run
@@ -45,7 +47,10 @@ def start_child(service: Literal["api", "host"], mode: str) -> OwnedService:
         service,
         owned_child_command(mode),
         REPOSITORY,
-        ScorerStartupPacket(version=SCORER_CONTROL_VERSION, scorer=scorer, startup=startup)
+        ScorerStartupPacket(
+            version=SCORER_CONTROL_VERSION, scorer=scorer, startup=startup,
+            operation_metadata=create_child_operation(create_root_operation()),
+        )
         if service == "api"
         else startup,
         service_settings(
@@ -79,6 +84,58 @@ def scorer_service(child: OwnedService) -> ScorerService:
         owner=child,
         started=time.monotonic(),
     )
+
+
+@pytest.mark.parametrize("fault", ["crossed_launch", "crossed_service"])
+def test_owned_context_checks_add_to_nonce_pid_and_process_start_pin_checks(fault: str) -> None:
+    child = start_child("api", fault)
+    try:
+        if fault == "crossed_launch":
+            with pytest.raises(WorkflowError) as failure:
+                child.wait_ready(CHILD_STARTUP_MS)
+            assert failure.value.error.code == "STARTUP_IDENTITY_MISMATCH"
+        else:
+            ready = child.wait_ready(CHILD_STARTUP_MS)
+            assert ready.pid == child.process.pid
+            assert child.observed_service_operation is not None
+        with pytest.raises(WorkflowError) as stopped:
+            child.close(6000)
+        assert stopped.value.error.code == "SERVICE_STOP_FAILED"
+        assert child.process.poll() == 0
+    finally:
+        if not child.closed:
+            with contextlib.suppress(WorkflowError):
+                child.close(6000)
+
+
+@pytest.mark.parametrize("traced", [False, True])
+def test_actual_byte_pipe_relay_preserves_saved_occurrence_data_and_carrier_absence(
+    traced: bool, capsys: pytest.CaptureFixture[str],
+) -> None:
+    operation = create_child_operation(create_root_operation(trace_state="first=value"))
+    original = ServerEvent.from_evaluation(
+        example_event(), operation if traced else None, propagate_trace_context=traced,
+    )
+    child = start_child("api", "replay_event")
+    try:
+        child.wait_ready(CHILD_STARTUP_MS)
+        assert child.process.stdin is not None
+        assert child.max_event_bytes is not None
+        child.process.stdin.write(original.encode_json_line(child.max_event_bytes))
+        child.process.stdin.flush()
+        child.close(6000)
+    finally:
+        if not child.closed:
+            with contextlib.suppress(WorkflowError):
+                child.close(6000)
+    relayed = [
+        ServerEvent.model_validate_json(line) for line in capsys.readouterr().err.splitlines()
+    ]
+    selected = [event for event in relayed if event.id == original.id]
+    assert selected == [original]
+    assert selected[0].model_dump(mode="json") == original.model_dump(mode="json")
+    assert (selected[0].traceparent is not None) is traced
+    assert (selected[0].tracestate is not None) is traced
 
 
 @pytest.mark.parametrize("mode", ["clean", "mismatch", "early_exit", "blocked_close"])
