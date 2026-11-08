@@ -76,6 +76,9 @@ jobs:
       - name: Install the shared TypeScript contracts
         run: bun install --frozen-lockfile --cwd packages/common-contracts
 
+      - name: Check Unicode evidence spans
+        run: bun test ./services/text_analysis/spacy/scripts/validate-evidence-spans.test.ts
+
       - name: Sync the text-analysis environment
         working-directory: services/text_analysis/spacy
         run: uv sync --frozen

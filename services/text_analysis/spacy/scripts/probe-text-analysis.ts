@@ -5,6 +5,7 @@ import {
   readTraceContext,
   writeTraceContext,
 } from "../../../../packages/common-contracts/src/index.ts";
+import { validateEvidenceOffsets } from "./validate-evidence-spans.ts";
 
 type JsonRecord = Record<string, unknown>;
 type Language = "en" | "zh";
@@ -312,14 +313,14 @@ function validateError(value: unknown, expectedCode: string): JsonRecord {
   return result;
 }
 
-function validateEvidenceSpan(value: unknown, source: string, evidence: Set<string>): JsonRecord {
+function validateEvidenceSpan(value: unknown, sourceCodePoints: readonly string[], evidence: Set<string>): JsonRecord {
   const span = record(value, "Evidence span is invalid");
   exactKeys(span, ["text", "start_char", "end_char", "sentence_index"]);
   const spanText = text(span.text, "Evidence text is invalid");
   const start = integer(span.start_char, "Evidence start is invalid");
   const end = integer(span.end_char, "Evidence end is invalid");
   integer(span.sentence_index, "Evidence sentence index is invalid");
-  expect(start >= 0 && end > start && source.slice(start, end) === spanText, "Evidence offsets do not reproduce the source");
+  validateEvidenceOffsets(sourceCodePoints, start, end, spanText);
   evidence.add(spanText);
   return span;
 }
@@ -327,7 +328,7 @@ function validateEvidenceSpan(value: unknown, source: string, evidence: Set<stri
 function validateFeatureData(
   feature: Feature,
   value: unknown,
-  source: string,
+  sourceCodePoints: readonly string[],
   evidence: Set<string>,
 ): void {
   const data = record(value, "Feature data is invalid");
@@ -341,14 +342,14 @@ function validateFeatureData(
         start_char: mention.start_char,
         end_char: mention.end_char,
         sentence_index: mention.sentence_index,
-      }, source, evidence);
+      }, sourceCodePoints, evidence);
       text(mention.label, "Entity label is invalid");
     }
     return;
   }
   if (feature === "sentences") {
     exactKeys(data, ["sentences"]);
-    array(data.sentences, "Sentence spans are invalid").forEach(item => validateEvidenceSpan(item, source, evidence));
+    array(data.sentences, "Sentence spans are invalid").forEach(item => validateEvidenceSpan(item, sourceCodePoints, evidence));
     return;
   }
   if (feature === "relations") {
@@ -357,19 +358,19 @@ function validateFeatureData(
       const relation = record(rawRelation, "Relation record is invalid");
       exactKeys(relation, ["sentence_index", "action", "actors", "objects", "times", "places"]);
       integer(relation.sentence_index, "Relation sentence index is invalid");
-      validateEvidenceSpan(relation.action, source, evidence);
+      validateEvidenceSpan(relation.action, sourceCodePoints, evidence);
       const actors = array(relation.actors, "Relation actors are invalid");
       expect(actors.length > 0, "Relation must retain an actor");
-      actors.forEach(item => validateEvidenceSpan(item, source, evidence));
+      actors.forEach(item => validateEvidenceSpan(item, sourceCodePoints, evidence));
       for (const key of ["objects", "times", "places"] as const) {
-        array(relation[key], "Relation evidence list is invalid").forEach(item => validateEvidenceSpan(item, source, evidence));
+        array(relation[key], "Relation evidence list is invalid").forEach(item => validateEvidenceSpan(item, sourceCodePoints, evidence));
       }
     }
     return;
   }
   if (feature === "noun_phrases") {
     exactKeys(data, ["phrases"]);
-    array(data.phrases, "Noun phrase spans are invalid").forEach(item => validateEvidenceSpan(item, source, evidence));
+    array(data.phrases, "Noun phrase spans are invalid").forEach(item => validateEvidenceSpan(item, sourceCodePoints, evidence));
     return;
   }
   if (feature === "linguistic_tokens") {
@@ -392,7 +393,7 @@ function validateFeatureData(
         start_char: token.start_char,
         end_char: token.end_char,
         sentence_index: token.sentence_index,
-      }, source, evidence);
+      }, sourceCodePoints, evidence);
       for (const key of ["lemma", "part_of_speech", "dependency", "morphology"] as const) {
         expect(token[key] === null || typeof token[key] === "string", "Nullable token annotation is invalid");
       }
@@ -434,6 +435,7 @@ function validateAnalysisResult(
   expect(model.spacy_version === expectedModel.spacy_version, "spaCy version does not match configuration");
   const rawFeatures = array(result.features, "Feature results are invalid");
   expect(rawFeatures.length === expectedFeatures.length, "Feature result count is unexpected");
+  const sourceCodePoints = Array.from(source);
   const evidence = new Set<string>();
   const featureStatuses: ExpectedEvent["feature_statuses"] = [];
   rawFeatures.forEach((rawFeature, index) => {
@@ -446,7 +448,7 @@ function validateAnalysisResult(
     if (status === "complete") {
       expect(featureResult.error === null, "Complete feature retained an error");
       expect(featureResult.data !== null, "Complete feature omitted data");
-      validateFeatureData(feature, featureResult.data, source, evidence);
+      validateFeatureData(feature, featureResult.data, sourceCodePoints, evidence);
       featureStatuses.push({ feature, status });
     } else {
       expect(featureResult.data === null, "Failed feature retained data");
