@@ -174,7 +174,7 @@
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| I1 | 1 | Extract the reusable local Python API host | - | A | IN-FLIGHT | extract-reusable-api-host | - | Extract reusable API host |
+| I1 | 1 | Extract the reusable local Python API host | - | A | DONE | extract-reusable-api-host | - | Extract reusable API host |
 | I2 | 2 | Register the manual text-analysis workflow | 1 | B | PENDING | - | - | - |
 | I3 | 3 | Build and verify the multilingual text-analysis API | 1, 2 | C | PENDING | - | - | - |
 
