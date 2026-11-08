@@ -4,12 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/scripts/ai-pipeline.ts'
-      - 'tools/ai-pipeline-experiment/read-pipeline-events.ts'
-      - 'tools/ai-pipeline-experiment/test/workflow-handoff.test.ts'
       - '.github/workflows/ai-pipeline-tests.yml'
-      - 'packages/common-contracts/**'
-      - 'services/summary-generator/**'
-      - 'tests/fixtures/typescript-metadata/workflow-output-event.json'
   workflow_dispatch:
     inputs:
       input_source:
