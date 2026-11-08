@@ -56,8 +56,9 @@ once with `language = 'en'` and once with `language = 'zh'`, both using
 `profile = 'md'`. Confirm both runs record the same final `github.sha`. Any
 later implementation edit invalidates both results.
 
-The platform retains dispatch inputs, and completed evidence may contain
-returned source spans. Do not submit private material or credentials.
+The platform retains dispatch inputs. The selected source text is also visible
+in the run summary and `analysis-request.json` to anyone who can view the run.
+Do not submit secrets or private material.
 
 ## Inspect the run and evidence
 
@@ -67,16 +68,38 @@ gh run view <run-id> --log
 gh run download <run-id> --dir <evidence-directory>
 ```
 
-The run's `headSha`, recorded selected SHA and tested commit must agree.
-Preserve the run URL, workflow SHA, tested commit, inputs, artifact ID,
-conclusion and `report.json`.
+The run's `headSha` and `report.json` `commit_sha` must agree. Preserve the run
+URL, tested commit, inputs, artifact ID, conclusion and `report.json`.
 
 The single artifact is named
-`spacy-tests-<run-id>-<run-attempt>` and is retained for 90 days. It includes
-the workflow context, `selected-ref.txt`, selected SHA and tested commit, the runner's
-machine-readable report, captured `events.jsonl` and escaped
-`job-summary.md`. The artifact uploads after ordinary failure. Cleanup or
-upload failure leaves the job red.
+`text-analysis-spacy-evidence-<run-id>-<run-attempt>` and is retained for 90
+days. A successful artifact contains exactly:
+
+- `report.json` - the strict workflow receipt;
+- `analysis-request.json` - the exact validated selected request, including
+  source text and resolved feature order;
+- `health-response.json` - the exact validated ready health response;
+- `analysis-response.json` - the exact validated selected analysis response;
+- `events.jsonl` - the canonical validated CloudEvents; and
+- `report.md` - the same escaped bytes appended to the GitHub step summary.
+
+The successful receipt has only version `2026-11-08`, conclusion `success`,
+the lowercase 40-hex `commit_sha`, positive run ID and attempt, and cleanup
+`confirmed`. A failed receipt adds one declared safe `failure_code`. The
+contract changelog says: `Split native API evidence from the verification
+outcome and make cleanup semantic.` Old retained artifacts keep their original
+shape; new runs write only this version.
+
+The summary leads with PASS or FAIL, links the run and tested commit, then
+shows selected model identity, ordered feature outcomes, the capacity/BUSY/warm
+reuse checks, semantic cleanup and the escaped source text. It never includes
+raw analysis data, trace values, process details, paths, exceptions or the
+generated concurrency input. GitHub limits one step summary to 1 MiB. The
+runner checks the complete UTF-8 bytes and fails with a safe code instead of
+truncating them.
+
+The artifact uploads after ordinary failure. Cleanup or upload failure leaves
+the job red.
 
 The job has a 60-minute bound. It prepares only the selected model, runs the
 service through its owned process group and uses the shared TypeScript
@@ -87,11 +110,17 @@ Keeping supervision inside that one step is deliberate:
 `run-spacy-test.py` owns server startup, readiness, HTTP evidence, exact
 process-group cleanup and final validation in one `try/finally`.
 `probe-text-analysis.ts` receives only `base_url` for live calls and verifies
-the service independently over HTTP. The runner preserves every server event
-byte in `events.jsonl` and also mirrors only events that pass the native strict
-CloudEvents contract to the live workflow stderr log.
-The runner accepts Uvicorn's preserved SIGTERM exit only when the captured
-events validate one clean `stopped` lifecycle and no service failure.
+the service independently over HTTP. The runner reads `events.jsonl` as bounded
+records, using the configured `logging.max_event_bytes` and the exact expected
+request plus lifecycle count. It mirrors only events that pass the native
+strict CloudEvents contract to the live workflow stderr log.
+
+Cleanup evidence is semantic: `not_started` means no child was created,
+`confirmed` means an owner-sent SIGTERM or a clean exit was confirmed,
+`forced` means SIGKILL was required and confirmed, and `unconfirmed` means exit
+could not be proved. Successful runs require `confirmed`. Historical report
+value `-15` was the POSIX SIGTERM exit code and represented expected owner
+cleanup, not a service failure. New receipts expose no raw exit code.
 
 ## Local execution boundary
 

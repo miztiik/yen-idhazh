@@ -36,8 +36,8 @@ type ExpectedEvent = {
   require_zero_model_load?: boolean;
 };
 
-type ExerciseInput = {
-  mode: "exercise";
+type VerificationInput = {
+  mode: "verify_api";
   base_url: string;
   language: Language;
   profile: Profile;
@@ -50,7 +50,9 @@ type ValidateEventsInput = {
   mode: "validate_events";
   events_path: string;
   text: string;
-  exercise: JsonRecord;
+  verification: JsonRecord;
+  max_event_bytes: number;
+  max_event_records: number;
 };
 
 type TraceCall = {
@@ -159,7 +161,7 @@ function distinctFeatures(value: unknown, message: string): Feature[] {
 }
 
 function selectFeatures(
-  input: ExerciseInput,
+  input: VerificationInput,
   supportedFeatures: readonly Feature[],
 ): Feature[] {
   if (input.feature_mode === "default") {
@@ -197,7 +199,7 @@ function responseTrace(response: Response, parentTraceId: string, parentSpanId: 
 }
 
 async function callApi(
-  input: ExerciseInput,
+  input: VerificationInput,
   path: string,
   method: "GET" | "POST",
   body?: JsonRecord,
@@ -502,7 +504,7 @@ function generatedConcurrencyText(): string {
   return value;
 }
 
-async function waitForActiveRequests(input: ExerciseInput, count: number): Promise<void> {
+async function waitForActiveRequests(input: VerificationInput, count: number): Promise<void> {
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
     const call = await callApi(input, HEALTH_PATH, "GET");
@@ -530,7 +532,7 @@ function inspectSchema(value: unknown): { paths: string[]; feature_failed_declar
   };
 }
 
-async function exercise(input: ExerciseInput): Promise<JsonRecord> {
+async function verifyApi(input: VerificationInput): Promise<JsonRecord> {
   expect(input.base_url === "http://127.0.0.1:3020", "Probe base URL is unexpected");
   expect(input.text.trim().length > 0, "Probe text must be nonblank");
   const expectedEvents: ExpectedEvent[] = [];
@@ -551,7 +553,7 @@ async function exercise(input: ExerciseInput): Promise<JsonRecord> {
 
   const schemaCall = await callApi(input, SCHEMA_PATH, "GET");
   expect(schemaCall.status === 200, "Schema route failed");
-  const schema = inspectSchema(schemaCall.body);
+  inspectSchema(schemaCall.body);
   noEventTraceparents.push(schemaCall.traceparent);
 
   const selectedCall = await callApi(input, ANALYZE_PATH, "POST", {
@@ -713,20 +715,22 @@ async function exercise(input: ExerciseInput): Promise<JsonRecord> {
   selected.evidence.push(...warm.evidence);
 
   return {
-    selected_result: selected.result,
-    health,
-    schema,
+    analysis_request: {
+      text: input.text,
+      language: input.language,
+      model_profile: input.profile,
+      features: selectedFeatures,
+    },
+    health_response: health,
+    analysis_response: selected.result,
     expected_events: expectedEvents,
     no_event_traceparents: noEventTraceparents,
     evidence_texts: [...new Set(selected.evidence)],
-    checks: {
-      selected_features: selectedFeatures,
-      tamil_unavailable: true,
-      chinese_noun_phrase_partial: input.language === "zh",
-      concurrent_active_requests: 2,
-      busy_refused: true,
-      concurrency_text_bytes: CONCURRENCY_TEXT_BYTES,
-      warm_repeat_requested: true,
+    live_checks: {
+      active_requests: 2,
+      capacity: integer(health.max_concurrent_requests, "Health capacity is invalid"),
+      busy_http_status: busyCall.status,
+      busy_queued: false,
     },
   };
 }
@@ -825,13 +829,44 @@ function collectStrings(value: unknown, output: string[]): void {
   }
 }
 
+async function readEventLines(
+  path: string,
+  maxEventBytes: number,
+  maxEventRecords: number,
+): Promise<string[]> {
+  expect(Number.isInteger(maxEventBytes) && maxEventBytes > 0, "Event byte bound is invalid");
+  expect(Number.isInteger(maxEventRecords) && maxEventRecords > 0, "Event record bound is invalid");
+  const lines: string[] = [];
+  let current: number[] = [];
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  for await (const chunk of Bun.file(path).stream()) {
+    for (const byte of chunk) {
+      if (byte === 0x0a) {
+        expect(current.length > 0, "Captured events contain a blank record");
+        if (current[current.length - 1] === 0x0d) current.pop();
+        expect(lines.length < maxEventRecords, "Captured event count exceeded its bound");
+        lines.push(decoder.decode(Uint8Array.from(current)));
+        current = [];
+        continue;
+      }
+      current.push(byte);
+      expect(current.length < maxEventBytes, "Captured event exceeded its byte bound");
+    }
+  }
+  expect(current.length === 0, "Captured events are not newline terminated");
+  return lines;
+}
+
 async function validateEvents(input: ValidateEventsInput): Promise<JsonRecord> {
-  const exerciseReport = record(input.exercise, "Exercise report is invalid");
-  const expectedEvents = array(exerciseReport.expected_events, "Expected event list is invalid") as ExpectedEvent[];
-  const noEventTraceparents = array(exerciseReport.no_event_traceparents, "No-event trace list is invalid").map(item => text(item, "No-event trace is invalid"));
-  const evidenceTexts = array(exerciseReport.evidence_texts, "Evidence text list is invalid").map(item => text(item, "Evidence text is invalid"));
-  const content = await Bun.file(input.events_path).text();
-  const lines = content.split(/\r?\n/).filter(line => line.length > 0);
+  const verification = record(input.verification, "Verification result is invalid");
+  const expectedEvents = array(verification.expected_events, "Expected event list is invalid") as ExpectedEvent[];
+  const noEventTraceparents = array(verification.no_event_traceparents, "No-event trace list is invalid").map(item => text(item, "No-event trace is invalid"));
+  const evidenceTexts = array(verification.evidence_texts, "Evidence text list is invalid").map(item => text(item, "Evidence text is invalid"));
+  const lines = await readEventLines(
+    input.events_path,
+    input.max_event_bytes,
+    input.max_event_records,
+  );
   expect(lines.length > 0, "No text-analysis events were captured");
   const events = lines.map(line => CloudEventSchema.parse(JSON.parse(line)));
   const sensitive = new Set([input.text, ...evidenceTexts].filter(value => value.length > 0));
@@ -862,6 +897,7 @@ async function validateEvents(input: ValidateEventsInput): Promise<JsonRecord> {
 
   const requestEvents = events.filter(event => event.type.startsWith("text-analysis.request."));
   expect(requestEvents.length === expectedEvents.length, "Request event count is unexpected");
+  let warmModelLoadMs: number | undefined;
   for (const expected of expectedEvents) {
     const matching = requestEvents.filter(
       event => event.type === expected.type && event.traceparent === expected.traceparent,
@@ -883,23 +919,20 @@ async function validateEvents(input: ValidateEventsInput): Promise<JsonRecord> {
     }))), "Request event feature statuses are unexpected");
     if (expected.require_zero_model_load) {
       expect(data.model_load_ms === 0, "Warm repeated analysis reloaded the model");
+      warmModelLoadMs = integer(data.model_load_ms, "Warm model load timing is invalid");
     }
   }
   for (const traceparent of noEventTraceparents) {
     expect(!requestEvents.some(event => event.traceparent === traceparent), "Health or schema emitted a request event");
   }
-  return {
-    event_count: events.length,
-    request_event_count: requestEvents.length,
-    service_event_types: serviceTypes,
-    zero_model_load_verified: expectedEvents.some(item => item.require_zero_model_load),
-  };
+  expect(warmModelLoadMs === 0, "Warm model reuse was not verified");
+  return { warm_model_load_ms: warmModelLoadMs };
 }
 
 async function main(): Promise<void> {
   const rawInput = await Bun.stdin.text();
   const parsed = record(JSON.parse(rawInput), "Probe input is invalid");
-  if (parsed.mode === "exercise") {
+  if (parsed.mode === "verify_api") {
     const language = text(parsed.language, "Probe language is invalid");
     const profile = text(parsed.profile, "Probe profile is invalid");
     const featureMode = text(parsed.feature_mode, "Probe feature mode is invalid");
@@ -909,8 +942,8 @@ async function main(): Promise<void> {
       featureMode === "default" || featureMode === "all" || featureMode === "custom",
       "Probe feature mode is invalid",
     );
-    const input: ExerciseInput = {
-      mode: "exercise",
+    const input: VerificationInput = {
+      mode: "verify_api",
       base_url: text(parsed.base_url, "Probe base URL is invalid"),
       language,
       profile,
@@ -918,7 +951,7 @@ async function main(): Promise<void> {
       custom_features: text(parsed.custom_features, "Probe custom features are invalid"),
       text: text(parsed.text, "Probe text is invalid"),
     };
-    process.stdout.write(JSON.stringify(await exercise(input)));
+    process.stdout.write(JSON.stringify(await verifyApi(input)));
     return;
   }
   if (parsed.mode === "validate_events") {
@@ -926,7 +959,9 @@ async function main(): Promise<void> {
       mode: "validate_events",
       events_path: text(parsed.events_path, "Event path is invalid"),
       text: text(parsed.text, "Event validation text is invalid"),
-      exercise: record(parsed.exercise, "Exercise report is invalid"),
+      verification: record(parsed.verification, "Verification result is invalid"),
+      max_event_bytes: integer(parsed.max_event_bytes, "Event byte bound is invalid"),
+      max_event_records: integer(parsed.max_event_records, "Event record bound is invalid"),
     };
     process.stdout.write(JSON.stringify(await validateEvents(input)));
     return;

@@ -482,7 +482,7 @@ The workflow syncs the frozen environment, installs only the selected
 configured model wheel, starts one owned process group, and validates live
 English or Chinese results through the actual shared TypeScript CloudEvents
 and trace contracts. The required candidate evidence is one `md` run per
-language against the same immutable selected-ref head. A changed candidate
+language against the same immutable commit. A changed candidate
 needs both runs again.
 
 ### Independent TypeScript packages and services

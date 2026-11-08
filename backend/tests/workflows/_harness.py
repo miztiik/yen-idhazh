@@ -75,7 +75,10 @@ EXPECTED_WORKFLOWS: Final = {
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),
     ),
-    "spacy-tests.yml": ("spacy-tests", frozenset({"workflow_dispatch"})),
+    "spacy-tests.yml": (
+        "Text-Analysis-spaCy-tests",
+        frozenset({"workflow_dispatch"}),
+    ),
     "idhazh-gardener.yml": ("Idhazh Gardener", frozenset({"schedule", "workflow_dispatch"})),
 }
 
