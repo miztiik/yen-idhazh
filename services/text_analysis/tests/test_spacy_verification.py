@@ -10,6 +10,7 @@ from declare_spacy_verification import (
     SuccessfulVerificationReport,
     SummaryLimitExceededError,
     classify_cleanup,
+    render_oversized_failure_summary,
     render_summary,
     validate_native_evidence,
 )
@@ -188,9 +189,12 @@ class VerificationSummaryTests(unittest.TestCase):
         )
         self.assertNotIn(source_text, summary)
         self.assertIn("<details><summary>Source text</summary>", summary)
+        self.assertIn("[Commit `", summary)
+        self.assertNotIn("Tested commit", summary)
 
     def test_summary_refuses_the_named_platform_limit(self) -> None:
-        native = validate_native_evidence(_native_payloads("x"))
+        source_text = "x" * GITHUB_STEP_SUMMARY_MAX_BYTES
+        native = validate_native_evidence(_native_payloads(source_text))
         with self.assertRaises(SummaryLimitExceededError):
             render_summary(
                 conclusion="success",
@@ -198,7 +202,7 @@ class VerificationSummaryTests(unittest.TestCase):
                 commit_sha="e" * 40,
                 run_id="21",
                 cleanup="confirmed",
-                source_text="x" * GITHUB_STEP_SUMMARY_MAX_BYTES,
+                source_text=source_text,
                 server_url="https://github.com",
                 repository="sample/project",
                 native=native,
@@ -210,6 +214,26 @@ class VerificationSummaryTests(unittest.TestCase):
                     warm_model_load_ms=0,
                 ),
             )
+        failed = render_oversized_failure_summary(
+            commit_sha="e" * 40,
+            run_id="21",
+            cleanup="confirmed",
+            source_text=source_text,
+            server_url="https://github.com",
+            repository="sample/project",
+            native=native,
+            checks=LiveCheckEvidence(
+                active_requests=2,
+                capacity=2,
+                busy_http_status=429,
+                busy_queued=False,
+                warm_model_load_ms=0,
+            ),
+        ).decode("utf-8")
+        self.assertIn("**Live test: FAIL** - SUMMARY_TOO_LARGE:", failed)
+        self.assertIn("<details><summary>Source text</summary><pre><code>", failed)
+        self.assertEqual(failed.count(source_text), 1)
+        self.assertNotIn("Source text omitted", failed)
 
 
 if __name__ == "__main__":

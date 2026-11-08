@@ -24,6 +24,7 @@ from declare_spacy_verification import (
     SummaryLimitExceededError,
     VerificationReport,
     classify_cleanup,
+    render_oversized_failure_summary,
     render_summary,
     validate_live_checks,
     validate_native_evidence,
@@ -628,9 +629,7 @@ def main() -> None:
             run_attempt=run_attempt,
             cleanup=cleanup,
         )
-        summary = render_summary(
-            conclusion="failure",
-            failure_code=failure_code,
+        summary = render_oversized_failure_summary(
             commit_sha=commit_sha,
             run_id=run_id,
             cleanup=cleanup.status,
@@ -639,7 +638,6 @@ def main() -> None:
             repository=repository,
             native=native,
             checks=checks,
-            include_source=False,
         )
 
     try:

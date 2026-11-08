@@ -69,7 +69,7 @@ gh run download <run-id> --dir <evidence-directory>
 ```
 
 The run's `headSha` and `report.json` `commit_sha` must agree. Preserve the run
-URL, tested commit, inputs, artifact ID, conclusion and `report.json`.
+URL, commit, inputs, artifact ID, conclusion and `report.json`.
 
 The single artifact is named
 `text-analysis-spacy-evidence-<run-id>-<run-attempt>` and is retained for 90
@@ -90,13 +90,14 @@ contract changelog says: `Split native API evidence from the verification
 outcome and make cleanup semantic.` Old retained artifacts keep their original
 shape; new runs write only this version.
 
-The summary leads with PASS or FAIL, links the run and tested commit, then
+The summary leads with PASS or FAIL, links the run and commit, then
 shows selected model identity, ordered feature outcomes, the capacity/BUSY/warm
 reuse checks, semantic cleanup and the escaped source text. It never includes
 raw analysis data, trace values, process details, paths, exceptions or the
 generated concurrency input. GitHub limits one step summary to 1 MiB. The
 runner checks the complete UTF-8 bytes and fails with a safe code instead of
-truncating them.
+truncating them. Its failed `report.md` keeps the complete escaped source; it
+never substitutes an omission message.
 
 The artifact uploads after ordinary failure. Cleanup or upload failure leaves
 the job red.

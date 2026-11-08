@@ -263,10 +263,68 @@ def render_summary(
     repository: str,
     native: NativeEvidence | None,
     checks: LiveCheckEvidence | None,
-    include_source: bool = True,
 ) -> bytes:
     """Render one escaped result-first projection within GitHub's 1 MiB limit."""
 
+    content = _render_summary_content(
+        conclusion=conclusion,
+        failure_code=failure_code,
+        commit_sha=commit_sha,
+        run_id=run_id,
+        cleanup=cleanup,
+        source_text=source_text,
+        server_url=server_url,
+        repository=repository,
+        native=native,
+        checks=checks,
+    )
+    if len(content) > GITHUB_STEP_SUMMARY_MAX_BYTES:
+        raise SummaryLimitExceededError(
+            "Rendered summary exceeds GitHub's 1 MiB per-step limit"
+        )
+    return content
+
+
+def render_oversized_failure_summary(
+    *,
+    commit_sha: str,
+    run_id: str,
+    cleanup: CleanupStatus,
+    source_text: str,
+    server_url: str,
+    repository: str,
+    native: NativeEvidence | None,
+    checks: LiveCheckEvidence | None,
+) -> bytes:
+    """Keep the complete source in the failed artifact when GitHub cannot render it."""
+
+    return _render_summary_content(
+        conclusion="failure",
+        failure_code="SUMMARY_TOO_LARGE",
+        commit_sha=commit_sha,
+        run_id=run_id,
+        cleanup=cleanup,
+        source_text=source_text,
+        server_url=server_url,
+        repository=repository,
+        native=native,
+        checks=checks,
+    )
+
+
+def _render_summary_content(
+    *,
+    conclusion: Literal["success", "failure"],
+    failure_code: FailureCode | None,
+    commit_sha: str,
+    run_id: str,
+    cleanup: CleanupStatus,
+    source_text: str,
+    server_url: str,
+    repository: str,
+    native: NativeEvidence | None,
+    checks: LiveCheckEvidence | None,
+) -> bytes:
     _validate_github_location(server_url, repository)
     if conclusion == "success":
         if failure_code is not None or native is None or checks is None:
@@ -287,7 +345,7 @@ def render_summary(
         "",
         result_line,
         "",
-        f"[Run {run_id}]({run_url}) | [Tested commit `{commit_sha}`]({commit_url})",
+        f"[Run {run_id}]({run_url}) | [Commit `{commit_sha}`]({commit_url})",
         "",
         "## Selected analysis",
         "",
@@ -381,14 +439,7 @@ def render_summary(
         for label, value in live_rows
     )
 
-    rendered_source = (
-        html.escape(source_text, quote=True)
-        if include_source
-        else (
-            "Source text omitted because the summary exceeded GitHub&#x27;s "
-            "1 MiB per-step limit."
-        )
-    )
+    rendered_source = html.escape(source_text, quote=True)
     lines.extend(
         [
             "",
@@ -400,12 +451,7 @@ def render_summary(
             "",
         ]
     )
-    content = "\n".join(lines).encode("utf-8")
-    if len(content) > GITHUB_STEP_SUMMARY_MAX_BYTES:
-        raise SummaryLimitExceededError(
-            "Rendered summary exceeds GitHub's 1 MiB per-step limit"
-        )
-    return content
+    return "\n".join(lines).encode("utf-8")
 
 
 def write_json_atomic(path: Path, value: BaseModel) -> None:
