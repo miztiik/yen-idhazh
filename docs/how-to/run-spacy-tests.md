@@ -83,6 +83,13 @@ service through its owned process group and uses the shared TypeScript
 CloudEvents contract. It never writes evidence paths into API configuration.
 The verification step pipes the GitHub event payload to the runner on stdin,
 so dispatch text is not copied into the step environment or command line.
+Keeping supervision inside that one step is deliberate:
+`run-spacy-test.py` owns server startup, readiness, HTTP evidence, exact
+process-group cleanup and final validation in one `try/finally`.
+`probe-text-analysis.ts` receives only `base_url` for live calls and verifies
+the service independently over HTTP. The runner preserves every server event
+byte in `events.jsonl` and also mirrors only events that pass the native strict
+CloudEvents contract to the live workflow stderr log.
 The runner accepts Uvicorn's preserved SIGTERM exit only when the captured
 events validate one clean `stopped` lifecycle and no service failure.
 
@@ -91,6 +98,9 @@ events validate one clean `stopped` lifecycle and no service failure.
 Do not install, import, start or load the text-analysis service locally for
 this verification. Existing CI checks workflow structure; this manual workflow
 is the live functional check.
+
+Production pipelines use their own process supervisor and call the health and
+analyze routes directly. They do not reuse this verification runner.
 
 ## See also
 

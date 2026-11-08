@@ -6,12 +6,15 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, BinaryIO, Iterator, Literal, cast
 
 import httpx
-from text_analysis.declare_api_contracts import HEALTH_PATH
+from text_analysis.declare_api_contracts import HEALTH_PATH, TextAnalysisEvent
 from text_analysis.declare_service_settings import ServiceSettings
 from text_analysis.load_service_settings import load_service_settings
 
@@ -27,6 +30,140 @@ class VerificationError(RuntimeError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+
+
+@dataclass(slots=True)
+class _EventDrainResult:
+    failed: bool = False
+    artifact_bytes: int = 0
+    mirrored_bytes: int = 0
+    diagnostic_emitted: bool = False
+    lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+
+@contextmanager
+def _workflow_group(name: str) -> Iterator[None]:
+    print(f"::group::{name}", flush=True)
+    try:
+        yield
+    finally:
+        print("::endgroup::", flush=True)
+
+
+def _mark_event_capture_failed(result: _EventDrainResult) -> None:
+    with result.lock:
+        result.failed = True
+        if result.diagnostic_emitted:
+            return
+        result.diagnostic_emitted = True
+    try:
+        sys.stderr.write("text-analysis runner event capture failed\n")
+        sys.stderr.flush()
+    except (OSError, UnicodeError):
+        pass
+
+
+def _mirror_valid_event(
+    record: bytes,
+    mirror: BinaryIO,
+    result: _EventDrainResult,
+) -> None:
+    try:
+        record.decode("utf-8")
+        TextAnalysisEvent.model_validate_json(record)
+    except (UnicodeDecodeError, ValueError):
+        _mark_event_capture_failed(result)
+        return
+    try:
+        written = mirror.write(record)
+        if written != len(record):
+            raise OSError("short event mirror write")
+        mirror.flush()
+    except (OSError, UnicodeError, ValueError):
+        _mark_event_capture_failed(result)
+        return
+    result.mirrored_bytes += written
+
+
+def _drain_events(
+    source: BinaryIO,
+    artifact: BinaryIO,
+    mirror: BinaryIO,
+    max_event_bytes: int,
+    result: _EventDrainResult,
+) -> None:
+    pending = bytearray()
+    discarding_oversized_record = False
+    while True:
+        try:
+            chunk = os.read(source.fileno(), max_event_bytes)
+        except (OSError, ValueError):
+            _mark_event_capture_failed(result)
+            break
+        if not chunk:
+            break
+        try:
+            written = artifact.write(chunk)
+            if written != len(chunk):
+                raise OSError("short event artifact write")
+            result.artifact_bytes += written
+        except (OSError, ValueError):
+            _mark_event_capture_failed(result)
+
+        cursor = 0
+        while cursor < len(chunk):
+            if discarding_oversized_record:
+                newline = chunk.find(b"\n", cursor)
+                if newline < 0:
+                    cursor = len(chunk)
+                    continue
+                discarding_oversized_record = False
+                cursor = newline + 1
+                continue
+
+            newline = chunk.find(b"\n", cursor)
+            if newline < 0:
+                remainder = chunk[cursor:]
+                if len(pending) + len(remainder) >= max_event_bytes:
+                    pending.clear()
+                    discarding_oversized_record = True
+                    _mark_event_capture_failed(result)
+                else:
+                    pending.extend(remainder)
+                cursor = len(chunk)
+                continue
+
+            segment = chunk[cursor : newline + 1]
+            if len(pending) + len(segment) > max_event_bytes:
+                pending.clear()
+                _mark_event_capture_failed(result)
+            else:
+                pending.extend(segment)
+                _mirror_valid_event(bytes(pending), mirror, result)
+                pending.clear()
+            cursor = newline + 1
+
+    if pending or discarding_oversized_record:
+        _mark_event_capture_failed(result)
+
+
+def _join_event_drain(
+    drain: threading.Thread,
+    source: BinaryIO,
+    timeout_seconds: float,
+    result: _EventDrainResult,
+) -> None:
+    drain.join(timeout_seconds)
+    if not drain.is_alive():
+        return
+    _mark_event_capture_failed(result)
+    try:
+        source.close()
+    except OSError:
+        pass
+    drain.join(OWNER_EXIT_GRACE_SECONDS)
+    if drain.is_alive():
+        _mark_event_capture_failed(result)
 
 
 def _required_environment(name: str) -> str:
@@ -74,7 +211,11 @@ def _workflow_inputs() -> dict[str, str]:
     }
 
 
-def _run_probe(payload: dict[str, Any]) -> dict[str, Any]:
+def _run_probe(
+    payload: dict[str, Any],
+    *,
+    echo_failure: bool = True,
+) -> dict[str, Any]:
     completed = subprocess.run(
         ["bun", "run", "--no-install", PROBE_PATH],
         cwd=ROOT,
@@ -84,7 +225,7 @@ def _run_probe(payload: dict[str, Any]) -> dict[str, Any]:
         check=False,
     )
     if completed.returncode != 0:
-        if completed.stderr:
+        if echo_failure and completed.stderr:
             sys.stderr.write(completed.stderr)
         raise VerificationError("LIVE_PROBE_FAILED")
     try:
@@ -256,32 +397,63 @@ def main() -> None:
     }
     cleanup: dict[str, Any] | None = None
 
-    with events_path.open("w", encoding="utf-8", newline="\n") as events:
-        process: subprocess.Popen[bytes] | None = None
+    events = events_path.open("wb")
+    process: subprocess.Popen[bytes] | None = None
+    drain: threading.Thread | None = None
+    drain_result = _EventDrainResult()
+    try:
         try:
-            process = subprocess.Popen(
-                [
-                    sys.executable,
-                    "-m",
-                    "text_analysis",
-                    "--root",
-                    str(ROOT),
-                ],
-                cwd=ROOT,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=events,
-                start_new_session=True,
-            )
-            _wait_for_readiness(process, settings)
-            exercise_result = _run_probe(
-                {
-                    "mode": "exercise",
-                    "base_url": base_url,
-                    **inputs,
-                }
-            )
-            report["exercise"] = exercise_result
+            with _workflow_group("Start server"):
+                process = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-m",
+                        "text_analysis",
+                        "--root",
+                        str(ROOT),
+                    ],
+                    cwd=ROOT,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    start_new_session=True,
+                )
+                if process.stderr is None:
+                    _mark_event_capture_failed(drain_result)
+                    raise VerificationError("EVENT_CAPTURE_FAILED")
+                mirror = getattr(sys.stderr, "buffer", None)
+                if mirror is None:
+                    _mark_event_capture_failed(drain_result)
+                    raise VerificationError("EVENT_CAPTURE_FAILED")
+                event_drain = threading.Thread(
+                    target=_drain_events,
+                    args=(
+                        process.stderr,
+                        events,
+                        mirror,
+                        settings.logging.max_event_bytes,
+                        drain_result,
+                    ),
+                    name="text-analysis-event-drain",
+                    daemon=False,
+                )
+                try:
+                    event_drain.start()
+                except RuntimeError:
+                    _mark_event_capture_failed(drain_result)
+                    raise VerificationError("EVENT_CAPTURE_FAILED") from None
+                drain = event_drain
+            with _workflow_group("Wait for readiness"):
+                _wait_for_readiness(process, settings)
+            with _workflow_group("Exercise HTTP API"):
+                exercise_result = _run_probe(
+                    {
+                        "mode": "exercise",
+                        "base_url": base_url,
+                        **inputs,
+                    }
+                )
+                report["exercise"] = exercise_result
         except VerificationError as failure:
             failure_code = failure.code
         except OSError:
@@ -289,38 +461,74 @@ def main() -> None:
         except Exception:
             failure_code = "VERIFICATION_FAILED"
         finally:
-            if process is not None:
-                try:
-                    cleanup = _stop_owned_process(
-                        process,
-                        settings.listener.shutdown_timeout_ms,
+            with _workflow_group("Stop server"):
+                if process is not None:
+                    try:
+                        cleanup = _stop_owned_process(
+                            process,
+                            settings.listener.shutdown_timeout_ms,
+                        )
+                    except (OSError, VerificationError):
+                        cleanup = {
+                            "confirmed": False,
+                            "forced": True,
+                            "exit_code": process.poll(),
+                        }
+                        failure_code = failure_code or "PROCESS_GROUP_NOT_STOPPED"
+                if drain is not None and process is not None and process.stderr is not None:
+                    _join_event_drain(
+                        drain,
+                        process.stderr,
+                        settings.listener.shutdown_timeout_ms / 1000
+                        + OWNER_EXIT_GRACE_SECONDS,
+                        drain_result,
                     )
-                except VerificationError as failure:
-                    cleanup = {
-                        "confirmed": False,
-                        "forced": True,
-                        "exit_code": process.poll(),
-                    }
-                    failure_code = failure_code or failure.code
+                    try:
+                        process.stderr.close()
+                    except OSError:
+                        _mark_event_capture_failed(drain_result)
+                try:
+                    events.flush()
+                except OSError:
+                    _mark_event_capture_failed(drain_result)
+                try:
+                    events.close()
+                except OSError:
+                    _mark_event_capture_failed(drain_result)
+    finally:
+        if not events.closed:
             try:
-                events.flush()
+                events.close()
             except OSError:
-                failure_code = failure_code or "EVENT_CAPTURE_FAILED"
+                _mark_event_capture_failed(drain_result)
 
     report["cleanup"] = cleanup
     event_validation: dict[str, Any] | None = None
-    try:
-        event_validation = _run_probe(
-            {
-                "mode": "validate_events",
-                "events_path": str(events_path),
-                "text": inputs["text"],
-                "exercise": exercise_result,
-            }
-        )
-        report["event_validation"] = event_validation
-    except VerificationError as failure:
-        failure_code = failure_code or failure.code
+    with _workflow_group("Validate evidence"):
+        capture_failed = drain_result.failed
+        if drain_result.failed:
+            _mark_event_capture_failed(drain_result)
+            failure_code = "EVENT_CAPTURE_FAILED"
+        elif failure_code is None and (
+            drain_result.artifact_bytes == 0
+            or drain_result.mirrored_bytes != drain_result.artifact_bytes
+        ):
+            _mark_event_capture_failed(drain_result)
+            failure_code = "EVENT_CAPTURE_FAILED"
+            capture_failed = True
+        try:
+            event_validation = _run_probe(
+                {
+                    "mode": "validate_events",
+                    "events_path": str(events_path),
+                    "text": inputs["text"],
+                    "exercise": exercise_result,
+                },
+                echo_failure=not capture_failed,
+            )
+            report["event_validation"] = event_validation
+        except VerificationError as failure:
+            failure_code = failure_code or failure.code
 
     if (
         failure_code is None

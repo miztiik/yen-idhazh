@@ -181,6 +181,16 @@ artifact after ordinary failure, with 90-day retention. Cleanup or upload
 failure fails the 60-minute job. See the
 [manual text-analysis guide](../how-to/run-spacy-tests.md).
 
+The one verification step deliberately keeps startup, readiness, HTTP exercise
+and cleanup under `run-spacy-test.py`, which retains the exact child process and
+process group through one `try/finally`. Its fixed workflow log groups expose
+those phases. `probe-text-analysis.ts` receives only `base_url` and remains an
+independent HTTP verifier. The runner writes the original server stderr bytes
+to `events.jsonl` while mirroring only events accepted by the native strict
+text-analysis CloudEvents contract to live workflow stderr. Production
+pipelines use their own supervisor with the health and analyze routes rather
+than this verification runner.
+
 ## Pages publication
 
 - Build committed data only. Do not run the producer or a model during publication.
