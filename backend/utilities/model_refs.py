@@ -70,9 +70,11 @@ GGUF_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.gguf$")
 #: A full commit. A branch is re-pointed on every upload, so a run that names one
 #: cannot be repeated. Equal to `measure_llm.REVISION_RE`.
 REVISION_RE: Final = re.compile(r"^[0-9a-f]{40}$")
-#: One path segment. A companion carries no suffix rule because it may be a
-#: projector, an adapter or a vocoder rather than a second GGUF.
-SEGMENT_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+#: Safe companion paths have no suffix rule: projectors and adapters need not be GGUF.
+#: Kept equal to the native contract by the companion-path binding test.
+COMPANION_PATH_RE: Final = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*$"
+)
 #: A digest, required of the weights and of every companion with no exception.
 SHA256_RE: Final = re.compile(r"^[0-9a-f]{64}$")
 #: The alias the server answers under. Equal to `idhazh.contracts.base.SLUG_PATTERN`.
@@ -197,9 +199,11 @@ def _declared(config_root: Path, named: str) -> _Declared:
 
 
 def _a_file(declared: _Declared, block: Mapping[str, Any], at: str, *, weights: bool) -> ModelFile:
-    """One declared file. A companion keeps the segment rule without the suffix."""
+    """One declared file. A companion preserves safe repository subdirectories."""
     rule, says = (
-        (GGUF_RE, "not a .gguf filename") if weights else (SEGMENT_RE, "not one path segment")
+        (GGUF_RE, "not a .gguf filename")
+        if weights
+        else (COMPANION_PATH_RE, "not a safe relative POSIX path")
     )
     filename = _field(declared, block, at, "file", rule, says)
     return ModelFile(

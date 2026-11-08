@@ -1,6 +1,6 @@
 # The model's own file
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-11-08
 
 What `config/` says about a set of weights: which model runs, what runtime
 settings are declared for those exact bytes, how a turn is written for it, and
@@ -81,6 +81,20 @@ its limit is still reported as truncated rather than published as complete.
 ## The model references are the only values in `config/` with no default
 
 There is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing. A reference names the repository, the file, and the `revision` those bytes were uploaded in; the revision is what makes the recorded `sha256` mean anything, because a download that named a branch would get whatever was uploaded last. No workflow keeps a copy of any of it: `digest.yml` and `idhazh-pipeline-tests.yaml` follow `models_file` to the active model file, read `summarizer` out of it, and use the result to load the weights ([../../reference/github-actions.md](../../reference/github-actions.md)).
+
+Companion `file` values are relative POSIX paths, not just filenames. The
+download URL and the local path preserve every directory segment. Each segment
+starts with an ASCII letter or digit and contains only ASCII letters, digits,
+dots, underscores or hyphens; absolute paths, traversal, backslashes and shell
+syntax are refused before download or launch. The native contract and the
+pre-install workflow reader share this grammar through a named binding test.
+
+This is an additive read-side change: existing single-segment declarations and
+recorded run payloads remain valid without migration. The 12B Gemma Q4_0 draft
+head is stored at `MTP/mtp-gemma-4-12B-it-Q4_0.gguf` at its pinned revision.
+Preserving that path fixes the download without changing its digest or size.
+This section stays here because companion locations are part of the model
+reference, not a separate configuration concept.
 
 **Six spellings were retired on 2026-09-13, and a file still carrying one is
 refused by name.** Plan 11 row #6 deleted `models.visual_planner`,
