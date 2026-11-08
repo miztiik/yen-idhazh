@@ -51,9 +51,11 @@ async def call_local_api[Result: BaseModel](
             ) as response:
                 status = response.status_code
                 if observe_trace is not None:
+                    observation = read_response_trace(response.headers)
                     try:
-                        observe_trace(read_response_trace(response.headers))
-                    except (OSError, ValueError, TypeError, RuntimeError):
+                        observe_trace(observation)
+                    except Exception:
+                        # Optional callbacks cannot erase results; BaseException controls propagate.
                         logging.getLogger(__name__).warning(
                             '{"event":"scorer_trace_observation_failed"}'
                         )

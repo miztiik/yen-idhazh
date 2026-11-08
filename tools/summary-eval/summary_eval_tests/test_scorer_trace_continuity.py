@@ -337,8 +337,9 @@ def test_recorded_unieval_complete_and_partial_results_survive_response_trace_fa
     asyncio.run(check())
 
 
+@pytest.mark.parametrize("exception_type", [RuntimeError, KeyError, ZeroDivisionError])
 def test_failed_response_observer_keeps_the_native_result_and_reports_only_a_fixed_warning(
-    caplog: pytest.LogCaptureFixture,
+    caplog: pytest.LogCaptureFixture, exception_type: type[Exception],
 ) -> None:
     async def check() -> None:
         inputs, prepared, receipt, previous = generation_phase()
@@ -349,7 +350,7 @@ def test_failed_response_observer_keeps_the_native_result_and_reports_only_a_fix
         settings = service_settings()
 
         def failed_observer(_value: object) -> None:
-            raise RuntimeError("PrivateTraceObserverCanary")
+            raise exception_type("PrivateTraceObserverCanary")
 
         async with running_scorers(settings) as case:
             status, result = await evaluate(
@@ -359,9 +360,47 @@ def test_failed_response_observer_keeps_the_native_result_and_reports_only_a_fix
                 observe_trace=failed_observer,
             )
             assert status == 200 and result.status == "complete"
-            assert "scorer_trace_observation_failed" in caplog.text
+            actual = next(
+                response for response in case.transport.responses
+                if response.request.url.path == EVALUATE_PATH
+            )
+            assert result == EvaluationResult.model_validate_json(actual.body)
+            assert status == actual.status
+            assert [
+                record.getMessage() for record in caplog.records
+                if record.name == "summary_eval_pipeline.http"
+            ] == ['{"event":"scorer_trace_observation_failed"}']
             assert "PrivateTraceObserverCanary" not in caplog.text
             assert inputs.source_text not in caplog.text
+
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize("exception_type", [asyncio.CancelledError, KeyboardInterrupt, SystemExit])
+def test_response_observer_preserves_cancellation_and_process_control_exceptions(
+    exception_type: type[BaseException], caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def check() -> None:
+        inputs, prepared, receipt, previous = generation_phase()
+        request, _ = bind_evaluations(
+            prepared, inputs, receipt, previous,
+            generation_sha256=text_sha256(receipt.model_dump_json()),
+        )
+        settings = service_settings()
+
+        def stop_observer(_value: object) -> None:
+            raise exception_type("PrivateTraceControlCanary")
+
+        async with running_scorers(settings) as case:
+            with pytest.raises(exception_type):
+                await evaluate(
+                    case.client, case.apis[0].origin, request, settings,
+                    load_pipeline_settings(REPOSITORY),
+                    operation_metadata=create_child_operation(create_root_operation()),
+                    observe_trace=stop_observer,
+                )
+        assert "scorer_trace_observation_failed" not in caplog.text
+        assert "PrivateTraceControlCanary" not in caplog.text
 
     asyncio.run(check())
 

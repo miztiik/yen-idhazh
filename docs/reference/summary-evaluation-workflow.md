@@ -180,8 +180,10 @@ observation retains no invented parent. Valid optional state is canonical;
 invalid optional state is omitted without losing a valid remote identity.
 Missing or malformed parent carriers produce fixed, body-free observations.
 These per-call values remain in memory and are excluded from saved scores,
-phase evidence and reports. An observer failure emits a fixed warning without
-discarding a native response or its completed scores.
+phase evidence and reports. An ordinary callback failure emits a fixed warning
+without discarding a native response or its completed scores. Only the callback
+invocation is isolated; transport and native-body validation retain their own
+failures. Cancellation and process-exit signals still propagate.
 
 If a scorer's health transport fails, the caller retains independent observations
 already validated for its siblings and records that actual failure under the owning scorer.
