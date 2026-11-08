@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-08
 
 Checks for agents using Git and GitHub. Follow the
 [PR workflow](../../how-to/ship-a-pr.md) and [git rules](../../../CLAUDE.md#7-git-hygiene).
@@ -22,6 +22,7 @@ Checks for agents using Git and GitHub. Follow the
 
 - Compare fixed commit ids. Shared worktrees can update `origin/main` between commands.
 - Review `git diff --name-only <base>...HEAD` before publishing; a clean checkout does not prove the branch contains only your changes.
+- If `main` advances only run output, publish the fixed validated candidate rather than waiting for another data-only merge or missing-blob fetch. Check the actual diff first; reconcile relevant code or contract changes and preserve local work and any in-flight Git operation.
 - Resolve conflicts from both changes' intent. Do not take `--ours` or `--theirs` for every file without checking what it discards.
 - A documentation branch based on a feature branch can retain its old code after that feature is squash-merged. Merge current main, keep its tested code and verify that the final diff changes only the intended documents.
 
