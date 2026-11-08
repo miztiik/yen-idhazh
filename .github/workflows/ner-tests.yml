@@ -125,3 +125,43 @@ jobs:
           include-hidden-files: false
           if-no-files-found: error
           retention-days: 90
+
+      - name: Generate the GLiNER dependency lock
+        run: uv lock --project services/text_analysis/gliner
+
+      - name: Upload the generated GLiNER lock
+        uses: actions/upload-artifact@v7
+        with:
+          name: gliner-dependency-lock
+          path: services/text_analysis/gliner/uv.lock
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Sync the GLiNER API environment
+        run: uv sync --project services/text_analysis/gliner --frozen --extra model --group dev
+
+      - name: Check GLiNER API source
+        working-directory: services/text_analysis/gliner
+        run: |
+          uv run --frozen --extra model --group dev ruff check src tests scripts
+          uv run --frozen --extra model --group dev mypy src tests scripts
+
+      - name: Prepare the configured GLiNER model
+        run: >-
+          uv run --project services/text_analysis/gliner --frozen --extra model --group dev
+          python services/text_analysis/gliner/scripts/prepare_model.py --root .
+
+      - name: Check the native GLiNER API
+        run: >-
+          uv run --project services/text_analysis/gliner --frozen --extra model --group dev
+          pytest services/text_analysis/gliner/tests/test_api.py
+          --junitxml="${{ runner.temp }}/gliner-api-results.xml"
+
+      - name: Upload GLiNER API results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gliner-api-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gliner-api-results.xml
+          if-no-files-found: error
+          retention-days: 90

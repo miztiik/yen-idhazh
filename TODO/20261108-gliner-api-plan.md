@@ -72,7 +72,7 @@
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| F1 | 1 | Delivering the native GLiNER2 API | - | A | PENDING | - | - | - |
+| F1 | 1 | Delivering the native GLiNER2 API | - | A | IN-FLIGHT | musical-waddle | - | GLiNER2 API delivery |
 | F2 | 2 | Integrating the independent APIs on the existing listener | 1 | B | PENDING | - | - | - |
 
 ## 2 - Row #1 - Delivering the native GLiNER2 API
