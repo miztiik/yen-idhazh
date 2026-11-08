@@ -94,9 +94,11 @@ def compose_api[HealthT, EventT](
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         failure: BaseException | None = None
+        startup_completed = False
         try:
             await events.started(service_context, events.data.started())
             await component.start()
+            startup_completed = True
             yield
         except BaseException as error:
             failure = error
@@ -113,8 +115,13 @@ def compose_api[HealthT, EventT](
                         service_context,
                         events.data.failed(HostFailure(phase="shutdown")),
                     )
-                else:
+                elif startup_completed:
                     await events.stopped(service_context, events.data.stopped())
+                else:
+                    await events.failed(
+                        service_context,
+                        events.data.failed(HostFailure(phase="startup")),
+                    )
             except BaseException as error:
                 cleanup.append(error)
             try:
