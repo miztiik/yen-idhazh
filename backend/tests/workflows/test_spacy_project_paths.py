@@ -47,7 +47,7 @@ def test_spacy_host_dependency_resolves_from_the_nested_project() -> None:
 
 
 def test_spacy_workflow_uses_the_nested_project_and_existing_entrypoints() -> None:
-    steps = _steps(_load_workflows()["spacy-tests.yml"], "spacy_live_test")
+    steps = _steps(_load_workflows()["ner-tests.yml"], "spacy_ner_test")
     sync = next(step for step in steps if step.get("run") == "uv sync --frozen")
     assert sync["working-directory"] == PROJECT_PATH
 
@@ -64,7 +64,7 @@ def test_spacy_workflow_uses_the_nested_project_and_existing_entrypoints() -> No
         assert (REPO_ROOT / entrypoint).is_file()
 
     contracts = next(
-        step for step in steps if step.get("name") == "Check verification artifact contracts"
+        step for step in steps if "test_spacy_verification.py" in str(step.get("run", ""))
     )
     assert (
         _mapping(contracts["env"], "verification environment")["PYTHONPATH"]

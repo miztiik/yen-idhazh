@@ -75,8 +75,8 @@ EXPECTED_WORKFLOWS: Final = {
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),
     ),
-    "spacy-tests.yml": (
-        "Text-Analysis-spaCy-tests",
+    "ner-tests.yml": (
+        "Text-Analysis-NER-tests",
         frozenset({"workflow_dispatch"}),
     ),
     "idhazh-gardener.yml": ("Idhazh Gardener", frozenset({"schedule", "workflow_dispatch"})),
@@ -168,11 +168,11 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
     ("idhazh-pipeline-tests.yaml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
-    ("spacy-tests.yml", "language"): DISPATCH_CHOICE,
-    ("spacy-tests.yml", "profile"): DISPATCH_CHOICE,
-    ("spacy-tests.yml", "feature_mode"): DISPATCH_CHOICE,
-    ("spacy-tests.yml", "custom_features"): DISPATCH_READ_BY_NAME,
-    ("spacy-tests.yml", "text"): DISPATCH_READ_FROM_EVENT_STDIN,
+    ("ner-tests.yml", "language"): DISPATCH_CHOICE,
+    ("ner-tests.yml", "profile"): DISPATCH_CHOICE,
+    ("ner-tests.yml", "feature_mode"): DISPATCH_CHOICE,
+    ("ner-tests.yml", "custom_features"): DISPATCH_READ_BY_NAME,
+    ("ner-tests.yml", "text"): DISPATCH_READ_FROM_EVENT_STDIN,
     # The planner checks both the date pattern and real UTC calendar day before
     # resolving selected judges; the workflow passes it through env, not script source.
     ("llm-council.yml", "date"): DISPATCH_READ_BY_NAME,

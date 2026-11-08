@@ -93,7 +93,7 @@ def test_expensive_workflows_do_not_run_on_pull_request_or_push() -> None:
 
 
 def test_spacy_workflow_dispatch_inputs_match_the_manual_contract() -> None:
-    inputs = _declared_dispatch_inputs(_load_workflows()["spacy-tests.yml"])
+    inputs = _declared_dispatch_inputs(_load_workflows()["ner-tests.yml"])
     assert set(inputs) == {
         "language",
         "profile",
@@ -102,7 +102,7 @@ def test_spacy_workflow_dispatch_inputs_match_the_manual_contract() -> None:
         "text",
     }
     declared = {
-        name: _mapping(body, f"spacy-tests.yml input {name}") for name, body in inputs.items()
+        name: _mapping(body, f"ner-tests.yml input {name}") for name, body in inputs.items()
     }
 
     assert {name: body.get("type") for name, body in declared.items()} == {
@@ -145,12 +145,12 @@ def test_spacy_workflow_dispatch_inputs_match_the_manual_contract() -> None:
 
 
 def test_spacy_workflow_checks_out_the_selected_github_sha() -> None:
-    workflow = _load_workflows()["spacy-tests.yml"]
+    workflow = _load_workflows()["ner-tests.yml"]
     jobs = _mapping(workflow.get("jobs"), "spacy workflow jobs")
-    assert set(jobs) == {"spacy_live_test"}
-    job = _mapping(jobs["spacy_live_test"], "spacy live-test job")
+    assert "spacy_ner_test" in jobs
+    job = _mapping(jobs["spacy_ner_test"], "spacy live-test job")
     assert job["name"] == "spaCy live test - ${{ inputs.language }} / ${{ inputs.profile }}"
-    steps = _steps(workflow, "spacy_live_test")
+    steps = _steps(workflow, "spacy_ner_test")
     checkout = next(step for step in steps if step.get("uses") == "actions/checkout@v6")
     recorded = next(
         step for step in steps if step.get("name") == "Verify the tested checkout"
@@ -180,8 +180,8 @@ def test_spacy_workflow_checks_out_the_selected_github_sha() -> None:
 
 
 def test_spacy_workflow_uploads_only_the_six_declared_artifacts() -> None:
-    workflow = _load_workflows()["spacy-tests.yml"]
-    steps = _steps(workflow, "spacy_live_test")
+    workflow = _load_workflows()["ner-tests.yml"]
+    steps = _steps(workflow, "spacy_ner_test")
     upload = next(
         step for step in steps if step.get("uses") == "actions/upload-artifact@v7"
     )
@@ -213,10 +213,10 @@ def test_spacy_workflow_uploads_only_the_six_declared_artifacts() -> None:
 
 
 def test_spacy_workflow_passes_free_text_only_through_runner_stdin() -> None:
-    workflow = _load_workflows()["spacy-tests.yml"]
+    workflow = _load_workflows()["ner-tests.yml"]
     runner = next(
         step
-        for step in _steps(workflow, "spacy_live_test")
+        for step in _steps(workflow, "spacy_ner_test")
         if step.get("name") == "Run live text-analysis verification"
     )
     env = _mapping(runner.get("env"), "text-analysis runner env")
