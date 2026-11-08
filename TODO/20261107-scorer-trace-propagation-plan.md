@@ -205,7 +205,7 @@ flowchart LR
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| H1 | 1 | Accept trace-aware scorer envelopes without changing old records | - | A | PENDING | - | - | - |
+| H1 | 1 | Accept trace-aware scorer envelopes without changing old records | - | A | IN-FLIGHT | fuzzy-parakeet | - | Trace envelope readers |
 | H2 | 2 | Enable actual scorer API and worker trace propagation | 1 | B | PENDING | - | - | - |
 | H3 | 3 | Connect retained callers and process diagnostics to scorer traces | 2 | C | PENDING | - | - | - |
 

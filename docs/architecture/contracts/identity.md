@@ -1,6 +1,6 @@
 # Identity contracts
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-08
 
 How files, work units, content, event occurrences and operations retain distinct identities.
 
@@ -289,7 +289,7 @@ hhem
 {sequence}
 ```
 
-`services/summary_evaluator/src/summary_evaluator/resolve_ids.py` declares this encoding
+`services/summary_evaluator/src/summary_evaluator/hhem/resolve_ids.py` declares this encoding
 once and uses Python's standard UUID implementation. The named
 `tests/fixtures/hhem-evaluator/event-id-vectors.json` vectors also run through
 the existing TypeScript `createUuidV5` implementation. Missing Bun or its locked
@@ -298,12 +298,29 @@ service installation.
 
 The shared Python server carries each HHEM event in CloudEvents 1.0. Its
 envelope `id` is the native `event_id`, and `time` is the native UTC
-`occurred_at`; the native ordered event is `data`. Shared API, llama and
-diagnostic-file occurrences instead receive fresh UUIDv4 event IDs. Their
+`occurred_at`; the native ordered event is `data`. API, native UniEval,
+historical coverage and diagnostic-file occurrences instead receive fresh UUIDv4 event IDs. Their
 producer `source` is the fixed URI reference `/fastapi-server`. These are
 native Python events, not manufactured TypeScript trace identifiers.
-Readers accept the current structured envelope only. Private startup and
-worker-control packets remain native JSON, not CloudEvents.
+Readers accept the structured envelope, never unwrapped HHEM data. A saved
+envelope may have valid `traceparent` and optional canonical `tracestate`.
+Both absent means untraced and both remain omitted after serialization.
+Explicit null, a malformed supplied carrier or state without a parent is
+rejected; reading never creates an operation, occurrence or timestamp.
+The envelope's schema date and read-compatibility metadata do not change
+CloudEvents `specversion: "1.0"` or the native event-data version.
+Private startup and worker-control packets remain native JSON, not CloudEvents.
+
+Transport context is separate from the native execution, operation and caller
+UUIDs above. The single Python metadata copy and W3C codec live in
+`services/local_api_host/src/local_api_host/propagate_trace_context.py`.
+`tests/test_trace_context.py` and its real Bun bridge bind that copy's serialized
+field set, requiredness, null rules, types, factories and codec to the shared
+TypeScript authority in section 4. The native metadata date remains
+`2026-11-03`; its snake-case Python attributes serialize with the shared
+camel-case names. No UUID conversion or second context model is involved.
+Existing evaluator factories still emit untraced events; reader compatibility
+does not enable HTTP or worker propagation.
 
 UniEval also creates its execution UUIDv4 before body reading, independently
 of caller request/correlation UUIDs and the other model worker. Its private
@@ -327,6 +344,13 @@ without changing repeatable work or foreign protocols. The pinned
 the W3C codec only. Core also installs semantic-convention definitions. Their
 cost is server/tool installation, not browser bytes; no tracing SDK, recorder,
 exporter, collector, automatic instrumentation or trace file is added.
+
+Native scorer readers preserve real absent or supplied carriers without
+recreating a saved event. The neutral host's existing `opentelemetry-api`
+dependency supplies Python's W3C codec; its cost is package installation and
+bounded carrier bytes, not model weights, browser bytes or a new tracing service.
+Python UUIDv5 scorer occurrences and UUIDv4 diagnostics retain their native
+profile rather than adopt the TypeScript UUIDv4-only event factory.
 
 A query can select the resource itself. Keeping an extra address record is
 safer than merging two required parameter values. URL identity does not decide

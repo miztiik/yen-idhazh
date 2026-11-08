@@ -13,21 +13,29 @@ from summary_evaluator_cases.contract_examples import SETTINGS_FILE, example_eve
 from summary_evaluator.hhem.contracts.evaluation_event import EventDetails
 from summary_evaluator.hhem.emit_events import EventEmitter
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
-from summary_evaluator.serve_http.contracts.server_event import ApiDiagnosticData, ServerEvent
+from summary_evaluator.serve_http.contracts.server_event import (
+    SERVER_EVENT_SCHEMA_VERSION,
+    ApiDiagnosticData,
+    ServerEvent,
+)
 from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
 from summary_evaluator.shared.contracts.diagnostic_data import LifecycleFields
-from summary_evaluator.shared.contracts.server_contract import SERVER_SCHEMA_VERSION
 from summary_evaluator.shared.contracts.service_settings import StartupContext
 
 
-def test_native_event_has_one_current_cloudevents_occurrence_and_no_legacy_reader() -> None:
+def test_saved_untraced_event_retains_its_occurrence_and_rejects_unwrapped_data() -> None:
     native = example_event()
     event = ServerEvent.from_evaluation(native)
     assert event.id == native.event_id and event.time == native.occurred_at
     assert event.source == "/fastapi-server" and event.specversion == "1.0"
-    assert ServerEvent.model_validate_json(event.model_dump_json()) == event
-    assert ServerEvent.model_json_schema()["version"] == SERVER_SCHEMA_VERSION
+    saved = event.model_dump_json()
+    observed = ServerEvent.model_validate_json(saved)
+    assert observed == event
+    assert observed.model_dump_json() == saved
+    assert "traceparent" not in observed.model_dump()
+    assert "tracestate" not in observed.model_dump()
+    assert ServerEvent.model_json_schema()["version"] == SERVER_EVENT_SCHEMA_VERSION
     with pytest.raises(ValidationError):
         ServerEvent.model_validate_json(native.model_dump_json())
     with pytest.raises(ValidationError):

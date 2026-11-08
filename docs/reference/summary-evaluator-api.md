@@ -1,6 +1,6 @@
 # Summary evaluator API
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 Which routes and startup settings each selected `summary-evaluator` process exposes.
 This is a local workflow service, not a backend for the published site.
@@ -15,17 +15,19 @@ in `services/summary_evaluator/src/summary_evaluator/serve_http/contracts/`
 and `shared/contracts/`. The reusable listener contract lives in
 `services/local_api_host/src/local_api_host/contracts.py`; the evaluator
 projects its committed settings into that contract with trace propagation
-disabled, so evaluator responses and events gain no trace fields. Shared settings,
-health, generic API errors and CloudEvents schemas have version `2026-11-07`.
-Live health, errors and event envelopes use their current shapes. Deployment
+disabled, so evaluator responses and newly emitted events remain untraced.
+Shared settings, health and generic API errors retain version `2026-11-07`.
+The native CloudEvents envelope schema has version `2026-11-08` and declares
+reader-optional W3C carriers; it adds no payload `version` field and retains
+`specversion: "1.0"`. Live health and errors use their current shapes. Deployment
 readers also accept frozen `2026-11-07` three-listener and single-listener
 settings, but resolve only one maintained scorer. Saved workflow evidence may
 read the exact previous health shape only with disabled coverage, then remove
 that slot without inventing process observations. Mixed formats, arbitrary
 extras, invalid bounds, listener collisions and unknown versions are rejected.
 Historical logs retain coverage diagnostics; no records are rewritten.
-HHEM and native UniEval scoring schemas retain
-their own versions.
+HHEM score/event data retains `2026-11-02`; native UniEval score/recording data
+retains `2026-11-04`.
 
 Table A - Listener and component selection
 
@@ -114,6 +116,13 @@ and the existing body-free HHEM operation data. The
 defines event identity. Prompts, request bodies, model answers, secrets and raw
 exception messages are not diagnostic fields. Uvicorn access/error output is
 disabled; private startup and process-exit packets stay on their own channel.
+
+Saved envelopes may carry validated `traceparent` and `tracestate` extensions.
+The reader preserves their native occurrence, UTC time, ordered data and
+carrier; real legacy absence stays omitted. The identity contract owns the
+[strict read rules](../architecture/contracts/identity.md#6-hhem-execution-and-event-identity).
+Historical coverage diagnostics remain readable without enabling coverage.
+This reader support does not inject live carriers or change scorer responses.
 
 An unopenable or unwritable file emits `LOG_FILE_UNAVAILABLE` to stderr and
 sets shared health's `log_available` to false. It does not change a score or
