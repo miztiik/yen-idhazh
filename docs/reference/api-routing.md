@@ -167,7 +167,7 @@ owns the real stage HTTP composition and its supervised clients.
 
 The independent Python text-analysis service uses the fixed HTTP date
 `2026-11-07`. Its constants live in
-`services/text_analysis/src/text_analysis/declare_api_contracts.py`.
+`services/text_analysis/spacy/src/text_analysis/declare_api_contracts.py`.
 
 Table E - Text-analysis operations
 

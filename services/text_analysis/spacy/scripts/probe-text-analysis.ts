@@ -4,7 +4,7 @@ import {
   createRootContext,
   readTraceContext,
   writeTraceContext,
-} from "../../../packages/common-contracts/src/index.ts";
+} from "../../../../packages/common-contracts/src/index.ts";
 
 type JsonRecord = Record<string, unknown>;
 type Language = "en" | "zh";

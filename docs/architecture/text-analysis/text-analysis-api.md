@@ -8,8 +8,8 @@ coupling the runtime to a pipeline.
 
 ## One service, one bounded listener
 
-`services/text_analysis/` is an installable Python package composed through the
-neutral [`local_api_host`](../local-api-host.md). It owns the dated
+`services/text_analysis/spacy/` is an installable Python package composed through
+the neutral [`local_api_host`](../local-api-host.md). It owns the dated
 text-analysis routes, settings, health, errors, feature extraction, process
 pool and CloudEvents data. The host owns the guarded loopback listener,
 bounded body reader, trace middleware, OpenAPI route and lifespan ordering.
@@ -139,6 +139,11 @@ Standard executor processes already supply the required CPU isolation and
 concurrency. A custom worker protocol, queue or automatic repair would add
 ownership, cancellation and recovery states without serving the initial
 two-request contract.
+
+Keeping the implementation's manifest, environment and verification tools
+together leaves the parent directory available for other implementations
+without sharing a project. Physical project location does not change the
+Python package name, HTTP family or committed settings location.
 
 Selectable features keep expensive or verbose data caller-controlled, while
 feature-local errors preserve useful siblings. Keeping timings out of HTTP

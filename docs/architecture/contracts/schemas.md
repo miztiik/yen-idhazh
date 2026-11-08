@@ -46,7 +46,7 @@ one run, not inputs to a later run; adding such a reader requires a persisted
 contract design first.
 
 Transient text-analysis settings, HTTP, worker and CloudEvents contracts live
-under `services/text_analysis/src/text_analysis/`. Their strict Pydantic models
+under `services/text_analysis/spacy/src/text_analysis/`. Their strict Pydantic models
 own validation and on-demand OpenAPI schemas without entering the backend
 persisted-contract registry. The API writes no service-side result or event
 record; the manual workflow's same-run report and captured stderr are

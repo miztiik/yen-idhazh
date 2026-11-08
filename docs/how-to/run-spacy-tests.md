@@ -2,8 +2,8 @@
 
 **Last Updated**: 2026-11-08
 
-How to dispatch `spacy-tests.yml` against one selected implementation ref
-and inspect its live multilingual API evidence. This procedure is
+How to dispatch the `spacy_ner_test` job in `ner-tests.yml` against one selected
+implementation ref and inspect its live multilingual API evidence. This procedure is
 project-specific because it uses the committed text-analysis service and shared
 TypeScript event contracts.
 
@@ -16,7 +16,7 @@ and verifies that exact immutable commit.
 
 Do not treat registration or ordinary pull-request checks as live
 text-analysis evidence. The checked commit must contain the complete
-`services/text_analysis/` implementation and scripts.
+`services/text_analysis/spacy/` implementation and scripts.
 
 ## Select the exact ref and inputs
 
@@ -48,7 +48,7 @@ $inputs = @{
   text = Get-Content -Raw .\text-analysis-input.txt
 } | ConvertTo-Json -Compress
 
-$inputs | gh workflow run spacy-tests.yml --ref '<implementation-branch-or-tag>' --json
+$inputs | gh workflow run ner-tests.yml --ref '<implementation-branch-or-tag>' --json
 ```
 
 Before the implementation pull request merges, select its final branch head
@@ -63,7 +63,7 @@ Do not submit secrets or private material.
 ## Inspect the run and evidence
 
 ```powershell
-gh run list --workflow spacy-tests.yml --limit 5 --json databaseId,headSha,status,conclusion,url
+gh run list --workflow ner-tests.yml --limit 5 --json databaseId,headSha,status,conclusion,url
 gh run view <run-id> --log
 gh run download <run-id> --dir <evidence-directory>
 ```

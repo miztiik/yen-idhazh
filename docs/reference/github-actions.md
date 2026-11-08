@@ -21,7 +21,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |
 | `feed-ingest-plan-test.yml` | `Feed ingest plan test` | none | Run the real planner HTTP API and publish its completed planner and host metadata |
 | `summary-eval-tests.yml` | `summary-eval-tests` | none | Generate natively with one declared model, stop it, score the saved answer through independent HHEM and UniEval APIs with optional independent-reference relevance, and report applicable work and machine/server outcomes without Git delivery |
-| `spacy-tests.yml` | `Text-Analysis-spaCy-tests` | none | Verify the multilingual text-analysis API at an immutable commit |
+| `ner-tests.yml` | `Text-Analysis-NER-tests` | none | Verify the multilingual text-analysis API at an immutable commit |
 | `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
 | `ai-pipeline-tests.yml` | `Yen-Summarizers` | Manual inference; pull-request saved-event checks | Run independent TypeScript inference and preserve generation/event/report checks |
 
@@ -161,11 +161,11 @@ See [host metrics](host-metrics.md) for the fingerprint and its unavailable reas
 
 ## Manual text analysis
 
-`spacy-tests.yml` is a read-only manual workflow. The dispatch selects a branch
+`ner-tests.yml` is a read-only manual workflow. The dispatch selects a branch
 or tag; GitHub resolves it to `github.sha`. The workflow checks out that exact
 commit with credentials disabled and verifies the checkout before execution.
 
-One stock Ubuntu job uses CPython 3.12, pinned uv and Bun, and the locked
+The `spacy_ner_test` job uses stock Ubuntu, CPython 3.12, pinned uv and Bun, and the locked
 `packages/common-contracts` toolchain. It syncs the selected commit's
 text-analysis environment, prepares only the selected configured model and
 runs only the service-local preparation and verification scripts. Dispatch
