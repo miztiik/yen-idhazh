@@ -14,13 +14,15 @@ recorded. It was not repeated.
 The after reading is one serial run on Windows 11, Python 3.14.2, an Intel
 Core i7-1265U with 10 cores and 12 logical processors, and 31.8 GiB RAM.
 The invocation required the shared gate lock; it did not isolate the machine
-from other work. All 82 tests passed in
-478.09 seconds. The full application suite was not run locally.
+from other work. At measurement time, the 82-test selection passed in
+478.09 seconds. The full application suite was not run locally. One of the
+two measured test modules has since been removed, so the recorded total cannot
+be reproduced.
 
 ```powershell
 $env:GIT_CONFIG_COUNT = '0'
 $env:PYTHONPATH = Join-Path (Get-Location) 'backend'
-python backend/utilities/gate_lock.py --require-lock --retry-every 0.25 --timeout 7200 -- python -m pytest -n 0 backend/tests/workflows/test_commit_script.py backend/tests/workflows/test_daily_commit_steps.py --durations=25
+python backend/utilities/gate_lock.py --require-lock --retry-every 0.25 --timeout 7200 -- python -m pytest -n 0 backend/tests/workflows/test_commit_script.py --durations=25
 ```
 
 Use an environment with the project's development dependencies installed.
@@ -35,9 +37,9 @@ production deadline. Deadlines are selected by workflow job id from the
 
 ## Current readings
 
-Table A reports pytest's call phase, in seconds. Rows A1-A6 are in
-`backend/tests/workflows/test_commit_script.py`; A7 is in
-`backend/tests/workflows/test_daily_commit_steps.py`.
+Table A preserves the historical pytest call phase, in seconds. Rows A1-A6 are
+in the retained `backend/tests/workflows/test_commit_script.py`; A7 came from
+the removed `backend/tests/workflows/test_daily_commit_steps.py`.
 
 | Id | Test | User-supplied baseline (s) | After (s) |
 | --- | --- | ---: | ---: |

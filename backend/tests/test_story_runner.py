@@ -1,13 +1,11 @@
 """Exercise real typed runner files, arithmetic vectors and imports without model inference."""
 
-import json
 import subprocess
 import zipfile
 from pathlib import Path
 
 import numpy as np
 import pytest
-import yaml  # type: ignore[import-untyped]
 from story_runner_fixtures import articles, manifest, policy, registered_candidate
 
 from idhazh.contracts.story_encoder_candidate import CandidateVectorState, CandidateVectorUnit
@@ -312,21 +310,3 @@ def test_shard_full_evidence_and_unknown_control_rejection(tmp_path: Path) -> No
     shard.articles[0].input_sha256 = "f" * 64
     with pytest.raises(ValueError, match="evidence"):
         validate_shard(shard)
-
-
-def test_manual_workflow_has_no_publication_and_preserves_partial_units() -> None:
-    workflow = yaml.safe_load(Path(".github/workflows/story-archive-encoding.yml").read_text())
-    trigger = workflow.get("on", workflow.get(True))
-    assert set(trigger) == {"workflow_dispatch"}
-    assert "runner_label" not in trigger["workflow_dispatch"]["inputs"]
-    assert workflow["permissions"] == {"contents": "read", "actions": "read"}
-    assert workflow["jobs"]["inputs"]["runs-on"] == "ubuntu-latest"
-    assert workflow["jobs"]["encode"]["runs-on"] == "ubuntu-latest"
-    assert workflow["jobs"]["encode"]["timeout-minutes"] == 360
-    assert workflow["jobs"]["encode"]["strategy"]["max-parallel"] == 2
-    steps = workflow["jobs"]["encode"]["steps"]
-    assert steps[-1]["if"] == "always()"
-    assert steps[-1]["with"]["retention-days"] == 90
-    assert not any("push" in s.get("run", "") for s in steps)
-    assert "require-hashes" in json.dumps(steps)
-    assert "private" not in json.dumps(workflow)

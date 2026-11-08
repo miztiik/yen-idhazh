@@ -467,7 +467,6 @@ and `actions: read` for artifact downloads. Only the collecting job
 for its downloads. Each declared block sets every unlisted scope to none.
 Judge code runs beside fetched article text, so it must not hold a write token.
 The default credential reaches each download by hand; there is no stored token.
-`backend/tests/workflows/test_llm_council_workflow.py` holds this boundary.
 
 **The uploads keep three nights instead of one**. One day expired
 before the next scheduled run had even started, so a run that judged a whole

@@ -112,8 +112,7 @@ and `backend/tests/contracts/test_gardener_plan.py` holds them to it and to the
 shape, on one line:
 `{"any_active_task":false,"matrix":{"include":[]},"shard_count":0,"shards":[]}`.
 The workflow reads three of those keys - `any_active_task`, `shard_count` and
-`matrix` - and `backend/tests/contracts/test_gardener_plan_matrix.py` fails if
-it reads a key the model does not declare. Each leg of `matrix` carries its
+`matrix`. Each leg of `matrix` carries its
 shard's number and task names, and the `run-tasks` job's name lists them, for
 example `shard 0: compact-feed-health, traces`, so a run's page shows what every
 shard ran without opening a job; the workflow holds that format and never a
@@ -881,9 +880,7 @@ squash back, and `dry_run: true` rehearses it (Fowler and Carmack).
 **2026-09-28: each job holds only the permissions its own steps use.** `plan`
 reads; `run-tasks` writes contents and Actions, for its record and the two
 collection tasks; `history` writes contents and never calls the Actions API. A
-job's `permissions` replace the workflow's, so each job lists its whole set, and
-`backend/tests/workflows/test_gardener_workflow.py` pins all three (Fowler and
-Carmack).
+job's `permissions` replace the workflow's, so each job lists its whole set.
 
 **2026-09-28: the history job checks out `main`, both times.** A checkout takes
 the commit the run was created at unless told otherwise, and the shards push
