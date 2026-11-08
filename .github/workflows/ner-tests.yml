@@ -1,4 +1,4 @@
-name: Text-Analysis-spaCy-tests
+name: Text-Analysis-NER-tests
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ on:
           - en
           - zh
       profile:
-        description: Configured spaCy model profile
+        description: Configure spaCy model profile
         required: false
         default: md
         type: choice
@@ -40,7 +40,7 @@ permissions:
   contents: read
 
 jobs:
-  spacy_live_test:
+  spacy_ner_test:
     name: spaCy live test - ${{ inputs.language }} / ${{ inputs.profile }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
