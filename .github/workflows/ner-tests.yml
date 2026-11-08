@@ -138,10 +138,7 @@ jobs:
       - name: Check GLiNER API source
         working-directory: services/text_analysis/gliner
         run: |
-          uv run --frozen --extra model --group dev ruff check src tests scripts || {
-            uv run --frozen --extra model --group dev ruff check --diff src tests scripts
-            exit 1
-          }
+          uv run --frozen --extra model --group dev ruff check src tests scripts
           uv run --frozen --extra model --group dev mypy src tests scripts
 
       - name: Prepare the configured GLiNER model
