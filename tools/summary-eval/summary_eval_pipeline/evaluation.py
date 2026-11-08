@@ -82,12 +82,8 @@ def bind_evaluations(
         request_id=create_execution_id(),
         correlation_id=create_execution_id(),
     )
-    reference = (
-        {"reference_summary_text": inputs.reference_summary_text}
-        if inputs.reference_summary_text is not None else {}
-    )
     unieval = UnievalRequest.model_validate({
-        **reference,
+        **inputs.model_dump(include={"reference_summary_text", "consistency_source_mode"}),
         "source_text": request.source_text,
         "summary_text": request.summary_text,
         "evaluate_relevance": prepared.evaluate_relevance,

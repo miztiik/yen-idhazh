@@ -1,4 +1,4 @@
-"""Which exact texts and explicit relevance selection can UniEval accept?"""
+"""Which exact texts and omittable scorer controls can UniEval accept?"""
 
 from typing import Self
 
@@ -43,7 +43,9 @@ class UnievalRequest(UnievalScoringContract):
 class UnievalControls(UnievalScoringContract):
     consistency_source_mode: SourceMode
     evaluate_relevance: StrictBool = False
-    max_input_tokens: PositiveCount
+    max_input_tokens: PositiveCount = Field(
+        description="Operator resource allowance for full question/text input and special tokens."
+    )
     source_window_tokens: PositiveCount
     source_overlap_tokens: Count
     max_source_windows: PositiveCount

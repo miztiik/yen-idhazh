@@ -390,8 +390,14 @@ longer than the unchanged health request deadline. The actual transport failure
 must remain in evidence while an already-ready HHEM worker scores.
 The named live fixture's
 long coherence input and source-tail spans use the actual pinned tokenizer,
-not word counts. Separate declaration
-invocations and the named form-default check keep model selection real.
+not word counts. Historical four-score/window journeys select relevance and
+`all_source_windows` explicitly without changing recorded inputs or predictions.
+The default-mode oracle in `test_unieval_windows.py` requires one complete source
+span and one comparison per native summary sentence; its explicit override
+retains complete window geometry. It counts assembled inputs against the unchanged
+operator allowance, not advisory tokenizer metadata. Executable platform-input,
+native-request and response-binding cases verify empty mode omission and both
+exact override spellings. Separate declaration invocations keep model selection real.
 The machine-task regression launches the actual Python owner, Bun helper and
 machine-only Hono child over private pipes and a generated loopback listener
 configuration. It sends the serialized Python run including its source revision,
@@ -460,6 +466,8 @@ installs neither feed-ingest-plan nor data-delivery.
 Workflow files have no dedicated content tests. Keep the existing full suites
 in CI; tests of application programs remain focused on those programs rather
 than declarations that call them.
+Review the actual manual string field directly; declaration parsing is not
+proof that platform inputs reach the native scorer.
 The [manual procedure](run-hhem-evaluation-api.md) owns registration and real
 hosted evidence; offline results do not close that check.
 

@@ -46,6 +46,15 @@ alone does not enable relevance. Send that file as JSON data to the
 named UniEval operation. Do not place any text into a shell expression,
 destination or path.
 
+Omit `consistency_source_mode` to use the committed `full_source_prompt`
+default: every native summary sentence is compared with the complete source.
+Select `all_source_windows` explicitly for sentence-by-window consistency,
+or choose it in committed scorer configuration. Both existing mode spellings
+are valid explicit controls. An oversized complete input has no automatic
+retry or truncation; consistency windows do not shorten coherence's complete
+source/summary input. The configured token allowance is a resource policy,
+not a fixed model context maximum.
+
 Retain the complete native response even with an error HTTP status. Check
 all four fields, actual loaded identity, selected consistency mode, source
 spans and planned/completed counts. Three applicable scores with an authorized
