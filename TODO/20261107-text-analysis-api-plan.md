@@ -1,6 +1,6 @@
 # Multilingual text-analysis API
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 **Level**: 5 - a reusable API host, a new model runtime and a new HTTP contract.
 
 ## 0. Operating contract
@@ -13,9 +13,9 @@
 | A2 | Hard scope - in | A neutral reusable local Python API host; one independently started text-analysis API process; exact request/result/health/error contracts; W3C trace propagation; current CloudEvents diagnostics; `sm`, `md` and `lg` model profiles; two concurrent analyses; a manual verification workflow; owning configuration and documentation. |
 | A3 | Hard scope - out | Table B prices every exclusion. None permits coupling text analysis to summary evaluation or an existing pipeline. |
 | A4 | Chosen strategy | Fowler: extract the proven single-component FastAPI host from summary evaluation, keep service-specific contracts and diagnostics behind adapters, and run spaCy through a standard two-process executor with immediate admission refusal instead of a custom worker protocol or queue. |
-| A5 | Plan state | Ready for execution only after a separate implementation instruction. This revision changes the plan only. |
-| A6 | ESCALATE triggers | 1. HHEM or UniEval HTTP/event behavior must change. 2. Text analysis must share another service process. 3. Source text must enter logs, paths, shell arguments, URLs or service persistence. 4. A request may choose a package, URL, path or executable. 5. More than two concurrent analyses or a waiting queue is required. 6. Tamil must produce features before a trained model is configured. 7. An existing workflow or `ci.yml` must change. 8. The service must join `digest.yml` or another production pipeline. |
-| A7 | Execution | Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 1 rows in flight because every row updates this plan and later rows consume the preceding host/workflow contract, refilling the slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes. |
+| A5 | Plan state | Row 3 implementation and live verification are in progress. |
+| A6 | ESCALATE triggers | 1. HHEM or UniEval HTTP/event behavior must change. 2. Text analysis must share another service process. 3. Source text must enter logs, paths, shell arguments, URLs or service persistence. 4. A request may choose a package, URL, path or executable. 5. More than two concurrent analyses or a waiting queue is required. 6. Tamil must produce features before a trained model is configured. 7. `ci.yml` or a workflow other than `spacy-tests.yml` must change. 8. The service must join `digest.yml` or another production pipeline. |
+| A7 | Execution | Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 1 rows in flight because every row updates this plan and later rows consume the preceding host/workflow contract, refilling the slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. |
 | A8 | Verification rule | Run no local tests, installs, imports, server starts or model loads. Add no new ordinary test suite. Existing CI may exercise changed summary-evaluator behavior; live text-analysis evidence comes only from `.github/workflows/spacy-tests.yml`. |
 | A9 | Text trust boundary | Request text may enter only the validated request, the process-pool call and the returned feature data. It never becomes a prompt, event field, command argument, path, package, URL or retained service record. |
 | A10 | Production/test boundary | `services/local_api_host/`, `services/text_analysis/src/` and `config/text-analysis/` are production inputs. Workflow YAML, preparation/probe scripts, temporary evidence and artifacts are verification machinery and are never imported by the API package. |
@@ -33,7 +33,7 @@
 | B7 | Waiting queue, FIFO reservations or disconnect recovery | A third simultaneous request receives `429 BUSY`, and accepted work may finish after a caller disconnects. | Measured demand for waiting, cancellation or owned task retirement. |
 | B8 | Service-side result/event persistence | Operators use current HTTP results and caller-owned workflow artifacts only. | A retention, access and deletion contract. |
 | B9 | Local or new ordinary tests | Feedback depends on existing CI and the manual workflow. | A separate change to the agreed verification boundary. |
-| B10 | Changes to existing workflows, `ci.yml`, `.github/scripts/`, `CLAUDE.md` or `AGENTS.md` | The new API remains outside ordinary pipeline automation. | An explicit scope change naming the affected behavior and cost. |
+| B10 | Changes to `ci.yml`, workflows other than `spacy-tests.yml`, `.github/scripts/`, `CLAUDE.md` or `AGENTS.md` | The new API remains outside ordinary pipeline automation. | An explicit scope change naming the affected behavior and cost. |
 
 **Table C - Ownership and boundaries**
 
@@ -90,7 +90,7 @@
 | E14 | Feature result | One entry per requested feature in request order: `feature`, `status` from `complete`, `failed`, nullable typed `data`, nullable feature error. Complete has only data; failed has only error. |
 | E15 | Top-level status | `complete` when every feature completes and `partial` when completed and failed features coexist; both use HTTP 200. `failed` means every requested feature has a feature-level failure and uses HTTP 422. Request-level failures use Table G's error result instead. |
 | E16 | Evidence span | Exact source text plus integer `start_char`, `end_char`, `sentence_index`; slicing the input by the half-open offsets must reproduce the text. |
-| E17 | Partial preservation | Feature post-processing failures preserve completed sibling data. Transport, model and process failures remain request-level failures. |
+| E17 | Partial preservation | A missing capability produces feature-level `FEATURE_UNAVAILABLE`; an isolated extractor/post-processing exception produces feature-level `FEATURE_FAILED`. Completed siblings survive either. Shared document analysis, invalid worker outcome, transport and process failures remain request-level `ANALYSIS_FAILED`. |
 
 **Table F - Settings, models and runtime**
 
@@ -114,7 +114,7 @@
 | F16 | Admission | After body validation, acquire a configured AnyIO capacity token without waiting. No token returns `429 BUSY`; accepted work is submitted immediately, so the executor receives no waiting backlog. |
 | F17 | Process-local model slot | Each executor process stores at most one current `(language, profile)` model. Same-key work reuses it; a different key releases and replaces it before analysis. |
 | F18 | Timing | The process returns nonnegative `model_load_ms` and `analysis_ms`. The parent measures `total_ms` with a monotonic clock from immediately before body reading until the validated response model is complete, before encoding. Timings appear only in Table G events. |
-| F19 | Failure | Normal feature failures produce E14 partial data. Missing package/model maps to `MODEL_UNAVAILABLE`; executor/process failure maps to `ANALYSIS_FAILED` and component health becomes failed. No automatic pool repair occurs. |
+| F19 | Failure | Missing capability and isolated post-processing failures produce E14 `FEATURE_UNAVAILABLE` or `FEATURE_FAILED` without failing service health. Missing package/model maps to request-level `MODEL_UNAVAILABLE`. Shared document analysis, invalid worker outcome, executor transport or process failure maps to request-level `ANALYSIS_FAILED`; executor/process integrity failures also fail health and stop admission. No automatic pool repair occurs. |
 | F20 | Disconnect | The service does not monitor or replace work for a disconnected caller. Accepted analysis may complete without a delivered response. |
 | F21 | Health | Ready requires valid settings and a usable executor, not loaded weights. Report active requests, capacity, configured capabilities and pool readiness; never worker PID, generation, queue depth or loaded-model claims. |
 | F22 | Shutdown | C1 stops admission and waits for active analyses within the configured graceful interval. It cancels unstarted futures and closes the executor. It emits no stopped event until every pool process exits; exceeding the interval fails lifespan so the external owner terminates the API process group. |
@@ -137,24 +137,25 @@
 | G10 | `UNSUPPORTED_FEATURE` | 422 | Retryable false; message `The selected feature is not supported.` |
 | G11 | `MODEL_UNAVAILABLE` | 503 | Retryable true; message `The selected model is not available.` Declared package is missing, incompatible or unloadable. |
 | G12 | `FEATURE_UNAVAILABLE` | 200 with sibling success, otherwise 422 | Retryable false; message `The selected feature is not available.` The selected model lacks a required capability. |
-| G13 | `ANALYSIS_FAILED` | 500 | Retryable true; message `The text analysis failed.` Undeclared analysis or executor failure. |
-| G14 | CloudEvents envelope | - | Match the current TypeScript common schema: strict CloudEvents `1.0`, lowercase UUIDv4 ID, source `/services/text-analysis`, valid UTC second/millisecond `Z` time, `application/json`, valid `traceparent`, optional canonical `tracestate`, typed JSON data. |
-| G15 | Service event types | - | `text-analysis.service.started`, `.ready`, `.stopped`, `.failed`. |
-| G16 | Request event types | - | `text-analysis.request.completed`, `.partial`, `.failed`. Health/schema probes emit no request event. |
-| G17 | Request event data | - | Language, profile/package/model/spaCy versions, requested feature names and statuses, active/capacity counts, F18 timings, result status and fixed error codes. |
-| G18 | Privacy | - | Events contain no request text, evidence text/spans, model URL, raw validation data, headers, process IDs, paths or exceptions. |
-| G19 | Delivery | - | Validated JSON lines go to stderr only. The workflow may capture them. A diagnostic write failure does not introduce a public error code or rewrite completed feature data; later health reports failure. |
+| G13 | `FEATURE_FAILED` | 200 with sibling success, otherwise 422 | Retryable true; message `The selected feature failed.` An isolated extractor or post-processing exception names only the affected feature and does not fail health. |
+| G14 | `ANALYSIS_FAILED` | 500 | Retryable true; message `The text analysis failed.` Shared document analysis, invalid worker outcome, executor transport or process failure; feature is null. |
+| G15 | CloudEvents envelope | - | Match the current TypeScript common schema: strict CloudEvents `1.0`, lowercase UUIDv4 ID, source `/services/text-analysis`, valid UTC second/millisecond `Z` time, `application/json`, valid `traceparent`, optional canonical `tracestate`, typed JSON data. |
+| G16 | Service event types | - | `text-analysis.service.started`, `.ready`, `.stopped`, `.failed`. |
+| G17 | Request event types | - | `text-analysis.request.completed`, `.partial`, `.failed`. Health/schema probes emit no request event. |
+| G18 | Request event data | - | Language, profile/package/model/spaCy versions, requested feature names and ordered statuses, feature-local `FEATURE_UNAVAILABLE`/`FEATURE_FAILED` codes, active/capacity counts, F18 timings, aggregate result status and fixed request error code. |
+| G19 | Privacy | - | Events contain no request text, evidence text/spans, model URL, raw validation data, headers, process IDs, paths or exceptions. |
+| G20 | Delivery | - | Validated JSON lines go to stderr only. The workflow may capture them. A diagnostic write failure does not introduce a public error code or rewrite completed feature data; later health reports failure. |
 
 **Table H - Manual workflow contract**
 
 | Id | Workflow behavior | Contract |
 | --- | --- | --- |
-| H1 | Registration | Add only `.github/workflows/spacy-tests.yml` with `workflow_dispatch`; no push, pull-request, schedule or callable trigger. It must exist on the default branch before testing Row 3. |
+| H1 | Registration | Keep `.github/workflows/spacy-tests.yml` manual-only with `workflow_dispatch`; no push, pull-request, schedule or callable trigger. It must exist on the default branch before dispatch by filename. |
 | H2 | Permissions | `contents: read`; checkout credentials disabled. |
-| H3 | Inputs | Required immutable lowercase 40-character `code_ref`; language `en` or `zh`; profile `sm`, `md` or `lg`, default `md`; feature mode `default`, `all` or `custom`; optional custom feature names; required text. |
-| H4 | Checkout | Load the workflow from the default branch, checkout exact `code_ref`, record workflow SHA and tested commit, and invalidate evidence after any later Row 3 edit. |
+| H3 | Inputs | The dispatch selects its branch or tag. Inputs are language `en` or `zh`; profile `sm`, `md` or `lg`, default `md`; feature mode `default`, `all` or `custom`; optional custom feature CSV; required text. The form explains the default feature order, all-language support and a custom CSV example. |
+| H4 | Checkout | Resolve the selected ref to `github.sha`, checkout and verify that exact commit with credentials disabled, record selected ref/SHA, workflow SHA and tested commit, and invalidate evidence after any later Row 3 edit. |
 | H5 | Environment | Stock `ubuntu-latest`, Python 3.12, pinned uv and the repository's TypeScript common-contract toolchain. |
-| H6 | Preparation | Sync the text-analysis environment, prepare only the selected model, then start with the F13 command. Workflow values never become shell source. |
+| H6 | Preparation | Sync the text-analysis environment, prepare only the selected model, then start with the F13 command. Dispatch text reaches the runner through the workflow event on stdin; it never becomes a step environment value, shell source or command argument. |
 | H7 | Live behavior | Wait for health, fetch schema, submit selected analysis, submit Tamil and, for Chinese, submit one unavailable noun-phrase feature combination. |
 | H8 | Concurrency | Start two `document_metrics` requests concurrently, each using generated 750,000-byte ASCII text under the 1 MiB body bound; wait until health reports two active analyses, then require a third request to return `429 BUSY`. These requests also warm both process-local model slots. |
 | H9 | Trace interoperability | A TypeScript probe creates an operation with the existing common helpers, calls every route and proves each response retains the trace ID and returns a new span ID. For analysis/refusal responses, the terminal request event uses the same carrier. |
@@ -162,9 +163,9 @@
 | H11 | Feature checks | Every completed evidence span round-trips. Chinese noun phrases fail only that feature. Tamil fails before executor admission. Result model identity matches configuration. |
 | H12 | Timing checks | Completed/partial/failed request events carry finite nonnegative F18 values. After H8 warms both processes, repeat the selected analysis and require zero model-load time. |
 | H13 | Evidence | Write one machine-readable report, captured events and an escaped job summary under the runner temporary directory. No evidence path enters API configuration. |
-| H14 | Cleanup | The Python runner starts one new process session, retains the exact `Popen` child and signals only that child's process group in `finally`, so its pool children stop too. It waits, force-kills the same group if needed and confirms the child exit. No PID file, start-tick check, nonce or name-based kill. |
+| H14 | Cleanup | The Python runner starts one new process session, retains the exact `Popen` child and signals only that child's process group in `finally`, so its pool children stop too. It waits, force-kills the same group if needed and confirms the child exit. Uvicorn's preserved SIGTERM exit is clean only when event validation proves one `stopped` lifecycle and no service failure. No PID file, start-tick check, nonce or name-based kill. |
 | H15 | Artifact | Upload one run/attempt-named artifact even on failure. Retention belongs to workflow YAML. Cleanup and upload failure fail the job. |
-| H16 | Required runs | Before Row 3 merges, complete one English `md` run and one Chinese `md` run against its final immutable commit. Other profiles remain manual choices, not merge gates. |
+| H16 | Required runs | Before Row 3 merges, dispatch its final branch ref once for English `md` and once for Chinese `md`; both runs must record the same immutable `github.sha`. Other profiles remain manual choices, not merge gates. |
 | H17 | Job bound | Sixty minutes; reaching it fails the selected profile and remains below GitHub's six-hour job boundary. |
 | H18 | Test boundary | No local command and no new ordinary test directory. Existing CI remains unchanged; this workflow is the text-analysis functional gate. |
 
@@ -176,7 +177,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | I1 | 1 | Extract the reusable local Python API host | - | A | DONE | extract-reusable-api-host | - | Extract reusable API host |
 | I2 | 2 | Register the manual text-analysis workflow | 1 | B | DONE | register-text-analysis-workflow | - | Register text analysis workflow |
-| I3 | 3 | Build and verify the multilingual text-analysis API | 1, 2 | C | PENDING | - | - | - |
+| I3 | 3 | Build and verify the multilingual text-analysis API | 1, 2 | C | DONE | build-multilingual-text-analysis-api | - | Build multilingual text analysis API |
 
 ## 2. Row #1 - Extract the reusable local Python API host
 
@@ -249,23 +250,23 @@
   - Existing CI: unchanged checks selected for these files; no CI workflow edit.
   - After merge: `gh workflow view spacy-tests.yml --ref main` resolves the manual trigger and Table H inputs.
   - Record merged revision and workflow-view result.
-- **Oracle:** The default branch exposes a dispatchable workflow whose `code_ref` controls the tested checkout and whose steps reference only Row 3 service-local scripts; it cannot prove the absent API implementation.
+- **Oracle:** The default branch exposes a dispatchable workflow whose selected ref resolves to and verifies `github.sha`, and whose steps reference only Row 3 service-local scripts; it cannot prove the absent API implementation.
 
 **Table L - Row 2 decisions**
 
 | Id | Decision | Authority |
 | --- | --- | --- |
 | L1 | Register before Row 3 because GitHub dispatches the default-branch workflow definition. | GitHub workflow behavior. |
-| L2 | Keep the workflow manual-only with no default `code_ref`. | H1-H4. |
+| L2 | Keep the workflow manual-only and let its selected ref own the tested commit. | H1-H4. |
 | L3 | Keep preparation, probes, evidence and cleanup under `services/text_analysis/scripts/`, never `.github/scripts/`. | C7 and B10. |
-| L4 | Make Row 2 complete; Row 3 does not edit workflow behavior to obtain a pass. | Reversible delivery boundary. |
+| L4 | Register the manual-only workflow before implementation; later contract changes remain explicit workflow edits with bounded tests. | Reversible delivery boundary. |
 
 **Table M - Row 2 rejected alternatives**
 
 | Id | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | M1 | Add to an existing pipeline/workflow | It couples model downloads and API experiments to unrelated triggers. | Price every affected trigger and runtime. | B10. |
-| M2 | Merge workflow with implementation | It cannot be dispatched from default branch before the implementation merges. | Merge without the required live evidence. | L1. |
+| M2 | Delay first workflow registration until implementation | A filename dispatch requires the workflow to exist on the default branch. | Merge without a registered live-evidence path. | L1. |
 | M3 | Add automatic triggers | Every matching event would install models without an explicit operator choice. | Define bounded path selection and profile cost. | H1. |
 | M4 | Use local verification instead | It violates the settled verification boundary. | Change A8 and H18. | A8. |
 
@@ -274,6 +275,9 @@
 - **Scope:** Implement Tables C-H on the reusable host and prove English/Chinese behavior, two-request concurrency and TypeScript trace interoperability through the registered workflow.
 - **Files touched:**
   - `config/text-analysis/settings.json`
+  - `.github/workflows/spacy-tests.yml`
+  - `backend/tests/workflows/_harness.py`
+  - `backend/tests/workflows/test_triggers.py`
   - `services/text_analysis/.python-version`
   - `services/text_analysis/pyproject.toml`
   - `services/text_analysis/uv.lock`
@@ -297,10 +301,12 @@
   - `docs/reference/api-routing.md`
   - `docs/reference/repository-layout.md`
   - `docs/how-to/run-the-gates.md`
+  - `docs/how-to/run-spacy-tests.md`
+  - `docs/reference/github-actions.md`
   - `TODO/20261107-text-analysis-api-plan.md`
 - **Acceptance gates:**
   - Local: none. Do not install, import, lint, type-check, start or load models locally.
-  - Existing CI: allow unchanged checks selected by the pull request; do not modify their workflows or treat them as spaCy evidence.
+  - Existing CI: allow unchanged checks selected by the pull request; keep `ci.yml` and every workflow other than `spacy-tests.yml` unchanged, and do not treat ordinary CI as spaCy evidence.
   - Live: dispatch the two H16 runs against the final immutable commit. Any later Row 3 edit invalidates both. Preserve run URL, workflow SHA, tested commit, inputs, artifact ID, conclusion and report.
   - Dependency lock: generate `services/text_analysis/uv.lock` during implementation; verify installation only in CI/manual workflow.
   - Documentation: update every owning page in this row; do not modify `CLAUDE.md` or `AGENTS.md`.
@@ -316,7 +322,7 @@
 | N4 | Use two standard executor processes plus immediate admission, not a custom worker or queue. | F4 and F15-F20. |
 | N5 | Keep one lazy model per process, so concurrency bounds memory without LRU coordination. | F17. |
 | N6 | Keep API configuration free of workflow settings. | F1 and C5-C7. |
-| N7 | Keep all emitted text-analysis diagnostics on the current trace-aware CloudEvents envelope while leaving evaluator envelopes unchanged. | G14-G19 and B6. |
+| N7 | Keep all emitted text-analysis diagnostics on the current trace-aware CloudEvents envelope while leaving evaluator envelopes unchanged. | G15-G20 and B6. |
 | N8 | Use one common relation policy and add no language override without observed evidence. | F11-F12. |
 
 **Table O - Row 3 rejected alternatives**
