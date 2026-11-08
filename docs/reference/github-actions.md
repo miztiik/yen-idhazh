@@ -161,17 +161,18 @@ See [host metrics](host-metrics.md) for the fingerprint and its unavailable reas
 
 ## Manual text analysis
 
-`spacy-tests.yml` is a read-only manual workflow. Its default-branch definition
-validates a lowercase 40-character `code_ref` before checkout, checks out that
-exact commit with credentials disabled and records both the workflow SHA and
-tested commit.
+`spacy-tests.yml` is a read-only manual workflow. The dispatch selects a branch
+or tag; GitHub resolves it to `github.sha`. The workflow checks out that exact
+commit with credentials disabled and records the selected ref, selected SHA,
+workflow SHA and tested commit.
 
 One stock Ubuntu job uses CPython 3.12, pinned uv and Bun, and the locked
 `packages/common-contracts` toolchain. It syncs the selected commit's
 text-analysis environment, prepares only the selected configured model and
 runs only the service-local preparation and verification scripts. Dispatch
-text and custom feature names reach the runner through environment values,
-never inline shell or command arguments.
+text reaches the runner through the workflow event on stdin; custom feature
+names use a step environment value. Neither becomes inline shell or a command
+argument.
 
 The runner owns the API process group, live route and concurrency probes,
 TypeScript trace/event validation, escaped summary and cleanup. Evidence stays

@@ -1,0 +1,134 @@
+{
+  "version": "2026-11-07",
+  "changelog": [
+    {
+      "version": "2026-11-07",
+      "change": "Declare the multilingual text-analysis service settings."
+    }
+  ],
+  "enabled": true,
+  "listener": {
+    "host": "127.0.0.1",
+    "port": 3020,
+    "max_body_bytes": 1048576,
+    "body_read_timeout_ms": 5000,
+    "shutdown_timeout_ms": 15000
+  },
+  "max_concurrent_requests": 2,
+  "spacy_version": "3.8.18",
+  "default_features": [
+    "relations",
+    "entities",
+    "sentences",
+    "document_metrics"
+  ],
+  "allowed_features": [
+    "entities",
+    "sentences",
+    "relations",
+    "noun_phrases",
+    "linguistic_tokens",
+    "document_metrics"
+  ],
+  "languages": {
+    "en": {
+      "enabled": true,
+      "default_profile": "md",
+      "supported_features": [
+        "entities",
+        "sentences",
+        "relations",
+        "noun_phrases",
+        "linguistic_tokens",
+        "document_metrics"
+      ],
+      "profiles": {
+        "sm": {
+          "package": "en_core_web_sm",
+          "version": "3.8.0",
+          "url": "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+        },
+        "md": {
+          "package": "en_core_web_md",
+          "version": "3.8.0",
+          "url": "https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl"
+        },
+        "lg": {
+          "package": "en_core_web_lg",
+          "version": "3.8.0",
+          "url": "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl"
+        }
+      }
+    },
+    "zh": {
+      "enabled": true,
+      "default_profile": "md",
+      "supported_features": [
+        "entities",
+        "sentences",
+        "relations",
+        "linguistic_tokens",
+        "document_metrics"
+      ],
+      "profiles": {
+        "sm": {
+          "package": "zh_core_web_sm",
+          "version": "3.8.0",
+          "url": "https://github.com/explosion/spacy-models/releases/download/zh_core_web_sm-3.8.0/zh_core_web_sm-3.8.0-py3-none-any.whl"
+        },
+        "md": {
+          "package": "zh_core_web_md",
+          "version": "3.8.0",
+          "url": "https://github.com/explosion/spacy-models/releases/download/zh_core_web_md-3.8.0/zh_core_web_md-3.8.0-py3-none-any.whl"
+        },
+        "lg": {
+          "package": "zh_core_web_lg",
+          "version": "3.8.0",
+          "url": "https://github.com/explosion/spacy-models/releases/download/zh_core_web_lg-3.8.0/zh_core_web_lg-3.8.0-py3-none-any.whl"
+        }
+      }
+    },
+    "ta": {
+      "enabled": false,
+      "default_profile": null,
+      "supported_features": [],
+      "profiles": {}
+    }
+  },
+  "relation_rules": {
+    "action_pos": [
+      "VERB",
+      "AUX"
+    ],
+    "actor_dependencies": [
+      "nsubj",
+      "csubj",
+      "nsubj:xsubj"
+    ],
+    "agent_dependency": "agent",
+    "agent_object_dependency": "pobj",
+    "object_dependencies": [
+      "dobj",
+      "dative",
+      "attr",
+      "oprd",
+      "nsubjpass",
+      "csubjpass"
+    ],
+    "conjunction_dependency": "conj",
+    "time_entity_labels": [
+      "DATE",
+      "TIME"
+    ],
+    "place_entity_labels": [
+      "GPE",
+      "LOC",
+      "FAC"
+    ],
+    "language_overrides": {}
+  },
+  "logging": {
+    "level": "INFO",
+    "max_event_bytes": 4096
+  }
+}

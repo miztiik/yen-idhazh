@@ -8,6 +8,11 @@ import time
 from pathlib import Path
 
 import pytest
+from local_api_host.propagate_trace_context import (
+    OperationMetadata,
+    create_child_operation,
+    create_root_operation,
+)
 from summary_eval_pipeline.contracts import WORKFLOW_VERSION
 from summary_eval_pipeline.control import StartupPacket
 from summary_eval_pipeline.failures import WorkflowError
@@ -31,7 +36,9 @@ from summary_eval_tests.pipeline_cases import owned_child_command
 from summary_eval_tests.test_pipeline_lifetime import CHILD_STARTUP_MS
 
 
-def start_scorer(scorer: ApiComponent, directory: Path) -> OwnedService:
+def start_scorer(
+    scorer: ApiComponent, directory: Path, *, operation_metadata: OperationMetadata | None = None
+) -> OwnedService:
     api = load_scorer_api_settings(REPOSITORY / "config" / "summary-evals" / "api.json", scorer)
     command = [
         *owned_child_command(
@@ -44,6 +51,9 @@ def start_scorer(scorer: ApiComponent, directory: Path) -> OwnedService:
         "api", command, REPOSITORY,
         ScorerStartupPacket(
             version=SCORER_CONTROL_VERSION, scorer=scorer,
+            operation_metadata=create_child_operation(
+                operation_metadata or create_root_operation()
+            ),
             startup=StartupPacket(
                 version=WORKFLOW_VERSION, startup_id=create_execution_id(),
                 context=StartupContext(),

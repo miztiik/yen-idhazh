@@ -40,6 +40,11 @@ construction and supplied to the neutral host. Each controller and model-load
 operation belongs to that service branch. The validated API flag enables
 receiving and response carriers; a scorer consumes the operation already
 stored by the host rather than extract another parent.
+An owned workflow API receives an explicit launch operation in its private
+startup packet and creates this service operation as that launch's child.
+The existing event-writer injection supplies it to the logger, native
+controllers and neutral host; no additional middleware or startup-context
+fields are needed. Standalone APIs retain their own local service root.
 
 Adding an API means its implementation adapter plus one deliberate registration
 entry. Its configuration and public component vocabulary, native request/result
@@ -125,11 +130,19 @@ exit rules are unchanged. Each owned API also observes its private parent pipe,
 with a bounded whole-lifespan deadline. Its private stopped packet reports only
 its own worker's actual exit. API owners are closed independently; the workflow
 retains original and cleanup causes separately. The TypeScript machine-measurement
-channel remains unchanged.
+ready/stopped controls remain unchanged. Its separately dated startup wrapper
+adopts the workflow's actual machine-launch operation through the existing
+native supervisor and HTTP interfaces.
 Each attempt retains its own receiving context through queue promotion,
 cancellation and interleaved progress. Current private worker packets carry
 the issued load or evaluation operation and require exact reply equality.
 Their date stamps are independent of public scoring and recording versions.
+Current workflow scorer controls likewise carry the issued launch and observed
+service operations. Readiness and shutdown retain the same service child;
+launch equality and ancestry are checked in addition to native process
+ownership. The `2026-11-07` private control reader preserves genuinely untraced
+records. Malformed `2026-11-08` metadata or unsupported versions cannot fall
+through to that reader.
 
 Standard logging formats validated native data as CloudEvents JSONL. The
 same accepted records reach stderr and the role's named file. A failed file
@@ -187,6 +200,12 @@ rules while supplying real HTTP and process continuity. Reader optionality
 retains genuinely absent old carriers; enabled live writers still require
 their actual operation. A saved event is validated and preserved, never
 recreated by a live factory.
+The retained caller observes actual response carriers independently of native
+scores. Explicit phase, call and launch operations prevent equal correlation
+UUIDs or interleaved requests from sharing context. A missing or invalid
+optional carrier does not erase a valid complete, partial or error response.
+Full serialized startup/control values, including canonical optional state,
+escaping and newline, stay inside the existing configured bounds.
 The old model-free environment and stopped-service caches are not moved or
 deleted. New preparation reads only the configured cache and log paths.
 

@@ -18,7 +18,7 @@ import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from ".
 import { HardwareSchema, MachineServerProjectionSchema, projectMachineProfile } from "./machine-results";
 
 const VERSION = "2026-11-05"; // Disposable workflow control version.
-const StartupSchema = z.strictObject({
+export const StartupSchema = z.strictObject({
   version: z.literal(VERSION), startup_id: z.uuidv4(),
   context: z.strictObject({
     run_id: z.string(), pipeline_name: z.string(), task_name: z.string(),
@@ -31,6 +31,24 @@ const StartupSchema = z.strictObject({
     started_at: z.iso.datetime(),
   }),
 });
+export const MACHINE_STARTUP_VERSION = "2026-11-08";
+export const MachineStartupSchema = z.strictObject({
+  version: z.literal(MACHINE_STARTUP_VERSION),
+  startup: StartupSchema,
+  operation_metadata: OperationMetadataSchema,
+}).meta({
+  version: MACHINE_STARTUP_VERSION,
+  readCompatibility: "read legacy flat 2026-11-05 startup without adding metadata",
+  changelog: [
+    { version: MACHINE_STARTUP_VERSION, change: "Carry the issued machine launch operation in a transient wrapper." },
+  ],
+});
+const MachineStartupInputSchema = z.discriminatedUnion("version", [MachineStartupSchema, StartupSchema]);
+
+export function readMachineStartup(value: unknown) {
+  return MachineStartupInputSchema.parse(value);
+}
+
 const StopSchema = z.strictObject({ kind: z.literal("stop"), outcome: z.enum(["success", "error"]) });
 const CauseCodeSchema = z.string().regex(/^[A-Z][A-Z0-9_]{0,127}$/)
   .refine(value => value === value.trim());
@@ -75,7 +93,9 @@ async function main() {
   }).parse(await Bun.file(join(root, "config", "summary-evals", "workflow.json")).json());
   const runtime = join(root, pipeline.output_directory);
   const packets = readPackets(process.stdin, pipeline.control_max_bytes);
-  const startup = StartupSchema.parse((await packets.next()).value);
+  const input = readMachineStartup((await packets.next()).value);
+  const startup = "startup" in input ? input.startup : input;
+  const context = "operation_metadata" in input ? input.operation_metadata : createRootContext();
   const cancellation = new AbortController();
   const abort = () => cancellation.abort(new Error("Machine task parent stopped"));
   process.once("SIGINT", abort);
@@ -88,7 +108,6 @@ async function main() {
   let profile: z.infer<typeof TaskProfileSchema> | null = null;
   let clean = true;
   let server: z.infer<typeof CurrentMachineServerEvidenceSchema> | null = null;
-  const context = createRootContext();
   let currentEvidence = false;
   let announced = false;
   let stage = "MACHINE_SETTINGS_INVALID";

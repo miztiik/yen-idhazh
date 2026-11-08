@@ -12,6 +12,7 @@ from ._harness import (
     DISPATCH_CHOICE,
     DISPATCH_INPUT_SHAPES,
     DISPATCH_READ_BY_NAME,
+    DISPATCH_READ_FROM_EVENT_STDIN,
     EXPECTED_WORKFLOWS,
     RUNS_MAY_OVERLAP,
     SUBSTITUTED_DATE,
@@ -94,7 +95,6 @@ def test_expensive_workflows_do_not_run_on_pull_request_or_push() -> None:
 def test_spacy_workflow_dispatch_inputs_match_the_manual_contract() -> None:
     inputs = _declared_dispatch_inputs(_load_workflows()["spacy-tests.yml"])
     assert set(inputs) == {
-        "code_ref",
         "language",
         "profile",
         "feature_mode",
@@ -106,7 +106,6 @@ def test_spacy_workflow_dispatch_inputs_match_the_manual_contract() -> None:
     }
 
     assert {name: body.get("type") for name, body in declared.items()} == {
-        "code_ref": "string",
         "language": "choice",
         "profile": "choice",
         "feature_mode": "choice",
@@ -114,7 +113,6 @@ def test_spacy_workflow_dispatch_inputs_match_the_manual_contract() -> None:
         "text": "string",
     }
     assert {name: body.get("required") for name, body in declared.items()} == {
-        "code_ref": "true",
         "language": "false",
         "profile": "false",
         "feature_mode": "false",
@@ -136,32 +134,53 @@ def test_spacy_workflow_dispatch_inputs_match_the_manual_contract() -> None:
     assert _string_list(
         declared["feature_mode"].get("options"), "feature mode options"
     ) == ["default", "all", "custom"]
+    assert declared["feature_mode"]["description"] == (
+        "default: relations, entities, sentences, document_metrics; "
+        "all: every feature supported by selected language; "
+        "custom: CSV from custom_features"
+    )
+    assert declared["custom_features"]["description"] == (
+        "Custom CSV, for example: entities, sentences, document_metrics"
+    )
 
 
-def test_spacy_workflow_validates_then_checks_out_the_exact_code_ref() -> None:
+def test_spacy_workflow_checks_out_the_selected_github_sha() -> None:
     workflow = _load_workflows()["spacy-tests.yml"]
     steps = _steps(workflow, "verify")
-    validation = next(step for step in steps if step.get("name") == "Validate immutable code ref")
+    initialized = next(
+        step for step in steps if step.get("name") == "Initialize workflow evidence"
+    )
     checkout = next(step for step in steps if step.get("uses") == "actions/checkout@v6")
     recorded = next(step for step in steps if step.get("name") == "Record the tested checkout")
 
-    assert steps.index(validation) < steps.index(checkout) < steps.index(recorded)
-    validation_env = _mapping(validation.get("env"), "code-ref validation env")
-    assert validation_env["CODE_REF"] == "${{ inputs.code_ref }}"
-    assert '[[ ! "$CODE_REF" =~ ^[0-9a-f]{40}$ ]]' in str(validation.get("run"))
+    assert steps.index(initialized) < steps.index(checkout) < steps.index(recorded)
+    assert all(step.get("name") != "Validate immutable code ref" for step in steps)
+    initialized_env = _mapping(initialized.get("env"), "workflow evidence env")
+    assert initialized_env["SELECTED_REF"] == "${{ github.ref }}"
+    assert initialized_env["SELECTED_SHA"] == "${{ github.sha }}"
+    assert "selected-ref.txt" in str(initialized.get("run"))
 
     checkout_settings = _mapping(checkout.get("with"), "spacy checkout settings")
-    assert checkout_settings["ref"] == "${{ inputs.code_ref }}"
+    assert checkout_settings["ref"] == "${{ github.sha }}"
     assert checkout_settings["persist-credentials"] == "false"
 
     recorded_env = _mapping(recorded.get("env"), "tested-checkout env")
-    assert recorded_env["CODE_REF"] == "${{ inputs.code_ref }}"
+    assert recorded_env["EXPECTED_SHA"] == "${{ github.sha }}"
     recorded_body = str(recorded.get("run"))
     assert 'TESTED_COMMIT="$(git rev-parse HEAD)"' in recorded_body
-    assert '"$TESTED_COMMIT" != "$CODE_REF"' in recorded_body
+    assert '"$TESTED_COMMIT" != "$EXPECTED_SHA"' in recorded_body
+
+    runner = next(
+        step
+        for step in steps
+        if step.get("name") == "Run live text-analysis verification"
+    )
+    runner_env = _mapping(runner.get("env"), "text-analysis runner env")
+    assert runner_env["TEXT_ANALYSIS_SELECTED_REF"] == "${{ github.ref }}"
+    assert runner_env["TEXT_ANALYSIS_SELECTED_SHA"] == "${{ github.sha }}"
 
 
-def test_spacy_workflow_passes_free_text_only_through_runner_environment() -> None:
+def test_spacy_workflow_passes_free_text_only_through_runner_stdin() -> None:
     workflow = _load_workflows()["spacy-tests.yml"]
     runner = next(
         step
@@ -169,26 +188,18 @@ def test_spacy_workflow_passes_free_text_only_through_runner_environment() -> No
         if step.get("name") == "Run live text-analysis verification"
     )
     env = _mapping(runner.get("env"), "text-analysis runner env")
-    expected = {
-        "custom_features": (
-            "TEXT_ANALYSIS_CUSTOM_FEATURES",
-            "${{ inputs.custom_features }}",
-        ),
-        "text": ("TEXT_ANALYSIS_TEXT", "${{ inputs.text }}"),
-    }
-
-    for input_name, (env_name, expression) in expected.items():
-        assert env[env_name] == expression
-        assert not any(
-            _names_the_input(body, input_name) for body in _run_bodies(workflow)
-        )
-        references = [
-            str(value)
-            for _, scope in _every_env(workflow)
-            for value in scope.values()
-            if _names_the_input(str(value), input_name)
-        ]
-        assert references == [expression]
+    assert env["TEXT_ANALYSIS_CUSTOM_FEATURES"] == "${{ inputs.custom_features }}"
+    assert "TEXT_ANALYSIS_TEXT" not in env
+    body = str(runner.get("run"))
+    assert '< "$GITHUB_EVENT_PATH"' in body
+    assert not any(_names_the_input(run, "text") for run in _run_bodies(workflow))
+    text_references = [
+        str(value)
+        for _, scope in _every_env(workflow)
+        for value in scope.values()
+        if _names_the_input(str(value), "text")
+    ]
+    assert text_references == []
 
 
 def test_every_dispatch_input_is_shaped_before_anything_acts_on_it() -> None:
@@ -233,6 +244,19 @@ def test_every_dispatch_input_is_shaped_before_anything_acts_on_it() -> None:
                 for _, scope in _every_env(workflow)
                 for value in scope.values()
             ), f"{where} must reach a step through env"
+            continue
+        if shape == DISPATCH_READ_FROM_EVENT_STDIN:
+            assert not any(
+                _names_the_input(body, name) for body in _run_bodies(workflow)
+            ), f"{where} must not be copied into shell source"
+            assert not any(
+                _names_the_input(str(value), name)
+                for _, scope in _every_env(workflow)
+                for value in scope.values()
+            ), f"{where} must not be copied into a step environment value"
+            assert any(
+                '< "$GITHUB_EVENT_PATH"' in body for body in _run_bodies(workflow)
+            ), f"{where} must reach the runner through workflow event stdin"
             continue
         assert shape.startswith("^") and shape.endswith("$"), (
             f"{where}: an unanchored pattern matches a prefix, which is not a shape"

@@ -45,6 +45,15 @@ fields, versions and startup settings. Caller-saved responses are outputs of
 one run, not inputs to a later run; adding such a reader requires a persisted
 contract design first.
 
+Transient text-analysis settings, HTTP, worker and CloudEvents contracts live
+under `services/text_analysis/src/text_analysis/`. Their strict Pydantic models
+own validation and on-demand OpenAPI schemas without entering the backend
+persisted-contract registry. The API writes no service-side result or event
+record; the manual workflow's same-run report and captured stderr are
+caller-owned evidence. The
+[text-analysis reference](../../reference/text-analysis-api.md) owns the exact
+fields and vocabulary.
+
 The manual summary workflow's same-run generation, phase evidence and private launcher packets
 live outside that API, under
 `tools/summary-eval/summary_eval_pipeline/`. The
