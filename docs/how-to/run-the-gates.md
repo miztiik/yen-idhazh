@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -241,11 +241,30 @@ uv sync --frozen --group dev
 uv run --frozen python .\scripts\prepare-unieval-resources.py --root '..\..'
 uv run --frozen ruff check src tests scripts
 Push-Location ..\..
-uv run --project .\services\summary_evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
+uv run --project .\services\summary_evaluator --frozen ruff check .\tools\summary-eval
 Pop-Location
-uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline ../../.github/scripts/summary-eval-tests/summary_eval_tests
+uv run --frozen mypy src tests ../../tools/summary-eval/summary_eval_pipeline ../../tools/summary-eval/summary_eval_tests
 uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test_event_ids.py tests/test_server_events.py
 ```
+
+On Windows hosts where registry downloads fail through uv, keep the same
+service interpreter and environment. Export the frozen registry requirements,
+verify their hashes with pip, then install the already-declared local packages
+without resolving another dependency set. From the repository root:
+
+```powershell
+New-Item -ItemType Directory -Force .\services\summary_evaluator\var | Out-Null
+uv export --project .\services\summary_evaluator --frozen --group dev --no-emit-project --no-emit-package local-api-host --output-file .\services\summary_evaluator\var\checks-requirements.txt
+.\services\summary_evaluator\.venv\Scripts\python.exe -m ensurepip --upgrade
+.\services\summary_evaluator\.venv\Scripts\python.exe -m pip install --require-hashes -r .\services\summary_evaluator\var\checks-requirements.txt
+.\services\summary_evaluator\.venv\Scripts\python.exe -m pip install --no-deps -e .\services\local_api_host -e .\services\summary_evaluator
+uv pip check --python .\services\summary_evaluator\.venv\Scripts\python.exe
+Remove-Item -LiteralPath .\services\summary_evaluator\var\checks-requirements.txt
+```
+
+After that successful check, add `--no-sync` to local `uv run` verification
+commands so they use the checked environment. CI keeps its frozen uv
+preparation. No lock, model extra, backend installation or destination changes.
 
 If Bun cannot copy the local writer dependency on Windows, repeat its locked
 install with `--linker=isolated`; do not change either package manifest or lock.
@@ -262,8 +281,11 @@ workflow exercises live HHEM and UniEval scoring separately; the
 The model-free environment installs neither the backend nor the model extra.
 The `src` package is installed from this project, not supplied through pytest's
 source path. Shared test support is `tests/summary_evaluator_cases`; the
-comparison workflow's independent tests are `summary_eval_tests` under its
-script directory. The explicit pytest configuration names both suites.
+comparison workflow's independent tests are under
+`tools/summary-eval/summary_eval_tests`. The explicit pytest configuration names
+both suites and the tool's Python import root; it does not install a separate
+caller distribution. The three tool launchers still establish backend imports
+before entering their existing task modules.
 The named UUID test fails with preparation
 instructions when its real TypeScript dependency is absent; it never skips.
 The model-free environment includes the pinned tokenizer and sentence-rule
@@ -325,7 +347,7 @@ and dependency boundary.
 
 For the manual caller, complete the native preparation above, then prepare the
 existing locked host APIs and shared application from the repository root.
-Run the named modules from the service directory:
+Run the complete caller suite on Linux from the service directory:
 
 ```powershell
 bun install --frozen-lockfile --cwd .\packages\common-contracts
@@ -336,10 +358,10 @@ bun install --frozen-lockfile --cwd .\services\host-probes
 Set-Location .\services\summary_evaluator
 uv run --frozen ruff check src tests scripts
 Push-Location ..\..
-uv run --project .\services\summary_evaluator --frozen ruff check .\.github\scripts\summary-eval-tests
+uv run --project .\services\summary_evaluator --frozen ruff check .\tools\summary-eval
 Pop-Location
-uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline ../../.github/scripts/summary-eval-tests/summary_eval_tests
-uv run --frozen pytest -c pyproject.toml ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_pipeline_preparation.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_generation_handoff.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_native_generation.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_host_profile_reader_parity.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_machine_task.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_pipeline_control.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_pipeline_evaluation.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_unieval_workflow.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_workflow_health_isolation.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_evaluator_response_binding.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_unieval_workflow_fixture.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_workflow_outcomes.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_pipeline_measurement.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_pipeline_lifetime.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_native_launch.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_pipeline_report.py ../../.github/scripts/summary-eval-tests/summary_eval_tests/test_manual_workflow.py
+uv run --frozen mypy src tests ../../tools/summary-eval/summary_eval_pipeline ../../tools/summary-eval/summary_eval_tests
+uv run --frozen pytest -c pyproject.toml ../../tools/summary-eval/summary_eval_tests
 ```
 
 The host compatibility test exports the actual native schemas through Bun,
@@ -401,7 +423,7 @@ on Linux. The same invocation is available for local Linux debugging from the
 service directory:
 
 ```powershell
-uv run --frozen pytest -c pyproject.toml tests ../../.github/scripts/summary-eval-tests/summary_eval_tests
+uv run --frozen pytest -c pyproject.toml tests ../../tools/summary-eval/summary_eval_tests
 ```
 
 Keep the socket guard and resource preparation above. The ordinary CI job
@@ -533,7 +555,7 @@ Type-check the comparison workflow's native bridge with Node and the probe
 package's explicit locked Bun type binding:
 
 ```powershell
-node .\services\host-probes\node_modules\typescript\bin\tsc --noEmit --target ESNext --module ESNext --moduleResolution Bundler --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --noUnusedLocals --noUnusedParameters --verbatimModuleSyntax --skipLibCheck --types .\services\host-probes\node_modules\@types\bun .\.github\scripts\summary-eval-tests\machine-task.ts .\.github\scripts\summary-eval-tests\summary_eval_tests\host-profile-bridge.ts
+node .\services\host-probes\node_modules\typescript\bin\tsc --noEmit --target ESNext --module ESNext --moduleResolution Bundler --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --noUnusedLocals --noUnusedParameters --verbatimModuleSyntax --skipLibCheck --types .\services\host-probes\node_modules\@types\bun .\tools\summary-eval\machine-task.ts .\tools\summary-eval\machine-results.ts .\tools\summary-eval\summary_eval_tests\host-profile-bridge.ts
 ```
 
 The bridge remains an importer of the native route constants. Its model-free
@@ -712,17 +734,22 @@ manifests, then check the native API and both caller products:
 
 ```powershell
 bun install --frozen-lockfile --cwd services/summary-generator
-bun install --frozen-lockfile --cwd .github/scripts/summary-generator-tests
+bun install --frozen-lockfile --cwd tools/summary-generator-caller
 bun run --cwd services/summary-generator check
 bun run --cwd services/summary-generator test
-bun run --cwd .github/scripts/summary-generator-tests check
-bun run --cwd .github/scripts/summary-generator-tests test
-bun test ./.github/scripts/test/workflow-handoff.test.ts
+bun run --cwd tools/summary-generator-caller check
+bun run --cwd tools/summary-generator-caller test
+bun test ./tools/ai-pipeline-experiment/test/workflow-handoff.test.ts
 ```
 
 The existing saved-handoff check also requires its locked shared metadata and
 already declared root inference dependencies. Its TypeScript command stays in
 `ai-pipeline-tests.yml`; run that same named selection locally.
+On Windows, a cold child import can exceed Bun's default five-second test
+timer. `bun test --timeout 120000` with that same named file gives the test
+runner a two-minute startup allowance without changing an application,
+model, listener or cleanup deadline. The Linux CI command keeps its existing
+default.
 The generator and caller cases use standard in-memory HTTP requests/responses,
 recorded native/source boundaries, real JSDOM parsing and named private output
 files under generated project-owned directories. They open no test sockets,
@@ -1092,8 +1119,9 @@ which `pytest` above runs.
 
 **There is no shell linter for workflow commands.** `shellcheck` and the
 `shellcheck-py` dev dependency were removed with the last `.sh` file in
-`.github/scripts/` on 2026-09-23. That directory now holds a TypeScript helper,
-not a shell script. No linter reads a workflow's inline shell, because a
+`.github/scripts/` on 2026-09-23. That directory now holds only the retained
+TypeScript generation experiment; caller support and tests live under
+`tools/`. No linter reads a workflow's inline shell, because a
 `run:` body is a string inside YAML rather than a file; the contract tests in
 `backend/tests/workflows/` execute the real steps instead
 ([../reference/ci-dispatch-inputs.md](../reference/ci-dispatch-inputs.md#nothing-lints-a-run-body)).

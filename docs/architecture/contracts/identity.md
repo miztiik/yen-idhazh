@@ -1,6 +1,6 @@
 # Identity contracts
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-08
 
 How files, work units, content, event occurrences and operations retain distinct identities.
 
@@ -139,8 +139,9 @@ the codec; native `traceState` is its serialized form. Locally emitted carriers
 use version `00` and unsampled flags `00`. Callers derive a child or start a root
 explicitly; these identifiers grant no authorization or request replay promise.
 
-Each producer declares its fixed logical URI in its own `declare-event-source.ts`
-module; the independent workflow uses `declare-workflow-event-source.ts`.
+HTTP producers declare their fixed logical URI in their local
+`declare-event-source.ts` module. The retained inference experiment declares
+`WORKFLOW_EVENT_SOURCE` directly in `.github/scripts/ai-pipeline.ts`.
 These protocol identities are not configuration, deployment addresses or fetch
 destinations. Shared `EventSourceSchema` validates URI references when events
 are constructed or read, without enumerating applications or reading files.
@@ -167,8 +168,8 @@ Table B - verified API and producer bindings
 | B4 | Probe HTTP: sample, start/stop task profile and cache latency; probe CLI | `/services/host-probes`; `services/host-probes/src/declare-event-source.ts` | Native handled/disabled outcomes and safe failures come from real commands. `native-events.test.ts` and `probe.test.ts` cover all commands, private reports, cleanup and retained profile operations; `serve-machine-apis.test.ts` covers native machine composition. |
 | B5 | Delivery HTTP: health and safe-persist-data | `/services/typescript-api`; delivery's declaration in `services/feed-ingest-plan/src/declare-event-source.ts` | The handler creates completion/failure events before supervision. `safe-persist-http.test.ts` verifies native stderr before relay, unchanged occurrence/context after relay and actual local Git delivery; finalization retains the same native facts. |
 | B6 | Composed listener: health, lifecycle and request-error boundary | `/services/typescript-api`; `services/serve-pipeline-apis/src/declare-event-source.ts` | The host constructs its own request-failure event and relays validated producer events unchanged. `supervise-http-child.test.ts`, `server-events.test.ts` and `serve-feed-apis.test.ts` exercise real listeners and error paths without reverse native dependencies. |
-| B7 | Non-HTTP phased workflow and upload inventory | `/workflows/ai-pipeline` in `.github/scripts/declare-workflow-event-source.ts`; upload inventory reuses B1 | The workflow and inventory emit real native events without a registry file. `workflow-handoff.test.ts` and planner `operation-logging.test.ts` preserve saved handoff, upload facts and source identities. |
-| B8 | Full-analysis CLI and summary-only workflow caller | `/workflows/summary-generator-tests`; `.github/scripts/summary-generator-tests/declare-event-source.ts` | `analysis-events.test.ts` retains private full-analysis events and historical source readback; `summary-workflow.test.ts` captures the real summary API response, prompt/input identity and distinct caller/API carriers. The API does not write either caller's report. |
+| B7 | Non-HTTP inference experiment and upload inventory | `/workflows/ai-pipeline` in `.github/scripts/ai-pipeline.ts`; upload inventory reuses B1 | The workflow and inventory emit real native events without a registry file. `tools/ai-pipeline-experiment/test/workflow-handoff.test.ts` and planner `operation-logging.test.ts` preserve saved handoff, upload facts and source identities. |
+| B8 | Full-analysis CLI and summary-only workflow caller | `/workflows/summary-generator-tests`; `tools/summary-generator-caller/declare-event-source.ts` | `analysis-events.test.ts` retains private full-analysis events and historical source readback; `summary-workflow.test.ts` captures the real summary API response, prompt/input identity and distinct caller/API carriers. The API does not write either caller's report. |
 
 Delivery intentionally retains the API host's published namespace through its
 own declaration; neither producer loads the other's source. Their integration

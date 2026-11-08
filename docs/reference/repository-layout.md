@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -20,7 +20,7 @@ question, and the four answers do not mix.
 
 | Answer | Directory |
 | --- | --- |
-| A person writes it, by hand | `.claude/`, `.github/`, `config/`, `docs/`, `notebooks/`, `tests/`, `TODO/` |
+| A person writes it, by hand | `.claude/`, `.github/`, `config/`, `docs/`, `notebooks/`, `tests/`, `tools/`, `TODO/` |
 | A tool generates it, and it is committed | `state/`, `frontend/public/digest/` |
 | A tool generates it, and it is thrown away | `backend/var/`, `frontend/build/` |
 | It is downloaded, not authored | `backend/models/`, `backend/bin/` |
@@ -34,8 +34,11 @@ question, and the four answers do not mix.
 | `corpus/` | The rolling training window: source text as training samples, its census and its holdout. **`corpus/reference-dataset-1/` is a second collection in the same directory and a different thing entirely**: a frozen, hand-labelled set for measuring the article classifier, written once by hand and never by a run. The two must not share an article, and `build_reference_dataset.py verify` is what says so. **`corpus/reference-dataset-2/` is a third**: a collection built from a URL list supplied by hand, for a later balanced classification sample, with its own settings in `config.json` and its own `scratch/` subtree ignored by git | a run, in CI; `reference-dataset-1/` and `reference-dataset-2/` by a person | **never** |
 | `backend/` | The build-time producer. Not a service, ever. `backend/idhazh/` is the package, `backend/idhazh/contracts/` the Pydantic models, `backend/idhazh/contracts/knobs/` one module per block of `config/idhazh.json`, `backend/idhazh/stages/` one module per pipeline stage, `backend/utilities/` the operator tooling, `backend/tests/` its tests | a person | no |
 | `.github/workflows/` | CI, the daily pipeline, and the Pages deploy | a person | no |
-| `.github/scripts/` | The independent `ai-pipeline.ts` experiment owns generation, saved inference events and its report; `summary-eval-tests/` owns distinct manual generation, saved-answer evaluation, shared machine HTTP calls and reporting, not the evaluator APIs | a person | no |
-| `.github/scripts/summary-generator-tests/` | Private full-analysis CLI, URL/fallback preparation, existing classification/measurement events and reports, plus the summary-only Yen caller and its validated response/report; [caller contract](summary-generator-caller.md) | a person | no |
+| `.github/scripts/` | Only the retained `ai-pipeline.ts` generation experiment, including its logical event-source declaration; no caller packages, tests or coverage helpers | a person | no |
+| `tools/` | Language-neutral homes for independent Python and TypeScript caller programs, their private contracts and their tests; not API implementation source or generated output | a person | no |
+| `tools/summary-generator-caller/` | Private full-analysis and summary-only callers, URL/fallback preparation, analysis contracts, package/lock/compiler files and `test/`; [caller contract](summary-generator-caller.md) | a person | no |
+| `tools/summary-eval/` | Manual generation/evaluation/reporting caller, native machine bridge, `run.py`, `report.py`, `serve.py`, `summary_eval_pipeline/` contracts/implementation and `summary_eval_tests/`; uses the existing locked evaluator environment, not a separate distribution; [workflow contract](summary-evaluation-workflow.md) | a person | no |
+| `tools/ai-pipeline-experiment/` | The retained generation experiment's saved-event reader and `test/workflow-handoff.test.ts`; its type-only dependency points to the retained writer; [saved-event contract](workflow-pipeline-events.md) | a person | no |
 | `services/summary-generator/` | Independent prepared-text summary API, native request/content helpers and bounded transport; no extraction, classification, machine sampling or report writing; [API contract](summary-generator-api.md) | a person | no |
 | `services/feed-ingest-plan/`, `services/host-probes/` | Native API implementations and assembly: feed owns planning/delivery, probes compose fingerprints/profiles; workflow/report helpers remain with their native package, with offline cases under `test/` | a person | no |
 | `services/serve-pipeline-apis/` | Reusable local listener, health identity, private-pipe lifetime, cancellation, exact-child cleanup, safe diagnostics and typed evidence; no native API dependencies; [listener contract](serve-pipeline-apis.md) | a person | no |
@@ -76,6 +79,7 @@ These exist on a developer machine and in CI. None is ever committed.
 | `backend/var/` | Run intermediates and caches. The committed record of a run is the digest plus the `state/` rows, never the workings |
 | `services/summary_evaluator/var/` | Downloaded model assets, a separate optional model environment and disposable capture output; never published or committed |
 | `backend/var/summary-generator-tests/` | Caller-owned summary API response, private event and Markdown report; never published or committed |
+| `backend/var/summary-eval-tests/` | Comparison caller's same-run receipts, phase evidence, escaped report and native logs; never published or committed |
 | `backend/var/evidence/` | Inside `backend/var/`, and named here because a person has to find it. One file per scored item, holding the article text and the summary a human labeller must read. Article bodies are not ours to republish, so this one is uncommittable on principle rather than on size |
 | `backend/var/council/` | Inside `backend/var/`, and named here for the same reason. **Everything one judging night carries between its jobs, and the only thing it carries**: the workflow uploads this directory and nothing else, so a file a tenant writes outside it is thrown away with the runner. One date a directory, and inside it a slot each for what was picked, what was judged, what the units measured and how each unit ended. A file is named `<date>-<tenant>-<unit>`, so eight units cannot land on one path and a file merged out of eight artifacts still says who wrote it. Nothing here is ever committed - a drawn row carries no verdict yet and the units rewrite it, while a row reaches the `content-similarity-judge/scored-pairs` ledger once, through the ledger door, already judged, and is never edited afterwards |
 | `frontend/build/` | The built bundle. Pages rebuilds it from source on every deploy |
@@ -170,6 +174,19 @@ interface between the two halves.
  it. An empty module "for later" is a section 10 anti-pattern.
 
 ## Design rationale
+
+Independent callers belong in top-level `tools/` because neither their language
+nor the workflow that invokes them makes them part of an API implementation.
+Their own contracts and tests stay beside their entrypoints. Backend-specific
+utilities remain in `backend/utilities/`; service-specific setup, supervision
+and operation scripts remain in their native service package. Reusable
+libraries remain in `packages/`.
+
+The retained generation experiment does not require a new client package or
+manifest. Its writer declares its own fixed event source, and the generator
+caller imports each schema from its defining module rather than an export-only
+redirect. Source placement changes neither logical event identities nor the
+configured private output directories.
 
 Splitting committed machine output (`state/`, `frontend/public/`)
 from committed human input (`config/`, `docs/`, `tests/`) is the decision the

@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 How do the API and CLI execute one real feed plan?
 Both compose the same units. The production Python news pipeline, digest
@@ -24,8 +24,9 @@ parser workers, not the number of feeds fetched.
 The workflow child also reports its startup nonce, process ID and run identity.
 The service owns its API code and workflow adapters. GitHub workflow YAML
 calls `services/feed-ingest-plan/scripts/`; no native API depends on
-`.github/scripts/`. The two independent experiment files retained there
-do not supply API execution, history, verification or reporting.
+`.github/scripts/`. Only the independent `ai-pipeline.ts` generation experiment
+remains there; its reader and tests live under `tools/ai-pipeline-experiment/`.
+Neither supplies native feed API execution, history, verification or reporting.
 The workflow entry is `scripts/run-feed-ingest-plan.ts`. Preparation lives in
 `scripts/feed-ingest-plan-workflow-inputs.ts`: it loads authored settings from
 the initial checkout, enables only this invocation and captures identity, effective policy and host

@@ -1,6 +1,6 @@
 # Inference workflow events
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 Which saved events does the independent inference workflow write and read?
 
@@ -22,8 +22,9 @@ with `INVALID_PIPELINE_PHASE`; the default and `--phase=infer` retain generation
 
 The envelope follows the shared
 [identity contract](../architecture/contracts/identity.md#4-native-typescript-event-and-operation-metadata).
-The workflow selects `/workflows/ai-pipeline` from its local
-`.github/scripts/declare-workflow-event-source.ts`, without a source registry.
+The workflow selects `/workflows/ai-pipeline` from its unchanged exported
+`WORKFLOW_EVENT_SOURCE` declaration in `.github/scripts/ai-pipeline.ts`,
+without a source registry or a declaration-only redirect.
 Project data version `2026-11-03` is attached to `PipelineEventDataSchema`;
 CloudEvents `specversion` remains `1.0`. This is a current-only reader with no
 aliases, old-format reader, identity conversion or backfill.
@@ -40,7 +41,7 @@ Table A - workflow application data
 | A2 | `data.durationMs` | Rounded milliseconds since the preceding log event in the current phase. This is a log gap, not an operation duration. |
 | A3 | `data.cumulativeMs` | Rounded milliseconds on the existing pipeline counter. Loading a saved file resumes from its last value, excludes the gap between phase processes and resets the next log gap. |
 
-`read-pipeline-events.ts` validates the named file and selects
+`tools/ai-pipeline-experiment/read-pipeline-events.ts` validates the named file and selects
 `type === "OUTPUT_STRUCTURED"`, without
 rewriting any saved identity, occurrence time, carrier or payload.
 The step summary reads the same saved identity and measurement paths.
@@ -66,11 +67,16 @@ evaluator or a source of new scores.
 
 Prepare the common package's locked dependencies and the workflow's existing
 inference dependencies, then run
-`bun test ./.github/scripts/test/workflow-handoff.test.ts`. The functional cases call the
+`bun test ./tools/ai-pipeline-experiment/test/workflow-handoff.test.ts`. The functional cases call the
 same production writer, reader, selector and generation report.
 They cover distinct occurrences, unchanged producer identity, resumed counters,
 explicit malformed-input failure and retired-phase refusal before generation.
 They do not dispatch a live model or evaluator.
+
+The test imports the source declaration from the writer it already exercises.
+The reader retains only a type-only dependency on that writer. No separate
+experiment package or manifest is needed; private event files and their
+identities keep their existing locations and meanings.
 
 The named `tests/fixtures/typescript-metadata/workflow-output-event.json` recording
 uses fixed replacement text and machine labels. Its token, memory and CPU
