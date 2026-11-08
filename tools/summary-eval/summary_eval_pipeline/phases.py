@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 import httpx
+from local_api_host.propagate_trace_context import create_child_operation, create_root_operation
 from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
 from summary_evaluator.serve_http.api_settings import (
@@ -30,7 +31,7 @@ from .contracts import (
     PhaseName,
     PipelineError,
 )
-from .control import HostReady, StartupPacket
+from .control import MACHINE_STARTUP_VERSION, HostReady, MachineStartupPacket, StartupPacket
 from .evaluate_pair import EvaluatorOutcomes, evaluate_pair
 from .evaluation import bind_evaluations, read_owned_health
 from .failures import WorkflowError
@@ -80,6 +81,7 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
         "generation-phase.json" if phase == "generation" else "evaluation.json"
     )
     services = PhaseServices(prepared.run)
+    phase_operation = create_root_operation()
     outcomes = EvaluatorOutcomes()
     requests: tuple[EvaluateRequest, UnievalRequest] | None = None
     receipt: GenerationReceipt | None = None
@@ -161,6 +163,7 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                             ScorerStartupPacket(
                                 version=SCORER_CONTROL_VERSION,
                                 scorer=api.scorer,
+                                operation_metadata=create_child_operation(phase_operation),
                                 startup=packet.model_copy(
                                     update={"startup_id": create_execution_id()}
                                 ),
@@ -208,6 +211,7 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                                 api.scorer,
                                 deadline=deadline,
                                 observe=api.observe_health,
+                                operation_metadata=phase_operation,
                             ),
                             api.owner,
                             pipeline,
@@ -230,7 +234,11 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                     "host",
                     ["bun", "run", "--no-install", str(scripts / "machine-task.ts"), str(root)],
                     root,
-                    packet,
+                    MachineStartupPacket(
+                        version=MACHINE_STARTUP_VERSION,
+                        startup=packet,
+                        operation_metadata=create_child_operation(phase_operation),
+                    ),
                     None,
                     pipeline,
                 )
@@ -285,6 +293,7 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
                     outcomes,
                     errors,
                     lambda: write_result(destination, evidence()),
+                    operation_metadata=phase_operation,
                 )
     except WorkflowError as error:
         errors.append(error.error)

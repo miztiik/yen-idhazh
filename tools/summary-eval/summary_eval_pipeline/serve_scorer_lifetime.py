@@ -18,6 +18,7 @@ from summary_evaluator.shared.create_api_component import ApiComponentRuntime
 from summary_evaluator.shared.read_process_identity import read_owned_process_identity
 
 from .channels import OwnedChannels
+from .control import encode_control_packet
 from .scorer_control import (
     SCORER_CONTROL_VERSION,
     ScorerReady,
@@ -28,9 +29,9 @@ from .scorer_control import (
 
 
 def emit_control(
-    packet: ScorerReady | ScorerStopped | ScorerStartFailed, stream: TextIO
+    packet: ScorerReady | ScorerStopped | ScorerStartFailed, stream: TextIO, max_bytes: int
 ) -> None:
-    stream.write(packet.model_dump_json() + "\n")
+    stream.write(encode_control_packet(packet, max_bytes).decode("utf-8"))
     stream.flush()
 
 
@@ -62,6 +63,7 @@ async def serve_scorer_lifetime(
     sockets: list[socket.socket],
     announced: threading.Event,
     *,
+    control_max_bytes: int,
     parent_stream: BinaryIO | None = None,
 ) -> None:
     if api.enabled_routes != (packet.scorer,) or len(app.state.components) != 1:
@@ -104,12 +106,15 @@ async def serve_scorer_lifetime(
                     service="api",
                     scorer=packet.scorer,
                     startup_id=packet.startup_id,
+                    launch_operation_metadata=packet.operation_metadata,
+                    operation_metadata=app.state.events.service_operation,
                     process=process,
                     service_instance_id=app.state.service_instance_id,
                     log_file=app.state.events.log_file,
                     log_available=app.state.events.log_available,
                 ),
                 channels.control,
+                control_max_bytes,
             )
             announced.set()
         await serving
@@ -129,10 +134,13 @@ async def serve_scorer_lifetime(
                 service="api",
                 scorer=packet.scorer,
                 startup_id=packet.startup_id,
+                launch_operation_metadata=packet.operation_metadata,
+                operation_metadata=app.state.events.service_operation,
                 pid=process.pid,
                 error_code="STARTUP_FAILED",
             ),
             channels.control,
+            control_max_bytes,
         )
         announced.set()
     worker_exit = runtime.observe_exit()
@@ -147,6 +155,8 @@ async def serve_scorer_lifetime(
             service="api",
             scorer=packet.scorer,
             startup_id=packet.startup_id,
+            launch_operation_metadata=packet.operation_metadata,
+            operation_metadata=app.state.events.service_operation,
             process=process,
             clean=clean,
             worker_exit=worker_exit,
@@ -155,6 +165,7 @@ async def serve_scorer_lifetime(
             cleanup_error_code="SERVICE_STOP_FAILED" if not clean else None,
         ),
         channels.control,
+        control_max_bytes,
     )
     if failure is not None and cleanup is not None:
         raise BaseExceptionGroup("Owned scorer cleanup failed", [failure, cleanup])

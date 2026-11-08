@@ -166,6 +166,23 @@ own process guard; one failed API or unfinished model does not prevent a ready s
 actual result. A failed request does not cancel its sibling, retry scoring or
 regenerate the answer.
 
+Each actual phase allocates its own operation through the neutral Python host's
+shared trace helpers. Separate scorer calls, API launches and the machine launch
+are children of that operation. Health polls allocate a fresh call child before
+each real request. Run, request and correlation UUIDs retain their existing
+meanings; they are never converted to trace identifiers or used to reconstruct
+an earlier generation job's trace.
+
+The bounded HTTPX caller sends the explicit call's W3C carrier and observes the
+actual returned headers separately from the native result. A receiving span is
+not the caller's span. Response headers provide no parent relationship, so the
+observation retains no invented parent. Valid optional state is canonical;
+invalid optional state is omitted without losing a valid remote identity.
+Missing or malformed parent carriers produce fixed, body-free observations.
+These per-call values remain in memory and are excluded from saved scores,
+phase evidence and reports. An observer failure emits a fixed warning without
+discarding a native response or its completed scores.
+
 If a scorer's health transport fails, the caller retains independent observations
 already validated for its siblings and records that actual failure under the owning scorer.
 Only a component already observed ready may score. Identity or response
@@ -178,8 +195,24 @@ overall completion even when a sibling returns a score.
 generation/preparation contracts and frozen shared-API evidence. Current
 `phase_contracts.py`, `report_contracts.py` and `scorer_evidence.py` declare
 `2026-11-07` phase/report evidence with independent API observations.
-`scorer_control.py` declares the separate current-only `2026-11-07` private API
-packets. The Bun machine bridge still uses `2026-11-05` and accepts no scorer fields.
+`scorer_control.py` declares the separate `2026-11-08` private API packets.
+Startup carries the issued launch operation; replies echo that complete value
+and carry the actual service child. The API supplies that service operation to
+its existing event writer before controller construction, so service,
+controller and model-load work really adopt the launch branch. The process
+reader checks launch equality, service ancestry and consistent service identity
+alongside its existing nonce, PID, kernel start pin, scorer, instance and exit
+checks. `previous_scorer_control.py` reads genuine `2026-11-07` controls with their
+original version and absent metadata. Invalid current packets cannot select
+that reader.
+
+`control.py` declares the independent `2026-11-08` machine-startup wrapper.
+It contains the unchanged flat startup packet and the issued machine operation.
+The actual TypeScript reader adopts that operation for native supervision, run
+metadata and HTTP calls. Legacy flat `2026-11-05` inputs remain readable without
+adding metadata; a new execution from one retains the previous local-root
+behavior. The Bun ready/stopped controls and global workflow version still use
+`2026-11-05` and accept no scorer fields.
 Native scoring, API health and machine-result versions remain independent.
 Bounded report readers dispatch by the evidence's own version; unknown versions
 fail. Legacy evidence remains one shared API, without invented independent PIDs
@@ -259,6 +292,12 @@ do not share a diagnostic file. The date is the UTC
 run-start day. Restarting a role appends to its file. Private control packets
 are separate. Source, prompts, model output and secrets never enter diagnostic
 records; native raw output is suppressed with the configured quiet flags.
+Scorer events retain the actual call or service branch through the native
+worker and diagnostic relay. Relay validates and re-serializes the original
+occurrence, time, carrier and data; it never invokes an event factory or adds
+trace fields to an old untraced event. Private startup and control bounds include
+complete metadata, JSON escaping and the JSONL newline. Both directions reject
+an oversized complete packet under the existing byte allowances.
 `native_logging` and `native_log_directory` in the workflow settings control
 the native lifecycle log independently of evaluator logging. Its configured
 directory is retained with the workflow diagnostics, not an evaluator-labelled
@@ -324,6 +363,11 @@ references while keeping orchestration controls in the workflow.
 The workflow adds no Python model binding, collector dependency or root
 workspace. The reusable FastAPI composition, unchanged Hono application, frozen dependencies, native
 asset tools and request/final-answer readers do the actual work.
+Explicit per-call and per-launch values connect actual work without ambient
+state or a tracing SDK, exporter or store. Separately dated transient wrappers
+avoid changing saved machine, phase and report projections. Compatible readers
+preserve old absence rather than manufacture ancestry; optional tracing cannot
+change the native scoring proof or completion policy.
 The evaluation application is not a generation proxy: the workflow already
 owns the native model, so a second forwarding process would add a readiness
 and shutdown dependency without doing another task.

@@ -207,7 +207,7 @@ flowchart LR
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | H1 | 1 | Accept trace-aware scorer envelopes without changing old records | - | A | DONE | fuzzy-parakeet | - | Trace envelope readers |
 | H2 | 2 | Enable actual scorer API and worker trace propagation | 1 | B | IN PROGRESS | automatic-meme | - | API worker trace propagation |
-| H3 | 3 | Connect retained callers and process diagnostics to scorer traces | 2 | C | PENDING | - | - | - |
+| H3 | 3 | Connect retained callers and process diagnostics to scorer traces | 2 | C | DONE | scorer-caller-trace-continuity | - | Scorer caller trace continuity |
 
 ## 2. Row #1 - Accept trace-aware scorer envelopes without changing old records
 
@@ -360,13 +360,16 @@ flowchart LR
   - `tools/summary-eval/summary_eval_pipeline/phases.py`
   - `tools/summary-eval/summary_eval_pipeline/control.py`
   - `tools/summary-eval/summary_eval_pipeline/scorer_control.py`
+  - `tools/summary-eval/summary_eval_pipeline/previous_scorer_control.py` (new; frozen untraced controls)
   - `tools/summary-eval/summary_eval_pipeline/services.py`
   - `tools/summary-eval/summary_eval_pipeline/serve_api.py`
   - `tools/summary-eval/summary_eval_pipeline/serve_scorer_lifetime.py`
   - `tools/summary-eval/machine-task.ts`
   - `tools/summary-eval/summary_eval_tests/scorer_caller_cases.py`
   - `tools/summary-eval/summary_eval_tests/owned_scorer_child.py`
+  - `tools/summary-eval/summary_eval_tests/owned_service_child.py`
   - `tools/summary-eval/summary_eval_tests/test_scorer_callers.py`
+  - `tools/summary-eval/summary_eval_tests/test_scorer_api_isolation.py`
   - `tools/summary-eval/summary_eval_tests/test_pipeline_control.py`
   - `tools/summary-eval/summary_eval_tests/test_pipeline_lifetime.py`
   - `tools/summary-eval/summary_eval_tests/test_machine_task.py`

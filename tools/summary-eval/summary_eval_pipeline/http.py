@@ -1,14 +1,17 @@
 """How is one owned HTTP response bounded without redirects, proxies or retries?"""
 
 import asyncio
+import logging
 from typing import Literal
 
 import httpx
+from local_api_host.propagate_trace_context import OperationMetadata, write_trace_context
 from pydantic import BaseModel, ValidationError
 
 from .contracts import FailurePhase, ServiceName
 from .failures import WorkflowError
 from .settings import PipelineSettings
+from .trace_context import ResponseTraceObserver, read_response_trace
 
 
 def loopback_url(host: Literal["127.0.0.1", "::1"], port: int) -> str:
@@ -28,20 +31,32 @@ async def call_local_api[Result: BaseModel](
     phase: FailurePhase,
     body: bytes | None = None,
     max_response_bytes: int | None = None,
+    operation_metadata: OperationMetadata | None = None,
+    observe_trace: ResponseTraceObserver | None = None,
 ) -> tuple[int, Result]:
     timeout = httpx.Timeout(timeout_ms / 1000, connect=manual.http_connect_timeout_ms / 1000)
     limit = manual.max_response_bytes if max_response_bytes is None else max_response_bytes
+    headers = {"Content-Type": "application/json", "Accept-Encoding": "identity"}
+    if operation_metadata is not None:
+        headers.update(write_trace_context(operation_metadata))
     try:
         async with asyncio.timeout(timeout_ms / 1000):
             async with client.stream(
                 method,
                 url,
                 content=body,
-                headers={"Content-Type": "application/json", "Accept-Encoding": "identity"},
+                headers=headers,
                 timeout=timeout,
                 follow_redirects=False,
             ) as response:
                 status = response.status_code
+                if observe_trace is not None:
+                    try:
+                        observe_trace(read_response_trace(response.headers))
+                    except (OSError, ValueError, TypeError, RuntimeError):
+                        logging.getLogger(__name__).warning(
+                            '{"event":"scorer_trace_observation_failed"}'
+                        )
                 if 300 <= status < 400:
                     raise WorkflowError("HTTP_FAILED", phase, service, status)
                 if response.headers.get("content-encoding", "identity") != "identity":

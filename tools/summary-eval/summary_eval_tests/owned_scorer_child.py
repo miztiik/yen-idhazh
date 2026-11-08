@@ -10,13 +10,16 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
-from pydantic import BaseModel
+from local_api_host.propagate_trace_context import OperationMetadata, create_child_operation
 from summary_eval_pipeline.channels import open_owned_channels
+from summary_eval_pipeline.evaluation import evaluate, evaluate_unieval
 from summary_eval_pipeline.http import loopback_url
 from summary_eval_pipeline.scorer_control import ScorerStartupPacket
 from summary_eval_pipeline.serve_scorer_lifetime import serve_scorer_lifetime
 from summary_eval_pipeline.settings import load_pipeline_settings
+from summary_eval_pipeline.trace_context import ResponseTraceObservation
 from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
+from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.configure_server import report_startup_failure
 from summary_evaluator.serve_http.contracts.api_health import ApiHealth
@@ -28,6 +31,8 @@ from summary_evaluator.shared.contracts.api_paths import (
     EVALUATE_PATH,
 )
 from summary_evaluator.shared.read_process_identity import read_owned_process_identity
+from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
+from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 from summary_evaluator.unieval.unieval_router import UNIEVAL_PATH
 from summary_evaluator_cases.replay_predictions import Scenario, read_recordings
 from summary_evaluator_cases.service_cases import RecordedSupervisor, service_settings
@@ -36,6 +41,8 @@ from summary_evaluator_cases.unieval_cases import (
     read_unieval_inputs,
     unieval_settings,
 )
+
+from summary_eval_tests.scorer_caller_cases import ObservedScorerApp, ObservedTraceRecords
 
 
 def recorded_app(
@@ -58,7 +65,9 @@ def recorded_app(
     )
 
 
-def native_request(root: Path, scorer: ApiComponent) -> tuple[str, BaseModel]:
+def native_request(
+    root: Path, scorer: ApiComponent
+) -> tuple[str, EvaluateRequest | UnievalRequest]:
     if scorer == "hhem":
         inputs, _, _ = read_recordings(root)
         case = inputs.cases[0]
@@ -75,14 +84,17 @@ def save_observation(path: Path, value: dict[str, object]) -> None:
 
 
 async def record_journey(
-    root: Path, directory: Path, api: ApiSettings, app: FastAPI, scorer: ApiComponent
+    root: Path, directory: Path, api: ApiSettings, app: FastAPI,
+    packet: ScorerStartupPacket, traces: ObservedTraceRecords,
 ) -> None:
+    scorer = packet.scorer
     pipeline = load_pipeline_settings(root)
     runtime = app.state.components[scorer]
     deadline = time.monotonic() + runtime.worker_settings.startup_timeout_ms / 1000
-    path, request = native_request(root, scorer)
+    _, request = native_request(root, scorer)
+    receiving: list[OperationMetadata] = []
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app),
+        transport=httpx.ASGITransport(ObservedScorerApp(app, receiving)),
         base_url=loopback_url(api.listener.host, api.listener.port),
         trust_env=False,
         follow_redirects=False,
@@ -97,12 +109,30 @@ async def record_journey(
             await asyncio.sleep(pipeline.poll_interval_ms / 1000)
 
         async def observe(destination: str) -> None:
-            response = await client.post(
-                path, content=request.model_dump_json(),
-                headers={"content-type": "application/json"},
-            )
-            if response.status_code != 200:
+            call = create_child_operation(packet.operation_metadata)
+            response_traces: list[ResponseTraceObservation] = []
+            origin = loopback_url(api.listener.host, api.listener.port)
+            result: EvaluationResult | UnievalResult
+            if isinstance(request, EvaluateRequest):
+                status, result = await evaluate(
+                    client, origin, request, app.state.controller.settings, pipeline,
+                    operation_metadata=call, observe_trace=response_traces.append,
+                )
+                controller = app.state.controller
+            else:
+                status, result = await evaluate_unieval(
+                    client, origin, request, app.state.unieval.settings, pipeline,
+                    operation_metadata=call, observe_trace=response_traces.append,
+                )
+                controller = app.state.unieval
+            if status != 200 or not response_traces:
                 raise RuntimeError("Recorded native operation did not complete")
+            remote = response_traces[-1]
+            if not isinstance(remote, OperationMetadata):
+                raise RuntimeError("The actual recorded API did not return its receiving carrier")
+            actual_receiving = receiving[-1]
+            if controller.worker.bootstrap is None:
+                raise RuntimeError("The native owned worker did not retain its load operation")
             observed = await client.get(API_HEALTH_PATH)
             validated = ApiHealth.model_validate_json(observed.content)
             identity = read_owned_process_identity(
@@ -113,7 +143,22 @@ async def record_journey(
                 {
                     "process": identity.model_dump(mode="json"),
                     "health": validated.model_dump(mode="json"),
-                    "result": response.json(),
+                    "result": result.model_dump(mode="json"),
+                    "service_operation": app.state.events.service_operation.model_dump(mode="json"),
+                    "controller_operation": controller.service_operation.model_dump(mode="json"),
+                    "worker_load_operation": (
+                        controller.worker.bootstrap.operation_metadata.model_dump(mode="json")
+                    ),
+                    "caller_operation": call.model_dump(mode="json"),
+                    "response_operation": remote.model_dump(mode="json"),
+                    "receiving_operation": actual_receiving.model_dump(mode="json"),
+                    "trace_records": [
+                        {
+                            "event": event.model_dump(mode="json"),
+                            "operation_metadata": operation.model_dump(mode="json"),
+                        }
+                        for event, operation in traces.records
+                    ],
                 },
             )
 
@@ -142,17 +187,24 @@ def main() -> None:
                 root / "config" / "summary-evals" / "api.json", packet.scorer
             )
             events = EventWriter(
-                api.logging, channels.events, directory=directory / "logs", scorer=packet.scorer
+                api.logging, channels.events, directory=directory / "logs", scorer=packet.scorer,
+                service_operation=create_child_operation(packet.operation_metadata),
+                propagate_trace_context=api.propagate_trace_context,
             )
+            traces = ObservedTraceRecords()
+            events.logger.addHandler(traces)
             api, app = recorded_app(root, packet, events)
             finished, announced = threading.Event(), threading.Event()
 
             async def run() -> None:
                 lifetime = asyncio.create_task(
-                    serve_scorer_lifetime(app, api, packet, finished, channels, [], announced)
+                    serve_scorer_lifetime(
+                        app, api, packet, finished, channels, [], announced,
+                        control_max_bytes=controls.control_max_bytes,
+                    )
                 )
                 journey = asyncio.create_task(
-                    record_journey(root, directory, api, app, packet.scorer)
+                    record_journey(root, directory, api, app, packet, traces)
                 )
                 try:
                     done, _ = await asyncio.wait(
