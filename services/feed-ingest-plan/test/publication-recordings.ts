@@ -28,7 +28,9 @@ export async function publicationGitRecording() {
     await reservation.stop(true);
     plan.inputs.settings.listener.port = settings.listener.port;
     const server = await Bun.file(new URL("../../../config/hono-server.json", import.meta.url)).json();
-    await writeFile(join(repository, "config", "hono-server.json"), JSON.stringify({ ...server, port: settings.listener.port }));
+    await writeFile(join(repository, "config", "hono-server.json"), JSON.stringify({
+      ...server, listeners: { ...server.listeners, delivery: { ...server.listeners.delivery, port: settings.listener.port } },
+    }));
     await writeFile(settingsPath, JSON.stringify(settings));
     const retry = await Bun.file(new URL("../../../config/push-retry.json", import.meta.url)).json();
     await writeFile(join(repository, "config", "push-retry.json"), JSON.stringify(retry));

@@ -174,8 +174,8 @@
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| I1 | 1 | Extract the reusable local Python API host | - | A | PENDING | - | - | - |
-| I2 | 2 | Register the manual text-analysis workflow | 1 | B | PENDING | - | - | - |
+| I1 | 1 | Extract the reusable local Python API host | - | A | DONE | extract-reusable-api-host | - | Extract reusable API host |
+| I2 | 2 | Register the manual text-analysis workflow | 1 | B | DONE | register-text-analysis-workflow | - | Register text analysis workflow |
 | I3 | 3 | Build and verify the multilingual text-analysis API | 1, 2 | C | PENDING | - | - | - |
 
 ## 2. Row #1 - Extract the reusable local Python API host
@@ -239,6 +239,8 @@
 - **Scope:** Put the complete manual workflow on the default branch so Row 3 can be dispatched against an immutable implementation commit.
 - **Files touched:**
   - `.github/workflows/spacy-tests.yml`
+  - `backend/tests/workflows/_harness.py`
+  - `backend/tests/workflows/test_triggers.py`
   - `docs/how-to/run-spacy-tests.md`
   - `docs/reference/github-actions.md`
   - `TODO/20261107-text-analysis-api-plan.md`

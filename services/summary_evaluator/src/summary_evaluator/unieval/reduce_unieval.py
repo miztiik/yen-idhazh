@@ -4,6 +4,8 @@ import hashlib
 import time
 from dataclasses import dataclass, field
 
+from local_api_host.propagate_trace_context import OperationMetadata, create_root_operation
+
 from summary_evaluator.shared.contracts.base import OutcomeStatus
 from summary_evaluator.shared.contracts.worker_identity import WorkerIdentity
 from summary_evaluator.shared.create_execution_id import create_execution_id
@@ -27,6 +29,7 @@ from summary_evaluator.unieval.contracts.unieval_result import (
 )
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
 from summary_evaluator.unieval.contracts.unieval_worker_message import (
+    RequestPacket,
     UnievalPrediction,
     UnievalPrepared,
 )
@@ -35,6 +38,7 @@ from summary_evaluator.unieval.fail_unieval import UnievalFailure
 
 @dataclass
 class UnievalState:
+    operation_metadata: OperationMetadata = field(default_factory=create_root_operation)
     execution_id: str = field(default_factory=create_execution_id)
     received_at: float = field(default_factory=time.monotonic)
     request: UnievalRequest | None = None
@@ -50,6 +54,8 @@ class UnievalState:
     queue_ms: float | None = None
     scoring_ms: float | None = None
     prepared: bool = False
+    queue_operation: OperationMetadata | None = None
+    evaluation_operation: OperationMetadata | None = None
 
     def set_request(self, request: UnievalRequest) -> None:
         self.request = request.model_copy(
@@ -63,6 +69,7 @@ class UnievalState:
         ).hexdigest()
 
     def accept_plan(self, packet: UnievalPrepared, settings: UnievalSettings) -> None:
+        self.require_issued_operation(packet)
         if self.prepared or self.request is None:
             raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
         controls = settings.scoring.model_dump()
@@ -120,6 +127,7 @@ class UnievalState:
         self.prepared = True
 
     def accept_prediction(self, packet: UnievalPrediction) -> None:
+        self.require_issued_operation(packet)
         dimension = packet.dimension
         work = getattr(self.work, dimension)
         if (
@@ -165,6 +173,14 @@ class UnievalState:
         if not self.prepared or any(
             self.processed[dimension] != (getattr(self.work, dimension).planned or 0)
             for dimension in DIMENSIONS
+        ):
+            raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
+
+    def require_issued_operation(self, packet: RequestPacket) -> None:
+        if (
+            self.evaluation_operation is None
+            or packet.operation_metadata != self.evaluation_operation
+            or packet.execution_id != self.execution_id
         ):
             raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
 

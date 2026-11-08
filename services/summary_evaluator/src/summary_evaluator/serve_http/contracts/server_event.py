@@ -1,17 +1,39 @@
 """Which CloudEvents JSON records may leave the shared Python server?"""
 
 from datetime import UTC, datetime, timedelta
-from typing import Literal, Self
+from typing import Final, Literal, Self
 
-from pydantic import AwareDatetime, Field, model_validator
+from local_api_host.propagate_trace_context import (
+    OperationMetadata,
+    read_trace_context,
+    write_trace_context,
+)
+from pydantic import AwareDatetime, ConfigDict, Field, field_validator, model_validator
+from pydantic.json_schema import SkipJsonSchema
+from starlette.datastructures import Headers
 
 from summary_evaluator.hhem.contracts.evaluation_event import EvaluationEvent
 from summary_evaluator.shared.contracts.base import Uuid4, Uuid5
 from summary_evaluator.shared.contracts.diagnostic_data import LifecycleFields
+from summary_evaluator.shared.contracts.optional_fields import is_absent, omit_default
 from summary_evaluator.shared.contracts.server_contract import ServerContract
 from summary_evaluator.shared.create_execution_id import create_execution_id
 
+SERVER_EVENT_SCHEMA_VERSION: Final = "2026-11-08"
 DiagnosticComponent = Literal["api", "unieval", "coverage", "log"]
+
+
+def _operation_carrier(
+    operation_metadata: OperationMetadata | None,
+    propagate_trace_context: bool,
+) -> dict[str, str]:
+    if type(propagate_trace_context) is not bool:
+        raise ValueError("Trace emission requires a validated boolean mode")
+    if not propagate_trace_context:
+        return {}
+    if operation_metadata is None:
+        raise ValueError("Enabled emission requires the actual operation metadata")
+    return write_trace_context(operation_metadata)
 
 
 class ApiDiagnosticData(LifecycleFields):
@@ -23,13 +45,58 @@ class ApiDiagnosticData(LifecycleFields):
 class ServerEvent(ServerContract):
     """Carry one validated native occurrence in the CloudEvents structured profile."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": SERVER_EVENT_SCHEMA_VERSION,
+            "changelog": [
+                {
+                    "version": SERVER_EVENT_SCHEMA_VERSION,
+                    "change": "Read optional W3C carriers without changing native occurrences.",
+                }
+            ],
+            "readCompatibility": (
+                "read_and_preserve; absent carriers stay omitted; "
+                "present carriers must validate and state requires a parent"
+            ),
+        }
+    )
+
     specversion: Literal["1.0"]
     id: Uuid4 | Uuid5
     source: Literal["/fastapi-server"]
     type: str
     time: AwareDatetime = Field(description="UTC instant when this occurrence was emitted.")
     datacontenttype: Literal["application/json"]
+    traceparent: str | SkipJsonSchema[None] = Field(
+        default=None, exclude_if=is_absent, json_schema_extra=omit_default
+    )
+    tracestate: str | SkipJsonSchema[None] = Field(
+        default=None, exclude_if=is_absent, json_schema_extra=omit_default
+    )
     data: EvaluationEvent | ApiDiagnosticData
+
+    @field_validator("traceparent", "tracestate")
+    @classmethod
+    def refuse_null_carriers(cls, value: str | None) -> str:
+        if value is None:
+            raise ValueError("Omit absent trace carriers instead of supplying null")
+        return value
+
+    @model_validator(mode="after")
+    def require_valid_trace_carrier(self) -> Self:
+        if self.traceparent is None:
+            if self.tracestate is not None:
+                raise ValueError("tracestate requires traceparent")
+            return self
+        carrier = {"traceparent": self.traceparent}
+        if self.tracestate is not None:
+            carrier["tracestate"] = self.tracestate
+        operation = read_trace_context(Headers(carrier))
+        if operation is None:
+            raise ValueError("traceparent must contain valid W3C operation context")
+        if self.tracestate is not None and self.tracestate != operation.trace_state:
+            raise ValueError("tracestate must be canonical W3C trace state")
+        return self
 
     @model_validator(mode="after")
     def require_matching_occurrence(self) -> Self:
@@ -46,7 +113,13 @@ class ServerEvent(ServerContract):
         return self
 
     @classmethod
-    def from_evaluation(cls, event: EvaluationEvent) -> Self:
+    def from_evaluation(
+        cls,
+        event: EvaluationEvent,
+        operation_metadata: OperationMetadata | None = None,
+        *,
+        propagate_trace_context: bool = False,
+    ) -> Self:
         return cls(
             specversion="1.0",
             id=event.event_id,
@@ -55,10 +128,17 @@ class ServerEvent(ServerContract):
             time=event.occurred_at,
             datacontenttype="application/json",
             data=event,
+            **_operation_carrier(operation_metadata, propagate_trace_context),
         )
 
     @classmethod
-    def diagnostic(cls, data: ApiDiagnosticData) -> Self:
+    def diagnostic(
+        cls,
+        data: ApiDiagnosticData,
+        operation_metadata: OperationMetadata | None = None,
+        *,
+        propagate_trace_context: bool = False,
+    ) -> Self:
         return cls(
             specversion="1.0",
             id=create_execution_id(),
@@ -67,6 +147,7 @@ class ServerEvent(ServerContract):
             time=datetime.now(UTC),
             datacontenttype="application/json",
             data=data,
+            **_operation_carrier(operation_metadata, propagate_trace_context),
         )
 
     def encode_json_line(self, max_bytes: int) -> bytes:

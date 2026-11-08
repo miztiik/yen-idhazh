@@ -1,6 +1,6 @@
 # Summary evaluator API
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 Which routes and startup settings each selected `summary-evaluator` process exposes.
 This is a local workflow service, not a backend for the published site.
@@ -12,17 +12,23 @@ process ownership and failure handling.
 `config/summary-evals/api.json` owns the per-scorer listeners,
 diagnostic settings and request-body bounds. The frozen native models live
 in `services/summary_evaluator/src/summary_evaluator/serve_http/contracts/`
-and `shared/contracts/`. Shared settings,
-health, generic API errors and CloudEvents schemas have version `2026-11-07`.
-Live health, errors and event envelopes use their current shapes. Deployment
-readers also accept frozen `2026-11-07` three-listener and single-listener
-settings, but resolve only one maintained scorer. Saved workflow evidence may
+and `shared/contracts/`. The reusable listener contract lives in
+`services/local_api_host/src/local_api_host/contracts.py`; the evaluator
+projects its committed propagation flag into that contract. Current settings
+have version `2026-11-08` and enable actual HTTP, event and worker context.
+Health and generic API errors retain version `2026-11-07`.
+The native CloudEvents envelope schema has version `2026-11-08` and declares
+reader-optional W3C carriers; it adds no payload `version` field and retains
+`specversion: "1.0"`. Live health and errors use their current shapes. Deployment
+readers also accept separate frozen `2026-11-07` two-listener, three-listener
+and single-listener settings, resolving only maintained scorers with propagation
+disabled. Invalid current fields never fall back to an old shape. Saved workflow evidence may
 read the exact previous health shape only with disabled coverage, then remove
 that slot without inventing process observations. Mixed formats, arbitrary
 extras, invalid bounds, listener collisions and unknown versions are rejected.
 Historical logs retain coverage diagnostics; no records are rewritten.
-HHEM and native UniEval scoring schemas retain
-their own versions.
+HHEM score/event data retains `2026-11-02`; native UniEval score/recording data
+retains `2026-11-04`.
 
 Table A - Listener and component selection
 
@@ -33,6 +39,7 @@ Table A - Listener and component selection
 | A3 | `listeners.<scorer>.body_read_timeout_ms` | An absolute input-read deadline of 5000 milliseconds, or five seconds, by default. |
 | A4 | `--routes <scorer>` | Resolve exactly one maintained scorer. The comparison workflow starts separate HHEM and UniEval APIs. No modern default starts every configured listener; coverage selection is refused. |
 | A5 | `shutdown_timeout_ms` | 15000 milliseconds, or fifteen seconds, for Uvicorn's graceful request wait. This cannot be shorter than the selected scorer's worker shutdown wait. The owned parent-loss/close allowance also includes that worker's shutdown and forced-stop joins. |
+| A6 | `propagate_trace_context` | Required strict boolean in current authored/effective settings; enabled in committed configuration. It controls the host and native event emission together, without an environment override or second tracing flag. |
 
 Table B - Native operations
 
@@ -48,6 +55,8 @@ Table B - Native operations
 Disabled operation routes return HTTP 404. Shared health explicitly reports
 disabled scorers; it does not claim their models loaded. Browser origins,
 duplicate or unexpected Host headers and slash redirects remain refused.
+The neutral host performs the authority check, while evaluator callbacks retain
+the exact native and generic refusal bodies below.
 
 Each standalone invocation requires only its selected evaluator's prepared assets. HHEM-only
 startup reads no UniEval configuration; UniEval-only startup reads no HHEM
@@ -86,6 +95,12 @@ The message comes from the declared local error policy, never request input
 or a raw exception. The guard runs before body reading. Bounded reads,
 disconnect handling, absolute deadlines and real cleanup failures remain
 part of the enabled scorers' request path.
+Enabled responses include the actual receiving `traceparent` and optional
+canonical `tracestate`, including refusals, errors, health/schema and unknown
+routes. A valid parent creates one receiving child; missing or malformed
+optional parents create a root. Invalid state is omitted without discarding
+a valid parent identity. Malformed supplied metadata produces a fixed
+`INVALID_TRACE_CONTEXT` diagnostic, never raw header or parser text.
 
 ## Diagnostics
 
@@ -110,6 +125,17 @@ defines event identity. Prompts, request bodies, model answers, secrets and raw
 exception messages are not diagnostic fields. Uvicorn access/error output is
 disabled; private startup and process-exit packets stay on their own channel.
 
+Saved envelopes may carry validated `traceparent` and `tracestate` extensions.
+The reader preserves their native occurrence, UTC time, ordered data and
+carrier; real legacy absence stays omitted. The identity contract owns the
+[strict read rules](../architecture/contracts/identity.md#6-hhem-execution-and-event-identity).
+Historical coverage diagnostics remain readable without enabling coverage.
+Enabled live factories require the actual operation even though saved readers
+permit genuine carrier absence. Request and terminal records use the actual
+response operation; nested work uses its own children. Read routes do not
+invent scoring events, and disconnected work has a terminal record but no
+HTTP response. The validated score body is unchanged.
+
 An unopenable or unwritable file emits `LOG_FILE_UNAVAILABLE` to stderr and
 sets shared health's `log_available` to false. It does not change a score or
 stop the API. Confirmed process exit and validated HTTP results establish
@@ -121,6 +147,8 @@ returns normally. Its bound socket and diagnostic file still close.
 
 ## See also
 
+- [../architecture/local-api-host.md](../architecture/local-api-host.md) -
+  reusable listener, lifecycle and request-boundary contract.
 - [../architecture/evaluation/summary-evaluator.md](../architecture/evaluation/summary-evaluator.md) - composition and owned lifetimes.
 - [api-routing.md](api-routing.md) - dated operations and the native generation exception.
 - [hhem-evaluation-api.md](hhem-evaluation-api.md) - unchanged scoring requests, results and worker packets.

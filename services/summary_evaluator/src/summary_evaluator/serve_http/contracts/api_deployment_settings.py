@@ -4,28 +4,38 @@ from typing import Self, get_args
 
 from pydantic import ConfigDict, model_validator
 
-from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
+from summary_evaluator.serve_http.contracts.api_settings import (
+    API_SETTINGS_SCHEMA_VERSION,
+    ApiComponent,
+    ApiSettingsVersion,
+)
 from summary_evaluator.shared.contracts.base import PositiveCount, RelativePath
-from summary_evaluator.shared.contracts.server_contract import ServerContract, ServerSchemaVersion
+from summary_evaluator.shared.contracts.server_contract import ServerContract
 from summary_evaluator.shared.contracts.service_settings import ListenerSettings, LoggingSettings
 
 
 class ApiDeploymentSettings(ServerContract):
     model_config = ConfigDict(
         json_schema_extra={
-            "version": "2026-11-07",
+            "version": API_SETTINGS_SCHEMA_VERSION,
             "readCompatibility": (
-                "read frozen three-listener or single-listener settings for one maintained scorer"
+                "frozen two/three-listener or single-listener settings resolve "
+                "with propagation disabled"
             ),
             "changelog": [
-                {"version": "2026-11-07", "change": "Separate HHEM and UniEval listeners."}
+                {
+                    "version": API_SETTINGS_SCHEMA_VERSION,
+                    "change": "Configure actual API and worker trace propagation.",
+                },
+                {"version": "2026-11-07", "change": "Separate HHEM and UniEval listeners."},
             ],
         }
     )
 
-    version: ServerSchemaVersion
+    version: ApiSettingsVersion
     listeners: dict[ApiComponent, ListenerSettings]
     logging: LoggingSettings
+    propagate_trace_context: bool
     log_directory: RelativePath
     shutdown_timeout_ms: PositiveCount
 

@@ -18,7 +18,7 @@ import { HOST_CLOSED_FILENAME, HostClosedSchema, HostFailure, HostStartupSchema,
 import type { HostStartup } from "./run-host-lifetime";
 
 const serverEntry = fileURLToPath(new URL("./run-host-lifetime.ts", import.meta.url));
-const sharedSettings = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)));
+const sharedSettings = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)), "machine");
 const supervision = SupervisionSettingsSchema.parse({
   ...sharedSettings.supervision,
   readiness_timeout_ms: 10_000, shutdown_timeout_ms: 5_000, forced_exit_timeout_ms: 3_000,

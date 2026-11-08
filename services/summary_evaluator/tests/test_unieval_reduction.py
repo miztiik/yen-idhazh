@@ -1,11 +1,13 @@
 """Verify parent progress identity and numeric completion rules without a model substitute."""
 
 import pytest
+from local_api_host.propagate_trace_context import create_child_operation
 from summary_evaluator_cases.unieval_cases import read_unieval_recordings, unieval_settings
 
 from summary_evaluator.shared.read_process_identity import read_process_identity
-from summary_evaluator.unieval.contracts.unieval_contract import DIMENSIONS, UNIEVAL_VERSION
+from summary_evaluator.unieval.contracts.unieval_contract import DIMENSIONS
 from summary_evaluator.unieval.contracts.unieval_result import UnievalScores
+from summary_evaluator.unieval.contracts.unieval_worker_contract import UNIEVAL_WORKER_VERSION
 from summary_evaluator.unieval.contracts.unieval_worker_message import (
     UnievalPrediction,
     UnievalPrepared,
@@ -19,12 +21,14 @@ def test_zero_is_complete_data_and_duplicate_or_unfinished_progress_is_refused()
     _, settings = unieval_settings()
     recorded = predictions.cases[0]
     state = UnievalState()
+    state.evaluation_operation = create_child_operation(state.operation_metadata)
     state.set_request(inputs.cases[0].request)
     state.model = identity
     state.worker = read_process_identity(1, settings.worker.max_proc_identity_bytes)
     state.accept_plan(
         UnievalPrepared(
-            version=UNIEVAL_VERSION,
+            version=UNIEVAL_WORKER_VERSION,
+            operation_metadata=state.evaluation_operation,
             execution_id=state.execution_id,
             generation=1,
             effective_settings=recorded.effective_settings,
@@ -37,7 +41,8 @@ def test_zero_is_complete_data_and_duplicate_or_unfinished_progress_is_refused()
         state.require_finished()
     first = recorded.comparisons[0]
     packet = UnievalPrediction(
-        version=UNIEVAL_VERSION,
+        version=UNIEVAL_WORKER_VERSION,
+        operation_metadata=state.evaluation_operation,
         execution_id=state.execution_id,
         generation=1,
         dimension=first.dimension,
@@ -53,7 +58,8 @@ def test_zero_is_complete_data_and_duplicate_or_unfinished_progress_is_refused()
     for comparison in recorded.comparisons[1:]:
         state.accept_prediction(
             UnievalPrediction(
-                version=UNIEVAL_VERSION,
+                version=UNIEVAL_WORKER_VERSION,
+                operation_metadata=state.evaluation_operation,
                 execution_id=state.execution_id,
                 generation=1,
                 dimension=comparison.dimension,

@@ -1,6 +1,6 @@
 # Identity contracts
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-08
 
 How files, work units, content, event occurrences and operations retain distinct identities.
 
@@ -139,8 +139,9 @@ the codec; native `traceState` is its serialized form. Locally emitted carriers
 use version `00` and unsampled flags `00`. Callers derive a child or start a root
 explicitly; these identifiers grant no authorization or request replay promise.
 
-Each producer declares its fixed logical URI in its own `declare-event-source.ts`
-module; the independent workflow uses `declare-workflow-event-source.ts`.
+HTTP producers declare their fixed logical URI in their local
+`declare-event-source.ts` module. The retained inference experiment declares
+`WORKFLOW_EVENT_SOURCE` directly in `.github/scripts/ai-pipeline.ts`.
 These protocol identities are not configuration, deployment addresses or fetch
 destinations. Shared `EventSourceSchema` validates URI references when events
 are constructed or read, without enumerating applications or reading files.
@@ -167,8 +168,8 @@ Table B - verified API and producer bindings
 | B4 | Probe HTTP: sample, start/stop task profile and cache latency; probe CLI | `/services/host-probes`; `services/host-probes/src/declare-event-source.ts` | Native handled/disabled outcomes and safe failures come from real commands. `native-events.test.ts` and `probe.test.ts` cover all commands, private reports, cleanup and retained profile operations; `serve-machine-apis.test.ts` covers native machine composition. |
 | B5 | Delivery HTTP: health and safe-persist-data | `/services/typescript-api`; delivery's declaration in `services/feed-ingest-plan/src/declare-event-source.ts` | The handler creates completion/failure events before supervision. `safe-persist-http.test.ts` verifies native stderr before relay, unchanged occurrence/context after relay and actual local Git delivery; finalization retains the same native facts. |
 | B6 | Composed listener: health, lifecycle and request-error boundary | `/services/typescript-api`; `services/serve-pipeline-apis/src/declare-event-source.ts` | The host constructs its own request-failure event and relays validated producer events unchanged. `supervise-http-child.test.ts`, `server-events.test.ts` and `serve-feed-apis.test.ts` exercise real listeners and error paths without reverse native dependencies. |
-| B7 | Non-HTTP phased workflow and upload inventory | `/workflows/ai-pipeline` in `.github/scripts/declare-workflow-event-source.ts`; upload inventory reuses B1 | The workflow and inventory emit real native events without a registry file. `workflow-handoff.test.ts` and planner `operation-logging.test.ts` preserve saved handoff, upload facts and source identities. |
-| B8 | Full-analysis CLI and summary-only workflow caller | `/workflows/summary-generator-tests`; `.github/scripts/summary-generator-tests/declare-event-source.ts` | `analysis-events.test.ts` retains private full-analysis events and historical source readback; `summary-workflow.test.ts` captures the real summary API response, prompt/input identity and distinct caller/API carriers. The API does not write either caller's report. |
+| B7 | Non-HTTP inference experiment and upload inventory | `/workflows/ai-pipeline` in `.github/scripts/ai-pipeline.ts`; upload inventory reuses B1 | The workflow and inventory emit real native events without a registry file. `tools/ai-pipeline-experiment/test/workflow-handoff.test.ts` and planner `operation-logging.test.ts` preserve saved handoff, upload facts and source identities. |
+| B8 | Full-analysis CLI and summary-only workflow caller | `/workflows/summary-generator-tests`; `tools/summary-generator-caller/declare-event-source.ts` | `analysis-events.test.ts` retains private full-analysis events and historical source readback; `summary-workflow.test.ts` captures the real summary API response, prompt/input identity and distinct caller/API carriers. The API does not write either caller's report. |
 
 Delivery intentionally retains the API host's published namespace through its
 own declaration; neither producer loads the other's source. Their integration
@@ -289,7 +290,7 @@ hhem
 {sequence}
 ```
 
-`services/summary_evaluator/src/summary_evaluator/resolve_ids.py` declares this encoding
+`services/summary_evaluator/src/summary_evaluator/hhem/resolve_ids.py` declares this encoding
 once and uses Python's standard UUID implementation. The named
 `tests/fixtures/hhem-evaluator/event-id-vectors.json` vectors also run through
 the existing TypeScript `createUuidV5` implementation. Missing Bun or its locked
@@ -298,20 +299,52 @@ service installation.
 
 The shared Python server carries each HHEM event in CloudEvents 1.0. Its
 envelope `id` is the native `event_id`, and `time` is the native UTC
-`occurred_at`; the native ordered event is `data`. Shared API, llama and
-diagnostic-file occurrences instead receive fresh UUIDv4 event IDs. Their
+`occurred_at`; the native ordered event is `data`. API, native UniEval,
+historical coverage and diagnostic-file occurrences instead receive fresh UUIDv4 event IDs. Their
 producer `source` is the fixed URI reference `/fastapi-server`. These are
 native Python events, not manufactured TypeScript trace identifiers.
-Readers accept the current structured envelope only. Private startup and
-worker-control packets remain native JSON, not CloudEvents.
+Readers accept the structured envelope, never unwrapped HHEM data. A saved
+envelope may have valid `traceparent` and optional canonical `tracestate`.
+Both absent means untraced and both remain omitted after serialization.
+Explicit null, a malformed supplied carrier or state without a parent is
+rejected; reading never creates an operation, occurrence or timestamp.
+The envelope's schema date and read-compatibility metadata do not change
+CloudEvents `specversion: "1.0"` or the native event-data version.
+Private startup and worker-control packets remain native JSON, not CloudEvents.
+
+Transport context is separate from the native execution, operation and caller
+UUIDs above. The single Python metadata copy and W3C codec live in
+`services/local_api_host/src/local_api_host/propagate_trace_context.py`.
+`tests/test_trace_context.py` and its real Bun bridge bind that copy's serialized
+field set, requiredness, null rules, types, factories and codec to the shared
+TypeScript authority in section 4. The native metadata date remains
+`2026-11-03`; its snake-case Python attributes serialize with the shared
+camel-case names. No UUID conversion or second context model is involved.
+Compatible readers alone do not enable propagation. The current evaluator configuration enables
+actual receiving, nested and worker operations through the same native metadata.
+The host receives a valid optional caller parent once; request and terminal
+occurrences and connected response headers retain that receiving operation.
+Queue and primary/full work are children, and each real HHEM model command
+is a child of its comparison. Reused full scoring issues no model command.
+Service construction, controller work and model loading retain a separate
+service branch; recovery may link the failed attempt without adopting it
+as the service parent.
 
 UniEval also creates its execution UUIDv4 before body reading, independently
 of caller request/correlation UUIDs and the other model worker. Its private
 comparison replies must match that execution, worker generation, dimension,
-sentence and source-window identity. Its diagnostic occurrences use fresh
+sentence, source-window and exact issued operation identity. Its native batch,
+progress and reduction remain one actual worker evaluation, not invented
+per-item work. Its diagnostic occurrences use fresh
 CloudEvents UUIDv4 IDs and retain the request execution ID in safe data.
 The reference-summary digest identifies the exact UTF-8 reference bytes,
 not the source, generated answer or an event occurrence.
+The [server configuration](../../reference/summary-evaluator-api.md) owns the
+single strict propagation flag and frozen disabled profiles. Current worker
+packets have their own date-stamped protocol, independently of public scores
+and recordings; old owned workers are replaced before current packets are
+issued. Neither carrier observations nor diagnostic-file availability prove
+that scoring completed.
 
 ## Design rationale
 
@@ -327,6 +360,13 @@ without changing repeatable work or foreign protocols. The pinned
 the W3C codec only. Core also installs semantic-convention definitions. Their
 cost is server/tool installation, not browser bytes; no tracing SDK, recorder,
 exporter, collector, automatic instrumentation or trace file is added.
+
+Native scorer readers preserve real absent or supplied carriers without
+recreating a saved event. The neutral host's existing `opentelemetry-api`
+dependency supplies Python's W3C codec; its cost is package installation and
+bounded carrier bytes, not model weights, browser bytes or a new tracing service.
+Python UUIDv5 scorer occurrences and UUIDv4 diagnostics retain their native
+profile rather than adopt the TypeScript UUIDv4-only event factory.
 
 A query can select the resource itself. Keeping an extra address record is
 safer than merging two required parameter values. URL identity does not decide

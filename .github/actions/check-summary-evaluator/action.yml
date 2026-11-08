@@ -48,14 +48,14 @@ runs:
     - name: Lint workflow from the repository root
       shell: bash
       working-directory: ${{ github.workspace }}
-      run: uv run --project services/summary_evaluator --frozen ruff check .github/scripts/summary-eval-tests
+      run: uv run --project services/summary_evaluator --frozen ruff check tools/summary-eval
 
     - name: Check evaluator and workflow types
       shell: bash
       working-directory: ${{ github.workspace }}/services/summary_evaluator
-      run: uv run --frozen mypy src tests ../../.github/scripts/summary-eval-tests/summary_eval_pipeline ../../.github/scripts/summary-eval-tests/summary_eval_tests
+      run: uv run --frozen mypy src tests ../../tools/summary-eval/summary_eval_pipeline ../../tools/summary-eval/summary_eval_tests
 
     - name: Run complete model-free Linux suites
       shell: bash
       working-directory: ${{ github.workspace }}/services/summary_evaluator
-      run: uv run --frozen pytest -c pyproject.toml tests ../../.github/scripts/summary-eval-tests/summary_eval_tests --junitxml=var/model-free-results.xml
+      run: uv run --frozen pytest -c pyproject.toml tests ../../tools/summary-eval/summary_eval_tests --junitxml=var/model-free-results.xml

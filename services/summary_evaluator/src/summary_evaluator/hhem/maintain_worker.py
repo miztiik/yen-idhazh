@@ -6,12 +6,13 @@ import time
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 
+from local_api_host.propagate_trace_context import OperationMetadata, create_root_operation
 from pydantic import ValidationError
 
-from summary_evaluator.hhem.contracts.base import SCHEMA_VERSION
 from summary_evaluator.hhem.contracts.error_detail import ErrorDetail
 from summary_evaluator.hhem.contracts.model_identity import ModelIdentity
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
+from summary_evaluator.hhem.contracts.worker_contract import HHEM_WORKER_VERSION
 from summary_evaluator.hhem.contracts.worker_message import (
     FrozenAssets,
     ReplyPacket,
@@ -29,7 +30,7 @@ from summary_evaluator.hhem.fail_evaluation import EvaluationFailure
 from summary_evaluator.hhem.run_worker import run_worker
 from summary_evaluator.shared.contracts.service_settings import StartupContext
 from summary_evaluator.shared.contracts.worker_identity import WorkerIdentity
-from summary_evaluator.shared.exchange_packets import ByteChannel
+from summary_evaluator.shared.exchange_packets import ByteChannel, encode_packet
 
 
 class WorkerSupervisor:
@@ -38,13 +39,10 @@ class WorkerSupervisor:
     def __init__(self, settings: ServiceSettings, context: StartupContext, root: Path) -> None:
         self.settings = settings
         self.root = root
-        self.bootstrap = WorkerBootstrap(
-            version=SCHEMA_VERSION,
-            kind="bootstrap",
-            settings=settings,
-            assets=FrozenAssets(model=settings.hhem.model, foundation=settings.hhem.foundation),
-            context=context,
-        )
+        self.context = context
+        self.bootstrap: WorkerBootstrap | None = None
+        self.load_operation: OperationMetadata | None = None
+        self.outstanding: ScoreWindow | None = None
         self.process: BaseProcess | None = None
         self.channel: ByteChannel | None = None
         self.lifetime: ByteChannel | None = None
@@ -66,10 +64,27 @@ class WorkerSupervisor:
             daemon=False,
         )
 
+    def issue_load(self, operation_metadata: OperationMetadata) -> None:
+        """Issue the actual load context without changing existing startup callbacks."""
+        if not self.exit_confirmed or self.process is not None:
+            raise EvaluationFailure(ErrorDetail.from_code("WORKER_STOP_FAILED", "worker"))
+        self.load_operation = operation_metadata
+
     async def start(self) -> None:
         if not self.exit_confirmed or self.process is not None:
             raise EvaluationFailure(ErrorDetail.from_code("WORKER_STOP_FAILED", "worker"))
         self.generation += 1
+        self.bootstrap = WorkerBootstrap(
+            version=HHEM_WORKER_VERSION,
+            operation_metadata=self.load_operation or create_root_operation(),
+            kind="bootstrap",
+            settings=self.settings,
+            assets=FrozenAssets(
+                model=self.settings.hhem.model, foundation=self.settings.hhem.foundation
+            ),
+            context=self.context,
+        )
+        self.load_operation = None
         context = multiprocessing.get_context("spawn")
         allocated: list[ByteChannel] = []
         try:
@@ -108,19 +123,27 @@ class WorkerSupervisor:
             async with asyncio.timeout(timeout / 1000):
                 await asyncio.shield(start_task)
                 await asyncio.to_thread(
-                    parent.send_bytes, self.bootstrap.model_dump_json().encode("utf-8")
+                    parent.send_bytes,
+                    encode_packet(
+                        self.bootstrap, command_byte_limit(self.bootstrap, self.generation)
+                    ),
                 )
                 started = await self._receive()
                 if (
                     not isinstance(started, WorkerStarted)
                     or started.worker.generation != self.generation
                     or started.worker.pid != process.pid
+                    or started.operation_metadata != self.bootstrap.operation_metadata
                 ):
                     raise EvaluationFailure(
                         ErrorDetail.from_code("WORKER_PROTOCOL_FAILED", "worker")
                     )
                 self.worker = started.worker
                 reply = await self._receive()
+                if reply.operation_metadata != self.bootstrap.operation_metadata:
+                    raise EvaluationFailure(
+                        ErrorDetail.from_code("WORKER_PROTOCOL_FAILED", "worker")
+                    )
                 if isinstance(reply, WorkerFailed) and reply.worker == self.worker:
                     raise EvaluationFailure(reply.error)
                 if not isinstance(reply, WorkerReady) or reply.worker != self.worker:
@@ -140,7 +163,7 @@ class WorkerSupervisor:
             raise EvaluationFailure(ErrorDetail.from_code("WORKER_EXITED", "worker")) from None
 
     async def _receive(self) -> ReplyPacket:
-        if self.channel is None or self.read_task is not None:
+        if self.channel is None or self.read_task is not None or self.bootstrap is None:
             raise EvaluationFailure(ErrorDetail.from_code("WORKER_PROTOCOL_FAILED", "worker"))
         task = asyncio.create_task(
             asyncio.to_thread(
@@ -162,14 +185,20 @@ class WorkerSupervisor:
                 self.read_task = None
 
     async def score(self, command: ScoreWindow) -> WindowOutcome:
-        if self.channel is None or self.model is None or command.generation != self.generation:
+        if (
+            self.channel is None
+            or self.model is None
+            or self.bootstrap is None
+            or command.generation != self.generation
+        ):
             raise EvaluationFailure(ErrorDetail.from_code("WORKER_NOT_READY", command.comparison))
+        if self.outstanding is not None:
+            raise EvaluationFailure(
+                ErrorDetail.from_code("WORKER_PROTOCOL_FAILED", command.comparison)
+            )
+        self.outstanding = command
         try:
-            encoded = command.model_dump_json().encode("utf-8")
-            if len(encoded) > command_byte_limit(self.bootstrap, self.generation):
-                raise EvaluationFailure(
-                    ErrorDetail.from_code("WORKER_PROTOCOL_FAILED", command.comparison)
-                )
+            encoded = encode_packet(command, command_byte_limit(self.bootstrap, self.generation))
             await asyncio.to_thread(self.channel.send_bytes, encoded)
             reply = await self._receive()
             if not isinstance(reply, WindowOutcome):
@@ -199,6 +228,9 @@ class WorkerSupervisor:
                     "WORKER_EXITED", command.comparison, window_index=command.window_index
                 )
             ) from None
+        finally:
+            if self.outstanding is command:
+                self.outstanding = None
 
     async def stop(self) -> None:
         process = self.process
@@ -262,3 +294,4 @@ class WorkerSupervisor:
         self.exit_confirmed = True
         self.model = None
         self.worker = None
+        self.outstanding = None

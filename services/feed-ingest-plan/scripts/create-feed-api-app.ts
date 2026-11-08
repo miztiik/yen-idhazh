@@ -1,11 +1,10 @@
-/** How are native planning, machine and delivery routes assembled for one feed task? */
-import { join, resolve } from "node:path";
+/** How does one feed task start only its selected planning or delivery application? */
+import { resolve } from "node:path";
 import { Hono } from "hono";
 import { createApiApp, serveApiApp } from "@idhazh/serve-pipeline-apis/app";
 import type { ApiBindings } from "@idhazh/serve-pipeline-apis/app";
+import { ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
 import type { ApiReady } from "@idhazh/serve-pipeline-apis/startup";
-import { createMachineApp, loadMachineApiInputs } from "@idhazh/host-probes/machine-app";
-import type { MachineApiInputs } from "@idhazh/host-probes/machine-app";
 import { createPlanApp } from "../src/api/server";
 import { PlanError } from "../src/api/plan-request";
 import { PlannerReadySchema } from "../src/config/planner-startup";
@@ -22,43 +21,39 @@ export type FeedApiInputs = {
     runtime: Parameters<typeof createPlanApp>[1];
     identity: Parameters<typeof createPlanApp>[2];
   };
-  machine?: MachineApiInputs;
   delivery?: Parameters<typeof createSafePersistApp>[0];
   writeEvent?: Parameters<typeof createApiApp>[0]["writeEvent"];
 };
 
 export function createFeedApiApp(input: FeedApiInputs) {
-  const enabled = new Set(input.identity.modules);
+  const identity = ApiReadySchema.parse(input.identity);
+  const enabled = new Set(identity.modules);
   if (enabled.has("planning") !== (input.planner !== undefined)
     || enabled.has("delivery") !== (input.delivery !== undefined)
-    || enabled.has("machine") !== (input.machine !== undefined)) {
+    || enabled.has("machine")) {
     throw new Error("Readiness must identify exactly the actual enabled API modules");
   }
-  return createApiApp({ identity: input.identity,
+  return createApiApp({ identity,
     ...(input.writeEvent === undefined ? {} : { writeEvent: input.writeEvent }), create: signal => {
     const app = new Hono<{ Bindings: ApiBindings }>();
     const planner = input.planner === undefined ? undefined : createPlanApp(input.planner.inputs, {
       ...input.planner.runtime,
       signal: AbortSignal.any([signal, ...(input.planner.runtime.signal === undefined ? [] : [input.planner.runtime.signal])]),
     }, input.planner.identity);
-    const machine = input.machine === undefined ? undefined : createMachineApp(input.machine);
     if (planner !== undefined) app.route("/", planner);
     if (input.delivery !== undefined) app.route("/", createSafePersistApp({
       ...input.delivery, signal: AbortSignal.any([input.delivery.signal, signal]),
     }));
-    if (machine !== undefined) app.all("*", c => machine.fetch(c.req.raw, c.env));
     app.notFound(c => c.json({ code: "NOT_FOUND" }, 404));
     app.onError(error => { throw error; });
     return {
       maxRequestBodyBytes: Math.max(
         input.planner?.inputs.settings.listener.max_body_bytes ?? 0,
-        machine?.maxRequestBodyBytes ?? 0, input.delivery?.maxBodyBytes ?? 0,
+        input.delivery?.maxBodyBytes ?? 0,
       ),
       fetch: (request, bindings) => app.fetch(request, bindings),
       async close() {
-        const results = await Promise.allSettled([planner?.close(), machine?.close()]);
-        const failures = results.filter(result => result.status === "rejected").map(result => result.reason);
-        if (failures.length) throw new AggregateError(failures, "Pipeline API module cleanup failed");
+        await planner?.close();
       },
     };
   } });
@@ -78,8 +73,6 @@ export async function startFeedApiApp(
         event: "planner_ready", nonce: startup.planner.nonce, pid: process.pid,
         port: startup.server.port, runtime: startup.planner.runtime,
       }) };
-    modules.machine = await loadMachineApiInputs(root, startup.planner.output_root,
-      join(root, startup.planner.settings.inputs.registrations));
   } else {
     modules.delivery = {
       root, directory: resolve(root, startup.delivery.output_root),

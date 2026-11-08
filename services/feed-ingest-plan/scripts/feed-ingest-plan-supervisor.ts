@@ -23,13 +23,12 @@ export async function invokePlannerHttp(
   inputs: PlanInputs, startup: PlannerStartup, request: PlanRequest, directory: string,
   options: {
     signal?: AbortSignal; serverEntry?: string;
-    beforePlan?: (origin: string, signal: AbortSignal) => Promise<void>;
   } = {},
 ) {
   return superviseFeedApiTask({
     root: inputs.root,
     startup: {
-      group: "planning", server: await loadHonoSettings(inputs.root),
+      group: "planning", server: await loadHonoSettings(inputs.root, "planning"),
       directory: relative(inputs.root, directory).replaceAll("\\", "/"),
       run: { run_id: startup.runtime.run_number, attempt: startup.runtime.attempt,
         started_at: startup.runtime.captured_at, context: operationMetadata(startup.runtime) },
@@ -39,9 +38,8 @@ export async function invokePlannerHttp(
       limits: inputs.settings.diagnostics.failure },
     ...(options.serverEntry === undefined ? {} : { serverEntry: options.serverEntry }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
-    request: async (origin, signal) => {
-      await options.beforePlan?.(origin, signal);
-      return requestPlannerHttp(`${origin}${PLANNER_API_PREFIX}`, inputs, request, directory, signal, operationMetadata(startup.runtime));
-    },
+    request: (origin, signal) => requestPlannerHttp(
+      `${origin}${PLANNER_API_PREFIX}`, inputs, request, directory, signal, operationMetadata(startup.runtime),
+    ),
   });
 }

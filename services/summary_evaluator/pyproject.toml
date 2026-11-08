@@ -8,6 +8,7 @@ version = "2026.11.2"
 description = "Local HHEM and native UniEval evaluation."
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "local-api-host",
     "pydantic>=2.12,<3",
     "fastapi>=0.121,<0.122",
     "uvicorn>=0.38,<1",
@@ -44,6 +45,7 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.sources]
+local-api-host = { path = "../local_api_host" }
 torch = { index = "pytorch-cpu" }
 
 [tool.ruff]
@@ -57,7 +59,13 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-mypy_path = ["src", "../../backend", "tests", "../../.github/scripts/summary-eval-tests"]
+mypy_path = [
+    "src",
+    "../local_api_host/src",
+    "../../backend",
+    "tests",
+    "../../tools/summary-eval",
+]
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
@@ -78,7 +86,7 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "../../.github/scripts/summary-eval-tests/summary_eval_tests"]
-pythonpath = [".", "tests", "../../.github/scripts/summary-eval-tests", "../../backend"]
+testpaths = ["tests", "../../tools/summary-eval/summary_eval_tests"]
+pythonpath = [".", "tests", "../../tools/summary-eval", "../../backend"]
 # asyncio uses Unix-domain sockets for local wake-up IPC, not an HTTP listener.
 addopts = "-q --import-mode=importlib --disable-socket --allow-unix-socket"

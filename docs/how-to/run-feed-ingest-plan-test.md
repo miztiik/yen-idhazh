@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-08
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -198,8 +198,9 @@ readiness/stdout, full task profiles and saved delivery receipts keep their
 existing protocols; event envelopes do not replace them.
 
 Workflow YAML calls those modules directly. `.github/scripts/` retains only
-the independent `ai-pipeline.ts` experiment and `serve-evaluator.py`; neither
-is required for the native feed APIs. Recorded compatibility drivers live in
+the independent `ai-pipeline.ts` generation experiment; independent caller
+programs and their tests live under `tools/`. They are not required for the
+native feed APIs. Recorded compatibility drivers live in
 the service's test directory only when they cover an independently maintained
 reader or writer. The runtime verifier checks actual planner files during real
 execution; it has no fixture-only entry point.
@@ -262,9 +263,11 @@ Finalization keeps delivery, reporting and artifact preparation separate:
    record distinguishes empty name sets, incomplete analysis and omitted
    names. No file means no upload, not a successful empty result.
 6. `Upload server failure logs` retains available
-   `hono-server_<yyyy_mm_dd>_<run>_<attempt>.log` files after failure or
+   `hono-server_<group>_<yyyy_mm_dd>_<run>_<attempt>.log` files after failure or
    cancellation. The date is the UTC run-start day. Native lifecycle evidence
    is retained in the normal artifact even when the planner never replied.
+   Saved legacy evidence keeps its original unqualified filename; reading and
+   copying it does not rewrite the old observations.
    There is no retention override.
 7. `Finish and clean up` checks collection, finalization and the normal upload's
    returned artifact identity, plus diagnostic uploads when applicable.

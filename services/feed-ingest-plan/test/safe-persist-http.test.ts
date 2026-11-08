@@ -24,7 +24,7 @@ import { fixtureGit } from "./fixture-git";
 import { writeRecordedHostOutput } from "./host-output-recordings";
 import { API_HEALTH_PATH, ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
 import { FeedApiStartupFailureSchema, FeedApiStartupSchema } from "../scripts/read-feed-api-startup";
-import { loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
+import { HonoServerConfigSchema, loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
 import { ServerEventDataSchema, serverLogFilename } from "../../serve-pipeline-apis/src/server-evidence";
 import { readFeedApiReadiness } from "../scripts/read-feed-api-readiness";
 import { captureFeedApiFailure } from "../scripts/capture-feed-api-failure";
@@ -188,7 +188,7 @@ test("two actual delivery request operations survive native stderr, the completi
     context: createRootContext({ traceState: "supervision=retained" }),
   };
   const startup = FeedApiStartupSchema.parse({
-    group: "delivery", server: await loadHonoSettings(f.repository),
+    group: "delivery", server: await loadHonoSettings(f.repository, "delivery"),
     directory: relative(f.repository, f.directory).replaceAll("\\", "/"), run,
     delivery: {
       nonce: randomUUID(), settings, output_root: relative(f.repository, f.directory).replaceAll("\\", "/"),
@@ -212,11 +212,11 @@ test("two actual delivery request operations survive native stderr, the completi
       signal: AbortSignal.timeout(startup.server.supervision.readiness_timeout_ms),
       failure: captureFeedApiFailure({ operation: "commit-ledgers" }),
     };
-    expect(await readFeedApiReadiness(readiness)).toBe(origin);
+    expect(await readFeedApiReadiness(readiness)).toEqual({ origin, identity: message });
     for (const overrides of [
       { nonce: randomUUID() }, { pid: child.pid + 1 },
       { port: ready.port === 65535 ? ready.port - 1 : ready.port + 1 },
-      { group: "planning", modules: ["planning", "machine"] }, { modules: ["machine"] }, { enabled: false },
+      { group: "planning", modules: ["planning"] }, { enabled: false },
     ]) {
       await expect(readFeedApiReadiness({ ...readiness, message: ApiReadySchema.parse({ ...message, ...overrides }) }))
         .rejects.toMatchObject({ code: "SAFE_PERSIST_READY_IDENTITY" });
@@ -263,8 +263,8 @@ test("two actual delivery request operations survive native stderr, the completi
       new Response(mirror.stdout).text(), new Response(mirror.stderr).text(), mirror.exited,
     ]);
     expect(code, emittedText).toBe(0);
-    expect(JSON.parse(output)).toEqual({ available: true, filename: serverLogFilename(run) });
-    const readbackText = await readFile(join(f.directory, serverLogFilename(run)), "utf8");
+    expect(JSON.parse(output)).toEqual({ available: true, filename: serverLogFilename("delivery", run) });
+    const readbackText = await readFile(join(f.directory, serverLogFilename("delivery", run)), "utf8");
     expect(readbackText).toBe(emittedText);
     const events = readbackText.trim().split("\n").map(line => JSON.parse(line));
     const completions = events.filter(event => event.type === "safe_persist_http_completed")
@@ -397,7 +397,7 @@ test("expired delivery readiness reaps the child without starting Git delivery",
   const f = await publicationGitRecording();
   try {
     const path = join(f.repository, "config", "hono-server.json");
-    const settings = await loadHonoSettings(f.repository);
+    const settings = HonoServerConfigSchema.parse(await Bun.file(path).json());
     settings.supervision.readiness_timeout_ms = 1;
     await writeFile(path, JSON.stringify(settings));
     await expect(deliverWorkflowMetadataHttp(inputFor(f))).rejects.toThrow("SAFE_PERSIST_READY_TIMEOUT");
@@ -426,9 +426,11 @@ test("cancellation during a real refused Git push reaps the delivery child and p
   let gitPid: number | undefined;
   try {
     const settingsPath = join(f.repository, "config", "hono-server.json");
-    const listener = await loadHonoSettings(f.repository);
+    const listener = await loadHonoSettings(f.repository, "delivery");
     listener.supervision.shutdown_timeout_ms = 200;
-    await writeFile(settingsPath, JSON.stringify(listener));
+    const config = HonoServerConfigSchema.parse(await Bun.file(settingsPath).json());
+    config.supervision = listener.supervision;
+    await writeFile(settingsPath, JSON.stringify(config));
     await writeFile(join(f.repository, "config", "feed-ingest-plan.json"), JSON.stringify(f.inputs.harvest.config));
     const retryPath = join(f.repository, "config", "push-retry.json");
     const retry = await Bun.file(retryPath).json();
@@ -479,7 +481,7 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
       nonce: randomUUID(), settings, output_root: relative(f.repository, f.directory).replaceAll("\\", "/"),
       git_sha: f.identity.git_sha,
     });
-    const listener = await loadHonoSettings(f.repository);
+    const listener = await loadHonoSettings(f.repository, "delivery");
     const startup = FeedApiStartupSchema.parse({
       group: "delivery", delivery, server: listener,
       directory: relative(f.repository, f.directory).replaceAll("\\", "/"),

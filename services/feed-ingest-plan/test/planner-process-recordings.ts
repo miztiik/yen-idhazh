@@ -41,7 +41,9 @@ export async function recordedPlannerProcess(
     }
     const server = await Bun.file(new URL("hono-server.json", configRoot)).json();
     await writeFile(join(fixture.directory, "config", "hono-server.json"), JSON.stringify({
-      ...server, port: settings.listener.port,
+      ...server, listeners: {
+        ...server.listeners, planning: { ...server.listeners.planning, port: settings.listener.port },
+      },
     }));
     await writeFile(join(fixture.directory, "config", "feed-ingest-plan-service.json"), JSON.stringify(settings));
     await writeFile(join(fixture.directory, "config", "feed-ingest-plan.json"), JSON.stringify(fixture.inputs.harvest.config));

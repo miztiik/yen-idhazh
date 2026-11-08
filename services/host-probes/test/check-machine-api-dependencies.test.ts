@@ -7,7 +7,7 @@ test("native machine entries and the summary helper have no feed dependency", as
     entrypoints: [
       new URL("../src/api/serve-machine-apis.ts", import.meta.url),
       new URL("../src/api/supervise-machine-api-task.ts", import.meta.url),
-      new URL("../../../.github/scripts/summary-eval-tests/machine-task.ts", import.meta.url),
+      new URL("../../../tools/summary-eval/machine-task.ts", import.meta.url),
     ].map(url => fileURLToPath(url)),
     target: "bun", metafile: true,
   });

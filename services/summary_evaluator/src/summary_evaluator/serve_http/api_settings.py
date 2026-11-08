@@ -1,19 +1,29 @@
 """How is one scorer's committed API configuration resolved without destination overrides?"""
 
+import json
 from pathlib import Path
 from typing import Annotated, get_args
 
 from pydantic import Field, RootModel, ValidationError
 
 from summary_evaluator.serve_http.contracts.api_deployment_settings import ApiDeploymentSettings
-from summary_evaluator.serve_http.contracts.api_settings import ApiComponent, ApiSettings
+from summary_evaluator.serve_http.contracts.api_settings import (
+    API_SETTINGS_SCHEMA_VERSION,
+    ApiComponent,
+    ApiSettings,
+)
 from summary_evaluator.serve_http.contracts.previous_api_settings import (
     PreviousApiDeploymentSettings,
     PreviousApiSettings,
+    PreviousTwoListenerApiDeploymentSettings,
 )
 
 ConfigurationSettings = (
-    ApiDeploymentSettings | PreviousApiDeploymentSettings | ApiSettings | PreviousApiSettings
+    ApiDeploymentSettings
+    | PreviousTwoListenerApiDeploymentSettings
+    | PreviousApiDeploymentSettings
+    | ApiSettings
+    | PreviousApiSettings
 )
 
 
@@ -25,6 +35,12 @@ class ApiConfiguration(
     RootModel[Annotated[ConfigurationSettings, Field(union_mode="left_to_right")]]
 ):
     pass
+
+
+class EffectiveApiConfiguration(
+    RootModel[Annotated[ApiSettings | PreviousApiSettings, Field(discriminator="version")]]
+):
+    """Select the effective reader by its declared date before projecting diagnostics."""
 
 
 def load_api_configuration(path: Path) -> ConfigurationSettings:
@@ -42,12 +58,17 @@ def resolve_scorer_api_settings(
     if scorer not in get_args(ApiComponent):
         raise ApiSettingsLoadError("Select a maintained scorer with --routes.")
     selected = ApiSettings(
-        version=configuration.version,
+        version=API_SETTINGS_SCHEMA_VERSION,
         listener=configuration.listener
         if isinstance(configuration, ApiSettings | PreviousApiSettings)
         else configuration.listeners[scorer],
         enabled_routes=(scorer,),
         logging=configuration.logging,
+        propagate_trace_context=(
+            configuration.propagate_trace_context
+            if isinstance(configuration, ApiSettings | ApiDeploymentSettings)
+            else False
+        ),
         log_directory=configuration.log_directory,
         shutdown_timeout_ms=configuration.shutdown_timeout_ms,
     )
@@ -58,9 +79,7 @@ def load_scorer_api_settings(path: Path, scorer: ApiComponent) -> ApiSettings:
     return resolve_scorer_api_settings(load_api_configuration(path), scorer)
 
 
-def load_selected_api_settings(
-    path: Path, routes: tuple[ApiComponent, ...] | None
-) -> ApiSettings:
+def load_selected_api_settings(path: Path, routes: tuple[ApiComponent, ...] | None) -> ApiSettings:
     return resolve_selected_api_settings(load_api_configuration(path), routes)
 
 
@@ -85,7 +104,15 @@ def resolve_selected_api_settings(
 def load_api_settings(path: Path) -> ApiSettings:
     """Read a legacy effective snapshot; modern callers must explicitly name their scorer."""
     try:
-        return ApiSettings.model_validate_json(path.read_bytes())
+        configuration = EffectiveApiConfiguration.model_validate_json(path.read_bytes()).root
+        if isinstance(configuration, ApiSettings):
+            return configuration
+        payload = configuration.model_dump(mode="json")
+        payload.update(
+            version=API_SETTINGS_SCHEMA_VERSION,
+            propagate_trace_context=False,
+        )
+        return ApiSettings.model_validate_json(json.dumps(payload))
     except OSError:
         raise ApiSettingsLoadError("Could not read config/summary-evals/api.json.") from None
     except ValidationError as error:

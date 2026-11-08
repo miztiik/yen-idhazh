@@ -25,8 +25,10 @@ import {
   PipelineInputError,
   readPipelineEvents,
   type PipelineEvent,
-} from "./read-pipeline-events.ts";
-import { WORKFLOW_EVENT_SOURCE } from "./declare-workflow-event-source.ts";
+} from "../../tools/ai-pipeline-experiment/read-pipeline-events.ts";
+
+/** Identify the phased workflow's logical producer independently of deployment or source paths. */
+export const WORKFLOW_EVENT_SOURCE = "/workflows/ai-pipeline";
 
 // -------------------------------------------------------------
 // 0. CONFIGURATION & STRUCTURED SCHEMAS

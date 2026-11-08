@@ -8,12 +8,13 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from local_api_host.propagate_trace_context import create_root_operation
 from summary_evaluator_cases.contract_examples import REPOSITORY
 from summary_evaluator_cases.replay_predictions import Scenario, read_recordings
 from summary_evaluator_cases.service_cases import RecordedSupervisor, service_settings
 
-from summary_evaluator.hhem.contracts.base import SCHEMA_VERSION
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
+from summary_evaluator.hhem.contracts.worker_contract import HHEM_WORKER_VERSION
 from summary_evaluator.hhem.contracts.worker_message import ScoreWindow
 from summary_evaluator.shared.create_execution_id import create_execution_id
 from summary_evaluator.shared.exchange_packets import ByteChannel
@@ -86,7 +87,8 @@ def _vanishing_parent(control: ByteChannel, encoded_settings: bytes) -> None:
             inputs, _, _ = read_recordings(REPOSITORY)
             case = inputs.cases[0]
             command = ScoreWindow(
-                version=SCHEMA_VERSION,
+                version=HHEM_WORKER_VERSION,
+                operation_metadata=create_root_operation(),
                 kind="score_window",
                 execution_id=create_execution_id(),
                 generation=1,

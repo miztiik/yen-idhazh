@@ -91,6 +91,106 @@ def test_expensive_workflows_do_not_run_on_pull_request_or_push() -> None:
         assert {"pull_request", "push"}.isdisjoint(_triggers(workflows[filename]))
 
 
+def test_spacy_workflow_dispatch_inputs_match_the_manual_contract() -> None:
+    inputs = _declared_dispatch_inputs(_load_workflows()["spacy-tests.yml"])
+    assert set(inputs) == {
+        "code_ref",
+        "language",
+        "profile",
+        "feature_mode",
+        "custom_features",
+        "text",
+    }
+    declared = {
+        name: _mapping(body, f"spacy-tests.yml input {name}") for name, body in inputs.items()
+    }
+
+    assert {name: body.get("type") for name, body in declared.items()} == {
+        "code_ref": "string",
+        "language": "choice",
+        "profile": "choice",
+        "feature_mode": "choice",
+        "custom_features": "string",
+        "text": "string",
+    }
+    assert {name: body.get("required") for name, body in declared.items()} == {
+        "code_ref": "true",
+        "language": "false",
+        "profile": "false",
+        "feature_mode": "false",
+        "custom_features": "false",
+        "text": "true",
+    }
+    assert {
+        name: body["default"] for name, body in declared.items() if "default" in body
+    } == {"profile": "md"}
+    assert _string_list(declared["language"].get("options"), "language options") == [
+        "en",
+        "zh",
+    ]
+    assert _string_list(declared["profile"].get("options"), "profile options") == [
+        "sm",
+        "md",
+        "lg",
+    ]
+    assert _string_list(
+        declared["feature_mode"].get("options"), "feature mode options"
+    ) == ["default", "all", "custom"]
+
+
+def test_spacy_workflow_validates_then_checks_out_the_exact_code_ref() -> None:
+    workflow = _load_workflows()["spacy-tests.yml"]
+    steps = _steps(workflow, "verify")
+    validation = next(step for step in steps if step.get("name") == "Validate immutable code ref")
+    checkout = next(step for step in steps if step.get("uses") == "actions/checkout@v6")
+    recorded = next(step for step in steps if step.get("name") == "Record the tested checkout")
+
+    assert steps.index(validation) < steps.index(checkout) < steps.index(recorded)
+    validation_env = _mapping(validation.get("env"), "code-ref validation env")
+    assert validation_env["CODE_REF"] == "${{ inputs.code_ref }}"
+    assert '[[ ! "$CODE_REF" =~ ^[0-9a-f]{40}$ ]]' in str(validation.get("run"))
+
+    checkout_settings = _mapping(checkout.get("with"), "spacy checkout settings")
+    assert checkout_settings["ref"] == "${{ inputs.code_ref }}"
+    assert checkout_settings["persist-credentials"] == "false"
+
+    recorded_env = _mapping(recorded.get("env"), "tested-checkout env")
+    assert recorded_env["CODE_REF"] == "${{ inputs.code_ref }}"
+    recorded_body = str(recorded.get("run"))
+    assert 'TESTED_COMMIT="$(git rev-parse HEAD)"' in recorded_body
+    assert '"$TESTED_COMMIT" != "$CODE_REF"' in recorded_body
+
+
+def test_spacy_workflow_passes_free_text_only_through_runner_environment() -> None:
+    workflow = _load_workflows()["spacy-tests.yml"]
+    runner = next(
+        step
+        for step in _steps(workflow, "verify")
+        if step.get("name") == "Run live text-analysis verification"
+    )
+    env = _mapping(runner.get("env"), "text-analysis runner env")
+    expected = {
+        "custom_features": (
+            "TEXT_ANALYSIS_CUSTOM_FEATURES",
+            "${{ inputs.custom_features }}",
+        ),
+        "text": ("TEXT_ANALYSIS_TEXT", "${{ inputs.text }}"),
+    }
+
+    for input_name, (env_name, expression) in expected.items():
+        assert env[env_name] == expression
+        assert not any(
+            _names_the_input(body, input_name) for body in _run_bodies(workflow)
+        )
+        references = [
+            str(value)
+            for _, scope in _every_env(workflow)
+            for value in scope.values()
+            if _names_the_input(str(value), input_name)
+        ]
+        assert references == [expression]
+
+
 def test_every_dispatch_input_is_shaped_before_anything_acts_on_it() -> None:
     """A dispatch form is free text unless somebody constrained it, and a wrong
     value here is not loud - it is a run that finishes and publishes to an

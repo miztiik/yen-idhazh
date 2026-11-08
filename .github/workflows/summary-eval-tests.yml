@@ -58,24 +58,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           uv run --frozen --extra model --no-dev python
-          ../../.github/scripts/summary-eval-tests/run.py --root ../.. prepare
+          ../../tools/summary-eval/run.py --root ../.. prepare
 
       - name: Generate natively and stop the model
         run: >-
           uv run --frozen --extra model --no-dev python
-          ../../.github/scripts/summary-eval-tests/run.py --root ../.. generate
+          ../../tools/summary-eval/run.py --root ../.. generate
 
       - name: Evaluate the saved generated answer with HHEM and UniEval
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: >-
           uv run --frozen --extra model --no-dev python
-          ../../.github/scripts/summary-eval-tests/run.py --root ../.. evaluate
+          ../../tools/summary-eval/run.py --root ../.. evaluate
 
       - name: Report actual results and server outcomes
         if: always()
         run: >-
           uv run --frozen --extra model --no-dev python
-          ../../.github/scripts/summary-eval-tests/report.py --root ../..
+          ../../tools/summary-eval/report.py --root ../..
 
       - name: Retain results and escaped report
         if: ${{ always() && steps.prepare.outputs.output_directory != '' }}

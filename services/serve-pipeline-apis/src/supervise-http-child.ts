@@ -1,10 +1,12 @@
 /** Keep one private-pipe HTTP child alive and close and reap only that owned process. */
 import type { HttpChildFailure, HttpChildFailurePolicy, HttpChildKind } from "./http-child-failure";
 import type { SupervisionSettings } from "./load-settings";
+import type { ApiReady, ApiReadiness } from "./api-startup";
 export type HttpChildObservation = {
   phase: "started" | "ready" | "startup_failed" | "stopping" | "stopped" | "forced" | "cleanup_failed";
   pid: number;
   exit_code?: number;
+  identity?: ApiReady;
 };
 
 async function forwardDiagnostics(stream: ReadableStream<Uint8Array>, write: (line: string) => void) {
@@ -66,8 +68,8 @@ export async function superviseHttpChild<T, Failure extends HttpChildFailure>(in
   signal?: AbortSignal;
   diagnostics?: (line: string) => void;
   observe?: (event: HttpChildObservation) => void;
-  ready: (message: unknown, pid: number, signal: AbortSignal) => Promise<string>;
-  request: (base: string, signal: AbortSignal) => Promise<T>;
+  ready: (message: unknown, pid: number, signal: AbortSignal) => Promise<ApiReadiness>;
+  request: (base: string, signal: AbortSignal, identity: ApiReady) => Promise<T>;
 }) {
   const controls = input.supervision;
   const cancellation = new AbortController();
@@ -100,9 +102,9 @@ export async function superviseHttpChild<T, Failure extends HttpChildFailure>(in
     })();
     const base = await beforeDeadline(Promise.race([startupReady, unexpectedExit, aborted]),
       controls.readiness_timeout_ms, deadlineError(`${input.kind}_READY_TIMEOUT`));
-    input.observe?.({ phase: "ready", pid: child.pid });
+    input.observe?.({ phase: "ready", pid: child.pid, identity: base.identity });
     ready = true;
-    const result = await Promise.race([input.request(base, signal), unexpectedExit, aborted]);
+    const result = await Promise.race([input.request(base.origin, signal, base.identity), unexpectedExit, aborted]);
     completed = true;
     return result;
   } catch (error) {

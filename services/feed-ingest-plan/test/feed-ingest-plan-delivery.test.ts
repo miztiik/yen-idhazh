@@ -65,7 +65,7 @@ test("safe-persist startup keeps only the existing private loopback controls", a
   expect(SafePersistHttpStartupSchema.safeParse({ ...controls, permittedPaths: ["state"] }).success).toBe(false);
   expect(FeedApiStartupSchema.safeParse({
     group: "delivery", delivery: controls, directory: "evidence",
-    server: { ...await loadHonoSettings(inputs.root), hostname: "0.0.0.0" },
+    server: { ...await loadHonoSettings(inputs.root, "delivery"), hostname: "0.0.0.0" },
     run: { run_id: startup.runtime.run_number, attempt: startup.runtime.attempt,
       started_at: startup.runtime.captured_at, context: operationMetadata(startup.runtime) },
   }).success).toBe(false);

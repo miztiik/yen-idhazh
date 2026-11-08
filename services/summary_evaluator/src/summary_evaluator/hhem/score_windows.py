@@ -4,6 +4,8 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 
+from local_api_host.propagate_trace_context import create_child_operation
+
 from summary_evaluator.hhem.contracts.base import SCHEMA_VERSION, Comparison
 from summary_evaluator.hhem.contracts.error_detail import ErrorDetail
 from summary_evaluator.hhem.contracts.evaluate_request import EffectiveSettings, EvaluateRequest
@@ -17,6 +19,7 @@ from summary_evaluator.hhem.contracts.evaluation_progress import (
 )
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.contracts.model_identity import ModelIdentity
+from summary_evaluator.hhem.contracts.worker_contract import HHEM_WORKER_VERSION
 from summary_evaluator.hhem.contracts.worker_message import ScoreWindow
 from summary_evaluator.hhem.emit_events import EventEmitter
 from summary_evaluator.hhem.fail_evaluation import EvaluationFailure
@@ -131,7 +134,10 @@ async def score_comparison(
         for window in plan:
             check_deadline(state, comparison, window.index)
             command = ScoreWindow(
-                version=SCHEMA_VERSION,
+                version=HHEM_WORKER_VERSION,
+                operation_metadata=create_child_operation(
+                    state.emitter.operation_contexts[comparison]
+                ),
                 kind="score_window",
                 execution_id=state.emitter.execution_id,
                 generation=state.worker.generation,

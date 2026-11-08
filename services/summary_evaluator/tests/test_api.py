@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from local_api_host.propagate_trace_context import create_root_operation
 from summary_evaluator_cases.contract_examples import API_SETTINGS_FILE, REPOSITORY, SETTINGS_FILE
 from summary_evaluator_cases.replay_predictions import Scenario, read_recordings
 from summary_evaluator_cases.service_cases import (
@@ -49,7 +50,10 @@ def test_event_overflow_is_refused_before_any_truncated_record_is_written() -> N
     settings = service_settings(logging={"max_event_bytes": 64})
     log = EventLog()
     emitter = EventEmitter(
-        EventWriter(settings.logging, log).write, StartupContext(), settings.logging
+        EventWriter(settings.logging, log).write,
+        StartupContext(),
+        settings.logging,
+        operation_metadata=create_root_operation(),
     )
     with pytest.raises(EvaluationFailure) as failure:
         emitter.emit("request", "started", EventDetails())

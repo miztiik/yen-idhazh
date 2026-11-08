@@ -1,13 +1,14 @@
 """Which Uvicorn settings keep one loopback server and its diagnostics private?"""
 
 import logging
-import math
 import sys
 from typing import TextIO
 
 import uvicorn
 from fastapi import FastAPI
+from local_api_host.configure_server import create_server_config as create_host_server_config
 
+from summary_evaluator.serve_http.compose_api import create_host_settings
 from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
 from summary_evaluator.serve_http.contracts.server_event import ApiDiagnosticData, ServerEvent
 from summary_evaluator.serve_http.emit_events import JsonEventFormatter
@@ -15,21 +16,7 @@ from summary_evaluator.shared.write_event_records import StrictEventHandler
 
 
 def create_server_config(app: FastAPI, settings: ApiSettings) -> uvicorn.Config:
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
-        logging.getLogger(name).disabled = True
-    return uvicorn.Config(
-        app,
-        host=settings.listener.host,
-        port=settings.listener.port,
-        workers=1,
-        reload=False,
-        access_log=False,
-        log_config=None,
-        proxy_headers=False,
-        server_header=False,
-        lifespan="on",
-        timeout_graceful_shutdown=math.ceil(settings.shutdown_timeout_ms / 1000),
-    )
+    return create_host_server_config(app, create_host_settings(settings))
 
 
 def report_startup_failure(code: str, stream: TextIO | None = None) -> None:

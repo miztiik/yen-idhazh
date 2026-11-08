@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { superviseApiTask } from "@idhazh/serve-pipeline-apis/supervisor";
 import { readApiReadiness } from "@idhazh/serve-pipeline-apis/readiness";
+import type { ApiReady } from "@idhazh/serve-pipeline-apis/startup";
 import { loadConfig } from "../config";
 import { MachineApiStartupSchema, MachineApiStartupFailureSchema, readMachineApiIdentity } from "./read-machine-api-startup";
 import type { MachineApiStartup } from "./read-machine-api-startup";
@@ -12,7 +13,7 @@ import { readMachineApiDiagnostic } from "./read-machine-api-diagnostic";
 
 export async function superviseMachineApiTask<T>(input: {
   root: string; startup: MachineApiStartup; serverEntry?: string; signal?: AbortSignal;
-  request: (origin: string, signal: AbortSignal) => Promise<T>;
+  request: (origin: string, signal: AbortSignal, identity: ApiReady) => Promise<T>;
 }): Promise<T> {
   const startup = MachineApiStartupSchema.parse(input.startup);
   const config = await loadConfig(join(input.root, "config", "host-probes.json"));
