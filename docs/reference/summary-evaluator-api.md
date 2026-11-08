@@ -14,14 +14,15 @@ diagnostic settings and request-body bounds. The frozen native models live
 in `services/summary_evaluator/src/summary_evaluator/serve_http/contracts/`
 and `shared/contracts/`. The reusable listener contract lives in
 `services/local_api_host/src/local_api_host/contracts.py`; the evaluator
-projects its committed settings into that contract with trace propagation
-disabled, so evaluator responses and newly emitted events remain untraced.
-Shared settings, health and generic API errors retain version `2026-11-07`.
+projects its committed propagation flag into that contract. Current settings
+have version `2026-11-08` and enable actual HTTP, event and worker context.
+Health and generic API errors retain version `2026-11-07`.
 The native CloudEvents envelope schema has version `2026-11-08` and declares
 reader-optional W3C carriers; it adds no payload `version` field and retains
 `specversion: "1.0"`. Live health and errors use their current shapes. Deployment
-readers also accept frozen `2026-11-07` three-listener and single-listener
-settings, but resolve only one maintained scorer. Saved workflow evidence may
+readers also accept separate frozen `2026-11-07` two-listener, three-listener
+and single-listener settings, resolving only maintained scorers with propagation
+disabled. Invalid current fields never fall back to an old shape. Saved workflow evidence may
 read the exact previous health shape only with disabled coverage, then remove
 that slot without inventing process observations. Mixed formats, arbitrary
 extras, invalid bounds, listener collisions and unknown versions are rejected.
@@ -38,6 +39,7 @@ Table A - Listener and component selection
 | A3 | `listeners.<scorer>.body_read_timeout_ms` | An absolute input-read deadline of 5000 milliseconds, or five seconds, by default. |
 | A4 | `--routes <scorer>` | Resolve exactly one maintained scorer. The comparison workflow starts separate HHEM and UniEval APIs. No modern default starts every configured listener; coverage selection is refused. |
 | A5 | `shutdown_timeout_ms` | 15000 milliseconds, or fifteen seconds, for Uvicorn's graceful request wait. This cannot be shorter than the selected scorer's worker shutdown wait. The owned parent-loss/close allowance also includes that worker's shutdown and forced-stop joins. |
+| A6 | `propagate_trace_context` | Required strict boolean in current authored/effective settings; enabled in committed configuration. It controls the host and native event emission together, without an environment override or second tracing flag. |
 
 Table B - Native operations
 
@@ -93,6 +95,12 @@ The message comes from the declared local error policy, never request input
 or a raw exception. The guard runs before body reading. Bounded reads,
 disconnect handling, absolute deadlines and real cleanup failures remain
 part of the enabled scorers' request path.
+Enabled responses include the actual receiving `traceparent` and optional
+canonical `tracestate`, including refusals, errors, health/schema and unknown
+routes. A valid parent creates one receiving child; missing or malformed
+optional parents create a root. Invalid state is omitted without discarding
+a valid parent identity. Malformed supplied metadata produces a fixed
+`INVALID_TRACE_CONTEXT` diagnostic, never raw header or parser text.
 
 ## Diagnostics
 
@@ -122,7 +130,11 @@ The reader preserves their native occurrence, UTC time, ordered data and
 carrier; real legacy absence stays omitted. The identity contract owns the
 [strict read rules](../architecture/contracts/identity.md#6-hhem-execution-and-event-identity).
 Historical coverage diagnostics remain readable without enabling coverage.
-This reader support does not inject live carriers or change scorer responses.
+Enabled live factories require the actual operation even though saved readers
+permit genuine carrier absence. Request and terminal records use the actual
+response operation; nested work uses its own children. Read routes do not
+invent scoring events, and disconnected work has a terminal record but no
+HTTP response. The validated score body is unchanged.
 
 An unopenable or unwritable file emits `LOG_FILE_UNAVAILABLE` to stderr and
 sets shared health's `log_available` to false. It does not change a score or

@@ -7,9 +7,9 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
-from summary_evaluator.hhem.contracts.base import SCHEMA_VERSION
 from summary_evaluator.hhem.contracts.error_detail import ErrorDetail
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
+from summary_evaluator.hhem.contracts.worker_contract import HHEM_WORKER_VERSION
 from summary_evaluator.hhem.contracts.worker_message import (
     ScoreWindow,
     WindowOutcome,
@@ -19,9 +19,10 @@ from summary_evaluator.hhem.contracts.worker_message import (
     WorkerReady,
     WorkerStarted,
 )
+from summary_evaluator.hhem.exchange_packets import reply_byte_limit
 from summary_evaluator.hhem.fail_evaluation import EvaluationFailure
 from summary_evaluator.hhem.load_model import Predictor, load_model
-from summary_evaluator.shared.exchange_packets import ByteChannel
+from summary_evaluator.shared.exchange_packets import ByteChannel, encode_packet
 from summary_evaluator.shared.fail_runtime import RuntimeFailure
 from summary_evaluator.shared.quiet_model_output import quiet_model_output
 from summary_evaluator.shared.read_process_identity import read_process_identity
@@ -93,48 +94,64 @@ def run_worker(
             worker = read_process_identity(
                 generation, bootstrap.settings.worker.max_proc_identity_bytes
             )
+            max_reply_bytes = reply_byte_limit(bootstrap, generation)
             channel.send_bytes(
-                WorkerStarted(version=SCHEMA_VERSION, kind="worker_started", worker=worker)
-                .model_dump_json()
-                .encode("utf-8")
+                encode_packet(
+                    WorkerStarted(
+                        version=HHEM_WORKER_VERSION,
+                        operation_metadata=bootstrap.operation_metadata,
+                        kind="worker_started",
+                        worker=worker,
+                    ),
+                    max_reply_bytes,
+                )
             )
             try:
                 arm_parent_exit()
                 predictor = loader(bootstrap.settings, root, local_only=generation > 1)
             except (EvaluationFailure, RuntimeFailure) as failure:
                 channel.send_bytes(
-                    WorkerFailed(
-                        version=SCHEMA_VERSION,
-                        kind="worker_failed",
-                        worker=worker,
-                        error=(
-                            failure.error
-                            if isinstance(failure, EvaluationFailure)
-                            else ErrorDetail.from_code(failure.code, "worker")
+                    encode_packet(
+                        WorkerFailed(
+                            version=HHEM_WORKER_VERSION,
+                            operation_metadata=bootstrap.operation_metadata,
+                            kind="worker_failed",
+                            worker=worker,
+                            error=(
+                                failure.error
+                                if isinstance(failure, EvaluationFailure)
+                                else ErrorDetail.from_code(failure.code, "worker")
+                            ),
                         ),
+                        max_reply_bytes,
                     )
-                    .model_dump_json()
-                    .encode("utf-8")
                 )
                 return
             except Exception:
                 channel.send_bytes(
-                    WorkerFailed(
-                        version=SCHEMA_VERSION,
-                        kind="worker_failed",
-                        worker=worker,
-                        error=ErrorDetail.from_code("MODEL_LOAD_FAILED", "worker"),
+                    encode_packet(
+                        WorkerFailed(
+                            version=HHEM_WORKER_VERSION,
+                            operation_metadata=bootstrap.operation_metadata,
+                            kind="worker_failed",
+                            worker=worker,
+                            error=ErrorDetail.from_code("MODEL_LOAD_FAILED", "worker"),
+                        ),
+                        max_reply_bytes,
                     )
-                    .model_dump_json()
-                    .encode("utf-8")
                 )
                 return
             channel.send_bytes(
-                WorkerReady(
-                    version=SCHEMA_VERSION, kind="ready", worker=worker, model=predictor.identity
+                encode_packet(
+                    WorkerReady(
+                        version=HHEM_WORKER_VERSION,
+                        operation_metadata=bootstrap.operation_metadata,
+                        kind="ready",
+                        worker=worker,
+                        model=predictor.identity,
+                    ),
+                    max_reply_bytes,
                 )
-                .model_dump_json()
-                .encode("utf-8")
             )
             while True:
                 command = WorkerCommand.model_validate_json(
@@ -143,9 +160,9 @@ def run_worker(
                 if not isinstance(command, ScoreWindow) or command.generation != generation:
                     return
                 outcome = _score(predictor, command)
-                channel.send_bytes(outcome.model_dump_json().encode("utf-8"))
+                channel.send_bytes(encode_packet(outcome, max_reply_bytes))
                 del command, outcome
-        except (EOFError, OSError, ValidationError):
+        except (EOFError, OSError, ValueError):
             return
         finally:
             channel.close()

@@ -1,6 +1,6 @@
 # How the local HHEM API owns scoring
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 How the HHEM component scores supplied source and summary text without
 blocking health checks or leaving a second model process behind.
@@ -50,8 +50,9 @@ completed primary score and logical full plan without another prediction;
 different whitespace is not equality.
 
 Each child reply identifies its execution, generation, comparison and word
-range. The parent validates that identity against its one outstanding command
-and retains each valid completed window. A comparison receives a score only
+range. The parent validates that identity and exact issued operation metadata
+against its one outstanding command and retains each valid completed window.
+A comparison receives a score only
 after all its windows finish. Thus an unfinished primary comparison has no
 score, while a failed full comparison preserves the exact completed primary
 maximum. Partial responses use an error HTTP status and leave unfinished full
@@ -105,6 +106,12 @@ Shutdown closes admission, cancels owned requests and loading, and awaits
 owned recovery and stop operations within its declared deadline. A client
 disconnect produces one terminal request cancellation event and no HTTP status
 or body.
+The host creates one receiving operation for each enabled attempt. Request
+and terminal occurrences retain it; queue and primary/full occurrences use
+their own children. A real window command receives a child of its enclosing
+comparison, and its reply returns that operation unchanged. Full-source reuse
+creates no synthetic model command. Native UUIDs, event sequences, causal
+occurrence links and scoring timings remain separate.
 Connected cleanup failures preserve the first error and any completed primary
 score. Request text is released at delivery; no result cache or history exists.
 
@@ -123,6 +130,11 @@ write, flush or record-size failure is explicit: an affected response has
 A failed optional file mirror instead emits a safe warning and marks the log
 unavailable. It does not change the score or stop the worker. The caller does
 not require a terminal log match to accept a validated native result.
+Model loading and replacement use children of the controller's service
+operation. A replacement may link the failed request, but neither a queued
+request nor a lifecycle warning becomes the service parent. Worker packet
+versions and [read compatibility](../../reference/hhem-evaluation-api.md#events-and-private-worker-packets)
+are independent of the public score and event-data version.
 
 The capture script runs the production loader and predictor on the named
 project-authored inputs. Captured predictions bind exact source/summary hashes
@@ -138,6 +150,10 @@ call cannot be reliably stopped by cancelling a thread future. Per-window
 validated progress keeps a completed primary score outside that process.
 Finite reservations bound input memory before validation, rather than only
 bounding requests after their bodies have already been read.
+Keeping operation metadata in the attempt and command avoids dependence on
+a global or most-recent request. Complete encoded metadata is included in the
+derived worker bounds, while the existing event bound counts serialized
+carrier fields, JSON escaping and the record newline.
 
 Pinned upstream revisions identify the selected assets without another
 startup pass over all weights. Offline recording provenance remains separate:

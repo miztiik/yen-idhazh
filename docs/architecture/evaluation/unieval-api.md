@@ -1,6 +1,6 @@
 # How the UniEval API checks a complete source
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 How the local evaluator produces four distinct scores without silently
 cutting the article or replacing an unfinished result. The
@@ -65,7 +65,8 @@ and no numeric score. Other admissible dimensions can finish. Missing
 reference text is invalid input, not a request for three scores.
 
 The parent validates each private reply against its request, process
-generation, dimension, sentence and source-window identity. It retains
+generation, dimension, sentence, source-window and exact issued operation
+identity. It retains
 completed predictions outside the model process. A final dimension requires
 all of its planned comparisons; a maximum from an unfinished matrix is not a
 score. Computed zero is valid, while uncomputed values remain null.
@@ -85,6 +86,11 @@ kernel parent-death mechanism shared with HHEM. Cancellation and request
 deadlines close the exact child's lifetime pipe and confirm its joined
 exit, escalating to a kill of that owned process if needed. A failed worker
 does not start an automatic restart loop.
+An enabled request consumes the host's one receiving operation. Request
+outcomes and connected response headers retain it. The real worker evaluation
+is a child of that request; its planning, prediction and final packets all
+retain the issued operation. Native sentence/window indexing and reduction
+remain unchanged, without fake per-item work or another calculation.
 
 Shared health retains separate component states. An unavailable UniEval
 worker does not erase HHEM's readiness or completed result. Disabled UniEval
@@ -115,6 +121,11 @@ writer. Only codes, identities and measured facts are logged. Source,
 reference, summary, prompts, model output and raw exceptions are not
 diagnostic fields. Failure of the optional file mirror warns without
 changing a score.
+Startup/load/shutdown diagnostics stay on the service branch. File-mirror
+warnings use the causing operation, and startup/open/close warnings use the
+service operation. Current private packets have a separate version from
+native scoring and recordings; incompatible owned workers are retired before
+new packets are issued.
 
 ## Design rationale
 
@@ -122,6 +133,10 @@ One mode control describes source handling without creating interacting
 flags or changing the saved summary. All-window consistency trades more
 comparisons for direct source-span coverage, rather than a retrieval promise
 that selected passages represent the entire article.
+Exact operation equality is part of native progress validation, alongside
+execution and generation. Complete command metadata is included in derived
+byte bounds; replies keep the configured byte allowance and fail explicitly
+when the serialized packet does not fit.
 
 A larger configured input allowance permits complete native coherence and
 reference prompts when execution supports them. It is not evidence that

@@ -4,10 +4,11 @@ from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, RootModel, model_validator
 
-from summary_evaluator.hhem.contracts.base import Comparison, SchemaVersion
+from summary_evaluator.hhem.contracts.base import Comparison
 from summary_evaluator.hhem.contracts.error_detail import ErrorDetail
 from summary_evaluator.hhem.contracts.model_identity import ModelIdentity
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
+from summary_evaluator.hhem.contracts.worker_contract import WorkerContract
 from summary_evaluator.shared.contracts.base import (
     Count,
     Milliseconds,
@@ -28,10 +29,9 @@ class FrozenAssets(NativeContract):
     foundation: ModelAssetSettings
 
 
-class WorkerBootstrap(NativeContract):
+class WorkerBootstrap(WorkerContract):
     """Freeze settings and logical asset identities before any text is sent."""
 
-    version: SchemaVersion
     kind: Literal["bootstrap"]
     settings: ServiceSettings
     assets: FrozenAssets
@@ -47,27 +47,24 @@ class WorkerBootstrap(NativeContract):
         return self
 
 
-class WorkerStarted(NativeContract):
+class WorkerStarted(WorkerContract):
     """Report the owned process separately from model readiness."""
 
-    version: SchemaVersion
     kind: Literal["worker_started"]
     worker: WorkerIdentity
 
 
-class WorkerReady(NativeContract):
+class WorkerReady(WorkerContract):
     """Require fingerprints before reporting a loaded model."""
 
-    version: SchemaVersion
     kind: Literal["ready"]
     worker: WorkerIdentity
     model: ModelIdentity
 
 
-class WorkerFailed(NativeContract):
+class WorkerFailed(WorkerContract):
     """Report a closed startup failure instead of incomplete readiness."""
 
-    version: SchemaVersion
     kind: Literal["worker_failed"]
     worker: WorkerIdentity
     error: ErrorDetail
@@ -86,10 +83,9 @@ class WorkerFailed(NativeContract):
         return self
 
 
-class WindowIdentity(NativeContract):
+class WindowIdentity(WorkerContract):
     """Identify the exact active command, including its end-exclusive word range."""
 
-    version: SchemaVersion
     execution_id: Uuid4
     generation: PositiveCount
     comparison: Comparison
@@ -148,7 +144,7 @@ _PACKET_READER_CONFIG = ConfigDict(
     strict=True,
     frozen=True,
     hide_input_in_errors=True,
-    json_schema_extra=NativeContract.model_config["json_schema_extra"],
+    json_schema_extra=WorkerContract.model_config["json_schema_extra"],
 )
 
 

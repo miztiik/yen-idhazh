@@ -319,16 +319,31 @@ field set, requiredness, null rules, types, factories and codec to the shared
 TypeScript authority in section 4. The native metadata date remains
 `2026-11-03`; its snake-case Python attributes serialize with the shared
 camel-case names. No UUID conversion or second context model is involved.
-Existing evaluator factories still emit untraced events; reader compatibility
-does not enable HTTP or worker propagation.
+Compatible readers alone do not enable propagation. The current evaluator configuration enables
+actual receiving, nested and worker operations through the same native metadata.
+The host receives a valid optional caller parent once; request and terminal
+occurrences and connected response headers retain that receiving operation.
+Queue and primary/full work are children, and each real HHEM model command
+is a child of its comparison. Reused full scoring issues no model command.
+Service construction, controller work and model loading retain a separate
+service branch; recovery may link the failed attempt without adopting it
+as the service parent.
 
 UniEval also creates its execution UUIDv4 before body reading, independently
 of caller request/correlation UUIDs and the other model worker. Its private
 comparison replies must match that execution, worker generation, dimension,
-sentence and source-window identity. Its diagnostic occurrences use fresh
+sentence, source-window and exact issued operation identity. Its native batch,
+progress and reduction remain one actual worker evaluation, not invented
+per-item work. Its diagnostic occurrences use fresh
 CloudEvents UUIDv4 IDs and retain the request execution ID in safe data.
 The reference-summary digest identifies the exact UTF-8 reference bytes,
 not the source, generated answer or an event occurrence.
+The [server configuration](../../reference/summary-evaluator-api.md) owns the
+single strict propagation flag and frozen disabled profiles. Current worker
+packets have their own date-stamped protocol, independently of public scores
+and recordings; old owned workers are replaced before current packets are
+issued. Neither carrier observations nor diagnostic-file availability prove
+that scoring completed.
 
 ## Design rationale
 

@@ -25,6 +25,7 @@ from summary_evaluator_cases.contract_examples import REPOSITORY, example_event
 from summary_evaluator.hhem.contracts.evaluation_event import EvaluationEvent
 from summary_evaluator.hhem.resolve_ids import create_event_id
 from summary_evaluator.serve_http.contracts.server_event import ApiDiagnosticData, ServerEvent
+from summary_evaluator.shared.bound_operation_metadata import maximum_worker_operation_metadata
 
 TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736"
 SPAN_ID = "00f067aa0ba902b7"
@@ -104,6 +105,7 @@ def _metadata_vectors() -> list[MetadataVector]:
         ("invalid state", {"traceState": "not-valid-state"}),
         ("noncanonical state", {"traceState": "first=value, second=other"}),
         ("duplicate state key", {"traceState": "first=value,first=other"}),
+        ("state over total limit", {"traceState": "a=" + "x" * 256 + ",b=" + "y" * 256}),
         ("extra metadata", {"extra": True}),
     ]
     native_root = create_root_operation(
@@ -114,15 +116,24 @@ def _metadata_vectors() -> list[MetadataVector]:
     vectors: list[MetadataVector] = [
         {"name": "root", "value": root},
         {"name": "linked child", "value": linked},
+        {
+            "name": "maximum escaped native state",
+            "value": maximum_worker_operation_metadata().model_dump(mode="json"),
+        },
         {"name": "missing links", "value": {"traceId": TRACE_ID, "spanId": SPAN_ID}},
     ]
     for name, patch in patches:
         vectors.append({"name": name, "value": {**root, **patch}})
-    vectors.extend([
-        {"name": "native root factory", "value": native_root.model_dump(mode="json")},
-        {"name": "native child factory", "value": native_child.model_dump(mode="json")},
-        {"name": "native default root", "value": create_root_operation().model_dump(mode="json")},
-    ])
+    vectors.extend(
+        [
+            {"name": "native root factory", "value": native_root.model_dump(mode="json")},
+            {"name": "native child factory", "value": native_child.model_dump(mode="json")},
+            {
+                "name": "native default root",
+                "value": create_root_operation().model_dump(mode="json"),
+            },
+        ]
+    )
     return vectors
 
 

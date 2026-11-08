@@ -3,7 +3,11 @@
 from datetime import UTC, datetime, timedelta
 from typing import Final, Literal, Self
 
-from local_api_host.propagate_trace_context import read_trace_context
+from local_api_host.propagate_trace_context import (
+    OperationMetadata,
+    read_trace_context,
+    write_trace_context,
+)
 from pydantic import AwareDatetime, ConfigDict, Field, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 from starlette.datastructures import Headers
@@ -17,6 +21,19 @@ from summary_evaluator.shared.create_execution_id import create_execution_id
 
 SERVER_EVENT_SCHEMA_VERSION: Final = "2026-11-08"
 DiagnosticComponent = Literal["api", "unieval", "coverage", "log"]
+
+
+def _operation_carrier(
+    operation_metadata: OperationMetadata | None,
+    propagate_trace_context: bool,
+) -> dict[str, str]:
+    if type(propagate_trace_context) is not bool:
+        raise ValueError("Trace emission requires a validated boolean mode")
+    if not propagate_trace_context:
+        return {}
+    if operation_metadata is None:
+        raise ValueError("Enabled emission requires the actual operation metadata")
+    return write_trace_context(operation_metadata)
 
 
 class ApiDiagnosticData(LifecycleFields):
@@ -96,7 +113,13 @@ class ServerEvent(ServerContract):
         return self
 
     @classmethod
-    def from_evaluation(cls, event: EvaluationEvent) -> Self:
+    def from_evaluation(
+        cls,
+        event: EvaluationEvent,
+        operation_metadata: OperationMetadata | None = None,
+        *,
+        propagate_trace_context: bool = False,
+    ) -> Self:
         return cls(
             specversion="1.0",
             id=event.event_id,
@@ -105,10 +128,17 @@ class ServerEvent(ServerContract):
             time=event.occurred_at,
             datacontenttype="application/json",
             data=event,
+            **_operation_carrier(operation_metadata, propagate_trace_context),
         )
 
     @classmethod
-    def diagnostic(cls, data: ApiDiagnosticData) -> Self:
+    def diagnostic(
+        cls,
+        data: ApiDiagnosticData,
+        operation_metadata: OperationMetadata | None = None,
+        *,
+        propagate_trace_context: bool = False,
+    ) -> Self:
         return cls(
             specversion="1.0",
             id=create_execution_id(),
@@ -117,6 +147,7 @@ class ServerEvent(ServerContract):
             time=datetime.now(UTC),
             datacontenttype="application/json",
             data=data,
+            **_operation_carrier(operation_metadata, propagate_trace_context),
         )
 
     def encode_json_line(self, max_bytes: int) -> bytes:

@@ -15,6 +15,7 @@ import httpx
 from fastapi import FastAPI
 from starlette.types import Message, Scope
 from summary_evaluator_cases.contract_examples import REPOSITORY, SETTINGS_FILE
+from summary_evaluator_cases.observe_packets import ObservedChannel
 from summary_evaluator_cases.replay_predictions import Scenario, run_recorded_worker
 
 from summary_evaluator.hhem.contracts.evaluation_event import EvaluationEvent
@@ -109,6 +110,8 @@ class RecordedSupervisor(WorkerSupervisor):
         self.spawn_events = {index + 1: asyncio.Event() for index in range(len(scenarios))}
         self.child_controls: list[ByteChannel] = []
         self.confirmed_before_spawn: list[tuple[int, int]] = []
+        self.commands: list[bytes] = []
+        self.replies: list[bytes] = []
 
     def _create_process(
         self, channel: ByteChannel, lifetime: ByteChannel, generation: int, max_bytes: int
@@ -140,6 +143,8 @@ class RecordedSupervisor(WorkerSupervisor):
     async def start(self) -> None:
         try:
             await super().start()
+            assert self.channel is not None
+            self.channel = ObservedChannel(self.channel, self.commands, self.replies)
         finally:
             for child in self.child_controls:
                 child.close()
@@ -199,7 +204,8 @@ async def running_service(
                 "listener": (
                     unieval_settings.listener
                     if routes == ("unieval",) and unieval_settings is not None
-                    else shared.listener if routes == ("unieval",)
+                    else shared.listener
+                    if routes == ("unieval",)
                     else selected.listener
                 ),
                 "logging": selected.logging,
@@ -211,7 +217,12 @@ async def running_service(
         selected,
         root,
         supervisor=worker,
-        writer=EventWriter(selected.logging, log, directory=log_directory),
+        writer=EventWriter(
+            selected.logging,
+            log,
+            directory=log_directory,
+            propagate_trace_context=api.propagate_trace_context,
+        ),
         unieval_settings=unieval_settings,
         unieval_supervisor=unieval_supervisor,
     )
@@ -226,7 +237,9 @@ async def running_service(
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app),
                 base_url=httpx.URL(
-                    scheme="http", host=api.listener.host, port=api.listener.port,
+                    scheme="http",
+                    host=api.listener.host,
+                    port=api.listener.port,
                 ),
                 trust_env=False,
                 follow_redirects=False,

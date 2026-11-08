@@ -46,6 +46,7 @@ def main() -> None:
                 api.logging,
                 directory=root / api.log_directory,
                 scorer=api.enabled_routes[0],
+                propagate_trace_context=api.propagate_trace_context,
             ),
         )
     except ValueError:

@@ -4,6 +4,8 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from local_api_host.propagate_trace_context import OperationMetadata
+
 from summary_evaluator.hhem.contracts.base import SCHEMA_VERSION
 from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
 from summary_evaluator.hhem.contracts.evaluation_event import EvaluationEvent, EventDetails
@@ -14,6 +16,7 @@ from summary_evaluator.hhem.contracts.evaluation_progress import (
 )
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.contracts.model_identity import ModelIdentity, RuntimeVersions
+from summary_evaluator.hhem.contracts.worker_contract import HHEM_WORKER_VERSION
 from summary_evaluator.hhem.contracts.worker_message import ScoreWindow, WindowOutcome
 from summary_evaluator.hhem.resolve_ids import create_event_id
 from summary_evaluator.hhem.resolve_request import resolve_request
@@ -29,6 +32,13 @@ EXECUTION_ID = "11111111-2222-4333-8444-555555555555"
 REQUEST_ID = "12345678-1234-4234-8234-123456789abc"
 CORRELATION_ID = "87654321-4321-4321-8321-cba987654321"
 OPERATION_ID = "99999999-8888-4777-8666-555555555555"
+EXAMPLE_OPERATION = OperationMetadata(
+    trace_id="f" * 32,
+    span_id="e" * 16,
+    parent_span_id="d" * 16,
+    links=(),
+    trace_state="first=value",
+)
 
 
 def read_contract[Contract: NativeContract](contract: type[Contract], payload: object) -> Contract:
@@ -105,7 +115,8 @@ def example_event() -> EvaluationEvent:
 
 def example_command() -> ScoreWindow:
     return ScoreWindow(
-        version=SCHEMA_VERSION,
+        version=HHEM_WORKER_VERSION,
+        operation_metadata=EXAMPLE_OPERATION,
         kind="score_window",
         execution_id=EXECUTION_ID,
         generation=1,
@@ -122,6 +133,7 @@ def example_window_outcome() -> WindowOutcome:
     command = example_command()
     return WindowOutcome(
         version=command.version,
+        operation_metadata=command.operation_metadata,
         kind="window_scored",
         execution_id=command.execution_id,
         generation=command.generation,

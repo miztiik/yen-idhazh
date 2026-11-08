@@ -1,14 +1,16 @@
 """Which shared listener and explicit route groups can one API process use?"""
 
-from typing import Literal, Self
+from typing import Final, Literal, Self
 
 from pydantic import ConfigDict, Field, model_validator
 
 from summary_evaluator.shared.contracts.base import PositiveCount, RelativePath
-from summary_evaluator.shared.contracts.server_contract import ServerContract, ServerSchemaVersion
+from summary_evaluator.shared.contracts.server_contract import ServerContract
 from summary_evaluator.shared.contracts.service_settings import ListenerSettings, LoggingSettings
 
 ApiComponent = Literal["hhem", "unieval"]
+API_SETTINGS_SCHEMA_VERSION: Final = "2026-11-08"
+ApiSettingsVersion = Literal["2026-11-08"]
 
 
 class ApiSettings(ServerContract):
@@ -16,22 +18,27 @@ class ApiSettings(ServerContract):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "version": "2026-11-07",
+            "version": API_SETTINGS_SCHEMA_VERSION,
             "readCompatibility": (
-                "previous single-listener settings resolve only to a maintained scorer"
+                "frozen settings resolve only to maintained scorers with propagation disabled"
             ),
             "changelog": [
-                {"version": "2026-11-07", "change": "Retain HHEM and native UniEval selection."}
+                {
+                    "version": API_SETTINGS_SCHEMA_VERSION,
+                    "change": "Configure actual API and worker trace propagation.",
+                },
+                {"version": "2026-11-07", "change": "Retain HHEM and native UniEval selection."},
             ],
         }
     )
 
-    version: ServerSchemaVersion
+    version: ApiSettingsVersion
     listener: ListenerSettings
     enabled_routes: tuple[ApiComponent, ...] = Field(
         description="Enabled API components for this invocation; phases may select a subset."
     )
     logging: LoggingSettings
+    propagate_trace_context: bool
     log_directory: RelativePath
     shutdown_timeout_ms: PositiveCount
 

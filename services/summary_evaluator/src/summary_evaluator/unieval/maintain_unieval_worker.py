@@ -6,21 +6,26 @@ import time
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 
+from local_api_host.propagate_trace_context import OperationMetadata, create_root_operation
 from pydantic import ValidationError
 
 from summary_evaluator.shared.contracts.worker_identity import WorkerIdentity
-from summary_evaluator.shared.exchange_packets import JSON_ESCAPE_MAX_BYTES, ByteChannel
-from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_VERSION
+from summary_evaluator.shared.exchange_packets import ByteChannel, encode_packet
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_result import UnievalModelIdentity
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
+from summary_evaluator.unieval.contracts.unieval_worker_contract import UNIEVAL_WORKER_VERSION
 from summary_evaluator.unieval.contracts.unieval_worker_message import (
+    RequestPacket,
     UnievalBootstrap,
     UnievalCommand,
+    UnievalFinished,
     UnievalReady,
     UnievalReply,
     UnievalStartupFailed,
+    validate_request_reply,
 )
+from summary_evaluator.unieval.exchange_packets import command_byte_limit
 from summary_evaluator.unieval.fail_unieval import UnievalFailure
 from summary_evaluator.unieval.unieval_worker import run_unieval_worker
 
@@ -38,11 +43,10 @@ class UnievalSupervisor:
         self.generation = 0
         self.exit_confirmed = True
         self.last_exit: tuple[int, int] | None = None
-        self.bootstrap = UnievalBootstrap(version=UNIEVAL_VERSION, settings=settings)
-        self.command_limit = (
-            len(self.bootstrap.model_dump_json().encode("utf-8"))
-            + JSON_ESCAPE_MAX_BYTES * settings.listener.max_body_bytes
-        )
+        self.bootstrap: UnievalBootstrap | None = None
+        self.load_operation: OperationMetadata | None = None
+        self.outstanding: UnievalCommand | None = None
+        self.command_limit = command_byte_limit(settings, 1)
 
     @property
     def is_alive(self) -> bool:
@@ -57,10 +61,23 @@ class UnievalSupervisor:
             daemon=False,
         )
 
+    def issue_load(self, operation_metadata: OperationMetadata) -> None:
+        """Issue a service-owned load operation while preserving startup callback signatures."""
+        if self.process is not None or not self.exit_confirmed:
+            raise UnievalFailure(UnievalError.from_code("WORKER_STOP_FAILED"))
+        self.load_operation = operation_metadata
+
     async def start(self) -> None:
         if self.process is not None or not self.exit_confirmed:
             raise UnievalFailure(UnievalError.from_code("WORKER_STOP_FAILED"))
         self.generation += 1
+        self.bootstrap = UnievalBootstrap(
+            version=UNIEVAL_WORKER_VERSION,
+            operation_metadata=self.load_operation or create_root_operation(),
+            settings=self.settings,
+        )
+        self.load_operation = None
+        self.command_limit = command_byte_limit(self.settings, self.generation)
         context = multiprocessing.get_context("spawn")
         allocated: list[ByteChannel] = []
         try:
@@ -87,7 +104,7 @@ class UnievalSupervisor:
             async with asyncio.timeout(self.settings.worker.startup_timeout_ms / 1000):
                 await asyncio.shield(starting)
                 await asyncio.to_thread(
-                    parent.send_bytes, self.bootstrap.model_dump_json().encode("utf-8")
+                    parent.send_bytes, encode_packet(self.bootstrap, self.command_limit)
                 )
                 reply = (await self.receive()).root
                 if isinstance(reply, UnievalStartupFailed):
@@ -113,11 +130,14 @@ class UnievalSupervisor:
     async def send(self, command: UnievalCommand) -> None:
         if self.channel is None or self.model is None:
             raise UnievalFailure(UnievalError.from_code("WORKER_NOT_READY"))
-        encoded = command.model_dump_json().encode("utf-8")
-        if len(encoded) > self.command_limit:
-            raise UnievalFailure(UnievalError.from_code("BODY_TOO_LARGE"))
+        if self.outstanding is not None or command.generation != self.generation:
+            raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
         try:
+            encoded = encode_packet(command, self.command_limit)
+            self.outstanding = command
             await asyncio.to_thread(self.channel.send_bytes, encoded)
+        except ValueError:
+            raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED")) from None
         except (OSError, EOFError):
             raise UnievalFailure(UnievalError.from_code("WORKER_EXITED")) from None
 
@@ -130,8 +150,23 @@ class UnievalSupervisor:
         self.read_task = task
         try:
             encoded = await asyncio.shield(task)
-            return UnievalReply.model_validate_json(encoded)
-        except ValidationError:
+            reply = UnievalReply.model_validate_json(encoded)
+            packet = reply.root
+            if isinstance(packet, UnievalReady | UnievalStartupFailed):
+                if (
+                    self.bootstrap is None
+                    or self.model is not None
+                    or packet.operation_metadata != self.bootstrap.operation_metadata
+                ):
+                    raise ValueError("Startup outcome does not match its issued load operation")
+            elif isinstance(packet, RequestPacket):
+                if self.outstanding is None:
+                    raise ValueError("No UniEval command is outstanding")
+                validate_request_reply(self.outstanding, packet)
+                if isinstance(packet, UnievalFinished):
+                    self.outstanding = None
+            return reply
+        except (ValidationError, ValueError):
             raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED")) from None
         except (OSError, EOFError):
             raise UnievalFailure(UnievalError.from_code("WORKER_EXITED")) from None
@@ -194,3 +229,4 @@ class UnievalSupervisor:
         self.process, self.start_task = None, None
         self.exit_confirmed = True
         self.worker, self.model = None, None
+        self.outstanding = None

@@ -23,7 +23,9 @@ from local_api_host.create_api_component import (
 )
 from local_api_host.guard_requests import GuardRequests
 from local_api_host.propagate_trace_context import (
+    OperationMetadata,
     PropagateTraceContext,
+    TraceWarningHandler,
     create_root_operation,
     observe_request_operation,
     observe_request_started_at,
@@ -38,6 +40,7 @@ class _HostedFastAPI(FastAPI):
         *args: Any,
         host_settings: HostSettings,
         component: ApiComponentRuntime[Any],
+        invalid_trace_context: TraceWarningHandler | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -53,6 +56,7 @@ class _HostedFastAPI(FastAPI):
         self._host_entry = PropagateTraceContext(
             guarded,
             host_settings.propagate_trace_context,
+            invalid_trace_context=invalid_trace_context,
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -72,12 +76,18 @@ def compose_api[HealthT, EventT](
     events: HostEventSink[HealthT, EventT],
     *,
     service_instance_id: str | None = None,
+    service_operation: OperationMetadata | None = None,
+    invalid_trace_context: TraceWarningHandler | None = None,
 ) -> FastAPI:
     """Compose one component without inspecting its health or event vocabulary."""
     identity = service_instance_id or str(uuid4())
     service_context = HostEventContext(
         service_instance_id=identity,
-        operation=create_root_operation() if settings.propagate_trace_context else None,
+        operation=(
+            service_operation or create_root_operation()
+            if settings.propagate_trace_context
+            else None
+        ),
     )
     started_at = time.monotonic()
 
@@ -129,6 +139,7 @@ def compose_api[HealthT, EventT](
         lifespan=lifespan,
         host_settings=settings,
         component=component,
+        invalid_trace_context=invalid_trace_context,
     )
     app.state.component = component
     app.state.service_instance_id = identity

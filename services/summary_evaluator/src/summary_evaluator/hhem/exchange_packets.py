@@ -2,16 +2,19 @@
 
 import sys
 
-from summary_evaluator.hhem.contracts.base import SCHEMA_VERSION
 from summary_evaluator.hhem.contracts.error_detail import ErrorDetail
 from summary_evaluator.hhem.contracts.model_identity import ModelIdentity, RuntimeVersions
+from summary_evaluator.hhem.contracts.worker_contract import HHEM_WORKER_VERSION
 from summary_evaluator.hhem.contracts.worker_message import (
     ScoreWindow,
     WindowOutcome,
     WorkerBootstrap,
+    WorkerFailed,
     WorkerReady,
+    WorkerStarted,
 )
-from summary_evaluator.shared.contracts.error_policy import ERROR_POLICIES
+from summary_evaluator.shared.bound_operation_metadata import maximum_worker_operation_metadata
+from summary_evaluator.shared.contracts.error_policy import ERROR_POLICIES, ErrorCode
 from summary_evaluator.shared.contracts.worker_identity import WorkerIdentity
 from summary_evaluator.shared.exchange_packets import (
     JSON_ESCAPE_MAX_BYTES,
@@ -23,8 +26,9 @@ from summary_evaluator.shared.exchange_packets import (
 def command_byte_limit(bootstrap: WorkerBootstrap, generation: int) -> int:
     settings = bootstrap.settings
     largest_index = settings.listener.max_body_bytes
-    metadata = ScoreWindow(
-        version=SCHEMA_VERSION,
+    example = ScoreWindow(
+        version=HHEM_WORKER_VERSION,
+        operation_metadata=maximum_worker_operation_metadata(),
         kind="score_window",
         execution_id=UUID4_EXAMPLE,
         generation=generation,
@@ -34,10 +38,13 @@ def command_byte_limit(bootstrap: WorkerBootstrap, generation: int) -> int:
         end_word=largest_index + 1,
         source_text="x",
         summary_text="x",
-    ).model_dump_json()
+    )
+    metadata_bytes = len(example.model_dump_json().encode("utf-8")) - (
+        len(example.source_text.encode("utf-8")) + len(example.summary_text.encode("utf-8"))
+    )
     return max(
         len(bootstrap.model_dump_json().encode("utf-8")),
-        JSON_ESCAPE_MAX_BYTES * settings.listener.max_body_bytes + len(metadata),
+        JSON_ESCAPE_MAX_BYTES * settings.listener.max_body_bytes + metadata_bytes,
     )
 
 
@@ -51,7 +58,8 @@ def reply_byte_limit(bootstrap: WorkerBootstrap, generation: int) -> int:
         pin_unavailable_reason=None,
     )
     ready = WorkerReady(
-        version=SCHEMA_VERSION,
+        version=HHEM_WORKER_VERSION,
+        operation_metadata=maximum_worker_operation_metadata(),
         kind="ready",
         worker=worker,
         model=ModelIdentity(
@@ -70,7 +78,8 @@ def reply_byte_limit(bootstrap: WorkerBootstrap, generation: int) -> int:
     largest_index = settings.listener.max_body_bytes
     outcomes = [
         WindowOutcome(
-            version=SCHEMA_VERSION,
+            version=HHEM_WORKER_VERSION,
+            operation_metadata=maximum_worker_operation_metadata(),
             kind="window_failed",
             execution_id=UUID4_EXAMPLE,
             generation=generation,
@@ -79,11 +88,34 @@ def reply_byte_limit(bootstrap: WorkerBootstrap, generation: int) -> int:
             start_word=largest_index,
             end_word=largest_index + 1,
             score=None,
-            scoring_ms=sys.float_info.max,
+            scoring_ms=sys.float_info.min,
             error=ErrorDetail.from_code(code, "primary", window_index=largest_index),
         )
         for code in ERROR_POLICIES
     ]
-    # A ready packet includes the larger worker/model identity; a failed outcome
-    # includes more metadata than success and the longest closed error wording.
-    return max(len(packet.model_dump_json().encode("utf-8")) for packet in (ready, *outcomes))
+    startup_codes: tuple[ErrorCode, ...] = (
+        "MODEL_LOAD_FAILED",
+        "MODEL_IDENTITY_CHANGED",
+        "WORKER_PROTOCOL_FAILED",
+        "INTERNAL_ERROR",
+    )
+    startup_failures = [
+        WorkerFailed(
+            version=HHEM_WORKER_VERSION,
+            operation_metadata=maximum_worker_operation_metadata(),
+            kind="worker_failed",
+            worker=worker,
+            error=ErrorDetail.from_code(code, "worker"),
+        )
+        for code in startup_codes
+    ]
+    started = WorkerStarted(
+        version=HHEM_WORKER_VERSION,
+        operation_metadata=maximum_worker_operation_metadata(),
+        kind="worker_started",
+        worker=worker,
+    )
+    return max(
+        len(packet.model_dump_json().encode("utf-8"))
+        for packet in (started, ready, *startup_failures, *outcomes)
+    )

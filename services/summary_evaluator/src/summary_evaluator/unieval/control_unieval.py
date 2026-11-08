@@ -5,6 +5,12 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from local_api_host.propagate_trace_context import (
+    OperationMetadata,
+    create_child_operation,
+    create_root_operation,
+)
+
 from summary_evaluator.shared.contracts.diagnostic_data import LifecycleFields
 from summary_evaluator.shared.fail_runtime import RuntimeFailure
 from summary_evaluator.shared.queue_evaluations import EvaluationQueue, Reservation
@@ -12,6 +18,7 @@ from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_VERSION
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError, UnievalErrorCode
 from summary_evaluator.unieval.contracts.unieval_result import UnievalHealth
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
+from summary_evaluator.unieval.contracts.unieval_worker_contract import UNIEVAL_WORKER_VERSION
 from summary_evaluator.unieval.contracts.unieval_worker_message import (
     UnievalCommand,
     UnievalFinished,
@@ -28,12 +35,17 @@ class UnievalController:
         self,
         settings: UnievalSettings,
         root: Path,
-        writer: Callable[[LifecycleFields], None],
+        writer: Callable[[LifecycleFields, OperationMetadata], None],
         service_instance_id: str,
         *,
         supervisor: UnievalSupervisor | None = None,
+        service_operation: OperationMetadata | None = None,
+        propagate_trace_context: bool = False,
     ) -> None:
-        self.settings, self.diagnostic = settings, writer
+        self.settings, self.writer = settings, writer
+        self.service_operation = service_operation or create_root_operation()
+        self.propagate_trace_context = propagate_trace_context
+        self.load_operation = create_child_operation(self.service_operation)
         self.worker = supervisor or UnievalSupervisor(settings, root)
         self.queue = EvaluationQueue(settings.queue)
         self.instance_id = service_instance_id
@@ -43,6 +55,11 @@ class UnievalController:
         self.active_task: asyncio.Task[None] | None = None
         self.stop_task: asyncio.Task[None] | None = None
         self.stopping = False
+
+    def diagnostic(
+        self, data: LifecycleFields, operation_metadata: OperationMetadata | None = None
+    ) -> None:
+        self.writer(data, operation_metadata or self.service_operation)
 
     async def health(self) -> UnievalHealth:
         await self._observe_worker_exit()
@@ -65,11 +82,12 @@ class UnievalController:
 
     async def _load(self) -> None:
         try:
+            self.worker.issue_load(self.load_operation)
             await self.worker.start()
             self.status = "ready"
             self.queue.ready = True
             self.queue.promote()
-            self.diagnostic(LifecycleFields(action="ready", level="INFO"))
+            self.diagnostic(LifecycleFields(action="ready", level="INFO"), self.load_operation)
         except (UnievalFailure, RuntimeFailure) as failure:
             self.queue.ready = False
             code = failure.error.code if isinstance(failure, UnievalFailure) else failure.code
@@ -80,7 +98,8 @@ class UnievalController:
                         action="failed",
                         level="ERROR",
                         code=code,
-                    )
+                    ),
+                    self.load_operation,
                 )
             except RuntimeFailure:
                 self.failure_code = "LOGGING_FAILED"
@@ -94,7 +113,8 @@ class UnievalController:
                             action="failed",
                             level="ERROR",
                             code=cleanup.error.code,
-                        )
+                        ),
+                        self.load_operation,
                     )
                 except RuntimeFailure:
                     self.failure_code = "LOGGING_FAILED"
@@ -141,6 +161,7 @@ class UnievalController:
         await asyncio.shield(self.stop_task)
 
     async def process(self, state: UnievalState, reservation: Reservation) -> None:
+        state.queue_operation = create_child_operation(state.operation_metadata)
         try:
             await self.queue.wait(reservation)
         except RuntimeFailure as failure:
@@ -151,11 +172,13 @@ class UnievalController:
         state.model, state.worker = self.worker.model, self.worker.worker
         state.queue_ms = (reservation.promoted_at - reservation.reserved_at) * 1000
         started = time.monotonic()
+        state.evaluation_operation = create_child_operation(state.operation_metadata)
         try:
             async with asyncio.timeout(self.settings.evaluation.timeout_ms / 1000):
                 await self.worker.send(
                     UnievalCommand(
-                        version=UNIEVAL_VERSION,
+                        version=UNIEVAL_WORKER_VERSION,
+                        operation_metadata=state.evaluation_operation,
                         execution_id=state.execution_id,
                         generation=self.worker.generation,
                         request=state.request,
@@ -222,4 +245,7 @@ class UnievalController:
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
             await self._stop_worker()
-        self.diagnostic(LifecycleFields(action="stopped", level="INFO"))
+        self.diagnostic(
+            LifecycleFields(action="stopped", level="INFO"),
+            create_child_operation(self.service_operation),
+        )

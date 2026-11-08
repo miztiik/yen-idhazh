@@ -1,7 +1,8 @@
 """How does one local request retain valid W3C context and receive a fresh API span?"""
 
+import logging
 import time
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from secrets import token_hex
 from typing import Annotated, Final, Self, cast
 
@@ -30,10 +31,22 @@ from pydantic import (
 from pydantic.json_schema import JsonSchemaValue, SkipJsonSchema
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.requests import Request
+from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 _TRACE_PROPAGATOR = TraceContextTextMapPropagator()
 OPERATION_METADATA_VERSION: Final = "2026-11-03"
+W3C_TRACESTATE_MAX_BYTES: Final = 512
+
+
+class _DiscardUnsafeTraceStateWarnings(logging.Filter):
+    """Leave invalid-carrier reporting to the receiving operation's safe callback."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return False
+
+
+logging.getLogger("opentelemetry.trace.span").addFilter(_DiscardUnsafeTraceStateWarnings())
 
 
 class OperationLink(BaseModel):
@@ -124,7 +137,10 @@ class OperationMetadata(BaseModel):
     @field_validator("trace_state")
     @classmethod
     def require_canonical_trace_state(cls, value: str | None) -> str | None:
-        if value is not None and TraceState.from_header([value]).to_header() != value:
+        if value is not None and (
+            len(value) > W3C_TRACESTATE_MAX_BYTES
+            or TraceState.from_header([value]).to_header() != value
+        ):
             raise ValueError("traceState must be canonical W3C tracestate")
         return value
 
@@ -145,6 +161,9 @@ class OperationMetadata(BaseModel):
     ) -> dict[str, object]:
         serialized = cast(dict[str, object], handler(self))
         return {key: value for key, value in serialized.items() if value is not None}
+
+
+type TraceWarningHandler = Callable[[Request, OperationMetadata], Awaitable[Response | None]]
 
 
 def _create_nonzero_identifier(byte_length: int, excluded: str | None = None) -> str:
@@ -196,20 +215,34 @@ def create_child_operation(
     )
 
 
-def read_trace_context(headers: Headers) -> OperationMetadata | None:
+def read_trace_context(
+    headers: Headers,
+    *,
+    on_invalid: Callable[[], None] | None = None,
+) -> OperationMetadata | None:
     """Read one valid incoming W3C operation without treating it as received work."""
     traceparents = headers.getlist("traceparent")
     if len(traceparents) != 1:
+        if on_invalid is not None and (traceparents or headers.getlist("tracestate")):
+            on_invalid()
         return None
     carrier: dict[str, str | list[str]] = {"traceparent": traceparents}
     tracestate = headers.getlist("tracestate")
     if tracestate:
         carrier["tracestate"] = tracestate
-    incoming = get_current_span(_TRACE_PROPAGATOR.extract(carrier)).get_span_context()
+    incoming = get_current_span(
+        _TRACE_PROPAGATOR.extract(carrier, context=Context())
+    ).get_span_context()
     if not incoming.is_valid:
+        if on_invalid is not None:
+            on_invalid()
         return None
     canonical_state = incoming.trace_state.to_header()
+    if len(canonical_state) > W3C_TRACESTATE_MAX_BYTES:
+        canonical_state = ""
     if not canonical_state:
+        if tracestate and on_invalid is not None:
+            on_invalid()
         return OperationMetadata(
             trace_id=f"{incoming.trace_id:032x}",
             span_id=f"{incoming.span_id:016x}",
@@ -223,9 +256,13 @@ def read_trace_context(headers: Headers) -> OperationMetadata | None:
     )
 
 
-def create_request_operation(headers: Headers) -> OperationMetadata:
+def create_request_operation(
+    headers: Headers,
+    *,
+    on_invalid: Callable[[], None] | None = None,
+) -> OperationMetadata:
     """Create the receiving operation for one optional incoming carrier."""
-    parent = read_trace_context(headers)
+    parent = read_trace_context(headers, on_invalid=on_invalid)
     return create_root_operation() if parent is None else create_child_operation(parent)
 
 
@@ -267,9 +304,16 @@ def observe_request_started_at(request: Request) -> float:
 class PropagateTraceContext:
     """Capture request timing and optionally write W3C context on every response."""
 
-    def __init__(self, app: ASGIApp, enabled: bool) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        enabled: bool,
+        *,
+        invalid_trace_context: TraceWarningHandler | None = None,
+    ) -> None:
         self.app = app
         self.enabled = enabled
+        self.invalid_trace_context = invalid_trace_context
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -277,7 +321,16 @@ class PropagateTraceContext:
             return
         state = scope.setdefault("state", {})
         state["request_started_at"] = time.monotonic()
-        operation = create_request_operation(Headers(scope=scope)) if self.enabled else None
+        state["invalid_trace_context"] = False
+
+        def mark_invalid() -> None:
+            state["invalid_trace_context"] = True
+
+        operation = (
+            create_request_operation(Headers(scope=scope), on_invalid=mark_invalid)
+            if self.enabled
+            else None
+        )
         state["operation_metadata"] = operation
 
         async def send_with_trace(message: Message) -> None:
@@ -291,4 +344,13 @@ class PropagateTraceContext:
                     del headers["tracestate"]
             await send(message)
 
+        if (
+            state["invalid_trace_context"]
+            and operation is not None
+            and self.invalid_trace_context is not None
+        ):
+            refusal = await self.invalid_trace_context(Request(scope, receive), operation)
+            if refusal is not None:
+                await refusal(scope, receive, send_with_trace)
+                return
         await self.app(scope, receive, send_with_trace)

@@ -5,6 +5,13 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from local_api_host.propagate_trace_context import (
+    OperationLink,
+    OperationMetadata,
+    create_child_operation,
+    create_root_operation,
+)
+
 from summary_evaluator.hhem.contracts.base import SCHEMA_VERSION
 from summary_evaluator.hhem.contracts.error_detail import ErrorDetail
 from summary_evaluator.hhem.contracts.evaluation_event import EvaluationEvent, EventDetails
@@ -32,20 +39,30 @@ class EvaluationController:
         root: Path,
         *,
         supervisor: WorkerSupervisor | None = None,
-        writer: Callable[[EvaluationEvent], None],
+        writer: Callable[[EvaluationEvent, OperationMetadata], None],
         service_instance_id: str | None = None,
+        service_operation: OperationMetadata | None = None,
+        propagate_trace_context: bool = False,
     ) -> None:
         self.settings = settings
         self.context = context
         self.worker = supervisor or WorkerSupervisor(settings, context, root)
         self.writer = writer
+        self.service_operation = service_operation or create_root_operation()
+        self.propagate_trace_context = propagate_trace_context
         self.queue = EvaluationQueue(settings.queue)
         self.instance_id = (
             create_execution_id() if service_instance_id is None else service_instance_id
         )
         self.status: ServiceStatus = "loading" if settings.enabled else "disabled"
         self.failure_code: ErrorCode | None = None
-        self.lifecycle = EventEmitter(self.writer, context, settings.logging)
+        self.lifecycle = EventEmitter(
+            self.writer,
+            context,
+            settings.logging,
+            operation_metadata=self.service_operation,
+            root_operation="service",
+        )
         self.maintenance_lock = asyncio.Lock()
         self.loading_task: asyncio.Task[None] | None = None
         self.active_task: asyncio.Task[object] | None = None
@@ -73,15 +90,27 @@ class EvaluationController:
         if self.settings.enabled:
             self.loading_task = asyncio.create_task(self._load())
 
-    async def _load(self) -> None:
+    async def _load(self, failed_operation: OperationMetadata | None = None) -> None:
         async with self.maintenance_lock:
             try:
+                links = (
+                    ()
+                    if failed_operation is None
+                    else (
+                        OperationLink(
+                            trace_id=failed_operation.trace_id,
+                            span_id=failed_operation.span_id,
+                        ),
+                    )
+                )
                 cause = self.lifecycle.emit(
                     "worker",
                     "started",
                     EventDetails(status=self.status),
                     cause=self.lifecycle.last_event_id,
+                    operation_metadata=create_child_operation(self.service_operation, links=links),
                 )
+                self.worker.issue_load(self.lifecycle.operation_contexts["worker"])
                 await self.worker.start()
                 if self.worker.worker is None or self.worker.model is None:
                     raise EvaluationFailure(ErrorDetail.from_code("WORKER_NOT_READY", "worker"))
@@ -235,7 +264,7 @@ class EvaluationController:
                 self.status, self.failure_code = "failed", "LOGGING_FAILED"
                 return
         # The failed caller waits for confirmed exit, not a replacement model load.
-        self.loading_task = asyncio.create_task(self._load())
+        self.loading_task = asyncio.create_task(self._load(state.emitter.operation_metadata))
 
     def terminal(self, state: EvaluationState, *, disconnected: bool = False) -> str | None:
         phase: EventPhase

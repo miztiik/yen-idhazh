@@ -8,6 +8,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 
+from local_api_host.propagate_trace_context import (
+    OperationMetadata,
+    create_root_operation,
+    write_trace_context,
+)
 from pydantic import TypeAdapter
 
 from summary_evaluator.hhem.contracts.evaluation_event import EvaluationEvent
@@ -42,7 +47,10 @@ class DiagnosticFileHandler(logging.FileHandler):
         self.writer = writer
 
     def handleError(self, record: logging.LogRecord) -> None:
-        self.writer.mark_log_unavailable()
+        operation = getattr(record, "operation_metadata", None)
+        if not isinstance(operation, OperationMetadata):
+            raise RuntimeFailure("LOGGING_FAILED")
+        self.writer.mark_log_unavailable(operation)
 
     def emit(self, record: logging.LogRecord) -> None:
         if self.writer.log_available:
@@ -62,8 +70,12 @@ class EventWriter:
         attempt: int = 1,
         started_at: datetime | None = None,
         scorer: ApiComponent | None = None,
+        service_operation: OperationMetadata | None = None,
+        propagate_trace_context: bool = False,
     ) -> None:
         self.settings = settings
+        self.service_operation = service_operation or create_root_operation()
+        self.bind_trace_mode(propagate_trace_context)
         self.logger = logging.Logger(
             "summary_evaluator.events", logging.getLevelName(settings.level)
         )
@@ -94,29 +106,81 @@ class EventWriter:
             except (OSError, ValueError):
                 self.mark_log_unavailable()
 
-    def write(self, event: EvaluationEvent) -> None:
-        self.write_server_event(ServerEvent.from_evaluation(event))
+    def bind_trace_mode(self, propagate_trace_context: bool) -> None:
+        """Project the one validated API emission mode without storing request context."""
+        if type(propagate_trace_context) is not bool:
+            raise ValueError("Trace emission requires a validated boolean mode")
+        self.propagate_trace_context = propagate_trace_context
 
-    def write_server_event(self, event: ServerEvent) -> None:
+    def write(
+        self, event: EvaluationEvent, operation_metadata: OperationMetadata | None = None
+    ) -> None:
         try:
+            envelope = ServerEvent.from_evaluation(
+                event,
+                operation_metadata,
+                propagate_trace_context=self.propagate_trace_context,
+            )
+        except ValueError:
+            raise RuntimeFailure("LOGGING_FAILED") from None
+        self.write_server_event(envelope, operation_metadata)
+
+    def write_server_event(
+        self, event: ServerEvent, operation_metadata: OperationMetadata | None = None
+    ) -> None:
+        try:
+            if self.propagate_trace_context and operation_metadata is None:
+                raise ValueError("Enabled emission requires the actual operation metadata")
+            if self.propagate_trace_context and operation_metadata is not None:
+                carrier = write_trace_context(operation_metadata)
+                if (
+                    event.traceparent != carrier["traceparent"]
+                    or event.tracestate != carrier.get("tracestate")
+                ):
+                    raise ValueError("Enabled emission must retain its actual operation carrier")
+            elif event.traceparent is not None:
+                raise ValueError("Disabled emission cannot claim a live trace carrier")
             event.encode_json_line(self.settings.max_event_bytes)
-            self.logger.log(logging.getLevelName(event.data.level), event)
+            self.logger.log(
+                logging.getLevelName(event.data.level),
+                event,
+                extra={"operation_metadata": operation_metadata or self.service_operation},
+            )
         except (OSError, ValueError, UnicodeError):
             raise RuntimeFailure("LOGGING_FAILED") from None
 
-    def diagnostic(self, data: ApiDiagnosticData) -> None:
-        self.write_server_event(ServerEvent.diagnostic(data))
-
-    def component_diagnostic(self, component: DiagnosticComponent, data: LifecycleFields) -> None:
-        self.diagnostic(
-            ApiDiagnosticData.model_validate({"component": component, **data.model_dump()})
+    def diagnostic(
+        self, data: ApiDiagnosticData, operation_metadata: OperationMetadata | None = None
+    ) -> None:
+        operation = operation_metadata or self.service_operation
+        self.write_server_event(
+            ServerEvent.diagnostic(
+                data,
+                operation,
+                propagate_trace_context=self.propagate_trace_context,
+            ),
+            operation,
         )
 
-    def unieval_diagnostic(self, data: LifecycleFields) -> None:
-        self.component_diagnostic("unieval", data)
+    def component_diagnostic(
+        self,
+        component: DiagnosticComponent,
+        data: LifecycleFields,
+        operation_metadata: OperationMetadata | None = None,
+    ) -> None:
+        self.diagnostic(
+            ApiDiagnosticData.model_validate({"component": component, **data.model_dump()}),
+            operation_metadata,
+        )
 
-    def mark_log_unavailable(self) -> None:
+    def unieval_diagnostic(
+        self, data: LifecycleFields, operation_metadata: OperationMetadata | None = None
+    ) -> None:
+        self.component_diagnostic("unieval", data, operation_metadata)
+
+    def mark_log_unavailable(self, operation_metadata: OperationMetadata | None = None) -> None:
         self.log_available = False
+        operation = operation_metadata or self.service_operation
         warning = ServerEvent.diagnostic(
             ApiDiagnosticData(
                 component="log",
@@ -124,10 +188,25 @@ class EventWriter:
                 level="WARNING",
                 code="LOG_FILE_UNAVAILABLE",
                 log_file=self.log_file,
-            )
+            ),
+            operation,
+            propagate_trace_context=self.propagate_trace_context,
         )
-        record = self.logger.makeRecord(self.logger.name, logging.WARNING, "", 0, warning, (), None)
-        self.stderr_handler.handle(record)
+        try:
+            warning.encode_json_line(self.settings.max_event_bytes)
+            record = self.logger.makeRecord(
+                self.logger.name,
+                logging.WARNING,
+                "",
+                0,
+                warning,
+                (),
+                None,
+                extra={"operation_metadata": operation},
+            )
+            self.stderr_handler.handle(record)
+        except (OSError, ValueError, UnicodeError):
+            raise RuntimeFailure("LOGGING_FAILED") from None
 
     def close(self) -> None:
         if self.file_handler is not None:
