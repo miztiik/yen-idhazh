@@ -163,7 +163,6 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
     ("idhazh-pipeline-tests.yaml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
-    ("spacy-tests.yml", "code_ref"): "^[0-9a-f]{40}$",
     ("spacy-tests.yml", "language"): DISPATCH_CHOICE,
     ("spacy-tests.yml", "profile"): DISPATCH_CHOICE,
     ("spacy-tests.yml", "feature_mode"): DISPATCH_CHOICE,

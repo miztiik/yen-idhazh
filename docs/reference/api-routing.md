@@ -1,6 +1,6 @@
 # First-party API routing
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 How this repository names HTTP operations and distinguishes them from an
 upstream native protocol. Each API's native contracts own its payloads;
@@ -163,6 +163,26 @@ delivery validation. The
 [runner reference](../architecture/sources/feed-plan-runner.md)
 owns the real stage HTTP composition and its supervised clients.
 
+## Current text-analysis family
+
+The independent Python text-analysis service uses the fixed HTTP date
+`2026-11-07`. Its constants live in
+`services/text_analysis/src/text_analysis/declare_api_contracts.py`.
+
+Table E - Text-analysis operations
+
+| Id | Method | Path | Meaning |
+| --- | --- | --- | --- |
+| E1 | POST | `/api/2026-11-07/analyze-text` | Extract the selected ordered linguistic features. |
+| E2 | GET | `/api/2026-11-07/get-text-analysis-health` | Read configured capacity and language/profile/feature capabilities without loading a model. |
+| E3 | GET | `/api/2026-11-07/get-text-analysis-schema` | Read the current OpenAPI document without an interactive UI. |
+
+The application and settings schema date is `2026-11-07`. The package release,
+spaCy version and model versions are separate identities. Unknown and previous
+paths return 404 without aliases. Wrong methods retain `Allow`.
+The [text-analysis reference](text-analysis-api.md) owns request, result,
+feature-error, health and event fields.
+
 ## Upstream native-protocol exception
 
 The existing llama-server owns `/v1/chat/completions`, `/completions`,
@@ -185,3 +205,4 @@ implementation.
 - [summary-generator-api.md](summary-generator-api.md) - prepared-text generation and its independent listener.
 - [serve-pipeline-apis.md](serve-pipeline-apis.md) - shared process identity and owned-child lifetime.
 - [feed-operator-api.md](../architecture/sources/feed-operator-api.md) - planner and delivery operations and native control flow.
+- [text-analysis-api.md](text-analysis-api.md) - multilingual extraction routes and payloads.

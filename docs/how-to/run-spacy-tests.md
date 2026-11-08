@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-11-08
 
-How to dispatch `spacy-tests.yml` against one immutable implementation commit
+How to dispatch `spacy-tests.yml` against one selected implementation ref
 and inspect its live multilingual API evidence. This procedure is
 project-specific because it uses the committed text-analysis service and shared
 TypeScript event contracts.
@@ -10,36 +10,37 @@ TypeScript event contracts.
 ## Register before dispatch
 
 The workflow definition must exist on the default branch before GitHub accepts
-a dispatch by filename. The workflow still tests the commit supplied through
-`code_ref`; the default-branch workflow revision and the tested implementation
-revision are separate identities.
+a dispatch by filename. Select the implementation branch or tag when
+dispatching. GitHub resolves that ref to `github.sha`; the workflow checks out
+and verifies that exact immutable commit.
 
 Do not treat registration or ordinary pull-request checks as live
 text-analysis evidence. The checked commit must contain the complete
 `services/text_analysis/` implementation and scripts.
 
-## Supply the exact commit and inputs
+## Select the exact ref and inputs
 
-`code_ref` is required and must be a lowercase 40-character commit SHA. The
-workflow validates it before checkout, disables checkout credentials and
-confirms that the resulting `HEAD` is the same SHA.
+The dispatch ref selects both the workflow revision and implementation. The
+workflow disables checkout credentials, checks out `github.sha` and confirms
+that the resulting `HEAD` is the same 40-character commit.
 
 Always supply `language` as `en` or `zh` and `feature_mode` as `default`, `all`
 or `custom`. `profile` defaults to `md`; `sm` and `lg` remain optional manual
-profiles. `text` is required.
+profiles. `text` is required. `default` selects `relations`, `entities`,
+`sentences`, `document_metrics`; `all` selects every feature supported by the
+selected language.
 
 For `custom` mode, set `custom_features` to a nonempty comma-separated list
 drawn from `entities`, `sentences`, `relations`, `noun_phrases`,
 `linguistic_tokens` and `document_metrics`. Names are case-sensitive, duplicate
-names are refused and supplied order is preserved. Leave `custom_features`
-blank for the other modes.
+names are refused, surrounding CSV whitespace is ignored and supplied order is
+preserved. Leave `custom_features` blank for the other modes.
 
 Send the JSON form through standard input so text never becomes a shell
 argument:
 
 ```powershell
 $inputs = @{
-  code_ref = '<immutable-40-character-sha>'
   language = 'en'
   profile = 'md'
   feature_mode = 'default'
@@ -47,12 +48,13 @@ $inputs = @{
   text = Get-Content -Raw .\text-analysis-input.txt
 } | ConvertTo-Json -Compress
 
-$inputs | gh workflow run spacy-tests.yml --ref main --json
+$inputs | gh workflow run spacy-tests.yml --ref '<implementation-branch-or-tag>' --json
 ```
 
-Before the implementation pull request merges, run the same final `code_ref`
+Before the implementation pull request merges, select its final branch head
 once with `language = 'en'` and once with `language = 'zh'`, both using
-`profile = 'md'`. Any later implementation edit invalidates both results.
+`profile = 'md'`. Confirm both runs record the same final `github.sha`. Any
+later implementation edit invalidates both results.
 
 The platform retains dispatch inputs, and completed evidence may contain
 returned source spans. Do not submit private material or credentials.
@@ -65,13 +67,13 @@ gh run view <run-id> --log
 gh run download <run-id> --dir <evidence-directory>
 ```
 
-The run's `headSha` identifies the default-branch workflow definition, not the
-tested implementation. Preserve the run URL, workflow SHA, tested commit,
-inputs, artifact ID, conclusion and `report.json`.
+The run's `headSha`, recorded selected SHA and tested commit must agree.
+Preserve the run URL, workflow SHA, tested commit, inputs, artifact ID,
+conclusion and `report.json`.
 
 The single artifact is named
 `spacy-tests-<run-id>-<run-attempt>` and is retained for 90 days. It includes
-the workflow context, requested and tested commits, the runner's
+the workflow context, `selected-ref.txt`, selected SHA and tested commit, the runner's
 machine-readable report, captured `events.jsonl` and escaped
 `job-summary.md`. The artifact uploads after ordinary failure. Cleanup or
 upload failure leaves the job red.

@@ -462,6 +462,29 @@ conditions, not filenames or quoted expression literals.
 The [manual procedure](run-hhem-evaluation-api.md) owns registration and real
 hosted evidence; offline results do not close that check.
 
+### Independent text-analysis service
+
+The multilingual text-analysis package has its own CPython 3.12 environment,
+manifest and frozen lock. Generate and then verify its lock without installing:
+
+```powershell
+uv lock --project .\services\text_analysis
+uv lock --locked --project .\services\text_analysis
+```
+
+Do not install, import, lint, type-check, start or load this service locally.
+The registered manual workflow is its functional gate and the
+[operator guide](run-spacy-tests.md) owns dispatch and evidence inspection.
+Ordinary CI checks the changed workflow declarations and repository-wide
+source rules without claiming spaCy behavior.
+
+The workflow syncs the frozen environment, installs only the selected
+configured model wheel, starts one owned process group, and validates live
+English or Chinese results through the actual shared TypeScript CloudEvents
+and trace contracts. The required candidate evidence is one `md` run per
+language against the same immutable selected-ref head. A changed candidate
+needs both runs again.
+
 ### Independent TypeScript packages and services
 
 Maintainer ruling, 2026-10-21: remaining feed-planner development and tests do not

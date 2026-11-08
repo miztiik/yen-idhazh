@@ -161,10 +161,10 @@ See [host metrics](host-metrics.md) for the fingerprint and its unavailable reas
 
 ## Manual text analysis
 
-`spacy-tests.yml` is a read-only manual workflow. Its default-branch definition
-validates a lowercase 40-character `code_ref` before checkout, checks out that
-exact commit with credentials disabled and records both the workflow SHA and
-tested commit.
+`spacy-tests.yml` is a read-only manual workflow. The dispatch selects a branch
+or tag; GitHub resolves it to `github.sha`. The workflow checks out that exact
+commit with credentials disabled and records the selected ref, selected SHA,
+workflow SHA and tested commit.
 
 One stock Ubuntu job uses CPython 3.12, pinned uv and Bun, and the locked
 `packages/common-contracts` toolchain. It syncs the selected commit's

@@ -3,10 +3,6 @@ name: spacy-tests
 on:
   workflow_dispatch:
     inputs:
-      code_ref:
-        description: Immutable lowercase 40-character commit SHA to test
-        required: true
-        type: string
       language:
         description: Configured language to test
         required: false
@@ -24,7 +20,7 @@ on:
           - md
           - lg
       feature_mode:
-        description: Feature selection mode
+        description: "default: relations, entities, sentences, document_metrics; all: every feature supported by selected language; custom: CSV from custom_features"
         required: false
         type: choice
         options:
@@ -32,7 +28,7 @@ on:
           - all
           - custom
       custom_features:
-        description: Comma-separated feature names used only in custom mode
+        description: "Custom CSV, for example: entities, sentences, document_metrics"
         required: false
         type: string
       text:
@@ -52,42 +48,33 @@ jobs:
         env:
           EVIDENCE_DIRECTORY: ${{ runner.temp }}/spacy-tests
           WORKFLOW_SHA: ${{ github.workflow_sha }}
+          SELECTED_REF: ${{ github.ref }}
+          SELECTED_SHA: ${{ github.sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE_DIRECTORY"
-          printf '{"workflow_sha":"%s","run_id":"%s","run_attempt":"%s"}\n' \
-            "$WORKFLOW_SHA" "$RUN_ID" "$RUN_ATTEMPT" \
+          printf '{"workflow_sha":"%s","selected_sha":"%s","run_id":"%s","run_attempt":"%s"}\n' \
+            "$WORKFLOW_SHA" "$SELECTED_SHA" "$RUN_ID" "$RUN_ATTEMPT" \
             > "$EVIDENCE_DIRECTORY/workflow-context.json"
-
-      - name: Validate immutable code ref
-        env:
-          CODE_REF: ${{ inputs.code_ref }}
-          EVIDENCE_DIRECTORY: ${{ runner.temp }}/spacy-tests
-        run: |
-          set -euo pipefail
-          if [[ ! "$CODE_REF" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "code_ref must be a lowercase 40-character commit SHA" >&2
-            exit 1
-          fi
-          printf '%s\n' "$CODE_REF" > "$EVIDENCE_DIRECTORY/requested-code-ref.txt"
+          printf '%s\n' "$SELECTED_REF" > "$EVIDENCE_DIRECTORY/selected-ref.txt"
 
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.code_ref }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Record the tested checkout
         id: checkout
         env:
-          CODE_REF: ${{ inputs.code_ref }}
+          EXPECTED_SHA: ${{ github.sha }}
           EVIDENCE_DIRECTORY: ${{ runner.temp }}/spacy-tests
         run: |
           set -euo pipefail
           TESTED_COMMIT="$(git rev-parse HEAD)"
-          if [[ "$TESTED_COMMIT" != "$CODE_REF" ]]; then
-            echo "checked out commit does not match code_ref" >&2
+          if [[ "$TESTED_COMMIT" != "$EXPECTED_SHA" ]]; then
+            echo "checked out commit does not match github.sha" >&2
             exit 1
           fi
           printf '%s\n' "$TESTED_COMMIT" > "$EVIDENCE_DIRECTORY/tested-commit.txt"
@@ -128,6 +115,8 @@ jobs:
           TEXT_ANALYSIS_CUSTOM_FEATURES: ${{ inputs.custom_features }}
           TEXT_ANALYSIS_TEXT: ${{ inputs.text }}
           TEXT_ANALYSIS_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          TEXT_ANALYSIS_SELECTED_REF: ${{ github.ref }}
+          TEXT_ANALYSIS_SELECTED_SHA: ${{ github.sha }}
           TEXT_ANALYSIS_TESTED_COMMIT: ${{ steps.checkout.outputs.tested_commit }}
           TEXT_ANALYSIS_EVIDENCE_DIRECTORY: ${{ runner.temp }}/spacy-tests
           TEXT_ANALYSIS_RUN_ID: ${{ github.run_id }}
