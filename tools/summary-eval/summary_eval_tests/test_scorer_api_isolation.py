@@ -71,7 +71,7 @@ def read_observation(child: OwnedService, path: Path) -> dict[str, object]:
 
 def test_owned_caller_arguments_are_accepted_by_the_actual_private_entrypoint() -> None:
     source = (
-        REPOSITORY / ".github" / "scripts" / "summary-eval-tests"
+        REPOSITORY / "tools" / "summary-eval"
         / "summary_eval_pipeline" / "phases.py"
     )
     module = ast.parse(source.read_text(encoding="utf-8"))

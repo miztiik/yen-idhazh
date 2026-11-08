@@ -6,7 +6,7 @@ import sys
 import threading
 from pathlib import Path
 
-from pydantic import TypeAdapter
+from pydantic import RootModel
 from summary_eval_pipeline.channels import open_owned_channels
 from summary_eval_pipeline.contracts import WORKFLOW_VERSION, Hardware
 from summary_eval_pipeline.control import (
@@ -31,7 +31,7 @@ from summary_evaluator.shared.read_process_identity import read_owned_process_id
 
 
 def api_transport_case(packet: ScorerStartupPacket, mode: str) -> None:
-    root = Path(__file__).resolve().parents[4]
+    root = Path(__file__).resolve().parents[3]
     with open_owned_channels() as channels:
         settings = load_hhem_settings(
             root / "config" / "summary-evals" / "hhem-evaluator" / "settings.json"
@@ -96,11 +96,9 @@ def api_transport_case(packet: ScorerStartupPacket, mode: str) -> None:
 
 
 def main() -> None:
-    packet: ScorerStartupPacket | StartupPacket = TypeAdapter(
-        ScorerStartupPacket | StartupPacket
-    ).validate_json(
+    packet = RootModel[ScorerStartupPacket | StartupPacket].model_validate_json(
         sys.stdin.buffer.readline(16384)
-    )
+    ).root
     mode = sys.argv[1]
     if mode == "early_exit":
         return

@@ -75,7 +75,7 @@ async def collect_phase(root: Path, phase: PhaseName) -> PhaseEvidence:
         raise WorkflowError("ASSET_FAILED", "preparation")
     inputs = read_manual_inputs(pipeline)
     directory = root / pipeline.output_directory
-    scripts = root / ".github" / "scripts" / "summary-eval-tests"
+    scripts = root / "tools" / "summary-eval"
     destination = directory / (
         "generation-phase.json" if phase == "generation" else "evaluation.json"
     )

@@ -286,7 +286,7 @@ def test_current_entrypoints_resolve_contracts_without_inherited_pythonpath(name
     result = subprocess.run(
         [
             sys.executable,
-            str(REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / name),
+            str(REPOSITORY / "tools" / "summary-eval" / name),
             "--help",
         ],
         env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},

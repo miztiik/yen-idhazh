@@ -31,7 +31,7 @@ def test_serialized_python_packet_starts_stops_and_retains_native_http_machine_r
     packet, pipeline = stage_machine_run(tmp_path)
     assert packet.run is not None
     assert json.loads(packet.model_dump_json())["run"]["git_sha"] == packet.git_sha
-    script = REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "machine-task.ts"
+    script = REPOSITORY / "tools" / "summary-eval" / "machine-task.ts"
     child = OwnedService(
         "host",
         [required_bun(), "run", "--no-install", str(script), str(tmp_path)],
@@ -100,7 +100,7 @@ def test_real_helper_startup_failure_retains_safe_cause_without_adopting_another
             "PrivateMachineSettingsCanary" if failure == "invalid_settings" else port
         )
         path.write_text(json.dumps(controls), encoding="utf-8")
-        script = REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "machine-task.ts"
+        script = REPOSITORY / "tools" / "summary-eval" / "machine-task.ts"
         child = OwnedService(
             "host",
             [required_bun(), "run", "--no-install", str(script), str(tmp_path)],
@@ -142,7 +142,7 @@ def test_invalid_private_close_retains_native_cancelled_measurement_and_safe_fai
     capfd: pytest.CaptureFixture[str],
 ) -> None:
     packet, pipeline = stage_machine_run(tmp_path)
-    script = REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "machine-task.ts"
+    script = REPOSITORY / "tools" / "summary-eval" / "machine-task.ts"
     child = OwnedService(
         "host",
         [required_bun(), "run", "--no-install", str(script), str(tmp_path)],
@@ -183,7 +183,7 @@ def test_real_machine_bridge_rejects_other_families_and_scorer_fields(
 ) -> None:
     packet, pipeline = stage_machine_run(tmp_path)
     previous = {**packet.model_dump(mode="json"), **change}
-    script = REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "machine-task.ts"
+    script = REPOSITORY / "tools" / "summary-eval" / "machine-task.ts"
     result = subprocess.run(
         [required_bun(), "run", "--no-install", str(script), str(tmp_path)],
         input=(json.dumps(previous) + "\n").encode("utf-8"),

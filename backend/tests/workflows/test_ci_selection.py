@@ -138,13 +138,13 @@ def test_ci_model_free_summary_checks_are_read_only_gated_and_complete() -> None
     assert "prepare-unieval-resources.py --root ../.." in commands
     assert (
         "uv run --frozen pytest -c pyproject.toml tests "
-        "../../.github/scripts/summary-eval-tests/summary_eval_tests "
+        "../../tools/summary-eval/summary_eval_tests "
         "--junitxml=var/model-free-results.xml"
     ) in commands
     assert (
         "mypy src tests "
-        "../../.github/scripts/summary-eval-tests/summary_eval_pipeline "
-        "../../.github/scripts/summary-eval-tests/summary_eval_tests"
+        "../../tools/summary-eval/summary_eval_pipeline "
+        "../../tools/summary-eval/summary_eval_tests"
     ) in commands
     assert "command -v setpriv" in commands
     assert "assert importlib.util.find_spec('torch') is None" in commands

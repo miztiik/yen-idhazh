@@ -71,11 +71,11 @@ def test_named_workflow_selects_one_declaration_with_the_current_pointer_default
     phases = [
         str(step["run"]).rsplit(" ", 1)[-1]
         for step in declared
-        if "summary-eval-tests/run.py" in str(step.get("run", ""))
+        if "tools/summary-eval/run.py" in str(step.get("run", ""))
     ]
     assert phases == ["prepare", "generate", "evaluate"]
     assert "--frozen --extra model --no-dev" in text
-    assert "summary-eval-tests/report.py --root ../.." in text
+    assert "tools/summary-eval/report.py --root ../.." in text
     assert "bun install --frozen-lockfile --cwd services/serve-pipeline-apis" in text
     for forbidden in (
         "bun install --frozen-lockfile --cwd services/feed-ingest-plan",

@@ -1,25 +1,25 @@
 /** How do offline cases compose native host collection without a TCP listener? */
-import { z } from "../../../../services/host-probes/node_modules/zod";
+import { z } from "../../../services/host-probes/node_modules/zod";
 import { createInterface } from "node:readline";
-import { loadConfig, ProbeConfigSchema } from "../../../../services/host-probes/src/config";
-import { START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../../../services/host-probes/src/api/server";
-import { createApiApp } from "../../../../services/serve-pipeline-apis/src/create-api-app";
-import { createMachineApp } from "../../../../services/host-probes/src/api/create-machine-app";
-import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../../../../services/host-probes/src/api/task-command-schema";
-import { startTaskProfile } from "../../../../services/host-probes/src/task-profile/task-profiler";
-import type { TaskProfileSession } from "../../../../services/host-probes/src/task-profile/task-profiler";
-import { parseProcessStat } from "../../../../services/host-probes/src/task-profile/process-stat";
-import { TaskProfileSchema } from "../../../../services/host-probes/src/task-profile/profile-schema";
-import type { TaskProfile } from "../../../../services/host-probes/src/task-profile/profile-schema";
-import { OperationMetadataSchema } from "../../../../packages/common-contracts/src/schemas/operation-metadata.schema";
-import type { OperationMetadata } from "../../../../packages/common-contracts/src/schemas/operation-metadata.schema";
-import { HostFingerprintRowSchema } from "../../../../packages/common-contracts/src/schemas/host-fingerprint.schema";
-import { FINGERPRINT_PATH } from "../../../../services/host-fingerprints/src/api/server";
-import { fixture } from "../../../../services/host-fingerprints/test/fixture";
+import { loadConfig, ProbeConfigSchema } from "../../../services/host-probes/src/config";
+import { START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../../services/host-probes/src/api/server";
+import { createApiApp } from "../../../services/serve-pipeline-apis/src/create-api-app";
+import { createMachineApp } from "../../../services/host-probes/src/api/create-machine-app";
+import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../../../services/host-probes/src/api/task-command-schema";
+import { startTaskProfile } from "../../../services/host-probes/src/task-profile/task-profiler";
+import type { TaskProfileSession } from "../../../services/host-probes/src/task-profile/task-profiler";
+import { parseProcessStat } from "../../../services/host-probes/src/task-profile/process-stat";
+import { TaskProfileSchema } from "../../../services/host-probes/src/task-profile/profile-schema";
+import type { TaskProfile } from "../../../services/host-probes/src/task-profile/profile-schema";
+import { OperationMetadataSchema } from "../../../packages/common-contracts/src/schemas/operation-metadata.schema";
+import type { OperationMetadata } from "../../../packages/common-contracts/src/schemas/operation-metadata.schema";
+import { HostFingerprintRowSchema } from "../../../packages/common-contracts/src/schemas/host-fingerprint.schema";
+import { FINGERPRINT_PATH } from "../../../services/host-fingerprints/src/api/server";
+import { fixture } from "../../../services/host-fingerprints/test/fixture";
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { projectMachineProfile, HardwareSchema } from "../machine-results";
-import { CurrentMachineServerEvidenceSchema } from "../../../../services/host-probes/src/api/create-machine-server-evidence";
+import { CurrentMachineServerEvidenceSchema } from "../../../services/host-probes/src/api/create-machine-server-evidence";
 
 function emit(value: unknown): void { process.stdout.write(JSON.stringify(value) + "\n"); }
 
@@ -31,7 +31,7 @@ if (Bun.argv[2] === "schemas") {
   });
 } else if (Bun.argv[2] === "workflow") {
   emit(Bun.YAML.parse(await Bun.file(new URL(
-    "../../../../.github/workflows/summary-eval-tests.yml", import.meta.url,
+    "../../../.github/workflows/summary-eval-tests.yml", import.meta.url,
   )).text()));
 } else {
   const bootstrap = z.strictObject({
@@ -66,7 +66,7 @@ if (Bun.argv[2] === "schemas") {
         const recorded = z.object({
           pid: z.int().positive(), stat: z.string(),
         }).parse(await Bun.file(new URL(
-          "../../../../tests/fixtures/host-probes/process-inputs.json", import.meta.url,
+          "../../../tests/fixtures/host-probes/process-inputs.json", import.meta.url,
         )).json());
         const processRoot = join(input.proc_root, String(process.pid));
         await mkdir(processRoot, { recursive: true });
@@ -89,7 +89,7 @@ if (Bun.argv[2] === "schemas") {
               config: f.config, settings: f.settings,
               options: {
                 outputRoot: join(f.directory, "state"), inspection: f.inspection,
-                registryPath: new URL("../../../../config/ledgers.json", import.meta.url),
+                registryPath: new URL("../../../config/ledgers.json", import.meta.url),
               },
             },
             probes: profiling,

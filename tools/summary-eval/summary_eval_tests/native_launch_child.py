@@ -28,8 +28,8 @@ def main() -> None:
         os.close(descriptor)
         command = sys.argv[3:]
         os.execv(command[0], command)
-    root = Path(__file__).resolve().parents[4]
-    sys.path.insert(0, str(root / ".github" / "scripts" / "summary-eval-tests"))
+    root = Path(__file__).resolve().parents[3]
+    sys.path.insert(0, str(root / "tools" / "summary-eval"))
     from summary_eval_pipeline.launch_native import parent_bound_command
 
     command = parent_bound_command([sys.executable, str(Path(__file__).resolve()), "native"])

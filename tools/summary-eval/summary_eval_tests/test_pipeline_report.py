@@ -359,7 +359,7 @@ def test_report_creator_retains_full_artifact_and_never_promotes_failed_work(
     result = subprocess.run(
         [
             sys.executable,
-            str(REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "report.py"),
+            str(REPOSITORY / "tools" / "summary-eval" / "report.py"),
             "--root",
             str(tmp_path),
         ],

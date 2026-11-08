@@ -1,20 +1,20 @@
 /** How does one phase call the real shared machine APIs and close their owned server? */
-import { z } from "../../../services/serve-pipeline-apis/node_modules/zod";
+import { z } from "../../services/serve-pipeline-apis/node_modules/zod";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import type { Readable } from "node:stream";
-import { createRootContext, OperationMetadataSchema, writeTraceContext } from "../../../packages/common-contracts/src";
-import { superviseMachineApiTask } from "../../../services/host-probes/src/api/supervise-machine-api-task";
-import { loadHonoSettings } from "../../../services/serve-pipeline-apis/src/load-settings";
-import { CurrentMachineServerEvidenceSchema } from "../../../services/host-probes/src/api/create-machine-server-evidence";
-import { loadConfig } from "../../../services/host-probes/src/config";
-import { readProcessIdentity } from "../../../services/host-probes/src/task-profile/process-stat";
-import { TaskProfileSchema } from "../../../services/host-probes/src/task-profile/profile-schema";
-import { FINGERPRINT_PATH } from "../../../services/host-fingerprints/src/api/server";
-import { FingerprintResponseSchema } from "../../../services/host-fingerprints/src/api/fingerprint-response";
-import { START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../../services/host-probes/src/api/server";
-import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../../../services/host-probes/src/api/task-command-schema";
+import { createRootContext, OperationMetadataSchema, writeTraceContext } from "../../packages/common-contracts/src";
+import { superviseMachineApiTask } from "../../services/host-probes/src/api/supervise-machine-api-task";
+import { loadHonoSettings } from "../../services/serve-pipeline-apis/src/load-settings";
+import { CurrentMachineServerEvidenceSchema } from "../../services/host-probes/src/api/create-machine-server-evidence";
+import { loadConfig } from "../../services/host-probes/src/config";
+import { readProcessIdentity } from "../../services/host-probes/src/task-profile/process-stat";
+import { TaskProfileSchema } from "../../services/host-probes/src/task-profile/profile-schema";
+import { FINGERPRINT_PATH } from "../../services/host-fingerprints/src/api/server";
+import { FingerprintResponseSchema } from "../../services/host-fingerprints/src/api/fingerprint-response";
+import { START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../services/host-probes/src/api/server";
+import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../../services/host-probes/src/api/task-command-schema";
 import { HardwareSchema, MachineServerProjectionSchema, projectMachineProfile } from "./machine-results";
 
 const VERSION = "2026-11-05"; // Disposable workflow control version.

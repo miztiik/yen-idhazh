@@ -64,7 +64,7 @@ mypy_path = [
     "../local_api_host/src",
     "../../backend",
     "tests",
-    "../../.github/scripts/summary-eval-tests",
+    "../../tools/summary-eval",
 ]
 explicit_package_bases = true
 
@@ -86,7 +86,7 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "../../.github/scripts/summary-eval-tests/summary_eval_tests"]
-pythonpath = [".", "tests", "../../.github/scripts/summary-eval-tests", "../../backend"]
+testpaths = ["tests", "../../tools/summary-eval/summary_eval_tests"]
+pythonpath = [".", "tests", "../../tools/summary-eval", "../../backend"]
 # asyncio uses Unix-domain sockets for local wake-up IPC, not an HTTP listener.
 addopts = "-q --import-mode=importlib --disable-socket --allow-unix-socket"

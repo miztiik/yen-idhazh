@@ -36,7 +36,7 @@ def owned_child_command(mode: str, *, script_path: Path | None = None) -> list[s
         script,
         sysconfig.get_path("purelib"),
         str(REPOSITORY / "services" / "summary_evaluator" / "tests"),
-        str(REPOSITORY / ".github" / "scripts" / "summary-eval-tests"),
+        str(REPOSITORY / "tools" / "summary-eval"),
         str(REPOSITORY / "backend"),
         str(REPOSITORY / "services" / "summary_evaluator"),
         str(script_path or Path(__file__).with_name("owned_service_child.py")),

@@ -106,7 +106,7 @@ def test_real_preparation_failure_is_saved_and_reported_with_both_model_phases_n
     result = subprocess.run(
         [
             sys.executable,
-            str(REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "report.py"),
+            str(REPOSITORY / "tools" / "summary-eval" / "report.py"),
             "--root",
             str(tmp_path),
         ],

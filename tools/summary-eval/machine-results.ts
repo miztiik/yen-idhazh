@@ -1,8 +1,8 @@
 /** Which native machine fields does the Python workflow consume? */
-import { z } from "../../../services/host-probes/node_modules/zod";
-import { HostFingerprintRowSchema } from "../../../packages/common-contracts/src/schemas/host-fingerprint.schema";
-import type { TaskProfile, TaskSample } from "../../../services/host-probes/src/task-profile/profile-schema";
-import { CurrentMachineServerEvidenceSchema } from "../../../services/host-probes/src/api/create-machine-server-evidence";
+import { z } from "../../services/host-probes/node_modules/zod";
+import { HostFingerprintRowSchema } from "../../packages/common-contracts/src/schemas/host-fingerprint.schema";
+import type { TaskProfile, TaskSample } from "../../services/host-probes/src/task-profile/profile-schema";
+import { CurrentMachineServerEvidenceSchema } from "../../services/host-probes/src/api/create-machine-server-evidence";
 
 const serverFields = CurrentMachineServerEvidenceSchema.shape;
 export const MachineServerProjectionSchema = z.object({
