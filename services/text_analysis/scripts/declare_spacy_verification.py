@@ -8,9 +8,10 @@ import os
 import re
 import signal
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Literal, Mapping, TypeAlias
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from text_analysis.declare_api_contracts import (
@@ -25,13 +26,13 @@ REPORT_CHANGE = (
 )
 GITHUB_STEP_SUMMARY_MAX_BYTES = 1_048_576
 
-CleanupStatus: TypeAlias = Literal[
+type CleanupStatus = Literal[
     "not_started",
     "confirmed",
     "forced",
     "unconfirmed",
 ]
-FailureCode: TypeAlias = Literal[
+type FailureCode = Literal[
     "INVALID_WORKFLOW_INPUT",
     "TESTED_COMMIT_MISMATCH",
     "SERVER_START_FAILED",
@@ -100,7 +101,7 @@ class FailedVerificationReport(_VerificationReportBase):
     failure_code: FailureCode
 
 
-VerificationReport: TypeAlias = (
+type VerificationReport = (
     SuccessfulVerificationReport | FailedVerificationReport
 )
 
@@ -127,7 +128,7 @@ class LiveCheckEvidence:
     warm_model_load_ms: int
 
 
-class SummaryLimitExceeded(ValueError):
+class SummaryLimitExceededError(ValueError):
     """Signal that the complete Markdown projection cannot fit the platform."""
 
 
@@ -401,7 +402,7 @@ def render_summary(
     )
     content = "\n".join(lines).encode("utf-8")
     if len(content) > GITHUB_STEP_SUMMARY_MAX_BYTES:
-        raise SummaryLimitExceeded(
+        raise SummaryLimitExceededError(
             "Rendered summary exceeds GitHub's 1 MiB per-step limit"
         )
     return content
@@ -439,7 +440,7 @@ def write_bytes_atomic(path: Path, content: bytes) -> None:
             destination.write(content)
             destination.flush()
             os.fsync(destination.fileno())
-        os.replace(temporary_path, path)
+        temporary_path.replace(path)
     except Exception:
         if temporary_path is not None:
             try:

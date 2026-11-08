@@ -21,7 +21,7 @@ from declare_spacy_verification import (
     LiveCheckEvidence,
     NativeEvidence,
     SuccessfulVerificationReport,
-    SummaryLimitExceeded,
+    SummaryLimitExceededError,
     VerificationReport,
     classify_cleanup,
     render_summary,
@@ -619,7 +619,7 @@ def main() -> None:
             native=native,
             checks=checks,
         )
-    except SummaryLimitExceeded:
+    except SummaryLimitExceededError:
         failure_code = "SUMMARY_TOO_LARGE"
         report = _build_report(
             failure_code=failure_code,

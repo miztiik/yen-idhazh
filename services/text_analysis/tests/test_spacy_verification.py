@@ -3,18 +3,17 @@
 import signal
 import unittest
 
-from pydantic import ValidationError
-
 from declare_spacy_verification import (
     GITHUB_STEP_SUMMARY_MAX_BYTES,
     FailedVerificationReport,
     LiveCheckEvidence,
     SuccessfulVerificationReport,
-    SummaryLimitExceeded,
+    SummaryLimitExceededError,
     classify_cleanup,
     render_summary,
     validate_native_evidence,
 )
+from pydantic import ValidationError
 
 
 def _native_payloads(source_text: str = "A source sentence.") -> dict[str, object]:
@@ -192,7 +191,7 @@ class VerificationSummaryTests(unittest.TestCase):
 
     def test_summary_refuses_the_named_platform_limit(self) -> None:
         native = validate_native_evidence(_native_payloads("x"))
-        with self.assertRaises(SummaryLimitExceeded):
+        with self.assertRaises(SummaryLimitExceededError):
             render_summary(
                 conclusion="success",
                 failure_code=None,
