@@ -129,16 +129,8 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Generate the GLiNER dependency lock
-        run: uv lock --project services/text_analysis/gliner
-
-      - name: Upload the generated GLiNER lock
-        uses: actions/upload-artifact@v7
-        with:
-          name: gliner-dependency-lock
-          path: services/text_analysis/gliner/uv.lock
-          if-no-files-found: error
-          retention-days: 7
+      - name: Verify the GLiNER dependency lock
+        run: uv lock --locked --project services/text_analysis/gliner
 
       - name: Sync the GLiNER API environment
         run: uv sync --project services/text_analysis/gliner --frozen --extra model --group dev
@@ -146,7 +138,10 @@ jobs:
       - name: Check GLiNER API source
         working-directory: services/text_analysis/gliner
         run: |
-          uv run --frozen --extra model --group dev ruff check src tests scripts
+          uv run --frozen --extra model --group dev ruff check src tests scripts || {
+            uv run --frozen --extra model --group dev ruff check --diff src tests scripts
+            exit 1
+          }
           uv run --frozen --extra model --group dev mypy src tests scripts
 
       - name: Prepare the configured GLiNER model

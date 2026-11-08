@@ -3,13 +3,14 @@
 import io
 import json
 import logging
+from contextlib import suppress
 from pathlib import Path
+from typing import Protocol, cast
 
 import pytest
 from fastapi.testclient import TestClient
 from local_api_host.contracts import HostSettings, ListenerSettings
 from pydantic import ValidationError
-from text_analysis.load_service_settings import load_service_settings
 
 from gliner_api.classify_text import normalize_classifications
 from gliner_api.configure_native_diagnostics import (
@@ -35,9 +36,16 @@ from gliner_api.declare_api_contracts import (
 )
 from gliner_api.declare_event_contracts import GlinerEvent
 from gliner_api.extract_entities import normalize_entities
+from gliner_api.load_model import NativeModel
 from gliner_api.load_settings import GlinerSettings, load_settings
+from gliner_api.run_model import ModelRuntime, OperationError
+from text_analysis.load_service_settings import load_service_settings
 
 ROOT = Path(__file__).resolve().parents[4]
+
+
+class _NativeProcessor(Protocol):
+    def collate_fn_inference(self, batch: list[tuple[str, object]]) -> object: ...
 
 
 def _transport() -> HostSettings:
@@ -184,12 +192,9 @@ def test_native_diagnostic_refusal_survives_a_caught_exception() -> None:
     handler_count = len(logging.getLogger("gliner2").handlers)
     configure_native_diagnostics()
     assert len(logging.getLogger("gliner2").handlers) == handler_count
-    with pytest.raises(NativeDiagnosticError):
-        with native_operation():
-            try:
-                logging.getLogger("gliner2.processor").warning("unpublished-native-diagnostic")
-            except NativeDiagnosticError:
-                pass
+    with pytest.raises(NativeDiagnosticError), native_operation():
+        with suppress(NativeDiagnosticError):
+            logging.getLogger("gliner2.processor").warning("unpublished-native-diagnostic")
     with native_operation():
         logging.getLogger("gliner2.processor").info("discarded-native-info")
 
@@ -234,6 +239,16 @@ def test_real_prepared_model_api() -> None:
         for mention in ner_result.entities:
             assert text[mention.start_char : mention.end_char] == mention.text
             assert mention.label in ner_request.labels
+        runtime = cast(ModelRuntime, app.state.component.state)
+
+        def refuse_native_record(native: NativeModel) -> object:
+            processor = cast(_NativeProcessor, getattr(native, "processor"))
+            return processor.collate_fn_inference([("x", None)])
+
+        assert client.portal is not None
+        with pytest.raises(OperationError) as refused:
+            client.portal.call(runtime.execute, refuse_native_record)
+        assert refused.value.code == "INPUT_UNSUPPORTED"
         classification_response = client.post(
             CLASSIFY_PATH, json=classification_request.model_dump(), headers=carrier
         )

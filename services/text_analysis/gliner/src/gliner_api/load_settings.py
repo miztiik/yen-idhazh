@@ -5,9 +5,12 @@ from pathlib import Path
 from typing import Final, Literal, Self
 from urllib.parse import urlsplit
 
-from huggingface_hub.utils import HFValidationError, validate_repo_id
 from pydantic import Field, ValidationError, field_validator, model_validator
 
+from gliner_api.configure_native_diagnostics import (
+    NativeDiagnosticError,
+    require_safe_import_controls,
+)
 from gliner_api.declare_api_contracts import API_VERSION, ApiContract
 
 SETTINGS_PATH: Final = Path("config") / "text-analysis" / "gliner" / "settings.json"
@@ -44,6 +47,12 @@ class ModelSettings(ApiContract):
     @field_validator("repo")
     @classmethod
     def require_full_hub_identifier(cls, value: str) -> str:
+        try:
+            require_safe_import_controls()
+        except NativeDiagnosticError:
+            raise ValueError("Native library import controls are invalid") from None
+        from huggingface_hub.utils import HFValidationError, validate_repo_id
+
         try:
             validate_repo_id(value)
         except HFValidationError:
