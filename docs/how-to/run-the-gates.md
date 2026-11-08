@@ -264,8 +264,9 @@ Remove-Item -LiteralPath .\services\summary_evaluator\var\checks-requirements.tx
 ```
 
 After that successful check, add `--no-sync` to local `uv run` verification
-commands so they use the checked environment. CI keeps its frozen uv
-preparation. No lock, model extra, backend installation or destination changes.
+commands so they use the checked environment. The manual scoring workflow keeps
+its frozen uv preparation. No lock, model extra, backend installation or
+destination changes.
 
 If Bun cannot copy the local writer dependency on Windows, repeat its locked
 install with `--linker=isolated`; do not change either package manifest or lock.
