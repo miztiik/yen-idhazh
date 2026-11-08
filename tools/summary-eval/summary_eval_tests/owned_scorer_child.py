@@ -39,6 +39,7 @@ from summary_evaluator_cases.service_cases import RecordedSupervisor, service_se
 from summary_evaluator_cases.unieval_cases import (
     RecordedUnievalSupervisor,
     read_unieval_inputs,
+    recorded_unieval_request,
     unieval_settings,
 )
 
@@ -74,7 +75,7 @@ def native_request(
         return EVALUATE_PATH, EvaluateRequest(
             source_text=case.source_text, summary_text=case.summary_text
         )
-    return UNIEVAL_PATH, read_unieval_inputs().cases[0].request
+    return UNIEVAL_PATH, recorded_unieval_request(read_unieval_inputs().cases[0].request)
 
 
 def save_observation(path: Path, value: dict[str, object]) -> None:

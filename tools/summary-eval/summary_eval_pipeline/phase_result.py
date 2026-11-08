@@ -11,8 +11,8 @@ from .contracts import (
     ServerOutcome,
 )
 from .host_reader import HonoServerReader, MachineUsage
-from .phase_contracts import PhaseEvidence, PhaseShutdown, phase_status
-from .scorer_evidence import EVIDENCE_VERSION, ScorerApiEvidence
+from .phase_contracts import PHASE_VERSION, PhaseEvidence, PhaseShutdown, phase_status
+from .scorer_evidence import ScorerApiEvidence
 
 
 def build_evidence(
@@ -24,7 +24,8 @@ def build_evidence(
     *,
     run: RunIdentity,
     phase: PhaseName,
-    reference_summary_sha256: str,
+    reference_summary_sha256: str | None,
+    evaluate_relevance: bool,
     servers: tuple[HonoServerReader | ServerOutcome, ...] = (),
     generation_sha256: str | None = None,
     unieval: UnievalResult | None = None,
@@ -33,7 +34,7 @@ def build_evidence(
     evaluation_correlation_id: str | None = None,
 ) -> PhaseEvidence:
     return PhaseEvidence(
-        version=EVIDENCE_VERSION,
+        version=PHASE_VERSION,
         run=run,
         phase=phase,
         status=phase_status(
@@ -45,6 +46,7 @@ def build_evidence(
         evaluation_request_id=evaluation_request_id,
         evaluation_correlation_id=evaluation_correlation_id,
         reference_summary_sha256=reference_summary_sha256,
+        evaluate_relevance=evaluate_relevance,
         hardware=hardware,
         machine=machine,
         shutdown=shutdown,

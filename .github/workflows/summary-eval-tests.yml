@@ -8,9 +8,14 @@ on:
         required: true
         type: string
       reference_summary_text:
-        description: Independent reference for this source; not sent to generation; shown in report
-        required: true
+        description: Optional independent reference; not sent to generation or HHEM; shown in report
+        required: false
         type: string
+      evaluate_relevance:
+        description: Evaluate agreement with the optional independent reference
+        required: false
+        type: boolean
+        default: false
       models_file:
         description: Model JSON path relative to config/; blank uses the committed pointer
         required: false

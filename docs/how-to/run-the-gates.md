@@ -370,9 +370,14 @@ committed registry from the caller's root, not an installed package location;
 safe stage/status diagnostics retain a failed native boundary.
 The backend artifact guard resolves the workflow's two configured directories
 from that named settings file, so a path change cannot hide behind a fixed test value.
-The generation checks bind the
-source, answer, independent reference, model and run before either evaluator
-can start. Direct native generation checks use the recorded HTTP boundary,
+The generation checks bind source, answer, nullable reference identity,
+relevance selection, model and run before either evaluator can start.
+Named readers preserve the prior four-score native result and both shared and
+independent phase/report evidence without relabelling bytes or hashes. Current
+invalid data never retries as historical. The reference-free native-pair oracle
+uses the real ASGI worker and unchanged captured prompt predictions, requiring
+three applicable scores, an authorized skip and no relevance work. Direct native
+generation checks use the recorded HTTP boundary,
 without evaluator configuration or a forwarding application. They cover exact
 UTF-8 request/response byte limits and one byte above each limit, refused
 redirects and encodings, cancellation, unchanged sampling pass-through and fresh

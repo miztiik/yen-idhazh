@@ -30,6 +30,103 @@ from summary_eval_tests.scorer_caller_cases import running_scorers
 from summary_eval_tests.test_generation_handoff import generation_phase
 
 
+def test_reference_free_pair_completes_without_relevance_work(tmp_path: Path) -> None:
+    from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
+
+    recorded_inputs, predictions, _ = read_unieval_recordings()
+    recorded_request = recorded_inputs.cases[0].request
+    request = UnievalRequest(
+        source_text=recorded_request.source_text,
+        summary_text=recorded_request.summary_text,
+    )
+
+    async def check() -> None:
+        from summary_eval_pipeline.evaluate_pair import require_unieval_work
+        from summary_eval_pipeline.evaluation import evaluate_unieval
+        from summary_eval_pipeline.inputs import ManualInputs
+        from summary_evaluator.unieval.contracts.unieval_worker_message import (
+            UnievalPrediction,
+            UnievalPrepared,
+            UnievalReply,
+        )
+        from summary_evaluator_cases.unieval_cases import running_unieval
+
+        _, prepared, receipt, previous = generation_phase()
+        inputs = ManualInputs(source_text=request.source_text)
+        prepared = prepared.model_copy(update={
+            "source_sha256": text_sha256(inputs.source_text),
+            "reference_summary_sha256": None,
+            "evaluate_relevance": False,
+        })
+        receipt = receipt.model_copy(update={
+            "source_sha256": prepared.source_sha256,
+            "reference_summary_sha256": None,
+            "evaluate_relevance": False,
+            "summary_text": request.summary_text,
+            "summary_sha256": text_sha256(request.summary_text),
+        })
+        previous = previous.model_copy(update={
+            "reference_summary_sha256": None,
+            "evaluate_relevance": False,
+            "generation_sha256": text_sha256(receipt.model_dump_json()),
+        })
+        hhem_request, issued = bind_evaluations(
+            prepared, inputs, receipt, previous,
+            generation_sha256=text_sha256(receipt.model_dump_json()),
+        )
+        assert hhem_request.source_text == issued.source_text
+        assert hhem_request.summary_text == issued.summary_text
+        assert "reference_summary_text" not in hhem_request.model_dump()
+        assert "reference_summary_text" not in issued.model_dump()
+        assert issued.evaluate_relevance is False
+        _, settings = unieval_settings(evaluate_relevance=False)
+        pipeline = load_pipeline_settings(REPOSITORY)
+        async with running_unieval(settings=settings) as (client, worker, _):
+            status, result = await evaluate_unieval(
+                client, str(client.base_url).rstrip("/"), issued, settings, pipeline
+            )
+            require_unieval_work(result, issued, settings, status)
+            assert status == 200 and result.status == "complete"
+            assert result.errors == ()
+            assert result.request_id == issued.request_id
+            assert result.correlation_id == issued.correlation_id
+            assert result.reference_summary_sha256 is None
+            assert result.relevance_skip_reason == "disabled"
+            assert result.effective_settings is not None
+            assert result.effective_settings.evaluate_relevance is False
+            assert result.scores.relevance is None
+            assert result.work.relevance.planned is None and result.work.relevance.completed == 0
+            packets = [UnievalReply.model_validate_json(raw).root for raw in worker.replies]
+            assert any(
+                isinstance(packet, UnievalPrepared) and packet.relevance_skip_reason == "disabled"
+                for packet in packets
+            )
+            assert not any(
+                isinstance(packet, UnievalPrediction) and packet.dimension == "relevance"
+                for packet in packets
+            )
+            for dimension in ("fluency", "coherence", "consistency"):
+                values = [
+                    item.score for item in predictions.cases[0].comparisons
+                    if item.dimension == dimension
+                ]
+                if dimension == "consistency":
+                    width = len(predictions.cases[0].work.source_spans)
+                    values = [
+                        max(values[start:start + width])
+                        for start in range(0, len(values), width)
+                    ]
+                assert getattr(result.scores, dimension) == sum(values) / len(values)
+            saved_path = tmp_path / "reference-free-unieval.json"
+            write_result(saved_path, result)
+            saved = read_result(saved_path, UnievalResult, pipeline.max_response_bytes)
+            require_unieval_work(saved, issued, settings, status)
+            assert saved == result and saved.status == "complete"
+        assert worker.exit_confirmed and worker.last_exit is not None
+
+    asyncio.run(check())
+
+
 @pytest.mark.parametrize("failure", ["hhem", "unieval", "coherence", "malformed_prediction"])
 def test_same_pair_and_reference_requests_preserve_native_sibling_and_partial_results(
     tmp_path: Path, failure: str
@@ -51,7 +148,7 @@ def test_same_pair_and_reference_requests_preserve_native_sibling_and_partial_re
             prepared = prepared.model_copy(
                 update={
                     "source_sha256": text_sha256(inputs.source_text),
-                    "reference_summary_sha256": text_sha256(inputs.reference_summary_text),
+                    "reference_summary_sha256": inputs.reference_summary_sha256,
                 }
             )
             receipt = receipt.model_copy(
@@ -158,6 +255,7 @@ def test_same_pair_and_reference_requests_preserve_native_sibling_and_partial_re
             assert "reference_summary_text" not in seen[EVALUATE_PATH]
             assert seen[UNIEVAL_PATH]["reference_summary_text"] == inputs.reference_summary_text
             logs = service.hhem.log.getvalue() + service.unieval.log.getvalue()
+            assert inputs.reference_summary_text is not None
             assert inputs.reference_summary_text not in logs
             assert inputs.source_text not in logs
             assert receipt.summary_text is not None

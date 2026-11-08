@@ -12,8 +12,11 @@ from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.phase_contracts import PhaseDocument, PhaseEvidence, PhaseShutdown
 from summary_eval_pipeline.phase_result import build_evidence
 from summary_eval_pipeline.report import render_report
-from summary_eval_pipeline.report_contracts import PipelineDocument, PipelineEvidence
-from summary_eval_pipeline.scorer_evidence import EVIDENCE_VERSION
+from summary_eval_pipeline.report_contracts import (
+    REPORT_VERSION,
+    PipelineDocument,
+    PipelineEvidence,
+)
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_result import DimensionWork
 from summary_evaluator_cases.contract_examples import (
@@ -31,6 +34,7 @@ def test_native_zero_scores_complete_only_with_both_results_measurement_and_join
     tmp_path: Path,
 ) -> None:
     inputs, prepared, receipt = handoff_case()
+    assert prepared.reference_summary_sha256 is not None
     hhem = example_result()
     unieval = example_unieval_result(prepared.reference_summary_sha256)
     apis = (scorer_api_example("hhem", hhem), scorer_api_example("unieval", unieval))
@@ -49,6 +53,7 @@ def test_native_zero_scores_complete_only_with_both_results_measurement_and_join
             run=prepared.run,
             phase="evaluation",
             reference_summary_sha256=prepared.reference_summary_sha256,
+            evaluate_relevance=prepared.evaluate_relevance,
             generation_sha256=text_sha256(receipt.model_dump_json()),
             evaluation_request_id=hhem.request_id,
             evaluation_correlation_id=hhem.correlation_id,
@@ -64,10 +69,11 @@ def test_native_zero_scores_complete_only_with_both_results_measurement_and_join
             run=prepared.run,
             phase="generation",
             reference_summary_sha256=prepared.reference_summary_sha256,
+            evaluate_relevance=prepared.evaluate_relevance,
             generation_sha256=text_sha256(receipt.model_dump_json()),
         )
         combined = PipelineEvidence(
-            version=EVIDENCE_VERSION,
+            version=REPORT_VERSION,
             status="complete",
             prepared=prepared,
             generation=receipt,
@@ -81,7 +87,7 @@ def test_native_zero_scores_complete_only_with_both_results_measurement_and_join
         report = render_report(combined, inputs, service_settings(), "https://example.test/config")
         for dimension in ("fluency", "coherence", "consistency", "relevance"):
             assert f"| {dimension} | 0.0 |" in report
-        assert "all_source_windows" in report and "4 of 4 dimensions complete" in report
+        assert "all_source_windows" in report and "4 of 4 applicable dimensions complete" in report
         assert "not source coverage" in report and "cannot join evidence" in report
         for change in (
             {"unieval": None},
@@ -118,12 +124,12 @@ def test_native_zero_scores_complete_only_with_both_results_measurement_and_join
 
 
 def test_current_in_memory_evidence_roundtrips_without_changing_native_families() -> None:
-    from summary_eval_pipeline.contracts import WORKFLOW_VERSION
+    from summary_eval_pipeline.run_contracts import RUN_VERSION
 
     _, pipeline = in_memory_pipeline()
     current = PipelineDocument.model_validate_json(pipeline.model_dump_json()).root
     assert isinstance(current, PipelineEvidence) and current.status == "complete"
-    assert current.generation is not None and current.generation.version == WORKFLOW_VERSION
+    assert current.generation is not None and current.generation.version == RUN_VERSION
     phase = current.evaluation_phase
     assert isinstance(phase, PhaseEvidence)
     assert phase.evaluation is not None and phase.evaluation.hhem == 0.0
@@ -133,6 +139,48 @@ def test_current_in_memory_evidence_roundtrips_without_changing_native_families(
     assert phase.servers == ()
     assert [api.scorer for api in phase.scorer_apis] == ["hhem", "unieval"]
     assert len({api.process.pid for api in phase.scorer_apis if api.process is not None}) == 2
+
+
+@pytest.mark.parametrize("supplied", [False, True])
+def test_three_applicable_scores_complete_the_bound_report_and_disclose_an_unused_reference(
+    supplied: bool,
+) -> None:
+    inputs, evidence = in_memory_pipeline()
+    payload = evidence.model_dump(mode="json")
+    assert evidence.generation is not None
+    for key in ("prepared", "generation", "generation_phase", "evaluation_phase"):
+        payload[key]["evaluate_relevance"] = False
+        if not supplied:
+            payload[key]["reference_summary_sha256"] = None
+    from summary_eval_pipeline.run_contracts import GenerationReceipt
+
+    receipt = GenerationReceipt.model_validate_json(json.dumps(payload["generation"]))
+    for key in ("generation_phase", "evaluation_phase"):
+        payload[key]["generation_sha256"] = text_sha256(receipt.model_dump_json())
+    unieval = payload["evaluation_phase"]["unieval"]
+    unieval["effective_settings"]["evaluate_relevance"] = False
+    unieval["relevance_skip_reason"] = "disabled"
+    unieval["scores"]["relevance"] = None
+    unieval["work"]["relevance"] = {"planned": None, "completed": 0}
+    if not supplied:
+        unieval["reference_summary_sha256"] = None
+    current = PipelineDocument.model_validate_json(json.dumps(payload)).root
+    assert isinstance(current, PipelineEvidence) and current.status == "complete"
+    assert current.evaluation_phase is not None and current.evaluation_phase.unieval is not None
+    assert current.evaluation_phase.unieval.status == "complete"
+    inputs = inputs.model_copy(update={
+        "evaluate_relevance": False,
+        **({} if supplied else {"reference_summary_text": None}),
+    })
+    report = render_report(current, inputs, service_settings(), "https://example.test/config")
+    assert "3 of 3 applicable dimensions complete" in report
+    assert "Skipped - disabled" in report
+    assert "Skipped relevance is not a failure or zero" in report
+    assert ("Supplied but unused" if supplied else "Not supplied") in report
+    broken = current.model_dump(mode="json")
+    broken["generation"]["evaluate_relevance"] = True
+    with pytest.raises(ValidationError):
+        PipelineDocument.model_validate_json(json.dumps(broken))
 
 
 @pytest.mark.parametrize(

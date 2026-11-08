@@ -20,7 +20,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `digest-recovery.yml` | `Digest assembly recovery` | none | Complete assembly from retained worker artifacts |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |
 | `feed-ingest-plan-test.yml` | `Feed ingest plan test` | none | Run the real planner HTTP API and publish its completed planner and host metadata |
-| `summary-eval-tests.yml` | `summary-eval-tests` | none | Generate natively with one declared model, stop it, score the saved answer through independent HHEM and UniEval APIs using an independent reference, and report machine/server outcomes without Git delivery |
+| `summary-eval-tests.yml` | `summary-eval-tests` | none | Generate natively with one declared model, stop it, score the saved answer through independent HHEM and UniEval APIs with optional independent-reference relevance, and report applicable work and machine/server outcomes without Git delivery |
 | `spacy-tests.yml` | `Text-Analysis-spaCy-tests` | none | Verify the multilingual text-analysis API at an immutable commit |
 | `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
 | `ai-pipeline-tests.yml` | `Yen-Summarizers` | Manual inference; pull-request saved-event checks | Run independent TypeScript inference and preserve generation/event/report checks |

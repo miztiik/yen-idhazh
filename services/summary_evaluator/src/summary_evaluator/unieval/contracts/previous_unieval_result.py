@@ -10,19 +10,65 @@ from summary_evaluator.shared.contracts.base import (
     Sha256,
     Uuid4,
 )
+from summary_evaluator.shared.contracts.error_policy import ERROR_POLICIES, ErrorCode, ErrorPolicy
 from summary_evaluator.shared.contracts.worker_identity import WorkerIdentity
 from summary_evaluator.unieval.contracts.unieval_contract import (
     DIMENSIONS,
+    Dimension,
     SourceMode,
     UnievalContract,
 )
-from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_result import (
     UnievalModelIdentity,
     UnievalScores,
     UnievalTimings,
     UnievalWork,
 )
+
+PreviousUnievalErrorCode = ErrorCode | Literal[
+    "SUMMARY_SENTENCE_TOO_LONG",
+    "COHERENCE_INPUT_TOO_LONG",
+    "RELEVANCE_INPUT_TOO_LONG",
+    "CONSISTENCY_INPUT_TOO_LONG",
+    "COMPARISON_LIMIT_EXCEEDED",
+    "TOKENIZER_FAILED",
+]
+PREVIOUS_POLICIES: dict[PreviousUnievalErrorCode, ErrorPolicy] = {
+    code: policy for code, policy in ERROR_POLICIES.items()
+}
+PREVIOUS_POLICIES.update({
+    "SUMMARY_SENTENCE_TOO_LONG": ErrorPolicy(
+        400, "A complete summary sentence exceeds the configured prompt allowance."
+    ),
+    "COHERENCE_INPUT_TOO_LONG": ErrorPolicy(
+        400, "The complete source and summary exceed the coherence prompt allowance."
+    ),
+    "RELEVANCE_INPUT_TOO_LONG": ErrorPolicy(
+        400, "The complete reference and summary exceed the relevance prompt allowance."
+    ),
+    "CONSISTENCY_INPUT_TOO_LONG": ErrorPolicy(
+        400, "The complete consistency prompt exceeds the configured allowance."
+    ),
+    "COMPARISON_LIMIT_EXCEEDED": ErrorPolicy(
+        400, "The evaluation exceeds the configured comparison allowance."
+    ),
+    "TOKENIZER_FAILED": ErrorPolicy(
+        500, "The declared local text resources could not be used."
+    ),
+})
+
+
+class PreviousUnievalError(UnievalContract):
+    code: PreviousUnievalErrorCode
+    dimension: Dimension | None
+    index: Count | None
+    message: str
+
+    @model_validator(mode="after")
+    def require_declared_message(self) -> Self:
+        if self.message != PREVIOUS_POLICIES[self.code].message:
+            raise ValueError("The error requires its fixed safe message")
+        return self
 
 
 class PreviousUnievalControls(UnievalContract):
@@ -57,7 +103,7 @@ class PreviousUnievalResult(UnievalContract):
     scores: UnievalScores
     work: UnievalWork
     timings_ms: UnievalTimings
-    errors: tuple[UnievalError, ...]
+    errors: tuple[PreviousUnievalError, ...]
 
     @model_validator(mode="after")
     def require_observed_scores(self) -> Self:

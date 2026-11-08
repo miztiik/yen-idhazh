@@ -46,6 +46,7 @@ from summary_evaluator_cases.service_cases import service_settings
 from summary_evaluator_cases.unieval_cases import (
     UnievalScenario,
     read_unieval_inputs,
+    recorded_unieval_request,
     unieval_settings,
 )
 
@@ -303,7 +304,7 @@ def test_recorded_unieval_complete_and_partial_results_survive_response_trace_fa
     fault: str, fail_at: int | None,
 ) -> None:
     async def check() -> None:
-        request = read_unieval_inputs().cases[0].request
+        request = recorded_unieval_request(read_unieval_inputs().cases[0].request)
         _, settings = unieval_settings()
         phase = create_root_operation(trace_state="first=value")
         observations: list[ResponseTraceObservation] = []

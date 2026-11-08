@@ -23,10 +23,13 @@ from summary_eval_pipeline.previous_report_contracts import (
     PipelineEvidence as PreviousPipelineEvidence,
 )
 from summary_eval_pipeline.report_contracts import (
+    REPORT_VERSION,
     PipelineDocument,
     PipelineEvidence,
     PipelineResult,
 )
+from summary_eval_pipeline.run_contracts import RUN_VERSION
+from summary_eval_pipeline.run_contracts import GenerationReceipt as CurrentGenerationReceipt
 from summary_eval_pipeline.scorer_evidence import EVIDENCE_VERSION, ScorerApiEvidence
 from summary_evaluator.hhem.contracts.base import SCHEMA_VERSION
 from summary_evaluator.hhem.contracts.evaluate_request import EffectiveSettings
@@ -48,7 +51,10 @@ from summary_evaluator.unieval.contracts.previous_unieval_result import (
     PreviousEffectiveUnievalControls,
     PreviousUnievalResult,
 )
-from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_VERSION
+from summary_evaluator.unieval.contracts.unieval_contract import (
+    UNIEVAL_SCORING_VERSION,
+    UNIEVAL_VERSION,
+)
 from summary_evaluator.unieval.contracts.unieval_result import (
     DimensionWork,
     UnievalHealth,
@@ -130,6 +136,7 @@ def scorer_api_example(
 
 def previous_pipeline_example() -> tuple[ManualInputs, PreviousPipelineEvidence]:
     inputs = ManualInputs(source_text="Source.", reference_summary_text="Reference.")
+    assert inputs.reference_summary_text is not None
     run = RunIdentity(
         run_id="contract-run", attempt=1, git_sha="a" * 40,
         started_at=datetime(2026, 11, 7, tzinfo=UTC),
@@ -247,7 +254,24 @@ def previous_pipeline_example() -> tuple[ManualInputs, PreviousPipelineEvidence]
 
 def in_memory_pipeline() -> tuple[ManualInputs, PipelineEvidence]:
     inputs, previous = previous_pipeline_example()
-    return inputs, PipelineEvidence.model_validate_json(previous.model_dump_json())
+    payload = previous.model_dump(mode="json")
+    payload["version"] = REPORT_VERSION
+    for name in ("prepared", "generation"):
+        payload[name]["version"] = RUN_VERSION
+        payload[name]["evaluate_relevance"] = True
+    receipt = CurrentGenerationReceipt.model_validate_json(json.dumps(payload["generation"]))
+    receipt_hash = text_sha256(receipt.model_dump_json())
+    for name in ("generation_phase", "evaluation_phase"):
+        phase = payload[name]
+        phase["version"] = REPORT_VERSION
+        phase["evaluate_relevance"] = True
+        phase["generation_sha256"] = receipt_hash
+        if phase["unieval"] is not None:
+            phase["unieval"]["version"] = UNIEVAL_SCORING_VERSION
+            phase["unieval"]["relevance_skip_reason"] = None
+            phase["unieval"]["effective_settings"]["evaluate_relevance"] = True
+    current = PipelineEvidence.model_validate_json(json.dumps(payload))
+    return inputs.model_copy(update={"evaluate_relevance": True}), current
 
 
 def legacy_pipeline_example(*, current_outer: bool = False) -> PipelineResult:

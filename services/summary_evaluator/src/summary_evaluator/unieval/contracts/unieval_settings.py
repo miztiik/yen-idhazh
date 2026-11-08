@@ -21,7 +21,11 @@ from summary_evaluator.shared.contracts.service_settings import (
     QueueSettings,
     WorkerSettings,
 )
-from summary_evaluator.unieval.contracts.unieval_contract import UnievalContract, UnievalVersion
+from summary_evaluator.unieval.contracts.unieval_contract import (
+    UnievalContract,
+    UnievalScoringContract,
+    UnievalScoringVersion,
+)
 from summary_evaluator.unieval.contracts.unieval_request import UnievalControls
 
 
@@ -81,7 +85,7 @@ class UnievalWorkerSettings(WorkerSettings):
     max_reply_bytes: PositiveCount
 
 
-AUTHORED_UNIEVAL_VERSION: Final = "2026-11-07"
+AUTHORED_UNIEVAL_VERSION: Final = "2026-11-08"
 
 
 class UnievalPromptFiles(UnievalContract):
@@ -106,10 +110,14 @@ class AuthoredUnievalSettings(UnievalContract):
     model_config = ConfigDict(
         json_schema_extra={
             "version": AUTHORED_UNIEVAL_VERSION,
-            "readCompatibility": "current_only; resolve files into unchanged native settings",
+            "readCompatibility": "current_only; resolve files and explicit scorer defaults",
             "changelog": [
                 {
                     "version": AUTHORED_UNIEVAL_VERSION,
+                    "change": "Default relevance off independently of reference presence.",
+                },
+                {
+                    "version": "2026-11-07",
                     "change": "Name question files separately from answer tokens.",
                 },
                 {
@@ -119,7 +127,7 @@ class AuthoredUnievalSettings(UnievalContract):
             ],
         }
     )
-    version: Literal["2026-11-07"]
+    version: Literal["2026-11-08"]
     assets: UnievalAssets
     prompt_files: UnievalPromptFiles
     prompts: UnievalAnswers
@@ -129,8 +137,8 @@ class AuthoredUnievalSettings(UnievalContract):
     worker: UnievalWorkerSettings
 
 
-class UnievalSettings(UnievalContract):
-    version: UnievalVersion
+class UnievalSettings(UnievalScoringContract):
+    version: UnievalScoringVersion
     assets: UnievalAssets
     prompts: UnievalPrompts
     scoring: UnievalControls

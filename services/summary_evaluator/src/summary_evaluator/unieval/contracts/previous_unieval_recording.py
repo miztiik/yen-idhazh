@@ -15,6 +15,7 @@ from summary_evaluator.shared.contracts.optional_fields import is_absent, omit_d
 from summary_evaluator.unieval.contracts.previous_unieval_result import (
     PreviousEffectiveUnievalControls,
     PreviousUnievalControls,
+    PreviousUnievalError,
 )
 from summary_evaluator.unieval.contracts.unieval_contract import (
     Dimension,
@@ -22,7 +23,6 @@ from summary_evaluator.unieval.contracts.unieval_contract import (
     UnievalContract,
     UnievalVersion,
 )
-from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_result import UnievalWork
 
 
@@ -73,7 +73,7 @@ class RecordedUnievalCase(UnievalContract):
     input_sha256: Sha256
     effective_settings: PreviousEffectiveUnievalControls
     work: UnievalWork
-    errors: tuple[UnievalError, ...]
+    errors: tuple[PreviousUnievalError, ...]
     comparisons: tuple[RecordedUnievalComparison, ...]
 
 

@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-11-08
 
-How the local evaluator produces four distinct scores without silently
+How the local evaluator produces applicable distinct scores without silently
 cutting the article or replacing an unfinished result. The
 [API reference](../../reference/unieval-api.md) owns fields and settings.
 This service neither generates a summary nor publishes a quality judgement.
@@ -15,6 +15,11 @@ that the summary makes. Relevance compares the generated summary with an
 independently supplied reference summary. The selected summarization
 checkpoint can answer all four questions; the separate factuality-only
 checkpoint cannot replace it.
+
+The first three questions always apply. Relevance requires the resolved strict
+boolean selection and an independent reference. It is disabled by default;
+supplying a reference never enables it. No source-only replacement or generated
+reference is used.
 
 The service preserves the selected model's native question formats,
 sentence rules and normalized Yes/No probability calculation. It does not
@@ -62,7 +67,10 @@ windows would define a different measure, so the service does not do it.
 
 If a complete prompt exceeds its allowance, that dimension has a safe error
 and no numeric score. Other admissible dimensions can finish. Missing
-reference text is invalid input, not a request for three scores.
+reference text does not block the other scores. Disabled relevance has reason
+`disabled`, even without a reference; enabled relevance without one has reason
+`reference_not_supplied`. A supplied blank or null reference is invalid input.
+A valid unused reference still retains its exact byte hash.
 
 The parent validates each private reply against its request, process
 generation, dimension, sentence, source-window and exact issued operation
@@ -70,7 +78,11 @@ identity. It retains
 completed predictions outside the model process. A final dimension requires
 all of its planned comparisons; a maximum from an unfinished matrix is not a
 score. Computed zero is valid, while uncomputed values remain null.
-All four dimensions and no errors are required for a complete result.
+Every applicable dimension and no errors are required for a complete result.
+A skipped relevance dimension has no score, plan, completed comparisons or
+failure. An attempted relevance failure has no skip reason. The parent derives
+this authorization from the original request and validated controls, not from
+the worker's claim.
 
 ## Independent ownership
 
@@ -137,6 +149,12 @@ Exact operation equality is part of native progress validation, alongside
 execution and generation. Complete command metadata is included in derived
 byte bounds; replies keep the configured byte allowance and fail explicitly
 when the serialized packet does not fit.
+
+An independent relevance boolean separates a scoring decision from input
+provenance. A nullable skip reason distinguishes intentional absence of work
+from failure while retaining the four numeric fields. Frozen four-score readers
+keep earlier results and recordings meaningful; current saved handoffs bind
+selection and nullable reference identity before generation and through reporting.
 
 A larger configured input allowance permits complete native coherence and
 reference prompts when execution supports them. It is not evidence that
