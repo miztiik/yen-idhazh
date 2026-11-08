@@ -168,6 +168,7 @@
   - `tools/summary-eval/summary_eval_tests/test_manual_workflow.py`
   - `tools/summary-eval/summary_eval_tests/test_unieval_workflow.py`
   - `tools/summary-eval/summary_eval_tests/test_unieval_workflow_fixture.py`
+  - `tools/summary-eval/summary_eval_tests/test_workflow_outcomes.py`
   - `tools/summary-eval/summary_eval_tests/test_evaluator_response_binding.py`
   - `.github/workflows/summary-eval-tests.yml`
   - `docs/reference/unieval-api.md`
