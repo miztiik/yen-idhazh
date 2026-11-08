@@ -35,8 +35,8 @@ from text_analysis.declare_api_contracts import HEALTH_PATH, TextAnalysisEvent
 from text_analysis.declare_service_settings import ServiceSettings
 from text_analysis.load_service_settings import load_service_settings
 
-ROOT = Path(__file__).resolve().parents[3]
-PROBE_PATH = "./services/text_analysis/scripts/probe-text-analysis.ts"
+ROOT = Path(__file__).resolve().parents[4]
+PROBE_PATH = "./services/text_analysis/spacy/scripts/probe-text-analysis.ts"
 READINESS_POLL_SECONDS = 0.1
 OWNER_EXIT_GRACE_SECONDS = 5
 EXPECTED_SERVICE_EVENT_COUNT = 3

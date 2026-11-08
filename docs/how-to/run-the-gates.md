@@ -469,8 +469,8 @@ The multilingual text-analysis package has its own CPython 3.12 environment,
 manifest and frozen lock. Generate and then verify its lock without installing:
 
 ```powershell
-uv lock --project .\services\text_analysis
-uv lock --locked --project .\services\text_analysis
+uv lock --project .\services\text_analysis\spacy
+uv lock --locked --project .\services\text_analysis\spacy
 ```
 
 Do not install, import, lint, type-check, start or load this service locally.

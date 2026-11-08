@@ -19,7 +19,7 @@ from text_analysis.load_service_settings import load_service_settings
 VERIFY_ENVIRONMENT_KEY = "TEXT_ANALYSIS_VERIFY_INSTALLED_MODEL"
 LANGUAGE_ENVIRONMENT_KEY = "TEXT_ANALYSIS_LANGUAGE"
 PROFILE_ENVIRONMENT_KEY = "TEXT_ANALYSIS_PROFILE"
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 
 
 def _read_verification_input() -> dict[str, Any]:
