@@ -32,4 +32,5 @@ def install_request_schemas(app: FastAPI) -> None:
         app.openapi_schema = schema
         return schema
 
-    app.openapi = openapi_schema
+    # FastAPI's documented OpenAPI callback extension assigns its method.
+    app.openapi = openapi_schema  # type: ignore[method-assign]

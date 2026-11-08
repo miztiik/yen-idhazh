@@ -143,8 +143,8 @@ def configure_native_diagnostics() -> None:
         _filter_library_handlers("transformers")
         try:
             from huggingface_hub.constants import HF_HUB_DISABLE_PROGRESS_BARS
-            from huggingface_hub.utils import disable_progress_bars
             from huggingface_hub.utils import logging as hub_logging
+            from huggingface_hub.utils.tqdm import disable_progress_bars
 
             _filter_library_handlers("huggingface_hub")
             hub_logging.set_verbosity(logging.ERROR)

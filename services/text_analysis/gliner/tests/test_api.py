@@ -121,14 +121,14 @@ def test_native_result_boundaries() -> None:
     selection = {"label": "id", "confidence": 1.0}
     normalized = normalize_classifications({"task": selection}, classification)
     assert set(normalized.model_dump()) == {"classifications"}
-    for prediction in (
+    for classification_prediction in (
         {},
         {"task": selection | {"label": "invented"}},
         {"task": [selection, selection]},
         {"task": selection | {"confidence": float("inf")}},
     ):
         with pytest.raises(ResultValidationError):
-            normalize_classifications(prediction, classification)
+            normalize_classifications(classification_prediction, classification)
 
 
 def test_unready_api_guards_schema_and_disabled_state(tmp_path: Path) -> None:

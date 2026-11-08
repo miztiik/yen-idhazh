@@ -51,7 +51,8 @@ class ModelSettings(ApiContract):
             require_safe_import_controls()
         except NativeDiagnosticError:
             raise ValueError("Native library import controls are invalid") from None
-        from huggingface_hub.utils import HFValidationError, validate_repo_id
+        from huggingface_hub.errors import HFValidationError
+        from huggingface_hub.utils._validators import validate_repo_id
 
         try:
             validate_repo_id(value)

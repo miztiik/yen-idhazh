@@ -136,11 +136,11 @@ def create_app(
         return _json_response(ErrorResult(error=error), error.http_status, headers)
 
     async def process[
-        RequestT: NerRequest | ClassificationRequest,
-        ResultT: NerResult | ClassificationResult,
+        RequestT,
+        ResultT: ApiContract,
     ](
         request: Request,
-        contract: type[RequestT],
+        parse: Callable[[bytes], RequestT],
         run: Callable[[RequestT], Awaitable[ResultT]],
     ) -> Response:
         try:
@@ -152,7 +152,7 @@ def create_app(
                 request, "BODY_TOO_LARGE" if error.code == "BODY_TOO_LARGE" else "INVALID_REQUEST"
             )
         try:
-            parsed = contract.model_validate_json(body)
+            parsed = parse(body)
         except ValidationError:
             return await request_error(request, "INVALID_REQUEST")
         finally:
@@ -175,7 +175,7 @@ def create_app(
     async def run_classification(parsed: ClassificationRequest) -> ClassificationResult:
         return await runtime.execute(lambda model: classify_text(model, parsed))
 
-    errors = {
+    errors: dict[int | str, dict[str, object]] = {
         status: {"model": ErrorResult} for status in (403, 413, 422, 500, 503)
     }
 
@@ -195,7 +195,7 @@ def create_app(
         },
     )
     async def run_ner_gliner(request: Request) -> Response:
-        return await process(request, NerRequest, run_ner)
+        return await process(request, NerRequest.model_validate_json, run_ner)
 
     @router.post(
         CLASSIFY_PATH,
@@ -213,7 +213,9 @@ def create_app(
         },
     )
     async def classify_text_gliner(request: Request) -> Response:
-        return await process(request, ClassificationRequest, run_classification)
+        return await process(
+            request, ClassificationRequest.model_validate_json, run_classification
+        )
 
     async def refuse(request: Request, code: HostRefusalCode) -> Response:
         return await request_error(request, code)
