@@ -697,6 +697,7 @@ EXPRESSION_VALUES: Final = {
     "github.sha": SUBSTITUTED_SHA,
     "github.run_id": SUBSTITUTED_EXECUTION,
     "github.run_attempt": SUBSTITUTED_ATTEMPT,
+    "runner.temp": "/tmp/runner",
     "matrix.shard": SUBSTITUTED_SHARD,
     "matrix.shards": SUBSTITUTED_SHARDS,
     "matrix.tenant": SUBSTITUTED_TENANT,
