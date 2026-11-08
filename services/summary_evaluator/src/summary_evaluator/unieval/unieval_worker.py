@@ -27,6 +27,7 @@ from summary_evaluator.unieval.contracts.unieval_worker_message import (
 )
 from summary_evaluator.unieval.fail_unieval import UnievalFailure
 from summary_evaluator.unieval.load_unieval import UnievalPredictor, load_unieval
+from summary_evaluator.unieval.resolve_unieval_selection import resolve_unieval_selection
 from summary_evaluator.unieval.score_unieval import UnievalComparison, prepare_unieval
 
 
@@ -123,23 +124,22 @@ def run_unieval_worker(
                     prepared = UnievalPrepared(
                         **identity.model_dump(),
                         effective_settings=plan.controls,
+                        relevance_skip_reason=plan.relevance_skip_reason,
                         work=plan.work,
                         errors=plan.errors,
                     )
                 except UnievalFailure as failure:
                     plan = None
+                    controls, relevance_skip_reason = resolve_unieval_selection(
+                        command.request, bootstrap.settings.scoring
+                    )
                     prepared = UnievalPrepared(
                         **identity.model_dump(),
                         effective_settings=EffectiveUnievalControls(
-                            **{
-                                **bootstrap.settings.scoring.model_dump(),
-                                "consistency_source_mode": (
-                                    command.request.consistency_source_mode
-                                    or bootstrap.settings.scoring.consistency_source_mode
-                                ),
-                            },
+                            **controls.model_dump(),
                             source_budget_tokens=None,
                         ),
+                        relevance_skip_reason=relevance_skip_reason,
                         work=UnievalWork(),
                         errors=(failure.error,),
                     )

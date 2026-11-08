@@ -15,13 +15,14 @@ from summary_evaluator.shared.contracts.base import NonblankText
 from idhazh.llm.server import server_argv
 from utilities.model_runtime import BIN_DIR, SERVER_BINARY, verify_model_files
 
-from .contracts import LoadedModel, PreparedRun, ServerOutcome
+from .contracts import LoadedModel, ServerOutcome
 from .failures import WorkflowError
 from .http import call_local_api
 from .launch_native import parent_bound_command
 from .model_selection import SelectedModel
 from .native_log import NativeDiagnosticData, NativeLog
 from .native_response import NativeHealth, NativeHealthReply
+from .run_contracts import PreparedRun
 from .settings import PipelineSettings
 
 

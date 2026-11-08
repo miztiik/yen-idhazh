@@ -6,6 +6,7 @@ from local_api_host.propagate_trace_context import create_root_operation, write_
 from summary_evaluator_cases.unieval_cases import (
     UnievalScenario,
     read_unieval_recordings,
+    recorded_unieval_request,
     running_unieval,
     unieval_settings,
 )
@@ -30,7 +31,7 @@ def test_timed_out_matrix_preserves_three_scores_and_confirms_actual_worker_exit
         ):
             response = await client.post(
                 UNIEVAL_PATH,
-                json=inputs.cases[0].request.model_dump(),
+                json=recorded_unieval_request(inputs.cases[0].request).model_dump(),
                 headers=write_trace_context(caller),
             )
             result = UnievalResult.model_validate_json(response.content)

@@ -1,16 +1,17 @@
 # Generate and evaluate one summary
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 How to dispatch `summary-eval-tests.yml` and inspect the generated answer,
-actual HHEM and four UniEval scores, machine readings and owned-process cleanup. This procedure
+actual HHEM and applicable UniEval scores, machine readings and owned-process cleanup. This procedure
 is project-specific because it uses committed model declarations and the
 named shared services.
 
 ## Register before dispatch
 
-Merge the checked implementation onto the default branch before dispatching
-the new workflow by name. A feature-branch `--ref` cannot register a workflow
+Register a new workflow on the default branch before dispatching it by name.
+An already registered workflow can run an immutable candidate revision through
+its feature-branch `--ref`. A feature-branch ref cannot register a workflow
 that has never existed there. This is the platform's
 [manual-dispatch requirement](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
 
@@ -18,10 +19,13 @@ Keep live verification pending until a real model run has been inspected.
 Registration, offline recordings and green PR checks do not prove live
 generation, evaluator loading, host observations or cleanup.
 
-## Select one model and supply the source and independent reference
+## Select one model and supply the source
 
-The form requires `source_text` and an independently written
-`reference_summary_text` for that source. The reference is captured before
+The form requires `source_text`. The optional reference is independently written
+`reference_summary_text` for that source. Select `evaluate_relevance` explicitly
+to evaluate agreement; its false default does not depend on reference presence.
+The exactly empty form reference means absent; whitespace-only text is invalid.
+When supplied, the reference is captured before
 generation and sent only to UniEval, not to the summarizer or HHEM.
 Optional `models_file` is the committed JSON
 path relative to `config/`, not a repository identifier or a `config/`-prefixed
@@ -35,7 +39,8 @@ runs with the same source and reference. The generation instruction stays fixed 
 There is no manual summary input or model matrix.
 
 This command sends the named, project-authored source/reference fixture through standard
-input, not command arguments. Use the intended merged ref and retain its actual
+input, not command arguments. It explicitly selects its four-score journey.
+Use the intended verified ref and retain its actual
 `headSha` with the result.
 
 ```powershell
@@ -61,10 +66,13 @@ named artifacts and field meanings. Confirm that the report's selected
 declaration, loaded model and answer match `generation.json`. HHEM must score
 that exact same-run answer after confirmed native-model shutdown. UniEval must
 score the identical source/answer pair and identify the independently supplied
-reference hash. A failed generation must leave both evaluators not run, without
+reference hash when present, even if unused. A reference-free run requires all
+three applicable UniEval scores, the authorized skip reason, no relevance
+comparisons and confirmed API/worker cleanup. A failed generation must leave both evaluators not run, without
 a zero score or numeric duration.
 
-The named fixture requires multiple tokenizer-sized source windows. With the
+For the explicitly opted-in named fixture, require its four-score journey.
+It requires multiple tokenizer-sized source windows. With the
 pinned tokenizer, even its complete source-only coherence prompt exceeds the
 original 1024-token cutoff. Inspect the actual generated answer's native
 coherence prompt: it must exceed that cutoff and fit the configured total
@@ -75,10 +83,11 @@ unexercised larger setting or an offline recording cannot close live proof.
 
 The report contains separate phase and server outcomes, actual startup times,
 shutdown results and log names. An unavailable observation remains unavailable.
-Normal completion needs a complete HHEM result and all four UniEval dimensions,
+Normal completion needs a complete HHEM result and every applicable UniEval dimension,
 actual hardware and
 whole-machine CPU/RAM, explicit uninterrupted profile close and clean confirmed
-shutdown. A score alone does not close live verification.
+shutdown. A valid relevance skip is not a failure. A supplied but unused reference
+must be labelled unused. A score alone does not close live verification.
 
 If work fails, available results and the report still upload. The
 `summary-eval-tests-server-logs` artifact retains available role logs after

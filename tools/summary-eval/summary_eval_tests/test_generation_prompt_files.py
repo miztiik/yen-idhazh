@@ -139,6 +139,7 @@ def test_native_generation_receives_the_selected_file_in_fresh_requests(tmp_path
             {"role": "system", "content": text},
             {"role": "user", "content": inputs.source_text},
         ]
+        assert inputs.reference_summary_text is not None
         assert inputs.reference_summary_text not in recorded.requests[0][1].decode("utf-8")
         assert body["temperature"] == selected.entry.sampling["temperature"]
 

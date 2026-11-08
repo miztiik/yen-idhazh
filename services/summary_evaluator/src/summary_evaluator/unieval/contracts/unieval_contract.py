@@ -8,8 +8,11 @@ from summary_evaluator.shared.contracts.base import NativeContract
 
 UNIEVAL_VERSION: Final = "2026-11-04"
 UnievalVersion = Literal["2026-11-04"]
+UNIEVAL_SCORING_VERSION: Final = "2026-11-08"
+UnievalScoringVersion = Literal["2026-11-08"]
 Dimension = Literal["fluency", "coherence", "consistency", "relevance"]
 SourceMode = Literal["all_source_windows", "full_source_prompt"]
+RelevanceSkipReason = Literal["disabled", "reference_not_supplied"]
 # This order is part of the private progress protocol, not a model or quality ranking.
 DIMENSIONS: Final[tuple[Dimension, ...]] = (
     "fluency",
@@ -28,6 +31,25 @@ class UnievalContract(NativeContract):
                     "version": UNIEVAL_VERSION,
                     "change": "Declare four-score evaluation with complete source handling.",
                 }
+            ],
+        }
+    )
+
+
+class UnievalScoringContract(UnievalContract):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": UNIEVAL_SCORING_VERSION,
+            "readCompatibility": "read frozen four-score results by their original version",
+            "changelog": [
+                {
+                    "version": UNIEVAL_SCORING_VERSION,
+                    "change": "Select relevance explicitly and complete applicable scores.",
+                },
+                {
+                    "version": UNIEVAL_VERSION,
+                    "change": "Declare four-score evaluation with complete source handling.",
+                },
             ],
         }
     )

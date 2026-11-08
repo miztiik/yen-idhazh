@@ -32,6 +32,7 @@ def test_platform_input_preserves_exact_source_and_blank_model_selection(
     inputs = read_manual_inputs(load_pipeline_settings(REPOSITORY))
     assert inputs.source_text == source and inputs.models_file == ""
     assert inputs.reference_summary_text == reference
+    assert inputs.evaluate_relevance is False
     assert event.is_file()
 
 
@@ -49,6 +50,11 @@ def test_platform_input_preserves_exact_source_and_blank_model_selection(
         {"source_text": "Source.", "reference_summary_text": True},
         {"source_text": "Source.", "reference_summary_text": " \n"},
         {"source_text": "Source.", "reference_summary_text": "\ud800"},
+        {"source_text": "Source.", "evaluate_relevance": None},
+        {"source_text": "Source.", "evaluate_relevance": 0},
+        {"source_text": "Source.", "evaluate_relevance": 1},
+        {"source_text": "Source.", "evaluate_relevance": "False"},
+        {"source_text": "Source.", "evaluate_relevance": ""},
     ],
 )
 def test_invalid_platform_inputs_fail_without_echoing_values(
@@ -154,3 +160,30 @@ def test_frozen_parent_report_and_unchanged_private_machine_control_remain_reada
             PipelineEvidence,
             {**report.model_dump(mode="json"), "summary_text": "PrivateSummaryCanary"},
         )
+
+
+@pytest.mark.parametrize("reference", [None, ""])
+@pytest.mark.parametrize("boolean", [None, False, True, "false", "true"])
+def test_platform_empty_reference_and_canonical_boolean_are_normalized_only_at_the_form(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    reference: str | None, boolean: bool | str | None,
+) -> None:
+    payload: dict[str, object] = {"source_text": "Exact source."}
+    if reference is not None:
+        payload["reference_summary_text"] = reference
+    if boolean is not None:
+        payload["evaluate_relevance"] = boolean
+    event = tmp_path / "event.json"
+    write_event(event, payload)
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    inputs = read_manual_inputs(load_pipeline_settings(REPOSITORY))
+    assert inputs.reference_summary_text is None
+    assert inputs.reference_summary_sha256 is None
+    assert inputs.evaluate_relevance is (boolean is True or boolean == "true")
+    assert "reference_summary_text" not in inputs.model_dump()
+    from summary_eval_pipeline.inputs import ManualInputs
+
+    with pytest.raises(ValidationError):
+        ManualInputs(source_text="Source.", reference_summary_text="")
+    with pytest.raises(ValidationError):
+        ManualInputs.model_validate({"source_text": "Source.", "evaluate_relevance": "true"})

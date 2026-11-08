@@ -3,10 +3,12 @@
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
 from summary_evaluator.serve_http.contracts.api_health import ApiHealth
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
+from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 
 from .contracts import PhaseEvidence as LegacyPhaseEvidence
 from .phase_contracts import PhaseResult
 from .report_contracts import PipelineResult
+from .run_contracts import PreparedRun
 
 
 def scorer_health(phase: PhaseResult | None, scorer: ApiComponent) -> ApiHealth | None:
@@ -53,7 +55,21 @@ def model_rows(evidence: PipelineResult, settings: ServiceSettings) -> list[tupl
         ("Answer SHA-256 (accepted summary)", generation.summary_sha256 if generation else None),
         (
             "Independent reference SHA-256 (captured before generation)",
-            evidence.prepared.reference_summary_sha256 if evidence.prepared else None,
+            (evidence.prepared.reference_summary_sha256 or "Not supplied")
+            if evidence.prepared else None,
+        ),
+        (
+            "Relevance selection",
+            ("Enabled" if evidence.prepared.evaluate_relevance else "Disabled")
+            if isinstance(evidence.prepared, PreparedRun)
+            else "Required (historical four-score evidence)" if evidence.prepared
+            else "Not resolved",
+        ),
+        (
+            "Relevance skip reason",
+            unieval.relevance_skip_reason or "Not skipped"
+            if isinstance(unieval, UnievalResult) and unieval.effective_settings is not None
+            else "Not recorded",
         ),
         ("HHEM model", hhem_model.reference if hhem_model else "Not loaded"),
         ("HHEM loaded revision", hhem_model.loaded_revision if hhem_model else "Not loaded"),

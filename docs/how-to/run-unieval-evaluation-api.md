@@ -1,9 +1,9 @@
 # Run the local UniEval API
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 How to prepare the named resources, start the real evaluator and retain its
-actual four-score response. This is separate from workflow generation.
+actual applicable-score response. This is separate from workflow generation.
 The [reference](../reference/unieval-api.md) owns request fields and modes.
 
 ## Prepare offline-check resources
@@ -39,15 +39,19 @@ model and starts no native llama process. Check UniEval's component health,
 not only its listening socket. Stopping this API does not stop a separately
 running HHEM or coverage API or worker.
 
-Write a bounded JSON request with the exact source, generated summary and
-independently supplied reference summary. Send that file as JSON data to the
+Write a bounded JSON request with the exact source and generated summary.
+Omit the reference for ordinary evaluation. For reference agreement, supply the
+independent reference and explicitly set `evaluate_relevance` true. A reference
+alone does not enable relevance. Send that file as JSON data to the
 named UniEval operation. Do not place any text into a shell expression,
 destination or path.
 
 Retain the complete native response even with an error HTTP status. Check
 all four fields, actual loaded identity, selected consistency mode, source
-spans and planned/completed counts. Missing work is not zero, and fewer than
-four valid scores is not complete.
+spans and planned/completed counts. Three applicable scores with an authorized
+relevance skip and no errors are complete. Missing required work is not zero;
+an attempted relevance failure is not a skip. Supplied but unused reference
+bytes still have a hash.
 
 ## Capture real offline predictions
 
