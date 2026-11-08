@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-11-03
+**Last Updated**: 2026-11-08
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
@@ -16,18 +16,23 @@ depend on a site rebuild. Each copied file includes every column, and the
 repository that commits it is public, so none of its columns is private
 ([what the site holds for the door](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
 
-## TypeScript metadata is not a trace recorder
+## Operation metadata is not a trace recorder
 
 The shared TypeScript library defines event occurrence, execution and operation
 metadata. The [identity contract](../architecture/contracts/identity.md#4-native-typescript-event-and-operation-metadata)
 owns its fields, creation and W3C propagation rules. Service formats remain
 owned by their current contracts.
 
+The neutral Python API host supplies the bound native metadata copy and W3C
+codec. Scorer event readers preserve supplied carriers and true untraced
+absence under the [native identity rules](../architecture/contracts/identity.md#6-hhem-execution-and-event-identity).
+Reader support alone does not enable scorer HTTP or worker propagation.
+
 The OpenTelemetry API and core codec packages supply metadata only. They install
 no provider, tracing SDK, instrumentation, recorder, exporter or collector.
 They add no timing tree, trace file, output directory, telemetry switch or
-shutdown flush. Python's envelopes, local span writer and SDK prohibition below
-remain unchanged.
+shutdown flush. Backend pipeline envelopes, the local span writer and the SDK
+prohibition below remain unchanged.
 
 ## The envelope
 

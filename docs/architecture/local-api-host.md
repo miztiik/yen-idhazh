@@ -1,6 +1,6 @@
 # How one local Python API is hosted
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 How an independently started Python service acquires one bounded loopback
 listener without giving the host ownership of service payloads or behavior.
@@ -38,7 +38,12 @@ the monotonic start at `request.state.request_started_at` before guards run.
 required `links` JSON array and optional canonical `traceState`. Root and
 receiving-operation factories emit an empty link array. Optional fields are
 omitted rather than serialized or accepted as null. Its native schema metadata
-has version `2026-11-03`. Trace data is not inserted into a JSON body.
+has version `2026-11-03`. Decoded link arrays validate as immutable native
+tuples; generated optional-field schemas contain neither null branches nor
+null defaults. The evaluator's `tests/test_trace_context.py` and real
+`check_trace_context.ts` bridge bind the native JSON reader, serialized fields,
+schema and codec to the shared TypeScript authority. Trace data is not inserted
+into a JSON body.
 
 The next layer refuses any browser `Origin`, duplicate `Host` or `Host` outside
 the configured loopback binding before reading the request body. The selected

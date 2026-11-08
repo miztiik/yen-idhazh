@@ -56,7 +56,11 @@ from summary_evaluator.serve_http.contracts.api_deployment_settings import ApiDe
 from summary_evaluator.serve_http.contracts.api_health import ApiHealth, DisabledEvaluatorHealth
 from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
 from summary_evaluator.serve_http.contracts.error_detail import ApiErrorDetail, ApiErrorResult
-from summary_evaluator.serve_http.contracts.server_event import ApiDiagnosticData, ServerEvent
+from summary_evaluator.serve_http.contracts.server_event import (
+    SERVER_EVENT_SCHEMA_VERSION,
+    ApiDiagnosticData,
+    ServerEvent,
+)
 from summary_evaluator.serve_http.emit_events import EventWriter
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
 from summary_evaluator.serve_http.refuse_request import refuse_request
@@ -157,7 +161,6 @@ def test_fastapi_openapi_matches_native_omission_and_null_rules() -> None:
         ApiErrorDetail,
         ApiErrorResult,
         ApiDiagnosticData,
-        ServerEvent,
     ],
 )
 def test_application_schemas_are_current_only_and_change_logged(
@@ -169,6 +172,28 @@ def test_application_schemas_are_current_only_and_change_logged(
     assert 1 <= len(schema["changelog"]) <= 5
     assert all("\n" not in entry["change"] for entry in schema["changelog"])
     assert schema["additionalProperties"] is False
+
+
+def test_scorer_envelope_has_its_own_date_and_nonnullable_optional_carriers() -> None:
+    schema = ServerEvent.model_json_schema()
+    assert schema["version"] == SERVER_EVENT_SCHEMA_VERSION == "2026-11-08"
+    assert schema["changelog"][0]["version"] == SERVER_EVENT_SCHEMA_VERSION
+    assert 1 <= len(schema["changelog"]) <= 5
+    assert all("\n" not in entry["change"] for entry in schema["changelog"])
+    assert schema["additionalProperties"] is False
+    assert schema["readCompatibility"] == (
+        "read_and_preserve; absent carriers stay omitted; "
+        "present carriers must validate and state requires a parent"
+    )
+    assert "version" not in schema["properties"]
+    assert schema["properties"]["specversion"]["const"] == "1.0"
+    for name in ("traceparent", "tracestate"):
+        field = schema["properties"][name]
+        assert name not in schema["required"]
+        assert field["type"] == "string"
+        assert "null" not in json.dumps(field) and "default" not in field
+    assert EvaluationEvent.model_json_schema()["version"] == "2026-11-02"
+    assert ApiDiagnosticData.model_json_schema()["version"] == SERVER_SCHEMA_VERSION
 
 
 @pytest.mark.parametrize("code", ["HOST_FORBIDDEN", "ORIGIN_FORBIDDEN"])

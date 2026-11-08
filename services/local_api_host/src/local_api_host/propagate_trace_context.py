@@ -3,7 +3,7 @@
 import time
 from collections.abc import Mapping
 from secrets import token_hex
-from typing import Final, Self, cast
+from typing import Annotated, Final, Self, cast
 
 from opentelemetry.context import Context
 from opentelemetry.trace import (
@@ -17,13 +17,17 @@ from opentelemetry.trace import (
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     SerializerFunctionWrapHandler,
+    StringConstraints,
+    ValidationInfo,
     field_validator,
     model_serializer,
     model_validator,
 )
+from pydantic.json_schema import JsonSchemaValue, SkipJsonSchema
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -54,6 +58,16 @@ class OperationLink(BaseModel):
         return self
 
 
+def _normalize_json_links(value: object, info: ValidationInfo) -> object:
+    """Keep decoded JSON arrays as the immutable native link sequence."""
+    return tuple(value) if info.mode == "json" and isinstance(value, list) else value
+
+
+def _omit_default(schema: JsonSchemaValue) -> None:
+    """Do not advertise the internal omission marker as a wire default."""
+    schema.pop("default", None)
+
+
 class OperationMetadata(BaseModel):
     """Carry one W3C operation, its parent, links and canonical trace state."""
 
@@ -79,13 +93,19 @@ class OperationMetadata(BaseModel):
 
     trace_id: str = Field(alias="traceId", pattern=r"^[0-9a-f]{32}$")
     span_id: str = Field(alias="spanId", pattern=r"^[0-9a-f]{16}$")
-    parent_span_id: str | None = Field(
+    parent_span_id: (
+        Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{16}$")] | SkipJsonSchema[None]
+    ) = Field(
         default=None,
         alias="parentSpanId",
-        pattern=r"^[0-9a-f]{16}$",
+        json_schema_extra=_omit_default,
     )
-    links: tuple[OperationLink, ...]
-    trace_state: str | None = Field(default=None, alias="traceState", min_length=1)
+    links: Annotated[tuple[OperationLink, ...], BeforeValidator(_normalize_json_links)]
+    trace_state: Annotated[str, StringConstraints(min_length=1)] | SkipJsonSchema[None] = Field(
+        default=None,
+        alias="traceState",
+        json_schema_extra=_omit_default,
+    )
 
     @model_validator(mode="before")
     @classmethod
