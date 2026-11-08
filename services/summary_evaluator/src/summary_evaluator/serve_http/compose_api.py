@@ -20,6 +20,7 @@ from local_api_host.create_api_component import (
     HostEventContext,
     HostEventDataFactory,
     HostEventSink,
+    HostFailure,
     HostRefusalCode,
     HostRequestContext,
     RenderedHealth,
@@ -218,6 +219,16 @@ def compose_app(
             ready=status == "ready",
         )
 
+    def translate_host_failure(failure: HostFailure) -> ApiDiagnosticData:
+        if failure.phase == "startup":
+            return ApiDiagnosticData(component="api", action="stopped", level="INFO")
+        return ApiDiagnosticData(
+            component="api",
+            action="failed",
+            level="ERROR",
+            code="SHUTDOWN_FAILED",
+        )
+
     data = HostEventDataFactory[
         EvaluatorHealthObservation,
         ApiDiagnosticData,
@@ -230,12 +241,7 @@ def compose_app(
             duration_ms=duration_ms,
         ),
         stopped=lambda: ApiDiagnosticData(component="api", action="stopped", level="INFO"),
-        failed=lambda _failure: ApiDiagnosticData(
-            component="api",
-            action="failed",
-            level="ERROR",
-            code="SHUTDOWN_FAILED",
-        ),
+        failed=translate_host_failure,
     )
 
     async def emit_event(

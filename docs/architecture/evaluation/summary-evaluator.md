@@ -136,6 +136,11 @@ same accepted records reach stderr and the role's named file. A failed file
 mirror warns safely and records that the log is unavailable; it does not
 invalidate completed model work. Validated HTTP results and actual process
 receipts, not a search through terminal output, establish success.
+The neutral host reports incomplete component startup through its failed
+callback. The evaluator adapter translates that startup phase to its existing
+`api` stopped INFO diagnostic, preserving the public event sequence. A shutdown
+phase remains the existing `api` failed ERROR diagnostic with
+`SHUTDOWN_FAILED`.
 Request-caused file-mirror warnings retain the causing operation; opening
 and closing warnings use the service operation. Invalid optional carrier
 metadata produces a fixed diagnostic without exposing header or parser text.
@@ -160,6 +165,10 @@ The retired retrieval and upstream converter were the sole consumers of
 `rank-bm25` and `prettytable`; neither remains in the frozen environment.
 Native UniEval uses its own model, tokenizer and sentence resources directly.
 Their dependencies and native calculations remain unchanged.
+
+Retiring coverage removes its dedicated tests, not shared API or workflow checks.
+Native UniEval's full-source validation remains part of its own scoring contract;
+the word coverage in a test name does not make the test obsolete.
 
 Keeping a dormant generation proxy would retain another API's transport,
 configuration and failure surface without enabling evaluation. The existing

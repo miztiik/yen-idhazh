@@ -2,11 +2,30 @@
 
 import asyncio
 import io
+from http import HTTPStatus
 from pathlib import Path
 from typing import get_args
 
 import httpx
 import pytest
+from fastapi import APIRouter
+from local_api_host.compose_api import compose_api as compose_host_api
+from local_api_host.create_api_component import (
+    ApiComponentRuntime as HostApiComponentRuntime,
+)
+from local_api_host.create_api_component import (
+    HealthRenderer,
+    HostEventContext,
+    HostEventDataFactory,
+    HostEventSink,
+    HostFailure,
+    HostRefusalCode,
+    HostRequestContext,
+    RenderedHealth,
+)
+from pydantic import BaseModel
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 from summary_evaluator_cases.contract_examples import API_SETTINGS_FILE, REPOSITORY
 from summary_evaluator_cases.replay_predictions import Scenario
 from summary_evaluator_cases.service_cases import EventLog, RecordedSupervisor, service_settings
@@ -18,7 +37,11 @@ from summary_evaluator.hhem.create_api_component import (
 )
 from summary_evaluator.hhem.fail_evaluation import EvaluationFailure
 from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
-from summary_evaluator.serve_http.compose_api import ComponentRegistration, compose_app
+from summary_evaluator.serve_http.compose_api import (
+    ComponentRegistration,
+    compose_app,
+    create_host_settings,
+)
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
 from summary_evaluator.serve_http.contracts.server_event import (
     ApiDiagnosticData,
@@ -36,6 +59,10 @@ from summary_evaluator.shared.contracts.service_settings import StartupContext
 from summary_evaluator.shared.fail_runtime import RuntimeFailure
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 from summary_evaluator.unieval.unieval_router import UNIEVAL_HEALTH_PATH, UNIEVAL_PATH
+
+
+class NeutralHostHealth(BaseModel):
+    ready: bool
 
 
 def test_registration_requires_the_complete_distinct_declared_vocabulary(tmp_path: Path) -> None:
@@ -206,6 +233,116 @@ def test_all_registered_scorers_start_before_requests_and_keep_native_health_and
         assert all(controller.worker.exit_confirmed for controller in controllers)
 
     asyncio.run(check())
+
+
+def test_neutral_host_reports_startup_failure_without_stopped() -> None:
+    async def check() -> None:
+        api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem").model_copy(
+            update={"enabled_routes": ()}
+        )
+        startup_failure = RuntimeError("Component startup failed.")
+        lifecycle: list[str] = []
+        shutdown_completed = False
+        sink_closed = False
+
+        async def start_component() -> None:
+            raise startup_failure
+
+        async def shutdown_component() -> None:
+            nonlocal shutdown_completed
+            shutdown_completed = True
+
+        async def observe_health() -> NeutralHostHealth:
+            return NeutralHostHealth(ready=False)
+
+        async def refuse_request(
+            _request: Request,
+            _code: HostRefusalCode,
+        ) -> Response:
+            return Response(status_code=HTTPStatus.FORBIDDEN)
+
+        def render_health(
+            _request: HostRequestContext,
+            health: NeutralHostHealth,
+        ) -> RenderedHealth:
+            return RenderedHealth(
+                response=JSONResponse(health.model_dump(mode="json")),
+                ready=health.ready,
+            )
+
+        async def record_event(
+            _context: HostEventContext,
+            event: str,
+        ) -> None:
+            lifecycle.append(event)
+
+        async def close_events() -> None:
+            nonlocal sink_closed
+            sink_closed = True
+
+        component = HostApiComponentRuntime[NeutralHostHealth](
+            router=APIRouter(),
+            state=object(),
+            start=start_component,
+            shutdown=shutdown_component,
+            observe_health=observe_health,
+            refuse_requests={},
+            default_refusal=refuse_request,
+        )
+        app = compose_host_api(
+            create_host_settings(api),
+            component,
+            HealthRenderer[NeutralHostHealth](
+                response_model=NeutralHostHealth,
+                render=render_health,
+            ),
+            HostEventSink[NeutralHostHealth, str](
+                data=HostEventDataFactory[NeutralHostHealth, str](
+                    started=lambda: "started",
+                    ready=lambda _health, _duration_ms: "ready",
+                    stopped=lambda: "stopped",
+                    failed=lambda failure: f"failed:{failure.phase}",
+                ),
+                started=record_event,
+                ready=record_event,
+                stopped=record_event,
+                failed=record_event,
+                aclose=close_events,
+            ),
+        )
+
+        with pytest.raises(RuntimeError) as observed:
+            async with app.router.lifespan_context(app):
+                raise AssertionError("A failed component start cannot enter the lifespan.")
+
+        assert observed.value is startup_failure
+        assert shutdown_completed and sink_closed
+        assert lifecycle == ["started", "failed:startup"]
+
+    asyncio.run(check())
+
+
+def test_evaluator_preserves_legacy_host_failure_diagnostics() -> None:
+    api = load_scorer_api_settings(API_SETTINGS_FILE, "hhem").model_copy(
+        update={"enabled_routes": ()}
+    )
+    writer = EventWriter(api.logging, io.StringIO())
+    app = create_app(api, None, REPOSITORY, writer=writer)
+    try:
+        data = app.state.host_events.data
+        assert data.failed(HostFailure(phase="startup")) == ApiDiagnosticData(
+            component="api",
+            action="stopped",
+            level="INFO",
+        )
+        assert data.failed(HostFailure(phase="shutdown")) == ApiDiagnosticData(
+            component="api",
+            action="failed",
+            level="ERROR",
+            code="SHUTDOWN_FAILED",
+        )
+    finally:
+        writer.close()
 
 
 def test_startup_failure_cleans_all_components_and_retains_native_errors() -> None:
