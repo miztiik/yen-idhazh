@@ -70,6 +70,8 @@ GGUF_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.gguf$")
 #: A full commit. A branch is re-pointed on every upload, so a run that names one
 #: cannot be repeated. Equal to `measure_llm.REVISION_RE`.
 REVISION_RE: Final = re.compile(r"^[0-9a-f]{40}$")
+#: Runtime build and archive names remain single path segments.
+SEGMENT_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 #: Safe companion paths have no suffix rule: projectors and adapters need not be GGUF.
 #: Kept equal to the native contract by the companion-path binding test.
 COMPANION_PATH_RE: Final = re.compile(
