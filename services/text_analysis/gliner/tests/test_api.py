@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from local_api_host.contracts import HostSettings, ListenerSettings
 from pydantic import ValidationError
+from text_analysis.load_service_settings import load_service_settings
 
 from gliner_api.classify_text import normalize_classifications
 from gliner_api.configure_native_diagnostics import (
@@ -39,13 +40,16 @@ from gliner_api.extract_entities import normalize_entities
 from gliner_api.load_model import NativeModel
 from gliner_api.load_settings import GlinerSettings, load_settings
 from gliner_api.run_model import ModelRuntime, OperationError
-from text_analysis.load_service_settings import load_service_settings
 
 ROOT = Path(__file__).resolve().parents[4]
 
 
 class _NativeProcessor(Protocol):
     def collate_fn_inference(self, batch: list[tuple[str, object]]) -> object: ...
+
+
+class _NativeProcessingModel(NativeModel, Protocol):
+    processor: _NativeProcessor
 
 
 def _transport() -> HostSettings:
@@ -192,9 +196,12 @@ def test_native_diagnostic_refusal_survives_a_caught_exception() -> None:
     handler_count = len(logging.getLogger("gliner2").handlers)
     configure_native_diagnostics()
     assert len(logging.getLogger("gliner2").handlers) == handler_count
-    with pytest.raises(NativeDiagnosticError), native_operation():
-        with suppress(NativeDiagnosticError):
-            logging.getLogger("gliner2.processor").warning("unpublished-native-diagnostic")
+    with (
+        pytest.raises(NativeDiagnosticError),
+        native_operation(),
+        suppress(NativeDiagnosticError),
+    ):
+        logging.getLogger("gliner2.processor").warning("unpublished-native-diagnostic")
     with native_operation():
         logging.getLogger("gliner2.processor").info("discarded-native-info")
 
@@ -242,7 +249,7 @@ def test_real_prepared_model_api() -> None:
         runtime = cast(ModelRuntime, app.state.component.state)
 
         def refuse_native_record(native: NativeModel) -> object:
-            processor = cast(_NativeProcessor, getattr(native, "processor"))
+            processor = cast(_NativeProcessingModel, native).processor
             return processor.collate_fn_inference([("x", None)])
 
         assert client.portal is not None
