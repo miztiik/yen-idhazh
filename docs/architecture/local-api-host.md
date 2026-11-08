@@ -64,22 +64,33 @@ to map into its existing public result.
 
 ## Lifecycle and health
 
-The lifespan emits typed service-owned started data, starts the component and
-always invokes its shutdown callback. Health observation remains service-owned:
-`HealthRenderer` returns the exact response plus a separate readiness boolean.
-The host uses only that boolean to emit one ready event. It does not infer
-readiness from an HTTP status or payload field.
+The lifespan emits typed service-owned started data, starts the component,
+tracks whether startup completed and always invokes its shutdown callback.
+Health observation remains service-owned: `HealthRenderer` returns the exact
+response plus a separate readiness boolean. The host uses only that boolean to
+emit one ready event. It does not infer readiness from an HTTP status or payload
+field.
 `compose_api(..., service_operation=...)` accepts the actual operation already
 used to construct service loggers and controllers. Enabled callers reuse it for
 host lifecycle callbacks rather than allocate a second service root.
 Standalone callers keep the default root allocation; disabled propagation
 keeps the host's untraced lifecycle profile.
 
-Shutdown retains the original lifespan failure and every independent cleanup
-failure. The event sink emits stopped after clean component shutdown, failed
-after a shutdown failure, then closes its own delivery resources. Uvicorn
-success is accepted only when startup and shutdown both completed without a
-lifespan error.
+The terminal callback is selected after component cleanup:
+
+- Completed startup with clean component cleanup emits
+  `started -> [ready] -> stopped`.
+- Failed component startup with clean component cleanup emits
+  `started -> failed(startup)` and never emits stopped.
+- Any component cleanup failure takes precedence and emits `failed(shutdown)`
+  once, never stopped, while retaining an earlier startup or lifespan failure.
+- A shutdown failure after completed startup also emits `failed(shutdown)` and
+  never stopped.
+
+The host then closes the event sink. Terminal callback and event-sink close
+failures remain independent cleanup failures, and the raised result retains the
+original lifespan failure plus every cleanup failure. Uvicorn success is
+accepted only when startup and shutdown both completed without a lifespan error.
 
 ## Dependency cost
 
