@@ -177,23 +177,30 @@ def test_invalid_model_values_are_refused(
     assert repr(value) in said
 
 
-def test_a_companion_allows_non_gguf_names_but_not_paths(tmp_path: Path) -> None:
+@pytest.mark.parametrize("filename", ["mmproj-model-f16", "MTP/mmproj-model-f16"])
+def test_a_companion_preserves_safe_segments_without_a_suffix_rule(
+    tmp_path: Path, filename: str
+) -> None:
+    """A companion may be a projector, an adapter or a vocoder, so it carries no suffix.
+    Directory segments are preserved; traversal cannot escape `backend/models`.
+    """
     projector = {
         "repo": "publisher/Model-GGUF",
         "revision": "0" * 40,
-        "file": "mmproj-model-f16",
+        "file": filename,
         "sha256": "b" * 64,
         "flag": "-md",
     }
     entry = _an_entry(byte_count=4215695776, companion_files=[projector])
     files = model_refs.list_model_files(_a_config_tree(tmp_path / "good", entry))
-    assert [item.file for item in files] == ["model-Q4_K_M.gguf", "mmproj-model-f16"]
-    assert files[1].landed_path == f"{model_refs.MODELS_DIR}/mmproj-model-f16"
-    assert files[1].flag == "-md"
-    assert files[0].byte_count == "4215695776"
-    assert files[1].byte_count == ""
+    assert [one.file for one in files] == ["model-Q4_K_M.gguf", filename]
+    assert files[1].landed_path == f"{model_refs.MODELS_DIR}/{filename}"
+    assert files[1].flag == "-md", "one leading dash is llama.cpp's short draft-model flag"
+    assert files[0].flag == "", "the weights are named by the launcher, not by config"
+    assert files[0].byte_count == "4215695776", "the declared size, as the string its rule reads"
+    assert files[1].byte_count == "", "a companion that declares no size skips the cross-check"
     escaping = dict(projector, file="../../x.gguf")
-    with pytest.raises(SystemExit, match=re.escape("not one path segment")):
+    with pytest.raises(SystemExit, match=re.escape("not a safe relative POSIX path")):
         model_refs.list_model_files(
             _a_config_tree(tmp_path / "bad", _an_entry(companion_files=[escaping]))
         )
