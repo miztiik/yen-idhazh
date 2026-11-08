@@ -436,7 +436,7 @@ def main() -> None:
                         drain_result,
                     ),
                     name="text-analysis-event-drain",
-                    daemon=False,
+                    daemon=True,
                 )
                 try:
                     event_drain.start()
