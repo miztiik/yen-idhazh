@@ -18,8 +18,10 @@ from summary_eval_pipeline.contracts import (
 )
 from summary_eval_pipeline.host_reader import MachineUsage
 from summary_eval_pipeline.inputs import ManualInputs
-from summary_eval_pipeline.phase_contracts import PhaseShutdown
-from summary_eval_pipeline.phase_result import build_evidence
+from summary_eval_pipeline.previous_phase_contracts import PhaseEvidence as PreviousPhaseEvidence
+from summary_eval_pipeline.previous_report_contracts import (
+    PipelineEvidence as PreviousPipelineEvidence,
+)
 from summary_eval_pipeline.report_contracts import (
     PipelineDocument,
     PipelineEvidence,
@@ -42,8 +44,11 @@ from summary_evaluator.shared.contracts.server_contract import SERVER_SCHEMA_VER
 from summary_evaluator.shared.contracts.service_settings import ListenerSettings
 from summary_evaluator.shared.contracts.worker_exit import WorkerExit
 from summary_evaluator.shared.contracts.worker_identity import WorkerIdentity
+from summary_evaluator.unieval.contracts.previous_unieval_result import (
+    PreviousEffectiveUnievalControls,
+    PreviousUnievalResult,
+)
 from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_VERSION
-from summary_evaluator.unieval.contracts.unieval_request import EffectiveUnievalControls
 from summary_evaluator.unieval.contracts.unieval_result import (
     DimensionWork,
     UnievalHealth,
@@ -63,7 +68,7 @@ UNIEVAL_INSTANCE = "99999999-8888-4777-8666-555555555555"
 
 def scorer_api_example(
     scorer: Literal["hhem", "unieval"],
-    result: EvaluationResult | UnievalResult | None = None,
+    result: EvaluationResult | UnievalResult | PreviousUnievalResult | None = None,
     *,
     errors: tuple[PipelineError, ...] = (),
     stopped: bool | None = True,
@@ -123,7 +128,7 @@ def scorer_api_example(
     )
 
 
-def in_memory_pipeline() -> tuple[ManualInputs, PipelineEvidence]:
+def previous_pipeline_example() -> tuple[ManualInputs, PreviousPipelineEvidence]:
     inputs = ManualInputs(source_text="Source.", reference_summary_text="Reference.")
     run = RunIdentity(
         run_id="contract-run", attempt=1, git_sha="a" * 40,
@@ -174,7 +179,7 @@ def in_memory_pipeline() -> tuple[ManualInputs, PipelineEvidence]:
         errors=(),
     )
     work = DimensionWork(planned=1, completed=1)
-    unieval = UnievalResult(
+    unieval = PreviousUnievalResult(
         version=UNIEVAL_VERSION, status="complete", execution_id=UNIEVAL_INSTANCE,
         request_id=REQUEST_ID, correlation_id=CORRELATION_ID,
         reference_summary_sha256=prepared.reference_summary_sha256,
@@ -186,7 +191,7 @@ def in_memory_pipeline() -> tuple[ManualInputs, PipelineEvidence]:
             ),
         ),
         worker=worker.model_copy(update={"pid": 1235}),
-        effective_settings=EffectiveUnievalControls(
+        effective_settings=PreviousEffectiveUnievalControls(
             consistency_source_mode="full_source_prompt", max_input_tokens=1000,
             source_window_tokens=100, source_overlap_tokens=0, max_source_windows=10,
             max_comparisons=100, source_budget_tokens=None,
@@ -212,29 +217,42 @@ def in_memory_pipeline() -> tuple[ManualInputs, PipelineEvidence]:
             {"phase": "closing", "memory_kb": {"total": 1024, "available": 400}, "unavailable": {}},
         ),
     })
-    generated = build_evidence(
-        None, hardware, machine, PhaseShutdown(host_stopped=True, llama_stopped=True), [],
-        phase="generation", run=run,
-        reference_summary_sha256=prepared.reference_summary_sha256,
-        generation_sha256=receipt_hash,
-    )
-    evaluated = build_evidence(
-        hhem, hardware, machine, PhaseShutdown(host_stopped=True), [],
-        phase="evaluation", unieval=unieval,
-        scorer_apis=(scorer_api_example("hhem", hhem), scorer_api_example("unieval", unieval)),
-        evaluation_request_id=REQUEST_ID, evaluation_correlation_id=CORRELATION_ID,
-        run=run, reference_summary_sha256=prepared.reference_summary_sha256,
-        generation_sha256=receipt_hash,
-    )
-    return inputs, PipelineEvidence(
+    generated = PreviousPhaseEvidence.model_validate_json(json.dumps({
+        "version": EVIDENCE_VERSION, "status": "complete", "phase": "generation",
+        "run": run.model_dump(mode="json"), "evaluation": None, "unieval": None,
+        "hardware": hardware.model_dump(mode="json"), "machine": machine.model_dump(mode="json"),
+        "shutdown": {"host_stopped": True, "llama_stopped": True}, "servers": (), "errors": (),
+        "reference_summary_sha256": prepared.reference_summary_sha256,
+        "generation_sha256": receipt_hash,
+    }))
+    evaluated = PreviousPhaseEvidence.model_validate_json(json.dumps({
+        "version": EVIDENCE_VERSION, "status": "complete", "phase": "evaluation",
+        "run": run.model_dump(mode="json"), "evaluation": hhem.model_dump(mode="json"),
+        "unieval": unieval.model_dump(mode="json"),
+        "hardware": hardware.model_dump(mode="json"), "machine": machine.model_dump(mode="json"),
+        "shutdown": {"host_stopped": True}, "servers": (), "errors": (),
+        "scorer_apis": (
+            scorer_api_example("hhem", hhem).model_dump(mode="json"),
+            scorer_api_example("unieval", unieval).model_dump(mode="json"),
+        ),
+        "evaluation_request_id": REQUEST_ID, "evaluation_correlation_id": CORRELATION_ID,
+        "reference_summary_sha256": prepared.reference_summary_sha256,
+        "generation_sha256": receipt_hash,
+    }))
+    return inputs, PreviousPipelineEvidence(
         version=EVIDENCE_VERSION, status="complete", prepared=prepared, generation=receipt,
         generation_phase=generated, evaluation_phase=evaluated, errors=(),
     )
 
 
+def in_memory_pipeline() -> tuple[ManualInputs, PipelineEvidence]:
+    inputs, previous = previous_pipeline_example()
+    return inputs, PipelineEvidence.model_validate_json(previous.model_dump_json())
+
+
 def legacy_pipeline_example(*, current_outer: bool = False) -> PipelineResult:
     """Retain the old shared API shape, including its absent API process observations."""
-    _, pipeline = in_memory_pipeline()
+    _, pipeline = previous_pipeline_example()
     payload = pipeline.model_dump(mode="json")
     payload["version"] = EVIDENCE_VERSION if current_outer else WORKFLOW_VERSION
     for key in ("generation_phase", "evaluation_phase"):

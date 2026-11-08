@@ -4,12 +4,14 @@ import json
 
 import pytest
 from pydantic import ValidationError
-from summary_evaluator_cases.contract_examples import REPOSITORY
+from summary_evaluator_cases.contract_examples import REPOSITORY, example_previous_unieval_result
 from summary_evaluator_cases.unieval_cases import read_unieval_recordings
 
 from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
+from summary_evaluator.unieval.contracts.previous_unieval_result import PreviousUnievalResult
 from summary_evaluator.unieval.contracts.unieval_contract import DIMENSIONS, UNIEVAL_VERSION
+from summary_evaluator.unieval.contracts.unieval_recording import UnievalRecordingInputs
 from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 
@@ -63,3 +65,31 @@ def test_recordings_have_no_fabricated_missing_or_out_of_range_scores() -> None:
     schema = UnievalResult.model_json_schema()
     assert schema["version"] == UNIEVAL_VERSION
     assert set(schema["$defs"]["UnievalScores"]["properties"]) == set(DIMENSIONS)
+
+
+def test_previous_result_reader_keeps_required_four_scores_and_original_identity() -> None:
+    original = example_previous_unieval_result("a" * 64).model_dump_json()
+    saved = PreviousUnievalResult.model_validate_json(original)
+    assert saved.version == "2026-11-04"
+    assert saved.model_dump_json() == original
+    payload = saved.model_dump(mode="json")
+    payload["scores"]["relevance"] = None
+    with pytest.raises(ValidationError, match="all four"):
+        PreviousUnievalResult.model_validate_json(json.dumps(payload))
+    payload = saved.model_dump(mode="json")
+    payload["effective_settings"]["evaluate_relevance"] = False
+    with pytest.raises(ValidationError):
+        PreviousUnievalResult.model_validate_json(json.dumps(payload))
+
+
+def test_previous_recording_reader_keeps_required_reference_and_original_controls() -> None:
+    saved = UnievalRecordingInputs.model_validate_json(
+        (REPOSITORY / "tests" / "fixtures" / "unieval-evaluator" / "model-inputs.json").read_bytes()
+    )
+    payload = saved.model_dump(mode="json")
+    assert saved.version == "2026-11-04"
+    assert "evaluate_relevance" not in payload["cases"][0]["request"]
+    assert "evaluate_relevance" not in payload["cases"][0]["controls"]
+    del payload["cases"][0]["request"]["reference_summary_text"]
+    with pytest.raises(ValidationError):
+        UnievalRecordingInputs.model_validate_json(json.dumps(payload))

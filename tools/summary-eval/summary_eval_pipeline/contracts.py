@@ -21,8 +21,10 @@ from summary_evaluator.shared.contracts.base import (
     Uuid4,
     validate_text,
 )
+from summary_evaluator.unieval.contracts.previous_unieval_result import (
+    PreviousUnievalResult as UnievalResult,
+)
 from summary_evaluator.unieval.contracts.unieval_contract import DIMENSIONS
-from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 
 from idhazh.contracts.app_config import ModelsFile
 
