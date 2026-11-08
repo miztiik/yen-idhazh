@@ -81,6 +81,10 @@ upload failure leaves the job red.
 The job has a 60-minute bound. It prepares only the selected model, runs the
 service through its owned process group and uses the shared TypeScript
 CloudEvents contract. It never writes evidence paths into API configuration.
+The verification step pipes the GitHub event payload to the runner on stdin,
+so dispatch text is not copied into the step environment or command line.
+The runner accepts Uvicorn's preserved SIGTERM exit only when the captured
+events validate one clean `stopped` lifecycle and no service failure.
 
 ## Local execution boundary
 

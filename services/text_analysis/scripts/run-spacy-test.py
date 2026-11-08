@@ -36,12 +36,24 @@ def _required_environment(name: str) -> str:
     return value
 
 
+def _request_text_from_stdin() -> str:
+    try:
+        event = json.load(sys.stdin)
+        inputs = event["inputs"]
+        request_text = inputs["text"]
+    except (KeyError, TypeError, json.JSONDecodeError):
+        raise VerificationError("INVALID_WORKFLOW_INPUT") from None
+    if not isinstance(request_text, str) or not request_text:
+        raise VerificationError("INVALID_WORKFLOW_INPUT")
+    return request_text
+
+
 def _workflow_inputs() -> dict[str, str]:
     language = _required_environment("TEXT_ANALYSIS_LANGUAGE")
     profile = _required_environment("TEXT_ANALYSIS_PROFILE")
     feature_mode = _required_environment("TEXT_ANALYSIS_FEATURE_MODE")
     custom_features = os.environ.get("TEXT_ANALYSIS_CUSTOM_FEATURES", "")
-    request_text = _required_environment("TEXT_ANALYSIS_TEXT")
+    request_text = _request_text_from_stdin()
     if language not in ("en", "zh"):
         raise VerificationError("INVALID_WORKFLOW_INPUT")
     if profile not in ("sm", "md", "lg"):
@@ -296,6 +308,7 @@ def main() -> None:
                 failure_code = failure_code or "EVENT_CAPTURE_FAILED"
 
     report["cleanup"] = cleanup
+    event_validation: dict[str, Any] | None = None
     try:
         event_validation = _run_probe(
             {
@@ -314,7 +327,8 @@ def main() -> None:
         and cleanup is not None
         and cleanup["confirmed"] is True
         and cleanup["forced"] is False
-        and cleanup["exit_code"] == 0
+        and cleanup["exit_code"] in (0, -signal.SIGTERM)
+        and event_validation is not None
     ):
         report["conclusion"] = "success"
     else:

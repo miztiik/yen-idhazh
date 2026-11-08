@@ -134,6 +134,8 @@ DISPATCH_BOOLEAN: Final = "boolean"
 
 DISPATCH_READ_BY_NAME: Final = "read by name"
 
+DISPATCH_READ_FROM_EVENT_STDIN: Final = "read from workflow event stdin"
+
 DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("backfill.yml", "commit"): DISPATCH_BOOLEAN,
     ("backfill.yml", "days"): DISPATCH_READ_BY_NAME,
@@ -167,7 +169,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("spacy-tests.yml", "profile"): DISPATCH_CHOICE,
     ("spacy-tests.yml", "feature_mode"): DISPATCH_CHOICE,
     ("spacy-tests.yml", "custom_features"): DISPATCH_READ_BY_NAME,
-    ("spacy-tests.yml", "text"): DISPATCH_READ_BY_NAME,
+    ("spacy-tests.yml", "text"): DISPATCH_READ_FROM_EVENT_STDIN,
     # The planner checks both the date pattern and real UTC calendar day before
     # resolving selected judges; the workflow passes it through env, not script source.
     ("llm-council.yml", "date"): DISPATCH_READ_BY_NAME,

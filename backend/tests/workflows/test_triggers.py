@@ -12,6 +12,7 @@ from ._harness import (
     DISPATCH_CHOICE,
     DISPATCH_INPUT_SHAPES,
     DISPATCH_READ_BY_NAME,
+    DISPATCH_READ_FROM_EVENT_STDIN,
     EXPECTED_WORKFLOWS,
     RUNS_MAY_OVERLAP,
     SUBSTITUTED_DATE,
@@ -179,7 +180,7 @@ def test_spacy_workflow_checks_out_the_selected_github_sha() -> None:
     assert runner_env["TEXT_ANALYSIS_SELECTED_SHA"] == "${{ github.sha }}"
 
 
-def test_spacy_workflow_passes_free_text_only_through_runner_environment() -> None:
+def test_spacy_workflow_passes_free_text_only_through_runner_stdin() -> None:
     workflow = _load_workflows()["spacy-tests.yml"]
     runner = next(
         step
@@ -187,26 +188,18 @@ def test_spacy_workflow_passes_free_text_only_through_runner_environment() -> No
         if step.get("name") == "Run live text-analysis verification"
     )
     env = _mapping(runner.get("env"), "text-analysis runner env")
-    expected = {
-        "custom_features": (
-            "TEXT_ANALYSIS_CUSTOM_FEATURES",
-            "${{ inputs.custom_features }}",
-        ),
-        "text": ("TEXT_ANALYSIS_TEXT", "${{ inputs.text }}"),
-    }
-
-    for input_name, (env_name, expression) in expected.items():
-        assert env[env_name] == expression
-        assert not any(
-            _names_the_input(body, input_name) for body in _run_bodies(workflow)
-        )
-        references = [
-            str(value)
-            for _, scope in _every_env(workflow)
-            for value in scope.values()
-            if _names_the_input(str(value), input_name)
-        ]
-        assert references == [expression]
+    assert env["TEXT_ANALYSIS_CUSTOM_FEATURES"] == "${{ inputs.custom_features }}"
+    assert "TEXT_ANALYSIS_TEXT" not in env
+    body = str(runner.get("run"))
+    assert '< "$GITHUB_EVENT_PATH"' in body
+    assert not any(_names_the_input(run, "text") for run in _run_bodies(workflow))
+    text_references = [
+        str(value)
+        for _, scope in _every_env(workflow)
+        for value in scope.values()
+        if _names_the_input(str(value), "text")
+    ]
+    assert text_references == []
 
 
 def test_every_dispatch_input_is_shaped_before_anything_acts_on_it() -> None:
@@ -251,6 +244,19 @@ def test_every_dispatch_input_is_shaped_before_anything_acts_on_it() -> None:
                 for _, scope in _every_env(workflow)
                 for value in scope.values()
             ), f"{where} must reach a step through env"
+            continue
+        if shape == DISPATCH_READ_FROM_EVENT_STDIN:
+            assert not any(
+                _names_the_input(body, name) for body in _run_bodies(workflow)
+            ), f"{where} must not be copied into shell source"
+            assert not any(
+                _names_the_input(str(value), name)
+                for _, scope in _every_env(workflow)
+                for value in scope.values()
+            ), f"{where} must not be copied into a step environment value"
+            assert any(
+                '< "$GITHUB_EVENT_PATH"' in body for body in _run_bodies(workflow)
+            ), f"{where} must reach the runner through workflow event stdin"
             continue
         assert shape.startswith("^") and shape.endswith("$"), (
             f"{where}: an unanchored pattern matches a prefix, which is not a shape"

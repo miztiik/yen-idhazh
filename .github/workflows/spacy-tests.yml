@@ -113,7 +113,6 @@ jobs:
           TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
           TEXT_ANALYSIS_FEATURE_MODE: ${{ inputs.feature_mode }}
           TEXT_ANALYSIS_CUSTOM_FEATURES: ${{ inputs.custom_features }}
-          TEXT_ANALYSIS_TEXT: ${{ inputs.text }}
           TEXT_ANALYSIS_WORKFLOW_SHA: ${{ github.workflow_sha }}
           TEXT_ANALYSIS_SELECTED_REF: ${{ github.ref }}
           TEXT_ANALYSIS_SELECTED_SHA: ${{ github.sha }}
@@ -124,6 +123,7 @@ jobs:
         run: >-
           uv run --project services/text_analysis --no-sync python
           services/text_analysis/scripts/run-spacy-test.py
+          < "$GITHUB_EVENT_PATH"
 
       - name: Upload text-analysis evidence
         if: always()
