@@ -59,7 +59,7 @@ test("native machine events are mirrored unchanged while unknown and unsafe even
     expect(warnings.every(event => event.data.code === "CHILD_DIAGNOSTIC_INVALID")).toBe(true);
     expect(projected.result.profile_count).toBe(0);
     expect(projected.error).not.toContain("PRIVATE_");
-    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(projected.error);
+    expect(await readFile(join(directory, serverLogFilename("machine", run)), "utf8")).toBe(projected.error);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -85,7 +85,7 @@ test("a real successful default profile report is not a server error or a repeat
       .map(line => readCloudEvent(JSON.parse(line), value => ServerEventDataSchema.parse(value)));
     expect(events.map(event => event.data.phase)).toEqual(["starting", "stopped"]);
     expect(projected.error).not.toContain("profile-report-regression");
-    expect(await readFile(join(directory, serverLogFilename(run)), "utf8")).toBe(projected.error);
+    expect(await readFile(join(directory, serverLogFilename("machine", run)), "utf8")).toBe(projected.error);
     const invalid = await writeEvents(directory, run, JSON.stringify({
       event: "task_profile", profile: { body: "PRIVATE_BODY" },
     }));
@@ -101,7 +101,7 @@ test("a failed file mirror does not stop a real machine-only child or its finger
   const fixture = await recordedMachineTask();
   const run = fixture.startup.run;
   try {
-    await mkdir(join(fixture.evidence, serverLogFilename(run)));
+    await mkdir(join(fixture.evidence, serverLogFilename("machine", run)));
     const result = await superviseMachineApiTask({
       root: fixture.root, startup: fixture.startup,
       request: async (origin, signal) => {
@@ -122,7 +122,7 @@ test("a failed file mirror does not stop a real machine-only child or its finger
     if (evidence === undefined) throw new Error("The real child must retain its same-run server outcome");
     expect(evidence.pid).toBeGreaterThan(0);
     expect(MachineServerEvidenceSchema.safeParse({
-      ...evidence, log_filename: serverLogFilename({ ...run, attempt: 4 }),
+      ...evidence, log_filename: serverLogFilename("machine", { ...run, attempt: 4 }),
     }).success).toBe(false);
     await expect(readMachineServerEvidence(fixture.evidence, { run_id: "700", attempt: 4 })).rejects.toThrow("invocation");
   } finally { await fixture.close(); }

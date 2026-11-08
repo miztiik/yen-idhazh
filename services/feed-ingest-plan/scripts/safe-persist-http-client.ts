@@ -36,7 +36,7 @@ export async function deliverWorkflowMetadataHttp(input: {
     return await superviseFeedApiTask({
       root: input.root,
       startup: {
-        group: "delivery", delivery: startup, server: await loadHonoSettings(input.root),
+        group: "delivery", delivery: startup, server: await loadHonoSettings(input.root, "delivery"),
         directory: relative(input.root, input.directory).replaceAll("\\", "/"),
         run: { run_id: input.runNumber, attempt: input.attempt, context,
           started_at: earlier[0]?.started_at ?? new Date().toISOString() },

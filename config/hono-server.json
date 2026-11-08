@@ -1,6 +1,10 @@
 {
-  "hostname": "127.0.0.1",
-  "port": 8787,
+  "version": "2026-11-07",
+  "listeners": {
+    "planning": { "hostname": "127.0.0.1", "port": 8787 },
+    "machine": { "hostname": "127.0.0.1", "port": 8788 },
+    "delivery": { "hostname": "127.0.0.1", "port": 8789 }
+  },
   "idle_timeout_seconds": 30,
   "supervision": {
     "readiness_timeout_ms": 30000,

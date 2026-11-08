@@ -218,9 +218,18 @@ which run inside the backend group.
 ### Independent Python service contracts
 
 Project bindings: the summary evaluator uses its own CPython 3.12 environment and
-manifest. Inspect the shared selection without changing its selector. Prepare
-the existing writer for the real UUID comparison, then run from the service
-directory:
+manifest. Its frozen environment installs the sibling `local_api_host` path
+dependency; the evaluator's strict type path includes that package, and the
+complete suites exercise it through the real evaluator adapter. Validate both
+locks without installing before preparing the environment:
+
+```powershell
+uv lock --locked --project .\services\local_api_host
+uv lock --locked --project .\services\summary_evaluator
+```
+
+Inspect the shared selection without changing its selector. Prepare the existing
+writer for the real UUID comparison, then run from the service directory:
 
 ```powershell
 npm --prefix .\frontend run test:changed -- --list
@@ -240,6 +249,11 @@ uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test
 
 If Bun cannot copy the local writer dependency on Windows, repeat its locked
 install with `--linker=isolated`; do not change either package manifest or lock.
+After a source merge, a copied local dependency can still expose its earlier
+contract fields. Refresh that package's frozen install with
+`--force --linker=isolated` before diagnosing a missing-field type error as an
+application defect. This refresh changes installed copies, not source limits
+or committed manifests.
 The evaluator's complete offline suite, strict types and lint run in the Linux
 `model-free` job in `ci.yml`, using the existing code-change gate and
 `check-summary-evaluator` action. The dedicated manual `summary-eval-tests.yml`
@@ -484,16 +498,22 @@ bun install --frozen-lockfile --cwd .\packages\data-delivery
 bun install --frozen-lockfile --cwd .\services\host-fingerprints
 bun install --frozen-lockfile --cwd .\services\host-probes
 bun install --frozen-lockfile --cwd .\services\feed-ingest-plan
+bun install --frozen-lockfile --cwd .\services\summary-generator
 bun run --cwd .\services\serve-pipeline-apis check
 bun run --cwd .\services\serve-pipeline-apis test
 bun run --cwd .\services\host-probes check
 bun run --cwd .\services\host-probes test .\test\serve-machine-apis.test.ts .\test\record-machine-api-events.test.ts .\test\check-machine-api-dependencies.test.ts
 bun run --cwd .\services\feed-ingest-plan check
-bun run --cwd .\services\feed-ingest-plan test .\test\serve-feed-apis.test.ts .\test\retain-api-profiles.test.ts .\test\feed-ingest-plan-supervisor.test.ts .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-workflow.test.ts .\test\feed-ingest-plan-report.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\feed-ingest-plan-host.test.ts
+bun run --cwd .\services\feed-ingest-plan test .\test\serve-feed-apis.test.ts .\test\retain-api-profiles.test.ts .\test\independent-api-lifetimes.test.ts .\test\feed-ingest-plan-supervisor.test.ts .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-workflow.test.ts .\test\feed-ingest-plan-report.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\feed-ingest-plan-host.test.ts
 ```
 
-The shared-port oracle uses real fingerprint and sampling handlers, recorded
-source fetch/parse operations and real profile-worker shutdown. Existing
+The bounded ownership oracle hosts the actual planning and machine
+applications in separate Bun processes and drives their same served objects
+through owned IPC and native in-memory HTTP dispatch. It verifies actual
+PID/start pins, reciprocal restart, parent-pipe loss, held fetch/parse state
+and retained native results. It adds no network-test matrix or production
+test hook. Existing named listener/readiness checks retain their HTTP surface
+and recorded source boundary. Existing
 engine cases still cover uncertain startup/lookup/release replies and
 cancellation during preparation. Failed startup retains reportable lifecycle
 evidence and available log artifacts independently of a planner result.
@@ -513,7 +533,7 @@ Type-check the comparison workflow's native bridge with Node and the probe
 package's explicit locked Bun type binding:
 
 ```powershell
-node .\services\host-probes\node_modules\typescript\bin\tsc --noEmit --target ESNext --module ESNext --moduleResolution Bundler --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --noUnusedLocals --noUnusedParameters --verbatimModuleSyntax --skipLibCheck --types .\services\host-probes\node_modules\@types\bun .\.github\scripts\summary-eval-tests\summary_eval_tests\host-profile-bridge.ts
+node .\services\host-probes\node_modules\typescript\bin\tsc --noEmit --target ESNext --module ESNext --moduleResolution Bundler --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --noUnusedLocals --noUnusedParameters --verbatimModuleSyntax --skipLibCheck --types .\services\host-probes\node_modules\@types\bun .\.github\scripts\summary-eval-tests\machine-task.ts .\.github\scripts\summary-eval-tests\summary_eval_tests\host-profile-bridge.ts
 ```
 
 The bridge remains an importer of the native route constants. Its model-free

@@ -1,23 +1,5 @@
-"""How does a server exit retain its actual ASGI lifespan outcome?"""
+"""Where do evaluator callers retain the neutral server-exit import path?"""
 
-import socket
+from local_api_host.run_server import has_clean_lifespan, run_server
 
-import uvicorn
-from uvicorn.lifespan.on import LifespanOn
-
-
-def has_clean_lifespan(server: uvicorn.Server) -> bool:
-    lifespan = getattr(server, "lifespan", None)
-    return (
-        server.started
-        and isinstance(lifespan, LifespanOn)
-        and not lifespan.error_occurred
-        and not lifespan.startup_failed
-        and not lifespan.shutdown_failed
-    )
-
-
-def run_server(server: uvicorn.Server, sockets: list[socket.socket]) -> None:
-    server.run(sockets=sockets)
-    if not has_clean_lifespan(server):
-        raise SystemExit(1)
+__all__ = ["has_clean_lifespan", "run_server"]

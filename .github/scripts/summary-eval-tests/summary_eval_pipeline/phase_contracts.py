@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, RootModel, model_validator
+from pydantic import ConfigDict, Field, RootModel, model_validator
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.shared.contracts.base import OutcomeStatus, Sha256, Uuid4
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
@@ -17,7 +17,7 @@ from .contracts import (
     has_completed_score,
 )
 from .contracts import PhaseEvidence as LegacyPhaseEvidence
-from .host_reader import MachineUsage, measurement_complete
+from .host_reader import HonoServerReader, MachineUsage, measurement_complete
 from .scorer_evidence import EvidenceContract, ScorerApiEvidence
 
 
@@ -68,6 +68,16 @@ def phase_status(
 
 
 class PhaseEvidence(EvidenceContract):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": "2026-11-07",
+            "readCompatibility": "read older phases without inventing process identity",
+            "changelog": [
+                {"version": "2026-11-07", "change": "Record independent API lifetimes."}
+            ],
+        }
+    )
+
     version: Literal["2026-11-07"]
     run: RunIdentity
     phase: PhaseName
@@ -81,7 +91,7 @@ class PhaseEvidence(EvidenceContract):
     hardware: Hardware | None
     machine: MachineUsage | None
     shutdown: PhaseShutdown
-    servers: tuple[ServerOutcome, ...]
+    servers: tuple[HonoServerReader | ServerOutcome, ...]
     errors: tuple[PipelineError, ...]
     generation_sha256: Sha256 | None = None
 

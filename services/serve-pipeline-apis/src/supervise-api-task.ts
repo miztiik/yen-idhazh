@@ -5,11 +5,11 @@ import type { z } from "zod";
 import { PIPELINE_API_EVENT_SOURCE } from "./declare-event-source";
 import { superviseHttpChild } from "./supervise-http-child";
 import { ApiHostStartupSchema } from "./api-startup";
-import type { ApiHostStartup } from "./api-startup";
+import type { ApiHostStartup, ApiReady, ApiReadiness } from "./api-startup";
 import type { HttpChildFailure, HttpChildFailurePolicy, HttpChildKind } from "./http-child-failure";
 import type { SupervisionSettings } from "./load-settings";
-import { serverEvidenceFilename, serverLogFilename } from "./server-evidence";
-import type { ServerEvidence } from "./server-evidence";
+import { SERVER_EVIDENCE_VERSION, serverEvidenceFilename, serverLogFilename } from "./server-evidence";
+import type { CurrentServerEvidence, ServerEvidence } from "./server-evidence";
 import { createServerEventWriter } from "./write-server-event";
 import type { ApiDiagnostic } from "./write-server-event";
 import type { ApiGroup } from "./server-evidence";
@@ -20,8 +20,8 @@ export async function superviseApiTask<T, Profile, Failure extends HttpChildFail
   supervision: SupervisionSettings; maxControlBytes: number;
   evidenceSchema: z.ZodType<ServerEvidence<Profile>>;
   decodeDiagnostic: (raw: unknown) => ApiDiagnostic<Profile, NativeData>;
-  ready: (message: unknown, pid: number, signal: AbortSignal) => Promise<string>;
-  request: (origin: string, signal: AbortSignal) => Promise<T>;
+  ready: (message: unknown, pid: number, signal: AbortSignal) => Promise<ApiReadiness>;
+  request: (origin: string, signal: AbortSignal, identity: ApiReady) => Promise<T>;
 }): Promise<T> {
   const startup = ApiHostStartupSchema.parse(input.startup);
   const directory = resolve(input.root, startup.directory);
@@ -31,11 +31,12 @@ export async function superviseApiTask<T, Profile, Failure extends HttpChildFail
     decode: input.decodeDiagnostic,
   });
   const started = performance.now();
-  const evidence: ServerEvidence<Profile> = {
-    version: "2026-11-04", server_name: "hono-server", group: input.startup.group,
+  const evidence: CurrentServerEvidence<Profile> = {
+    version: SERVER_EVIDENCE_VERSION, server_name: "hono-server", group: input.startup.group,
     run_id: startup.run.run_id, attempt: startup.run.attempt, started_at: startup.run.started_at,
     pid: null, startup: "not_started", startup_ms: null, shutdown: "not_started", exit_code: null,
-    log_filename: serverLogFilename(startup.run), log_available: logger.available,
+    log_filename: serverLogFilename(input.startup.group, startup.run), log_available: logger.available,
+    listener: { hostname: startup.server.hostname, port: startup.server.port }, identity: null,
     error_code: null, cleanup_error_code: null, reported_profiles: [],
   };
   let original: unknown;
@@ -57,6 +58,8 @@ export async function superviseApiTask<T, Profile, Failure extends HttpChildFail
       observe: event => {
         evidence.pid = event.pid;
         if (event.phase === "ready") {
+          if (event.identity === undefined) throw new Error("Ready server observation has no verified identity");
+          evidence.identity = event.identity;
           evidence.startup = "ready";
           evidence.startup_ms = performance.now() - started;
         } else if (event.phase === "startup_failed") {

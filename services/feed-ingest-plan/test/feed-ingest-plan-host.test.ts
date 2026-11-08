@@ -15,11 +15,38 @@ import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts"
 import { renderUnavailablePlanMarkdown } from "../src/reporting";
 import { metadataRegistrations, recordedWorkflowHost } from "./host-recordings";
 import { createApiApp, serveApiApp } from "@idhazh/serve-pipeline-apis/app";
+import { createRootContext } from "@idhazh/common-contracts";
+import { captureWorkflowMachineTask } from "../scripts/capture-workflow-machine-task";
 import { createMachineApp } from "@idhazh/host-probes/machine-app";
 import { loadHonoSettings } from "@idhazh/serve-pipeline-apis/settings";
 import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 
 const identity = { run_id: "2026-10-21-700", attempt: 1, git_sha: "a".repeat(40) };
+
+test("a finite machine startup failure preserves completed fingerprint evidence without starting planning", async () => {
+  const f = await fixture();
+  try {
+    const directory = join(f.directory, "evidence");
+    await mkdir(join(f.directory, "config"));
+    const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
+    settings.observability.host_telemetry_enabled = true;
+    settings.observability.host_fingerprint = true;
+    await writeFile(join(f.directory, "config", "idhazh.json"), JSON.stringify(settings));
+    await writeFile(join(f.directory, "config", "hono-server.json"), JSON.stringify({ version: "2026-11-07" }));
+    const host = await recordedWorkflowHost(directory, identity);
+    const before = await readFile(join(directory, "host-fingerprint.json"));
+    const files = host.response.files.map(file => join(directory, "state", file.path));
+    const bytes = await Promise.all(files.map(file => readFile(file)));
+    await expect(captureWorkflowMachineTask({
+      root: f.directory, directory, stateRoot: join(directory, "state"),
+      identity, registrations: host.registrations, registryPath: "config/ledgers.json",
+      run: { run_id: "700", attempt: 1, started_at: "2026-10-21T00:00:00Z", context: createRootContext() },
+    })).rejects.toThrow();
+    expect(await readFile(join(directory, "host-fingerprint.json"))).toEqual(before);
+    expect(await Promise.all(files.map(file => readFile(file)))).toEqual(bytes);
+    expect(await Bun.file(join(directory, "hono-server-machine.json")).exists()).toBe(false);
+  } finally { await f.cleanup(); }
+});
 
 async function reservePort() {
   const socket = createServer();
@@ -86,7 +113,7 @@ test("workflow collection retains the actual host fingerprint beside planner fil
     for (const name of ["ledgers.json"]) {
       await copyFile(new URL(`../../../config/${name}`, import.meta.url), join(f.directory, "config", name));
     }
-    const listener = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)));
+    const listener = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)), "machine");
     const probes = { config: await loadProbeConfig(new URL("../../../config/host-probes.json", import.meta.url)) };
     const shared = await serveApiApp({ ...listener, port: config.listen_port }, createApiApp({
       identity: { event: "typescript_api_ready", nonce: crypto.randomUUID(), pid: process.pid,

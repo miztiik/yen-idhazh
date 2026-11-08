@@ -96,7 +96,9 @@ def test_real_helper_startup_failure_retains_safe_cause_without_adopting_another
     path = tmp_path / pipeline.output_directory / "config" / "hono-server.json"
     controls = json.loads(path.read_bytes())
     with reserved_loopback_listener() as (port, unrelated):
-        controls["port"] = "PrivateMachineSettingsCanary" if failure == "invalid_settings" else port
+        controls["listeners"]["machine"]["port"] = (
+            "PrivateMachineSettingsCanary" if failure == "invalid_settings" else port
+        )
         path.write_text(json.dumps(controls), encoding="utf-8")
         script = REPOSITORY / ".github" / "scripts" / "summary-eval-tests" / "machine-task.ts"
         child = OwnedService(

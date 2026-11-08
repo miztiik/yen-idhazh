@@ -24,7 +24,7 @@ test("shutdown-only native profile data survives manager cleanup and the owned p
       root: fixture.directory,
       serverEntry: fileURLToPath(new URL("../../host-probes/test/run-recorded-machine-api-child.ts", import.meta.url)),
       startup: {
-        group: "machine", nonce: randomUUID(), server: await loadHonoSettings(fixture.directory),
+        group: "machine", nonce: randomUUID(), server: await loadHonoSettings(fixture.directory, "machine"),
         directory: relative(fixture.directory, fixture.evidence).replaceAll("\\", "/"),
         state_root: relative(fixture.directory, fixture.inputs.outputRoot).replaceAll("\\", "/"),
         run,
@@ -64,7 +64,15 @@ test("shutdown-only native profile data survives manager cleanup and the owned p
     expect(profile.samples.at(-1)?.phase).toBe("closing");
     const { reported_profiles: capturedProfiles, ...earlierEvidence } = evidence;
     expect(capturedProfiles).toHaveLength(1);
-    expect(MachineServerEvidenceSchema.parse(earlierEvidence).reported_profiles).toEqual([]);
+    expect(MachineServerEvidenceSchema.safeParse(earlierEvidence).success).toBe(false);
+    if (earlierEvidence.version !== "2026-11-07") throw new Error("The current writer must retain its declared profile reports");
+    const { identity, listener, ...legacy } = earlierEvidence;
+    expect(identity?.pid).toBe(result.pid);
+    expect(listener.port).toBeGreaterThan(0);
+    expect(MachineServerEvidenceSchema.parse({
+      ...legacy, version: "2026-11-04",
+      log_filename: legacy.log_filename.replace("hono-server_machine_", "hono-server_"),
+    }).reported_profiles).toEqual([]);
     await prepareServerArtifacts({ directory: fixture.evidence, runNumber: "700", attempt: 3 });
     const retained = MachineServerEvidenceSchema.parse(await Bun.file(
       join(fixture.evidence, "artifacts", "hono-server-machine.json"),

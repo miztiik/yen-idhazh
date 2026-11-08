@@ -264,7 +264,7 @@ test("planner configuration refuses retired acquisition controls", async () => {
 
 test("planner settings reject the shared supervision authority", async () => {
   const settings = ServiceSettingsSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan-service.json")).json());
-  const server = await loadHonoSettings(root);
+  const server = await loadHonoSettings(root, "planning");
   expect(ServiceSettingsSchema.safeParse({ ...settings, supervision: server.supervision }).success).toBe(false);
 });
 

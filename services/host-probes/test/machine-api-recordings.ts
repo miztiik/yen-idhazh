@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRootContext } from "@idhazh/common-contracts";
-import { loadHonoSettings } from "@idhazh/serve-pipeline-apis/settings";
+import { HonoServerConfigSchema, loadHonoSettings } from "@idhazh/serve-pipeline-apis/settings";
 import { MachineApiStartupSchema } from "../src/api/read-machine-api-startup";
 
 export async function recordedMachineTask() {
@@ -17,11 +17,14 @@ export async function recordedMachineTask() {
       "hono-server.json", "host-fingerprints.json",
       "host-probes.json", "idhazh.json", "ledgers.json",
     ]) await copyFile(new URL(`../../../config/${name}`, import.meta.url), join(root, "config", name));
-    const authored = await loadHonoSettings(root);
+    const authored = await loadHonoSettings(root, "machine");
     const reservation = Bun.serve({ hostname: authored.hostname, port: 0, fetch: () => new Response() });
     const server = { ...authored, port: reservation.port! };
     await reservation.stop(true);
-    await Bun.write(join(root, "config", "hono-server.json"), JSON.stringify(server));
+    const settingsPath = join(root, "config", "hono-server.json");
+    const listeners = HonoServerConfigSchema.parse(await Bun.file(settingsPath).json());
+    listeners.listeners.machine.port = server.port;
+    await Bun.write(settingsPath, JSON.stringify(listeners));
     const settings = await Bun.file(join(root, "config", "idhazh.json")).json();
     Object.assign(settings.observability, {
       host_telemetry_enabled: true, host_fingerprint: true,

@@ -29,8 +29,8 @@ do not supply API execution, history, verification or reporting.
 The workflow entry is `scripts/run-feed-ingest-plan.ts`. Preparation lives in
 `scripts/feed-ingest-plan-workflow-inputs.ts`: it loads authored settings from
 the initial checkout, enables only this invocation and captures identity, effective policy and host
-controls. Host evidence is captured through the shared listener after actual
-readiness, before planning. Code identity comes from the checkout's validated `GITHUB_SHA`, or
+controls. Host evidence is captured by a separate finite machine task after
+its actual readiness, before the planning task starts. Code identity comes from the checkout's validated `GITHUB_SHA`, or
 an explicitly supplied runtime identity for a standalone caller. Missing or
 invalid identity fails before writes. Preparation, startup, output verification,
 reports and artifact packaging never query `HEAD` or invoke Git.
@@ -41,7 +41,7 @@ final data delivery.
 `scripts/feed-ingest-plan-http-client.ts` calls an existing listener
 and verifies retained output; it does not start or stop the listener. The entry
 supervises its native `scripts/serve-feed-apis.ts` as a separate child process in
-one workflow step. Its address comes only from `config/hono-server.json`;
+one workflow step. Its group-selected address comes only from `config/hono-server.json`;
 standalone listener settings above do not select it.
 It verifies private-pipe readiness against the child's
 process ID, a fresh startup nonce, run, attempt, captured UTC clock and code
@@ -54,7 +54,7 @@ the actual health report, then releases its finalized collection before
 replying. The HTTP client saves and verifies the returned result; it makes
 no report or release continuation. A failed report or release fails the
 request without erasing independently completed planning output.
-Always-run finalization then restarts the same application with its
+Always-run finalization then starts its separate delivery application with the
 [safe-persist routes](feed-operator-api.md#safe-persist-http-delivery).
 It reuses the existing metadata adapter and the same process-lifetime code,
 without loading collection inputs or reopening in-memory planner batches.

@@ -22,6 +22,7 @@ import {
   readMachineServerEvidence as readServerEvidence, MachineServerEvidenceSchema as ServerEvidenceSchema,
 } from "@idhazh/host-probes/machine-evidence";
 import { serverLogFilename } from "@idhazh/serve-pipeline-apis/evidence";
+import { HonoServerConfigSchema } from "@idhazh/serve-pipeline-apis/settings";
 import { describePlanError } from "../src/api/plan-failure";
 
 function attention(markdown: string) {
@@ -70,9 +71,13 @@ async function writeDiagnosticMirror(f: Awaited<ReturnType<typeof plannerOutputR
   available = true) {
   const run = { run_id: f.response.run_id.slice(11), attempt: f.response.attempt, started_at: f.response.started_at };
   const server = ServerEvidenceSchema.parse({
-    version: "2026-11-04", server_name: "hono-server", group: "planning", ...run,
+    version: "2026-11-07", server_name: "hono-server", group: "planning", ...run,
+    listener: HonoServerConfigSchema.parse(await Bun.file(
+      new URL("../../../config/hono-server.json", import.meta.url),
+    ).json()).listeners.planning,
+    identity: null, reported_profiles: [],
     pid: null, startup: "not_started", startup_ms: null, shutdown: "not_started", exit_code: null,
-    log_filename: serverLogFilename(run), log_available: available, error_code: null, cleanup_error_code: null,
+    log_filename: serverLogFilename("planning", run), log_available: available, error_code: null, cleanup_error_code: null,
   });
   await writeFile(join(f.directory, "hono-server-planning.json"), JSON.stringify(server));
   await writeFile(join(f.directory, server.log_filename), records.map(record => JSON.stringify(record)).join("\n") + "\n");

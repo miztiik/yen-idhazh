@@ -21,7 +21,7 @@ export function createServerEventWriter<Profile, NativeData = never>(input: {
   decode: (raw: unknown) => ApiDiagnostic<Profile, NativeData>;
 }) {
   const context = createChildContext(input.run.context);
-  const filename = serverLogFilename(input.run);
+  const filename = serverLogFilename(input.group, input.run);
   let descriptor: number | undefined;
   let available = true;
   const profiles = new Map<string, Profile>();

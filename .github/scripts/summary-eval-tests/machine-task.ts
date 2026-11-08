@@ -6,8 +6,8 @@ import { unlink } from "node:fs/promises";
 import type { Readable } from "node:stream";
 import { createRootContext, OperationMetadataSchema, writeTraceContext } from "../../../packages/common-contracts/src";
 import { superviseMachineApiTask } from "../../../services/host-probes/src/api/supervise-machine-api-task";
-import { HonoServerSettingsSchema } from "../../../services/serve-pipeline-apis/src/load-settings";
-import { MachineServerEvidenceSchema } from "../../../services/host-probes/src/api/create-machine-server-evidence";
+import { loadHonoSettings } from "../../../services/serve-pipeline-apis/src/load-settings";
+import { CurrentMachineServerEvidenceSchema } from "../../../services/host-probes/src/api/create-machine-server-evidence";
 import { loadConfig } from "../../../services/host-probes/src/config";
 import { readProcessIdentity } from "../../../services/host-probes/src/task-profile/process-stat";
 import { TaskProfileSchema } from "../../../services/host-probes/src/task-profile/profile-schema";
@@ -15,7 +15,7 @@ import { FINGERPRINT_PATH } from "../../../services/host-fingerprints/src/api/se
 import { FingerprintResponseSchema } from "../../../services/host-fingerprints/src/api/fingerprint-response";
 import { START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../../services/host-probes/src/api/server";
 import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../../../services/host-probes/src/api/task-command-schema";
-import { HardwareSchema, projectMachineProfile } from "./machine-results";
+import { HardwareSchema, MachineServerProjectionSchema, projectMachineProfile } from "./machine-results";
 
 const VERSION = "2026-11-05"; // Disposable workflow control version.
 const StartupSchema = z.strictObject({
@@ -87,7 +87,7 @@ async function main() {
   }).catch(() => { abort(); return null; });
   let profile: z.infer<typeof TaskProfileSchema> | null = null;
   let clean = true;
-  let server: z.infer<typeof MachineServerEvidenceSchema> | null = null;
+  let server: z.infer<typeof CurrentMachineServerEvidenceSchema> | null = null;
   const context = createRootContext();
   let currentEvidence = false;
   let announced = false;
@@ -104,9 +104,7 @@ async function main() {
     });
     currentEvidence = true;
     stage = "MACHINE_API_STARTUP_INVALID";
-    const listener = HonoServerSettingsSchema.parse(
-      await Bun.file(join(runtime, "config", "hono-server.json")).json(),
-    );
+    const listener = await loadHonoSettings(runtime, "machine");
     await superviseMachineApiTask({
       root: runtime, signal: cancellation.signal,
       startup: {
@@ -213,8 +211,8 @@ async function main() {
       if (!currentEvidence) throw new Error("No current machine server evidence was started");
       const file = Bun.file(join(runtime, "logs", "hono-server-machine.json"));
       if (file.size > pipeline.max_response_bytes) throw new Error("Oversized server evidence");
-      server = MachineServerEvidenceSchema.parse(await file.json());
-      if (server.run_id !== startup.run.run_id || server.attempt !== startup.run.attempt
+      server = CurrentMachineServerEvidenceSchema.parse(await file.json());
+      if (server.group !== "machine" || server.run_id !== startup.run.run_id || server.attempt !== startup.run.attempt
         || server.started_at !== startup.run.started_at) throw new Error("Stale machine evidence");
       profile ??= server.reported_profiles.at(-1) ?? null;
       cleanupErrorCode ??= server.cleanup_error_code;
@@ -232,12 +230,7 @@ async function main() {
       pid: process.pid, clean, worker_exit_confirmed: null,
       error_code: errorCode, cleanup_error_code: cleanupErrorCode, http_status: httpStatus,
       machine: profile === null ? null : projectMachineProfile(profile),
-      server: server === null ? null : {
-        server_name: server.server_name, startup: server.startup, startup_ms: server.startup_ms,
-        shutdown: server.shutdown, exit_code: server.exit_code,
-        log_filename: server.log_filename, log_available: server.log_available,
-        error_code: server.error_code, cleanup_error_code: server.cleanup_error_code,
-      },
+      server: server === null ? null : MachineServerProjectionSchema.parse(server),
     });
     process.off("SIGINT", abort);
     process.off("SIGTERM", abort);

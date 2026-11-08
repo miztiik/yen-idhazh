@@ -36,14 +36,11 @@ test("exported host and shared paths use the fixed HTTP protocol date", () => {
 
 test("shared planning and delivery keep distinct native health and refuse every retired feed route", async () => {
   const recorded = await recordedPlan();
-  const host = await fixture();
-  const config = await loadConfig();
-  host.settings.observability.host_fingerprint = false;
   const runtime = { ...createRootContext(), git_sha: recorded.runtime.git_sha, run_number: "700",
     attempt: 1, captured_at: "2026-10-21T23:59:59Z" };
   const identity = ApiReadySchema.parse({
     event: "typescript_api_ready", nonce: crypto.randomUUID(), pid: process.pid, port: recorded.inputs.settings.listener.port,
-    group: "planning", modules: ["planning", "machine"], enabled: true,
+    group: "planning", modules: ["planning"], enabled: true,
   });
   const plannerIdentity = PlannerReadySchema.parse({
     event: "planner_ready", nonce: identity.nonce, pid: identity.pid, port: identity.port, runtime,
@@ -53,10 +50,6 @@ test("shared planning and delivery keep distinct native health and refuse every 
   });
   const planning = createFeedApiApp({
     identity, planner: { inputs: recorded.inputs, runtime: recorded.runtime, identity: plannerIdentity },
-    machine: {
-      fingerprint: { config: host.config, settings: host.settings, options: { outputRoot: host.directory } },
-      probes: { config, context: { platform: "unsupported" } },
-    },
   });
   const delivery = createFeedApiApp({
     identity: ApiReadySchema.parse({ ...identity, group: "delivery", modules: ["delivery"] }),
@@ -90,14 +83,13 @@ test("shared planning and delivery keep distinct native health and refuse every 
   } finally {
     await Promise.all([planning.close(), delivery.close()]);
     await recorded.close();
-    await host.cleanup();
   }
 });
 
 test("shared dispatch preserves native disabled payloads, uncached identity and method refusals", async () => {
   const host = await fixture();
   const config = await loadConfig();
-  const server = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)));
+  const server = await loadHonoSettings(fileURLToPath(new URL("../../../", import.meta.url)), "machine");
   host.settings.observability.host_fingerprint = false;
   config.task_profile.enabled = false;
   config.cache_probe.counters.enabled = false;

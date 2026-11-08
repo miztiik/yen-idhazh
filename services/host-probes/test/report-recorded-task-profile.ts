@@ -8,7 +8,7 @@ import { serveRecordedMachine } from "./serve-recorded-machine-api";
 
 async function recordProfileReport() {
   const root = fileURLToPath(new URL("../../../", import.meta.url));
-  const listener = await loadHonoSettings(root);
+  const listener = await loadHonoSettings(root, "machine");
   const reservation = Bun.serve({ hostname: listener.hostname, port: 0, fetch: () => new Response() });
   const port = reservation.port!;
   await reservation.stop(true);
