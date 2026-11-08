@@ -177,7 +177,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | I1 | 1 | Extract the reusable local Python API host | - | A | DONE | extract-reusable-api-host | - | Extract reusable API host |
 | I2 | 2 | Register the manual text-analysis workflow | 1 | B | DONE | register-text-analysis-workflow | - | Register text analysis workflow |
-| I3 | 3 | Build and verify the multilingual text-analysis API | 1, 2 | C | PENDING | - | - | - |
+| I3 | 3 | Build and verify the multilingual text-analysis API | 1, 2 | C | DONE | build-multilingual-text-analysis-api | - | Build multilingual text analysis API |
 
 ## 2. Row #1 - Extract the reusable local Python API host
 
