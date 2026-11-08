@@ -125,6 +125,18 @@ cleanup, not a service failure. New receipts expose no raw exit code.
 
 ## Local execution boundary
 
+Run the probe's model-free evidence-span check without installing or starting
+the service:
+
+```powershell
+bun test .\services\text_analysis\spacy\scripts\validate-evidence-spans.test.ts
+```
+
+The same test runs in `spacy_ner_test`. It calls the probe's actual offset
+helper with exact source spans after non-BMP characters and invalid bounds or
+text. It proves [evidence offset handling](../reference/text-analysis-api.md#evidence-spans),
+not model recognition quality.
+
 Do not install, import, start or load the text-analysis service locally for
 this verification. CI does not test the workflow declaration or execute the
 service; this manual workflow is the live functional check.
