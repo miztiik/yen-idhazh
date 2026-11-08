@@ -177,7 +177,7 @@
   - `docs/how-to/run-hhem-evaluation-api.md`
   - `docs/how-to/run-the-gates.md`
 - **Acceptance gates - local:** Use the shared selector and unchanged frozen lint/type procedures from row #1; select the named source-plan, reduction and caller-binding tests when debugging.
-- **Acceptance gates - native verification:** Explicitly run the complete offline service/workflow suites on Linux using [the gate guide](../docs/how-to/run-the-gates.md#independent-python-service-contracts); verify contract default binding, explicit override, no truncation, source-end coverage and preserved failed-dimension/sibling outcomes. The remaining backend CI suite does not provide evaluator runtime evidence.
+- **Acceptance gates - CI:** Existing complete Linux model-free service/workflow suites; contract default binding, explicit override, no truncation, source-end coverage and preserved failed-dimension/sibling outcomes.
 - **Acceptance gates - operator surface:** The existing report displays the actual selected mode and comparison counts. The manual form exposes the override defined in F3. No benchmark or additional model download is a prerequisite for switching to the already implemented mode.
 - **Oracle:** Add `test_default_full_source_has_one_consistency_comparison_per_summary_sentence` to the existing window/planning tests. Use a bounded in-memory article whose actual tokenized source exceeds the configured window target but whose full comparisons fit the configured allowance; require one full-source span and the native sentence comparison count, then require the explicit window override to retain its complete-source plan. This proves selection and work geometry, not that full-source inference is faster or more accurate.
 
