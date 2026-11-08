@@ -206,7 +206,7 @@ flowchart LR
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | H1 | 1 | Accept trace-aware scorer envelopes without changing old records | - | A | DONE | fuzzy-parakeet | - | Trace envelope readers |
-| H2 | 2 | Enable actual scorer API and worker trace propagation | 1 | B | PENDING | - | - | - |
+| H2 | 2 | Enable actual scorer API and worker trace propagation | 1 | B | IN PROGRESS | automatic-meme | - | API worker trace propagation |
 | H3 | 3 | Connect retained callers and process diagnostics to scorer traces | 2 | C | PENDING | - | - | - |
 
 ## 2. Row #1 - Accept trace-aware scorer envelopes without changing old records
@@ -255,6 +255,9 @@ flowchart LR
 
 - **Scope:** Enable C5 and wire the middleware receiving operation through real native scorer state, nested work, worker packets and diagnostic factories while preserving score bodies and process policies.
 - **Files touched:**
+  - `services/local_api_host/src/local_api_host/compose_api.py`
+  - `services/local_api_host/src/local_api_host/propagate_trace_context.py`
+  - `docs/architecture/local-api-host.md`
   - `config/summary-evals/api.json`
   - `services/summary_evaluator/src/summary_evaluator/serve_http/api_settings.py`
   - `services/summary_evaluator/src/summary_evaluator/serve_http/contracts/api_settings.py`
@@ -266,6 +269,9 @@ flowchart LR
   - `services/summary_evaluator/src/summary_evaluator/serve_http/emit_events.py`
   - `services/summary_evaluator/src/summary_evaluator/serve_http/configure_server.py`
   - `services/summary_evaluator/src/summary_evaluator/shared/create_api_component.py`
+  - `services/summary_evaluator/src/summary_evaluator/shared/exchange_packets.py`
+  - `services/summary_evaluator/src/summary_evaluator/shared/bound_operation_metadata.py` (new)
+  - `services/summary_evaluator/src/summary_evaluator/__main__.py`
   - `services/summary_evaluator/src/summary_evaluator/hhem/create_api_component.py`
   - `services/summary_evaluator/src/summary_evaluator/hhem/dispatch_evaluation.py`
   - `services/summary_evaluator/src/summary_evaluator/hhem/control_service.py`
@@ -284,6 +290,7 @@ flowchart LR
   - `services/summary_evaluator/src/summary_evaluator/unieval/contracts/unieval_worker_contract.py` (new)
   - `services/summary_evaluator/src/summary_evaluator/unieval/maintain_unieval_worker.py`
   - `services/summary_evaluator/src/summary_evaluator/unieval/unieval_worker.py`
+  - `services/summary_evaluator/src/summary_evaluator/unieval/exchange_packets.py` (new)
   - `services/summary_evaluator/tests/test_contracts.py`
   - `services/summary_evaluator/tests/test_settings.py`
   - `services/summary_evaluator/tests/test_api_deployments.py`
@@ -294,6 +301,15 @@ flowchart LR
   - `services/summary_evaluator/tests/test_worker_lifecycle.py`
   - `services/summary_evaluator/tests/test_unieval_worker.py`
   - `services/summary_evaluator/tests/test_scorer_trace_propagation.py` (new)
+  - `services/summary_evaluator/tests/test_scorer_trace_isolation.py` (new)
+  - `services/summary_evaluator/tests/test_worker_trace_contracts.py` (new)
+  - `services/summary_evaluator/tests/test_trace_context.py`
+  - `services/summary_evaluator/tests/test_unieval_reduction.py`
+  - `services/summary_evaluator/tests/summary_evaluator_cases/contract_examples.py`
+  - `services/summary_evaluator/tests/summary_evaluator_cases/service_cases.py`
+  - `services/summary_evaluator/tests/summary_evaluator_cases/unieval_cases.py`
+  - `services/summary_evaluator/tests/summary_evaluator_cases/observe_owned_exit.py`
+  - `services/summary_evaluator/tests/summary_evaluator_cases/observe_packets.py` (new)
   - `docs/architecture/contracts/identity.md`
   - `docs/architecture/evaluation/summary-evaluator.md`
   - `docs/architecture/evaluation/hhem-evaluation-api.md`

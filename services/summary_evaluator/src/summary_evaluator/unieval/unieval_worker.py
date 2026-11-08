@@ -6,15 +6,15 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
-from summary_evaluator.shared.exchange_packets import ByteChannel
+from summary_evaluator.shared.exchange_packets import ByteChannel, encode_packet
 from summary_evaluator.shared.quiet_model_output import quiet_model_output
 from summary_evaluator.shared.read_process_identity import read_process_identity
 from summary_evaluator.shared.watch_worker_parent import arm_parent_exit, watch_parent
-from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_VERSION
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_request import EffectiveUnievalControls
 from summary_evaluator.unieval.contracts.unieval_result import UnievalWork
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
+from summary_evaluator.unieval.contracts.unieval_worker_contract import UNIEVAL_WORKER_VERSION
 from summary_evaluator.unieval.contracts.unieval_worker_message import (
     RequestPacket,
     UnievalBootstrap,
@@ -86,6 +86,7 @@ def run_unieval_worker(
         threading.Thread(target=watch_parent, args=(lifetime,), daemon=True).start()
         try:
             bootstrap = UnievalBootstrap.model_validate_json(channel.recv_bytes(max_command_bytes))
+            max_reply_bytes = bootstrap.settings.worker.max_reply_bytes
             try:
                 arm_parent_exit()
                 worker = read_process_identity(
@@ -93,22 +94,27 @@ def run_unieval_worker(
                 )
                 predictor = loader(bootstrap.settings, root)
                 ready = UnievalReady(
-                    version=UNIEVAL_VERSION, worker=worker, model=predictor.identity
+                    version=UNIEVAL_WORKER_VERSION,
+                    operation_metadata=bootstrap.operation_metadata,
+                    worker=worker,
+                    model=predictor.identity,
                 )
-                channel.send_bytes(ready.model_dump_json().encode("utf-8"))
+                channel.send_bytes(encode_packet(ready, max_reply_bytes))
             except Exception:
                 failed = UnievalStartupFailed(
-                    version=UNIEVAL_VERSION,
+                    version=UNIEVAL_WORKER_VERSION,
+                    operation_metadata=bootstrap.operation_metadata,
                     error=UnievalError.from_code("MODEL_LOAD_FAILED"),
                 )
-                channel.send_bytes(failed.model_dump_json().encode("utf-8"))
+                channel.send_bytes(encode_packet(failed, max_reply_bytes))
                 return
             while True:
                 command = UnievalCommand.model_validate_json(channel.recv_bytes(max_command_bytes))
                 if command.generation != generation:
                     return
                 identity = RequestPacket(
-                    version=UNIEVAL_VERSION,
+                    version=UNIEVAL_WORKER_VERSION,
+                    operation_metadata=command.operation_metadata,
                     execution_id=command.execution_id,
                     generation=generation,
                 )
@@ -137,16 +143,16 @@ def run_unieval_worker(
                         work=UnievalWork(),
                         errors=(failure.error,),
                     )
-                channel.send_bytes(prepared.model_dump_json().encode("utf-8"))
+                channel.send_bytes(encode_packet(prepared, max_reply_bytes))
                 if plan is not None:
                     for comparison in plan.comparisons:
                         prediction = score_comparison(predictor, comparison, identity)
-                        channel.send_bytes(prediction.model_dump_json().encode("utf-8"))
+                        channel.send_bytes(encode_packet(prediction, max_reply_bytes))
                 channel.send_bytes(
-                    UnievalFinished(**identity.model_dump()).model_dump_json().encode("utf-8")
+                    encode_packet(UnievalFinished(**identity.model_dump()), max_reply_bytes)
                 )
                 del command, plan
-        except (EOFError, OSError, ValidationError):
+        except (EOFError, OSError, ValueError):
             return
         finally:
             channel.close()

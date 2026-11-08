@@ -44,6 +44,13 @@ null defaults. The evaluator's `tests/test_trace_context.py` and real
 `check_trace_context.ts` bridge bind the native JSON reader, serialized fields,
 schema and codec to the shared TypeScript authority. Trace data is not inserted
 into a JSON body.
+Canonical state is limited to the authority's W3C 512-byte allowance; invalid
+optional state is omitted without discarding a valid parent identity.
+The receiving layer reports supplied malformed metadata through an optional
+typed service callback, after storing the actual receiving operation. It
+suppresses the standard parser's unsafe raw-state warnings; the evaluator
+instead emits a fixed body-free diagnostic. A callback may return the service's
+native logging-failure response, which receives the same carrier.
 
 The next layer refuses any browser `Origin`, duplicate `Host` or `Host` outside
 the configured loopback binding before reading the request body. The selected
@@ -62,6 +69,11 @@ always invokes its shutdown callback. Health observation remains service-owned:
 `HealthRenderer` returns the exact response plus a separate readiness boolean.
 The host uses only that boolean to emit one ready event. It does not infer
 readiness from an HTTP status or payload field.
+`compose_api(..., service_operation=...)` accepts the actual operation already
+used to construct service loggers and controllers. Enabled callers reuse it for
+host lifecycle callbacks rather than allocate a second service root.
+Standalone callers keep the default root allocation; disabled propagation
+keeps the host's untraced lifecycle profile.
 
 Shutdown retains the original lifespan failure and every independent cleanup
 failure. The event sink emits stopped after clean component shutdown, failed
@@ -86,6 +98,10 @@ typed callbacks prevents that reuse from turning unrelated health, error and
 event contracts into one generic service vocabulary. A fixed component passed
 by the caller keeps imports and process ownership explicit; runtime discovery
 would add ordering, import-safety and failure rules with no current use.
+An explicit service operation joins construction, model loading and lifecycle
+diagnostics without introducing a mutable current request. Request context
+remains in its own ASGI scope; neither a lifecycle callback nor a metadata
+warning borrows the last request's context.
 
 ## See also
 

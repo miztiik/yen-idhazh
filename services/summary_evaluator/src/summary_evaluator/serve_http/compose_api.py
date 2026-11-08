@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from http import HTTPStatus
 from pathlib import Path
 from typing import Final, get_args
 
@@ -23,8 +24,9 @@ from local_api_host.create_api_component import (
     HostRequestContext,
     RenderedHealth,
 )
+from local_api_host.propagate_trace_context import OperationMetadata
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, PlainTextResponse, Response
 
 from summary_evaluator.serve_http.contracts.api_health import ApiHealth, DisabledEvaluatorHealth
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent, ApiSettings
@@ -42,6 +44,7 @@ from summary_evaluator.shared.create_api_component import (
     RefusalHandler,
 )
 from summary_evaluator.shared.create_execution_id import create_execution_id
+from summary_evaluator.shared.fail_runtime import RuntimeFailure
 
 SUMMARY_EVALUATOR_TITLE: Final = "summary-evaluator"
 
@@ -71,7 +74,7 @@ def create_host_settings(api: ApiSettings) -> HostSettings:
         schema_path=API_SCHEMA_PATH,
         listener=HostListenerSettings.model_validate(api.listener.model_dump(mode="json")),
         shutdown_timeout_ms=api.shutdown_timeout_ms,
-        propagate_trace_context=False,
+        propagate_trace_context=api.propagate_trace_context,
     )
 
 
@@ -102,7 +105,9 @@ def compose_app(
         api.logging,
         directory=root / api.log_directory,
         run_id=context.run_id if context is not None else None,
+        propagate_trace_context=api.propagate_trace_context,
     )
+    events.bind_trace_mode(api.propagate_trace_context)
     service_instance_id = create_execution_id()
     host = ComponentContext(
         root=root,
@@ -111,6 +116,8 @@ def compose_app(
         shutdown_timeout_ms=api.shutdown_timeout_ms,
         startup=context or StartupContext(),
         service_instance_id=service_instance_id,
+        service_operation=events.service_operation,
+        propagate_trace_context=api.propagate_trace_context,
     )
     components: dict[ApiComponent, ApiComponentRuntime] = {}
     refusals: dict[str, RefusalHandler] = {}
@@ -232,10 +239,31 @@ def compose_app(
     )
 
     async def emit_event(
-        _context: HostEventContext,
+        event_context: HostEventContext,
         event: ApiDiagnosticData,
     ) -> None:
-        events.diagnostic(event)
+        events.diagnostic(event, event_context.operation or host.service_operation)
+
+    async def warn_invalid_trace(request: Request, operation: OperationMetadata) -> Response | None:
+        try:
+            events.diagnostic(
+                ApiDiagnosticData(
+                    component="api",
+                    action="failed",
+                    level="WARNING",
+                    code="INVALID_TRACE_CONTEXT",
+                ),
+                operation,
+            )
+        except RuntimeFailure as failure:
+            for runtime in components.values():
+                if request.method == "POST" and request.url.path in runtime.refuse_requests:
+                    return await runtime.refuse_failure(request, failure.code)
+            return PlainTextResponse(
+                HTTPStatus.INTERNAL_SERVER_ERROR.phrase,
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
+        return None
 
     async def close_events() -> None:
         events.close()
@@ -254,6 +282,8 @@ def compose_app(
                 aclose=close_events,
             ),
             service_instance_id=service_instance_id,
+            service_operation=host.service_operation,
+            invalid_trace_context=warn_invalid_trace,
         )
     except BaseException as failure:
         _close_construction_events(events, failure)

@@ -1,6 +1,6 @@
 # How independent Python APIs serve summary evaluation
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 How each `summary-evaluator` process serves one selected evaluation method
 with its own listener, queue and model worker. Exact routes, settings and diagnostics
@@ -35,6 +35,11 @@ private state aliases; each selected controller shares its own API instance iden
 Typed callbacks also expose the selected worker's configured bounds and observed exit,
 without making the host inspect an opaque controller. Diagnostic callbacks use the same
 declared CloudEvents envelopes, not a new per-API logging implementation.
+One actual service operation is created before logger and controller
+construction and supplied to the neutral host. Each controller and model-load
+operation belongs to that service branch. The validated API flag enables
+receiving and response carriers; a scorer consumes the operation already
+stored by the host rather than extract another parent.
 
 Adding an API means its implementation adapter plus one deliberate registration
 entry. Its configuration and public component vocabulary, native request/result
@@ -121,12 +126,19 @@ with a bounded whole-lifespan deadline. Its private stopped packet reports only
 its own worker's actual exit. API owners are closed independently; the workflow
 retains original and cleanup causes separately. The TypeScript machine-measurement
 channel remains unchanged.
+Each attempt retains its own receiving context through queue promotion,
+cancellation and interleaved progress. Current private worker packets carry
+the issued load or evaluation operation and require exact reply equality.
+Their date stamps are independent of public scoring and recording versions.
 
 Standard logging formats validated native data as CloudEvents JSONL. The
 same accepted records reach stderr and the role's named file. A failed file
 mirror warns safely and records that the log is unavailable; it does not
 invalidate completed model work. Validated HTTP results and actual process
 receipts, not a search through terminal output, establish success.
+Request-caused file-mirror warnings retain the causing operation; opening
+and closing warnings use the service operation. Invalid optional carrier
+metadata produces a fixed diagnostic without exposing header or parser text.
 
 ## Design rationale
 
@@ -161,6 +173,11 @@ frozen environment for resource preparation and offline ASGI boundaries.
 Scoring snapshots, model identities, event seeds and recordings are unchanged.
 The package split changes ownership, not those wire identities. Existing
 native schema metadata remains inherited from its neutral primitive base.
+Explicit operation values preserve existing UUID occurrence and causal-link
+rules while supplying real HTTP and process continuity. Reader optionality
+retains genuinely absent old carriers; enabled live writers still require
+their actual operation. A saved event is validated and preserved, never
+recreated by a live factory.
 The old model-free environment and stopped-service caches are not moved or
 deleted. New preparation reads only the configured cache and log paths.
 

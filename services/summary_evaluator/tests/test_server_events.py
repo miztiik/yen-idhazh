@@ -98,8 +98,13 @@ def test_independent_scorer_logs_do_not_share_the_same_role_file(tmp_path: Path)
     scorers: tuple[ApiComponent, ...] = ("hhem", "unieval")
     for scorer in scorers:
         writer = EventWriter(
-            settings, io.StringIO(), directory=tmp_path, run_id="123456", attempt=1,
-            started_at=datetime(2026, 11, 7, tzinfo=UTC), scorer=scorer,
+            settings,
+            io.StringIO(),
+            directory=tmp_path,
+            run_id="123456",
+            attempt=1,
+            started_at=datetime(2026, 11, 7, tzinfo=UTC),
+            scorer=scorer,
         )
         writer.diagnostic(ApiDiagnosticData(component="api", action="started", level="INFO"))
         assert writer.log_file == f"fastapi-server_{scorer}_2026_11_07_123456_1.log"
@@ -115,7 +120,12 @@ def test_an_unopenable_diagnostic_mirror_warns_without_failing_native_events(
     occupied.write_text("A real file cannot also be a log directory.", encoding="ascii")
     stream = io.StringIO()
     writer = EventWriter(load_settings(SETTINGS_FILE).logging, stream, directory=occupied)
-    emitter = EventEmitter(writer.write, StartupContext(), writer.settings)
+    emitter = EventEmitter(
+        writer.write,
+        StartupContext(),
+        writer.settings,
+        operation_metadata=writer.service_operation,
+    )
     event_id = emitter.emit("service", "started", EventDetails(status="disabled"))
     assert event_id == emitter.last_event_id and not emitter.logging_failed
     assert not writer.log_available

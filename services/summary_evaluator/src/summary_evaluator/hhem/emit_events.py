@@ -6,6 +6,8 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Literal
 
+from local_api_host.propagate_trace_context import OperationMetadata, create_child_operation
+
 from summary_evaluator.hhem.contracts.base import SCHEMA_VERSION, Operation
 from summary_evaluator.hhem.contracts.error_detail import ErrorDetail
 from summary_evaluator.hhem.contracts.evaluation_event import EvaluationEvent, EventDetails
@@ -25,15 +27,23 @@ class EventEmitter:
 
     def __init__(
         self,
-        writer: Callable[[EvaluationEvent], None],
+        writer: Callable[[EvaluationEvent, OperationMetadata], None],
         context: StartupContext,
         logging: LoggingSettings,
         execution_id: str | None = None,
+        *,
+        operation_metadata: OperationMetadata,
+        root_operation: Literal["request", "service"] = "request",
     ) -> None:
         self.writer = writer
         self.context = context
         self.logging = logging
         self.execution_id = execution_id or create_execution_id()
+        self.operation_metadata = operation_metadata
+        self.root_operation = root_operation
+        self.operation_contexts: dict[Operation, OperationMetadata] = {
+            root_operation: operation_metadata
+        }
         self.request_id: str | None = None
         self.correlation_id: str | None = None
         self.sequence = 0
@@ -48,12 +58,19 @@ class EventEmitter:
         details: EventDetails,
         *,
         cause: str | None = None,
+        operation_metadata: OperationMetadata | None = None,
     ) -> str:
         if self.logging_failed:
             raise EvaluationFailure(ErrorDetail.from_code("LOGGING_FAILED", operation))
         self.sequence += 1
         if phase == "started" or operation not in self.operations:
             self.operations[operation] = create_execution_id()
+        if operation_metadata is not None:
+            self.operation_contexts[operation] = operation_metadata
+        elif operation != self.root_operation and (
+            phase == "started" or operation not in self.operation_contexts
+        ):
+            self.operation_contexts[operation] = create_child_operation(self.operation_metadata)
         configured = self.logging.level
         level: EventLevel = (
             "ERROR" if phase in ("failed", "cancelled") and configured != "CRITICAL" else configured
@@ -77,7 +94,7 @@ class EventEmitter:
             details=details,
         )
         try:
-            self.writer(event)
+            self.writer(event, self.operation_contexts[operation])
         except RuntimeFailure as failure:
             self.logging_failed = True
             raise EvaluationFailure(ErrorDetail.from_code(failure.code, operation)) from None

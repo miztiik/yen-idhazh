@@ -1,6 +1,6 @@
 # HHEM evaluation API
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 Which fields, identities and startup settings the independent HHEM evaluator
 accepts. The HHEM component serves synchronous local CPU evaluations with one owned
@@ -13,7 +13,8 @@ owns admission, cancellation, model loading and failure handling.
 `services/summary_evaluator/src/summary_evaluator/hhem/contracts/` owns the native Pydantic
 models and their on-demand JSON Schemas. Every schema has date-stamped
 `version` and `changelog` metadata. The initial version is `2026-11-02`.
-Results, health, events, settings and worker packets require this wire version;
+Results, health, event data and scoring settings retain that wire version.
+Private worker packets require their own `2026-11-08` version;
 unsupported or missing versions fail validation. Runtime model identity has
 no tensor, configuration or service-settings digests. The recording reader
 verifies historical fixture provenance against the original complete JSON,
@@ -168,12 +169,28 @@ Table F - Private native packets
 | F5 | `score_window` | `version`, `execution_id`, `generation`, `comparison`, `window_index`, `start_word`, `end_word`, `source_text`, `summary_text`. Comparison is `primary` or `full`; the nonempty end-exclusive range must match the source window's word count. This is the only text-bearing outbound packet. |
 | F6 | `window_scored`, `window_failed` | The same version/execution/generation/comparison/window/range identity, nullable finite `score`, nullable nonnegative `scoring_ms`, nullable closed `error`. Success requires a score without error; failure requires an error without score. Its error phase and window index must match. |
 
+Every current Table F packet additionally requires `operation_metadata`,
+using the single [native operation contract](../architecture/contracts/identity.md).
+Bootstrap/startup outcomes describe the actual service-load operation.
+A window command has a child of its comparison, and the reply returns that
+complete metadata unchanged. A load may carry one link to the failed active
+attempt; model commands do not fabricate input links. Required native JSON
+includes `links` and the shared camel-case identifier/state fields.
+
 The native `WorkerCommand` and `WorkerReply` root models select packets by
 `kind` without adding a JSON wrapper. They reject unknown kinds and unsupported
-versions. `validate_window_reply` checks every command identity field. The
-controller enforces one outstanding command, rejects duplicate and stale
+versions. `validate_window_reply` checks every command identity field and
+exact operation metadata, including parent, links and state.
+The current private reader is current-only: producers and consumers upgrade
+together, after confirmed retirement of old owned workers. Public scoring
+and original recordings are not rewritten.
+The controller enforces one outstanding command, rejects duplicate and stale
 replies, and uses bounded multiprocessing JSON byte pipes, not object pickle
 messages or a broker.
+Command/reply bounds include complete encoded metadata and JSON escaping.
+JSON byte-pipe payloads have no JSONL newline; event records include theirs
+inside the existing configured logging capacity. Overflow is an explicit
+protocol or logging failure, never truncation or dropped valid trace state.
 
 ## Authored startup settings
 

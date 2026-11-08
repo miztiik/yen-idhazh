@@ -1,6 +1,6 @@
 # UniEval evaluation API
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 Which requests, results and settings belong to the local four-score API.
 The [architecture](../architecture/evaluation/unieval-api.md) defines score
@@ -10,7 +10,8 @@ meaning, complete-source processing and process ownership.
 
 `services/summary_evaluator/src/summary_evaluator/unieval/contracts/` owns
 the native Pydantic contracts and on-demand schemas. Their version is
-`2026-11-04`. They are transient, current-only contracts: producers and
+`2026-11-04` for native scoring and recordings. Private worker packets use
+their separate `2026-11-08` version. They are transient, current-only contracts: producers and
 consumers change together, without old-route aliases or historical readers.
 There is no result store, polling API or published-data contract.
 
@@ -146,6 +147,29 @@ Shutdown closes admission and joins the exact owned worker. A blocked or
 failed worker is stopped, not replaced by an automatic retry daemon.
 Original evaluation and cleanup errors remain separate. Shared diagnostic
 file failure follows the server's warning-only mirror policy.
+
+## Current private worker packets
+
+Table E - Issued worker operations
+
+| Id | Kind | Fields and operation |
+| --- | --- | --- |
+| E1 | `bootstrap` | Current private `version`, frozen `settings` and required `operation_metadata` for the actual service-load operation. |
+| E2 | `ready`, `startup_failed` | Current private `version`, the unchanged ready/error fields and that same required load metadata. Readiness still requires the actual owned worker/model identity. |
+| E3 | `evaluate` | Current private `version`, `execution_id`, `generation`, native `request` and required metadata for the actual worker evaluation child of the receiving request. |
+| E4 | `planned` | Current request identity/metadata, `effective_settings`, native `work` and `errors`. |
+| E5 | `prediction` | Current request identity/metadata, `dimension`, `index`, `sentence_index`, `source_index`, `score` and `error`. Existing indexing and reduction are unchanged. |
+| E6 | `finished` | Current request identity and the same issued evaluation metadata; it does not manufacture per-item work. |
+
+The single [native operation contract](../architecture/contracts/identity.md)
+owns metadata fields and codec rules. The parent validates exact operation,
+execution and generation equality before accepting existing plan/progress
+rules; repeated or crossed replies fail the real protocol validator.
+Producers and consumers upgrade together after old owned processes are
+retired, without live old-packet fallback or historical rewriting.
+Complete command metadata and escaping contribute to derived command bounds.
+Every reply remains inside `worker.max_reply_bytes`; byte-pipe JSON has no
+record newline. Trace observations do not create or erase numeric scores.
 
 ## See also
 

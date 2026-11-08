@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from pathlib import Path
 
+from local_api_host.propagate_trace_context import OperationMetadata, create_child_operation
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -41,7 +42,7 @@ def create_api_component(
     *,
     settings: UnievalSettings | None = None,
     supervisor: UnievalSupervisor | None = None,
-    writer: Callable[[LifecycleFields], None],
+    writer: Callable[[LifecycleFields, OperationMetadata], None],
 ) -> ApiComponentRuntime:
     selected = settings or load_component_settings(
         host.root, host.listener, host.logging, host.shutdown_timeout_ms
@@ -53,7 +54,13 @@ def create_api_component(
     ):
         raise ValueError("UniEval must use the shared listener, logging and shutdown bounds")
     controller = UnievalController(
-        selected, host.root, writer, host.service_instance_id, supervisor=supervisor
+        selected,
+        host.root,
+        writer,
+        host.service_instance_id,
+        supervisor=supervisor,
+        service_operation=create_child_operation(host.service_operation),
+        propagate_trace_context=host.propagate_trace_context,
     )
 
     async def observe_health() -> ComponentHealth:
@@ -73,4 +80,5 @@ def create_api_component(
         worker_settings=selected.worker,
         is_stopping=lambda: controller.stopping,
         observe_exit=lambda: observe_worker_exit(controller.worker),
+        refuse_failure=refuse_forbidden,
     )

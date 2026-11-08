@@ -4,6 +4,12 @@ import asyncio
 import json
 
 import pytest
+from local_api_host.propagate_trace_context import (
+    create_root_operation,
+    read_trace_context,
+    write_trace_context,
+)
+from starlette.datastructures import Headers
 from summary_evaluator_cases.contract_examples import REPOSITORY, REQUEST_ID
 from summary_evaluator_cases.observe_owned_exit import prove_parent_loss
 from summary_evaluator_cases.replay_predictions import Scenario, read_recordings
@@ -14,9 +20,10 @@ from summary_evaluator_cases.service_cases import (
     service_settings,
 )
 
-from summary_evaluator.hhem.contracts.base import SCHEMA_VERSION
+from summary_evaluator.hhem.contracts.evaluation_event import EvaluationEvent
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.contracts.service_health import ServiceHealth
+from summary_evaluator.hhem.contracts.worker_contract import HHEM_WORKER_VERSION
 from summary_evaluator.hhem.contracts.worker_message import ScoreWindow
 from summary_evaluator.hhem.fail_evaluation import EvaluationFailure
 from summary_evaluator.shared.contracts.api_paths import EVALUATE_PATH, HHEM_HEALTH_PATH
@@ -34,6 +41,11 @@ def test_oracle_full_timeout_retains_primary_and_preserves_queued_work() -> None
     async def check() -> None:
         inputs, predictions, _ = read_recordings(REPOSITORY)
         primary, _, other, *_ = inputs.cases
+        active_caller = create_root_operation(trace_state="test=active")
+        queued_callers = {
+            QUEUED_ID: create_root_operation(trace_state="test=queued"),
+            NEXT_ID: create_root_operation(trace_state="test=next"),
+        }
         scores = {reply.id: reply.score for reply in predictions.cases}
         settings = service_settings(evaluation={"timeout_ms": 500})
         async with running_service(
@@ -47,6 +59,7 @@ def test_oracle_full_timeout_retains_primary_and_preserves_queued_work() -> None
             active = asyncio.create_task(
                 service.client.post(
                     EVALUATE_PATH,
+                    headers=write_trace_context(active_caller),
                     json={
                         "request_id": REQUEST_ID,
                         "source_text": primary.source_text + " " + other.source_text,
@@ -67,6 +80,7 @@ def test_oracle_full_timeout_retains_primary_and_preserves_queued_work() -> None
                     asyncio.create_task(
                         service.client.post(
                             EVALUATE_PATH,
+                            headers=write_trace_context(queued_callers[request_id]),
                             json={
                                 "source_text": primary.source_text,
                                 "summary_text": primary.summary_text,
@@ -109,12 +123,29 @@ def test_oracle_full_timeout_retains_primary_and_preserves_queued_work() -> None
             assert result.window_details is not None and len(result.window_details.primary) == 2
             assert result.worker is not None and result.worker.pid == old_pid
             assert result.model == initial
+            receiving = read_trace_context(Headers(response.headers))
+            assert receiving is not None and receiving.trace_id == active_caller.trace_id
+            assert receiving.trace_state == active_caller.trace_state
+            assert service.worker.bootstrap is not None
+            replacement = service.worker.bootstrap.operation_metadata
+            assert replacement.trace_id == service.app.state.controller.service_operation.trace_id
+            assert replacement.parent_span_id == (
+                service.app.state.controller.service_operation.span_id
+            )
+            assert len(replacement.links) == 1
+            assert replacement.links[0].trace_id == receiving.trace_id
+            assert replacement.links[0].span_id == receiving.span_id
             await service.worker.release_prediction(2)
             await service.app.state.controller.loading_task
             assert service.worker.model == initial
             completed = await asyncio.gather(*queued)
             assert [item.status_code for item in completed] == [200, 200]
             assert [item.json()["request_id"] for item in completed] == [QUEUED_ID, NEXT_ID]
+            for response, request_id in zip(completed, (QUEUED_ID, NEXT_ID), strict=True):
+                received = read_trace_context(Headers(response.headers))
+                assert received is not None
+                assert received.trace_id == queued_callers[request_id].trace_id
+                assert received.trace_state == queued_callers[request_id].trace_state
             assert [item.json()["correlation_id"] for item in completed] == [
                 QUEUED_ID.upper(),
                 NEXT_ID.upper(),
@@ -147,22 +178,41 @@ def test_queued_expiry_and_disconnect_do_not_stop_the_active_worker() -> None:
     async def check() -> None:
         inputs, _, _ = read_recordings(REPOSITORY)
         case = inputs.cases[0]
+        active_caller = create_root_operation(trace_state="test=kept")
+        expired_caller = create_root_operation(trace_state="test=expired")
+        disconnected_caller = create_root_operation(trace_state="test=disconnected")
         body = {"source_text": case.source_text, "summary_text": case.summary_text}
         settings = service_settings(queue={"wait_timeout_ms": 1000})
         async with running_service(settings, (Scenario(actions=("hold",)),)) as service:
             assert (await service.worker.handshake())["phase"] == "loading"
-            active = asyncio.create_task(service.client.post(EVALUATE_PATH, json=body))
+            active = asyncio.create_task(
+                service.client.post(
+                    EVALUATE_PATH, json=body, headers=write_trace_context(active_caller)
+                )
+            )
             assert (await service.worker.handshake())["phase"] == "prediction"
             original = service.worker.worker
             waiting = asyncio.create_task(
-                service.client.post(EVALUATE_PATH, json={**body, "request_id": QUEUED_ID})
+                service.client.post(
+                    EVALUATE_PATH,
+                    json={**body, "request_id": QUEUED_ID},
+                    headers=write_trace_context(expired_caller),
+                )
             )
             await service.log.wait("queue", "started", QUEUED_ID)
             expired = await waiting
             assert expired.status_code == 503
             assert expired.headers["Retry-After"] == str(settings.queue.retry_after_seconds)
             assert expired.json()["errors"][0]["code"] == "QUEUE_TIMEOUT"
-            request = DirectRequest(json.dumps({**body, "request_id": NEXT_ID}).encode())
+            assert expired_caller.trace_id in expired.headers["traceparent"]
+            assert expired.headers["tracestate"] == expired_caller.trace_state
+            request = DirectRequest(
+                json.dumps({**body, "request_id": NEXT_ID}).encode(),
+                headers=tuple(
+                    (key.encode(), value.encode())
+                    for key, value in write_trace_context(disconnected_caller).items()
+                ),
+            )
             disconnected = asyncio.create_task(request.run(service.app))
             await service.log.wait("queue", "started", NEXT_ID)
             request.disconnected.set()
@@ -181,6 +231,16 @@ def test_queued_expiry_and_disconnect_do_not_stop_the_active_worker() -> None:
                 and event.phase == "cancelled"
             ]
             assert len(terminal) == 1
+            envelopes = [
+                envelope
+                for envelope in service.log.envelopes
+                if envelope.data.execution_id == terminal[0].execution_id
+                and isinstance(envelope.data, EvaluationEvent)
+                and envelope.data.operation == "request"
+            ]
+            assert len(envelopes) == 2
+            assert envelopes[0].traceparent == envelopes[1].traceparent
+            assert envelopes[1].tracestate == disconnected_caller.trace_state
             cause = next(
                 event
                 for event in service.log.events
@@ -271,7 +331,8 @@ def test_stale_reply_is_rejected_over_real_worker_byte_pipes() -> None:
         try:
             await worker.start()
             command = ScoreWindow(
-                version=SCHEMA_VERSION,
+                version=HHEM_WORKER_VERSION,
+                operation_metadata=create_root_operation(),
                 kind="score_window",
                 execution_id=create_execution_id(),
                 generation=1,

@@ -13,6 +13,7 @@ from pathlib import Path
 
 import httpx
 from summary_evaluator_cases.contract_examples import REPOSITORY
+from summary_evaluator_cases.observe_packets import ObservedChannel
 
 from scripts.recording_json import canonical_bytes
 from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
@@ -165,6 +166,13 @@ class RecordedUnievalSupervisor(UnievalSupervisor):
     def __init__(self, settings: UnievalSettings, scenario: UnievalScenario | None = None) -> None:
         super().__init__(settings, REPOSITORY)
         self.scenario = scenario or UnievalScenario()
+        self.commands: list[bytes] = []
+        self.replies: list[bytes] = []
+
+    async def start(self) -> None:
+        await super().start()
+        assert self.channel is not None
+        self.channel = ObservedChannel(self.channel, self.commands, self.replies)
 
     def _create_process(
         self, channel: ByteChannel, lifetime: ByteChannel, generation: int
@@ -187,7 +195,12 @@ async def running_unieval(
     selected = settings or selected
     worker = RecordedUnievalSupervisor(selected, scenario)
     stream = io.StringIO()
-    events = EventWriter(api.logging, stream, directory=log_directory)
+    events = EventWriter(
+        api.logging,
+        stream,
+        directory=log_directory,
+        propagate_trace_context=api.propagate_trace_context,
+    )
     app = create_app(
         api,
         None,
@@ -202,7 +215,9 @@ async def running_unieval(
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app),
             base_url=httpx.URL(
-                scheme="http", host=api.listener.host, port=api.listener.port,
+                scheme="http",
+                host=api.listener.host,
+                port=api.listener.port,
             ),
             trust_env=False,
         ) as client:

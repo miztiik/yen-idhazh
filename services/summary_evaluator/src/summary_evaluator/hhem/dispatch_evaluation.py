@@ -3,6 +3,10 @@
 import asyncio
 import time
 
+from local_api_host.propagate_trace_context import (
+    create_root_operation,
+    observe_request_operation,
+)
 from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -18,6 +22,7 @@ from summary_evaluator.hhem.resolve_ids import resolve_ids
 from summary_evaluator.hhem.resolve_request import RequestResolutionError, resolve_request
 from summary_evaluator.hhem.score_windows import EvaluationState
 from summary_evaluator.shared.contracts.error_policy import ERROR_POLICIES
+from summary_evaluator.shared.create_execution_id import create_execution_id
 from summary_evaluator.shared.disconnected_response import DisconnectedResponse
 from summary_evaluator.shared.fail_runtime import RuntimeFailure
 from summary_evaluator.shared.queue_evaluations import Reservation
@@ -28,9 +33,19 @@ from summary_evaluator.shared.read_request_body import (
 )
 
 
-def new_attempt(controller: EvaluationController) -> EvaluationState:
+def new_attempt(request: Request, controller: EvaluationController) -> EvaluationState:
+    execution_id = create_execution_id()
+    operation = observe_request_operation(request)
+    if controller.propagate_trace_context and operation is None:
+        raise RuntimeError("Enabled scoring requires the host receiving operation")
     return EvaluationState(
-        emitter=EventEmitter(controller.writer, controller.context, controller.settings.logging),
+        emitter=EventEmitter(
+            controller.writer,
+            controller.context,
+            controller.settings.logging,
+            execution_id,
+            operation_metadata=operation or create_root_operation(),
+        ),
         received_at=time.monotonic(),
     )
 
@@ -111,7 +126,7 @@ async def cancel_work(
 async def dispatch_evaluation(
     request: Request, controller: EvaluationController, error: ErrorDetail | None = None
 ) -> Response:
-    state = new_attempt(controller)
+    state = new_attempt(request, controller)
     reservation: Reservation | None = None
     work: asyncio.Task[None] | None = None
     disconnect: asyncio.Task[None] | None = None

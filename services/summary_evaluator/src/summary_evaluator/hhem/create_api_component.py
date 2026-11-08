@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+from local_api_host.propagate_trace_context import OperationMetadata, create_child_operation
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -27,7 +28,7 @@ def create_api_component(
     settings: ServiceSettings | None,
     *,
     supervisor: WorkerSupervisor | None = None,
-    writer: Callable[[EvaluationEvent], None],
+    writer: Callable[[EvaluationEvent, OperationMetadata], None],
 ) -> ApiComponentRuntime:
     if settings is None:
         raise ValueError("Enabled HHEM requires its named scoring settings")
@@ -46,6 +47,8 @@ def create_api_component(
         supervisor=supervisor,
         writer=writer,
         service_instance_id=host.service_instance_id,
+        service_operation=create_child_operation(host.service_operation),
+        propagate_trace_context=host.propagate_trace_context,
     )
 
     async def observe_health() -> ComponentHealth:
@@ -67,4 +70,5 @@ def create_api_component(
         worker_settings=settings.worker,
         is_stopping=lambda: controller.stopping,
         observe_exit=lambda: observe_worker_exit(controller.worker),
+        refuse_failure=refuse_forbidden,
     )

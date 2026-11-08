@@ -1,12 +1,18 @@
 """How is a bounded UniEval HTTP request delivered without losing completed dimensions?"""
 
 import asyncio
+import time
 
+from local_api_host.propagate_trace_context import (
+    create_root_operation,
+    observe_request_operation,
+)
 from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from summary_evaluator.shared.contracts.diagnostic_data import LifecycleFields
+from summary_evaluator.shared.create_execution_id import create_execution_id
 from summary_evaluator.shared.disconnected_response import DisconnectedResponse
 from summary_evaluator.shared.fail_runtime import RuntimeFailure
 from summary_evaluator.shared.queue_evaluations import Reservation
@@ -32,7 +38,15 @@ async def dispatch_unieval(
     controller: UnievalController,
     error: UnievalError | None = None,
 ) -> Response:
-    state = UnievalState()
+    execution_id = create_execution_id()
+    operation = observe_request_operation(request)
+    if controller.propagate_trace_context and operation is None:
+        raise RuntimeError("Enabled scoring requires the host receiving operation")
+    state = UnievalState(
+        execution_id=execution_id,
+        operation_metadata=operation or create_root_operation(),
+        received_at=time.monotonic(),
+    )
     reservation: Reservation | None = None
     work: asyncio.Task[None] | None = None
     disconnect: asyncio.Task[None] | None = None
@@ -57,7 +71,8 @@ async def dispatch_unieval(
                     action="started",
                     level="INFO",
                     execution_id=state.execution_id,
-                )
+                ),
+                state.operation_metadata,
             )
             work = asyncio.create_task(controller.process(state, reservation))
             disconnect = asyncio.create_task(wait_for_disconnect(request))
@@ -98,7 +113,8 @@ async def dispatch_unieval(
                     level="ERROR",
                     execution_id=state.execution_id,
                     code=state.errors[0].code if state.errors else "CLIENT_DISCONNECTED",
-                )
+                ),
+                state.operation_metadata,
             )
             return DisconnectedResponse()
         if not state.errors and not any(
@@ -112,7 +128,8 @@ async def dispatch_unieval(
                     level="ERROR" if state.errors else "INFO",
                     execution_id=state.execution_id,
                     code=state.errors[0].code if state.errors else None,
-                )
+                ),
+                state.operation_metadata,
             )
         except RuntimeFailure as failure:
             state.errors.append(UnievalError.from_code(failure.code))
