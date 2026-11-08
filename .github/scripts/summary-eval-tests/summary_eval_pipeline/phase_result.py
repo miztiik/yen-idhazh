@@ -10,7 +10,7 @@ from .contracts import (
     RunIdentity,
     ServerOutcome,
 )
-from .host_reader import MachineUsage
+from .host_reader import HonoServerReader, MachineUsage
 from .phase_contracts import PhaseEvidence, PhaseShutdown, phase_status
 from .scorer_evidence import EVIDENCE_VERSION, ScorerApiEvidence
 
@@ -25,7 +25,7 @@ def build_evidence(
     run: RunIdentity,
     phase: PhaseName,
     reference_summary_sha256: str,
-    servers: tuple[ServerOutcome, ...] = (),
+    servers: tuple[HonoServerReader | ServerOutcome, ...] = (),
     generation_sha256: str | None = None,
     unieval: UnievalResult | None = None,
     scorer_apis: tuple[ScorerApiEvidence, ...] = (),

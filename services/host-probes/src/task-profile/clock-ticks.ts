@@ -23,7 +23,7 @@ export function resolveClockTicks(config: ProbeConfig): Promise<ClockTicks> {
         encoding: "utf8", timeout: config.task_profile.lifecycle_timeout_ms, maxBuffer: config.max_proc_bytes,
       }, (error, stdout) => {
         if (error === null) { resolve(parseClockTicks(stdout)); return; }
-        if (error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+        if (String(error.code) === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
           resolve({ value: null, reason: "too_large" });
         } else if (error.killed || typeof error.code === "number"
           || ["ENOENT", "EACCES", "EPERM"].includes(String(error.code))) {

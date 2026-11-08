@@ -1,5 +1,6 @@
 /** Start the native machine application under its shared private-pipe lifetime. */
 import { runHttpChild } from "@idhazh/serve-pipeline-apis/child";
+import { join } from "node:path";
 import { createApiApp, serveApiApp } from "@idhazh/serve-pipeline-apis/app";
 import { createMachineApp, loadMachineApiInputs } from "./create-machine-app";
 import { captureMachineApiFailure, MachineApiError } from "./capture-machine-api-failure";
@@ -11,7 +12,8 @@ export function runMachineApiServer() {
     return {
       shutdownTimeoutMs: startup.server.supervision.shutdown_timeout_ms,
       start: async signal => {
-        const inputs = await loadMachineApiInputs(process.cwd(), startup.state_root);
+        const inputs = await loadMachineApiInputs(process.cwd(), startup.state_root,
+          startup.registry_path === undefined ? undefined : join(process.cwd(), startup.registry_path));
         const identity = readMachineApiIdentity(startup, process.pid);
         signal.throwIfAborted();
         try {

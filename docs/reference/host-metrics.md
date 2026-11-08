@@ -59,13 +59,14 @@ stops placement reads in both collectors when false. A Python caller's
 fingerprint collection or its ledger write.
 
 The manual feed planner workflow starts the
-[shared pipeline API server](serve-pipeline-apis.md) on the same
+[independent machine API server](serve-pipeline-apis.md) on the same
 runner, verifies that exact child through HTTP, and posts only date and
 writer identity to its fingerprint route before planning. The caller is pipeline `feed-ingest-plan`, task
 `isolated-plan`, shard 0. It uses the committed instrument, placement and
 task-selected copy controls without overriding the copy-task list. A
-disabled instrument is an explicit skip with no host write; the shared
-listener still serves planning. The task stops it after success or failure.
+disabled instrument is an explicit skip with no host write or machine listener.
+The finite machine task stops after success or failure; the planning task
+uses its own server and retains its independently completed output.
 
 The API writes its raw Parquet under the caller's run state root.
 `host-fingerprint.json` retains the exact request, validated row, unavailable

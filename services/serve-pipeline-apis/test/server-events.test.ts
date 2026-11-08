@@ -33,7 +33,7 @@ test("server restarts append identical live CloudEvents without private bodies o
       headers: { authorization: "PRIVATE_HEADER" },
     }));
     const second = await writeEvents(directory, run);
-    const text = await readFile(join(directory, serverLogFilename(run)), "utf8");
+    const text = await readFile(join(directory, serverLogFilename("machine", run)), "utf8");
     expect(text).toBe(first.error + second.error);
     expect(first.result.available).toBe(true);
     expect(text).not.toContain("PRIVATE_BODY");
@@ -51,7 +51,7 @@ test("an unavailable file is a safe stderr warning and does not change successfu
   const directory = await mkdtemp(join(tmpdir(), "api-events-"));
   const run = { run_id: "700", attempt: 3, started_at: "2026-11-04T00:00:00Z", context: createRootContext() };
   try {
-    await mkdir(join(directory, serverLogFilename(run)));
+    await mkdir(join(directory, serverLogFilename("machine", run)));
     const { result, error } = await writeEvents(directory, run);
     expect(result.available).toBe(false);
     const events = error.trim().split("\n").map(line => readCloudEvent(JSON.parse(line), value => ServerEventDataSchema.parse(value)));
@@ -99,7 +99,7 @@ test("native request failures retain their occurrence and carrier through the re
     }));
     expect(rejected.error).toContain("CHILD_DIAGNOSTIC_INVALID");
     expect(rejected.error).not.toContain("PRIVATE_BODY");
-    expect(await readFile(join(directory, serverLogFilename(run)), "utf8"))
+    expect(await readFile(join(directory, serverLogFilename("machine", run)), "utf8"))
       .toBe(accepted.error + rejected.error);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

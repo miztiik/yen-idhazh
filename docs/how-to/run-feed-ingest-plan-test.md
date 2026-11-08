@@ -262,9 +262,11 @@ Finalization keeps delivery, reporting and artifact preparation separate:
    record distinguishes empty name sets, incomplete analysis and omitted
    names. No file means no upload, not a successful empty result.
 6. `Upload server failure logs` retains available
-   `hono-server_<yyyy_mm_dd>_<run>_<attempt>.log` files after failure or
+   `hono-server_<group>_<yyyy_mm_dd>_<run>_<attempt>.log` files after failure or
    cancellation. The date is the UTC run-start day. Native lifecycle evidence
    is retained in the normal artifact even when the planner never replied.
+   Saved legacy evidence keeps its original unqualified filename; reading and
+   copying it does not rewrite the old observations.
    There is no retention override.
 7. `Finish and clean up` checks collection, finalization and the normal upload's
    returned artifact identity, plus diagnostic uploads when applicable.

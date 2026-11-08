@@ -10,6 +10,7 @@ from .contracts import (
     Hardware,
     PhaseName,
     RunIdentity,
+    ServerOutcome,
     SourceCode,
     WorkflowContract,
     WorkflowVersion,
@@ -60,7 +61,7 @@ class ServiceStopped(ControlPacket):
     worker_exit_confirmed: bool | None
     unieval_worker_exit_confirmed: bool | None = None
     machine: MachineUsage | None = None
-    server: HonoServerReader | None = None
+    server: HonoServerReader | ServerOutcome | None = None
     log_available: bool | None = None
     error_code: SourceCode | None = None
     cleanup_error_code: SourceCode | None = None

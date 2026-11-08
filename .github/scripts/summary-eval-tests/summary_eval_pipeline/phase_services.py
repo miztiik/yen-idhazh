@@ -13,7 +13,7 @@ from summary_evaluator.shared.contracts.worker_exit import WorkerExit
 from .contracts import PipelineError, RunIdentity, ServerOutcome
 from .control import HostReady, ServiceStopped
 from .failures import WorkflowError
-from .host_reader import MachineUsage
+from .host_reader import HonoServerReader, MachineUsage
 from .http import loopback_url
 from .llama import OwnedLlama
 from .phase_contracts import PhaseShutdown
@@ -172,7 +172,7 @@ class PhaseServices:
     host_stopped: bool | None = None
     llama_stopped: bool | None = None
     machine: MachineUsage | None = None
-    servers: list[ServerOutcome] = field(default_factory=list)
+    servers: list[HonoServerReader | ServerOutcome] = field(default_factory=list)
 
     def shutdown(self) -> PhaseShutdown:
         return PhaseShutdown(
@@ -235,11 +235,7 @@ class PhaseServices:
                     )
                 self.machine = self.host.stopped.machine
                 if self.host.stopped.server is not None:
-                    self.servers.append(
-                        ServerOutcome.model_validate_json(
-                            self.host.stopped.server.model_dump_json()
-                        )
-                    )
+                    self.servers.append(self.host.stopped.server)
             if host_cleanup is not None:
                 errors.append(host_cleanup)
         # The closing machine sample is complete before either API owner is stopped.

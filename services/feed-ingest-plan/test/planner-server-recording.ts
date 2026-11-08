@@ -6,7 +6,7 @@ import { appendFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
-await runFeedApiServer({ restorePlanner: async startup => {
+export const restoreRecordedPlannerStartup: typeof restorePlannerStartup = async startup => {
   if (await Bun.file(join(process.cwd(), "recorded-readiness-mismatch")).exists()) startup.nonce = randomUUID();
   if (await Bun.file(join(process.cwd(), "recorded-runtime-mismatch")).exists()) startup.runtime.attempt++;
   const restored = await restorePlannerStartup(startup);
@@ -38,7 +38,10 @@ await runFeedApiServer({ restorePlanner: async startup => {
       observation_clock: () => new Date("2026-10-21T23:59:59Z"),
     },
   };
-} });
-if (await Bun.file(join(process.cwd(), "recorded-cleanup-failure")).exists()) {
-  await Bun.file(join(process.cwd(), "missing-cleanup-input.json")).json();
+};
+if (import.meta.main) {
+  await runFeedApiServer({ restorePlanner: restoreRecordedPlannerStartup });
+  if (await Bun.file(join(process.cwd(), "recorded-cleanup-failure")).exists()) {
+    await Bun.file(join(process.cwd(), "missing-cleanup-input.json")).json();
+  }
 }
