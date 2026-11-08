@@ -26,8 +26,7 @@ in every job that builds the site - `ci.yml`'s `site` job, `digest.yml`'s
 `assemble` job, and `backfill.yml` - before the commit that publishes a day.
 
 **The tree has no default**, because a default is how the old call came to name
-the wrong one. The workflow names it at the call site, and a contract test reads
-the path back off `pages.yml`'s own upload step.
+the wrong one. The workflow names it at the call site.
 
 **Two lines, and only one of them fails a build.** Over `retention.site_budget_mb`
 the step prints a warning and passes; past `retention.pages_hard_cap_mb` it
@@ -111,7 +110,7 @@ Retention was demoted after the byte arithmetic showed that encoding and the exi
 | Measuring the site in the Pages deploy instead | The day is already committed by then, and undoing it is a revert. Gating before the push is what turns a broken site into a run that publishes nothing. |
 | Leaving the page-weight gate before the commit | It keeps `main` green by spending a finished day and the two to three hours that built it, on a page that reads correctly and that no reader would have complained about. See [A bad day is stopped before the commit; the weight ratchet is not](#a-bad-day-is-stopped-before-the-commit-the-weight-ratchet-is-not). |
 | Making the page-weight gate a warning instead of moving it | A warning that fires on every heavy publish is a line in a log nobody opens, and the ceiling then drifts with no date on it. Red after the day is published is read; amber before it is not. |
-| A default value for `--site-tree` | A default is how the measurement came to name the wrong tree. The workflow names it, and a test reads it back off the deploy's own upload step. |
+| A default value for `--site-tree` | A default is how the measurement came to name the wrong tree. The workflow names the intended tree explicitly. |
 | Deleting text alongside images under one retention knob | Text is a fraction of a percent of the bytes. |
 
 ## See also

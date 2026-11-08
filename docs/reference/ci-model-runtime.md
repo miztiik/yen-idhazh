@@ -194,13 +194,11 @@ watched the bytes arrive.
 | --- | --- | --- |
 | every job on the shared download | whatever its config root declares | that root's own `models.summarizer.sha256` and each companion's, read by `verify-model-files` |
 
-The workflow contract test that holds this open is closed-world. It finds the
-downloads by reading every workflow file rather than by consulting a list, and
-fails when the set it finds differs from the set it pins. **It matches the hub
-host and the download verb**, because the download is a program now and a
-workflow that calls it names no host: matching only the host would have dropped
-four of the eight jobs the day the download moved, and every check written over
-that search would have gone on passing.
+The workflow declarations are not covered by automated file-content tests.
+When changing a caller, check its use of the shared download action against this
+document and the application-level model-reference tests. **The shared runtime
+is the boundary**, because the download is a program now and a workflow that
+calls it names no host.
 
 The production entry is **5.68 GB** (`5,680,522,464` bytes).
 

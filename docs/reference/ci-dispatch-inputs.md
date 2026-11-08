@@ -27,13 +27,11 @@ carries `permissions: contents: write`, and only a dispatch reaches the form, so
 whoever fills it in can already commit to `main` by hand. The pattern is worth
 having because the mistake is silent, not because the person is untrusted.
 
-The check runs where the value first becomes a fact - the `decide` step of the
-`plan` job - and it runs **after** the empty-string default resolves. That is
-what makes the scheduled path the case the pattern is proved against rather than
-the case nobody ever ran it on: a schedule passes no inputs, `date -u +%F`
-writes `2026-08-27`, and the same pattern accepts it. The month and the day are
-bounded as well as counted, because `2026-13-45` publishes exactly as well as a
-real day does.
+The workflow checks the value where it first becomes a fact - the `decide`
+step of the `plan` job - and **after** the empty-string default resolves. A
+schedule passes no inputs, `date -u +%F` writes `2026-08-27`, and the same
+pattern accepts it. The month and the day are bounded as well as counted,
+because `2026-13-45` publishes exactly as well as a real day does.
 
 The value arrives as `DISPATCH_DATE` in the step's `env` rather than pasted into
 the script. A pasted value is text before it is a value, so a pattern written
@@ -41,10 +39,9 @@ under the paste is reading a script the input has already edited.
 
 ### Three shapes, and a closed list
 
-Every one of the 27 inputs is one of three things, and a contract test finds
-them by reading the workflow files rather than by consulting a list - so a new
-input fails the test until somebody says which one it is and the test finds the
-evidence in the file.
+Every one of the 27 inputs is one of three things. This is a maintained
+documentation inventory; tests do not read workflow files to discover or verify
+these declarations.
 
 | Shape | What it means | Count |
 | --- | --- | --- |
@@ -89,13 +86,12 @@ every other step in the repository starts with, so a crash inside the comparison
 now turns the step red instead of passing through `tee` as a success and
 skipping the issue step on `if: success`.
 
-### Nothing lints a `run:` body
+### Inline shell is not linted
 
 `ruff` and `mypy` stop at Python, and no linter reads the shell a workflow
-writes inline: a `run:` body is a string inside YAML, not a file. The tool that
-can read one is `actionlint`, a Go binary this repository does not fetch. The
-inline shell is held by the contract tests in `backend/tests/workflows/`
-instead, which execute the real steps rather than grep them.
+writes inline: a `run:` body is a string inside YAML, not a file. This
+repository does not lint workflow files or execute their `run:` bodies in
+tests. Hosted runs remain the place where GitHub executes those declarations.
 
 CI ran `shellcheck` over `.github/scripts/*.sh` in the gates job until
 2026-09-23. Removing the last shell file also removed `shellcheck`, its
@@ -107,5 +103,5 @@ TypeScript helper, which is outside that shell check
 
 - [github-actions.md](github-actions.md) - which workflows take these inputs, and when each runs.
 - [ci-model-runtime.md](ci-model-runtime.md) - the model ref a dispatch input may name, and where the production one is written.
-- [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the linter and the contract tests that hold these shapes.
+- [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the checks that still run in CI.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #11 on why an input that reaches a URL is a closed list.

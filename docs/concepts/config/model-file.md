@@ -110,10 +110,7 @@ the key rather than relying on the contract. Retiring a key without moving
 those readers breaks the next scheduled run. The same applies to the pointer:
 those readers follow
 `models_file` to the model's own file rather than naming that file, so a swap
-stays one line for them too, and
-`backend/tests/workflows/test_weights_and_model_refs.py::test_every_config_key_a_workflow_indexes_is_in_the_committed_config`
-resolves each key path against whichever of the two documents the step really
-opened.
+stays one line for them too.
 
 ## Runtime settings
 

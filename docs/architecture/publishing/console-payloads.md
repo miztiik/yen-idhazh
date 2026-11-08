@@ -178,13 +178,11 @@ stopped publishing three months ago.
 ### The refresh paths have one declaration
 
 `REFRESH_PATHS` on the `Commit the day` step names what a rebuild owns after a
-lost push race, and it is read from
-[`backend/idhazh/path_classes.py`](../../../backend/idhazh/path_classes.py) by the step that
-prints it and by the workflow tests. It was a space-split string in the workflow
-with a hand-written mirror in `backend/tests/workflows/`, asserted equal by exact
-list order; two lists that can drift is one list too many, and a payload absent
-from either builds locally and never reaches the site. The staged path list on
-the same step still moves with a new payload root.
+lost push race. It is read from
+[`backend/idhazh/path_classes.py`](../../../backend/idhazh/path_classes.py) by the
+program that prints it for the step, rather than duplicated as a space-split
+workflow string. The staged path list on the same step still moves with a new
+payload root.
 
 **Seed payloads support the first site build, not directory staging.**
 `backend/utilities/publish_to_repo.py` indexes exact confirmed files, so a

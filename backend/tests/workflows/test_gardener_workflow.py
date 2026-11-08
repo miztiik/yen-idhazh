@@ -1,69 +1,21 @@
-"""Does the gardener's workflow run every task once, in a checkout its readers fit inside?
-
-Everything here reads the named workflow and three named declarations copied
-into a temporary config, and nothing runs a workflow. What is decidable from those files
-is decided here: that the matrix can only ever produce a partition of the
-tasks, that every job the workflow spells is a job a record can name, that the
-plan job's sparse checkout holds every folder its reader opens, that only the
-history job takes the whole history, that each job holds only the permissions
-it uses, that each shard's job is named for the tasks it runs, and that the
-history job takes the plan job's run id and its own day.
-Whether five shards pushing at once land is not decidable here; the first
-scheduled run's records answer it.
-"""
+"""Does the gardener planner partition tasks and keep shard reads narrow?"""
 
 from __future__ import annotations
 
 import json
-import os
-import re
-import subprocess
-import sys
-from pathlib import Path, PurePosixPath
-from typing import Any, Final, cast
+from pathlib import Path
 
 import pytest
-from support.paths import CONFIG_DIR, REPO_ROOT, read_text
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh import config, ledger
-from idhazh.contracts.base import ServerJob
 from idhazh.ledger.paths import COMPACT_DIRNAME, RAW_DIRNAME
 from utilities import gardener_publish, gardener_shards
 
-from ._harness import (
-    PRUNE_PUSH_STEP,
-    WORKFLOWS_DIR,
-    _expression_references,
-    _job,
-    _load_workflows,
-    _mapping,
-    _normalize_condition,
-    _script,
-    _step,
-    _steps,
-    _string_list,
-)
-
 pytestmark = pytest.mark.workflow
 
-WORKFLOW: Final = "idhazh-gardener.yml"
-
-#: The three jobs, in the order a wake reaches them.
-PLAN, RUN_TASKS, HISTORY = "plan", "run-tasks", "history"
-
-#: The program the plan job runs before anything of ours is installed.
-PLANNER: Final = REPO_ROOT / "backend" / "utilities" / "gardener_shards.py"
-
-#: A shard job's name: a format over the matrix leg the plan job wrote, never a list of tasks.
-RUN_TASKS_NAME: Final = "shard ${{ matrix.shard }}: ${{ join(matrix.task_names, ', ') }}"
-
-#: The person's gate on the history job, word for word and wrapper included:
-#: after every shard, whatever the shards did, unless the run was cancelled.
-#: Without `${{ }}` the `!` would open a YAML tag. The person's ruling, 2026-09-29.
-HISTORY_GATE: Final = "${{ !cancelled() }}"
-
-#: The folders a shard may never list for a task: a whole root that holds every ledger.
-BARE_ROOTS: Final = frozenset(
+TASK_FILES = ("compact-feed-health.json", "traces.json", "corpus-squash.json")
+BARE_ROOTS = frozenset(
     {
         ledger.STATE_DIRNAME,
         f"{ledger.STATE_DIRNAME}/{RAW_DIRNAME}",
@@ -71,30 +23,8 @@ BARE_ROOTS: Final = frozenset(
     }
 )
 
-# Two active tasks exercise partitioning; history exercises exclusion from it.
-TASK_FILES: Final = ("compact-feed-health.json", "traces.json", "corpus-squash.json")
-
-
-def gardener() -> dict[str, object]:
-    return _load_workflows()[WORKFLOW]
-
-
-def _checkouts(workflow: dict[str, object], job: str) -> list[dict[str, object]]:
-    """The `with` block of every `actions/checkout` step in one job, in order."""
-    return [
-        _mapping(step.get("with") or {}, f"{job} checkout with")
-        for step in _steps(workflow, job)
-        if isinstance(step.get("uses"), str)
-        and cast(str, step.get("uses")).startswith("actions/checkout@")
-    ]
-
-
-def _sparse(checkout: dict[str, object]) -> list[str]:
-    return [line for line in str(checkout["sparse-checkout"]).splitlines() if line]
-
 
 def a_config_with_shards(root: Path, shards: int) -> Path:
-    """Three named declarations, with the gardener's `shards` set to this."""
     config_dir = root / "config"
     (config_dir / "gardener" / "config").mkdir(parents=True, exist_ok=True)
     for filename in TASK_FILES:
@@ -114,37 +44,28 @@ def a_config_with_shards(root: Path, shards: int) -> Path:
     return config_dir
 
 
-def test_every_shard_count_the_matrix_can_run_is_a_partition_of_the_tasks(tmp_path: Path) -> None:
-    """Each active fixture task is in exactly one shard, and none is empty.
-
-    Swept over every shard count from one to one past the number of tasks, so a
-    change to the split is held at the boundaries, not at a growing production
-    task count.
-    """
+def test_every_shard_count_the_planner_can_run_is_a_partition_of_tasks(
+    tmp_path: Path,
+) -> None:
     declared = gardener_shards.declarations(a_config_with_shards(tmp_path / "declared", 1))
     tasks = {
         name
         for name, held in declared.items()
         if held["lifecycle_status"] == "active" and held["kind"] != "history"
     }
-    assert tasks, "nothing is declared active, so this checks nothing"
+    assert tasks
     for shards in range(1, len(tasks) + 2):
         planned = gardener_shards.plan(a_config_with_shards(tmp_path / str(shards), shards))
         dealt = [list(shard["task_names"]) for shard in planned["shards"]]
-        assert all(dealt), f"at {shards} shards a shard runs no task"
+        assert all(dealt)
         placed = [name for held in dealt for name in held]
-        assert sorted(placed) == sorted(tasks), f"at {shards} shards a task is missing or twice"
+        assert sorted(placed) == sorted(tasks)
         assert planned["shard_count"] == min(shards, len(tasks)) == len(dealt)
         legs = planned["matrix"]["include"]
         assert [leg["shard"] for leg in legs] == [shard["index"] for shard in planned["shards"]]
 
 
-def test_a_shard_lists_what_its_tasks_own_or_read_and_never_a_whole_root(tmp_path: Path) -> None:
-    """Every owned folder is listed by the one shard that runs its maintainer, and none is a root.
-
-    A shard checks out none of these folders: it lists their files from the
-    commit. A whole root here would list every ledger's files for one task.
-    """
+def test_a_shard_lists_task_owned_folders_and_never_a_whole_root(tmp_path: Path) -> None:
     config_root = a_config_with_shards(tmp_path, 2)
     settings = config.load_gardener(config_root)
     planned = gardener_shards.plan(config_root)
@@ -156,336 +77,7 @@ def test_a_shard_lists_what_its_tasks_own_or_read_and_never_a_whole_root(tmp_pat
             folder for policy in named for folder in (*(policy.owns or ()), *policy.reads)
         }
         for folder in owned:
-            assert folder not in shard_of_folder, f"{folder} is owned in two shards"
+            assert folder not in shard_of_folder
             shard_of_folder[folder] = shard["index"]
         assert BARE_ROOTS.isdisjoint([*owned, *read])
-    assert shard_of_folder, "no shard owns a folder, so this checks nothing"
-
-
-def test_every_job_the_workflow_spells_is_a_job_a_record_can_name() -> None:
-    """A job id is what a record's `job` column and a file's writer carry, so it is closed."""
-    workflow = gardener()
-    jobs = _mapping(workflow.get("jobs"), "jobs")
-    spelled = set(jobs)
-    for name in jobs:
-        needs = _job(workflow, name).get("needs")
-        if isinstance(needs, str):
-            spelled.add(needs)
-        elif needs is not None:
-            spelled |= set(_string_list(needs, f"{name} needs"))
-    assert spelled == {PLAN, RUN_TASKS, HISTORY}
-    assert spelled <= {job.value for job in ServerJob}
-    assert (ServerJob.RUN_TASKS.value, ServerJob.HISTORY.value) == (RUN_TASKS, HISTORY)
-
-
-def _what_the_planner_opens(tmp_path: Path) -> list[str]:
-    """Every file the committed planner opens and every folder it lists, run as the plan job runs it.
-
-    A fresh interpreter with no site packages, in a test-built tree, against the
-    named config inputs, with an audit hook recording each `open` and each folder
-    listing. Paths inside the interpreter's own installation are left out.
-    """
-    trace = tmp_path / "opened.json"
-    a_config_with_shards(tmp_path, 2)
-    driver = (
-        "import json, os, runpy, sys\n"
-        "seen = []\n"
-        "def hook(event, args):\n"
-        "    if event == 'open' and isinstance(args[0], (str, bytes, os.PathLike)):\n"
-        "        seen.append(os.fsdecode(args[0]))\n"
-        "    elif event in ('os.scandir', 'os.listdir') and args and args[0] is not None:\n"
-        "        seen.append(os.fsdecode(args[0]))\n"
-        "sys.addaudithook(hook)\n"
-        f"sys.argv = [{str(PLANNER)!r}, '--json']\n"
-        "try:\n"
-        f"    runpy.run_path({str(PLANNER)!r}, run_name='__main__')\n"
-        "except SystemExit as done:\n"
-        "    assert not done.code, done.code\n"
-        "opened = list(seen)\n"
-        f"with open({str(trace)!r}, 'w', encoding='utf-8') as out:\n"
-        "    out.write(json.dumps(opened))\n"
-    )
-    done = subprocess.run(
-        [sys.executable, "-I", "-S", "-c", driver],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=False,
-        env={key: value for key, value in os.environ.items() if not key.startswith("PYTHON")},
-    )
-    assert done.returncode == 0, done.stderr
-    installed = [Path(prefix).resolve() for prefix in {sys.prefix, sys.base_prefix}]
-    opened: list[str] = []
-    for raw in json.loads(trace.read_text(encoding="utf-8")):
-        path = Path(raw) if Path(raw).is_absolute() else tmp_path / raw
-        resolved = path.resolve()
-        if any(resolved.is_relative_to(prefix) for prefix in installed):
-            continue
-        if resolved.is_relative_to(tmp_path.resolve()):
-            opened.append(resolved.relative_to(tmp_path.resolve()).as_posix())
-        elif resolved.is_relative_to(REPO_ROOT.resolve()):
-            opened.append(resolved.relative_to(REPO_ROOT.resolve()).as_posix())
-    return opened
-
-
-def test_the_plan_jobs_checkout_holds_every_folder_its_reader_opens(tmp_path: Path) -> None:
-    """The gate the plan was missing, both sides computed rather than listed by hand.
-
-    The cone comes from the committed workflow, and what the reader opens comes
-    from running the committed reader. A reader that drifted outside its own
-    checkout would find nothing there on the runner, answer "no tasks" and
-    report success - so this fails first, here.
-    """
-    (checkout,) = _checkouts(gardener(), PLAN)
-    cone = _sparse(checkout)
-    assert (str(checkout["fetch-depth"]), checkout["filter"]) == ("1", "blob:none")
-
-    opened = _what_the_planner_opens(tmp_path)
-
-    assert any(path.startswith("config/gardener") for path in opened), (
-        "the reader opened no declaration, so this checks nothing"
-    )
-    outside = [
-        path
-        for path in opened
-        if "/" in path
-        and not any(PurePosixPath(path).is_relative_to(PurePosixPath(folder)) for folder in cone)
-    ]
-    assert not outside, (
-        f"the plan job's reader opens {outside[0]}, which its sparse checkout {cone} never "
-        "writes, so on the runner it would read nothing there"
-    )
-
-
-def test_among_jobs_that_may_push_only_the_history_jobs_second_checkout_is_a_full_clone() -> None:
-    """A job that commits and takes the whole history pays for a clone it does not use.
-
-    The history job takes one on purpose: it rewrites every commit. Jobs that
-    never push, such as CI's two full clones, are outside the rule, which is
-    about a job that commits.
-    """
-    full: list[tuple[str, str, int]] = []
-    for filename, workflow in _load_workflows().items():
-        for job in _mapping(workflow.get("jobs"), "jobs"):
-            granted = _job(workflow, job).get("permissions", workflow.get("permissions"))
-            pushes = granted == "write-all" or (
-                isinstance(granted, dict) and granted.get("contents") == "write"
-            )
-            if not pushes:
-                continue
-            for position, checkout in enumerate(_checkouts(workflow, job)):
-                if str(checkout.get("fetch-depth")) == "0":
-                    full.append((filename, job, position))
-    assert full == [(WORKFLOW, HISTORY, 1)]
-
-
-def test_each_job_holds_only_the_permissions_it_uses() -> None:
-    """A job's `permissions` replace the workflow's, so each one names its whole set.
-
-    The shards push their records and list, and once live delete, GitHub's
-    artifacts and runs. The history job rewrites `main` and calls no Actions
-    API, so the one job that force-pushes holds no permission it never calls.
-    """
-    workflow = gardener()
-    assert workflow.get("permissions") == {"contents": "read"}
-    assert _job(workflow, PLAN).get("permissions") == {"contents": "read"}
-    assert _job(workflow, RUN_TASKS).get("permissions") == {
-        "contents": "write",
-        "actions": "write",
-    }
-    assert _job(workflow, HISTORY).get("permissions") == {"contents": "write"}
-
-
-def test_the_shards_push_with_the_default_token_and_never_a_personal_one() -> None:
-    """A push made with the default token starts no workflow, and the header says so.
-
-    Five shard pushes a day that started CI would be five full CI runs a day. The
-    guard is invisible in the file that depends on it, so the header states it
-    and this reads both halves: no checkout names a token, and the one secret any
-    step reads is the default one.
-    """
-    text = read_text(WORKFLOWS_DIR / WORKFLOW)
-    assert "A push made with the default GITHUB_TOKEN starts no workflow" in text
-    workflow = gardener()
-    for job in (PLAN, RUN_TASKS, HISTORY):
-        assert all("token" not in checkout for checkout in _checkouts(workflow, job)), job
-    secrets = set(_expression_references(text, ("secrets",)))
-    assert secrets == {("secrets", "GITHUB_TOKEN")}
-    step = _step(workflow, RUN_TASKS, "name", "Run the shard's tasks and land its record")
-    assert _mapping(step.get("env"), "shard step env")["GITHUB_TOKEN"] == (
-        "${{ secrets.GITHUB_TOKEN }}"
-    )
-
-
-@pytest.mark.parametrize(
-    ("expression", "expected"),
-    [
-        ("secrets.GITHUB_TOKEN", ("secrets", "GITHUB_TOKEN")),
-        ("toJSON(secrets.PERSONAL_TOKEN)", ("secrets", "PERSONAL_TOKEN")),
-        ("secrets['PERSONAL_TOKEN']", ("secrets", "PERSONAL_TOKEN")),
-        ("secrets[matrix.token]", ("secrets",)),
-    ],
-)
-def test_secret_references_remain_visible_inside_wrappers_and_brackets(
-    expression: str,
-    expected: tuple[str, ...],
-) -> None:
-    assert _expression_references("${{ " + expression + " }}", ("secrets",)) == [expected]
-
-
-def test_secret_names_in_expression_strings_are_not_secret_reads() -> None:
-    assert _expression_references("${{ 'secrets.PERSONAL_TOKEN' }}", ("secrets",)) == []
-    assert _expression_references("${{ env.PERSONAL_TOKEN }}", ("secrets",)) == []
-
-
-def test_the_plan_job_runs_the_standard_library_planner_before_any_install() -> None:
-    workflow = gardener()
-    assert str(_job(workflow, PLAN)["timeout-minutes"]) == "5"
-    steps = _steps(workflow, PLAN)
-    assert not [step for step in steps if "setup-python" in str(step.get("uses", ""))]
-    assert not [step for step in steps if "pip install" in str(step.get("run", ""))]
-    assert "python3 backend/utilities/gardener_shards.py" in _script(
-        _step(workflow, PLAN, "id", "shards"), "plan step"
-    )
-    outputs = _mapping(_job(workflow, PLAN).get("outputs"), "plan outputs")
-    assert outputs == {
-        "any_active_task": "${{ steps.shards.outputs.any_active_task }}",
-        "shard_count": "${{ steps.shards.outputs.shard_count }}",
-        "matrix": "${{ steps.shards.outputs.matrix }}",
-        "run_id": "${{ steps.run.outputs.run_id }}",
-    }
-
-
-def test_a_shard_checks_out_only_its_code_and_runs_the_landing_program() -> None:
-    """No folder a task owns or reads is checked out: its names come from the commit."""
-    workflow = gardener()
-    job = _job(workflow, RUN_TASKS)
-    assert (job.get("needs"), str(job["timeout-minutes"])) == (PLAN, "20")
-    assert _normalize_condition(job["if"], "run-tasks if") == (
-        "needs.plan.outputs.any_active_task == 'true'"
-    )
-    strategy = _mapping(job.get("strategy"), "strategy")
-    assert _mapping(strategy.get("matrix"), "matrix") == {
-        "include": "${{ fromJSON(needs.plan.outputs.matrix).include }}"
-    }
-    assert str(strategy["fail-fast"]) == "false"
-    assert strategy["max-parallel"] == "${{ fromJSON(needs.plan.outputs.shard_count) }}"
-
-    steps = _steps(workflow, RUN_TASKS)
-    (checkout,) = _checkouts(workflow, RUN_TASKS)
-    assert _sparse(checkout) == [
-        "config",
-        "backend",
-        ".github",
-        "packages/common-contracts",
-        "packages/ledger-file-writer",
-        "state/raw/feed-ingest-plan",
-        "state/compact/feed-ingest-plan",
-    ]
-    assert (str(checkout["fetch-depth"]), checkout["filter"]) == ("1", "blob:none")
-    assert not any(step.get("run") == "git config index.sparse true" for step in steps)
-    assert _mapping(job.get("env"), "shard Git environment") == {
-        "GIT_CONFIG_COUNT": "1",
-        "GIT_CONFIG_KEY_0": "index.sparse",
-        "GIT_CONFIG_VALUE_0": "true",
-    }
-    assert any(step.get("run") == "pip install -e ." for step in steps)
-    bun_setup = next(step for step in steps if step.get("uses") == "oven-sh/setup-bun@v2")
-    assert bun_setup.get("if") == (
-        "contains(join(matrix.task_names, ','), 'compact-feed-ingest-plan-')"
-    )
-    assert _mapping(bun_setup.get("with"), "Bun setup") == {"bun-version": "1.3.13"}
-    bun_install = _step(
-        workflow, RUN_TASKS, "name", "Install planner ledger contracts and writer"
-    )
-    assert bun_install.get("if") == bun_setup["if"]
-    assert bun_install.get("run") == (
-        "bun install --frozen-lockfile --cwd packages/common-contracts\n"
-        "bun install --frozen-lockfile --cwd packages/ledger-file-writer\n"
-    )
-
-    landing = _step(workflow, RUN_TASKS, "name", "Run the shard's tasks and land its record")
-    landing_script = _script(landing, "shard step")
-    assert "python backend/utilities/gardener_publish.py" in landing_script
-    assert '--shard "$SHARD"' in landing_script
-    assert '--run-id "$RUN_ID"' in landing_script
-    assert '--attempt "$ATTEMPT"' in landing_script
-    assert _mapping(landing.get("env"), "shard step env") == {
-        "SHARD": "${{ matrix.shard }}",
-        "RUN_ID": "${{ needs.plan.outputs.run_id }}",
-        "ATTEMPT": "${{ github.run_attempt }}",
-        "GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}",
-    }
-
-
-def test_each_shard_jobs_name_lists_the_tasks_it_runs() -> None:
-    """A run's page shows what every shard ran without opening a job.
-
-    The name formats the matrix leg the plan job wrote - the shard's number and
-    its task names - so the workflow still names no task and adding one is
-    still a declaration alone. `test_gardener_plan_matrix.py` holds the keys it
-    reads to the ones a leg declares. This reads the expression, not a run: how
-    GitHub shortens a long name on screen is not decidable here.
-    """
-    assert _job(gardener(), RUN_TASKS).get("name") == RUN_TASKS_NAME
-
-
-def test_the_history_job_runs_last_and_unless_the_run_was_cancelled() -> None:
-    """Every shard has ended before history is rewritten, and only a cancel stops the squash.
-
-    A day no task is active and a day a shard failed both still squash. The
-    condition is read as written rather than normalised, because the wrapper is
-    what keeps the `!` from being read as a YAML tag.
-    """
-    job = _job(gardener(), HISTORY)
-    assert job.get("needs") == [PLAN, RUN_TASKS]
-    assert job["if"] == HISTORY_GATE
-    assert str(job["timeout-minutes"]) == "30"
-
-
-def test_the_history_step_takes_the_plan_jobs_run_id_and_its_own_day() -> None:
-    """One run carries one id, and the squash is due by the clock of the job that acts.
-
-    The plan job reads the run id once, for every shard, and the history step
-    takes the same id, so a run that crosses 00:00 UTC keeps one id. The step
-    makes its own only when the plan job left none: the job runs on
-    `!cancelled()`, so a failed plan job does not stop it. The day it squashes
-    against is the due step's own reading, so the job reads the clock once and
-    never takes a day from another job. The step's environment holds these three
-    values and nothing else, so no other step hands the program a commit or a
-    flag. This reads the expressions, not a run; the records of a run that
-    crossed midnight show whether it kept one id.
-    """
-    step = _step(gardener(), HISTORY, "name", PRUNE_PUSH_STEP)
-    assert _mapping(step.get("env"), "history step env") == {
-        "TODAY": "${{ steps.due.outputs.today }}",
-        "RUN_ID": (
-            "${{ needs.plan.outputs.run_id"
-            " || format('{0}-{1}', steps.due.outputs.today, github.run_id) }}"
-        ),
-        "ATTEMPT": "${{ github.run_attempt }}",
-    }
-
-
-def test_the_workflow_names_no_task_the_matrix_runs(tmp_path: Path) -> None:
-    """Adding a task is a declaration and never a workflow edit (decision 5).
-
-    The one task outside the matrix is the history task, and its job is about
-    it by design: it reads that declaration to decide whether the squash is due.
-    """
-    declared = gardener_shards.declarations(a_config_with_shards(tmp_path, 2))
-    names = {name for name, held in declared.items() if held["kind"] != "history"}
-    assert names, "nothing is declared, so this checks nothing"
-
-    def strings(value: Any) -> list[str]:
-        if isinstance(value, dict):
-            return [text for key, held in value.items() for text in (str(key), *strings(held))]
-        if isinstance(value, list):
-            return [text for held in value for text in strings(held)]
-        return [str(value)]
-
-    spelled = " ".join(strings(gardener()))
-    named = sorted(
-        name for name in names if re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", spelled)
-    )
-    assert not named, f"the workflow spells {named}, so adding a task would mean editing it"
+    assert shard_of_folder

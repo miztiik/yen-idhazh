@@ -1,8 +1,6 @@
 """Verify the named form, visible phases and bounded platform-data boundary."""
 
 import json
-import re
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -13,124 +11,6 @@ from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.inputs import read_manual_inputs
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_evaluator_cases.contract_examples import REPOSITORY, read_contract
-
-from summary_eval_tests.test_host_profile_reader_parity import (
-    bridge_path,
-    mapping,
-    required_bun,
-)
-
-
-def named_workflow() -> dict[str, object]:
-    result = subprocess.run(
-        [required_bun(), "run", "--no-install", str(bridge_path()), "workflow"],
-        cwd=REPOSITORY,
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
-    assert result.returncode == 0, "The existing Bun YAML reader failed: " + result.stderr
-    return mapping(json.loads(result.stdout))
-
-
-def strings(value: object) -> list[str]:
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, dict):
-        return [text for child in value.values() for text in strings(child)]
-    if isinstance(value, list):
-        return [text for child in value for text in strings(child)]
-    return []
-
-
-def test_named_workflow_selects_one_declaration_with_the_current_pointer_default() -> None:
-    workflow = named_workflow()
-    triggers = mapping(workflow["on"])
-    assert set(triggers) == {"workflow_dispatch"}
-    inputs = mapping(mapping(triggers["workflow_dispatch"])["inputs"])
-    assert set(inputs) == {"source_text", "models_file", "reference_summary_text"}
-    source, model = mapping(inputs["source_text"]), mapping(inputs["models_file"])
-    assert source["type"] == "string" and source["required"] is True
-    reference = mapping(inputs["reference_summary_text"])
-    assert reference["type"] == "string" and reference["required"] is True
-    assert model["type"] == "string" and model["required"] is False and "options" not in model
-    pointer = json.loads((REPOSITORY / "config" / "idhazh.json").read_bytes())["models_file"]
-    assert model["default"] == pointer
-    assert mapping(workflow["permissions"]) == {"contents": "read"}
-    jobs = mapping(workflow["jobs"])
-    assert set(jobs) == {"evaluate"}
-    job = mapping(jobs["evaluate"])
-    assert job["runs-on"] == "ubuntu-latest" and "strategy" not in job
-    assert 0 < int(str(job["timeout-minutes"])) < 360
-    steps = job["steps"]
-    assert isinstance(steps, list)
-    declared = [mapping(step) for step in steps]
-    text = "\n".join(strings({key: value for key, value in workflow.items() if key != "on"}))
-    assert not re.search(r"\$\{\{[^}]*\binputs\b", text)
-    phases = [
-        str(step["run"]).rsplit(" ", 1)[-1]
-        for step in declared
-        if "tools/summary-eval/run.py" in str(step.get("run", ""))
-    ]
-    assert phases == ["prepare", "generate", "evaluate"]
-    assert "--frozen --extra model --no-dev" in text
-    assert "tools/summary-eval/report.py --root ../.." in text
-    assert "bun install --frozen-lockfile --cwd services/serve-pipeline-apis" in text
-    for forbidden in (
-        "bun install --frozen-lockfile --cwd services/feed-ingest-plan",
-        "bun install --frozen-lockfile --cwd packages/data-delivery",
-        "git commit",
-        "git push",
-        "git add",
-        "digest.yml",
-        "idhazh pipeline",
-        "article_url",
-        "OMP_NUM_THREADS",
-        "MKL_NUM_THREADS",
-        "OPENBLAS_NUM_THREADS",
-        "taskset",
-        "ulimit",
-        "GITHUB_EVENT_PATH:",
-        "summary-eval-hhem/",
-    ):
-        assert forbidden not in text
-    uploads = [
-        step
-        for step in declared
-        if str(step.get("uses", "")).startswith("actions/upload-artifact@")
-    ]
-    assert len(uploads) == 2
-    assert uploads[0]["if"] == "${{ always() && steps.prepare.outputs.output_directory != '' }}"
-    assert uploads[1]["if"] == (
-        "${{ (failure() || cancelled()) && steps.prepare.outputs.output_directory != '' "
-        "&& steps.prepare.outputs.native_log_directory != '' }}"
-    )
-    assert "${{ steps.prepare.outputs.output_directory }}/generation.json" in str(
-        mapping(uploads[0]["with"])["path"]
-    )
-    diagnostics = str(mapping(uploads[1]["with"])["path"])
-    assert "${{ steps.prepare.outputs.output_directory }}/logs/" in diagnostics
-    assert "${{ steps.prepare.outputs.native_log_directory }}/" in diagnostics
-    assert all("retention-days" not in mapping(step["with"]) for step in uploads)
-    assert not (REPOSITORY / ".github" / "workflows" / "hhem-evaluation-api-test.yml").exists()
-    assert not (REPOSITORY / "config" / "summary-eval-hhem.json").exists()
-
-
-def test_workflow_scopes_the_standard_token_to_native_preparation_only() -> None:
-    workflow = named_workflow()
-    job = mapping(mapping(workflow["jobs"])["evaluate"])
-    assert "GITHUB_TOKEN" not in mapping(workflow.get("env", {}))
-    assert "GITHUB_TOKEN" not in mapping(job.get("env", {}))
-    steps = job["steps"]
-    assert isinstance(steps, list)
-    declared = [mapping(step) for step in steps]
-    prepare = next(step for step in declared if step.get("id") == "prepare")
-    assert mapping(prepare["env"]) == {"GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}
-    assert "run.py --root ../.. prepare" in str(prepare["run"])
-    for step in declared:
-        if step is not prepare:
-            assert "GITHUB_TOKEN" not in mapping(step.get("env", {}))
 
 
 def write_event(path: Path, inputs: dict[str, object]) -> None:

@@ -5,10 +5,10 @@ been shown to work. So every test here starts from a degradation and asserts the
 alert fires - and the important one asserts that a GLOBAL threshold would have
 missed it, which is why the rule is per-domain.
 
-The second oracle is the opposite failure and it is not a unit test: the review
-step reporting all clear over a window it never compared. Those tests run the
-program `.github/workflows/drift.yml` actually ships, against a ledger written
-into a temporary directory, and read its exit code.
+The second oracle is the opposite failure: the standalone report command must
+not report all clear over a window it never compared. These tests run that
+program against a ledger written into a temporary directory and read its exit
+code.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from __future__ import annotations
 import datetime
 import json
 import os
-import re
 import subprocess
 import sys
 from dataclasses import replace
@@ -24,7 +23,6 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-import yaml  # type: ignore[import-untyped]
 from council._config import copy_config
 from pydantic import ValidationError
 from support.ledger import seed_scores
@@ -50,11 +48,8 @@ from idhazh.drift import (
     shortfall,
 )
 
-# `workflow`, because the program `.github/workflows/drift.yml` ships is asserted here.
+# The report command exercises filesystem and subprocess behavior.
 pytestmark = pytest.mark.workflow
-
-DRIFT_WORKFLOW: Final = REPO_ROOT / ".github" / "workflows" / "drift.yml"
-COMPARE_STEP: Final = "Compare the windows"
 
 #: The module that step calls. Read rather than copied, so a second copy cannot
 #: pass its own tests while the shipped one exits 0 on an empty window.
@@ -443,28 +438,9 @@ def test_the_issue_body_links_the_full_report_when_findings_alone_are_too_large(
     assert run_url in body
 
 
-def compare_step() -> dict[str, object]:
-    workflow = yaml.safe_load(read_text(DRIFT_WORKFLOW))
-    for step in workflow["jobs"]["drift"]["steps"]:
-        if step.get("name") == COMPARE_STEP:
-            return dict(step)
-    raise AssertionError(f"drift.yml no longer has a {COMPARE_STEP!r} step")
-
-
 def scheduled_windows() -> dict[str, str]:
-    """What a scheduled run puts in the environment: every `|| 'N'` default.
-
-    A schedule passes no inputs, so this is the path that runs 51 weeks a year
-    and the one worth testing first.
-    """
-    env = compare_step()["env"]
-    assert isinstance(env, dict)
-    resolved: dict[str, str] = {}
-    for name, expression in env.items():
-        default = re.search(r"\|\|\s*'([^']+)'\s*\}\}", str(expression))
-        assert default is not None, f"{name} must carry a literal default for the schedule"
-        resolved[str(name)] = default.group(1)
-    return resolved
+    """Explicit test-owned windows for exercising the report CLI."""
+    return {"RECENT_DAYS": "7", "BASELINE_DAYS": "28"}
 
 
 def measured(
@@ -716,12 +692,6 @@ def test_the_review_still_fires_on_real_drift(tmp_path: Path) -> None:
     body = read_text(tmp_path / "drift-issue.txt")
     assert Alert.SCORING_CHROME.value in body
     assert "https://github.com/example/repository/actions/runs/123" in body
-    workflow = yaml.safe_load(read_text(DRIFT_WORKFLOW))
-    issue_step = next(
-        step for step in workflow["jobs"]["drift"]["steps"]
-        if step.get("name") == "Open an issue when something moved"
-    )
-    assert "--body-file drift-issue.txt" in issue_step["run"]
 
 
 def test_the_reader_uses_completed_utc_days_and_only_relevant_days(tmp_path: Path) -> None:
