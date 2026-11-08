@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-08
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 10.
 
@@ -47,10 +47,18 @@ contract design first.
 
 The manual summary workflow's same-run generation, phase evidence and private launcher packets
 live outside that API, under
-`.github/scripts/summary-eval-tests/summary_eval_pipeline/`. The
+`tools/summary-eval/summary_eval_pipeline/`. The
 [workflow reference](../../reference/summary-evaluation-workflow.md) owns
 their fields and the narrow reader held against native TypeScript host
 schemas. The evaluator package does not import these workflow contracts.
+
+The independent generator caller owns its analysis request/result, event,
+telemetry, environment and summary-workflow schemas in
+`tools/summary-generator-caller/contracts/`. Consumers import the defining
+schema modules directly; there is no schema re-export file. Pure summary API
+fields still come from the native API's model rather than a second declaration.
+The [caller reference](../../reference/summary-generator-caller.md) owns saved
+analysis compatibility and private reports.
 
 ## Council invocation and retained-record compatibility
 

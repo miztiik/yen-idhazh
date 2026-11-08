@@ -1,17 +1,40 @@
 # Summary evaluation workflow
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 Which inputs, saved results and process outcomes belong to the manual
 `summary-eval-tests.yml` workflow. Its task programs live in
-`.github/scripts/summary-eval-tests/`; evaluator calculations remain native API
+`tools/summary-eval/`; evaluator calculations remain native API
 operations.
 
-Workflow tests live in the distinct `summary_eval_tests` package beside those
-programs. Service tests remain under `services/summary_evaluator/tests`;
+Workflow tests live in `tools/summary-eval/summary_eval_tests`, beside the
+task programs. Service tests remain under `services/summary_evaluator/tests`;
 `summary_evaluator_cases` there contains their single shared recording and
 process harness. The service pytest configuration names both suites in one
 locked model-free environment. Tests keep the original fixture provenance.
+
+`run.py` bootstraps backend imports and dispatches `prepare`, `generate` or
+`evaluate`; `report.py` bootstraps the saved-result report; `serve.py` is the
+phase owner's existing Python API-child entrypoint. All remain in this tool.
+`machine-task.ts`, `machine-results.ts` and the test-only host-profile bridge
+import the native machine contracts and implementations; no API source moves
+into the tool. The native machine listener remains
+`services/host-probes/src/api/serve-machine-apis.ts`.
+Service setup and recording utilities remain under
+`services/summary_evaluator/scripts/`.
+From that service directory, the workflow invokes
+`python ../../tools/summary-eval/run.py --root ../..` with `prepare`, `generate`
+or `evaluate`, then `python ../../tools/summary-eval/report.py --root ../..`.
+Its frozen `--extra model --no-dev` environment is for live work, not offline
+checks. Workflow filenames, artifact names and private output directories keep
+their existing spellings.
+
+The evaluator's `pyproject.toml` names the tool root in `mypy_path` and
+`pythonpath`, and its `summary_eval_tests` directory in `testpaths`. Local and
+CI invocations use that existing locked environment. The
+[gate commands](../how-to/run-the-gates.md#independent-python-service-contracts)
+own model-free preparation and verification; the
+[manual procedure](../how-to/run-hhem-evaluation-api.md) owns live dispatch.
 
 ## One model and one generated answer
 

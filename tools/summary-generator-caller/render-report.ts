@@ -1,0 +1,164 @@
+/** Which summary and saved event identities belong in the private job report? */
+import fs from "node:fs";
+import type { Writable } from "node:stream";
+import type { RecordedSummaryStructuredOutput } from "./contracts/analysis-result.schema.js";
+import type { RecordedPipelineEvent } from "./contracts/pipeline-event.schema.js";
+
+const NOT_REPORTED = "Not reported";
+
+function formatMeasurement(value: number | null, unit: string): string {
+  return value === null ? NOT_REPORTED : `${value} ${unit}`;
+}
+
+function formatStageTime(milliseconds: number | null): string {
+  return milliseconds === null ? NOT_REPORTED : `${(milliseconds / 1000).toFixed(2)}s`;
+}
+
+export function renderGithubStepSummary(
+  modelName: string,
+  result: RecordedSummaryStructuredOutput,
+  events: RecordedPipelineEvent[],
+  options: { summaryPath?: string; diagnostic?: Pick<Writable, "write">; writeNotice?: boolean } = {},
+): void {
+  const tm = result.token_metrics;
+  const sm = result.swap_metrics;
+  const sa = result.source_audit;
+  const promptCount = formatMeasurement(tm.prompt_tokens, "tokens");
+  const completionCount = formatMeasurement(tm.completion_tokens, "tokens");
+  const promptRate = formatMeasurement(tm.prompt_tokens_per_second, "tokens/sec");
+  const completionRate = formatMeasurement(tm.completion_tokens_per_second, "tokens/sec");
+  const legacy = !Object.hasOwn(tm, "version");
+  const legacyWarning = "Historical measurements are shown as recorded; zeroes may mean unavailable data and stage times may include whole-request timing.";
+
+  if (options.writeNotice !== false) {
+    (options.diagnostic ?? process.stderr).write(
+      `::notice title=AI Pipeline Succeeded::Input: ${promptRate} (${promptCount}) | Output: ${completionRate} (${completionCount}) | Time: ${(tm.total_duration_ms / 1000).toFixed(1)}s | Peak swap: ${sm.peak_server_swap_mb} MB${legacy ? ` | ${legacyWarning}` : ""}\n`,
+    );
+  }
+
+  const summaryPath = options.summaryPath ?? process.env.GITHUB_STEP_SUMMARY;
+  if (!summaryPath) return;
+
+  const lines: string[] = [
+    `# AI Transformer Pipeline Execution Report`,
+    ``,
+    `Model: \`${modelName}\``,
+    ``,
+    `## Token Performance & Ingestion Rates`,
+    ``,
+    `Table A - Native token measurements`,
+    ``,
+    `| Id | Metric | Token Count | Elapsed Time | Speed (Tokens / Sec) |`,
+    `| :--- | :--- | :--- | :--- | :--- |`,
+    `| A1 | **Prompt (Input Ingestion)** | **${promptCount}** | ${formatStageTime(tm.prompt_time_ms)} | **${promptRate}** |`,
+    `| A2 | **Completion (Output Gen)** | **${completionCount}** | ${formatStageTime(tm.completion_time_ms)} | **${completionRate}** |`,
+    `| A3 | **Total Evaluation** | **${formatMeasurement(tm.total_tokens, "tokens")}** | **${(tm.total_duration_ms / 1000).toFixed(2)}s** | ${NOT_REPORTED} |`,
+    ``,
+    ...(legacy ? [legacyWarning, ``] : []),
+    `---`,
+    ``,
+    `## Content Stance & Ideological Alignment`,
+    ``,
+    `Table B - Full-analysis classifications`,
+    ``,
+    `| Id | Axis | Classification | Question Evaluated |`,
+    `| :--- | :--- | :--- | :--- |`,
+    `| B1 | **General Sentiment** | \`${result.sentiment.toUpperCase()}\` | Overall emotional and qualitative tone |`,
+    `| B2 | **Stance on Change** | \`${result.stance_on_change}\` | What to do about the existing arrangement |`,
+    `| B3 | **Stance on Economic Power** | \`${result.stance_on_economic_power}\` | Who should hold economic power |`,
+    `| B4 | **Stance on State Power** | \`${result.stance_on_state_power}\` | Whether a power the state holds was properly checked |`,
+    `| B5 | **Stance on Borders** | \`${result.stance_on_borders}\` | Whether the answer is inside or outside the border |`,
+    `| B6 | **Stance on Personal Sphere** | \`${result.stance_on_personal_sphere}\` | Whether a person keeps an inviolable personal sphere |`,
+    ``,
+    `---`,
+    ``,
+    `## Memory & Swap Diagnostics`,
+    ``,
+    `Table C - Retained caller measurements`,
+    ``,
+    `| Id | Metric | Measured Value | Health Status |`,
+    `| :--- | :--- | :--- | :--- |`,
+    `| C1 | **Linux \`vm.swappiness\`** | **\`${sm.swappiness}\`** | ${sm.swappiness <= 10 ? "Low Paging (Optimized)" : "High Paging"} |`,
+    `| C2 | **Server Process PID** | \`${sm.server_pid ?? ""}\` | Background Daemon |`,
+    `| C3 | **Server RAM (RSS)** | **${sm.server_vm_rss_mb} MB** | In Physical Memory |`,
+    `| C4 | **Peak Process Swap** | **${sm.peak_server_swap_mb} MB** | ${sm.peak_server_swap_mb > 0 ? "Process Swapped" : "0 MB (Zero Process Swap)"} |`,
+    `| C5 | **Final Process Swap** | **${sm.final_server_swap_mb} MB** | Current Swap Allocation |`,
+    `| C6 | **Swap Written to SSD** | **${sm.swap_bytes_written_mb} MB** | Pages Paged Out |`,
+    `| C7 | **Swap Read from SSD** | **${sm.swap_bytes_read_mb} MB** | Pages Paged In |`,
+    `| C8 | **Total System Swap Used** | \`${sm.system_swap_used_mb} MB / ${sm.system_swap_total_mb} MB\` | Allocated Swapfile Space |`,
+    ``,
+    `---`,
+    ``,
+    `## Structured Summary: *"${result.headline}"*`,
+    ``,
+    `### Comprehensive Executive Summary:`,
+    result.executive_summary,
+    ``,
+    `### Core Takeaways:`,
+    ...result.key_points.map((p) => `- ${p}`),
+    ``,
+    `---`,
+    ``,
+    `## Full Input Prompt (System + User Prompt)`,
+    `<details open>`,
+    `<summary><b>Click to collapse/expand exact prompt payload sent to model</b></summary>`,
+    ``,
+    `### System Prompt:`,
+    `\`\`\`text`,
+    result.system_prompt,
+    `\`\`\``,
+    ``,
+    `### User Prompt:`,
+    `\`\`\`text`,
+    result.user_prompt,
+    `\`\`\``,
+    ``,
+    `</details>`,
+    ``,
+    `---`,
+    ``,
+    `## Full Input Text (Source Material)`,
+    `<details open>`,
+    `<summary><b>Click to collapse/expand input text (${sa.extractedWordCount} words, ${sa.extractedCharCount} chars)</b></summary>`,
+    ``,
+    `\`\`\`markdown`,
+    result.input_text,
+    `\`\`\``,
+    ``,
+    `</details>`,
+    ``,
+    `---`,
+    ``,
+    `## Verbatim Raw Model Output`,
+    `<details open>`,
+    `<summary><b>Click to collapse/expand raw model output</b></summary>`,
+    ``,
+    `\`\`\`text`,
+    result.raw_output,
+    `\`\`\``,
+    ``,
+    `</details>`,
+    ``,
+    `---`,
+    ``,
+    `## Event occurrences`,
+    ``,
+    `Table D - Private event identities`,
+    ``,
+    `| Id | Event type | Occurrence UUID | Time (UTC) | Operation context |`,
+    `| :--- | :--- | :--- | :--- | :--- |`,
+    ...events.map((e, index) => `| D${index + 1} | \`${e.type}\` | \`${e.id}\` | \`${e.time}\` | \`${e.traceparent}\` |`),
+    ``,
+    `<details>`,
+    `<summary><b>Inspect Full Event Stream Payloads (JSON)</b></summary>`,
+    ``,
+    `\`\`\`json`,
+    JSON.stringify(events, null, 2),
+    `\`\`\``,
+    ``,
+    `</details>`,
+    ``,
+  ];
+
+  fs.appendFileSync(summaryPath, lines.join("\n"), "utf8");
+}

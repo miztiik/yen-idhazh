@@ -4,12 +4,11 @@ on:
   pull_request:
     paths:
       - '.github/scripts/ai-pipeline.ts'
-      - '.github/scripts/read-pipeline-events.ts'
-      - '.github/scripts/test/workflow-handoff.test.ts'
+      - 'tools/ai-pipeline-experiment/read-pipeline-events.ts'
+      - 'tools/ai-pipeline-experiment/test/workflow-handoff.test.ts'
       - '.github/workflows/ai-pipeline-tests.yml'
       - 'packages/common-contracts/**'
       - 'services/summary-generator/**'
-      - '.github/scripts/declare-workflow-event-source.ts'
       - 'tests/fixtures/typescript-metadata/workflow-output-event.json'
   workflow_dispatch:
     inputs:
@@ -94,8 +93,8 @@ jobs:
             --noEmit --target ESNext --module ESNext --moduleResolution Bundler \
             --strict --skipLibCheck --allowImportingTsExtensions --types bun \
             --typeRoots packages/common-contracts/node_modules/@types \
-            .github/scripts/ai-pipeline.ts .github/scripts/test/workflow-handoff.test.ts
-          bun test ./.github/scripts/test/workflow-handoff.test.ts
+            .github/scripts/ai-pipeline.ts tools/ai-pipeline-experiment/test/workflow-handoff.test.ts
+          bun test ./tools/ai-pipeline-experiment/test/workflow-handoff.test.ts
 
   run-pipeline:
     if: github.event_name == 'workflow_dispatch'

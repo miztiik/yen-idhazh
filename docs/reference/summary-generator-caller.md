@@ -1,6 +1,6 @@
 # Summary generator callers
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-08
 
 Which analysis and summary-only outputs does the independent private caller
 retain outside the generation API?
@@ -8,8 +8,15 @@ retain outside the generation API?
 ## Two caller products
 
 The private package is `summary-generator-tests` under
-`.github/scripts/summary-generator-tests/`. Its manifest declares `check`,
+`tools/summary-generator-caller/`. Its manifest declares `check`,
 `test`, `cli` and `summary` commands.
+
+All caller contracts stay under `tools/summary-generator-caller/contracts/`.
+The orchestrator imports request/result schemas directly; reporting imports
+result/event types directly; measurement collection imports its telemetry type
+directly. There is no export-only schema module. The private package's local
+dependency is `file:../../packages/common-contracts`; its package identity,
+command names and locked dependency versions are unchanged.
 
 Table A - Entry points and products
 
@@ -123,6 +130,11 @@ zeroes may mean unavailable data and stage times may include historical
 whole-request substitutions. Private captures are not published site data.
 
 ## Offline verification
+
+Caller cases live under `tools/summary-generator-caller/test/`, including
+`prepare-api-input.test.ts` for the shared source-word ceiling and independent
+transport byte limits. Native API cases remain under
+`services/summary-generator/test/`.
 
 `analysis-events.test.ts` and `analysis-runtime.test.ts` compose the real CLI,
 orchestrator, validators, event writer/reader and report with named native
