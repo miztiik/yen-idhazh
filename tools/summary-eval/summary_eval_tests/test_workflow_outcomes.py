@@ -280,6 +280,6 @@ def test_current_report_checks_the_original_receipt_hash_supplied_by_its_bounded
 def test_unknown_report_versions_are_refused_without_reading_a_different_variant() -> None:
     _, pipeline = in_memory_pipeline()
     payload = pipeline.model_dump(mode="json")
-    for version in ("2026-11-06", "2026-11-08"):
+    for version in ("2026-11-06", "2026-11-09"):
         with pytest.raises(ValidationError):
             PipelineDocument.model_validate_json(json.dumps({**payload, "version": version}))

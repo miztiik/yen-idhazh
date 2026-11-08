@@ -170,7 +170,11 @@ def test_idle_exit_refuses_admission_before_reading_input_and_joins_the_child() 
 @pytest.mark.parametrize(
     ("body", "headers", "status"),
     [
-        (b'{"source_text":"Source","summary_text":"Answer"}', {}, 400),
+        (
+            b'{"source_text":"Source","summary_text":"Answer","reference_summary_text":null}',
+            {},
+            400,
+        ),
         (b'{"PrivateUnknownCanary": "PrivateValueCanary"}', {}, 400),
         (b"not-json", {}, 400),
         (b"{}", {"Origin": "https://example.test"}, 403),
