@@ -1,18 +1,22 @@
-"""How are browser origins and unexpected listener hosts refused before body reads?"""
+"""Where does the evaluator adapt its generic refusal body to the neutral guard?"""
 
 from collections.abc import Mapping
 
+from local_api_host.create_api_component import HostRefusalCode
+from local_api_host.guard_requests import GuardRequests
 from starlette.requests import Request
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.responses import Response
+from starlette.types import ASGIApp
 
+from summary_evaluator.serve_http.compose_api import create_host_settings
 from summary_evaluator.serve_http.contracts.api_settings import ApiSettings
 from summary_evaluator.serve_http.refuse_request import refuse_request
-from summary_evaluator.shared.contracts.error_policy import ERROR_POLICIES, ErrorCode
+from summary_evaluator.shared.contracts.error_policy import ERROR_POLICIES
 from summary_evaluator.shared.create_api_component import RefusalHandler
 
 
-class GuardLocalRequests:
-    """Apply the shared listener's authority without redirects or input echoes."""
+class GuardLocalRequests(GuardRequests):
+    """Retain the evaluator's existing middleware construction surface."""
 
     def __init__(
         self,
@@ -20,31 +24,16 @@ class GuardLocalRequests:
         settings: ApiSettings,
         refuse_requests: Mapping[str, RefusalHandler],
     ) -> None:
-        self.app, self.settings, self.refuse_requests = app, settings, refuse_requests
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-        request = Request(scope, receive)
-        listener = self.settings.listener
-        host = f"[{listener.host}]" if ":" in listener.host else listener.host
-        code: ErrorCode | None = None
-        if "origin" in request.headers:
-            code = "ORIGIN_FORBIDDEN"
-        elif len(request.headers.getlist("host")) != 1 or request.headers.get("host") not in (
-            host,
-            f"{host}:{listener.port}",
-        ):
-            code = "HOST_FORBIDDEN"
-        if code is not None:
-            refusal = self.refuse_requests.get(scope["path"])
+        async def default_refusal(
+            _request: Request,
+            code: HostRefusalCode,
+        ) -> Response:
             policy = ERROR_POLICIES[code]
-            response = (
-                await refusal(request, code)
-                if refusal is not None
-                else refuse_request(code, policy.message, 403)
-            )
-            await response(scope, receive, send)
-            return
-        await self.app(scope, receive, send)
+            return refuse_request(code, policy.message, 403)
+
+        super().__init__(
+            app,
+            create_host_settings(settings),
+            refuse_requests,
+            default_refusal,
+        )
