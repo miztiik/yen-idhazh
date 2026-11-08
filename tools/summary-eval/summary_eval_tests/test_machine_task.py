@@ -206,8 +206,16 @@ def test_serialized_python_packet_starts_stops_and_retains_native_http_machine_r
             and context.trace_state == launch.trace_state
             for context in contexts
         )
+        current_profile = mapping(native["reported_profiles"][-1])
+        metadata = {
+            key: value for key, value in current_profile.items()
+            if key in ("traceId", "spanId", "parentSpanId", "links", "traceState")
+        }
+        operation = OperationMetadata.model_validate_json(json.dumps(metadata))
+        assert operation.parent_span_id == launch.span_id
+        assert operation.trace_id == launch.trace_id and operation.trace_state == launch.trace_state
         assert any(
-            context is not None and context.span_id == launch.span_id for context in contexts
+            context is not None and context.span_id == operation.span_id for context in contexts
         )
     finally:
         if not child.closed:

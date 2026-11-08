@@ -17,7 +17,7 @@ from pydantic import ValidationError
 from summary_eval_pipeline.contracts import WORKFLOW_VERSION, PipelineError, text_sha256
 from summary_eval_pipeline.control import StartupPacket
 from summary_eval_pipeline.evaluate_pair import EvaluatorOutcomes, evaluate_pair
-from summary_eval_pipeline.evaluation import bind_evaluations, evaluate
+from summary_eval_pipeline.evaluation import bind_evaluations, evaluate, evaluate_unieval
 from summary_eval_pipeline.scorer_control import (
     SCORER_CONTROL_VERSION,
     ScorerReady,
@@ -26,7 +26,7 @@ from summary_eval_pipeline.scorer_control import (
 )
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_eval_pipeline.storage import write_result
-from summary_eval_pipeline.trace_context import read_response_trace
+from summary_eval_pipeline.trace_context import ResponseTraceObservation, read_response_trace
 from summary_evaluator.hhem.contracts.evaluation_event import EvaluationEvent
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.contracts.worker_message import ScoreWindow, WindowOutcome, WorkerReply
@@ -43,7 +43,11 @@ from summary_evaluator.unieval.contracts.unieval_worker_message import (
 from summary_evaluator.unieval.unieval_router import UNIEVAL_PATH
 from summary_evaluator_cases.contract_examples import REPOSITORY, REQUEST_ID
 from summary_evaluator_cases.service_cases import service_settings
-from summary_evaluator_cases.unieval_cases import UnievalScenario, unieval_settings
+from summary_evaluator_cases.unieval_cases import (
+    UnievalScenario,
+    read_unieval_inputs,
+    unieval_settings,
+)
 
 from summary_eval_tests.scorer_caller_cases import running_scorers
 from summary_eval_tests.test_generation_handoff import generation_phase
@@ -137,10 +141,9 @@ def test_interleaved_equal_correlation_attempts_retain_real_receiving_and_worker
                 )
                 for phase, result, failures in zip(phases, outcomes, errors, strict=True)
             ))
-            assert errors == ([], [])
             receiving = {operation.span_id: operation for operation in case.transport.receiving}
             calls = []
-            for phase, result in zip(phases, outcomes, strict=True):
+            for phase, result, failures in zip(phases, outcomes, errors, strict=True):
                 for caller, observed in (
                     (result.hhem_operation, result.hhem_trace),
                     (result.unieval_operation, result.unieval_trace),
@@ -156,9 +159,28 @@ def test_interleaved_equal_correlation_attempts_retain_real_receiving_and_worker
                     assert observed.parent_span_id is None
                     calls.append(caller.span_id)
                 assert result.hhem is not None and result.hhem.status == "complete"
-                assert result.unieval is not None and result.unieval.status == "complete"
+                assert result.unieval is not None
                 assert result.hhem.request_id == result.unieval.request_id == requests[0].request_id
                 assert result.hhem.correlation_id == requests[0].correlation_id
+                expected = []
+                for path, contract, retained, scorer in (
+                    (EVALUATE_PATH, EvaluationResult, result.hhem, "hhem"),
+                    (UNIEVAL_PATH, UnievalResult, result.unieval, "unieval"),
+                ):
+                    response_observation = next(
+                        response for response in case.transport.responses
+                        if response.request.url.path == path
+                        and isinstance(
+                            request_operation := read_response_trace(response.request.headers),
+                            OperationMetadata,
+                        )
+                        and request_operation.trace_id == phase.trace_id
+                    )
+                    native = contract.model_validate_json(response_observation.body)
+                    assert retained == native
+                    if response_observation.status != 200 or native.status != "complete":
+                        expected.append(("EVALUATION_FAILED", scorer))
+                assert sorted((error.code, error.service) for error in failures) == sorted(expected)
             assert len(set(calls)) == len(calls)
             native_operations = {
                 (operation.trace_id, operation.span_id): operation
@@ -252,24 +274,65 @@ def test_sibling_trace_or_native_failure_cannot_erase_actual_scores_or_saved_nat
                 assert outcomes.unieval_trace.trace_state == (
                     None if fault == "state" else phase.trace_state
                 )
-            for path, contract, result in (
-                (EVALUATE_PATH, EvaluationResult, outcomes.hhem),
-                (UNIEVAL_PATH, UnievalResult, outcomes.unieval),
+            expected = []
+            for path, contract, result, scorer in (
+                (EVALUATE_PATH, EvaluationResult, outcomes.hhem, "hhem"),
+                (UNIEVAL_PATH, UnievalResult, outcomes.unieval, "unieval"),
             ):
                 actual = next(
                     response for response in case.transport.responses
                     if response.request.url.path == path
                 )
-                assert result.model_dump(mode="json") == contract.model_validate_json(
-                    actual.body
-                ).model_dump(mode="json")
+                native = contract.model_validate_json(actual.body)
+                assert result == native
+                if actual.status != 200 or native.status != "complete":
+                    expected.append(("EVALUATION_FAILED", scorer))
             assert (tmp_path / "hhem.json").read_bytes() == outcomes.hhem.model_dump_json().encode()
             assert (tmp_path / "unieval.json").read_bytes() == (
                 outcomes.unieval.model_dump_json().encode()
             )
-            assert [(error.code, error.service) for error in errors] == (
-                [("EVALUATION_FAILED", "unieval")] if fault == "native" else []
+            assert [(error.code, error.service) for error in errors] == expected
+
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize(
+    ("fault", "fail_at"), [("missing", None), ("invalid", 0), ("state", None)]
+)
+def test_recorded_unieval_complete_and_partial_results_survive_response_trace_failures(
+    fault: str, fail_at: int | None,
+) -> None:
+    async def check() -> None:
+        request = read_unieval_inputs().cases[0].request
+        _, settings = unieval_settings()
+        phase = create_root_operation(trace_state="first=value")
+        observations: list[ResponseTraceObservation] = []
+        async with running_scorers(
+            selected_unieval=settings, unieval_scenario=UnievalScenario(fail_at=fail_at),
+        ) as case:
+            case.transport.trace_faults[UNIEVAL_PATH] = fault
+            status, result = await evaluate_unieval(
+                case.client, case.apis[1].origin, request, settings,
+                load_pipeline_settings(REPOSITORY),
+                operation_metadata=create_child_operation(phase), observe_trace=observations.append,
             )
+            actual = next(
+                response for response in case.transport.responses
+                if response.request.url.path == UNIEVAL_PATH
+            )
+            assert result == UnievalResult.model_validate_json(actual.body)
+            assert status == actual.status
+            if fail_at is None:
+                assert result.status == "complete" and status == 200
+            else:
+                assert result.status == "partial" and result.errors
+                assert any(value is not None for value in result.scores.model_dump().values())
+            if fault in ("missing", "invalid"):
+                assert observations == [fault]
+            else:
+                assert isinstance(observations[0], OperationMetadata)
+                assert observations[0].trace_id == phase.trace_id
+                assert observations[0].trace_state is None
 
     asyncio.run(check())
 
