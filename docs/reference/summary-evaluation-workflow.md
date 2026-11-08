@@ -7,8 +7,9 @@ Which inputs, saved results and process outcomes belong to the manual
 `tools/summary-eval/`; evaluator calculations remain native API
 operations.
 
-Workflow tests live in `tools/summary-eval/summary_eval_tests`, beside the
-task programs. Service tests remain under `services/summary_evaluator/tests`;
+Application behavior tests live in `tools/summary-eval/summary_eval_tests`,
+beside the task programs; they do not read GitHub workflow declarations.
+Service tests remain under `services/summary_evaluator/tests`;
 `summary_evaluator_cases` there contains their single shared recording and
 process harness. The service pytest configuration names both suites in one
 locked model-free environment. Tests keep the original fixture provenance.

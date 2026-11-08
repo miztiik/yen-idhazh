@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Annotated, Any, ClassVar, Final
@@ -17,6 +18,8 @@ from idhazh.contracts.base import (
     Slug,
 )
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
+
+COMPANION_PATH_PATTERN: Final = r"^[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*$"
 
 
 class CompanionFile(Model):
@@ -43,9 +46,11 @@ class CompanionFile(Model):
     )
     file: str = Field(
         min_length=1,
+        pattern=COMPANION_PATH_PATTERN,
         description=(
-            "The file name inside the repository, and one path segment. It becomes a "
-            "path under the models directory and a shell argument beside it."
+            "The relative POSIX path inside the repository. Each segment starts with "
+            "an ASCII letter or digit and contains only letters, digits, dots, underscores "
+            "or hyphens. The same path is preserved under the models directory."
         ),
     )
     sha256: Sha256 = Field(
@@ -71,15 +76,10 @@ class CompanionFile(Model):
 
     @model_validator(mode="after")
     def _the_file_name_stays_inside_the_models_directory(self) -> CompanionFile:
-        """The name is joined to a directory, so the grammar is the only guard.
-
-        Guardrail #11: this value reaches a filesystem path and a shell argument.
-        """
+        """Only safe relative segments may reach a filesystem path or shell argument."""
         name = self.file
-        if name.split() != [name]:
-            raise ValueError(f"companion file name is empty or not one word: {name!r}")
-        if "/" in name or "\\" in name or name.startswith("."):
-            raise ValueError(f"companion file name is not one path segment: {name!r}")
+        if not re.fullmatch(COMPANION_PATH_PATTERN, name):
+            raise ValueError(f"companion file name is not a safe relative POSIX path: {name!r}")
         return self
 
 
@@ -403,6 +403,11 @@ class ModelsConfig(Contract):
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-08",
+            change="Companion files accept safe relative POSIX paths, preserving subdirectories.",
+            why="See docs/concepts/config/model-file.md for companion path compatibility.",
+        ),
+        ChangelogEntry(
             version="2026-09-23T01:00",
             change="The slot is `summarizer`; a file still naming the verb is refused.",
             why="A slot holds a model, so its name is a noun.",
@@ -416,11 +421,6 @@ class ModelsConfig(Contract):
             version="2026-09-21T06:00",
             change="The turn block goes; two keys move onto the entry and a run still reads.",
             why="The markers are the model's own template, so the server reads them off it.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T05:00",
-            change="The draft head becomes a companion file; its decode settings join `server`.",
-            why="A file that cannot name what a publisher ships cannot describe that model.",
         ),
         ChangelogEntry(
             version="2026-09-21",

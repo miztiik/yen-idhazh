@@ -120,8 +120,9 @@ def _serving(monkeypatch: pytest.MonkeyPatch, entry: dict[str, object]) -> _Serv
     return served
 
 
+@pytest.mark.parametrize("filename", ["mtp-model.gguf", "MTP/mtp-model.gguf"])
 def test_the_download_fetches_every_file_the_entry_declares(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, filename: str
 ) -> None:
     """The cache key digests every declared file, so a download of fewer is a broken entry.
 
@@ -130,6 +131,9 @@ def test_the_download_fetches_every_file_the_entry_declares(
     on a different machine, hours later, with nothing between the two saying so.
     """
     entry = _entry()
+    companions = entry["companion_files"]
+    assert isinstance(companions, list)
+    companions[0]["file"] = filename
     served = _serving(monkeypatch, entry)
     monkeypatch.chdir(tmp_path)
 
@@ -138,8 +142,10 @@ def test_the_download_fetches_every_file_the_entry_declares(
     assert len(served.asked) == 2, served.asked
     landed = MODELS_DIR
     assert (landed / "model-Q4_K_M.gguf").read_bytes() == WEIGHTS
-    assert (landed / "mtp-model.gguf").read_bytes() == COMPANION
-    assert not list(landed.glob("*.part")), "a finished download leaves no part file"
+    assert (landed / filename).read_bytes() == COMPANION
+    assert not (landed / "model-Q4_K_M.gguf.part").exists()
+    assert not (landed / (filename + ".part")).exists()
+    model_runtime.verify_model_files(_a_config_root(tmp_path, entry))
 
 
 def test_a_file_whose_digest_is_wrong_is_refused_and_not_left_behind(

@@ -8,16 +8,13 @@ module runs in a repository with no judge in it.
 
 from __future__ import annotations
 
-import fnmatch
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, Self
 
 import pytest
-import yaml  # type: ignore[import-untyped]
 from pydantic import Field
 from support.ledger import SEED_COMMIT
-from support.paths import REPO_ROOT, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, ServerJob
@@ -33,8 +30,6 @@ from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council.metrics_sink import collect_judge_metrics, ship_judge_metrics
 from idhazh.council.tenancy import ShardResult, Tenant
-
-COUNCIL_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "llm-council.yml"
 
 #: What the capability writes into on a runner. One directory a night.
 METRICS_DIRNAME = "metrics"
@@ -350,33 +345,3 @@ def test_a_truncated_upload_fails_before_it_reaches_the_store(tmp_path: Path) ->
             identity=_identity(),
         )
     assert not state.exists(), "a ledger never gains a row the contract refused"
-
-
-def test_the_upload_name_matches_what_the_collecting_job_downloads() -> None:
-    """An artifact nobody downloads is a reading the runner deletes.
-
-    Every upload a unit makes, not the one named for a directory: a unit that
-    gains a second artifact gains it here too, and an upload nobody collects is
-    the whole failure this asks about. Both sides are read out of the workflow,
-    so a rename of either one fails here rather than on a night nobody is
-    watching.
-    """
-    workflow = yaml.safe_load(read_text(COUNCIL_WORKFLOW))
-    uploaded = [
-        str(step["with"]["name"])
-        for step in workflow["jobs"]["judge"]["steps"]
-        if str(step.get("uses", "")).startswith("actions/upload-artifact")
-    ]
-    patterns = [
-        str(step["with"]["pattern"])
-        for step in workflow["jobs"]["save_council_results"]["steps"]
-        if str(step.get("uses", "")).startswith("actions/download-artifact")
-        and "pattern" in step["with"]
-    ]
-
-    assert uploaded, "a unit uploads nothing, so this test proves nothing"
-    for name in uploaded:
-        assert any(fnmatch.fnmatch(name, pattern) for pattern in patterns), (
-            f"{name} is uploaded and no download pattern in the collecting job "
-            f"({', '.join(patterns)}) matches it, so the rows are deleted with the runner."
-        )

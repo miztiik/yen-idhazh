@@ -10,7 +10,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 
 | File | Display name | Automatic trigger | Purpose |
 | --- | --- | --- | --- |
-| `ci.yml` | `CI` | Pull request; push to `main` | Code, site and complete model-free evaluator/workflow checks |
+| `ci.yml` | `CI` | Pull request; push to `main` | Code, site and complete model-free evaluator checks |
 | `digest.yml` | `Content refresh` | `20 2 * * *`, `20 6 * * *`, `20 10 * * *`, `20 14 * * *`, `20 18 * * *` | Digest and production state |
 | `llm-council.yml` | `LLM-COUNCIL` | `0 22 * * *` | Model judges' verdicts |
 | `pages.yml` | `Pages publication` | Passing push CI; completed Content refresh or assembly recovery | Static site |
@@ -26,7 +26,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `ai-pipeline-tests.yml` | `Yen-Summarizers` | Manual inference; pull-request saved-event checks | Run independent TypeScript inference and preserve generation/event/report checks |
 
 Use filenames for dispatch and API calls. `workflow_run.workflows` matches display
-names instead: update its callers and the workflow tests when renaming a label.
+names instead: update its callers when renaming a label.
 
 The [HHEM manual procedure](../how-to/run-hhem-evaluation-api.md) covers its
 first default-branch registration, exact-ref dispatch and body-free evidence.

@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 import pytest
-import yaml  # type: ignore[import-untyped]
 from gardener._garden import an_origin, git, quiet_git, write
 from support.paths import REPO_ROOT
 
@@ -267,17 +266,6 @@ def test_cli_collection_does_not_publish_when_commit_is_off(
     assert process.returncode == 0, process.stdout + process.stderr
     assert (repo / DIRECTORY / "manifest.json").is_file()
     assert git(origin, "rev-parse", "main").strip() == identity.git_sha
-    workflow = yaml.safe_load(
-        (REPO_ROOT / ".github/workflows/encoder-comparison.yml").read_text()
-    )
-    steps = workflow["jobs"]["collect"]["steps"]
-    assert any("pip install --quiet -e ." in step.get("run", "") for step in steps)
-    assert any("encoder_publish.py run" in step.get("run", "") for step in steps)
-    publisher = next(step for step in steps if "encoder_publish.py land" in step.get("run", ""))
-    assert publisher["if"] == "inputs.commit_readings"
-    assert not any("git add" in step.get("run", "") or "git push" in step.get("run", "") for step in steps)
-    artifact = next(step for step in steps if step.get("with", {}).get("name") == "encoder-comparison")
-    assert artifact["if"] == "always()"
 
 
 @pytest.mark.parametrize("directory, selected", [

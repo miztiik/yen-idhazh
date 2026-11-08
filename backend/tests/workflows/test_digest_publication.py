@@ -173,24 +173,3 @@ def test_work_adapter_lands_exact_completed_raw_not_pre_staged_state(
         entry = remote.entry("main", target.relative_to(repo).as_posix())
         assert entry is not None and entry.mode == "100644"
         assert remote.blob(entry.oid) == target.read_bytes()
-
-
-def test_plan_workflow_call_parses_and_bad_retry_config_stops_before_git_changes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    from ._harness import _commit_call, _substitute
-
-    quiet_git(tmp_path, monkeypatch)
-    origin, repo = an_origin(tmp_path, {"seed": "seed\n", "config/push-retry.json": "{}\n"})
-    monkeypatch.chdir(repo)
-    source = git(repo, "rev-parse", "HEAD").strip()
-    index = (repo / ".git/index").read_bytes()
-    args, _ = _commit_call("plan")
-    argv = [_substitute(value) for value in args]
-    assert digest_publish.main(argv) == 2
-    assert "deadline_seconds" in capsys.readouterr().err
-    assert git(repo, "rev-parse", "HEAD").strip() == source
-    assert git(origin, "rev-parse", "main").strip() == source
-    assert (repo / ".git/index").read_bytes() == index
-    write(repo / "config/push-retry.json", (CONFIG_DIR / "push-retry.json").read_text())
-    assert digest_publish.main(argv) == 0

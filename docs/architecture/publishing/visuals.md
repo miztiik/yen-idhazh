@@ -63,8 +63,7 @@ is already there. In particular, `WHOWHAT` never passes through
 `render.write.write_charts_from_decisions`. Until 2026-10-04 each shard also uploaded its whole
 day directory as `shard-visuals-<n>` and `assemble` merged the four into its own. In run
 `37212772816` two of them carried a newer `digest.json` than the other two, and the merged file
-could not be read. No job hands a file under `frontend/public/` to another job now, and
-`test_no_job_hands_a_published_file_to_another_job` holds that for every workflow.
+could not be read. No job hands a file under `frontend/public/` to another job now.
 
 **The flag is the first of two commits** (plan 11 rows #5b and #6). The second deletes the flag,
 the small model, this stage and its job together. Until then the flag off leaves the pipeline

@@ -4,8 +4,8 @@
 runs prints when an exception ends it. Each case here raises a real exception in
 code this file holds and reads what `print_trace` writes to stderr. Every
 exception carries planted text, the way a message can quote a fetched page, so a
-line that repeated it would show (Guardrail #11). What each program prints when
-it crashes is `test_gardener_crash_trace.py`.
+line that repeated it would show (Guardrail #11). The test exercises the trace
+printer directly, independent of how any runner invokes it.
 """
 
 from __future__ import annotations
