@@ -40,7 +40,7 @@
     "negative_answer": "No"
   },
   "scoring": {
-    "consistency_source_mode": "all_source_windows",
+    "consistency_source_mode": "full_source_prompt",
     "evaluate_relevance": false,
     "max_input_tokens": 4096,
     "source_window_tokens": 512,

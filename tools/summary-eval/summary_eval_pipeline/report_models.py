@@ -114,14 +114,30 @@ def model_rows(evidence: PipelineResult, settings: ServiceSettings) -> list[tupl
             controls.consistency_source_mode if controls else "Not resolved",
         ),
         (
+            "UniEval consistency comparisons",
+            (
+                "Each summary sentence against the complete source"
+                if controls.consistency_source_mode == "full_source_prompt"
+                else "Each summary sentence against every source window"
+            ) if controls else "Not resolved",
+        ),
+        (
             "UniEval complete-prompt allowance (tokens)",
             controls.max_input_tokens if controls else None,
         ),
         (
             "UniEval effective source budget (tokens)",
-            controls.source_budget_tokens if controls else None,
+            (
+                controls.source_budget_tokens if controls.source_budget_tokens is not None
+                else "Not used for complete-source comparisons"
+                if controls.consistency_source_mode == "full_source_prompt"
+                else None
+            ) if controls else None,
         ),
-        ("UniEval source windows", len(work.source_spans) if work and work.source_spans else None),
+        (
+            "UniEval source span count",
+            len(work.source_spans) if work and work.source_spans else None,
+        ),
         ("UniEval summary sentences", work.summary_sentences if work else None),
         ("UniEval source characters", work.source_characters if work else None),
         (
