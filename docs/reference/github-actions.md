@@ -173,14 +173,21 @@ group. Dispatch text reaches the caller through the workflow event on stdin.
 Readiness and cleanup are operational work; no live-check suite, extra
 inference calls or automatic inference retries run in this workflow.
 
-The summary presents escaped source text, spaCy results and GLiNER results in
-that order, with expandable result tables. It preserves empty, partial and
-failed outcomes rather than calling failures empty successes. Native request
-and response JSON files for each provider and the full Markdown report are
-uploaded from a run-owned runner-temporary directory, including available
-files after failure. The current retention policy applies. A report above
-GitHub's 1 MiB per-step summary limit remains complete in the artifact, with
-an explicit notice in the summary. Source text is visible to run viewers.
+The job display name is `Text analysis`. Its Summary presents soft-wrapped
+escaped source once, spaCy configuration/results and GLiNER
+configuration/results, with expandable type-specific entity tables sorted by
+occurrence count descending. Empty, not-requested, partial and failed states
+remain distinct.
+
+Only `spacy-results-YYYYMMDD-<run_id>-<attempt>` and
+`gliner-results-YYYYMMDD-<run_id>-<attempt>` are uploaded. Their shared UTC date
+is captured once near job start. Each independent always-run upload contains
+available exact native `request.json`, `response.json`, validated `settings.json`
+and a complete standalone `report.md`. Missing native output stays missing,
+and failures remain nonzero. The existing retention policy applies. A combined
+report above GitHub's 1 MiB per-step summary limit produces a notice pointing
+to both complete provider reports, never an unuploaded combined file.
+Source text is visible to run viewers.
 
 This manual result observation does not prove model quality or API correctness;
 ordinary required CI remains independent. See the

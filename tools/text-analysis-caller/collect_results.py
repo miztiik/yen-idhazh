@@ -1,8 +1,6 @@
 """How does one source become two native text-analysis responses?"""
 
 import json
-import os
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -10,6 +8,8 @@ from typing import Any
 import httpx
 from gliner_api.declare_api_contracts import NER_PATH, NerRequest, NerResult
 from gliner_api.declare_api_contracts import ErrorResult as GlinerError
+from gliner_api.load_settings import SETTINGS_PATH as GLINER_SETTINGS_PATH
+from gliner_api.load_settings import GlinerSettings
 from pydantic import ValidationError
 from text_analysis.declare_api_contracts import (
     ANALYZE_TEXT_PATH,
@@ -19,6 +19,8 @@ from text_analysis.declare_api_contracts import (
 )
 from text_analysis.declare_api_contracts import ErrorResult as SpacyError
 from text_analysis.declare_service_settings import ServiceSettings
+from text_analysis.load_service_settings import SETTINGS_PATH as SPACY_SETTINGS_PATH
+from write_reports import write_atomic
 
 
 @dataclass(frozen=True)
@@ -53,20 +55,15 @@ def read_inputs(event: object, environment: dict[str, str]) -> Inputs:
     return Inputs(text=text, profile=profile, feature_mode=mode, custom_features=custom)
 
 
-def write_atomic(path: Path, content: bytes) -> None:
-    """Replace one run-owned artifact with complete bytes."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as file:
-            temporary = Path(file.name)
-            file.write(content)
-            file.flush()
-            os.fsync(file.fileno())
-        temporary.replace(path)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
+def save_settings(root: Path, directory: Path) -> ServiceSettings:
+    """Save exactly the native bytes validated for this run, before API startup."""
+    spacy = (root / SPACY_SETTINGS_PATH).read_bytes()
+    settings = ServiceSettings.model_validate_json(spacy)
+    write_atomic(directory / "spacy" / "settings.json", spacy)
+    gliner = (root / GLINER_SETTINGS_PATH).read_bytes()
+    GlinerSettings.model_validate_json(gliner)
+    write_atomic(directory / "gliner" / "settings.json", gliner)
+    return settings
 
 
 def gliner_labels(settings: ServiceSettings) -> list[str]:

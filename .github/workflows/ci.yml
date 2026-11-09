@@ -189,6 +189,10 @@ jobs:
         if: needs.scope.outputs.code == 'true'
         run: mypy
 
+      - name: Pure text-analysis reports
+        if: needs.scope.outputs.code == 'true'
+        run: python tools/text-analysis-caller/test_reports.py
+
       - uses: ./.github/actions/publication-runtime
         if: needs.scope.outputs.code == 'true'
 
