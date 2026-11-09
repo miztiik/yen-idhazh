@@ -1,54 +1,38 @@
-# Run the text-analysis verification
+# Run text analysis and inspect results
 
 **Last Updated**: 2026-11-09
 
-How to dispatch the `spacy_ner_test` job in `ner-tests.yml` against one selected
-implementation ref and inspect its live multilingual API evidence. This procedure is
-project-specific because it uses the committed text-analysis service and shared
-TypeScript event contracts.
+How to dispatch `ner-tests.yml` for one source and inspect the native spaCy
+and GLiNER results. This procedure is project-specific because it uses the
+committed text-analysis providers and their shared listener.
 
-## Register before dispatch
+## Select the ref and inputs
 
 The workflow definition must exist on the default branch before GitHub accepts
-a dispatch by filename. Select the implementation branch or tag when
-dispatching. GitHub resolves that ref to `github.sha`; the workflow checks out
-and verifies that exact immutable commit.
+a dispatch by filename. Select the implementation branch or tag; GitHub
+resolves it to `github.sha`, and the workflow checks out and verifies that
+commit without retaining checkout credentials.
 
-Do not treat registration or ordinary pull-request checks as live
-text-analysis evidence. The checked commit must contain the complete
-`services/text_analysis/spacy/` implementation and scripts.
+The required `text` input is the source for both providers. Its editable
+default is in the workflow dispatch definition. The platform retains dispatch
+inputs, and the source is visible in the summary and saved requests to anyone
+who can view the run. Do not submit secrets or private material.
 
-## Select the exact ref and inputs
+spaCy runs in English. `profile` defaults to `md`, with `sm` and `lg` also
+available. `feature_mode` defaults to `default`; `all` selects all supported
+English features, and `custom` uses `custom_features`. Default mode omits
+`features` from the request so the API selects its configured defaults.
+Custom mode requires a nonempty comma-separated list from `entities`,
+`sentences`, `relations`, `noun_phrases`, `linguistic_tokens`,
+`document_metrics`, `named_entities` and `important_terms`. Names are
+case-sensitive; duplicates are refused, surrounding whitespace is ignored,
+and order is preserved. Leave `custom_features` blank for other modes.
 
-The dispatch ref selects both the workflow revision and implementation. The
-workflow disables checkout credentials, checks out `github.sha` and confirms
-that the resulting `HEAD` is the same 40-character commit.
+GLiNER uses distinct presentation types from `named_entities.label_map` in
+`config/text-analysis/settings.json`, in configuration order. An empty label
+selection is refused. It has no separate dispatch source or label input.
 
-The workflow tests English only; there is no language input. Its job-level
-`TEXT_ANALYSIS_LANGUAGE` selects `en` for model preparation, live verification
-and the shared API checks. `feature_mode` defaults to `default`; `all` and
-`custom` remain available. `profile` defaults to `md`; `sm` and `lg` remain
-optional manual profiles. `default` reads the resolved English defaults from
-health: `named_entities`, `important_terms`. `all` selects every feature
-supported by English.
-
-The required `text` input has an editable reference passage stored directly in
-`.github/workflows/ner-tests.yml` at
-`on.workflow_dispatch.inputs.text.default`. The dispatch supplies that text
-through the GitHub event file, not a separate committed article file.
-Input descriptions begin with `spaCy:` because GitHub's dispatch form supports
-only a flat input list, not provider groups. GLiNER has no dispatch inputs;
-its model settings come from its committed configuration.
-
-For `custom` mode, set `custom_features` to a nonempty comma-separated list
-drawn from `entities`, `sentences`, `relations`, `noun_phrases`,
-`linguistic_tokens`, `document_metrics`, `named_entities` and `important_terms`.
-The compact features are English-only. Names are case-sensitive, duplicate
-names are refused, surrounding CSV whitespace is ignored and supplied order is
-preserved. Leave `custom_features` blank for the other modes.
-
-Send the JSON form through standard input so text never becomes a shell
-argument:
+Send the JSON form through standard input so text is not a shell argument:
 
 ```powershell
 $inputs = @{
@@ -61,121 +45,50 @@ $inputs = @{
 $inputs | gh workflow run ner-tests.yml --ref '<implementation-branch-or-tag>' --json
 ```
 
-Before the implementation pull request merges, select its final branch head
-once using `profile = 'md'`. Confirm the run records that final `github.sha`.
-Any later implementation edit invalidates the result. This manual workflow
-does not provide Chinese live-verification evidence.
-
-The platform retains dispatch inputs. The selected source text is also visible
-in the run summary and `analysis-request.json` to anyone who can view the run.
-Do not submit secrets or private material.
-
-## Inspect the run and evidence
+## Inspect the results
 
 ```powershell
 gh run list --workflow ner-tests.yml --limit 5 --json databaseId,headSha,status,conclusion,url
 gh run view <run-id> --log
-gh run download <run-id> --dir <evidence-directory>
+gh run download <run-id> --dir <results-directory>
 ```
 
-The run's `headSha` and `report.json` `commit_sha` must agree. Preserve the run
-URL, commit, inputs, artifact ID, conclusion and `report.json`.
+The GitHub Summary shows the unchanged source first, then spaCy results, then
+GLiNER results. Source text is escaped preformatted text; result tables are
+inside expandable disclosures. spaCy's default Named Entities and Important
+Terms have separate tables; selected optional features appear in response
+order. YAKE scores are native rankings: lower is better, not a confidence
+probability. GLiNER shows the requested labels and each returned mention,
+label, native score and offsets in response order. Provider scores are not
+calibrated against each other. Offsets are zero-based, half-open Unicode code
+points.
 
-The single artifact is named
-`text-analysis-spacy-evidence-<run-id>-<run-attempt>` and is retained for 90
-days. A successful artifact contains exactly:
+Named Entities lists text, type and occurrences; Important Terms lists phrase,
+native YAKE score and occurrences. Selected raw entities, sentences, relations,
+noun phrases, tokens and metrics each retain their native fields, including
+source spans where supplied. Every table has row identifiers.
 
-- `report.json` - the strict workflow receipt;
-- `analysis-request.json` - the validated selected request for replay, including
-  source text and resolved feature order;
-- `health-response.json` - the exact validated ready health response;
-- `analysis-response.json` - the exact validated selected analysis response;
-- `events.jsonl` - the canonical validated CloudEvents; and
-- `report.md` - the same escaped bytes appended to the GitHub step summary.
+The run uploads available exact native `request.json` and `response.json`
+files in fixed provider subdirectories, together with the complete `report.md`.
+Files are written atomically in a run-owned runner-temporary directory and
+retained under the workflow's existing artifact retention policy. The summary
+and files can contain source text and extracted data. Diagnostic stderr stays
+in the workflow logs, not the result tables.
 
-Default-mode HTTP calls omit `features` to verify server-side selection. The
-replay request records that exact resolved order from validated health and
-requires the response and terminal event to agree with it.
+Successful empty collections say no results were returned. A feature failure
+shows its API error code and message without hiding completed siblings, and
+partial status remains partial. Provider, startup, transport and invalid
+response failures are explicit rather than empty successes; the other provider
+is attempted when available. Available results are written and uploaded even
+after failure, and execution exits nonzero. If the full UTF-8 report exceeds
+GitHub's 1 MiB per-step summary limit, the complete report remains in the
+artifact and the summary shows a size notice rather than truncating results.
 
-The successful receipt has only version `2026-11-08`, conclusion `success`,
-the lowercase 40-hex `commit_sha`, positive run ID and attempt, and cleanup
-`confirmed`. A failed receipt adds one declared safe `failure_code`. The
-contract changelog says: `Split native API evidence from the verification
-outcome and make cleanup semantic.` Old retained artifacts keep their original
-shape; new runs write only this version.
-
-The summary leads with PASS or FAIL, links the run and commit, then
-shows selected model identity, ordered feature outcomes, the capacity/BUSY/warm
-reuse checks, semantic cleanup and the escaped source text. It never includes
-raw analysis data, trace values, process details, paths, exceptions or the
-generated concurrency input. GitHub limits one step summary to 1 MiB. The
-runner checks the complete UTF-8 bytes and fails with a safe code instead of
-truncating them. Its failed `report.md` keeps the complete escaped source; it
-never substitutes an omission message.
-
-The artifact uploads after ordinary failure. Cleanup or upload failure leaves
-the job red.
-
-The job has a 60-minute bound. It prepares only the selected model, runs the
-service through its owned process group and uses the shared TypeScript
-CloudEvents contract. It never writes evidence paths into API configuration.
-The verification step pipes the GitHub event payload to the runner on stdin,
-so dispatch text is not copied into the step environment or command line.
-Keeping supervision inside that one step is deliberate:
-`run-spacy-test.py` owns server startup, readiness, HTTP evidence, exact
-process-group cleanup and final validation in one `try/finally`.
-`probe-text-analysis.ts` receives only `base_url` for live calls and verifies
-the service independently over HTTP. The runner reads `events.jsonl` as bounded
-records, using the configured `logging.max_event_bytes` and the exact expected
-request plus lifecycle count. It mirrors only events that pass the native
-strict CloudEvents contract to the live workflow stderr log.
-
-Cleanup evidence is semantic: `not_started` means no child was created,
-`confirmed` means an owner-sent SIGTERM or a clean exit was confirmed,
-`forced` means SIGKILL was required and confirmed, and `unconfirmed` means exit
-could not be proved. Successful runs require `confirmed`. Historical report
-value `-15` was the POSIX SIGTERM exit code and represented expected owner
-cleanup, not a service failure. New receipts expose no raw exit code.
-
-## Local execution boundary
-
-The Linux job runs the four exact unittest inputs before preparing model
-weights: `test_named_entities.py`, `test_important_terms.py`,
-`test_api_contracts.py` and `test_spacy_verification.py`, all under
-`services/text_analysis/spacy/tests/`. They exercise the one named settings
-contract and real in-memory native documents, grouping, YAKE calculations,
-ranking/limits including zero, local failures, current schemas and old reads.
-There are no new fixtures, directory
-scans, test networking or business-logic mocks.
-
-The live probe reads language defaults and the term maximum from current
-health, verifies the new English outputs and every selected raw feature, and
-checks retired routes and wrong methods. Its English whitespace boundary
-proves `FEATURE_FAILED` preserves siblings; a zero configured maximum instead
-completes with no terms. When invoked for Chinese outside this English-only
-workflow, its checks preserve raw/default behavior, noun-phrase unavailability
-and HTTP 422 for an all-unavailable selection.
-Successful receipt cleanup must still be `confirmed`.
-
-Run the probe's model-free evidence-span check without installing or starting
-the service:
-
-```powershell
-bun test .\services\text_analysis\spacy\scripts\validate-evidence-spans.test.ts
-```
-
-The same test runs in `spacy_ner_test`. It calls the probe's actual offset
-helper with exact source spans after non-BMP characters and invalid bounds or
-text. It proves [evidence offset handling](../reference/text-analysis-api.md#evidence-spans),
-not model recognition quality.
-
-Do not install, import, lint, type-check, start or load the text-analysis service
-locally for this verification. Ordinary CI does not test the workflow
-declaration or execute the service; the manual Linux workflow owns the native
-functional checks and live API execution.
-
-Production pipelines use their own process supervisor and call the native
-spaCy health and analysis operations directly. They do not reuse this runner.
+The manual workflow reports results, not recognition quality, performance or
+API correctness. It makes one spaCy analysis POST and one GLiNER NER POST for
+the same source; it does not run a live-check suite or classification. Ordinary
+required CI is separate. See the [shared API procedure](run-ner-api-tests.md)
+for preparation and process ownership.
 
 ## See also
 

@@ -480,26 +480,12 @@ uv lock --locked --project .\services\text_analysis\spacy
 ```
 
 Do not install, import, lint, type-check, start or load this service locally.
-The registered manual workflow is its functional gate and the
-[operator guide](run-spacy-tests.md) owns dispatch and evidence inspection.
-Ordinary CI runs repository-wide source checks without claiming spaCy behavior
-or testing workflow execution.
-
-The workflow syncs the compatible frozen GLiNER development environment for
-both independent providers, installs only the selected configured spaCy model
-wheel after its named in-memory unittest checks, starts one
-owned process group, and validates live
-English results through the actual shared TypeScript CloudEvents and trace
-contracts. The required candidate evidence is one English `md` run against
-the immutable commit. A changed candidate needs a new run. Chinese live
-verification is not part of this manual workflow.
-
-The named native tests cover compact grouping, actual YAKE ranking, configured
-maximum/zero behavior, feature-local failures, old settings/evidence reads and
-unchanged Chinese defaults. The existing live probe verifies the current
-spaCy routes, health-derived defaults/limits, exact source occurrences, raw
-outputs and the unchanged capacity/reuse/cleanup policies. These results do
-not claim recognition or ranking quality.
+The [operator guide](run-spacy-tests.md) owns manual dispatch and result
+inspection. The manual workflow is not a functional gate or a test suite:
+it prepares both providers, sends one analysis request to each for the same
+source and reports the native results. It does not claim recognition quality.
+Ordinary required CI and existing independent model-free tests remain separate;
+ordinary CI does not test the workflow declaration or execute the service.
 
 ### Independent GLiNER2 API
 
@@ -515,33 +501,12 @@ uv lock --locked --project .\services\text_analysis\gliner
 ```
 
 Follow the text-analysis no-local-provider-execution rule above. Do not install,
-import, lint, type-check or start this provider on the developer host. Inspect
-the shared changed-test selection; the Linux `spacy_ner_test` job in
-`ner-tests.yml` owns actual API functionality, not another news pipeline.
-
-The [shared API verification guide](run-ner-api-tests.md) owns the Linux
-preparation and focused verification commands. The same job also runs the
-existing neutral-host registration, lifespan and trace regressions. Provider
-lint/types and the thin assembly are checked there, never by importing a
-provider on the developer host.
-
-Model preparation happens before tests. The focused file uses the actual
-prepared native model through ASGI, with external network sockets disabled
-inside tests and no model mocks. Its single prepared-model journey uses the
-shared application and checks both native route families, separate customized
-schemas, native guards, strict application shapes, source spans, requested
-classifications, real readiness and safe diagnostics.
-The cancellation boundary also requires accepted native work to retain its
-model lease and terminal diagnostic after its caller disappears; shutdown
-cannot complete before that owned work finishes. spaCy remains ready when
-that native GLiNER cancellation check has completed its own shutdown.
-This does not establish quality, throughput, arbitrary checkpoint compatibility
-or news-pipeline integration.
-
-Retain the immutable source commit and `gliner-api-results` JUnit artifact from
-that job. A generated lock or bootstrap run is preparation evidence, not a
-final frozen-candidate pass. Required ordinary CI and native API functionality
-must pass on the final committed lock and exact head.
+import, lint, type-check or start this provider on the developer host.
+The [shared API guide](run-ner-api-tests.md) describes Linux preparation and
+manual result collection. The reporting workflow does not run provider or
+host regression suites, and does not produce JUnit evidence. Inspect the
+shared changed-test selection and follow applicable ordinary CI gates
+independently. A result observation is not a test pass.
 The [API reference](../reference/gliner-api.md) owns payload and configuration
 details; the [architecture](../architecture/text-analysis/gliner-api.md) owns
 native lifecycle and diagnostic safety.

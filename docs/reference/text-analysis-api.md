@@ -266,6 +266,6 @@ process IDs, paths or exceptions.
 ## See also
 
 - [How multilingual text analysis runs](../architecture/text-analysis/text-analysis-api.md)
-- [Run the text-analysis verification](../how-to/run-spacy-tests.md)
+- [Run text analysis and inspect results](../how-to/run-spacy-tests.md)
 - [First-party API routing](api-routing.md)
 - [Local API host](../architecture/local-api-host.md)

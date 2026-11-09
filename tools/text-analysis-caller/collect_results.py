@@ -1,0 +1,172 @@
+"""How does one source become two native text-analysis responses?"""
+
+import json
+import os
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import httpx
+from gliner_api.declare_api_contracts import NER_PATH, NerRequest, NerResult
+from gliner_api.declare_api_contracts import ErrorResult as GlinerError
+from pydantic import ValidationError
+from text_analysis.declare_api_contracts import (
+    ANALYZE_TEXT_PATH,
+    AnalysisResult,
+    AnalyzeTextRequest,
+    TextAnalysisHealth,
+)
+from text_analysis.declare_api_contracts import ErrorResult as SpacyError
+from text_analysis.declare_service_settings import ServiceSettings
+
+
+@dataclass(frozen=True)
+class Inputs:
+    text: str
+    profile: str
+    feature_mode: str
+    custom_features: str
+
+
+@dataclass(frozen=True)
+class Outcome:
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    incomplete: bool = False
+
+
+def read_inputs(event: object, environment: dict[str, str]) -> Inputs:
+    """Read dispatch text as data and validate the selected controls."""
+    if not isinstance(event, dict) or not isinstance(event.get("inputs"), dict):
+        raise ValueError("The dispatch inputs are invalid.")
+    text = event["inputs"].get("text")
+    profile = environment.get("TEXT_ANALYSIS_PROFILE", "")
+    mode = environment.get("TEXT_ANALYSIS_FEATURE_MODE", "")
+    custom = environment.get("TEXT_ANALYSIS_CUSTOM_FEATURES", "")
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("The source text must not be empty.")
+    if profile not in ("sm", "md", "lg") or mode not in ("default", "all", "custom"):
+        raise ValueError("The selected profile or feature mode is invalid.")
+    if (mode == "custom") != bool(custom.strip()):
+        raise ValueError("Custom features are required only in custom mode.")
+    return Inputs(text=text, profile=profile, feature_mode=mode, custom_features=custom)
+
+
+def write_atomic(path: Path, content: bytes) -> None:
+    """Replace one run-owned artifact with complete bytes."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as file:
+            temporary = Path(file.name)
+            file.write(content)
+            file.flush()
+            os.fsync(file.fileno())
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def gliner_labels(settings: ServiceSettings) -> list[str]:
+    """Use the configured presentation types as caller-selected entity labels."""
+    labels = list(dict.fromkeys(settings.named_entities.label_map.values()))
+    if not labels:
+        raise ValueError("No configured entity labels are available for GLiNER.")
+    return labels
+
+
+def spacy_request(inputs: Inputs, health: TextAnalysisHealth) -> AnalyzeTextRequest:
+    """Build the selected request without replacing native default selection."""
+    capability = next(item for item in health.languages if item.language == "en" and item.enabled)
+    payload: dict[str, object] = {
+        "text": inputs.text,
+        "language": "en",
+        "model_profile": inputs.profile,
+    }
+    if inputs.feature_mode == "all":
+        payload["features"] = list(capability.supported_features)
+    elif inputs.feature_mode == "custom":
+        payload["features"] = [part.strip() for part in inputs.custom_features.split(",")]
+    request = AnalyzeTextRequest.model_validate_json(json.dumps(payload))
+    if request.features is not None and not set(request.features).issubset(
+        capability.supported_features
+    ):
+        raise ValueError("The selected spaCy features are not supported.")
+    return request
+
+
+def _send(
+    client: httpx.Client,
+    path: str,
+    request: bytes,
+    directory: Path,
+    provider: str,
+) -> httpx.Response:
+    write_atomic(directory / provider / "request.json", request)
+    response = client.post(path, content=request, headers={"content-type": "application/json"})
+    write_atomic(directory / provider / "response.json", response.content)
+    return response
+
+
+def collect_spacy(
+    client: httpx.Client, inputs: Inputs, health: TextAnalysisHealth, directory: Path
+) -> Outcome:
+    """Collect and validate exactly one spaCy analysis response."""
+    try:
+        request = spacy_request(inputs, health)
+        response = _send(
+            client,
+            ANALYZE_TEXT_PATH,
+            request.model_dump_json(exclude_none=True).encode("utf-8"),
+            directory,
+            "spacy",
+        )
+        if response.status_code in (200, 422):
+            try:
+                result = AnalysisResult.model_validate_json(response.content)
+            except ValidationError:
+                if response.status_code != 422:
+                    raise
+            else:
+                capability = next(
+                    item for item in health.languages if item.language == "en" and item.enabled
+                )
+                expected_features = (
+                    request.features
+                    if request.features is not None
+                    else capability.default_features
+                )
+                if (
+                    result.language != request.language
+                    or result.model.profile != request.model_profile
+                    or tuple(feature.feature for feature in result.features) != expected_features
+                ):
+                    raise ValueError("The spaCy response does not match the request.")
+                return Outcome(
+                    result=result.model_dump(mode="json"),
+                    incomplete=result.status != "complete",
+                )
+        error = SpacyError.model_validate_json(response.content)
+        return Outcome(error=f"{error.error.code}: {error.error.message}")
+    except (httpx.HTTPError, OSError, ValidationError, ValueError, StopIteration):
+        return Outcome(error="The spaCy request failed or returned an invalid response.")
+
+
+def collect_gliner(
+    client: httpx.Client, inputs: Inputs, labels: list[str], directory: Path
+) -> Outcome:
+    """Collect and validate exactly one GLiNER named-entity response."""
+    try:
+        request = NerRequest(text=inputs.text, labels=labels)
+        response = _send(
+            client, NER_PATH, request.model_dump_json().encode("utf-8"), directory, "gliner"
+        )
+        if response.status_code == 200:
+            result = NerResult.model_validate_json(response.content)
+            return Outcome(result=result.model_dump(mode="json"))
+        error = GlinerError.model_validate_json(response.content)
+        return Outcome(error=f"{error.error.code}: {error.error.message}")
+    except (httpx.HTTPError, OSError, ValidationError, ValueError):
+        return Outcome(error="The GLiNER request failed or returned an invalid response.")

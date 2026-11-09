@@ -21,7 +21,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |
 | `feed-ingest-plan-test.yml` | `Feed ingest plan test` | none | Run the real planner HTTP API and publish its completed planner and host metadata |
 | `summary-eval-tests.yml` | `summary-eval-tests` | none | Generate natively with one declared model, stop it, score the saved answer through independent HHEM and UniEval APIs with optional independent-reference relevance, and report applicable work and machine/server outcomes without Git delivery |
-| `ner-tests.yml` | `Text-Analysis-NER-tests` | none | Verify English spaCy and the shared GLiNER APIs at an immutable commit |
+| `ner-tests.yml` | `Text analysis results` | none | Report native spaCy and GLiNER results for one source at an immutable commit |
 | `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
 | `ai-pipeline-tests.yml` | `Yen-Summarizers` | Manual inference; pull-request saved-event checks | Run independent TypeScript inference and preserve generation/event/report checks |
 
@@ -165,42 +165,26 @@ See [host metrics](host-metrics.md) for the fingerprint and its unavailable reas
 or tag; GitHub resolves it to `github.sha`. The workflow checks out that exact
 commit with credentials disabled and verifies the checkout before execution.
 
-The `spacy_ner_test` job uses stock Ubuntu, CPython 3.12, pinned uv and Bun, and the locked
-`packages/common-contracts` toolchain. It syncs the selected commit's
-text-analysis environment, runs the exact named native feature and artifact
-unittest inputs, prepares only the selected configured model and runs the
-service-local verification scripts. Dispatch
-text reaches the runner through the workflow event on stdin; custom feature
-names use a step environment value. Neither becomes inline shell or a command
-argument.
+The workflow prepares both providers in the frozen compatible environment.
+The caller in `tools/text-analysis-caller/` starts the existing shared API
+assembly, waits for bounded readiness, sends one spaCy analysis POST and one
+GLiNER NER POST using the same dispatch source, and cleans up its owned process
+group. Dispatch text reaches the caller through the workflow event on stdin.
+Readiness and cleanup are operational work; no live-check suite, extra
+inference calls or automatic inference retries run in this workflow.
 
-The runner owns the API process group, live route and concurrency probes,
-TypeScript trace/event validation, escaped summary and cleanup. Evidence stays
-under the runner temporary directory and uploads as one run/attempt-named
-artifact after ordinary failure, with 90-day retention. Upload names only the
-six files declared by the verification contract rather than the directory.
-The minimal receipt carries run identity and semantic cleanup; the native
-request, health and analysis payloads remain separate. Cleanup or upload
-failure fails the 60-minute job. See the
+The summary presents escaped source text, spaCy results and GLiNER results in
+that order, with expandable result tables. It preserves empty, partial and
+failed outcomes rather than calling failures empty successes. Native request
+and response JSON files for each provider and the full Markdown report are
+uploaded from a run-owned runner-temporary directory, including available
+files after failure. The current retention policy applies. A report above
+GitHub's 1 MiB per-step summary limit remains complete in the artifact, with
+an explicit notice in the summary. Source text is visible to run viewers.
+
+This manual result observation does not prove model quality or API correctness;
+ordinary required CI remains independent. See the
 [manual text-analysis guide](../how-to/run-spacy-tests.md).
-
-The one verification step deliberately keeps startup, readiness, HTTP verification
-and cleanup under `run-spacy-test.py`, which retains the exact child process and
-process group through one `try/finally`. Its fixed workflow log groups expose
-those phases. `probe-text-analysis.ts` receives only `base_url` and remains an
-independent HTTP verifier. The runner streams records within the configured
-event byte limit, writes canonical validated events to `events.jsonl` and
-mirrors those same bytes to live workflow stderr. Production
-pipelines use their own supervisor with the health and analyze routes rather
-than this verification runner.
-
-English defaults exercise grouped Named Entities and ranked Important Terms,
-with exact code-point evidence, configured limits and a feature-local
-unanchored-phrase failure. The same probe checks raw output, retired dated
-routes and method refusal. Chinese retains its inherited defaults, raw
-capabilities and unavailable-feature behavior. Both required `md` runs must
-record the same final immutable head and confirmed cleanup; ordinary CI is
-not a substitute for them.
 
 ## Pages publication
 
