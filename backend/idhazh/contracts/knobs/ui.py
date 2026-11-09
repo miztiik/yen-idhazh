@@ -48,7 +48,7 @@ class UiConfig(Model):
     """
 
     sections: list[str] = Field(
-        default_factory=lambda: ["notice", "leads", "topics", "items"],
+        default_factory=lambda: ["notice", "topics", "leads", "items"],
         min_length=1,
         description="Render order of the day page's sections, by registry id.",
     )

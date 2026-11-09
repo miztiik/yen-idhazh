@@ -75,7 +75,8 @@
 		onResults,
 		onTopic,
 		onAsk,
-		onType
+		onType,
+		onSearchAvailability
 	}: {
 		months: string[];
 		assist: {
@@ -100,6 +101,7 @@
 		onAsk: () => void;
 		/** The reader typed, so it is a filter again. */
 		onType: () => void;
+		onSearchAvailability: (available: boolean) => void;
 	} = $props();
 
 	/** What the two origins cost. Both figures live in `assist/loader`, beside
@@ -120,7 +122,10 @@
 		newSearch({ supported, loadIndex, loadVectors, embed: embedQuery }, settings)
 	);
 	const report = {
-		onPhase: (next: SearchPhase) => (phase = next),
+		onPhase: (next: SearchPhase) => {
+			phase = next;
+			onSearchAvailability(next.name !== 'blocked');
+		},
 		onScope: (next: SearchScope) => (scope = next)
 	};
 	const sentence = $derived(stateSentence({ phase, held, cached, cost: COST }));
@@ -156,10 +161,11 @@
 	{onTopic}
 	bind:query
 	fieldId="archive-query"
-	fieldLabel="Search this archive"
+	fieldLabel={phase.name === 'blocked' ? 'Filter this archive' : 'Search this archive'}
 	placeholder="What are you looking for?"
-	showField={months.length > 0 && phase.name !== 'blocked'}
+	showField={months.length > 0}
 	submitLabel="Search"
+	submitDisabled={phase.name === 'blocked'}
 	onSubmit={() => void run()}
 	onType={() => onType()}
 	noscriptNote="Search and the topic filters need JavaScript."

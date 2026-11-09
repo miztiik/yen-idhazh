@@ -55,7 +55,13 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import Contract, ServerJob, derive_url_key, normalize_prose
 from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
-from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
+from idhazh.contracts.digest_day import (
+    DigestDay,
+    DigestItem,
+    DigestLead,
+    DigestRunRef,
+    DigestVerticalRef,
+)
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import (
@@ -827,6 +833,7 @@ def build(target: Path, evaluation: EvaluationConfig, visuals: VisualsConfig) ->
         ],
         items=items,
         embeddings=embeddings,
+        leads=[DigestLead(item_id=items[0].item_id, reason="Published in today's digest.")],
     )
     write_atomic(day_dir(target, DATE) / "digest.json", day.to_json())
     return day

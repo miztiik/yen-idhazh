@@ -15,10 +15,8 @@
 	 * story. The stream still carries all of them, in the published order, so
 	 * nothing here removes, hides or re-orders a single story.
 	 *
-	 * It imports nothing at run time. That is a constraint rather than an
-	 * accident: the browser suite compiles this file on its own and renders it
-	 * with props, because the canary day has one desk and cannot fill a block
-	 * that allows two stories per desk.
+	 * It imports nothing at run time: the payload supplies the chosen stories
+	 * and their reasons.
 	 */
 	import type { LeadingStory } from '$lib/day-shape';
 

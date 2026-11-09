@@ -215,8 +215,8 @@
     "repo_url": "https://github.com/miztiik/yen-idhazh",
     "sections": [
       "notice",
-      "leads",
       "topics",
+      "leads",
       "items"
     ],
     "shell_seed_items": 15,

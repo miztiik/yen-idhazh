@@ -59,6 +59,7 @@
 	 * list under it - otherwise a search that found nothing would leave an empty
 	 * page instead of the browse list it is supposed to fall back to. */
 	let asked = $state(false);
+	let searchAvailable = $state(true);
 	/** How many days back the browse list reaches. The reader widens or narrows
 	 * it over the presets; the loop then fetches only the months this window can
 	 * hold a story from, and a story older than the window is out of the list
@@ -257,6 +258,7 @@
 			{onResults}
 			{onTopic}
 			onAsk={() => (asked = true)}
+			onSearchAvailability={(available) => (searchAvailable = available)}
 			onType={() => {
 				asked = false;
 				results = null;
@@ -440,7 +442,12 @@
 		{:else if status === 'ready'}
 			<p class="mt-1 text-base text-text-secondary" data-story-list="empty">
 				{#if filtering}
-					No loaded story matches that. Press Search to look through the whole archive.
+					No loaded story matches that.
+					{#if searchAvailable}
+						Press Search to look through the whole archive.
+					{:else}
+						Change the filter or open a day above.
+					{/if}
 				{:else}
 					{emptySentence}
 					{#if windowDays < widest}
@@ -449,9 +456,15 @@
 							onclick={() => onWindow(widest)}
 							class="text-accent hover:underline"
 							data-window-widen>Look back {plural(widest, 'day', 'days')}</button>, or press
-						Search to look through the whole archive.
-					{:else}
+						{#if searchAvailable}
+							Search to look through the whole archive.
+						{:else}
+							open a day above.
+						{/if}
+					{:else if searchAvailable}
 						Press Search to look through the whole archive.
+					{:else}
+						Open a day above.
 					{/if}
 				{/if}
 			</p>

@@ -172,7 +172,7 @@ interface Knobs {
 }
 
 const DEFAULTS: Knobs = {
-	sections: ['notice', 'leads', 'topics', 'items'],
+	sections: ['notice', 'topics', 'leads', 'items'],
 	archive_page_size: 25,
 	show_filter: true,
 	tagline: 'A daily digest that checks its own work.'

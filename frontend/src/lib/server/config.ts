@@ -522,7 +522,7 @@ export interface MotionConfig {
 }
 
 const DEFAULTS: UiConfig = {
-	sections: ['notice', 'leads', 'topics', 'items'],
+	sections: ['notice', 'topics', 'leads', 'items'],
 	theme_default: 'dark',
 	visual_side: 'trailing',
 	source_mark: true,
