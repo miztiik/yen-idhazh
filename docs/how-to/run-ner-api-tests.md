@@ -32,11 +32,18 @@ tests. There are no synthetic probes, classification calls, warm repeats or
 automatic inference retries. The caller uses HTTP rather than provider
 extraction internals; neither API writes report files.
 
-The caller renders available results and uploads the exact native requests,
-responses and complete Markdown report even after failure. The
+Before startup, the caller saves an exact copy of each provider's settings
+bytes after validation with that provider's native model. It renders available
+results from saved requests, responses and settings, then uploads two
+independent provider artifacts even after failure. Each has a complete
+standalone report with its source and the same provider section used in the
+combined Summary. Missing native output is not manufactured. The
 [dispatch guide](run-spacy-tests.md#inspect-the-results) describes partial,
-empty, failed and oversized results. The report does not establish recognition
-quality, concurrency, throughput or news-pipeline integration.
+empty, not-requested, failed and oversized results, and
+[pure regeneration](run-spacy-tests.md#regenerate-reports-without-inference)
+uses saved native files without loading later configurations or a provider
+runtime. The report does not establish recognition quality, concurrency,
+throughput or news-pipeline integration.
 
 ## Start the same application
 

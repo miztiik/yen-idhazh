@@ -45,12 +45,20 @@ permissions:
 
 jobs:
   text_analysis:
-    name: Text analysis - en / ${{ inputs.profile }}
+    name: Text analysis
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       TEXT_ANALYSIS_LANGUAGE: en
     steps:
+      - name: Name the provider artifacts
+        id: artifacts
+        run: |
+          set -euo pipefail
+          UTC_DATE="$(date -u +%Y%m%d)"
+          echo "spacy=spacy-results-${UTC_DATE}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+          echo "gliner=gliner-results-${UTC_DATE}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.sha }}
@@ -105,16 +113,27 @@ jobs:
           TEXT_ANALYSIS_FEATURE_MODE: ${{ inputs.feature_mode }}
           TEXT_ANALYSIS_CUSTOM_FEATURES: ${{ inputs.custom_features }}
           TEXT_ANALYSIS_OUTPUT_DIRECTORY: ${{ runner.temp }}/text-analysis-results
+          TEXT_ANALYSIS_SPACY_ARTIFACT: ${{ steps.artifacts.outputs.spacy }}
+          TEXT_ANALYSIS_GLINER_ARTIFACT: ${{ steps.artifacts.outputs.gliner }}
         run: >-
           uv run --project services/text_analysis/gliner --no-sync
           python tools/text-analysis-caller/run_analysis.py
           < "$GITHUB_EVENT_PATH"
 
-      - name: Upload analysis results
+      - name: Upload spaCy results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: text-analysis-results-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/text-analysis-results
+          name: ${{ steps.artifacts.outputs.spacy }}
+          path: ${{ runner.temp }}/text-analysis-results/spacy
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload GLiNER results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.artifacts.outputs.gliner }}
+          path: ${{ runner.temp }}/text-analysis-results/gliner
           if-no-files-found: error
           retention-days: 90
