@@ -28,7 +28,7 @@ class OperationError(RuntimeError):
 
 
 class ModelRuntime:
-    """Serialize native calls without replicas or changes to CPU tensor threading."""
+    """Own native calls and diagnostics independently of their HTTP waiters."""
 
     def __init__(self, settings: GlinerSettings, root: Path, shutdown_timeout_ms: int) -> None:
         self.settings = settings
