@@ -1,6 +1,6 @@
 # Summary generator callers
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 Which analysis and summary-only outputs does the independent private caller
 retain outside the generation API?
@@ -32,6 +32,8 @@ producer. Neither identity is a fetch destination or a source-registry entry.
 The older `ai-pipeline.ts` experiment keeps its separate `analytic_synthesis`
 product and [saved handoff](workflow-pipeline-events.md).
 Both `ai-pipeline-tests.yml` and `yen-ai-pipeline.yml` remain distinct workflows.
+After confirmed generator exit, their [private native scoring phase](pipeline-summary-evaluation.md)
+evaluates saved summary text without changing either caller product or the API.
 
 ## Preparation and prompts
 

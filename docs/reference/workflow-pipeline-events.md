@@ -1,6 +1,6 @@
 # Inference workflow events
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 Which saved events does the independent inference workflow write and read?
 
@@ -53,10 +53,10 @@ codes, not source text, titles, URLs, prompts, model output or raw exceptions.
 Each invocation creates a fresh execution root. Generation operations retain
 their explicit contexts and W3C carriers. Saved generation readback preserves
 each producer and occurrence, including results from different executions.
-There is no evaluator request builder, coverage destination, scoring phase or
-coverage report. Native HHEM/UniEval scoring belongs to the separate
-[summary evaluation workflow](summary-evaluation-workflow.md), with its
-independent reference requirement.
+The inference program remains generation-only; its retired evaluation phase
+and legacy coverage report are not restored. After confirmed generator exit,
+the workflow's [private native scoring caller](pipeline-summary-evaluation.md)
+reads the saved source/summary pairs and reports HHEM and UniEval results.
 
 The inference workflow uploads `pipeline-events.jsonl` and `llama-server.log`.
 Existing historical event files are not rewritten or deleted. Non-generation
@@ -99,3 +99,4 @@ recorded spans.
 - [../../.github/workflows/ai-pipeline-tests.yml](../../.github/workflows/ai-pipeline-tests.yml) - offline generation checks and manual inference.
 - [summary-generator-caller.md](summary-generator-caller.md) - independent full-analysis and summary-only caller capture.
 - [summary-evaluation-workflow.md](summary-evaluation-workflow.md) - retained native scorer comparison.
+- [pipeline-summary-evaluation.md](pipeline-summary-evaluation.md) - native scoring after saved inference.

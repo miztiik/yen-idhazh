@@ -42,6 +42,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Setup frozen evaluator tooling
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.9.7'
+
       - name: Install
         run: |
           python -m pip install 'pydantic>=2.12'
@@ -79,6 +84,7 @@ jobs:
           bun install --frozen-lockfile --cwd packages/common-contracts
           bun install --frozen-lockfile --cwd services/summary-generator
           bun install --frozen-lockfile --cwd tools/summary-generator-caller
+          uv sync --project services/summary_evaluator --frozen --extra model --no-dev
 
       - name: Start selected model
         uses: ./.github/actions/model-server
@@ -110,15 +116,30 @@ jobs:
           bun run tools/summary-generator-caller/run-summary-api.ts \
             | jq '{success, prompt_source, prompt_sha256, usage}'
 
-      - name: Stop local processes
+      - name: Confirm generation processes have stopped
+        id: stop
         if: always()
-        run: |
-          for file in services/summary-generator/.summary-generator.pid llama-server.pid; do
-            if [ -f "$file" ]; then
-              kill "$(cat "$file")" 2>/dev/null || true
-              rm -f "$file"
-            fi
-          done
+        run: >-
+          services/summary_evaluator/.venv/bin/python
+          tools/summary-eval/score-saved.py --root . stop-generation
+          --pid-file services/summary-generator/.summary-generator.pid
+          --pid-file llama-server.pid
+
+      - name: Prepare the saved summary for native evaluation
+        if: ${{ !cancelled() && steps.summary.outcome == 'success' && steps.stop.outcome == 'success' }}
+        run: >-
+          bun run --no-install tools/summary-eval/export-saved-summaries.ts
+          --format summary-api
+          --input "${{ steps.summary.outputs.output_directory }}/summary-events.jsonl"
+          --output saved-summary-requests.jsonl
+
+      - name: Score the saved summary with native HHEM and UniEval
+        id: scores
+        if: ${{ !cancelled() && steps.summary.outcome == 'success' && steps.stop.outcome == 'success' }}
+        run: >-
+          services/summary_evaluator/.venv/bin/python
+          tools/summary-eval/score-saved.py --root . evaluate
+          --requests saved-summary-requests.jsonl
 
       - name: Upload Logs and Telemetry
         if: always()
@@ -129,3 +150,6 @@ jobs:
             llama-server.log
             services/summary-generator/backend_ts_server_log.log
             ${{ steps.summary.outputs.output_directory }}
+            saved-summary-requests.jsonl
+            ${{ steps.scores.outputs.output_directory }}
+            ${{ steps.scores.outputs.log_directory }}
