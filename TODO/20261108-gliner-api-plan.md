@@ -1,6 +1,6 @@
 # GLiNER2 API plan
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 **Level**: 5 - new native API and model-configuration contracts.
 
 ## 0 - Operating contract
@@ -59,12 +59,12 @@
 
 | Id | Surface | Contract |
 | --- | --- | --- |
-| E1 | spaCy factory | `text_analysis.create_api_component.create_app(settings: ServiceSettings) -> FastAPI`, under `services/text_analysis/spacy/src/text_analysis/create_api_component.py`. Its plan preserves the public factory; do not perform its move here. |
+| E1 | spaCy factory | `text_analysis.create_api_component.create_app(settings: ServiceSettings) -> FastAPI`, under `services/text_analysis/spacy/src/text_analysis/create_api_component.py`. The delivered native paths are `/api/2026-11-08/run-ner-spacy`, `/api/2026-11-08/get-spacy-health` and `/api/2026-11-08/get-spacy-schema`. Preserve this factory and the native route constants; do not repeat the provider move. |
 | E2 | Existing settings | `text_analysis.load_service_settings.load_service_settings(root)` returns the native service settings. Reuse its listener host, port, body bounds, read deadline and shutdown deadline. This reads transport configuration, not another provider's model state. |
-| E3 | Composition | Preserve the complete native application surfaces: component hooks/refusals, host settings/events, service identity, `app.router.lifespan_context`, host-added health/schema routes and each native OpenAPI builder. The component router alone is not the complete API. |
+| E3 | Composition | Preserve the complete native application surfaces: component hooks/refusals, host settings/events, service identity, `app.router.lifespan_context`, host-added health/schema routes and each native OpenAPI builder. The component router alone is not the complete API. Current spaCy health includes resolved per-language `default_features` and nullable `important_terms_limit`; delegate that native shape rather than copying or flattening it. |
 | E4 | Neutral assembly | One shared FastAPI application/listener; separate provider routers, models and results. Keep request guards and one receiving trace operation. Use typed public bindings and native framework composition; do not rewrite paths, inspect worker internals or merge model state. |
 | E5 | Environment | Keep provider manifests independent. Prepare compatible locked dependencies in the existing job's environment with native package-manager commands; check compatibility. Do not add GLiNER logic/model dependencies to spaCy merely to assemble the server. |
-| E6 | Delivery prerequisite | The spaCy relocation is on its planning session's branch, not yet available on the implementation base. Row 2 waits until that layout and the stable E1 interface are delivered on its base. Do not repeat the relocation or write against the old root layout. |
+| E6 | Delivery prerequisite | The spaCy relocation, Unicode evidence reader and English core API are delivered, as is the native GLiNER2 API. Row 2 must use a base containing those deliveries and the stable E1 interface. Do not repeat provider work or write against the old root layout. |
 
 ## 1 - Status Reckoner (PR execution status)
 
@@ -72,7 +72,7 @@
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| F1 | 1 | Delivering the native GLiNER2 API | - | A | PENDING | - | - | - |
+| F1 | 1 | Delivering the native GLiNER2 API | - | A | DONE | musical-waddle | - | GLiNER2 API delivery |
 | F2 | 2 | Integrating the independent APIs on the existing listener | 1 | B | PENDING | - | - | - |
 
 ## 2 - Row #1 - Delivering the native GLiNER2 API
