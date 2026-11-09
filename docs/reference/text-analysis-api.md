@@ -109,7 +109,9 @@ or model-quality claims.
 
 spaCy's `PhraseMatcher` anchors candidate tokens in the original document.
 Pattern tokenization does not rerun the model. Matching phrases are deduplicated
-before the configured maximum is applied. The displayed text preserves the
+and ordered by score/source before native similarity filtering. Filtering stops
+as soon as the configured maximum of distinct selected patterns is filled;
+each selected pattern still retains all source occurrences. The displayed text preserves the
 first source spelling. A selected candidate without an exact source occurrence
 fails only this feature with `FEATURE_FAILED`; there is no fabricated offset
 or substring repair. No candidates or a configured zero maximum returns a

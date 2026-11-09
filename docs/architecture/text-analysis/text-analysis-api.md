@@ -179,6 +179,10 @@ This service invokes the library's native statistical stages directly so
 calculation failures reach `FEATURE_FAILED` instead of looking like successful
 no-candidate output. Candidate generation, scoring and similarity remain
 library-owned; the service owns source evidence and its public result limit.
+Token-pattern deduplication and score/source ordering precede similarity
+selection, which stops as soon as the configured maximum is filled. Filtering
+against every accumulated candidate would charge for discarded output; selected
+patterns retain all occurrences without that growing comparison set.
 
 Live validation remains strict even as old evidence stays readable. A separate
 retained reader recognizes the initial health shape, preserving recorded global

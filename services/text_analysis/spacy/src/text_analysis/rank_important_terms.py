@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -27,6 +27,8 @@ def anchor_ranked_terms(
     candidates: Iterable[tuple[str, float]],
     sentence_indexes: Mapping[int, int],
     max_results: int,
+    *,
+    is_duplicate: Callable[[str, str], bool] | None = None,
 ) -> ImportantTermsData:
     """Deduplicate token patterns, order source-backed ranks, then apply the limit."""
     if max_results == 0:
@@ -76,7 +78,13 @@ def anchor_ranked_terms(
         return score, matches[0].start_char if matches else len(source)
 
     terms: list[ImportantTermRecord] = []
-    for phrase, score, _pattern in sorted(patterns.values(), key=rank_key)[:max_results]:
+    selected_names: list[str] = []
+    for phrase, score, _pattern in sorted(patterns.values(), key=rank_key):
+        name = phrase.lower()
+        if is_duplicate is not None and any(
+            is_duplicate(name, previous) for previous in selected_names
+        ):
+            continue
         matches = occurrences[doc.vocab.strings[phrase]]
         if not matches:
             raise ValueError("A selected important term has no exact source occurrence")
@@ -87,6 +95,9 @@ def anchor_ranked_terms(
                 occurrences=tuple(matches),
             )
         )
+        selected_names.append(name)
+        if len(terms) == max_results:
+            break
     return ImportantTermsData(terms=tuple(terms))
 
 
@@ -128,24 +139,23 @@ def rank_important_terms(
     )
     core.build_single_terms_features()
     core.build_mult_terms_features()
-    candidates = sorted(
-        (candidate for candidate in core.candidates.values() if candidate.is_valid()),
-        key=lambda candidate: candidate.h,
-    )
-    ranked: list[tuple[str, str, float]] = []
-    for candidate in candidates:
-        if settings.deduplication_threshold < 1 and any(
-            ranker.dedup_function(candidate.unique_kw, previous_name)
-            > settings.deduplication_threshold
-            for previous_name, _phrase, _score in ranked
-        ):
-            continue
-        ranked.append((candidate.unique_kw, candidate.kw, float(candidate.h)))
+
+    def is_duplicate(left: str, right: str) -> bool:
+        return (
+            settings.deduplication_threshold < 1
+            and ranker.dedup_function(left, right) > settings.deduplication_threshold
+        )
+
     return anchor_ranked_terms(
         doc,
         nlp,
         source,
-        ((phrase, score) for _name, phrase, score in ranked),
+        (
+            (candidate.kw, float(candidate.h))
+            for candidate in core.candidates.values()
+            if candidate.is_valid()
+        ),
         sentence_indexes,
         settings.max_results,
+        is_duplicate=is_duplicate,
     )
