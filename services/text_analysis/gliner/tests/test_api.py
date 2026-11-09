@@ -5,13 +5,11 @@ import io
 import json
 import logging
 import os
-import sys
 import warnings
-from collections.abc import AsyncIterator, Iterator
-from contextlib import asynccontextmanager, contextmanager, suppress
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
-from threading import Event, getprofile, setprofile_all_threads
-from types import FrameType
+from threading import Event
 from typing import Protocol, cast
 
 import pytest
@@ -90,32 +88,6 @@ class _NativeProcessingModel(NativeModel, Protocol):
 def anyio_backend() -> str:
     """Use the event loop that owns the provider's asyncio tasks and locks."""
     return "asyncio"
-
-
-@contextmanager
-def _trace_warning_calls() -> Iterator[list[list[str]]]:
-    calls: list[list[str]] = []
-    previous_threads = getprofile()
-    previous_current = sys.getprofile()
-
-    def observe(frame: FrameType, event: str, value: object) -> None:
-        if event != "c_call" or value is not warnings.warn:
-            return
-        stack: list[str] = []
-        cursor: FrameType | None = frame
-        while cursor is not None and len(stack) < 32:
-            module = cursor.f_globals.get("__name__")
-            if isinstance(module, str):
-                stack.append(f"{module}.{cursor.f_code.co_qualname}:{cursor.f_lineno}")
-            cursor = cursor.f_back
-        calls.append(stack)
-
-    setprofile_all_threads(observe)
-    try:
-        yield calls
-    finally:
-        setprofile_all_threads(previous_threads)
-        sys.setprofile(previous_current)
 
 
 @asynccontextmanager
@@ -403,6 +375,20 @@ def test_native_diagnostic_refusal_survives_a_caught_exception() -> None:
                 lineno=2,
                 module="torch.jit._script",
             )
+            warnings.warn_explicit(
+                deprecation,
+                FutureWarning,
+                filename="unrelated_library.py",
+                lineno=1,
+                module="unrelated_library",
+            )
+            warnings.warn_explicit(
+                deprecation,
+                UserWarning,
+                filename="torch/jit/_script.py",
+                lineno=3,
+                module="torch.jit._script",
+            )
         warnings.warn_explicit(
             deprecation,
             FutureWarning,
@@ -410,9 +396,11 @@ def test_native_diagnostic_refusal_survives_a_caught_exception() -> None:
             lineno=3,
             module="torch.jit._script",
         )
-    assert [str(item.message) for item in observed] == [
-        "unrelated-native-warning",
-        deprecation,
+    assert [(type(item.message), str(item.message)) for item in observed] == [
+        (FutureWarning, "unrelated-native-warning"),
+        (FutureWarning, deprecation),
+        (UserWarning, deprecation),
+        (FutureWarning, deprecation),
     ]
 
 
@@ -462,132 +450,131 @@ async def test_real_prepared_model_api(capsys: pytest.CaptureFixture[str]) -> No
         "traceparent": "00-11111111111111111111111111111111-2222222222222222-01",
         "tracestate": "test=one",
     }
-    with _trace_warning_calls() as warning_calls:
-        async with _open_api_client(app, transport) as client:
-            health = await client.get(HEALTH_PATH)
-            assert health.status_code == 200, (
-                "Prepare the configured model before running this test."
-            )
-            assert GlinerHealth.model_validate_json(health.content).status == "ready"
-            spacy_health_response = await client.get(SPACY_HEALTH_PATH)
-            assert spacy_health_response.status_code == 200
-            spacy_health = TextAnalysisHealth.model_validate_json(spacy_health_response.content)
-            assert spacy_health.status == "ready"
-            capability = next(
-                item for item in spacy_health.languages if item.language == spacy_request.language
-            )
-            existing = load_service_settings(ROOT)
-            assert capability.default_features == existing.resolve_default_features(
-                spacy_request.language
-            )
-            assert capability.important_terms_limit == (
-                existing.important_terms.max_results
-                if "important_terms" in capability.supported_features
-                else None
-            )
-            spacy_response = await client.post(
-                SPACY_NER_PATH,
-                json=spacy_request.model_dump(mode="json", exclude_none=True),
-                headers=carrier,
-            )
-            assert spacy_response.status_code == 200
-            spacy_result = AnalysisResult.model_validate_json(spacy_response.content)
-            assert set(spacy_response.json()) == set(AnalysisResult.model_fields)
-            assert (
-                tuple(item.feature for item in spacy_result.features)
-                == capability.default_features
-            )
-            assert all(item.status == "complete" for item in spacy_result.features)
-            assert spacy_result.language == spacy_request.language
-            assert spacy_result.model.profile == spacy_request.model_profile
-            for path, error_model in (
-                (NER_PATH, ErrorResult),
-                (SPACY_NER_PATH, SpacyErrorResult),
+    async with _open_api_client(app, transport) as client:
+        health = await client.get(HEALTH_PATH)
+        assert health.status_code == 200, (
+            "Prepare the configured model before running this test."
+        )
+        assert GlinerHealth.model_validate_json(health.content).status == "ready"
+        spacy_health_response = await client.get(SPACY_HEALTH_PATH)
+        assert spacy_health_response.status_code == 200
+        spacy_health = TextAnalysisHealth.model_validate_json(spacy_health_response.content)
+        assert spacy_health.status == "ready"
+        capability = next(
+            item for item in spacy_health.languages if item.language == spacy_request.language
+        )
+        existing = load_service_settings(ROOT)
+        assert capability.default_features == existing.resolve_default_features(
+            spacy_request.language
+        )
+        assert capability.important_terms_limit == (
+            existing.important_terms.max_results
+            if "important_terms" in capability.supported_features
+            else None
+        )
+        spacy_response = await client.post(
+            SPACY_NER_PATH,
+            json=spacy_request.model_dump(mode="json", exclude_none=True),
+            headers=carrier,
+        )
+        assert spacy_response.status_code == 200
+        spacy_result = AnalysisResult.model_validate_json(spacy_response.content)
+        assert set(spacy_response.json()) == set(AnalysisResult.model_fields)
+        assert (
+            tuple(item.feature for item in spacy_result.features)
+            == capability.default_features
+        )
+        assert all(item.status == "complete" for item in spacy_result.features)
+        assert spacy_result.language == spacy_request.language
+        assert spacy_result.model.profile == spacy_request.model_profile
+        for path, error_model in (
+            (NER_PATH, ErrorResult),
+            (SPACY_NER_PATH, SpacyErrorResult),
+        ):
+            for headers, code in (
+                ({"origin": "https://example.invalid"}, "ORIGIN_FORBIDDEN"),
+                ({"host": "example.invalid"}, "HOST_FORBIDDEN"),
             ):
-                for headers, code in (
-                    ({"origin": "https://example.invalid"}, "ORIGIN_FORBIDDEN"),
-                    ({"host": "example.invalid"}, "HOST_FORBIDDEN"),
-                ):
-                    refusal = await client.post(path, content=b"\xff", headers=headers)
-                    assert refusal.status_code == 403
-                    assert error_model.model_validate_json(refusal.content).error.code == code
-                    assert "traceparent" in refusal.headers
-                too_large = await client.post(
-                    path,
-                    content=b" ",
-                    headers={
-                        "content-type": "application/json",
-                        "content-length": str(transport.listener.max_body_bytes + 1),
-                    },
+                refusal = await client.post(path, content=b"\xff", headers=headers)
+                assert refusal.status_code == 403
+                assert error_model.model_validate_json(refusal.content).error.code == code
+                assert "traceparent" in refusal.headers
+            too_large = await client.post(
+                path,
+                content=b" ",
+                headers={
+                    "content-type": "application/json",
+                    "content-length": str(transport.listener.max_body_bytes + 1),
+                },
+            )
+            assert too_large.status_code == 413
+            wrong_method = await client.get(path)
+            assert wrong_method.status_code == 405
+            assert wrong_method.headers["allow"] == "POST"
+            assert "traceparent" in wrong_method.headers
+            wrong_path = await client.get(path + "/")
+            assert wrong_path.status_code == 404
+            assert "traceparent" in wrong_path.headers
+            if path == NER_PATH:
+                assert (
+                    ErrorResult.model_validate_json(wrong_path.content).error.code
+                    == "NOT_FOUND"
                 )
-                assert too_large.status_code == 413
-                wrong_method = await client.get(path)
-                assert wrong_method.status_code == 405
-                assert wrong_method.headers["allow"] == "POST"
-                assert "traceparent" in wrong_method.headers
-                wrong_path = await client.get(path + "/")
-                assert wrong_path.status_code == 404
-                assert "traceparent" in wrong_path.headers
-                if path == NER_PATH:
-                    assert (
-                        ErrorResult.model_validate_json(wrong_path.content).error.code
-                        == "NOT_FOUND"
-                    )
-            gliner_schema = (await client.get(SCHEMA_PATH)).json()
-            spacy_schema = (await client.get(SPACY_SCHEMA_PATH)).json()
-            assert gliner_schema["info"]["version"] == API_VERSION
-            assert spacy_schema["info"]["version"] == SPACY_SCHEMA_VERSION
-            assert {NER_PATH, CLASSIFY_PATH, HEALTH_PATH}.issubset(gliner_schema["paths"])
-            assert {SPACY_NER_PATH, SPACY_HEALTH_PATH}.issubset(spacy_schema["paths"])
-            assert SPACY_NER_PATH not in gliner_schema["paths"]
-            assert NER_PATH not in spacy_schema["paths"]
-            assert {"NerRequest", "ClassificationRequest"} <= (
-                gliner_schema["components"]["schemas"].keys()
-            )
-            assert "AnalyzeTextRequest" in spacy_schema["components"]["schemas"]
-            assert {"default_features", "important_terms_limit"} <= (
-                spacy_schema["components"]["schemas"]["LanguageCapability"]["properties"].keys()
-            )
-            ner_response = await client.post(
-                NER_PATH, json=ner_request.model_dump(), headers=carrier
-            )
-            assert ner_response.status_code == 200
-            ner_result = NerResult.model_validate_json(ner_response.content)
-            assert set(ner_response.json()) == {"entities"}
-            assert ner_result.entities
-            for mention in ner_result.entities:
-                assert text[mention.start_char : mention.end_char] == mention.text
-                assert mention.label in ner_request.labels
-            native_gliner = next(
-                binding.app
-                for binding in app.application_bindings
-                if binding.host_settings.health_path == HEALTH_PATH
-            )
-            runtime = cast(ModelRuntime, native_gliner.state.component.state)
+        gliner_schema = (await client.get(SCHEMA_PATH)).json()
+        spacy_schema = (await client.get(SPACY_SCHEMA_PATH)).json()
+        assert gliner_schema["info"]["version"] == API_VERSION
+        assert spacy_schema["info"]["version"] == SPACY_SCHEMA_VERSION
+        assert {NER_PATH, CLASSIFY_PATH, HEALTH_PATH}.issubset(gliner_schema["paths"])
+        assert {SPACY_NER_PATH, SPACY_HEALTH_PATH}.issubset(spacy_schema["paths"])
+        assert SPACY_NER_PATH not in gliner_schema["paths"]
+        assert NER_PATH not in spacy_schema["paths"]
+        assert {"NerRequest", "ClassificationRequest"} <= (
+            gliner_schema["components"]["schemas"].keys()
+        )
+        assert "AnalyzeTextRequest" in spacy_schema["components"]["schemas"]
+        assert {"default_features", "important_terms_limit"} <= (
+            spacy_schema["components"]["schemas"]["LanguageCapability"]["properties"].keys()
+        )
+        ner_response = await client.post(
+            NER_PATH, json=ner_request.model_dump(), headers=carrier
+        )
+        assert ner_response.status_code == 200
+        ner_result = NerResult.model_validate_json(ner_response.content)
+        assert set(ner_response.json()) == {"entities"}
+        assert ner_result.entities
+        for mention in ner_result.entities:
+            assert text[mention.start_char : mention.end_char] == mention.text
+            assert mention.label in ner_request.labels
+        native_gliner = next(
+            binding.app
+            for binding in app.application_bindings
+            if binding.host_settings.health_path == HEALTH_PATH
+        )
+        runtime = cast(ModelRuntime, native_gliner.state.component.state)
 
-            def refuse_native_record(native: NativeModel) -> object:
-                processor = cast(_NativeProcessingModel, native).processor
-                return processor.collate_fn_inference([("x", None)])
+        def refuse_native_record(native: NativeModel) -> object:
+            processor = cast(_NativeProcessingModel, native).processor
+            return processor.collate_fn_inference([("x", None)])
 
-            with pytest.raises(OperationError) as refused:
-                await runtime.execute(refuse_native_record)
-            assert refused.value.code == "INPUT_UNSUPPORTED"
-            classification_response = await client.post(
-                CLASSIFY_PATH, json=classification_request.model_dump(), headers=carrier
+        with pytest.raises(OperationError) as refused:
+            await runtime.execute(refuse_native_record)
+        assert refused.value.code == "INPUT_UNSUPPORTED"
+        classification_response = await client.post(
+            CLASSIFY_PATH, json=classification_request.model_dump(), headers=carrier
+        )
+        assert classification_response.status_code == 200
+        result = ClassificationResult.model_validate_json(classification_response.content)
+        assert set(classification_response.json()) == {"classifications"}
+        assert result.classifications.keys() == classification_request.tasks.keys()
+        assert len(result.classifications["desk"]) == 1
+        for name, selected in result.classifications.items():
+            assert all(
+                label.id in classification_request.tasks[name].labels for label in selected
             )
-            assert classification_response.status_code == 200
-            result = ClassificationResult.model_validate_json(classification_response.content)
-            assert set(classification_response.json()) == {"classifications"}
-            assert result.classifications.keys() == classification_request.tasks.keys()
-            assert len(result.classifications["desk"]) == 1
-            for name, selected in result.classifications.items():
-                assert all(
-                    label.id in classification_request.tasks[name].labels for label in selected
-                )
-            assert (await client.get(HEALTH_PATH)).status_code == 200
-            await _verify_cancelled_native_ownership(runtime, ner_request, settings)
-            assert (await client.get(HEALTH_PATH)).status_code == 503
-            assert (await client.get(SPACY_HEALTH_PATH)).status_code == 200
+        assert (await client.get(HEALTH_PATH)).status_code == 200
+        await _verify_cancelled_native_ownership(runtime, ner_request, settings)
+        assert (await client.get(HEALTH_PATH)).status_code == 503
+        assert (await client.get(SPACY_HEALTH_PATH)).status_code == 200
     records = [GlinerEvent.model_validate_json(line) for line in events.getvalue().splitlines()]
     assert any(record.type == "gliner.service.ready" for record in records)
     completed = [record for record in records if record.type == "gliner.request.completed"]
@@ -616,5 +603,3 @@ async def test_real_prepared_model_api(capsys: pytest.CaptureFixture[str]) -> No
         for task in classification_request.tasks.values()
         for definition in task.labels.values()
     )
-    with capsys.disabled():
-        print(json.dumps({"native_warning_calls": warning_calls}))

@@ -1,4 +1,4 @@
-"""How are native diagnostics refused without formatting source-bearing records?"""
+"""How are native diagnostics controlled without formatting source-bearing records?"""
 
 from __future__ import annotations
 
