@@ -424,6 +424,25 @@ wheels = [
 ]
 
 [[package]]
+name = "jellyfish"
+version = "1.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b4/61/24eaae3dc47f3d3e2019b230439655db73b320fe7fac6a822e5243a3e25a/jellyfish-1.3.0.tar.gz", hash = "sha256:fd77ba8e1c9835d2c56b11bde6765380cbcac333037974c4ba4b60092c383212", size = 362154, upload-time = "2026-10-16T02:38:06.407Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c2/90/224c0668ebd1121971c2a7321c07d113bbeeef6b4342e43f0ae21c3fa5e0/jellyfish-1.3.0-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:0a151b4e220ed294e6d8069d75208159f7b7fb6dad6bda673897d5dc23241d8f", size = 323204, upload-time = "2026-10-16T02:37:08.603Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/8f/e24937283ed6cb739bf035c0b401ca3342be9720bca3b0115e8fd062bf38/jellyfish-1.3.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:dd2db41b2fb0511cf2bc93a3a87360fc51d663dff395f0b8204756d239477d28", size = 318927, upload-time = "2026-10-16T02:37:09.533Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/12/7f35c2302e5b20a37cd19fb04b3c51b78118660fa70525932a92d45041b4/jellyfish-1.3.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f9f29c1eaf7f405aace276c197d00108de50728af20e42e450850b5b5c3b9552", size = 352744, upload-time = "2026-10-16T02:37:10.635Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/7f/edfe8a4e3a7bd9522b4524a313aa7977369bbc4236ca627687498ab870fd/jellyfish-1.3.0-cp312-cp312-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:f674cc4f6af05d07cd0a1a9c96d1831cc82b6039a61aeb5a9278d909771f3611", size = 358833, upload-time = "2026-10-16T02:37:11.699Z" },
+    { url = "https://files.pythonhosted.org/packages/58/99/111749eea2948571e3d025ad97bf19ea8b7ee125f8ba38b54e891564430a/jellyfish-1.3.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0d67d2f4b80e0c7450feb88fa72a79933f81f94f4d2205a6140b25f748af6604", size = 356705, upload-time = "2026-10-16T02:37:12.93Z" },
+    { url = "https://files.pythonhosted.org/packages/8e/06/b875ea034cdad7d32951328954a0befdd7171a7ebbd94f44af7d8bbe0002/jellyfish-1.3.0-cp312-cp312-musllinux_1_1_aarch64.whl", hash = "sha256:9ce64d1546deb4f36752785154bf4d2d62e4d442025b02762bcd355c9c72d2d6", size = 530863, upload-time = "2026-10-16T02:37:13.905Z" },
+    { url = "https://files.pythonhosted.org/packages/ad/14/a650b210c26c0f9abf1375df19ee2df3936094a84bc16065da4857739ce9/jellyfish-1.3.0-cp312-cp312-musllinux_1_1_i686.whl", hash = "sha256:d736adac5431c4d728c21de52060eb6c9555d5f89418e09b47c33cddeaa32b04", size = 595043, upload-time = "2026-10-16T02:37:15.006Z" },
+    { url = "https://files.pythonhosted.org/packages/04/b1/f1fc427fa20778d15424a07b5526f0636fabc8bdcfb50e35e8abb9a3b012/jellyfish-1.3.0-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:45155d228abdfb94165ddfaa3f6110d71975ddbb998d3de83f27ad2a86262d2d", size = 560998, upload-time = "2026-10-16T02:37:16.09Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/ce/51acc2505fb69841545a0256f58f39c06e4a8b7d99ed0990735182f3adfa/jellyfish-1.3.0-cp312-cp312-win32.whl", hash = "sha256:6715f83806e5d87a8cf84376386e4594078c446b6d01138102fbc5c08bce7c7f", size = 212123, upload-time = "2026-10-16T02:37:17.132Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/2a/aaeff18e124900d362344ea62b87bdefbb5367ce1536757e100339efc25e/jellyfish-1.3.0-cp312-cp312-win_amd64.whl", hash = "sha256:9b64056bb1ffa472549a0567aaa6574b07e9bfbf7cf96ec97e90d892bb03127c", size = 215665, upload-time = "2026-10-16T02:37:18.122Z" },
+    { url = "https://files.pythonhosted.org/packages/81/7f/b72746615bb6dd0a2b442f41f7b7269a7e993fd945d5f80bb24d321e0583/jellyfish-1.3.0-cp312-cp312-win_arm64.whl", hash = "sha256:36ff9329c584229c20a220bc3ee7f868b001392a41a1fcd5e7e3941dbc1ba793", size = 214473, upload-time = "2026-10-16T02:37:19.442Z" },
+]
+
+[[package]]
 name = "jinja2"
 version = "3.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -904,6 +923,18 @@ wheels = [
 ]
 
 [[package]]
+name = "segtok"
+version = "1.5.11"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "regex" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0c/8a/1ae8e3deb805831933b63d58851ab41ff2472099e15511fc62039421ad70/segtok-1.5.11.tar.gz", hash = "sha256:8ab2dd44245bcbfec25b575dc4618473bbdf2af8c2649698cd5a370f42f3db23", size = 25244, upload-time = "2021-12-15T21:56:14.555Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dd/60/d384dbae5d4756e33f1750fa3472303de2c827011907a64e213e114d0556/segtok-1.5.11-py3-none-any.whl", hash = "sha256:910616b76198c3141b2772df530270d3b706e42ae69a5b30ef115c7bd5d1501a", size = 24332, upload-time = "2021-12-15T21:56:12.508Z" },
+]
+
+[[package]]
 name = "setuptools"
 version = "84.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1059,6 +1090,15 @@ wheels = [
 ]
 
 [[package]]
+name = "tabulate"
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/46/58/8c37dea7bbf769b20d58e7ace7e5edfe65b849442b00ffcdd56be88697c6/tabulate-0.10.0.tar.gz", hash = "sha256:e2cfde8f79420f6deeffdeda9aaec3b6bc5abce947655d17ac662b126e48a60d", size = 91754, upload-time = "2026-03-04T18:55:34.402Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/55/db07de81b5c630da5cbf5c7df646580ca26dfaefa593667fc6f2fe016d2e/tabulate-0.10.0-py3-none-any.whl", hash = "sha256:f0b0622e567335c8fabaaa659f1b33bcb6ddfe2e496071b743aa113f8774f2d3", size = 39814, upload-time = "2026-03-04T18:55:31.284Z" },
+]
+
+[[package]]
 name = "text-analysis"
 version = "2026.11.7"
 source = { directory = "../spacy" }
@@ -1071,6 +1111,7 @@ dependencies = [
     { name = "spacy" },
     { name = "spacy-pkuseg" },
     { name = "uvicorn" },
+    { name = "yake" },
 ]
 
 [package.metadata]
@@ -1083,6 +1124,7 @@ requires-dist = [
     { name = "spacy", specifier = "==3.8.18" },
     { name = "spacy-pkuseg", specifier = "==1.0.2" },
     { name = "uvicorn", specifier = ">=0.38,<1" },
+    { name = "yake", specifier = "==0.7.3" },
 ]
 
 [package.metadata.requires-dev]
@@ -1339,4 +1381,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7d/0a/ab645f8b4c594cac2db49bbc805bff97a9d3f2944061b865f67e0351b6c8/wrapt-2.5.2-cp312-cp312-win_amd64.whl", hash = "sha256:36021ef761856bdbc10d5f3da9a95af93ef60d6acf9c72c8f849937ba2b902aa", size = 106220, upload-time = "2026-10-29T23:04:58.081Z" },
     { url = "https://files.pythonhosted.org/packages/37/1e/232868b68b925ab29ca5acbec4ad54ee42a853fcd8f596bf7e0e0e3850f1/wrapt-2.5.2-cp312-cp312-win_arm64.whl", hash = "sha256:81bdf0bd141d9b1706a0751b2ee068c7afe6be4042712d427b32b3072d5c40b9", size = 103377, upload-time = "2026-10-29T23:04:59.366Z" },
     { url = "https://files.pythonhosted.org/packages/77/8b/1ea57b936b70f98e8e7620a352578096d778dbee95b262f73c066d210ffb/wrapt-2.5.2-py3-none-any.whl", hash = "sha256:61eb54e9540ea522c2c4752a57549a83d3c67e6704ed708403d28e067aaf90f0", size = 82025, upload-time = "2026-10-29T23:06:38.56Z" },
+]
+
+[[package]]
+name = "yake"
+version = "0.7.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "jellyfish" },
+    { name = "networkx" },
+    { name = "numpy" },
+    { name = "segtok" },
+    { name = "tabulate" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ff/5b/3603589ba74d6b3cb92278ecb7b58538bca9cbe7d6cf2fe1b9440d403ec8/yake-0.7.3.tar.gz", hash = "sha256:8778fb2832e58d26d838d6d7ac967b4947521f1fe8cdf23dd872636161fc53ed", size = 554917, upload-time = "2026-02-09T18:34:04.029Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4f/f3/ffb11f6e925b60f47ce2c08c298a74b93d45bf5ab6c6fb8bee9fcd41ff89/yake-0.7.3-py3-none-any.whl", hash = "sha256:38f7f135ff8ed4bcdc05e16b533a9dc93299f1e694b0c308c3c086bab316c5fe", size = 91357, upload-time = "2026-02-09T18:34:02.64Z" },
 ]

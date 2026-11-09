@@ -133,16 +133,8 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Prepare the reconciled GLiNER dependency lock
-        run: uv lock --project services/text_analysis/gliner
-
-      - name: Upload the reconciled GLiNER dependency lock
-        uses: actions/upload-artifact@v7
-        with:
-          name: gliner-reconciled-lock-${{ github.run_id }}-${{ github.run_attempt }}
-          path: services/text_analysis/gliner/uv.lock
-          if-no-files-found: error
-          retention-days: 7
+      - name: Verify the GLiNER dependency lock
+        run: uv lock --locked --project services/text_analysis/gliner
 
       - name: Sync the GLiNER API environment
         run: uv sync --project services/text_analysis/gliner --frozen --extra model --group dev
