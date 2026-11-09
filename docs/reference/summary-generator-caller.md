@@ -38,8 +38,9 @@ evaluates saved summary text without changing either caller product or the API.
 ## Preparation and prompts
 
 Both caller products acquire one operator-supplied URL or direct text outside
-HTTP. A failed URL may use supplied direct text; a failed URL with no fallback
-fails the invocation. The real extractor constructs an existing JSDOM instance
+HTTP. A supplied URL takes precedence; omit it to use direct text without fetching.
+A failed URL may use supplied direct text; a failed URL with no fallback fails
+the invocation. The real extractor constructs an existing JSDOM instance
 for Defuddle, with scripts and extra resources disabled, and closes its window
 after success or failure. Fetch callbacks retain one operation; parsing links
 to that completed fetch. Trace headers are not sent to the source.
