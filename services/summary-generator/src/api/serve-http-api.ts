@@ -22,9 +22,11 @@ export type SummaryHandlerOptions = {
   writeEvent?: (event: unknown) => void;
 };
 const failureDiagnostic = z.object({
-  kind: z.enum(["validation", "invalid_json", "body_limit", "native_failure"]),
+  kind: z.enum(["validation", "invalid_json", "body_limit", "timeout", "native_failure"]),
   issue_code: z.nativeEnum(z.ZodIssueCode).optional(),
   issue_path: z.array(z.union([z.string(), z.number()])).optional(),
+  expected_type: z.nativeEnum(z.ZodParsedType).optional(),
+  received_type: z.nativeEnum(z.ZodParsedType).optional(),
 }).strict();
 const diagnostic = z.object({
   code: z.string(),
@@ -36,10 +38,17 @@ const diagnostic = z.object({
 function describeFailure(error: unknown): z.infer<typeof failureDiagnostic> {
   if (error instanceof z.ZodError) {
     const issue = error.issues[0];
-    return { kind: "validation", issue_code: issue?.code, issue_path: issue?.path };
+    return {
+      kind: "validation", issue_code: issue?.code, issue_path: issue?.path,
+      ...(issue?.code === "invalid_type" ? {
+        expected_type: issue.expected, received_type: issue.received,
+      } : {}),
+    };
   }
   if (error instanceof SyntaxError) return { kind: "invalid_json" };
   if (error instanceof BodyLimitError) return { kind: "body_limit" };
+  if (error instanceof Error && (error.name === "TimeoutError"
+    || "code" in error && error.code === "ETIMEDOUT")) return { kind: "timeout" };
   return { kind: "native_failure" };
 }
 
