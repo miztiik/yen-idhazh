@@ -500,6 +500,54 @@ spaCy routes, health-derived defaults/limits, exact source occurrences, raw
 outputs and the unchanged capacity/reuse/cleanup policies. These results do
 not claim recognition or ranking quality.
 
+### Independent GLiNER2 API
+
+The provider has its own CPython 3.12 manifest and frozen lock under
+`services/text_analysis/gliner/`. Its production dependencies do not import
+spaCy model/feature logic. The development group consumes the existing
+text-analysis settings loader and resolves compatible dependencies.
+
+Verify the named lock without installing a provider:
+
+```powershell
+uv lock --locked --project .\services\text_analysis\gliner
+```
+
+Follow the text-analysis no-local-provider-execution rule above. Do not install,
+import, lint, type-check or start this provider on the developer host. Inspect
+the shared changed-test selection; the Linux `spacy_ner_test` job in
+`ner-tests.yml` owns actual API functionality, not another news pipeline.
+
+Its preparation and verification commands are:
+
+```powershell
+uv sync --project .\services\text_analysis\gliner --frozen --extra model --group dev
+Push-Location .\services\text_analysis\gliner
+uv run --frozen --extra model --group dev ruff check src tests scripts
+uv run --frozen --extra model --group dev mypy src tests scripts
+Pop-Location
+uv run --project .\services\text_analysis\gliner --frozen --extra model --group dev python .\services\text_analysis\gliner\scripts\prepare_model.py --root .
+uv run --project .\services\text_analysis\gliner --frozen --extra model --group dev pytest .\services\text_analysis\gliner\tests\test_api.py
+```
+
+Model preparation happens before tests. The focused file uses the actual
+prepared native model through ASGI, with external network sockets disabled
+inside tests and no model mocks. It checks strict application shapes, source
+spans, requested classifications, real readiness and safe diagnostic refusal.
+The cancellation boundary also requires accepted native work to retain its
+model lease and terminal diagnostic after its caller disappears; shutdown
+cannot complete before that owned work finishes.
+This does not establish quality, throughput, arbitrary checkpoint compatibility
+or shared-listener assembly.
+
+Retain the immutable source commit and `gliner-api-results` JUnit artifact from
+that job. A generated lock or bootstrap run is preparation evidence, not a
+final frozen-candidate pass. Required ordinary CI and native API functionality
+must pass on the final committed lock and exact head.
+The [API reference](../reference/gliner-api.md) owns payload and configuration
+details; the [architecture](../architecture/text-analysis/gliner-api.md) owns
+native lifecycle and diagnostic safety.
+
 ### Independent TypeScript packages and services
 
 Maintainer ruling, 2026-10-21: remaining feed-planner development and tests do not

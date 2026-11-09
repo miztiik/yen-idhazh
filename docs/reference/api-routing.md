@@ -185,6 +185,27 @@ aliases or redirects. Wrong methods retain `Allow`.
 The [text-analysis reference](text-analysis-api.md) owns request, result,
 feature-error, health and event fields.
 
+## Current GLiNER2 family
+
+The independent local GLiNER2 provider uses the fixed creation date
+`2026-11-08`. Its constants live in
+`services/text_analysis/gliner/src/gliner_api/declare_api_contracts.py`.
+Model selection and caller-defined label vocabulary do not change this family.
+
+Table F - GLiNER2 operations
+
+| Id | Method | Path | Meaning |
+| --- | --- | --- | --- |
+| F1 | POST | `/api/2026-11-08/run-ner-gliner` | Native scored entity spans in exact source text |
+| F2 | POST | `/api/2026-11-08/classify-text-gliner` | Native selections from named ID-to-definition tasks |
+| F3 | GET | `/api/2026-11-08/get-gliner-health` | Actual loaded-provider availability |
+| F4 | GET | `/api/2026-11-08/get-gliner-schema` | Native OpenAPI without an interactive UI |
+
+Unknown and trailing-slash paths return 404. Wrong methods retain 405 and
+`Allow`; there are no permanent aliases. The
+[GLiNER reference](gliner-api.md) owns strict payloads, model settings,
+safe refusals and diagnostics.
+
 ## Upstream native-protocol exception
 
 The existing llama-server owns `/v1/chat/completions`, `/completions`,
@@ -208,3 +229,4 @@ implementation.
 - [serve-pipeline-apis.md](serve-pipeline-apis.md) - shared process identity and owned-child lifetime.
 - [feed-operator-api.md](../architecture/sources/feed-operator-api.md) - planner and delivery operations and native control flow.
 - [text-analysis-api.md](text-analysis-api.md) - multilingual extraction routes and payloads.
+- [gliner-api.md](gliner-api.md) - native local NER and schema-based classification.
