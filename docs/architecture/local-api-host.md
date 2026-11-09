@@ -1,11 +1,11 @@
-# How one local Python API is hosted
+# How independent local Python APIs are hosted
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
-How an independently started Python service acquires one bounded loopback
-listener without giving the host ownership of service payloads or behavior.
+How independent Python APIs acquire one bounded loopback listener without
+giving the host ownership of service payloads or behavior.
 
-## One component per process
+## One component per native application
 
 `services/local_api_host/` is an installable Python package that composes one
 selected `ApiComponentRuntime` into one FastAPI application. The host owns the
@@ -18,12 +18,47 @@ health observation, health response schema and body, refusal bodies and
 diagnostic event data. The host never inspects a service status word, error
 payload or event envelope. A service that has several internal modules may
 combine them behind one service-owned component before calling the host; the
-host itself has no registration list or plugin discovery.
+host itself has no registration list or plugin discovery. Complete native
+applications can share a listener through the explicit assembly below.
 
 `HostSettings` declares the application title and schema version, exact health
 and schema paths, one loopback listener, body byte and read-time bounds,
 graceful shutdown wait and whether response trace propagation is enabled.
 Unknown settings and non-loopback hosts are rejected by the contract.
+
+## Complete-application assembly
+
+`compose_applications` accepts a fixed tuple of complete applications produced
+by `compose_api`. `bind_application` returns a typed immutable
+`ApplicationBinding` containing the original application and its validated host
+settings. The aggregate exposes those bindings as `application_bindings`; it
+does not copy component state, service identity or event sinks.
+
+All bindings must agree on listener/body/read bounds, shutdown timeout and
+trace propagation. Native titles, versions and health/schema paths remain
+independent. Construction rejects repeated applications, colliding paths and
+nonliteral or non-HTTP routes rather than silently selecting one provider.
+There is no discovery or another listener configuration.
+
+Standard framework routes forward the unchanged ASGI request to its native
+application for every HTTP method. A known operation's trailing-slash variant
+is also dispatched to that application, which refuses it using its own native
+behavior; it is not a successful alias or redirect. Unknown paths use the
+first application's default guarded behavior. The aggregate adds no guard or
+receiving trace wrapper, so each request acquires exactly one receiving
+operation.
+
+Every native health/schema endpoint remains intact. Schema requests invoke the
+original native OpenAPI builder, including its custom request definitions;
+there is no combined schema that could confuse identically named native
+models. The aggregate has no additional schema or documentation endpoint.
+
+The aggregate enters each native `app.router.lifespan_context(app)` once and
+unwinds in reverse order using `AsyncExitStack`. Only the native host's
+lossless lifecycle contract is accepted: a later startup/lifespan failure
+propagates through earlier native lifespans, which retain it alongside their
+own independent cleanup failures. Component shutdown and event-sink cleanup
+are never called a second time by the assembly.
 
 ## Request boundary
 
@@ -113,11 +148,16 @@ An explicit service operation joins construction, model loading and lifecycle
 diagnostics without introducing a mutable current request. Request context
 remains in its own ASGI scope; neither a lifecycle callback nor a metadata
 warning borrows the last request's context.
+Forwarding complete applications instead of copying component routers retains
+native host-added operations, exception handlers, schema customization and
+cleanup without coupling independently evolving provider contracts.
 
 ## See also
 
 - [evaluation/summary-evaluator.md](evaluation/summary-evaluator.md) - how the
   evaluator adapts its scorer registrations to one host component.
+- [text-analysis/gliner-api.md](text-analysis/gliner-api.md) - independent
+  provider applications assembled on the existing text-analysis listener.
 - [../reference/summary-evaluator-api.md](../reference/summary-evaluator-api.md) -
   the evaluator's unchanged wire contract.
 - [../reference/repository-layout.md](../reference/repository-layout.md) -
