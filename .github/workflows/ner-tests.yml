@@ -83,7 +83,8 @@ jobs:
         run: >-
           uv run --project services/summary_evaluator --frozen --group dev
           pytest -c services/summary_evaluator/pyproject.toml
-          services/summary_evaluator/tests/test_component_registration.py
+          services/summary_evaluator/tests/test_component_registration.py::test_neutral_host_reports_startup_failure_without_stopped
+          services/summary_evaluator/tests/test_component_registration.py::test_startup_failure_cleans_all_components_and_retains_native_errors
           services/summary_evaluator/tests/test_server_lifecycle.py
           services/summary_evaluator/tests/test_trace_context.py
 
