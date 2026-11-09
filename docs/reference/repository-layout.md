@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -42,11 +42,12 @@ question, and the four answers do not mix.
 | `services/summary-generator/` | Independent prepared-text summary API, native request/content helpers and bounded transport; no extraction, classification, machine sampling or report writing; [API contract](summary-generator-api.md) | a person | no |
 | `services/feed-ingest-plan/`, `services/host-probes/` | Native API implementations and assembly: feed owns planning/delivery, probes compose fingerprints/profiles; workflow/report helpers remain with their native package, with offline cases under `test/` | a person | no |
 | `services/serve-pipeline-apis/` | Reusable local listener, health identity, private-pipe lifetime, cancellation, exact-child cleanup, safe diagnostics and typed evidence; no native API dependencies; [listener contract](serve-pipeline-apis.md) | a person | no |
-| `services/local_api_host/` | Installed neutral Python package for one guarded loopback FastAPI component: strict host settings, lifespan, health/schema wiring, bounded body reads, optional W3C response propagation and exact Uvicorn exit; no service payload or event vocabulary; [host architecture](../architecture/local-api-host.md) | a person | no |
+| `services/local_api_host/` | Installed neutral Python package for guarded loopback FastAPI applications and explicit complete-application assembly: strict shared bounds, native lifecycle/health/schema retention, bounded body reads, one receiving operation and exact Uvicorn exit; no provider imports or service payload/event vocabulary; [host architecture](../architecture/local-api-host.md) | a person | no |
 | `services/summary_evaluator/` | Installed Python summary evaluator with `serve_http/`, `shared/`, `hhem/` and `unieval/` children under `src/summary_evaluator/`; one locked distribution with independent API processes, CPU workers and a locked path dependency on `services/local_api_host/`. Strict previous-settings and disabled-coverage health readers live with the serving contracts, not as a retired service. Service cases stay in `tests/`; `tests/summary_evaluator_cases/` is their recording/process harness shared with the distinct comparison workflow. Settings live in `config/summary-evals/`; existing HHEM and UniEval recordings retain their provenance | a person | no |
 | `services/text_analysis/` | Container for independent provider projects. New files belong in provider subdirectories, never directly at this root; GLiNER additions go under `services/text_analysis/gliner/`. | a person | no |
 | `services/text_analysis/spacy/` | Complete installed Python multilingual spaCy feature API, its manifest/lock, process-pool/model runtime, tests and manual verification scripts. The parent `services/text_analysis/` is a container with no loose spaCy project files. Production settings live in `config/text-analysis/`; the API writes only HTTP responses and stderr CloudEvents. [API architecture](../architecture/text-analysis/text-analysis-api.md) | a person | no |
 | `services/text_analysis/gliner/` | Independent native GLiNER2 API, its manifest/lock, local CPU model lifecycle, contracts, API-only tests and preparation script. `gliner_api` imports no spaCy model or feature code. Settings live in `config/text-analysis/gliner/`; output is only HTTP application data and validated stderr CloudEvents. [API architecture](../architecture/text-analysis/gliner-api.md) | a person | no |
+| `services/text_analysis/hosting/` | Thin shared-listener assembly of the complete independent native applications, using their public host bindings and the existing text-analysis listener settings. No distribution, model implementation or additional configuration. [Host architecture](../architecture/local-api-host.md) | a person | no |
 | `packages/feed-probe/` | The standalone TypeScript feed access and article readability probe, its CLI, machine-readable reports and package-local tests | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
@@ -82,7 +83,7 @@ These exist on a developer machine and in CI. None is ever committed.
 | `backend/var/` | Run intermediates and caches. The committed record of a run is the digest plus the `state/` rows, never the workings |
 | `services/summary_evaluator/var/` | Downloaded model assets, a separate optional model environment and disposable capture output; never published or committed |
 | `services/text_analysis/spacy/.venv/` | Locked text-analysis environment plus selected spaCy model packages; reproducible from the manifest, lock and committed wheel destinations |
-| `services/text_analysis/gliner/.venv/`, `services/text_analysis/gliner/var/models/` | Locked local API environment and downloaded configured model snapshots; never published or committed |
+| `services/text_analysis/gliner/.venv/`, `services/text_analysis/gliner/var/models/` | Locked local API development environment, also used for both prepared providers in the API-functional job, and downloaded configured GLiNER snapshots; never published or committed |
 | `backend/var/summary-generator-tests/` | Caller-owned summary API response, private event and Markdown report; never published or committed |
 | `backend/var/summary-eval-tests/` | Comparison caller's same-run receipts, phase evidence, escaped report and native logs; never published or committed |
 | `backend/var/evidence/` | Inside `backend/var/`, and named here because a person has to find it. One file per scored item, holding the article text and the summary a human labeller must read. Article bodies are not ours to republish, so this one is uncommittable on principle rather than on size |

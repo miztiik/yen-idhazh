@@ -17,8 +17,16 @@ listener settings. The factory imports no spaCy model or feature code.
 The [local API host](../local-api-host.md) supplies loopback and Origin guards,
 bounded UTF-8 body reading, W3C receiving operations, native health/schema
 routes and lifespan cleanup. The provider owns its router, model lifecycle,
-application results, refusal bodies and CloudEvents. Hosting several complete
-provider applications remains a separate assembly responsibility.
+application results, refusal bodies and CloudEvents.
+
+`services/text_analysis/hosting/serve_apis.py` is the thin assembly: it alone
+imports both native factories and the existing settings loader. It builds the
+complete spaCy application, passes its public transport binding to GLiNER,
+and delegates both to the neutral complete-application composer. Both API
+families retain their declared paths, health payloads, native schemas and
+lifespans on the same configured listener. Neither provider imports the other
+or receives its model state. This assembly is a script, not another package,
+configuration hierarchy or model server.
 
 ## Prepare, then load once
 
@@ -113,6 +121,9 @@ behavior. HTTPX, pytest, Ruff and mypy are verification-only.
 The development group uses the sibling text-analysis package only for the
 existing settings-loader binding and locked compatibility resolution. It does
 not create a production dependency on that provider's model or feature logic.
+The API-functional job uses this one prepared development environment for both
+providers and installs only its selected spaCy wheel plus the configured
+GLiNER snapshot. Native manifests and locks remain independent.
 
 ## Design rationale
 
@@ -127,5 +138,6 @@ malformed output from looking like useful application data.
 - [Exact GLiNER API contract](../../reference/gliner-api.md)
 - [First-party routing](../../reference/api-routing.md)
 - [Local API host](../local-api-host.md)
+- [Shared API verification](../../how-to/run-ner-api-tests.md)
 - [Gate commands](../../how-to/run-the-gates.md)
 - [Repository layout](../../reference/repository-layout.md)

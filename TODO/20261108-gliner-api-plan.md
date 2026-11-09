@@ -73,7 +73,7 @@
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | F1 | 1 | Delivering the native GLiNER2 API | - | A | DONE | musical-waddle | - | GLiNER2 API delivery |
-| F2 | 2 | Integrating the independent APIs on the existing listener | 1 | B | PENDING | - | - | - |
+| F2 | 2 | Integrating the independent APIs on the existing listener | 1 | B | DONE | bookish-garbanzo | - | Shared text-analysis listener |
 
 ## 2 - Row #1 - Delivering the native GLiNER2 API
 

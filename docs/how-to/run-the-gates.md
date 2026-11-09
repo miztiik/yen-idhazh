@@ -485,8 +485,9 @@ The registered manual workflow is its functional gate and the
 Ordinary CI runs repository-wide source checks without claiming spaCy behavior
 or testing workflow execution.
 
-The workflow syncs the frozen environment, installs only the selected
-configured model wheel after its named in-memory unittest checks, starts one
+The workflow syncs the compatible frozen GLiNER development environment for
+both independent providers, installs only the selected configured spaCy model
+wheel after its named in-memory unittest checks, starts one
 owned process group, and validates live
 English or Chinese results through the actual shared TypeScript CloudEvents
 and trace contracts. The required candidate evidence is one `md` run per
@@ -518,27 +519,24 @@ import, lint, type-check or start this provider on the developer host. Inspect
 the shared changed-test selection; the Linux `spacy_ner_test` job in
 `ner-tests.yml` owns actual API functionality, not another news pipeline.
 
-Its preparation and verification commands are:
-
-```powershell
-uv sync --project .\services\text_analysis\gliner --frozen --extra model --group dev
-Push-Location .\services\text_analysis\gliner
-uv run --frozen --extra model --group dev ruff check src tests scripts
-uv run --frozen --extra model --group dev mypy src tests scripts
-Pop-Location
-uv run --project .\services\text_analysis\gliner --frozen --extra model --group dev python .\services\text_analysis\gliner\scripts\prepare_model.py --root .
-uv run --project .\services\text_analysis\gliner --frozen --extra model --group dev pytest .\services\text_analysis\gliner\tests\test_api.py
-```
+The [shared API verification guide](run-ner-api-tests.md) owns the Linux
+preparation and focused verification commands. The same job also runs the
+existing neutral-host registration, lifespan and trace regressions. Provider
+lint/types and the thin assembly are checked there, never by importing a
+provider on the developer host.
 
 Model preparation happens before tests. The focused file uses the actual
 prepared native model through ASGI, with external network sockets disabled
-inside tests and no model mocks. It checks strict application shapes, source
-spans, requested classifications, real readiness and safe diagnostic refusal.
+inside tests and no model mocks. Its single prepared-model journey uses the
+shared application and checks both native route families, separate customized
+schemas, native guards, strict application shapes, source spans, requested
+classifications, real readiness and safe diagnostics.
 The cancellation boundary also requires accepted native work to retain its
 model lease and terminal diagnostic after its caller disappears; shutdown
-cannot complete before that owned work finishes.
+cannot complete before that owned work finishes. spaCy remains ready when
+that native GLiNER cancellation check has completed its own shutdown.
 This does not establish quality, throughput, arbitrary checkpoint compatibility
-or shared-listener assembly.
+or news-pipeline integration.
 
 Retain the immutable source commit and `gliner-api-results` JUnit artifact from
 that job. A generated lock or bootstrap run is preparation evidence, not a

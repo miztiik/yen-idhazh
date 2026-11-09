@@ -79,15 +79,36 @@ jobs:
       - name: Check Unicode evidence spans
         run: bun test ./services/text_analysis/spacy/scripts/validate-evidence-spans.test.ts
 
-      - name: Sync the text-analysis environment
-        working-directory: services/text_analysis/spacy
-        run: uv sync --frozen
+      - name: Check existing Python host regressions
+        run: >-
+          uv run --project services/summary_evaluator --frozen --group dev
+          pytest -c services/summary_evaluator/pyproject.toml
+          services/summary_evaluator/tests/test_component_registration.py
+          services/summary_evaluator/tests/test_server_lifecycle.py
+          services/summary_evaluator/tests/test_trace_context.py
+
+      - name: Verify the provider dependency locks
+        run: |
+          uv lock --locked --project services/local_api_host
+          uv lock --locked --project services/text_analysis/spacy
+          uv lock --locked --project services/text_analysis/gliner
+
+      - name: Sync the shared provider environment
+        run: uv sync --project services/text_analysis/gliner --frozen --extra model --group dev
+
+      - name: Check native and shared API source
+        working-directory: services/text_analysis/gliner
+        env:
+          MYPYPATH: ../hosting
+        run: |
+          uv run --no-sync ruff check src tests scripts ../../local_api_host/src ../hosting
+          uv run --no-sync mypy src tests scripts ../../local_api_host/src ../hosting
 
       - name: Check native features and verification contracts
         env:
           PYTHONPATH: services/text_analysis/spacy/scripts
         run: >-
-          uv run --project services/text_analysis/spacy --no-sync python
+          uv run --project services/text_analysis/gliner --no-sync python
           -m unittest
           services/text_analysis/spacy/tests/test_named_entities.py
           services/text_analysis/spacy/tests/test_important_terms.py
@@ -99,7 +120,7 @@ jobs:
           TEXT_ANALYSIS_LANGUAGE: ${{ inputs.language }}
           TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
         run: >-
-          uv run --project services/text_analysis/spacy --no-sync python
+          uv run --project services/text_analysis/gliner --no-sync python
           services/text_analysis/spacy/scripts/prepare-selected-model.py
 
       - name: Run live text-analysis verification
@@ -113,7 +134,7 @@ jobs:
           TEXT_ANALYSIS_RUN_ID: ${{ github.run_id }}
           TEXT_ANALYSIS_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: >-
-          uv run --project services/text_analysis/spacy --no-sync python
+          uv run --project services/text_analysis/gliner --no-sync python
           services/text_analysis/spacy/scripts/run-spacy-test.py
           < "$GITHUB_EVENT_PATH"
 
@@ -133,26 +154,21 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Verify the GLiNER dependency lock
-        run: uv lock --locked --project services/text_analysis/gliner
-
-      - name: Sync the GLiNER API environment
-        run: uv sync --project services/text_analysis/gliner --frozen --extra model --group dev
-
-      - name: Check GLiNER API source
-        working-directory: services/text_analysis/gliner
-        run: |
-          uv run --frozen --extra model --group dev ruff check src tests scripts
-          uv run --frozen --extra model --group dev mypy src tests scripts
-
       - name: Prepare the configured GLiNER model
         run: >-
-          uv run --project services/text_analysis/gliner --frozen --extra model --group dev
+          uv run --project services/text_analysis/gliner --no-sync
           python services/text_analysis/gliner/scripts/prepare_model.py --root .
 
-      - name: Check the native GLiNER API
+      - name: Check the prepared provider environment
+        run: uv pip check --python services/text_analysis/gliner/.venv/bin/python
+
+      - name: Check the native and shared APIs
+        env:
+          PYTHONPATH: services/text_analysis/hosting
+          TEXT_ANALYSIS_LANGUAGE: ${{ inputs.language }}
+          TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
         run: >-
-          uv run --project services/text_analysis/gliner --frozen --extra model --group dev
+          uv run --project services/text_analysis/gliner --no-sync
           pytest services/text_analysis/gliner/tests/test_api.py
           --junitxml="${{ runner.temp }}/gliner-api-results.xml"
 
