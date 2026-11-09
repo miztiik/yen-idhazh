@@ -63,11 +63,12 @@ gh run view <run-id> --log
 gh run download <run-id> --dir <results-directory>
 ```
 
-The job is named `Text analysis`. Its Summary shows source text once, then
-spaCy configuration/results, then GLiNER configuration/results. Escaped inline
-code uses GitHub's native soft wrapping, including long words, while retaining
-leading/repeated spaces, Unicode and displayed line breaks. GitHub normalizes
-CR/LF line endings when rendering; saved native request text remains exact.
+The job is named `Text analysis`. Its Summary shows a collapsed `Source text`
+disclosure, then spaCy configuration/results, then GLiNER configuration/results.
+The source is escaped ordinary prose, with native wrapping and explicit source
+line breaks, not code styling. Native prose collapses repeated spaces and tabs
+and normalizes CR/LF while displaying breaks. Saved native request text remains
+exact, including whitespace and Unicode.
 
 Each provider has expandable tables for every configured/requested entity
 type. The current types display as Organizations, Locations and People; extra
@@ -88,13 +89,14 @@ positions in native term order. Lower scores rank higher within the same
 article/settings; scores are not percentages, confidence probabilities or
 editorial quality grades. Counts are frequency, not weights. Existing native
 term limits appear in the configuration table, not as another report cap.
-Entities have no explicit result-count cap.
+Neither NER request accepts a per-category entity maximum; all returned
+entities are kept.
 
-Configuration tables distinguish saved request values from effective response
-features/model metadata and saved native settings. An omitted spaCy `features`
-field remains omitted, rather than becoming an explicit list; explicit lists
-retain their order. The tables include native entity mapping/case rules and
-Important Terms settings. GLiNER shows both attempted operations, exact entity
+Configuration tables contain row ID, Setting and one Effective value column.
+spaCy features/model metadata come from its response; entity mapping/case rules
+and Important Terms settings come from saved native settings. An omitted spaCy
+`features` field remains omitted in the request; returned feature order is
+preserved. GLiNER shows actual saved values for both operations, exact entity
 labels, classification task modes and offered ID-to-definition mappings.
 Its model identity comes from saved native settings, not response metadata;
 classification uses the same loaded model and its native SDK configuration,
@@ -184,9 +186,10 @@ scheduling, not workflow declarations or provider execution.
 
 ## Design rationale
 
-Preformatted blocks disable native wrapping, while inline CSS can be removed
-by GitHub's sanitizer. Inline code uses the supported native wrapping rules;
-escaped character references keep source line breaks out of Markdown parsing.
+Native disclosure and ordinary prose provide wrapping without code styling.
+Escaped character references keep source markup literal; explicit breaks retain
+source paragraphs. Exact whitespace stays in saved requests rather than relying
+on preformatted text or styles that GitHub's sanitizer can remove.
 Separate provider artifacts preserve independent delivery and keep oversized
 summaries recoverable without introducing a second JSON contract. Classification
 keeps its existing native request/result contracts and the validated taxonomy

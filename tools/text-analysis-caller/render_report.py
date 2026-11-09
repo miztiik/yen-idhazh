@@ -40,22 +40,20 @@ from render_tables import (
     render_error as _error,
 )
 
-ENTITY_NOTE = (
-    "Entity groups are sorted by returned occurrence count, descending; ties use "
-    "the earliest source position, then original group order. Counts are frequency, "
-    "not weights. Row IDs retain original group order. Positions are zero-based, "
-    "half-open Unicode code-point offsets into the unchanged source."
-)
-
 
 def _has_error(value: object) -> bool:
     return isinstance(value, dict) and "error" in value
 
 
 def render_source(source_text: str) -> str:
-    """Use native wrapping inline code, with source line breaks encoded as data."""
-    source = escape_text(_text(source_text)).replace("\r", "&#13;").replace("\n", "&#10;")
-    return "## Source text\n\n<p><code>" + source + "</code></p>"
+    """Show escaped, wrapping prose in a collapsed native disclosure."""
+    source = (
+        escape_text(_text(source_text))
+        .replace("\r\n", "&#13;&#10;<br>")
+        .replace("\r", "&#13;<br>")
+        .replace("\n", "&#10;<br>")
+    )
+    return "<details><summary>Source text</summary>\n\n<p>" + source + "</p>\n\n</details>"
 
 
 def _validate_request(
@@ -196,7 +194,6 @@ def render_spacy_results(
             render_spacy_configuration(spacy_request, result, spacy_settings),
             "### Results",
             outcome,
-            ENTITY_NOTE + " spaCy sentence indexes and native case groups are retained.",
             *sections,
         ]
     )
@@ -246,7 +243,6 @@ def render_gliner_results(
             ),
             "### Results",
             outcome,
-            ENTITY_NOTE,
             "Native GLiNER confidence is between 0 and 1: higher means stronger model "
             "confidence, not calibrated correctness. It is not comparable to YAKE scores. "
             "Every occurrence retains its own score; GLiNER returns no sentence indexes.",

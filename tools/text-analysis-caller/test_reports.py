@@ -103,38 +103,42 @@ def classification_result() -> dict[str, object]:
     }
 
 
-class CodeText(HTMLParser):
+class SourceText(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
-        self.in_code = False
+        self.in_prose = False
         self.value = ""
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag == "code":
-            self.in_code = True
+        if tag == "p":
+            self.in_prose = True
 
     def handle_endtag(self, tag: str) -> None:
-        if tag == "code":
-            self.in_code = False
+        if tag == "p":
+            self.in_prose = False
 
     def handle_data(self, data: str) -> None:
-        if self.in_code:
+        if self.in_prose:
             self.value += data
 
 
 class ReportTests(unittest.TestCase):
-    def test_source_preserves_characters_without_preformatted_no_wrap(self) -> None:
+    def test_source_preserves_literal_prose_in_a_collapsed_native_disclosure(self) -> None:
         source = "  alpha  beta\r\n<tag> *line* | `name`\r\t\u0ba4\u0bae\u0bbf\u0bb4\u0bcd\n\n"
         source += "longword" * 100
         markdown = render_source(source)
-        parsed = CodeText()
+        parsed = SourceText()
         parsed.feed(markdown)
         self.assertEqual(parsed.value, source)
+        self.assertTrue(markdown.startswith("<details><summary>Source text</summary>"))
+        self.assertNotIn("<details open", markdown)
+        self.assertNotIn("<code", markdown)
         self.assertNotIn("<pre", markdown)
         self.assertNotIn("style=", markdown)
         self.assertNotIn("<tag>", markdown)
-        self.assertIn("&#13;&#10;", markdown)
-        self.assertEqual(markdown.count("\n"), 2)
+        self.assertIn("&#13;&#10;<br>", markdown)
+        self.assertEqual(markdown.count("<br>"), 4)
+        self.assertEqual(markdown.count("\n"), 4)
 
     def test_spacy_groups_sort_counts_positions_and_keep_native_case_evidence(self) -> None:
         source = "B A A C D A a B"
@@ -321,7 +325,7 @@ class ReportTests(unittest.TestCase):
         self.assertIn("25 (settings.json)", report)
         self.assertIn("3 (settings.json)", report)
 
-    def test_configuration_keeps_omission_order_and_identity_provenance(self) -> None:
+    def test_configuration_shows_only_effective_values_without_changing_requests(self) -> None:
         source = "X"
         request: dict[str, object] = {"text": source, "language": "en", "model_profile": "md"}
         response = spacy_result(
@@ -332,7 +336,12 @@ class ReportTests(unittest.TestCase):
                 source, response, spacy_request=request, spacy_settings=spacy_settings()
             )
         )
-        self.assertIn("Omitted (native defaults)", report)
+        self.assertIn("| Id | Setting | Effective value |", report)
+        self.assertNotIn("Requested value", report)
+        self.assertIn(
+            '| A4 | Features (ordered) | ["important_terms", "named_entities"] (response.json) |',
+            report,
+        )
         self.assertNotIn("features", request)
         request["features"] = ["important_terms", "named_entities"]
         before = json.dumps(request)
@@ -356,9 +365,24 @@ class ReportTests(unittest.TestCase):
             )
         )
         self.assertIn("configured/model", gliner_report)
-        self.assertIn("returns no model identity metadata", gliner_report)
-        self.assertIn("| Classification | Not requested |", gliner_report)
+        self.assertIn('| J2 | Entity labels (ordered) | ["person"] (request.json) |', gliner_report)
+        self.assertIn(
+            '| J3 | Configured model identity | {"repo": "configured/model", '
+            '"base_url": "https://example.test"} (settings.json) |',
+            gliner_report,
+        )
+        self.assertIn("not reported by the NER API", gliner_report)
+        self.assertIn("| Id | Setting | Effective value |", gliner_report)
+        self.assertNotIn("Requested value", gliner_report)
+        self.assertIn("| J6 | Classification | Not requested |", gliner_report)
         self.assertNotIn("threshold", gliner_report)
+        unavailable = html.unescape(
+            render_gliner_results(
+                source, None, gliner_request={"text": source, "labels": ["person"]}
+            )
+        )
+        self.assertIn("run-ner-gliner (request.json; no successful response)", unavailable)
+        self.assertIn("Not recorded; no saved settings.json", unavailable)
 
     def test_partial_failed_empty_and_not_requested_are_distinct(self) -> None:
         failed: dict[str, object] = {
@@ -495,7 +519,11 @@ class ReportTests(unittest.TestCase):
                 gliner_request=gliner.request,
             ),
         )
-        self.assertEqual(reports.combined.count("## Source text"), 1)
+        self.assertEqual(reports.combined.count("<summary>Source text</summary>"), 1)
+        self.assertNotIn("Entity groups are sorted", reports.combined)
+        self.assertNotIn(
+            "spaCy sentence indexes and native case groups are retained", reports.combined
+        )
         ids = re.findall(r"^\| ([A-Z]+\d+) \|", reports.combined, re.MULTILINE)
         self.assertEqual(len(ids), len(set(ids)))
 
@@ -652,7 +680,13 @@ class ClassificationTests(unittest.TestCase):
         self.assertIn("classify&#45;text&#45;gliner", reports.gliner)
         self.assertIn("single&#45;label", reports.gliner)
         self.assertIn("Second desk", html.unescape(reports.gliner))
-        self.assertIn("taxonomy.json", html.unescape(reports.gliner))
+        for name, task in read_classification_tasks(request["tasks"]).items():
+            mode = "multi-label" if task["multi_label"] else "single-label"
+            self.assertIn(
+                f"| Classification task: {name} | {mode}; "
+                f"{json.dumps(task['labels'])} (classification/request.json) |",
+                html.unescape(reports.gliner),
+            )
         self.assertEqual(
             reports.combined,
             render_report(
