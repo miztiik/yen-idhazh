@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -520,6 +520,9 @@ Model preparation happens before tests. The focused file uses the actual
 prepared native model through ASGI, with external network sockets disabled
 inside tests and no model mocks. It checks strict application shapes, source
 spans, requested classifications, real readiness and safe diagnostic refusal.
+The cancellation boundary also requires accepted native work to retain its
+model lease and terminal diagnostic after its caller disappears; shutdown
+cannot complete before that owned work finishes.
 This does not establish quality, throughput, arbitrary checkpoint compatibility
 or shared-listener assembly.
 

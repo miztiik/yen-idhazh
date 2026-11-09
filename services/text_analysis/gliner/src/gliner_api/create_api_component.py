@@ -1,7 +1,7 @@
 """How are the native GLiNER2 operations bound to the existing guarded API host?"""
 
 import asyncio
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TextIO, cast
 
@@ -56,6 +56,7 @@ from gliner_api.declare_event_contracts import EventType, RequestEventData, Serv
 from gliner_api.declare_schema import install_request_schemas
 from gliner_api.emit_events import EventDeliveryError, EventEmitter
 from gliner_api.extract_entities import extract_entities
+from gliner_api.load_model import NativeModel
 from gliner_api.load_settings import GlinerSettings
 from gliner_api.run_model import ModelRuntime, OperationError
 
@@ -141,7 +142,7 @@ def create_app(
     ](
         request: Request,
         parse: Callable[[bytes], RequestT],
-        run: Callable[[RequestT], Awaitable[ResultT]],
+        run: Callable[[NativeModel, RequestT], ResultT],
     ) -> Response:
         try:
             body = await read_request_body(request, hosting.listener)
@@ -159,21 +160,28 @@ def create_app(
             del body
         if not settings.enabled:
             return await request_error(request, "SERVICE_DISABLED")
+
+        async def emit_terminal(outcome: ResultT | OperationError) -> None:
+            error = (
+                ErrorDetail.from_code(outcome.code)
+                if isinstance(outcome, OperationError)
+                else None
+            )
+            if not await emit_request(request, _OPERATIONS[request.url.path], error):
+                raise OperationError("LOGGING_FAILED")
+
         try:
-            result = await run(parsed)
+            result = await runtime.execute(
+                lambda model: run(model, parsed),
+                terminal=emit_terminal,
+            )
         except OperationError as error:
-            return await request_error(request, error.code)
-        if not await emit_request(request, _OPERATIONS[request.url.path], None):
+            detail = ErrorDetail.from_code(error.code)
             return _json_response(
-                ErrorResult(error=ErrorDetail.from_code("LOGGING_FAILED")), 500
+                ErrorResult(error=detail),
+                detail.http_status,
             )
         return _json_response(result, 200)
-
-    async def run_ner(parsed: NerRequest) -> NerResult:
-        return await runtime.execute(lambda model: extract_entities(model, parsed))
-
-    async def run_classification(parsed: ClassificationRequest) -> ClassificationResult:
-        return await runtime.execute(lambda model: classify_text(model, parsed))
 
     errors: dict[int | str, dict[str, object]] = {
         status: {"model": ErrorResult} for status in (403, 413, 422, 500, 503)
@@ -195,7 +203,7 @@ def create_app(
         },
     )
     async def run_ner_gliner(request: Request) -> Response:
-        return await process(request, NerRequest.model_validate_json, run_ner)
+        return await process(request, NerRequest.model_validate_json, extract_entities)
 
     @router.post(
         CLASSIFY_PATH,
@@ -214,7 +222,7 @@ def create_app(
     )
     async def classify_text_gliner(request: Request) -> Response:
         return await process(
-            request, ClassificationRequest.model_validate_json, run_classification
+            request, ClassificationRequest.model_validate_json, classify_text
         )
 
     async def refuse(request: Request, code: HostRefusalCode) -> Response:

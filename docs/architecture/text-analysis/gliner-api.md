@@ -1,6 +1,6 @@
 # How the native GLiNER2 API runs
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How one local model turns exact source text and caller-defined labels into
 validated entities or classifications without becoming an article pipeline.
@@ -41,9 +41,17 @@ process pools or thread caps. Health becomes ready only after native loading
 and verification of both promised operation interfaces. Missing or incompatible
 assets leave an observable failed provider, not an apparently ready cache.
 
-Shutdown stops admission and waits for the active operation under the existing
-shutdown deadline before dropping the model. A missed deadline fails the
-lifespan so the external process owner can stop it; it is not clean shutdown.
+The runtime, not the HTTP caller, owns each completion task and model lease.
+Cancelling a caller cancels only its wait: accepted native work retains the
+lock until its thread finishes and its terminal diagnostic is delivered.
+Completion exceptions are consumed even when the caller disappears. Native
+model loading has the same owned-task protection.
+
+Shutdown stops admission and waits for all accepted completions, diagnostics
+and model ownership under one absolute existing shutdown deadline before
+dropping the model. It does not cancel still-running native threads or release
+their leases to obtain an apparent clean exit. A missed deadline fails the
+lifespan so the external process owner can stop it.
 
 ## Native operations, strict results
 

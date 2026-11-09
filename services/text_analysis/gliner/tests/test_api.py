@@ -1,15 +1,18 @@
 """Do real native API calls preserve application contracts and safe failure boundaries?"""
 
+import asyncio
 import io
 import json
 import logging
 from contextlib import suppress
 from pathlib import Path
+from threading import Event
 from typing import Protocol, cast
 
 import pytest
 from fastapi.testclient import TestClient
 from local_api_host.contracts import HostSettings, ListenerSettings
+from local_api_host.propagate_trace_context import create_root_operation
 from pydantic import ValidationError
 from text_analysis.load_service_settings import load_service_settings
 
@@ -35,8 +38,9 @@ from gliner_api.declare_api_contracts import (
     NerResult,
     ResultValidationError,
 )
-from gliner_api.declare_event_contracts import GlinerEvent
-from gliner_api.extract_entities import normalize_entities
+from gliner_api.declare_event_contracts import GlinerEvent, RequestEventData
+from gliner_api.emit_events import EventEmitter
+from gliner_api.extract_entities import extract_entities, normalize_entities
 from gliner_api.load_model import NativeModel
 from gliner_api.load_settings import GlinerSettings, load_settings
 from gliner_api.run_model import ModelRuntime, OperationError
@@ -50,6 +54,94 @@ class _NativeProcessor(Protocol):
 
 class _NativeProcessingModel(NativeModel, Protocol):
     processor: _NativeProcessor
+
+
+async def _verify_cancelled_native_ownership(
+    runtime: ModelRuntime, request: NerRequest, settings: GlinerSettings
+) -> None:
+    loop = asyncio.get_running_loop()
+    entered = asyncio.Event()
+    release = Event()
+    first_finished = Event()
+    second_entered = Event()
+    events = io.StringIO()
+    emitter = EventEmitter(settings.logging, events)
+    unhandled: list[dict[str, object]] = []
+    previous_handler = loop.get_exception_handler()
+    loop.set_exception_handler(lambda _loop, context: unhandled.append(context))
+
+    def cancelled_operation(native: NativeModel) -> NerResult:
+        loop.call_soon_threadsafe(entered.set)
+        try:
+            release.wait()
+            processor = cast(_NativeProcessingModel, native).processor
+            processor.collate_fn_inference([("x", None)])
+            return extract_entities(native, request)
+        finally:
+            first_finished.set()
+
+    def next_operation(native: NativeModel) -> NerResult:
+        second_entered.set()
+        return extract_entities(native, request)
+
+    async def terminal(outcome: NerResult | OperationError) -> None:
+        await emitter.emit(
+            create_root_operation(),
+            "gliner.request.failed"
+            if isinstance(outcome, OperationError)
+            else "gliner.request.completed",
+            RequestEventData(
+                operation="run-ner-gliner",
+                status="failed" if isinstance(outcome, OperationError) else "complete",
+                error_code=outcome.code if isinstance(outcome, OperationError) else None,
+            ),
+        )
+
+    first = asyncio.create_task(runtime.execute(cancelled_operation, terminal=terminal))
+    second: asyncio.Task[NerResult] | None = None
+    shutdown: asyncio.Task[None] | None = None
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=runtime.shutdown_timeout_ms / 1000)
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        assert runtime.lock.locked()
+        assert not first_finished.is_set()
+        second = asyncio.create_task(runtime.execute(next_operation, terminal=terminal))
+        await asyncio.sleep(0)
+        assert not second_entered.is_set()
+        shutdown = asyncio.create_task(runtime.shutdown())
+        await asyncio.sleep(0)
+        assert not shutdown.done()
+        assert runtime.model is not None
+        release.set()
+        await shutdown
+        result = await second
+        assert result.entities
+        await asyncio.sleep(0)
+        assert first_finished.is_set()
+        assert second_entered.is_set()
+        assert runtime.model is None
+        records = [
+            GlinerEvent.model_validate_json(line) for line in events.getvalue().splitlines()
+        ]
+        assert [record.type for record in records] == [
+            "gliner.request.failed",
+            "gliner.request.completed",
+        ]
+        assert isinstance(records[0].data, RequestEventData)
+        assert records[0].data.error_code == "INPUT_UNSUPPORTED"
+        assert not unhandled
+    finally:
+        release.set()
+        if second is not None:
+            await asyncio.gather(second, return_exceptions=True)
+        if shutdown is not None:
+            await shutdown
+        else:
+            await runtime.shutdown()
+        loop.set_exception_handler(previous_handler)
+        await emitter.aclose()
 
 
 def _transport() -> HostSettings:
@@ -206,6 +298,16 @@ def test_native_diagnostic_refusal_survives_a_caught_exception() -> None:
         logging.getLogger("gliner2.processor").info("discarded-native-info")
 
 
+def test_shutdown_preserves_latched_failure() -> None:
+    runtime = ModelRuntime(load_settings(ROOT), ROOT, _transport().shutdown_timeout_ms)
+    runtime.mark_failed("INVALID_RESULT")
+    asyncio.run(runtime.shutdown())
+    health = runtime.observe_health()
+    assert health.status == "failed"
+    assert health.error is not None
+    assert health.error.code == "INVALID_RESULT"
+
+
 def test_real_prepared_model_api() -> None:
     settings = load_settings(ROOT)
     transport = _transport()
@@ -267,6 +369,8 @@ def test_real_prepared_model_api() -> None:
         for name, selected in result.classifications.items():
             assert all(label.id in classification_request.tasks[name].labels for label in selected)
         assert client.get(HEALTH_PATH).status_code == 200
+        client.portal.call(_verify_cancelled_native_ownership, runtime, ner_request, settings)
+        assert client.get(HEALTH_PATH).status_code == 503
     records = [GlinerEvent.model_validate_json(line) for line in events.getvalue().splitlines()]
     assert any(record.type == "gliner.service.ready" for record in records)
     completed = [record for record in records if record.type == "gliner.request.completed"]
