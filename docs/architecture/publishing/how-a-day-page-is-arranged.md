@@ -1,15 +1,15 @@
 # How a day page is arranged
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-11-09
 
 A day page from top to bottom: the header that states each publication fact
-once, the leading block the day opens on, the two-column arrangement that gives
+once, the controls, the leading block, the two-column arrangement that gives
 the leads a column of their own on a wide screen, and the footer that is its
 links and nothing else. Every ruling here is about the page rather than the
 story on it - what one item shows is
 [what-a-story-shows-and-where-each-fact-sits.md](what-a-story-shows-and-where-each-fact-sits.md).
 
-## The all-topics page opens on the day's leading stories, and nothing is dropped to do it
+## The all-topics page leads with the day's chosen stories, and nothing is dropped to do it
 
 A day of 586 items rendered as one queue had no usable first screen. Items are
 appended in plan order, which is per-vertical, so the payload reads
@@ -82,6 +82,12 @@ under its field. Each part renders its own sections in `digest.sections` order
 and the parts are in that order too, so the document order a narrow screen and a
 reader with no script see is exactly what config asked for, and reordering the
 page is still a config edit.
+
+The controls precede the leads in `digest.sections`. Filtering can hide the
+leading block without moving the field above it. Section ownership follows the
+configured order even when no leads are visible: controls never transfer
+between render loops, so the input keeps its DOM identity, focus and caret.
+An absent leading block creates no empty aside or reserved blank space.
 
 The aside needs the leads to come before the items in `digest.sections`. Any
 other order and the day is one column at every width, because an aside beside

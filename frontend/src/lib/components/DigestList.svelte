@@ -448,7 +448,9 @@
 	// other order and the day stays one column at every width.
 	const leadsAt = $derived(ui.sections.indexOf('leads'));
 	const streamAt = $derived(ui.sections.indexOf('items'));
-	const split = $derived(leads.length > 0 && leadsAt >= 0 && streamAt > leadsAt);
+	// Section ownership follows configuration, not the filtered results: moving
+	// the controls between render loops would replace the focused input.
+	const split = $derived(leadsAt >= 0 && streamAt > leadsAt);
 	const headBefore = $derived(split ? ui.sections.slice(0, leadsAt) : ui.sections);
 	const headAfter = $derived(split ? ui.sections.slice(leadsAt + 1, streamAt) : []);
 	const stream = $derived(split ? ui.sections.slice(streamAt) : []);
@@ -623,9 +625,11 @@
 	</div>
 
 	{#if split}
-		<div class="day-aside">
-			<LeadingStories stories={leads} />
-		</div>
+		{#if leads.length > 0}
+			<div class="day-aside">
+				<LeadingStories stories={leads} />
+			</div>
+		{/if}
 		<div class="day-head">
 			{#each headAfter as section (section)}
 				{@render part(section)}

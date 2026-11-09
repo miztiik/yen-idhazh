@@ -59,6 +59,7 @@
 		showField = true,
 		submitLabel = null,
 		submitVisible = true,
+		submitDisabled = false,
 		onSubmit = null,
 		onType = null,
 		matchNote = '',
@@ -99,6 +100,8 @@
 		 * keydown handler in its place would drop the control's name; focus brings
 		 * it back on screen for a reader moving by keyboard. */
 		submitVisible?: boolean;
+		/** Broader search may be unavailable while local filtering still works. */
+		submitDisabled?: boolean;
 		onSubmit?: (() => void) | null;
 		onType?: (() => void) | null;
 		/** What the field has narrowed to, drawn UNDER the panel rather than in it.
@@ -144,7 +147,7 @@
 
 	function submit(event: SubmitEvent) {
 		event.preventDefault();
-		onSubmit?.();
+		if (!submitDisabled) onSubmit?.();
 	}
 </script>
 
@@ -241,6 +244,7 @@
 					{@render box()}
 					<button
 						type="submit"
+						disabled={submitDisabled}
 						class={submitVisible ? 'submit' : 'submit sr-only focus:not-sr-only'}
 					>
 						<Icon id="search" size={14} />
@@ -405,9 +409,14 @@
 			border-color var(--dur-fast) ease;
 	}
 
-	.submit:hover {
+	.submit:hover:not(:disabled) {
 		border-color: var(--color-accent);
 		color: var(--color-accent);
+	}
+
+	.submit:disabled {
+		color: var(--color-text-tertiary);
+		cursor: not-allowed;
 	}
 
 	/* Outside `.filter-bar`, in the content column, for the reason the prop's own
