@@ -126,10 +126,16 @@ def test_normalization_planning_error_keeps_recorded_independent_dimensions() ->
                     item.score for item in recorded.comparisons if item.dimension == dimension
                 )
                 assert getattr(result.scores, dimension) == expected
-            assert any(
-                error.code == "CONSISTENCY_INPUT_TOO_LONG" and error.dimension == "consistency"
-                for error in result.errors
+            geometry = next(
+                (
+                    error for error in result.errors
+                    if error.code == "WINDOW_BUDGET_INSUFFICIENT"
+                    and error.dimension == "consistency"
+                ),
+                None,
             )
+            assert geometry is not None
+            assert geometry.input_tokens is None and geometry.allowed_tokens is None
             assert all(error.code != "WORKER_EXITED" for error in result.errors)
             assert (await client.get(API_HEALTH_PATH)).status_code == 200
             assert worker.is_alive

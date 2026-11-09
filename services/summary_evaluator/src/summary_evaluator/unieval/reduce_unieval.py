@@ -11,7 +11,7 @@ from summary_evaluator.shared.contracts.worker_identity import WorkerIdentity
 from summary_evaluator.shared.create_execution_id import create_execution_id
 from summary_evaluator.unieval.contracts.unieval_contract import (
     DIMENSIONS,
-    UNIEVAL_SCORING_VERSION,
+    UNIEVAL_RESULT_VERSION,
     Dimension,
     RelevanceSkipReason,
 )
@@ -86,6 +86,28 @@ class UnievalState:
         ):
             raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
         work = packet.work
+        if any(
+            error.code == "MODEL_INPUT_TOO_LONG"
+            or (
+                error.code == "WINDOW_BUDGET_INSUFFICIENT"
+                and (
+                    controls.consistency_source_mode != "all_source_windows"
+                    or work.consistency.planned is not None
+                    or work.source_spans
+                )
+            )
+            or (
+                error.allowed_tokens is not None
+                and error.allowed_tokens != controls.max_input_tokens
+            )
+            for error in packet.errors
+        ):
+            raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
+        try:
+            for error in packet.errors:
+                work.require_refusal_index(error)
+        except ValueError:
+            raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED")) from None
         total = 0
         for dimension in DIMENSIONS:
             dimension_work = getattr(work, dimension)
@@ -160,10 +182,21 @@ class UnievalState:
             expected_sentence, expected_source = divmod(packet.index, len(self.work.source_spans))
         if (packet.sentence_index, packet.source_index) != (expected_sentence, expected_source):
             raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
+        if packet.error is not None and (
+            packet.error.dimension != dimension
+            or packet.error.index != packet.index
+            or packet.error.code == "MODEL_INPUT_TOO_LONG"
+            or (
+                packet.error.allowed_tokens is not None
+                and (
+                    self.effective is None
+                    or packet.error.allowed_tokens != self.effective.max_input_tokens
+                )
+            )
+        ):
+            raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
         self.processed[dimension] += 1
         if packet.error is not None:
-            if packet.error.dimension != dimension or packet.error.index != packet.index:
-                raise UnievalFailure(UnievalError.from_code("WORKER_PROTOCOL_FAILED"))
             self.errors.append(packet.error)
         else:
             if packet.score is None:
@@ -211,7 +244,7 @@ class UnievalState:
             else "failed"
         )
         return UnievalResult(
-            version=UNIEVAL_SCORING_VERSION,
+            version=UNIEVAL_RESULT_VERSION,
             status=status,
             execution_id=self.execution_id,
             request_id=self.request.request_id if self.request else None,

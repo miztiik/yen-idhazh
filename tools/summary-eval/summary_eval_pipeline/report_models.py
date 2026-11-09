@@ -3,6 +3,9 @@
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
 from summary_evaluator.serve_http.contracts.api_health import ApiHealth
 from summary_evaluator.serve_http.contracts.api_settings import ApiComponent
+from summary_evaluator.unieval.contracts.previous_selected_unieval_result import (
+    PreviousSelectedUnievalResult,
+)
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 
 from .contracts import PhaseEvidence as LegacyPhaseEvidence
@@ -68,7 +71,8 @@ def model_rows(evidence: PipelineResult, settings: ServiceSettings) -> list[tupl
         (
             "Relevance skip reason",
             unieval.relevance_skip_reason or "Not skipped"
-            if isinstance(unieval, UnievalResult) and unieval.effective_settings is not None
+            if isinstance(unieval, UnievalResult | PreviousSelectedUnievalResult)
+            and unieval.effective_settings is not None
             else "Not recorded",
         ),
         ("HHEM model", hhem_model.reference if hhem_model else "Not loaded"),

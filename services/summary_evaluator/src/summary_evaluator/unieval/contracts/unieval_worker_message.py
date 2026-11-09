@@ -1,8 +1,8 @@
 """Which bounded native packets identify UniEval planning and every scored comparison?"""
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import ConfigDict, Field, RootModel
+from pydantic import ConfigDict, Field, RootModel, model_validator
 
 from summary_evaluator.shared.contracts.base import Count, PositiveCount, Score, Uuid4
 from summary_evaluator.shared.contracts.worker_identity import WorkerIdentity
@@ -55,6 +55,29 @@ class UnievalPrepared(RequestPacket):
     work: UnievalWork
     errors: tuple[UnievalError, ...]
 
+    @model_validator(mode="after")
+    def require_resolved_refusals(self) -> Self:
+        if any(
+            error.code == "MODEL_INPUT_TOO_LONG"
+            or (
+                error.allowed_tokens is not None
+                and error.allowed_tokens != self.effective_settings.max_input_tokens
+            )
+            for error in self.errors
+        ):
+            raise ValueError(
+                "Planned refusals require public dimensions and the resolved allowance"
+            )
+        if any(error.code == "WINDOW_BUDGET_INSUFFICIENT" for error in self.errors) and (
+            self.effective_settings.consistency_source_mode != "all_source_windows"
+            or self.work.consistency.planned is not None
+            or self.work.source_spans
+        ):
+            raise ValueError("Window geometry requires a refused explicit source-window plan")
+        for error in self.errors:
+            self.work.require_refusal_index(error)
+        return self
+
 
 class UnievalPrediction(RequestPacket):
     kind: Literal["prediction"] = "prediction"
@@ -64,6 +87,21 @@ class UnievalPrediction(RequestPacket):
     source_index: Count | None
     score: Score | None
     error: UnievalError | None
+
+    @model_validator(mode="after")
+    def require_measured_comparison(self) -> Self:
+        if self.error is not None and (
+            self.error.code == "MODEL_INPUT_TOO_LONG"
+            or (
+                self.error.input_tokens is not None
+                and (
+                    self.error.dimension != self.dimension
+                    or self.error.index != self.index
+                )
+            )
+        ):
+            raise ValueError("Measured refusal must retain the issued comparison identity")
+        return self
 
 
 class UnievalFinished(RequestPacket):

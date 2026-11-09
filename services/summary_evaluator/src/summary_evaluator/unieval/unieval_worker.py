@@ -10,6 +10,7 @@ from summary_evaluator.shared.exchange_packets import ByteChannel, encode_packet
 from summary_evaluator.shared.quiet_model_output import quiet_model_output
 from summary_evaluator.shared.read_process_identity import read_process_identity
 from summary_evaluator.shared.watch_worker_parent import arm_parent_exit, watch_parent
+from summary_evaluator.unieval.check_unieval_input_size import project_unieval_error
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_request import EffectiveUnievalControls
 from summary_evaluator.unieval.contracts.unieval_result import UnievalWork
@@ -54,7 +55,7 @@ def score_comparison(
             error=None,
         )
     except UnievalFailure as failure:
-        error = UnievalError.from_code(failure.error.code, comparison.dimension, comparison.index)
+        error = project_unieval_error(failure.error, comparison.dimension, comparison.index)
     except ValidationError:
         error = UnievalError.from_code(
             "INVALID_MODEL_OUTPUT", comparison.dimension, comparison.index

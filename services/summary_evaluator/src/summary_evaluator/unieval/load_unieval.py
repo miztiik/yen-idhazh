@@ -8,6 +8,7 @@ from typing import Protocol, cast
 
 from summary_evaluator.shared.load_model_assets import resolve_snapshot
 from summary_evaluator.shared.quiet_model_output import quiet_model_output
+from summary_evaluator.unieval.check_unieval_input_size import check_unieval_input_size
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_result import (
     UnievalModelIdentity,
@@ -38,14 +39,16 @@ class CpuUnievalPredictor:
     max_input_tokens: int
 
     def score(self, prompt: str) -> float:
-        import torch
-        from transformers import PreTrainedModel
-
         encoded = self.resources.tokenizer.encode(
             prompt, add_special_tokens=True, truncation=False, verbose=False
         )
-        if len(encoded) > self.max_input_tokens:
-            raise UnievalFailure(UnievalError.from_code("CONSISTENCY_INPUT_TOO_LONG"))
+        refusal = check_unieval_input_size(len(encoded), self.max_input_tokens)
+        if refusal is not None:
+            raise UnievalFailure(refusal)
+
+        import torch
+        from transformers import PreTrainedModel
+
         inputs = torch.tensor([encoded], dtype=torch.long, device="cpu")
         target = torch.tensor([[self.negative_id]], dtype=torch.long, device="cpu")
         with torch.inference_mode():

@@ -12,10 +12,11 @@ from .contracts import (
 from .contracts import PipelineEvidence as LegacyPipelineEvidence
 from .phase_contracts import PhaseEvidence, starts_no_scorers
 from .previous_report_contracts import PipelineEvidence as PreviousPipelineEvidence
+from .previous_selected_report_contracts import PipelineEvidence as PreviousSelectedPipelineEvidence
 from .run_contracts import GenerationReceipt, PreparedRun
 from .scorer_evidence import EvidenceContract
 
-REPORT_VERSION: Final = "2026-11-08"
+REPORT_VERSION: Final = "2026-11-09"
 
 
 class PipelineEvidence(EvidenceContract):
@@ -24,12 +25,13 @@ class PipelineEvidence(EvidenceContract):
             "version": REPORT_VERSION,
             "readCompatibility": "read frozen shared and independent reports by exact version",
             "changelog": [
-                {"version": REPORT_VERSION, "change": "Complete and disclose applicable scores."},
+                {"version": REPORT_VERSION, "change": "Retain measured native input refusals."},
+                {"version": "2026-11-08", "change": "Complete and disclose applicable scores."},
                 {"version": "2026-11-07", "change": "Keep independent maintained scorer APIs."},
             ],
         }
     )
-    version: Literal["2026-11-08"]
+    version: Literal["2026-11-09"]
     status: OutcomeStatus
     prepared: PreparedRun | None
     generation: GenerationReceipt | None
@@ -98,7 +100,12 @@ class PipelineEvidence(EvidenceContract):
         return self
 
 
-PipelineResult = PipelineEvidence | PreviousPipelineEvidence | LegacyPipelineEvidence
+PipelineResult = (
+    PipelineEvidence
+    | PreviousSelectedPipelineEvidence
+    | PreviousPipelineEvidence
+    | LegacyPipelineEvidence
+)
 
 
 class PipelineDocument(

@@ -10,6 +10,8 @@ UNIEVAL_VERSION: Final = "2026-11-04"
 UnievalVersion = Literal["2026-11-04"]
 UNIEVAL_SCORING_VERSION: Final = "2026-11-08"
 UnievalScoringVersion = Literal["2026-11-08"]
+UNIEVAL_RESULT_VERSION: Final = "2026-11-09"
+UnievalResultVersion = Literal["2026-11-09"]
 Dimension = Literal["fluency", "coherence", "consistency", "relevance"]
 SourceMode = Literal["all_source_windows", "full_source_prompt"]
 RelevanceSkipReason = Literal["disabled", "reference_not_supplied"]
@@ -42,6 +44,29 @@ class UnievalScoringContract(UnievalContract):
             "version": UNIEVAL_SCORING_VERSION,
             "readCompatibility": "read frozen four-score results by their original version",
             "changelog": [
+                {
+                    "version": UNIEVAL_SCORING_VERSION,
+                    "change": "Select relevance explicitly and complete applicable scores.",
+                },
+                {
+                    "version": UNIEVAL_VERSION,
+                    "change": "Declare four-score evaluation with complete source handling.",
+                },
+            ],
+        }
+    )
+
+
+class UnievalResultContract(UnievalScoringContract):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": UNIEVAL_RESULT_VERSION,
+            "readCompatibility": "read frozen 2026-11-04 and 2026-11-08 results by exact version",
+            "changelog": [
+                {
+                    "version": UNIEVAL_RESULT_VERSION,
+                    "change": "Retain measured input refusals and distinct window geometry.",
+                },
                 {
                     "version": UNIEVAL_SCORING_VERSION,
                     "change": "Select relevance explicitly and complete applicable scores.",
