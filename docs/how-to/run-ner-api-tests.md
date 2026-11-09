@@ -71,6 +71,16 @@ responses, unchanged customized schemas, native refusal behavior and one
 receiving trace operation per request. Classification definitions come from
 the current active entries in `config/taxonomy.json`, not a copied label list.
 
+The installed HTTPX async client enters the native application lifespan
+directly on the provider's asyncio event loop. It does not use the deprecated
+synchronous test-client bridge or another listener.
+
+The SDK import also loads its HTTP library, which probes local IPv6 support.
+`pytest-socket` blocks that socket creation and emits a warning even when the
+probe catches the exception. That specific import-time alert is not an
+outbound inference request. Keep socket blocking enabled and investigate any
+other blocked call rather than ignoring socket warnings.
+
 The existing GLiNER cancellation check still requires accepted work and
 terminal diagnostics to retain model ownership after the HTTP waiter
 disappears. Its own shutdown must not stop spaCy. Construction also refuses

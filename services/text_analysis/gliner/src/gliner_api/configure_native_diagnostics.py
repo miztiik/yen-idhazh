@@ -1,4 +1,4 @@
-"""How are native diagnostics refused without formatting source-bearing records?"""
+"""How are native diagnostics controlled without formatting source-bearing records?"""
 
 from __future__ import annotations
 
@@ -45,6 +45,20 @@ _VERBOSITY_OPTIONS: Final = {
         {"detail", "debug", "info", "warning", "error", "critical"}
     ),
 }
+
+
+@contextmanager
+def filter_encoder_deprecation() -> Iterator[None]:
+    """Recognize the SDK's benign TorchScript warning during model construction only."""
+    with _CONFIGURATION_LOCK, warnings.catch_warnings():
+        # The SDK already excludes a related encoder notice but misses this newer message.
+        warnings.filterwarnings(
+            "ignore",
+            message=r"^`torch\.jit\.script` is deprecated\.",
+            category=FutureWarning,
+            module=r"^torch\.jit\._script$",
+        )
+        yield
 
 
 @contextmanager

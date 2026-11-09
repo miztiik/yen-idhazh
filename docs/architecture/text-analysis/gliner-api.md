@@ -104,6 +104,12 @@ Supported progress and narrowly scoped warning controls prevent library output
 from bypassing the provider's event writer without altering the root logger or
 another provider's diagnostics.
 
+The SDK already excludes a related encoder compatibility notice but does not
+recognize the newer TorchScript deprecation message. Native model construction
+filters only that known `FutureWarning` from the TorchScript module. The
+previous warning policy is restored after loading; other messages, categories
+and modules are not suppressed. Native diagnostic refusal remains unchanged.
+
 This is deliberately conservative: a warning can refuse otherwise usable
 native input. It is safer than publishing an empty success after native
 preprocessing failed. Ordinary empty predictions remain valid when no native
