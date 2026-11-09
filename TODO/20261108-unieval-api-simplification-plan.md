@@ -210,6 +210,8 @@
 - **Files touched:**
   - `services/summary_evaluator/src/summary_evaluator/unieval/contracts/unieval_contract.py`
   - `services/summary_evaluator/src/summary_evaluator/unieval/contracts/unieval_error.py`
+  - `services/summary_evaluator/src/summary_evaluator/unieval/contracts/unieval_result.py`
+  - `services/summary_evaluator/src/summary_evaluator/unieval/contracts/previous_selected_unieval_result.py` - new frozen 2026-11-08 result reader.
   - `services/summary_evaluator/src/summary_evaluator/unieval/contracts/unieval_worker_contract.py`
   - `services/summary_evaluator/src/summary_evaluator/unieval/contracts/unieval_worker_message.py`
   - `services/summary_evaluator/src/summary_evaluator/unieval/check_unieval_input_size.py` - new shared token-refusal helper.
@@ -218,11 +220,20 @@
   - `services/summary_evaluator/src/summary_evaluator/unieval/load_unieval.py`
   - `services/summary_evaluator/src/summary_evaluator/unieval/unieval_worker.py`
   - `services/summary_evaluator/src/summary_evaluator/unieval/reduce_unieval.py`
+  - `services/summary_evaluator/tests/summary_evaluator_cases/contract_examples.py`
   - `services/summary_evaluator/tests/test_unieval_contracts.py`
   - `services/summary_evaluator/tests/test_unieval_windows.py`
   - `services/summary_evaluator/tests/test_unieval_reduction.py`
   - `services/summary_evaluator/tests/test_worker_trace_contracts.py`
+  - `tools/summary-eval/summary_eval_pipeline/contracts.py` - preserve historical score-presence types.
+  - `tools/summary-eval/summary_eval_pipeline/phase_contracts.py`
+  - `tools/summary-eval/summary_eval_pipeline/report_contracts.py`
+  - `tools/summary-eval/summary_eval_pipeline/previous_selected_phase_contracts.py` - new frozen 2026-11-08 phase reader.
+  - `tools/summary-eval/summary_eval_pipeline/previous_selected_report_contracts.py` - new frozen 2026-11-08 report reader.
   - `tools/summary-eval/summary_eval_pipeline/report.py`
+  - `tools/summary-eval/summary_eval_pipeline/report_models.py`
+  - `tools/summary-eval/summary_eval_pipeline/report_task.py`
+  - `tools/summary-eval/summary_eval_tests/scorer_evidence_cases.py`
   - `tools/summary-eval/summary_eval_tests/test_pipeline_report.py`
   - `tools/summary-eval/summary_eval_tests/test_unieval_workflow.py`
   - `docs/reference/unieval-api.md`
