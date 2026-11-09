@@ -16,10 +16,8 @@ Table A - Native operations
 | Id | Method | Path | Result |
 | --- | --- | --- | --- |
 | A1 | POST | `/api/2026-11-08/analyze-text-gliner` | Request-validated native extraction JSON |
-| A2 | POST | `/api/2026-11-08/run-ner-gliner` | Existing entity extraction during migration |
-| A3 | POST | `/api/2026-11-08/classify-text-gliner` | Existing classification during migration |
-| A4 | GET | `/api/2026-11-08/get-gliner-health` | Genuine provider availability |
-| A5 | GET | `/api/2026-11-08/get-gliner-schema` | Native OpenAPI, without an interactive UI |
+| A2 | GET | `/api/2026-11-08/get-gliner-health` | Genuine provider availability |
+| A3 | GET | `/api/2026-11-08/get-gliner-schema` | Native OpenAPI, without an interactive UI |
 
 Matching is exact. Unknown and trailing-slash paths return 404; wrong methods
 return 405 with `Allow`. The existing text-analysis settings supply the
@@ -97,10 +95,6 @@ and unchanged payload families keep their own dates. Saved reporting evidence
 is read by its declared old or new request fields, never rewritten or retried
 as an older shape after current validation fails.
 
-The existing migration routes retain their prior `text`/`labels` entity
-request and `text`/`tasks` classification request. They remain callable until
-the replacement succeeds through the existing reporting workflow.
-
 ## Errors
 
 Every failure has exactly:
@@ -142,7 +136,7 @@ Health contains only `enabled`, `status` and nullable fixed `error`.
 Status is `loading`, `ready`, `disabled`, `failed` or `stopping`.
 Only `ready` has no error and uses HTTP 200. All other states use 503.
 Finding a package or cache file is not readiness; startup must load the native
-model and expose direct long-text analysis and the retained migration operations.
+model and expose direct long-text analysis.
 
 ## Settings
 

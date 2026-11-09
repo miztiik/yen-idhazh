@@ -197,10 +197,8 @@ Table F - GLiNER2 operations
 | Id | Method | Path | Meaning |
 | --- | --- | --- | --- |
 | F1 | POST | `/api/2026-11-08/analyze-text-gliner` | Direct native schema-driven extraction |
-| F2 | POST | `/api/2026-11-08/run-ner-gliner` | Existing entity extraction during migration |
-| F3 | POST | `/api/2026-11-08/classify-text-gliner` | Existing classification during migration |
-| F4 | GET | `/api/2026-11-08/get-gliner-health` | Actual loaded-provider availability |
-| F5 | GET | `/api/2026-11-08/get-gliner-schema` | Native OpenAPI without an interactive UI |
+| F2 | GET | `/api/2026-11-08/get-gliner-health` | Actual loaded-provider availability |
+| F3 | GET | `/api/2026-11-08/get-gliner-schema` | Native OpenAPI without an interactive UI |
 
 Unknown and trailing-slash paths return 404. Wrong methods retain 405 and
 `Allow`; there are no permanent aliases. The

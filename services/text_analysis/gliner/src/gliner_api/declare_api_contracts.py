@@ -2,27 +2,18 @@
 
 from typing import Annotated, Final, Literal, Self
 
-from pydantic import (
-    AfterValidator,
-    BaseModel,
-    ConfigDict,
-    Field,
-    field_validator,
-    model_validator,
-)
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 # The creation date identifies this protocol, independently of the model or clock.
 API_VERSION: Final = "2026-11-08"
+ANALYSIS_CONTRACT_VERSION: Final = "2026-11-09"
 API_PREFIX: Final = f"/api/{API_VERSION}"
-NER_PATH: Final = f"{API_PREFIX}/run-ner-gliner"
-CLASSIFY_PATH: Final = f"{API_PREFIX}/classify-text-gliner"
+ANALYZE_TEXT_PATH: Final = f"{API_PREFIX}/analyze-text-gliner"
 HEALTH_PATH: Final = f"{API_PREFIX}/get-gliner-health"
 SCHEMA_PATH: Final = f"{API_PREFIX}/get-gliner-schema"
 APPLICATION_TITLE: Final = "gliner-api"
-ANALYZE_TEXT_PATH: Final = f"{API_PREFIX}/analyze-text-gliner"
-ANALYSIS_CONTRACT_VERSION: Final = "2026-11-09"
 
-OperationName = Literal["analyze-text-gliner", "run-ner-gliner", "classify-text-gliner"]
+OperationName = Literal["analyze-text-gliner"]
 HealthStatus = Literal["loading", "ready", "disabled", "failed", "stopping"]
 ErrorCode = Literal[
     "INVALID_REQUEST",
@@ -90,78 +81,6 @@ class ApiContract(BaseModel):
 
 class ResultValidationError(ValueError):
     """Refuse a damaged native prediction without retaining its contents."""
-
-
-class NerRequest(ApiContract):
-    """Select exact source text and ordered, distinct entity types."""
-
-    text: ExactText
-    labels: list[ExactText] = Field(min_length=1)
-
-    @field_validator("labels")
-    @classmethod
-    def require_unique_labels(cls, value: list[str]) -> list[str]:
-        if len(value) != len(set(value)):
-            raise ValueError("Entity labels must be unique")
-        return value
-
-
-class ClassificationTask(ApiContract):
-    """Describe one native classification task without owning its vocabulary."""
-
-    labels: dict[ExactText, ExactText] = Field(min_length=1)
-    multi_label: bool
-
-
-class ClassificationRequest(ApiContract):
-    """Select exact source text and named, caller-defined classification tasks."""
-
-    text: ExactText
-    tasks: dict[ExactText, ClassificationTask] = Field(min_length=1)
-
-
-class EntityMention(ApiContract):
-    """Locate one scored mention in the unchanged Unicode source."""
-
-    text: ExactText
-    label: ExactText
-    start_char: int = Field(ge=0)
-    end_char: int = Field(gt=0)
-    score: Confidence
-
-    @model_validator(mode="after")
-    def require_forward_span(self) -> Self:
-        if self.start_char >= self.end_char:
-            raise ValueError("Entity offsets must be forward half-open spans")
-        return self
-
-
-class NerResult(ApiContract):
-    """Return only scored source mentions, including valid empty predictions."""
-
-    entities: list[EntityMention]
-
-
-class SelectedLabel(ApiContract):
-    """Return one requested label ID and its unchanged native confidence."""
-
-    id: ExactText
-    score: Confidence
-
-
-class ClassificationResult(ApiContract):
-    """Return selected labels per requested task without operational metadata."""
-
-    classifications: dict[ExactText, list[SelectedLabel]] = Field(min_length=1)
-
-    @field_validator("classifications")
-    @classmethod
-    def require_unique_selections(
-        cls, value: dict[str, list[SelectedLabel]]
-    ) -> dict[str, list[SelectedLabel]]:
-        if any(len(labels) != len({label.id for label in labels}) for labels in value.values()):
-            raise ValueError("Selected IDs must be unique within each task")
-        return value
 
 
 class ErrorDetail(ApiContract):

@@ -5,11 +5,7 @@ from typing import Any
 from fastapi import FastAPI
 
 from gliner_api.declare_analysis_contracts import AnalyzeTextRequest
-from gliner_api.declare_api_contracts import (
-    HEALTH_PATH,
-    ClassificationRequest,
-    NerRequest,
-)
+from gliner_api.declare_api_contracts import HEALTH_PATH
 
 
 def install_request_schemas(app: FastAPI) -> None:
@@ -19,12 +15,11 @@ def install_request_schemas(app: FastAPI) -> None:
     def openapi_schema() -> dict[str, Any]:
         schema = original_openapi()
         models = schema.setdefault("components", {}).setdefault("schemas", {})
-        for contract in (AnalyzeTextRequest, NerRequest, ClassificationRequest):
-            request_schema = contract.model_json_schema(
-                ref_template="#/components/schemas/{model}"
-            )
-            models.update(request_schema.pop("$defs", {}))
-            models[contract.__name__] = request_schema
+        request_schema = AnalyzeTextRequest.model_json_schema(
+            ref_template="#/components/schemas/{model}"
+        )
+        models.update(request_schema.pop("$defs", {}))
+        models[AnalyzeTextRequest.__name__] = request_schema
         health_responses = schema["paths"][HEALTH_PATH]["get"]["responses"]
         health_responses["503"] = {
             "description": "The configured provider is not ready.",

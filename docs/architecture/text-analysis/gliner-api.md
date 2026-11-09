@@ -46,8 +46,7 @@ Each application retains one actually loaded model. Native calls use standard
 framework thread offloading and serialize access to that instance. The tensor
 runtime retains its native CPU threading; there are no worker replicas,
 process pools or thread caps. Health becomes ready only after native loading
-and verification of the direct long-text operation and retained migration
-interfaces. Missing or incompatible
+and verification of the direct long-text operation. Missing or incompatible
 assets leave an observable failed provider, not an apparently ready cache.
 
 The runtime, not the HTTP caller, owns each completion task and model lease.
@@ -64,8 +63,8 @@ lifespan so the external process owner can stop it.
 
 ## Native operations, strict results
 
-`analyze_text` calls the loaded model's `extract_long` directly, never either
-migration HTTP route. Its schema is the SDK's own `SchemaInput` grammar.
+`analyze_text` calls the loaded model's `extract_long` directly. Its schema is
+the SDK's own `SchemaInput` grammar.
 Non-classification sections use `Schema.from_dict`; ordered classifications
 are appended through the public builder. A small input subtype changes only
 the JSON classification label minimum to one, preserving an existing accepted

@@ -34,39 +34,29 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from gliner_api.analyze_text import analyze_text
-from gliner_api.classify_text import classify_text
 from gliner_api.declare_analysis_contracts import AnalyzeTextRequest, AnalyzeTextResult
 from gliner_api.declare_api_contracts import (
     ANALYZE_TEXT_PATH,
     API_VERSION,
     APPLICATION_TITLE,
-    CLASSIFY_PATH,
     HEALTH_PATH,
-    NER_PATH,
     SCHEMA_PATH,
     ApiContract,
-    ClassificationRequest,
-    ClassificationResult,
     ErrorCode,
     ErrorDetail,
     ErrorResult,
     GlinerHealth,
-    NerRequest,
-    NerResult,
     OperationName,
 )
 from gliner_api.declare_event_contracts import EventType, RequestEventData, ServiceEventData
 from gliner_api.declare_schema import install_request_schemas
 from gliner_api.emit_events import EventDeliveryError, EventEmitter
-from gliner_api.extract_entities import extract_entities
 from gliner_api.load_model import NativeModel
 from gliner_api.load_settings import GlinerSettings
 from gliner_api.run_model import ModelRuntime, OperationError
 
 _OPERATIONS: dict[str, OperationName] = {
     ANALYZE_TEXT_PATH: "analyze-text-gliner",
-    NER_PATH: "run-ner-gliner",
-    CLASSIFY_PATH: "classify-text-gliner",
 }
 
 
@@ -211,44 +201,6 @@ def create_app(
             request,
             lambda body: AnalyzeTextRequest.model_validate_json(body, strict=True),
             analyze_text,
-        )
-
-    @router.post(
-        NER_PATH,
-        response_model=NerResult,
-        responses=errors,
-        openapi_extra={
-            "requestBody": {
-                "required": True,
-                "content": {
-                    "application/json": {
-                        "schema": {"$ref": "#/components/schemas/NerRequest"}
-                    }
-                },
-            }
-        },
-    )
-    async def run_ner_gliner(request: Request) -> Response:
-        return await process(request, NerRequest.model_validate_json, extract_entities)
-
-    @router.post(
-        CLASSIFY_PATH,
-        response_model=ClassificationResult,
-        responses=errors,
-        openapi_extra={
-            "requestBody": {
-                "required": True,
-                "content": {
-                    "application/json": {
-                        "schema": {"$ref": "#/components/schemas/ClassificationRequest"}
-                    }
-                },
-            }
-        },
-    )
-    async def classify_text_gliner(request: Request) -> Response:
-        return await process(
-            request, ClassificationRequest.model_validate_json, classify_text
         )
 
     async def refuse(request: Request, code: HostRefusalCode) -> Response:
