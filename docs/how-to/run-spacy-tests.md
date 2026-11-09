@@ -30,17 +30,34 @@ and order is preserved. Leave `custom_features` blank for other modes.
 
 GLiNER uses distinct presentation types from `named_entities.label_map` in
 `config/text-analysis/settings.json`, in configuration order. An empty label
-selection is refused. It has no separate dispatch source or label input.
+selection is refused. NER has no separate dispatch source or entity-label input.
 
-GLiNER also classifies the unchanged source in one separate request containing
-all article tasks. `desk` is single-label and offers active taxonomy verticals;
-`lenses` and `events` are multi-label and offer their active entries.
-`config/taxonomy.json` supplies each ID and its committed definition, in
-taxonomy order. Draft and retired entries are excluded. The native `Taxonomy`
-model validates this file; undefined definitions and empty offered
-vocabularies fail classification explicitly without preventing NER.
-The workflow exposes the backend source root only to reuse that schema;
-it does not install the backend runtime or copy a taxonomy schema.
+GLiNER also classifies the unchanged source in one separate request. Optional
+`classification_tasks` accepts the API's native tasks JSON object: one or any
+number of arbitrary named tasks, each with an ID-to-label-text `labels` mapping
+and a `multi_label` boolean. Names and IDs must be nonblank strings, not members
+of a caller-maintained list. Label text can be a plain display name; no extra
+definition field or taxonomy membership is required. For example:
+
+```json
+{"tone":{"labels":{"neutral":"Neutral","opinion":"Opinion"},"multi_label":false}}
+```
+
+Leave `classification_tasks` blank to build the convenience request from
+`config/taxonomy.json`: single-label `vertical` and `desk` use active vertical
+definitions, multi-label `lenses` uses active lens definitions, and single-label
+`source_kind` uses active source-kind display names without new definitions.
+Draft and retired entries are excluded. Only this default construction loads
+the native `Taxonomy` model; custom tasks do not read taxonomy. Invalid custom
+JSON or invalid defaults fail classification explicitly without preventing NER.
+The workflow exposes the backend source root for default validation without
+installing the backend runtime or copying a taxonomy schema.
+
+These are model selections for the requested tasks only. Text alone supplies
+no feed provenance, so `vertical` is not a factual source vertical and
+`source_kind` is not the feed-declared source kind. Nothing changes production
+article identity, desk placement or publication policy. `events` is not in the
+default request but remains a valid caller-supplied task like any other name.
 
 Send the JSON form through standard input so text is not a shell argument:
 
@@ -49,6 +66,7 @@ $inputs = @{
   profile = 'md'
   feature_mode = 'default'
   custom_features = ''
+  classification_tasks = ''
   text = Get-Content -Raw .\text-analysis-input.txt
 } | ConvertTo-Json -Compress
 
@@ -97,16 +115,17 @@ spaCy features/model metadata come from its response; entity mapping/case rules
 and Important Terms settings come from saved native settings. An omitted spaCy
 `features` field remains omitted in the request; returned feature order is
 preserved. GLiNER shows actual saved values for both operations, exact entity
-labels, classification task modes and offered ID-to-definition mappings.
+labels, classification task modes and offered ID-to-label-text mappings.
 Its model identity comes from saved native settings, not response metadata;
 classification uses the same loaded model and its native SDK configuration,
 with no caller threshold or model override. Selected optional raw spaCy
 features retain their native fields and response order.
 
 The separate expandable Article classification table shows row ID, task,
-selected label ID, display name and native score. Tasks keep request order;
+selected label ID, request label text and native score. Tasks keep request order;
 selections keep returned order, without sorting or discarding labels.
-Display names come from the saved taxonomy, not later configuration.
+Label text comes directly from the saved request, not taxonomy or later
+configuration. Rendering never reconstructs an expected task list.
 GLiNER native NER and classification scores range from zero to one:
 higher means stronger model confidence, not calibrated correctness
 percentages. Long-text classifier scores can aggregate chunks. A valid empty
@@ -125,8 +144,7 @@ and validated `settings.json`, plus a complete standalone `report.md` with
 source and the same provider section used in the Summary. Each also contains
 `events.jsonl`; see [console and saved events](#console-and-saved-events).
 The GLiNER root request/response remain NER; its other files are
-`classification/request.json`, `classification/response.json` and
-`taxonomy.json`, the exact bytes validated for this request. Each upload runs
+`classification/request.json` and `classification/response.json`. Each upload runs
 independently even after failure. The existing retention policy is unchanged.
 Files are written atomically under a run-owned runner-temporary directory.
 The summary and native request/response files can contain source text and
@@ -189,9 +207,11 @@ python tools\text-analysis-caller\write_reports.py <results-directory>
 
 This standard-library-only command reads named saved native files and rewrites
 each provider's `report.md`. It does not import provider runtimes, access the
-network or load current repository configurations. Classification reuses its
-saved request, response and taxonomy, retaining historical definitions and
-display names. Source comes from any available saved native request, so
+network or load current repository configurations. Classification reuses only
+its saved native request and response, retaining exact task names, label text,
+selections and scores. Historical requests including `events` remain replayable
+unchanged; a historical `taxonomy.json` is not read or required.
+Source comes from any available saved native request, so
 regeneration cannot recover source when no request was saved. Artifacts
 without classification evidence retain their original not-requested state.
 Saved failures or missing responses remain failures, with a nonzero exit.
@@ -219,8 +239,9 @@ source paragraphs. Exact whitespace stays in saved requests rather than relying
 on preformatted text or styles that GitHub's sanitizer can remove.
 Separate provider artifacts preserve independent delivery and keep oversized
 summaries recoverable without introducing a second JSON contract. Classification
-keeps its existing native request/result contracts and the validated taxonomy
-copy so replay needs neither inference nor a later vocabulary.
+keeps its existing native request/result contracts. The request itself owns
+the offered tasks and label text, so replay needs neither inference nor a
+taxonomy snapshot, and adding a task requires request data rather than code.
 
 ## See also
 

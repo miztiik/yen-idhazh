@@ -11,8 +11,8 @@ from html.parser import HTMLParser
 
 import test_capture_stream
 from collect_operations import Outcome, collect_gliner_operations
+from prepare_default_tasks import default_classification_tasks
 from render_classifications import (
-    active_classification_tasks,
     read_classification_selections,
     read_classification_tasks,
     render_classifications,
@@ -91,6 +91,28 @@ def classification_taxonomy() -> dict[str, object]:
             {"id": "retired", "status": "retired", "definition": ""},
         ],
         "events": [{"id": "event", "display_name": "Event", "definition": "An event."}],
+        "source_kinds": [
+            {"id": "reporting", "display_name": "Reporting"},
+            {"id": "research", "display_name": "Research"},
+            {"id": "old", "display_name": "Old kind", "status": "retired"},
+        ],
+    }
+
+
+def historical_classification_request(source: str) -> dict[str, object]:
+    return {
+        "text": source,
+        "tasks": {
+            "desk": {
+                "labels": {"second": "Second <desk>.", "first": "First desk."},
+                "multi_label": False,
+            },
+            "lenses": {
+                "labels": {"lens-a": "First lens.", "lens-b": "Second lens."},
+                "multi_label": True,
+            },
+            "events": {"labels": {"event": "An event."}, "multi_label": True},
+        },
     }
 
 
@@ -576,43 +598,89 @@ class ReportTests(unittest.TestCase):
 
 
 class ClassificationTests(unittest.TestCase):
-    def test_active_taxonomy_definitions_modes_and_order_drive_offerings(self) -> None:
+    def test_default_request_uses_active_configured_labels_and_native_modes(self) -> None:
         taxonomy = classification_taxonomy()
         before = json.dumps(taxonomy)
-        tasks = read_classification_tasks(active_classification_tasks(taxonomy))
-        self.assertEqual(list(tasks), ["desk", "lenses", "events"])
+        tasks = read_classification_tasks(default_classification_tasks(taxonomy))
+        self.assertEqual(list(tasks), ["vertical", "desk", "lenses", "source_kind"])
         self.assertEqual(
             tasks["desk"],
             {"labels": {"second": "Second desk.", "first": "First desk."}, "multi_label": False},
         )
+        self.assertEqual(tasks["vertical"], tasks["desk"])
         self.assertEqual(list(read_object(tasks["lenses"]["labels"])), ["lens-a", "lens-b"])
         self.assertTrue(tasks["lenses"]["multi_label"])
-        self.assertTrue(tasks["events"]["multi_label"])
+        self.assertEqual(
+            tasks["source_kind"],
+            {
+                "labels": {"reporting": "Reporting", "research": "Research"},
+                "multi_label": False,
+            },
+        )
         self.assertEqual(json.dumps(taxonomy), before)
-        for field in ("verticals", "lenses", "events"):
+        for field in ("verticals", "lenses", "source_kinds"):
             empty = {**taxonomy, field: []}
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, "no active labels"):
-                active_classification_tasks(empty)
-            undefined = {**taxonomy, field: [{"id": "undefined", "definition": " "}]}
+                default_classification_tasks(empty)
+            undefined = {
+                **taxonomy,
+                field: [{"id": "undefined", "definition": " ", "display_name": " "}],
+            }
             with self.subTest(field=field), self.assertRaises(ValueError):
-                active_classification_tasks(undefined)
+                default_classification_tasks(undefined)
 
-    def test_classification_preserves_source_selections_scores_and_historical_names(self) -> None:
+    def test_arbitrary_single_and_multiple_tasks_need_no_taxonomy_or_default_names(self) -> None:
         source = "  X\r\n"
-        taxonomy = classification_taxonomy()
-        request: dict[str, object] = {
-            "text": source,
-            "tasks": active_classification_tasks(taxonomy),
-        }
+        for count in (1, 5):
+            tasks = {
+                f"custom task {index}/<choice>": {
+                    "labels": {"label / 1": "First <kind>", "label / 2": "Second"},
+                    "multi_label": index % 2 == 0,
+                }
+                for index in reversed(range(count))
+            }
+            selections = {
+                name: [{"id": "label / 2", "score": 0.25}]
+                + ([{"id": "label / 1", "score": 0.95}] if task["multi_label"] else [])
+                for name, task in reversed(list(tasks.items()))
+            }
+            request: dict[str, object] = {"text": source, "tasks": tasks}
+            response: dict[str, object] = {"classifications": selections}
+            before = json.dumps((request, response))
+            with self.subTest(count=count):
+                classification = render_classifications(source, response, request=request)
+                rows = [
+                    line
+                    for line in html.unescape(classification.content).splitlines()
+                    if line.startswith("| L")
+                ]
+                expected: list[str] = []
+                for name, task in tasks.items():
+                    labels = read_object(task["labels"])
+                    for selected in selections[name]:
+                        expected.append(
+                            f"| L{len(expected) + 1} | {name} | {selected['id']} | "
+                            f"{labels[str(selected['id'])]} | {selected['score']} |"
+                        )
+                self.assertEqual(rows, expected)
+                self.assertNotIn("<choice>", classification.content)
+                self.assertNotIn("<kind>", classification.content)
+                self.assertEqual(json.dumps((request, response)), before)
+                self.assertIs(classification.request, request)
+                self.assertIs(classification.result, response)
+
+    def test_historical_tasks_preserve_source_labels_selections_and_scores_without_taxonomy(
+        self,
+    ) -> None:
+        source = "  X\r\n"
+        request = historical_classification_request(source)
         response = classification_result()
-        before = json.dumps((request, response, taxonomy))
-        classification = render_classifications(
-            source, response, request=request, taxonomy=taxonomy
-        )
+        before = json.dumps((request, response))
+        classification = render_classifications(source, response, request=request)
         report = html.unescape(classification.content)
-        self.assertIn("| L1 | desk | second | Saved <desk> | 0.8 |", report)
-        self.assertIn("| L2 | lenses | lens-b | Lens B | 0.25 |", report)
-        self.assertIn("| L3 | lenses | lens-a | Lens A | 0.95 |", report)
+        self.assertIn("| L1 | desk | second | Second <desk>. | 0.8 |", report)
+        self.assertIn("| L2 | lenses | lens-b | Second lens. | 0.25 |", report)
+        self.assertIn("| L3 | lenses | lens-a | First lens. | 0.95 |", report)
         self.assertIn("| L4 | events | No label selected | - | - |", report)
         self.assertLess(report.index("| L2"), report.index("| L3"))
         self.assertNotIn("<desk>", classification.content)
@@ -621,14 +689,14 @@ class ClassificationTests(unittest.TestCase):
         self.assertIn("can aggregate chunks", report)
         self.assertIn("does not guarantee abstention", report)
         self.assertNotIn("YAKE", report)
-        self.assertEqual(json.dumps((request, response, taxonomy)), before)
+        self.assertEqual(json.dumps((request, response)), before)
         with self.assertRaises(ValueError):
-            render_classifications("X\n", response, request=request, taxonomy=taxonomy)
+            render_classifications("X\n", response, request=request)
 
     def test_classification_refuses_missing_tasks_wrong_ids_cardinality_and_invalid_scores(
         self,
     ) -> None:
-        tasks = read_classification_tasks(active_classification_tasks(classification_taxonomy()))
+        tasks = read_classification_tasks(historical_classification_request("X")["tasks"])
         invalid: list[dict[str, object]] = [
             {"desk": [], "lenses": []},
             {"desk": [], "lenses": [], "events": [], "invented": []},
@@ -656,11 +724,7 @@ class ClassificationTests(unittest.TestCase):
 
     def test_classification_composes_identically_and_failure_does_not_hide_ner(self) -> None:
         source = "X"
-        taxonomy = classification_taxonomy()
-        request: dict[str, object] = {
-            "text": source,
-            "tasks": active_classification_tasks(taxonomy),
-        }
+        request = historical_classification_request(source)
         response = classification_result()
         spacy = NativeFiles(
             request={"text": source, "language": "en"},
@@ -670,17 +734,15 @@ class ClassificationTests(unittest.TestCase):
             request={"text": source, "labels": ["person"]}, response={"entities": []}
         )
         files = NativeFiles(request=request, response=response)
-        reports = render_saved_reports(
-            source, spacy, gliner, classification=files, taxonomy=taxonomy
-        )
-        section = render_classifications(source, response, request=request, taxonomy=taxonomy)
+        reports = render_saved_reports(source, spacy, gliner, classification=files)
+        section = render_classifications(source, response, request=request)
         self.assertFalse(reports.failed)
         self.assertIn(section.content, reports.gliner)
         self.assertIn(section.content, reports.combined)
         self.assertNotIn(section.content, reports.spacy)
         self.assertIn("classify&#45;text&#45;gliner", reports.gliner)
         self.assertIn("single&#45;label", reports.gliner)
-        self.assertIn("Second desk", html.unescape(reports.gliner))
+        self.assertIn("Second <desk>", html.unescape(reports.gliner))
         for name, task in read_classification_tasks(request["tasks"]).items():
             mode = "multi-label" if task["multi_label"] else "single-label"
             self.assertIn(
@@ -716,9 +778,7 @@ class ClassificationTests(unittest.TestCase):
             ),
         ):
             with self.subTest(failed=failed):
-                reports = render_saved_reports(
-                    source, spacy, gliner, classification=failed, taxonomy=taxonomy
-                )
+                reports = render_saved_reports(source, spacy, gliner, classification=failed)
                 self.assertTrue(reports.failed)
                 self.assertIn("Status: complete.", reports.spacy)
                 self.assertIn("Status: complete.", reports.gliner)
@@ -728,7 +788,6 @@ class ClassificationTests(unittest.TestCase):
             spacy,
             NativeFiles(request=gliner.request, error="NER transport failed."),
             classification=files,
-            taxonomy=taxonomy,
         )
         self.assertTrue(reports.failed)
         self.assertIn(section.content, reports.gliner)
