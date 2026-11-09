@@ -3,15 +3,8 @@ name: Text-Analysis-NER-tests
 on:
   workflow_dispatch:
     inputs:
-      language:
-        description: Configured language to test
-        required: false
-        type: choice
-        options:
-          - en
-          - zh
       profile:
-        description: Configure spaCy model profile
+        description: "spaCy: model profile"
         required: false
         default: md
         type: choice
@@ -20,30 +13,43 @@ on:
           - md
           - lg
       feature_mode:
-        description: "default: configured language defaults; all: every supported feature; custom: CSV from custom_features"
+        description: "spaCy: default = configured English defaults; all = every supported feature; custom = custom_features CSV"
         required: false
+        default: default
         type: choice
         options:
           - default
           - all
           - custom
       custom_features:
-        description: "Custom CSV, for example: entities, sentences, document_metrics"
+        description: "spaCy: custom CSV, for example: entities, sentences, document_metrics"
         required: false
         type: string
       text:
-        description: Text to analyze; visible in dispatch, request evidence, and run summary
+        description: "spaCy: text to analyze; visible in dispatch, request evidence, and run summary"
         required: true
         type: string
+        default: |-
+          Artificial intelligence is attracting an increasingly large share of venture capital, but the funding remains concentrated among a handful of companies. According to Crunchbase, global startup funding reached approximately USD 510 billion in the first half of 2026, surpassing the USD 440 billion invested throughout 2025. AI companies alone accounted for about 80% of global venture funding in the first quarter.
+
+          OpenAI secured USD 122 billion in committed capital in a single round at a post-money valuation of USD 852 billion in March. Anthropic subsequently raised USD 65 billion at a valuation of USD 965 billion in May, overtaking OpenAI.
+
+          Yet while leading AI model developers continue to attract substantial investment, many businesses built around specialized applications have struggled to translate user adoption into profitability.
+
+          As attention shifts from model capabilities and computing infrastructure to practical applications, startups face a different set of tests.
+
+          Ahead of the main conference at Hong Kong FinTech Week x StartmeupHK 2026, 36Kr spoke with Tracy Ji, founding managing partner of Meridian Capital (also known as Huaying Capital), and Chin Yung Lu, acting head of startups at Invest Hong Kong. The pair shared how investors generally assess AI businesses, how founders should manage limited cash reserves, and what Hong Kong can offer companies expanding internationally.
 
 permissions:
   contents: read
 
 jobs:
   spacy_ner_test:
-    name: spaCy live test - ${{ inputs.language }} / ${{ inputs.profile }}
+    name: spaCy live test - en / ${{ inputs.profile }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      TEXT_ANALYSIS_LANGUAGE: en
     steps:
       - uses: actions/checkout@v6
         with:
@@ -119,7 +125,6 @@ jobs:
 
       - name: Prepare the selected spaCy model
         env:
-          TEXT_ANALYSIS_LANGUAGE: ${{ inputs.language }}
           TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
         run: >-
           uv run --project services/text_analysis/gliner --no-sync python
@@ -127,7 +132,6 @@ jobs:
 
       - name: Run live text-analysis verification
         env:
-          TEXT_ANALYSIS_LANGUAGE: ${{ inputs.language }}
           TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
           TEXT_ANALYSIS_FEATURE_MODE: ${{ inputs.feature_mode }}
           TEXT_ANALYSIS_CUSTOM_FEATURES: ${{ inputs.custom_features }}
@@ -167,7 +171,6 @@ jobs:
       - name: Check the native and shared APIs
         env:
           PYTHONPATH: services/text_analysis/hosting
-          TEXT_ANALYSIS_LANGUAGE: ${{ inputs.language }}
           TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
         run: >-
           uv run --project services/text_analysis/gliner --no-sync

@@ -489,10 +489,10 @@ The workflow syncs the compatible frozen GLiNER development environment for
 both independent providers, installs only the selected configured spaCy model
 wheel after its named in-memory unittest checks, starts one
 owned process group, and validates live
-English or Chinese results through the actual shared TypeScript CloudEvents
-and trace contracts. The required candidate evidence is one `md` run per
-language against the same immutable commit. A changed candidate
-needs both runs again.
+English results through the actual shared TypeScript CloudEvents and trace
+contracts. The required candidate evidence is one English `md` run against
+the immutable commit. A changed candidate needs a new run. Chinese live
+verification is not part of this manual workflow.
 
 The named native tests cover compact grouping, actual YAKE ranking, configured
 maximum/zero behavior, feature-local failures, old settings/evidence reads and
