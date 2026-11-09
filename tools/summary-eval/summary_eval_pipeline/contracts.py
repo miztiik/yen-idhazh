@@ -21,6 +21,9 @@ from summary_evaluator.shared.contracts.base import (
     Uuid4,
     validate_text,
 )
+from summary_evaluator.unieval.contracts.previous_selected_unieval_result import (
+    PreviousSelectedUnievalResult,
+)
 from summary_evaluator.unieval.contracts.previous_unieval_result import (
     PreviousUnievalResult as UnievalResult,
 )
@@ -263,7 +266,8 @@ class ServerOutcome(WorkflowContract):
 
 
 def has_completed_score(
-    evaluation: EvaluationResult | None, unieval: UnievalResult | CurrentUnievalResult | None
+    evaluation: EvaluationResult | None,
+    unieval: UnievalResult | PreviousSelectedUnievalResult | CurrentUnievalResult | None,
 ) -> bool:
     return (evaluation is not None and evaluation.hhem is not None) or (
         unieval is not None

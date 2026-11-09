@@ -1,6 +1,6 @@
 # Known defects
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-11-09
 
 **The open defects have named maintainers below.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
@@ -146,6 +146,44 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 73 | The manifest shard count can differ from the dispatched worker matrix | 5 | CLOSED 2026-10-12 (PR #1588) |
 | 74 | A stale-payload test assumes its scratch folder is outside the repository | 2 | **OPEN - check both repository-owned and external scratch paths** |
 | 75 | A full re-run that plans again leaves the earlier plan's rows under the same run id | 5 | **OPEN - reasoned, not measured; first count the run ids with run-plan rows from attempt 2 or later** |
+| 76 | Quiet tokenizer loading leaves a later diagnostic writing to a closed stream | 2 | **OPEN - reproduce the retained logging sink and repair its lifetime without changing token policy** |
+
+## 76 - Quiet tokenizer loading leaves a later diagnostic writing to a closed stream (OPEN)
+
+**Tokenization can succeed while its advisory diagnostic writes to a closed
+stream.** The first Transformers import inside quiet resource loading can retain
+the redirected devnull sink after that sink closes. In fresh processes,
+`resources.source_offsets` and explicit-window planning reproduce the nonfatal
+closed-stream `ValueError`; `resources.token_count` uses `verbose=False` and
+does not emit it. This is not an assembled-input refusal or a live model/API
+failure.
+
+The recorded source is `'  The garden opened on Monday.\n'` repeated 100 times.
+The producer is `unieval/load_unieval_resources.py`, through
+`shared/quiet_model_output.py` and `unieval/plan_unieval_windows.py`, under
+`services/summary_evaluator/src/summary_evaluator/`. Fresh-process receipts were
+preserved during PR #1974 on archived base
+`aa568d2d9b7ce3fbdc9bfba676722338bfd72d45` and candidate
+`250809942fc9f0c3731e69623a79bc6e0a7d2143`; that PR did not introduce or repair
+the defect.
+
+**Execution row 76.** Scope: repair the retained diagnostic stream lifetime
+structurally, not by suppressing all warnings. Files:
+`services/summary_evaluator/src/summary_evaluator/shared/quiet_model_output.py`,
+`services/summary_evaluator/src/summary_evaluator/unieval/load_unieval_resources.py`
+only if its loading boundary needs correction, and a focused
+`services/summary_evaluator/tests/test_quiet_model_output.py` regression. Check
+the named dependants `unieval/load_unieval_resources.py` and `hhem/load_model.py`.
+Oracle: a fresh process performs actual quiet loading followed by source
+offsets and explicit-window planning; legitimate diagnostics use a live, safe
+stream without a closed-stream error, while tokenization and complete planning
+remain unchanged. Use the pinned tokenizer/sentence resources prepared by the
+[native gate guide](../docs/how-to/run-the-gates.md#independent-python-service-contracts);
+tests use minimal generated input, no internal mocks, new disk fixtures,
+network or model weights. Preserve body-free logging, token allowances,
+metadata, prompts, source modes and non-truncating behavior. Status: OPEN;
+the known-defects execution maintainer takes this row separately from UniEval
+API simplification.
 
 ## 75 - A full re-run that plans again leaves the earlier plan's rows under the same run id (OPEN)
 

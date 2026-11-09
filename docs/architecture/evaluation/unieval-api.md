@@ -1,6 +1,6 @@
 # How the UniEval API checks a complete source
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How the local evaluator produces applicable distinct scores without silently
 cutting the article or replacing an unfinished result. The
@@ -47,8 +47,11 @@ input again with the actual tokenizer. It never uses tokenizer truncation.
 When normalization maps several tokens to one original character, windows
 end and restart only at complete character boundaries. Overlap rounds
 outward, never below its configured target. If that prevents forward
-progress within the prompt allowance, consistency receives a declared
-planning error; other admissible dimensions still run.
+progress within the input allowance, consistency receives
+`WINDOW_BUDGET_INSUFFICIENT`; other admissible dimensions still run.
+This is a geometry refusal, not an invented measurement of an oversized article.
+An actually oversized summary-sentence question is checked first and retains
+its measured `SUMMARY_SENTENCE_TOO_LONG` refusal.
 
 In this explicit mode, every summary sentence is compared with every source window. A sentence's
 score is the highest completed window score; consistency is the mean of
@@ -72,7 +75,11 @@ full-reference/full-summary prompt. Averaging either score over source
 windows would define a different measure, so the service does not do it.
 
 If a complete prompt exceeds its allowance, that dimension has a safe error
-and no numeric score. Other admissible dimensions can finish. Missing
+and no numeric score. Its actual assembled token count, configured allowance
+and zero-based comparison index survive planning, predictor defense, bounded
+worker packets, parent reduction and reporting. The predictor's neutral size
+refusal is projected to the actual comparison dimension, never assumed to be
+consistency. Other admissible dimensions can finish. Missing
 reference text does not block the other scores. Disabled relevance has reason
 `disabled`, even without a reference; enabled relevance without one has reason
 `reference_not_supplied`. A supplied blank or null reference is invalid input.
@@ -162,6 +169,16 @@ provenance. A nullable skip reason distinguishes intentional absence of work
 from failure while retaining the four numeric fields. Frozen four-score readers
 keep earlier results and recordings meaningful; current saved handoffs bind
 selection and nullable reference identity before generation and through reporting.
+Frozen applicable-score readers also retain unmeasured errors without creating
+counts or rewriting original receipt bytes.
+
+A short question is only the fixed template. The complete model input also
+contains its substituted summary sentence or full summary, source or reference
+where applicable, and special tokens. Only that assembled input's actual
+tokenizer count is compared with the configured allowance; separately counted
+components are not assumed to add up. A fitting sentence/question can still
+leave too little room for source progress and overlap, so geometry has its own
+body-free error rather than a misleading size claim.
 
 The scorer at the committed `assets.reference_code_revision` has a configurable
 `max_length` constructor default of 1024 tokens and requests tokenizer

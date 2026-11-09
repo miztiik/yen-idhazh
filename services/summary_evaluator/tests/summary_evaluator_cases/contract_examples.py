@@ -203,10 +203,10 @@ def example_previous_unieval_result(reference_hash: str) -> PreviousUnievalResul
 
 def example_unieval_result(reference_hash: str) -> UnievalResult:
     """Supply a current contract example, not a model prediction."""
-    from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_SCORING_VERSION
+    from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_RESULT_VERSION
 
     payload = example_previous_unieval_result(reference_hash).model_dump(mode="json")
-    payload["version"] = UNIEVAL_SCORING_VERSION
+    payload["version"] = UNIEVAL_RESULT_VERSION
     payload["relevance_skip_reason"] = None
     payload["effective_settings"]["evaluate_relevance"] = True
     return UnievalResult.model_validate_json(json.dumps(payload))

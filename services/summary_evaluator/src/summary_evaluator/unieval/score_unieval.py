@@ -2,12 +2,13 @@
 
 from dataclasses import dataclass
 
+from summary_evaluator.unieval.check_unieval_input_size import check_unieval_input_size
 from summary_evaluator.unieval.contracts.unieval_contract import (
     DIMENSIONS,
     Dimension,
     RelevanceSkipReason,
 )
-from summary_evaluator.unieval.contracts.unieval_error import UnievalError, UnievalErrorCode
+from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_request import (
     EffectiveUnievalControls,
     UnievalRequest,
@@ -121,18 +122,18 @@ def prepare_unieval(
                 inputs
             )
         ]
-        too_long = any(
-            resources.token_count(comparison.prompt) > controls.max_input_tokens
-            for comparison in comparisons
+        refusal = next(
+            (
+                error for comparison in comparisons
+                if (error := check_unieval_input_size(
+                    resources.token_count(comparison.prompt), controls.max_input_tokens,
+                    dimension, comparison.index,
+                )) is not None
+            ),
+            None,
         )
-        if too_long:
-            codes: dict[Dimension, UnievalErrorCode] = {
-                "fluency": "SUMMARY_SENTENCE_TOO_LONG",
-                "coherence": "COHERENCE_INPUT_TOO_LONG",
-                "relevance": "RELEVANCE_INPUT_TOO_LONG",
-                "consistency": "CONSISTENCY_INPUT_TOO_LONG",
-            }
-            errors.append(UnievalError.from_code(codes[dimension], dimension))
+        if refusal is not None:
+            errors.append(refusal)
             counts[dimension] = DimensionWork()
             continue
         counts[dimension] = DimensionWork(planned=len(comparisons))
