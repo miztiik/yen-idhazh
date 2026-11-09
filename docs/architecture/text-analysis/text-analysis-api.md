@@ -20,14 +20,11 @@ language, profile and ordered feature list. It cannot supply a package, URL,
 path, executable or model destination.
 
 The API writes no result, event or source file. Results leave through HTTP and
-validated CloudEvents leave through stderr. The manual workflow may redirect
-those streams into its runner-owned evidence directory.
-
-The workflow owns that persisted evidence contract. Its receipt records only
-the immutable run identity, conclusion and semantic cleanup. The exact
-validated request, ready health response and selected analysis response stay in
-three separate native payload files. Trace correlation and lifecycle metadata
-stay only in the bounded `events.jsonl` stream.
+validated CloudEvents leave through stderr. The manual workflow's caller under
+`tools/text-analysis-caller/` owns process supervision and reporting outside
+the API. It saves the exact native requests and responses for both providers
+and the complete Markdown report in a run-owned temporary directory; stderr
+diagnostics stay in workflow logs.
 
 ## Admission precedes executor submission
 
@@ -86,8 +83,7 @@ feature-level code changes service health. Request-level executor or process
 failure does.
 
 Every returned span carries exact source text and zero-based half-open Python
-code-point offsets. The verification probe converts the original source once
-per response and uses the same code-point array for every occurrence check.
+code-point offsets.
 
 ## Compact English outputs reuse the document
 
@@ -151,7 +147,8 @@ entities and model package interface; the selected model wheel is the dominant
 download and resident-memory cost. The manual workflow therefore installs one
 selected profile, while production preparation may install all enabled
 profiles. AnyIO supplies immediate capacity admission without a custom queue.
-HTTPX is verification-only. The service adds no Torch or transformer runtime.
+HTTPX is used by the external reporting caller. The service adds no Torch or
+transformer runtime.
 YAKE supplies English article phrase ranking. Its Python package and transitive
 statistical/tokenization dependencies add installation bytes and time, but no
 model download or published JavaScript. The manifest and frozen lock own that
@@ -164,10 +161,10 @@ concurrency. A custom worker protocol, queue or automatic repair would add
 ownership, cancellation and recovery states without serving the initial
 two-request contract.
 
-Keeping the implementation's manifest, environment and verification tools
-together leaves the parent directory available for other implementations
-without sharing a project. Physical project location does not change the
-Python package name, HTTP family or committed settings location.
+Keeping the implementation's manifest and environment together leaves the
+parent directory available for other implementations without sharing a
+project. Physical project location does not change the Python package name,
+HTTP family or committed settings location.
 
 Selectable features keep expensive or verbose data caller-controlled, while
 feature-local errors preserve useful siblings. Keeping timings out of HTTP
@@ -193,6 +190,6 @@ options use native defaults but never replace a historical feature selection.
 
 - [Text-analysis API reference](../../reference/text-analysis-api.md)
 - [First-party API routing](../../reference/api-routing.md)
-- [Run the text-analysis verification](../../how-to/run-spacy-tests.md)
+- [Run text analysis and inspect results](../../how-to/run-spacy-tests.md)
 - [Contracts and schemas](../contracts/schemas.md)
 - [Repository layout](../../reference/repository-layout.md)

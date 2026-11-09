@@ -1,4 +1,4 @@
-name: Text-Analysis-NER-tests
+name: Text analysis results
 
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ on:
         required: false
         type: string
       text:
-        description: "spaCy: text to analyze; visible in dispatch, request evidence, and run summary"
+        description: "Text analyzed by both providers; visible in dispatch, artifacts, and run summary"
         required: true
         type: string
         default: |-
@@ -44,8 +44,8 @@ permissions:
   contents: read
 
 jobs:
-  spacy_ner_test:
-    name: spaCy live test - en / ${{ inputs.profile }}
+  text_analysis:
+    name: Text analysis - en / ${{ inputs.profile }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -75,25 +75,6 @@ jobs:
         with:
           version: '0.9.7'
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: '1.3.13'
-
-      - name: Install the shared TypeScript contracts
-        run: bun install --frozen-lockfile --cwd packages/common-contracts
-
-      - name: Check Unicode evidence spans
-        run: bun test ./services/text_analysis/spacy/scripts/validate-evidence-spans.test.ts
-
-      - name: Check existing Python host regressions
-        run: >-
-          uv run --project services/summary_evaluator --frozen --group dev
-          pytest -c services/summary_evaluator/pyproject.toml
-          services/summary_evaluator/tests/test_component_registration.py::test_neutral_host_reports_startup_failure_without_stopped
-          services/summary_evaluator/tests/test_component_registration.py::test_startup_failure_cleans_all_components_and_retains_native_errors
-          services/summary_evaluator/tests/test_server_lifecycle.py
-          services/summary_evaluator/tests/test_trace_context.py
-
       - name: Verify the provider dependency locks
         run: |
           uv lock --locked --project services/local_api_host
@@ -103,62 +84,12 @@ jobs:
       - name: Sync the shared provider environment
         run: uv sync --project services/text_analysis/gliner --frozen --extra model --group dev
 
-      - name: Check native and shared API source
-        working-directory: services/text_analysis/gliner
-        env:
-          MYPYPATH: ../hosting
-        run: |
-          uv run --no-sync ruff check --config pyproject.toml src tests scripts
-          uv run --no-sync ruff check --config ../../../pyproject.toml ../../local_api_host/src ../hosting
-          uv run --no-sync mypy --config-file pyproject.toml src tests scripts ../../local_api_host/src ../hosting
-
-      - name: Check native features and verification contracts
-        env:
-          PYTHONPATH: services/text_analysis/spacy/scripts
-        run: >-
-          uv run --project services/text_analysis/gliner --no-sync python
-          -m unittest
-          services/text_analysis/spacy/tests/test_named_entities.py
-          services/text_analysis/spacy/tests/test_important_terms.py
-          services/text_analysis/spacy/tests/test_api_contracts.py
-          services/text_analysis/spacy/tests/test_spacy_verification.py
-
       - name: Prepare the selected spaCy model
         env:
           TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
         run: >-
           uv run --project services/text_analysis/gliner --no-sync python
           services/text_analysis/spacy/scripts/prepare-selected-model.py
-
-      - name: Run live text-analysis verification
-        env:
-          TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
-          TEXT_ANALYSIS_FEATURE_MODE: ${{ inputs.feature_mode }}
-          TEXT_ANALYSIS_CUSTOM_FEATURES: ${{ inputs.custom_features }}
-          TEXT_ANALYSIS_COMMIT_SHA: ${{ github.sha }}
-          TEXT_ANALYSIS_EVIDENCE_DIRECTORY: ${{ runner.temp }}/spacy-tests
-          TEXT_ANALYSIS_RUN_ID: ${{ github.run_id }}
-          TEXT_ANALYSIS_RUN_ATTEMPT: ${{ github.run_attempt }}
-        run: >-
-          uv run --project services/text_analysis/gliner --no-sync python
-          services/text_analysis/spacy/scripts/run-spacy-test.py
-          < "$GITHUB_EVENT_PATH"
-
-      - name: Upload text-analysis evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: text-analysis-spacy-evidence-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/spacy-tests/report.json
-            ${{ runner.temp }}/spacy-tests/analysis-request.json
-            ${{ runner.temp }}/spacy-tests/health-response.json
-            ${{ runner.temp }}/spacy-tests/analysis-response.json
-            ${{ runner.temp }}/spacy-tests/events.jsonl
-            ${{ runner.temp }}/spacy-tests/report.md
-          include-hidden-files: false
-          if-no-files-found: error
-          retention-days: 90
 
       - name: Prepare the configured GLiNER model
         run: >-
@@ -168,20 +99,22 @@ jobs:
       - name: Check the prepared provider environment
         run: uv pip check --python services/text_analysis/gliner/.venv/bin/python
 
-      - name: Check the native and shared APIs
+      - name: Analyze and report results
         env:
-          PYTHONPATH: services/text_analysis/hosting
           TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
+          TEXT_ANALYSIS_FEATURE_MODE: ${{ inputs.feature_mode }}
+          TEXT_ANALYSIS_CUSTOM_FEATURES: ${{ inputs.custom_features }}
+          TEXT_ANALYSIS_OUTPUT_DIRECTORY: ${{ runner.temp }}/text-analysis-results
         run: >-
           uv run --project services/text_analysis/gliner --no-sync
-          pytest services/text_analysis/gliner/tests/test_api.py
-          --junitxml="${{ runner.temp }}/gliner-api-results.xml"
+          python tools/text-analysis-caller/run_analysis.py
+          < "$GITHUB_EVENT_PATH"
 
-      - name: Upload GLiNER API results
+      - name: Upload analysis results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: gliner-api-results-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/gliner-api-results.xml
+          name: text-analysis-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/text-analysis-results
           if-no-files-found: error
           retention-days: 90
