@@ -1,9 +1,21 @@
 """Which effective settings explain each saved provider result?"""
 
 import json
+import re
 
 from render_classifications import ClassificationReport
 from render_tables import read_list, read_object, read_text, render_cell, render_table
+
+
+def render_settings_link(repository: str | None, *, gliner: bool = False) -> str:
+    if repository is None:
+        return "Current settings link unavailable: repository context was not provided."
+    if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) is None or any(
+        part in {".", ".."} for part in repository.split("/")
+    ):
+        raise ValueError("Invalid report repository identifier")
+    path = "config/text-analysis/" + ("gliner/" if gliner else "") + "settings.json"
+    return f"Current settings: [settings.json](/{repository}/blob/main/{path})"
 
 
 def read_selection(value: object) -> list[str]:
@@ -88,16 +100,13 @@ def render_spacy_configuration(
             [
                 _row(
                     "Entity label mapping",
-                    _native(policy["label_map"]) + " (settings.json)",
+                    _native(policy["label_map"]),
                 ),
                 _row(
                     "Entity case grouping",
-                    (
-                        "Casefold; retain first spelling (ignore_case=true)"
-                        if ignore_case
-                        else "Exact case; retain first spelling (ignore_case=false)"
-                    )
-                    + " (settings.json)",
+                    "Casefold; retain first spelling (ignore_case=true)"
+                    if ignore_case
+                    else "Exact case; retain first spelling (ignore_case=false)",
                 ),
             ]
         )
@@ -108,7 +117,7 @@ def render_spacy_configuration(
             rows.append(
                 _row(
                     "Important Terms: " + setting,
-                    _native(value) + " (settings.json)",
+                    _native(value),
                 )
             )
     else:
@@ -143,9 +152,9 @@ def render_gliner_configuration(
         ),
         _row(
             "Configured model identity",
-            _native(read_object(settings["model"])) + " (settings.json)"
+            _native(read_object(settings["model"]))
             if settings is not None
-            else "Not recorded; no saved settings.json",
+            else "Not recorded; no saved model settings",
         ),
         _row("Report grouping", "Exact entity text and requested label (report projection only)"),
         _row("Entity result limit", "All returned mentions retained"),
@@ -178,5 +187,5 @@ def render_gliner_configuration(
         "GLiNER configuration",
         ["Setting", "Effective value"],
         rows,
-        "Model identity is configured in saved settings.json, not reported by the NER API.",
+        "Model identity comes from the saved configuration, not NER response metadata.",
     )
