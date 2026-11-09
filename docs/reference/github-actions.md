@@ -118,8 +118,8 @@ Corpus harvest retains its normal optional-failure policy.
 Day contracts, site build, Pages size and published-column checks precede the
 commit. Fresh-main regeneration, immutable collisions, published-input import,
 the final site rebuild and bundle gate use the normal publication path.
-Recovery completion also wakes Pages, which deploys only when the run committed
-published files. A check-only run with no published changes does not deploy.
+Recovery does not start Pages publication; committed changes reach the site on
+the publication schedule or through a manual dispatch.
 
 ## Manual feed planner
 
@@ -197,14 +197,21 @@ than this verification runner.
 
 - Build committed data only. Do not run the producer or a model during publication.
 - [`publish_decision.py`](../../backend/utilities/publish_decision.py) holds the
-  rule, one case per trigger, and every publish builds main's tip:
-  - The schedule runs every 30 minutes and publishes only after CI has passed
-    for main's current tip. A missing, pending or failed CI run leaves the site
-    unchanged until the next scheduled run or a manual publish.
+  rule, one case per trigger, and every publish builds the run's main commit:
+  - The schedule runs every 30 minutes. Generated data and documentation can
+    advance beyond the last successful deployment or a full passing CI run
+    without requiring CI on the generated commit.
+  - A pending or failed push CI blocks the schedule unless a later full CI run
+    passes. Changed code must match a full passing CI run;
+    documentation-only CI runs do not establish that proof. The lookup reads
+    at most the latest 100 push runs and the latest successful manual CI run.
+    If it finds no proof and the code differs from the last deployment,
+    dispatch CI on `main` or publish manually. Comparisons inspect only named
+    tree levels, not the contents of generated data or source directories.
   - A manual publish from `main` always publishes.
 - PR checks, merges and content-generation workflows run independently of site
-  publication. New digest content can wait until the next schedule; GitHub may
-  delay scheduled starts during busy periods.
+  publication. New digest content can wait until the next schedule; the
+  scheduler can start runs late when busy.
 - Cancel superseded builds, but let an active deployment finish. Deploy requires
   a successful build and its complete artifact. These are separate job groups.
 

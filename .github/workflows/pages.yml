@@ -20,16 +20,16 @@ permissions:
 # that makes cancelling a live deploy right (Guardrail #6).
 
 jobs:
-  # A schedule publishes only after CI has passed on main's current tip. Manual
-  # publication remains available from the default branch. The rule is one
-  # program, backend/utilities/publish_decision.py, so it can be tested against
-  # a real repository. Every publish builds main's tip.
+  # A schedule may reuse already deployed code, or code verified by CI. Generated
+  # data can advance without starting CI. Manual publication remains available
+  # from the default branch. Every publish builds the scheduled commit.
   decide:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
       actions: read
+      deployments: read
     outputs:
       ref: ${{ steps.rule.outputs.ref }}
       publish: ${{ steps.rule.outputs.publish }}
@@ -42,23 +42,16 @@ jobs:
         if: github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          TIP: ${{ github.sha }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          successful=$(gh api "repos/$REPOSITORY/actions/workflows/ci.yml/runs" \
-            --method GET -f "head_sha=$TIP" -f "branch=$DEFAULT_BRANCH" -f "event=push" -f "per_page=100" \
-            --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')
-          if [ "$successful" -gt 0 ]; then
-            echo "conclusion=success" >> "$GITHUB_OUTPUT"
-          else
-            echo "conclusion=not_verified" >> "$GITHUB_OUTPUT"
-          fi
+        run: python3 backend/utilities/pages_ci_evidence.py >> "$GITHUB_OUTPUT"
 
       - id: rule
         env:
           EVENT_NAME: ${{ github.event_name }}
           CONCLUSION: ${{ steps.verify.outputs.conclusion }}
+          CHECKED: ${{ steps.verify.outputs.checked }}
+          DEPLOYED: ${{ steps.verify.outputs.deployed }}
           TIP: ${{ github.sha }}
           DISPATCHED_REF: ${{ github.ref_name }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}

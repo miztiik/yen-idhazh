@@ -16,11 +16,12 @@ the caller's HEAD, index or sparse patterns. Neither API reruns a producer.
 
 ## When committed data reaches the site
 
-The Pages workflow publishes on a 30-minute schedule, after CI has passed on
-the current default-branch tip, or by manual dispatch from the default branch.
-PR checks, merges and content generation do not start a Pages run. New digest
-content can therefore wait until the next scheduled run; GitHub may delay a
-scheduled start during busy periods.
+The Pages workflow publishes on a 30-minute schedule or by manual dispatch from
+the default branch. The schedule accepts generated data on already deployed or
+fully CI-verified code; a pending or failed push CI blocks it unless a later
+full CI run passes. PR checks, merges and content generation do not start a
+Pages run. New digest content can therefore wait until the next scheduled run;
+the scheduler can start runs late when busy.
 
 The scheduled build republishes the site's committed copies on its cadence.
 The Data explorer also reads consented compact data from the configured
