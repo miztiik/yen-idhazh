@@ -75,9 +75,10 @@ class ModelRuntime:
 
     def _release(self, task: asyncio.Task[object]) -> None:
         self._owned_tasks.discard(task)
-        if task.cancelled():
-            self.mark_failed("ANALYSIS_FAILED")
-        elif (failure := task.exception()) is not None and not isinstance(failure, OperationError):
+        if task.cancelled() or (
+            (failure := task.exception()) is not None
+            and not isinstance(failure, OperationError)
+        ):
             self.mark_failed("ANALYSIS_FAILED")
 
     def observe_health(self) -> GlinerHealth:
