@@ -38,6 +38,8 @@ uv sync --project services/text_analysis/gliner --frozen --extra model --group d
 The workflow checks Ruff and strict mypy over GLiNER, the neutral host and
 `services/text_analysis/hosting/`. `MYPYPATH=../hosting` from the GLiNER project
 directory resolves the thin assembly during those checks.
+The native and repository lint profiles are selected explicitly for their
+respective source roots; strict mypy uses the native project configuration.
 The existing host registration, lifecycle and trace tests use the evaluator's
 own frozen verification environment; they prepare no evaluator model.
 

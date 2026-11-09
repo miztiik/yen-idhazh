@@ -102,8 +102,9 @@ jobs:
         env:
           MYPYPATH: ../hosting
         run: |
-          uv run --no-sync ruff check src tests scripts ../../local_api_host/src ../hosting
-          uv run --no-sync mypy src tests scripts ../../local_api_host/src ../hosting
+          uv run --no-sync ruff check --config pyproject.toml src tests scripts
+          uv run --no-sync ruff check --config ../../../pyproject.toml ../../local_api_host/src ../hosting
+          uv run --no-sync mypy --config-file pyproject.toml src tests scripts ../../local_api_host/src ../hosting
 
       - name: Check native features and verification contracts
         env:
