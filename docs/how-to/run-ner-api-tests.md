@@ -10,9 +10,10 @@ registered `ner-tests.yml` workflow.
 ## Dispatch the exact candidate
 
 Follow [the native spaCy dispatch procedure](run-spacy-tests.md) for the exact
-ref, selected language/profile, source-text disclosure and retained evidence.
-Run the final candidate once for English and once for Chinese, both using
-`md`, and require both recorded `headSha` values to equal that candidate.
+ref, selected profile, source-text disclosure and retained evidence.
+Run the final candidate once using `md`, and require its recorded `headSha`
+to equal that candidate. The workflow selects English for spaCy; it does not
+provide Chinese live-verification evidence.
 Ordinary pull-request CI is also required; a running or skipped check is not a
 pass.
 
@@ -44,7 +45,8 @@ The existing host registration, lifecycle and trace tests use the evaluator's
 own frozen verification environment; they prepare no evaluator model.
 
 After the existing native spaCy tests, prepare its selected configured wheel
-using the dispatch's `TEXT_ANALYSIS_LANGUAGE` and `TEXT_ANALYSIS_PROFILE`.
+using the job's English `TEXT_ANALYSIS_LANGUAGE` and the dispatch's
+`TEXT_ANALYSIS_PROFILE`.
 Prepare the configured GLiNER snapshot before the focused test:
 
 ```bash
@@ -70,6 +72,10 @@ analysis plus native GLiNER NER/classification results, separate ready health
 responses, unchanged customized schemas, native refusal behavior and one
 receiving trace operation per request. Classification definitions come from
 the current active entries in `config/taxonomy.json`, not a copied label list.
+Its reference sentence is declared in
+`services/text_analysis/gliner/tests/test_api.py` inside
+`test_real_prepared_model_api`. This shared API regression input is separate
+from the editable spaCy dispatch passage.
 
 The installed HTTPX async client enters the native application lifespan
 directly on the provider's asyncio event loop. It does not use the deprecated
@@ -86,7 +92,7 @@ terminal diagnostics to retain model ownership after the HTTP waiter
 disappears. Its own shutdown must not stop spaCy. Construction also refuses
 duplicate applications, colliding paths and mismatched transport bounds.
 
-Preserve the exact candidate commit, both run URLs and conclusions, the
+Preserve the exact candidate commit, the run URL and conclusion, the
 `gliner-api-results-<run-id>-<run-attempt>` JUnit artifacts and the original
 spaCy evidence artifacts. A successful shared result proves native
 request/readiness/schema/lifecycle retention on one application, not

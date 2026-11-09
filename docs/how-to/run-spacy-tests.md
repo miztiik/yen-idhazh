@@ -24,12 +24,21 @@ The dispatch ref selects both the workflow revision and implementation. The
 workflow disables checkout credentials, checks out `github.sha` and confirms
 that the resulting `HEAD` is the same 40-character commit.
 
-Always supply `language` as `en` or `zh` and `feature_mode` as `default`, `all`
-or `custom`. `profile` defaults to `md`; `sm` and `lg` remain optional manual
-profiles. `text` is required. `default` reads the selected language's resolved
-defaults from health: English selects `named_entities`, `important_terms`;
-Chinese inherits `relations`, `entities`, `sentences`, `document_metrics`.
-`all` selects every feature supported by the selected language.
+The workflow tests English only; there is no language input. Its job-level
+`TEXT_ANALYSIS_LANGUAGE` selects `en` for model preparation, live verification
+and the shared API checks. `feature_mode` defaults to `default`; `all` and
+`custom` remain available. `profile` defaults to `md`; `sm` and `lg` remain
+optional manual profiles. `default` reads the resolved English defaults from
+health: `named_entities`, `important_terms`. `all` selects every feature
+supported by English.
+
+The required `text` input has an editable reference passage stored directly in
+`.github/workflows/ner-tests.yml` at
+`on.workflow_dispatch.inputs.text.default`. The dispatch supplies that text
+through the GitHub event file, not a separate committed article file.
+Input descriptions begin with `spaCy:` because GitHub's dispatch form supports
+only a flat input list, not provider groups. GLiNER has no dispatch inputs;
+its model settings come from its committed configuration.
 
 For `custom` mode, set `custom_features` to a nonempty comma-separated list
 drawn from `entities`, `sentences`, `relations`, `noun_phrases`,
@@ -43,7 +52,6 @@ argument:
 
 ```powershell
 $inputs = @{
-  language = 'en'
   profile = 'md'
   feature_mode = 'default'
   custom_features = ''
@@ -54,9 +62,9 @@ $inputs | gh workflow run ner-tests.yml --ref '<implementation-branch-or-tag>' -
 ```
 
 Before the implementation pull request merges, select its final branch head
-once with `language = 'en'` and once with `language = 'zh'`, both using
-`profile = 'md'`. Confirm both runs record the same final `github.sha`. Any
-later implementation edit invalidates both results.
+once using `profile = 'md'`. Confirm the run records that final `github.sha`.
+Any later implementation edit invalidates the result. This manual workflow
+does not provide Chinese live-verification evidence.
 
 The platform retains dispatch inputs. The selected source text is also visible
 in the run summary and `analysis-request.json` to anyone who can view the run.
@@ -144,8 +152,9 @@ The live probe reads language defaults and the term maximum from current
 health, verifies the new English outputs and every selected raw feature, and
 checks retired routes and wrong methods. Its English whitespace boundary
 proves `FEATURE_FAILED` preserves siblings; a zero configured maximum instead
-completes with no terms. The Chinese checks preserve raw/default behavior,
-noun-phrase unavailability and HTTP 422 for an all-unavailable selection.
+completes with no terms. When invoked for Chinese outside this English-only
+workflow, its checks preserve raw/default behavior, noun-phrase unavailability
+and HTTP 422 for an all-unavailable selection.
 Successful receipt cleanup must still be `confirmed`.
 
 Run the probe's model-free evidence-span check without installing or starting
