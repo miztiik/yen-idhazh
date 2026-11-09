@@ -6,18 +6,12 @@ from pathlib import Path
 import httpx
 from collect_operations import Outcome
 from collect_results import Inputs, send_request
-from gliner_api.declare_api_contracts import (
-    CLASSIFY_PATH,
-    ClassificationRequest,
-    ClassificationResult,
-    ErrorResult,
-)
+from gliner_api.declare_analysis_contracts import AnalyzeTextRequest, AnalyzeTextResult
+from gliner_api.declare_api_contracts import ANALYZE_TEXT_PATH, ErrorResult
+from gliner_api.validate_analysis_results import validate_analysis_results
 from prepare_default_tasks import default_classification_tasks
 from pydantic import ValidationError
-from render_classifications import (
-    read_classification_selections,
-    read_classification_tasks,
-)
+from render_classifications import read_classification_tasks
 
 
 async def collect_classifications(
@@ -34,7 +28,20 @@ async def collect_classifications(
                 (root / "config" / "taxonomy.json").read_bytes()
             )
             tasks = default_classification_tasks(taxonomy.model_dump(mode="json"))
-        request = ClassificationRequest.model_validate({"text": inputs.text, "tasks": tasks})
+        request = AnalyzeTextRequest.model_validate_json(
+            json.dumps(
+                {
+                    "text": inputs.text,
+                    "schema": {
+                        "classifications": [
+                            {"task": name, **task}
+                            for name, task in read_classification_tasks(tasks).items()
+                        ]
+                    },
+                }
+            ),
+            strict=True,
+        )
     except ImportError:
         return Outcome(
             error="Default GLiNER classification tasks need the taxonomy schema; "
@@ -52,16 +59,13 @@ async def collect_classifications(
     try:
         response = await send_request(
             client,
-            CLASSIFY_PATH,
-            request.model_dump_json().encode("utf-8"),
+            ANALYZE_TEXT_PATH,
+            request.model_dump_json(by_alias=True, exclude_unset=True).encode("utf-8"),
             directory / "gliner" / "classification",
         )
         if response.status_code == 200:
-            result = ClassificationResult.model_validate_json(response.content)
-            read_classification_selections(
-                result.model_dump(mode="json"),
-                read_classification_tasks(request.model_dump(mode="json")["tasks"]),
-            )
+            wire = AnalyzeTextResult.model_validate_json(response.content)
+            result = validate_analysis_results(wire.result, request)
             return Outcome(result=result.model_dump(mode="json"))
         error = ErrorResult.model_validate_json(response.content)
         return Outcome(error=f"{error.error.code}: {error.error.message}")

@@ -6,10 +6,13 @@ from pathlib import Path
 
 import httpx
 from collect_operations import Outcome
-from gliner_api.declare_api_contracts import NER_PATH, NerRequest, NerResult
+from gliner_api.declare_analysis_contracts import AnalyzeTextRequest as GlinerRequest
+from gliner_api.declare_analysis_contracts import AnalyzeTextResult as GlinerResult
+from gliner_api.declare_api_contracts import ANALYZE_TEXT_PATH as GLINER_ANALYZE_TEXT_PATH
 from gliner_api.declare_api_contracts import ErrorResult as GlinerError
 from gliner_api.load_settings import SETTINGS_PATH as GLINER_SETTINGS_PATH
 from gliner_api.load_settings import GlinerSettings
+from gliner_api.validate_analysis_results import validate_analysis_results
 from pydantic import ValidationError
 from text_analysis.declare_api_contracts import (
     ANALYZE_TEXT_PATH,
@@ -159,12 +162,19 @@ async def collect_gliner(
 ) -> Outcome:
     """Collect and validate exactly one GLiNER named-entity response."""
     try:
-        request = NerRequest(text=inputs.text, labels=gliner_labels(settings))
+        request = GlinerRequest.model_validate_json(
+            json.dumps({"text": inputs.text, "schema": {"entities": gliner_labels(settings)}}),
+            strict=True,
+        )
         response = await send_request(
-            client, NER_PATH, request.model_dump_json().encode("utf-8"), directory / "gliner"
+            client,
+            GLINER_ANALYZE_TEXT_PATH,
+            request.model_dump_json(by_alias=True, exclude_unset=True).encode("utf-8"),
+            directory / "gliner",
         )
         if response.status_code == 200:
-            result = NerResult.model_validate_json(response.content)
+            wire = GlinerResult.model_validate_json(response.content)
+            result = validate_analysis_results(wire.result, request)
             return Outcome(result=result.model_dump(mode="json"))
         error = GlinerError.model_validate_json(response.content)
         return Outcome(error=f"{error.error.code}: {error.error.message}")

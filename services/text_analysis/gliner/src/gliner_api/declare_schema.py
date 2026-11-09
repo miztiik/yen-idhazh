@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from gliner_api.declare_analysis_contracts import AnalyzeTextRequest
 from gliner_api.declare_api_contracts import (
     HEALTH_PATH,
     ClassificationRequest,
@@ -18,7 +19,7 @@ def install_request_schemas(app: FastAPI) -> None:
     def openapi_schema() -> dict[str, Any]:
         schema = original_openapi()
         models = schema.setdefault("components", {}).setdefault("schemas", {})
-        for contract in (NerRequest, ClassificationRequest):
+        for contract in (AnalyzeTextRequest, NerRequest, ClassificationRequest):
             request_schema = contract.model_json_schema(
                 ref_template="#/components/schemas/{model}"
             )

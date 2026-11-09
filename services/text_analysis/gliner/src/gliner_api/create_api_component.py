@@ -33,8 +33,11 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import Response
 
+from gliner_api.analyze_text import analyze_text
 from gliner_api.classify_text import classify_text
+from gliner_api.declare_analysis_contracts import AnalyzeTextRequest, AnalyzeTextResult
 from gliner_api.declare_api_contracts import (
+    ANALYZE_TEXT_PATH,
     API_VERSION,
     APPLICATION_TITLE,
     CLASSIFY_PATH,
@@ -61,6 +64,7 @@ from gliner_api.load_settings import GlinerSettings
 from gliner_api.run_model import ModelRuntime, OperationError
 
 _OPERATIONS: dict[str, OperationName] = {
+    ANALYZE_TEXT_PATH: "analyze-text-gliner",
     NER_PATH: "run-ner-gliner",
     CLASSIFY_PATH: "classify-text-gliner",
 }
@@ -188,6 +192,28 @@ def create_app(
     }
 
     @router.post(
+        ANALYZE_TEXT_PATH,
+        response_model=AnalyzeTextResult,
+        responses=errors,
+        openapi_extra={
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/AnalyzeTextRequest"}
+                    }
+                },
+            }
+        },
+    )
+    async def analyze_text_gliner(request: Request) -> Response:
+        return await process(
+            request,
+            lambda body: AnalyzeTextRequest.model_validate_json(body, strict=True),
+            analyze_text,
+        )
+
+    @router.post(
         NER_PATH,
         response_model=NerResult,
         responses=errors,
@@ -248,7 +274,7 @@ def create_app(
         start=start,
         shutdown=runtime.shutdown,
         observe_health=observe_health,
-        refuse_requests={NER_PATH: refuse, CLASSIFY_PATH: refuse},
+        refuse_requests={path: refuse for path in _OPERATIONS},
         default_refusal=refuse,
     )
 

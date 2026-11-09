@@ -2,25 +2,18 @@
 
 from pydantic import ConfigDict, TypeAdapter, ValidationError
 
+from gliner_api.declare_analysis_contracts import NativeSelection
 from gliner_api.declare_api_contracts import (
-    ApiContract,
     ClassificationRequest,
     ClassificationResult,
-    Confidence,
-    ExactText,
     ResultValidationError,
     SelectedLabel,
 )
 from gliner_api.load_model import NativeModel
 
 
-class _NativeSelection(ApiContract):
-    label: ExactText
-    confidence: Confidence
-
-
 _NATIVE_CLASSIFICATIONS = TypeAdapter(
-    dict[str, _NativeSelection | list[_NativeSelection]],
+    dict[str, NativeSelection | list[NativeSelection]],
     config=ConfigDict(strict=True, allow_inf_nan=False, hide_input_in_errors=True),
 )
 

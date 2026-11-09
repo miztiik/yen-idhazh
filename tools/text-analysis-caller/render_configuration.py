@@ -3,6 +3,7 @@
 import json
 import re
 
+from project_gliner_analysis import project_classification_request
 from render_classifications import ClassificationReport
 from render_tables import read_list, read_object, read_text, render_cell, render_table
 
@@ -142,7 +143,12 @@ def render_gliner_configuration(
     rows = [
         _row(
             "NER operation",
-            _render_operation("run-ner-gliner", request, result),
+            _render_operation(
+                "analyze-text-gliner" if request is not None and "schema" in request
+                else "run-ner-gliner",
+                request,
+                result,
+            ),
         ),
         _row(
             "Entity labels (ordered)",
@@ -163,7 +169,9 @@ def render_gliner_configuration(
         _row(
             "Classification",
             _render_operation(
-                "classify-text-gliner",
+                "analyze-text-gliner"
+                if classification.request is not None and "schema" in classification.request
+                else "classify-text-gliner",
                 classification.request,
                 classification.result,
                 prefix="classification/",
@@ -173,7 +181,8 @@ def render_gliner_configuration(
         )
     )
     if classification is not None and classification.request is not None:
-        for name, value in read_object(classification.request["tasks"]).items():
+        projected = project_classification_request(classification.request)
+        for name, value in read_object(projected["tasks"]).items():
             task = read_object(value)
             mode = "multi-label" if task["multi_label"] else "single-label"
             rows.append(

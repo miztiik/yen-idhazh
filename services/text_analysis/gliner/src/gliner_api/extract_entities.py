@@ -1,10 +1,10 @@
 """How do native GLiNER2 mentions become validated source spans?"""
 
-from pydantic import Field, ValidationError
+from pydantic import ValidationError
 
+from gliner_api.declare_analysis_contracts import NativeMention
 from gliner_api.declare_api_contracts import (
     ApiContract,
-    Confidence,
     EntityMention,
     ExactText,
     NerRequest,
@@ -14,15 +14,8 @@ from gliner_api.declare_api_contracts import (
 from gliner_api.load_model import NativeModel
 
 
-class _NativeMention(ApiContract):
-    text: ExactText
-    start: int = Field(ge=0)
-    end: int = Field(gt=0)
-    confidence: Confidence
-
-
 class _NativeEntities(ApiContract):
-    entities: dict[ExactText, list[_NativeMention]]
+    entities: dict[ExactText, list[NativeMention]]
 
 
 def normalize_entities(raw: object, request: NerRequest) -> NerResult:

@@ -495,6 +495,8 @@ The provider has its own CPython 3.12 manifest and frozen lock under
 `services/text_analysis/gliner/`. Its production dependencies do not import
 spaCy model/feature logic. The development group consumes the existing
 text-analysis settings loader and resolves compatible dependencies.
+The pinned torch-free GLiNER2 core validates caller-defined native analysis
+schemas in the base environment; model extras remain optional.
 
 Verify the named lock without installing a provider:
 

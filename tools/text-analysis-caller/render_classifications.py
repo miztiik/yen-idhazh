@@ -2,6 +2,10 @@
 
 from dataclasses import dataclass
 
+from project_gliner_analysis import (
+    project_classification_request,
+    project_classification_result,
+)
 from render_tables import (
     read_list,
     read_object,
@@ -69,10 +73,10 @@ def render_classifications(
     """Render one independent operation using only its saved native evidence."""
     tasks: dict[str, dict[str, object]] = {}
     if request is not None:
-        read_object(request, {"text", "tasks"})
-        if read_text(request["text"], nonblank=True) != source:
+        projected = project_classification_request(request)
+        if read_text(projected["text"], nonblank=True) != source:
             raise ValueError("Classification source differs from the displayed source.")
-        tasks = read_classification_tasks(request["tasks"])
+        tasks = read_classification_tasks(projected["tasks"])
     result = None
     selections: dict[str, list[dict[str, object]]] = {}
     if error is not None:
@@ -84,9 +88,11 @@ def render_classifications(
     elif "error" in response:
         outcome = "Classification error: " + render_error(read_object(response, {"error"})["error"])
     else:
-        if not tasks:
+        if not tasks or request is None:
             raise ValueError("Classification results require their saved request.")
-        selections = read_classification_selections(response, tasks)
+        selections = read_classification_selections(
+            project_classification_result(response, request), tasks
+        )
         result = response
         outcome = "Classification status: complete."
     rows = []

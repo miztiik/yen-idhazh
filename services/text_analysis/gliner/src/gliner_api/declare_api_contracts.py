@@ -19,8 +19,10 @@ CLASSIFY_PATH: Final = f"{API_PREFIX}/classify-text-gliner"
 HEALTH_PATH: Final = f"{API_PREFIX}/get-gliner-health"
 SCHEMA_PATH: Final = f"{API_PREFIX}/get-gliner-schema"
 APPLICATION_TITLE: Final = "gliner-api"
+ANALYZE_TEXT_PATH: Final = f"{API_PREFIX}/analyze-text-gliner"
+ANALYSIS_CONTRACT_VERSION: Final = "2026-11-09"
 
-OperationName = Literal["run-ner-gliner", "classify-text-gliner"]
+OperationName = Literal["analyze-text-gliner", "run-ner-gliner", "classify-text-gliner"]
 HealthStatus = Literal["loading", "ready", "disabled", "failed", "stopping"]
 ErrorCode = Literal[
     "INVALID_REQUEST",

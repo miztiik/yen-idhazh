@@ -12,6 +12,8 @@ from gliner_api.configure_native_diagnostics import (
 )
 
 if TYPE_CHECKING:
+    from gliner2.inference.schema import Schema
+
     from gliner_api.load_settings import GlinerSettings
 
 # Native checkpoint and tokenizer filenames are format identifiers, not model choices.
@@ -41,7 +43,16 @@ class ModelLoadError(RuntimeError):
 
 @runtime_checkable
 class NativeModel(Protocol):
-    """Expose the two real native long-text operations required by the API."""
+    """Expose native long-text analysis and the operations retained during migration."""
+
+    def extract_long(
+        self,
+        text: str,
+        schema: Schema,
+        *,
+        include_confidence: bool,
+        include_spans: bool,
+    ) -> object: ...
 
     def extract_entities_long(
         self,
@@ -130,6 +141,7 @@ def load_model(settings: GlinerSettings, root: Path) -> NativeModel:
                 )
             if (
                 not isinstance(model, NativeModel)
+                or not callable(model.extract_long)
                 or not callable(model.extract_entities_long)
                 or not callable(model.classify_text_long)
             ):
