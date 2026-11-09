@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -611,8 +611,11 @@ including disabled commands, retained profile operations, native delivery
 before supervision and unchanged relay identity. Private profiles and
 summarizer contents remain private. Reuse unchanged summarizer/workflow check
 records only when their tested inputs are unchanged. Keep Linux-only native
-instrument coverage and the full suite in merge-candidate CI; no live
-data-writing workflow or published-site browser gate is added.
+API/process/lifecycle tests and the full suite in merge-candidate CI. CI no
+longer installs optional Linux cache tools or runs RAM, copy, cache and
+affinity proofs. Automatic native perf control/SIGINT and cache/affinity
+measurement verification is retired; recorded parser cases do not replace
+it. No live data-writing workflow or published-site browser gate is added.
 
 The native package command supplies its declared timeout. Keep shorter
 process deadlines and existing independent failure checks; do not raise
