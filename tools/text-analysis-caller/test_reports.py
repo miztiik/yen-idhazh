@@ -1,5 +1,6 @@
 """Which pure report behaviors preserve native evidence and independent delivery?"""
 
+import asyncio
 import copy
 import html
 import json
@@ -8,6 +9,13 @@ import sys
 import unittest
 from html.parser import HTMLParser
 
+from collect_operations import Outcome, collect_gliner_operations
+from render_classifications import (
+    active_classification_tasks,
+    read_classification_selections,
+    read_classification_tasks,
+    render_classifications,
+)
 from render_entities import project_gliner_groups, project_spacy_groups
 from render_report import (
     compose_report,
@@ -16,6 +24,7 @@ from render_report import (
     render_source,
     render_spacy_results,
 )
+from render_tables import read_object
 from write_reports import SUMMARY_MAX_BYTES, NativeFiles, render_saved_reports, select_summary
 
 
@@ -65,6 +74,32 @@ def spacy_settings() -> dict[str, object]:
             },
         },
         "important_terms": {"max_results": 25, "max_phrase_words": 3},
+    }
+
+
+def classification_taxonomy() -> dict[str, object]:
+    return {
+        "verticals": [
+            {"id": "second", "display_name": "Saved <desk>", "definition": "Second desk."},
+            {"id": "first", "display_name": "First", "definition": "First desk."},
+            {"id": "draft", "status": "draft", "definition": ""},
+        ],
+        "lenses": [
+            {"id": "lens-a", "display_name": "Lens A", "definition": "First lens."},
+            {"id": "lens-b", "display_name": "Lens B", "definition": "Second lens."},
+            {"id": "retired", "status": "retired", "definition": ""},
+        ],
+        "events": [{"id": "event", "display_name": "Event", "definition": "An event."}],
+    }
+
+
+def classification_result() -> dict[str, object]:
+    return {
+        "classifications": {
+            "desk": [{"id": "second", "score": 0.8}],
+            "lenses": [{"id": "lens-b", "score": 0.25}, {"id": "lens-a", "score": 0.95}],
+            "events": [],
+        }
     }
 
 
@@ -509,6 +544,200 @@ class ReportTests(unittest.TestCase):
 
     def test_pure_reports_do_not_import_provider_runtimes(self) -> None:
         self.assertFalse({"text_analysis", "gliner_api", "spacy", "gliner2"} & set(sys.modules))
+
+
+class ClassificationTests(unittest.TestCase):
+    def test_active_taxonomy_definitions_modes_and_order_drive_offerings(self) -> None:
+        taxonomy = classification_taxonomy()
+        before = json.dumps(taxonomy)
+        tasks = read_classification_tasks(active_classification_tasks(taxonomy))
+        self.assertEqual(list(tasks), ["desk", "lenses", "events"])
+        self.assertEqual(
+            tasks["desk"],
+            {"labels": {"second": "Second desk.", "first": "First desk."}, "multi_label": False},
+        )
+        self.assertEqual(list(read_object(tasks["lenses"]["labels"])), ["lens-a", "lens-b"])
+        self.assertTrue(tasks["lenses"]["multi_label"])
+        self.assertTrue(tasks["events"]["multi_label"])
+        self.assertEqual(json.dumps(taxonomy), before)
+        for field in ("verticals", "lenses", "events"):
+            empty = {**taxonomy, field: []}
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "no active labels"):
+                active_classification_tasks(empty)
+            undefined = {**taxonomy, field: [{"id": "undefined", "definition": " "}]}
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                active_classification_tasks(undefined)
+
+    def test_classification_preserves_source_selections_scores_and_historical_names(self) -> None:
+        source = "  X\r\n"
+        taxonomy = classification_taxonomy()
+        request: dict[str, object] = {
+            "text": source,
+            "tasks": active_classification_tasks(taxonomy),
+        }
+        response = classification_result()
+        before = json.dumps((request, response, taxonomy))
+        classification = render_classifications(
+            source, response, request=request, taxonomy=taxonomy
+        )
+        report = html.unescape(classification.content)
+        self.assertIn("| L1 | desk | second | Saved <desk> | 0.8 |", report)
+        self.assertIn("| L2 | lenses | lens-b | Lens B | 0.25 |", report)
+        self.assertIn("| L3 | lenses | lens-a | Lens A | 0.95 |", report)
+        self.assertIn("| L4 | events | No label selected | - | - |", report)
+        self.assertLess(report.index("| L2"), report.index("| L3"))
+        self.assertNotIn("<desk>", classification.content)
+        self.assertIn("higher means stronger model confidence", report)
+        self.assertIn("not calibrated correctness percentages", report)
+        self.assertIn("can aggregate chunks", report)
+        self.assertIn("does not guarantee abstention", report)
+        self.assertNotIn("YAKE", report)
+        self.assertEqual(json.dumps((request, response, taxonomy)), before)
+        with self.assertRaises(ValueError):
+            render_classifications("X\n", response, request=request, taxonomy=taxonomy)
+
+    def test_classification_refuses_missing_tasks_wrong_ids_cardinality_and_invalid_scores(
+        self,
+    ) -> None:
+        tasks = read_classification_tasks(active_classification_tasks(classification_taxonomy()))
+        invalid: list[dict[str, object]] = [
+            {"desk": [], "lenses": []},
+            {"desk": [], "lenses": [], "events": [], "invented": []},
+            {"desk": [{"id": "event", "score": 0.5}], "lenses": [], "events": []},
+            {
+                "desk": [{"id": "second", "score": 0.5}, {"id": "first", "score": 0.4}],
+                "lenses": [],
+                "events": [],
+            },
+            {
+                "desk": [],
+                "lenses": [{"id": "lens-a", "score": 0.5}, {"id": "lens-a", "score": 0.4}],
+                "events": [],
+            },
+        ]
+        invalid.extend(
+            {"desk": [{"id": "second", "score": score}], "lenses": [], "events": []}
+            for score in (float("nan"), float("inf"), -0.1, 1.1, True, "0.5")
+        )
+        for classifications in invalid:
+            with self.subTest(result=classifications), self.assertRaises(ValueError):
+                read_classification_selections({"classifications": classifications}, tasks)
+        empty: dict[str, object] = {"classifications": {name: [] for name in tasks}}
+        self.assertEqual(read_classification_selections(empty, tasks), {name: [] for name in tasks})
+
+    def test_classification_composes_identically_and_failure_does_not_hide_ner(self) -> None:
+        source = "X"
+        taxonomy = classification_taxonomy()
+        request: dict[str, object] = {
+            "text": source,
+            "tasks": active_classification_tasks(taxonomy),
+        }
+        response = classification_result()
+        spacy = NativeFiles(
+            request={"text": source, "language": "en"},
+            response=spacy_result([feature("named_entities", {"entities": []})]),
+        )
+        gliner = NativeFiles(
+            request={"text": source, "labels": ["person"]}, response={"entities": []}
+        )
+        files = NativeFiles(request=request, response=response)
+        reports = render_saved_reports(
+            source, spacy, gliner, classification=files, taxonomy=taxonomy
+        )
+        section = render_classifications(source, response, request=request, taxonomy=taxonomy)
+        self.assertFalse(reports.failed)
+        self.assertIn(section.content, reports.gliner)
+        self.assertIn(section.content, reports.combined)
+        self.assertNotIn(section.content, reports.spacy)
+        self.assertIn("classify&#45;text&#45;gliner", reports.gliner)
+        self.assertIn("single&#45;label", reports.gliner)
+        self.assertIn("Second desk", html.unescape(reports.gliner))
+        self.assertIn("taxonomy.json", html.unescape(reports.gliner))
+        self.assertEqual(
+            reports.combined,
+            render_report(
+                source,
+                spacy.response,
+                gliner.response,
+                spacy_request=spacy.request,
+                gliner_request=gliner.request,
+                classification=section,
+            ),
+        )
+        ids = re.findall(r"^\| ([A-Z]+\d+) \|", reports.combined, re.MULTILINE)
+        self.assertEqual(len(ids), len(set(ids)))
+        for failed in (
+            NativeFiles(request=request, error="Classification transport failed."),
+            NativeFiles(request=request, response={"classifications": {"desk": []}}),
+            NativeFiles(
+                request=request,
+                response={
+                    "error": {
+                        "code": "INPUT_UNSUPPORTED",
+                        "message": "The native model cannot process this input.",
+                        "retryable": False,
+                    }
+                },
+            ),
+        ):
+            with self.subTest(failed=failed):
+                reports = render_saved_reports(
+                    source, spacy, gliner, classification=failed, taxonomy=taxonomy
+                )
+                self.assertTrue(reports.failed)
+                self.assertIn("Status: complete.", reports.spacy)
+                self.assertIn("Status: complete.", reports.gliner)
+                self.assertIn("Classification error:", reports.gliner)
+        reports = render_saved_reports(
+            source,
+            spacy,
+            NativeFiles(request=gliner.request, error="NER transport failed."),
+            classification=files,
+            taxonomy=taxonomy,
+        )
+        self.assertTrue(reports.failed)
+        self.assertIn(section.content, reports.gliner)
+        self.assertIn("Provider error:", reports.gliner)
+
+
+class OperationSchedulingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_both_operations_start_before_either_response_and_keep_independent_outcomes(
+        self,
+    ) -> None:
+        ner_started, classification_started = asyncio.Event(), asyncio.Event()
+        ner = Outcome(error="NER failed.")
+        classification = Outcome(result=classification_result())
+
+        async def receive(
+            started: asyncio.Event, sibling: asyncio.Event, outcome: Outcome
+        ) -> Outcome:
+            started.set()
+            await sibling.wait()
+            return outcome
+
+        results = await asyncio.wait_for(
+            collect_gliner_operations(
+                receive(ner_started, classification_started, ner),
+                receive(classification_started, ner_started, classification),
+            ),
+            timeout=1,
+        )
+        self.assertEqual(results, (ner, classification))
+
+    async def test_unexpected_error_is_raised_only_after_sibling_finishes(self) -> None:
+        finished = asyncio.Event()
+
+        async def fail() -> Outcome:
+            raise ValueError("Unexpected operation failure.")
+
+        async def finish() -> Outcome:
+            await asyncio.sleep(0)
+            finished.set()
+            return Outcome(result=classification_result())
+
+        with self.assertRaises(ValueError):
+            await collect_gliner_operations(fail(), finish())
+        self.assertTrue(finished.is_set())
 
 
 if __name__ == "__main__":

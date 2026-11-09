@@ -109,6 +109,7 @@ jobs:
 
       - name: Analyze and report results
         env:
+          PYTHONPATH: ${{ github.workspace }}/backend
           TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
           TEXT_ANALYSIS_FEATURE_MODE: ${{ inputs.feature_mode }}
           TEXT_ANALYSIS_CUSTOM_FEATURES: ${{ inputs.custom_features }}

@@ -2,6 +2,7 @@
 
 import json
 
+from render_classifications import ClassificationReport
 from render_tables import read_list, read_object, read_text, render_cell, render_table
 
 
@@ -147,10 +148,12 @@ def render_gliner_configuration(
     result: dict[str, object] | None,
     settings: dict[str, object] | None,
     labels: list[str] | None,
+    *,
+    classification: ClassificationReport | None = None,
 ) -> str:
     rows = [
         _row(
-            "Operation",
+            "NER operation",
             "run-ner-gliner (request.json)" if request is not None else "No saved request.json",
             "run-ner-gliner (response.json)"
             if result is not None
@@ -177,8 +180,46 @@ def render_gliner_configuration(
         _row(
             "Entity result limit", "No explicit result-count cap", "All returned mentions retained"
         ),
-        _row("Classification", "Not requested", "No classification request was made"),
     ]
+    request = classification.request if classification is not None else None
+    result = classification.result if classification is not None else None
+    rows.append(
+        _row(
+            "Classification",
+            "classify-text-gliner (classification/request.json)"
+            if request is not None
+            else (
+                "Not executed; no saved request" if classification is not None else "Not requested"
+            ),
+            "classify-text-gliner (classification/response.json)"
+            if result is not None
+            else (
+                "Not confirmed; no successful classification/response.json"
+                if classification is not None
+                else "No classification request was made"
+            ),
+        )
+    )
+    if request is not None:
+        for name, value in read_object(request["tasks"]).items():
+            task = read_object(value)
+            mode = "multi-label" if task["multi_label"] else "single-label"
+            rows.append(
+                _row(
+                    "Classification task: " + name,
+                    mode + "; " + _native(task["labels"]),
+                    "classification/request.json; active definitions in taxonomy.json "
+                    "(exact validated config/taxonomy.json)",
+                )
+            )
+        rows.append(
+            _row(
+                "Classification configuration",
+                "No caller threshold or model override",
+                "Same loaded model selected by settings.json; selection and long-text "
+                "chunk/score merging use native SDK configuration, not response metadata",
+            )
+        )
     return render_table(
         "J",
         "GLiNER configuration",

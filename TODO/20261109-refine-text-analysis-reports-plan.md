@@ -32,7 +32,7 @@ Table C - Outcomes
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Explain provider results and deliver separate artifacts | - | A | DONE (implemented) | bookish-fortnight | - | - |
-| C2 | 2 | Collect and report GLiNER article classification | 1 | B | PENDING | - | - | - | - |
+| C2 | 2 | Collect and report GLiNER article classification | 1 | B | DONE (implemented) | concurrent-gliner-classification | - | - |
 
 ## 2 - Row #1 Explain provider results and deliver separate artifacts
 
