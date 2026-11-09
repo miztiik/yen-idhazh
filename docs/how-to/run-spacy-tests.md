@@ -141,13 +141,14 @@ Only these provider artifacts are uploaded:
 The UTC date is captured once near job start and reused across midnight.
 Each artifact contains available exact native `request.json`, `response.json`
 and validated `settings.json`, plus a complete standalone `report.md` with
-source and the same provider section used in the Summary. The GLiNER root
-request/response remain NER; its additional native files are
+source and the same provider section used in the Summary. Each also contains
+`events.jsonl`; see [console and saved events](#console-and-saved-events).
+The GLiNER root request/response remain NER; its other files are
 `classification/request.json` and `classification/response.json`. Each upload runs
 independently even after failure. The existing retention policy is unchanged.
 Files are written atomically under a run-owned runner-temporary directory.
-The summary and files can contain source text and extracted data. Diagnostic
-stderr stays in the workflow logs, not the result tables.
+The summary and native request/response files can contain source text and
+extracted data. Diagnostic events are separate from result tables.
 
 Successful empty collections say no results were returned; unselected features
 say not requested. Failed features show native errors without hiding completed
@@ -170,6 +171,30 @@ provider serializes operations on one loaded model. No second server, model,
 download, live-check suite or inference retry is added. Ordinary required CI
 is separate. See the [shared API procedure](run-ner-api-tests.md) for preparation
 and process ownership.
+
+## Console and saved events
+
+The APIs emit validated native CloudEvents to stderr, not HTTP response bodies.
+The caller mirrors every emitted event immediately to the workflow console
+and to the matching artifact's `events.jsonl`. spaCy source
+`/services/text-analysis` goes only to the spaCy file; GLiNER source
+`/services/text-analysis/gliner` goes only to the GLiNER file, including both
+NER and classification. Records retain their exact bytes, UTC times, event
+identities, traces and diagnostic data.
+
+Capture begins before readiness and continues through process cleanup and
+confirmed stderr EOF, retaining startup, readiness, operation, failure and
+shutdown records whenever the native services emit them. Logging levels and
+event byte limits come from each saved, native-validated provider setting.
+Malformed, unknown, oversized or incomplete records fail capture without
+printing their raw contents. Capture, console, file and cleanup failures are
+explicit process errors and make the job fail, while retaining available
+validated events and successful processing artifacts.
+
+Full response bodies remain in `response.json` and GLiNER's
+`classification/response.json`; they are not dumped to the console or event
+files. Neither API gains a file sink, and report regeneration does not read
+or rewrite diagnostics.
 
 ## Regenerate reports without inference
 
@@ -201,8 +226,10 @@ npm --prefix frontend run test:changed -- --list
 ```
 
 Ordinary CI also runs the pure report assertions without starting a provider.
-These checks exercise rendering, independent outcomes and in-memory caller
-scheduling, not workflow declarations or provider execution.
+These checks exercise rendering, independent outcomes, in-memory caller
+scheduling and bounded stream delivery, not workflow declarations or provider
+execution. Native event validation and console/file routing are observed on
+the Linux reporting run.
 
 ## Design rationale
 

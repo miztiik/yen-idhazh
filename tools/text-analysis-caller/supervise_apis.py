@@ -33,6 +33,8 @@ def start_apis(root: Path) -> subprocess.Popen[bytes]:
         ],
         cwd=root,
         stdin=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        bufsize=0,
         start_new_session=True,
     )
 

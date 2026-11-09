@@ -9,6 +9,7 @@ import sys
 import unittest
 from html.parser import HTMLParser
 
+import test_capture_stream
 from collect_operations import Outcome, collect_gliner_operations
 from prepare_default_tasks import default_classification_tasks
 from render_classifications import (
@@ -831,6 +832,13 @@ class OperationSchedulingTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await collect_gliner_operations(fail(), finish())
         self.assertTrue(finished.is_set())
+
+
+def load_tests(
+    loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: str | None
+) -> unittest.TestSuite:
+    tests.addTests(loader.loadTestsFromModule(test_capture_stream))
+    return tests
 
 
 if __name__ == "__main__":

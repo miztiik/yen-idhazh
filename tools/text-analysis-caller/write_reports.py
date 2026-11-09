@@ -147,9 +147,7 @@ def _safe_classifications(
     except (KeyError, ValueError):
         error = "The saved classification evidence is invalid; inspect its native files."
     try:
-        return render_classifications(
-            source, None, request=files.request, error=error
-        ), True
+        return render_classifications(source, None, request=files.request, error=error), True
     except (KeyError, ValueError):
         return render_classifications(source, None, error=error), True
 
@@ -164,9 +162,7 @@ def render_saved_reports(
 ) -> Reports:
     """Compose every output from the same pure provider sections."""
     read_text(source)
-    classification_section, invalid_classification = _safe_classifications(
-        source, classification
-    )
+    classification_section, invalid_classification = _safe_classifications(source, classification)
     spacy_section, invalid_spacy = _safe_section(source, spacy, spacy=True)
     gliner_section, invalid_gliner = _safe_section(
         source, gliner, spacy=False, classification=classification_section

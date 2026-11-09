@@ -34,9 +34,7 @@ async def collect_classifications(
                 (root / "config" / "taxonomy.json").read_bytes()
             )
             tasks = default_classification_tasks(taxonomy.model_dump(mode="json"))
-        request = ClassificationRequest.model_validate(
-            {"text": inputs.text, "tasks": tasks}
-        )
+        request = ClassificationRequest.model_validate({"text": inputs.text, "tasks": tasks})
     except ImportError:
         return Outcome(
             error="Default GLiNER classification tasks need the taxonomy schema; "
