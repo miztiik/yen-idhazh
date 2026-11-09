@@ -345,7 +345,10 @@ def _expected_event_record_bound(verification: Mapping[str, object]) -> int:
 
 
 def _event_record_bound(language: str) -> int:
-    request_events = 6 + (1 if language == "zh" else 0)
+    if language not in ("en", "zh"):
+        raise VerificationError("INVALID_WORKFLOW_INPUT")
+    # The probe has seven shared requests and one English or two Chinese boundaries.
+    request_events = 7 + (2 if language == "zh" else 1)
     return request_events + EXPECTED_SERVICE_EVENT_COUNT
 
 
