@@ -1,4 +1,4 @@
-"""Which resolved control authorizes relevance for this exact request?"""
+"""Which source mode and relevance work does this exact request select?"""
 
 from summary_evaluator.unieval.contracts.unieval_contract import RelevanceSkipReason
 from summary_evaluator.unieval.contracts.unieval_request import UnievalControls, UnievalRequest

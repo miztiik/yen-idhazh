@@ -37,6 +37,12 @@ def test_native_zero_scores_complete_only_with_both_results_measurement_and_join
     assert prepared.reference_summary_sha256 is not None
     hhem = example_result()
     unieval = example_unieval_result(prepared.reference_summary_sha256)
+    assert unieval.effective_settings is not None
+    unieval = unieval.model_copy(update={
+        "effective_settings": unieval.effective_settings.model_copy(
+            update={"consistency_source_mode": "all_source_windows"}
+        ),
+    })
     apis = (scorer_api_example("hhem", hhem), scorer_api_example("unieval", unieval))
     prepare_proc(tmp_path)
     host = NativeHostPipe(tmp_path)

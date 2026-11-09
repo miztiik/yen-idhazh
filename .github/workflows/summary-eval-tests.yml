@@ -16,6 +16,10 @@ on:
         required: false
         type: boolean
         default: false
+      consistency_source_mode:
+        description: "Blank uses scorer config; full_source_prompt or all_source_windows; no fallback"
+        required: false
+        type: string
       models_file:
         description: Model JSON path relative to config/; blank uses the committed pointer
         required: false

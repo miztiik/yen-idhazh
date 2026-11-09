@@ -10,10 +10,12 @@ from summary_eval_pipeline.contracts import PipelineError, text_sha256
 from summary_eval_pipeline.evaluate_pair import EvaluatorOutcomes, evaluate_pair
 from summary_eval_pipeline.evaluation import bind_evaluations, read_owned_health
 from summary_eval_pipeline.failures import WorkflowError
+from summary_eval_pipeline.inputs import read_manual_inputs
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_eval_pipeline.storage import read_result, write_result
 from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.shared.contracts.api_paths import EVALUATE_PATH
+from summary_evaluator.unieval.contracts.unieval_contract import SourceMode
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 from summary_evaluator.unieval.load_unieval_resources import load_unieval_resources
 from summary_evaluator.unieval.unieval_router import UNIEVAL_PATH
@@ -28,6 +30,95 @@ from summary_evaluator_cases.unieval_cases import (
 
 from summary_eval_tests.scorer_caller_cases import running_scorers
 from summary_eval_tests.test_generation_handoff import generation_phase
+from summary_eval_tests.test_manual_workflow import write_event
+
+
+@pytest.mark.parametrize(
+    ("selected", "configured", "case_id"),
+    [
+        ("full_source_prompt", "all_source_windows", "contradicted"),
+        ("all_source_windows", "full_source_prompt", "distributed-support"),
+    ],
+)
+def test_manual_mode_override_reaches_the_native_worker_and_saved_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    selected: SourceMode, configured: SourceMode, case_id: str,
+) -> None:
+    from summary_eval_pipeline.evaluate_pair import require_unieval_work
+    from summary_eval_pipeline.evaluation import evaluate_unieval
+    from summary_evaluator_cases.unieval_cases import running_unieval
+
+    cases, predictions, _ = read_unieval_recordings()
+    case = next(case for case in cases.cases if case.id == case_id)
+    recorded = next(case for case in predictions.cases if case.id == case_id)
+    event = tmp_path / "event.json"
+    write_event(event, {
+        "source_text": case.request.source_text,
+        "reference_summary_text": case.request.reference_summary_text,
+        "evaluate_relevance": "true",
+        "consistency_source_mode": selected,
+    })
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    pipeline = load_pipeline_settings(REPOSITORY)
+    inputs = read_manual_inputs(pipeline)
+    _, prepared, receipt, previous = generation_phase()
+    prepared = prepared.model_copy(update={
+        "source_sha256": text_sha256(inputs.source_text),
+        "reference_summary_sha256": inputs.reference_summary_sha256,
+        "evaluate_relevance": inputs.evaluate_relevance,
+    })
+    receipt = receipt.model_copy(update={
+        "source_sha256": prepared.source_sha256,
+        "reference_summary_sha256": prepared.reference_summary_sha256,
+        "evaluate_relevance": prepared.evaluate_relevance,
+        "summary_text": case.request.summary_text,
+        "summary_sha256": text_sha256(case.request.summary_text),
+    })
+    previous = previous.model_copy(update={
+        "reference_summary_sha256": prepared.reference_summary_sha256,
+        "evaluate_relevance": prepared.evaluate_relevance,
+        "generation_sha256": text_sha256(receipt.model_dump_json()),
+    })
+    hhem, request = bind_evaluations(
+        prepared, inputs, receipt, previous,
+        generation_sha256=text_sha256(receipt.model_dump_json()),
+    )
+    assert "consistency_source_mode" not in hhem.model_dump()
+    assert "reference_summary_text" not in hhem.model_dump()
+    assert hhem.source_text == request.source_text == case.request.source_text
+    assert hhem.summary_text == request.summary_text == case.request.summary_text
+    assert request.consistency_source_mode == selected
+
+    async def check() -> None:
+        _, settings = unieval_settings(consistency_source_mode=configured)
+        async with running_unieval(settings=settings) as (client, worker, _):
+            status, result = await evaluate_unieval(
+                client, str(client.base_url).rstrip("/"), request, settings, pipeline
+            )
+            require_unieval_work(result, request, settings, status)
+            assert status == 200 and result.status == "complete"
+            assert result.reference_summary_sha256 == inputs.reference_summary_sha256
+            assert result.effective_settings is not None
+            assert result.effective_settings.consistency_source_mode == selected != configured
+            assert result.work.source_spans == recorded.work.source_spans
+            assert result.work.consistency.planned == recorded.work.consistency.planned
+            assert result.work.consistency.completed == recorded.work.consistency.planned
+            width = len(recorded.work.source_spans)
+            values = [
+                item.score for item in recorded.comparisons if item.dimension == "consistency"
+            ]
+            sentences = [
+                max(values[start:start + width]) for start in range(0, len(values), width)
+            ]
+            assert result.scores.consistency == sum(sentences) / len(sentences)
+            saved_path = tmp_path / "selected-mode-unieval.json"
+            write_result(saved_path, result)
+            saved = read_result(saved_path, UnievalResult, pipeline.max_response_bytes)
+            require_unieval_work(saved, request, settings, status)
+            assert saved == result
+        assert worker.exit_confirmed and worker.last_exit is not None
+
+    asyncio.run(check())
 
 
 def test_reference_free_pair_completes_without_relevance_work(tmp_path: Path) -> None:

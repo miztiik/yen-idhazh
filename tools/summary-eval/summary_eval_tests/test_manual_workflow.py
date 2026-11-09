@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-from summary_eval_pipeline.contracts import WORKFLOW_VERSION, PipelineEvidence
+from summary_eval_pipeline.contracts import WORKFLOW_VERSION, PipelineEvidence, text_sha256
 from summary_eval_pipeline.control import StartupPacket
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.inputs import read_manual_inputs
@@ -33,6 +33,7 @@ def test_platform_input_preserves_exact_source_and_blank_model_selection(
     assert inputs.source_text == source and inputs.models_file == ""
     assert inputs.reference_summary_text == reference
     assert inputs.evaluate_relevance is False
+    assert inputs.consistency_source_mode is None
     assert event.is_file()
 
 
@@ -55,6 +56,14 @@ def test_platform_input_preserves_exact_source_and_blank_model_selection(
         {"source_text": "Source.", "evaluate_relevance": 1},
         {"source_text": "Source.", "evaluate_relevance": "False"},
         {"source_text": "Source.", "evaluate_relevance": ""},
+        {"source_text": "Source.", "consistency_source_mode": None},
+        {"source_text": "Source.", "consistency_source_mode": True},
+        {"source_text": "Source.", "consistency_source_mode": 0},
+        {"source_text": "Source.", "consistency_source_mode": " \n"},
+        {"source_text": "Source.", "consistency_source_mode": "full_source_prompt "},
+        {"source_text": "Source.", "consistency_source_mode": " all_source_windows"},
+        {"source_text": "Source.", "consistency_source_mode": "PrivateValueCanary"},
+        {"source_text": "Source.", "consistency_source_mode": ["full_source_prompt"]},
     ],
 )
 def test_invalid_platform_inputs_fail_without_echoing_values(
@@ -187,3 +196,37 @@ def test_platform_empty_reference_and_canonical_boolean_are_normalized_only_at_t
         ManualInputs(source_text="Source.", reference_summary_text="")
     with pytest.raises(ValidationError):
         ManualInputs.model_validate({"source_text": "Source.", "evaluate_relevance": "true"})
+
+
+@pytest.mark.parametrize("selected", [None, "", "full_source_prompt", "all_source_windows"])
+def test_platform_mode_is_omittable_or_one_exact_native_spelling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, selected: str | None,
+) -> None:
+    from summary_eval_pipeline.evaluation import bind_evaluations
+    from summary_eval_pipeline.inputs import ManualInputs
+
+    from summary_eval_tests.test_generation_handoff import generation_phase
+
+    original, prepared, receipt, phase = generation_phase()
+    payload = original.model_dump()
+    if selected is not None:
+        payload["consistency_source_mode"] = selected
+    event = tmp_path / "event.json"
+    write_event(event, payload)
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    inputs = read_manual_inputs(load_pipeline_settings(REPOSITORY))
+    mode = selected if selected else None
+    assert inputs.consistency_source_mode == mode
+    hhem, unieval = bind_evaluations(
+        prepared, inputs, receipt, phase,
+        generation_sha256=text_sha256(receipt.model_dump_json()),
+    )
+    assert unieval.consistency_source_mode == mode
+    assert ("consistency_source_mode" in unieval.model_dump()) is (mode is not None)
+    assert "consistency_source_mode" not in hhem.model_dump()
+    assert unieval.source_text == hhem.source_text == original.source_text
+    assert unieval.summary_text == hhem.summary_text == receipt.summary_text
+    assert unieval.reference_summary_text == original.reference_summary_text
+    assert inputs.evaluate_relevance == original.evaluate_relevance
+    with pytest.raises(ValidationError):
+        ManualInputs.model_validate({"source_text": "Source.", "consistency_source_mode": ""})

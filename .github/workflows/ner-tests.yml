@@ -76,24 +76,27 @@ jobs:
       - name: Install the shared TypeScript contracts
         run: bun install --frozen-lockfile --cwd packages/common-contracts
 
+      - name: Check Unicode evidence spans
+        run: bun test ./services/text_analysis/spacy/scripts/validate-evidence-spans.test.ts
+
       - name: Sync the text-analysis environment
-        working-directory: services/text_analysis
+        working-directory: services/text_analysis/spacy
         run: uv sync --frozen
 
       - name: Check verification artifact contracts
         env:
-          PYTHONPATH: services/text_analysis/scripts
+          PYTHONPATH: services/text_analysis/spacy/scripts
         run: >-
-          uv run --project services/text_analysis --no-sync python
-          services/text_analysis/tests/test_spacy_verification.py
+          uv run --project services/text_analysis/spacy --no-sync python
+          services/text_analysis/spacy/tests/test_spacy_verification.py
 
       - name: Prepare the selected spaCy model
         env:
           TEXT_ANALYSIS_LANGUAGE: ${{ inputs.language }}
           TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
         run: >-
-          uv run --project services/text_analysis --no-sync python
-          services/text_analysis/scripts/prepare-selected-model.py
+          uv run --project services/text_analysis/spacy --no-sync python
+          services/text_analysis/spacy/scripts/prepare-selected-model.py
 
       - name: Run live text-analysis verification
         env:
@@ -106,8 +109,8 @@ jobs:
           TEXT_ANALYSIS_RUN_ID: ${{ github.run_id }}
           TEXT_ANALYSIS_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: >-
-          uv run --project services/text_analysis --no-sync python
-          services/text_analysis/scripts/run-spacy-test.py
+          uv run --project services/text_analysis/spacy --no-sync python
+          services/text_analysis/spacy/scripts/run-spacy-test.py
           < "$GITHUB_EVENT_PATH"
 
       - name: Upload text-analysis evidence

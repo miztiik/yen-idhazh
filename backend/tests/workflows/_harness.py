@@ -16,8 +16,6 @@ from fixture_git import command as fixture_git_command
 from origin_template import copy_origin, template
 from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
-ACTIONS_DIR = REPO_ROOT / ".github" / "actions"
-
 PROBE_URL_VALUE = "http://127.0.0.1:8080"
 START_SERVER_MODULE = REPO_ROOT / "backend" / "utilities" / "model_runtime.py"
 
@@ -243,8 +241,3 @@ def _reject_the_first_pushes(origin: Path, count: int) -> None:
         newline="\n",
     )
     hook.chmod(0o755)
-
-
-def _mapping(value: object, description: str) -> dict[str, object]:
-    assert isinstance(value, dict), f"{description} must be a mapping"
-    return value

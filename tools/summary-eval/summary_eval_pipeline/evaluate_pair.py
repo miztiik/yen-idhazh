@@ -66,12 +66,16 @@ def require_unieval_work(
     valid = not has_score or (
         work.source_characters == len(request.source_text) and work.summary_sentences is not None
     )
-    if result.scores.consistency is not None:
+    if work.consistency.planned is not None:
         valid = (
             valid
             and bool(work.source_spans)
             and work.summary_sentences is not None
             and work.consistency.planned == work.summary_sentences * len(work.source_spans)
+            and (
+                controls.consistency_source_mode != "full_source_prompt"
+                or len(work.source_spans) == 1
+            )
         )
     if result.scores.fluency is not None:
         valid = valid and work.fluency.planned == work.summary_sentences

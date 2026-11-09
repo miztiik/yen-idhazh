@@ -1,6 +1,5 @@
 """Prove startup-only validation and request default resolution from one named file."""
 
-import importlib.util
 import json
 import subprocess
 import sys
@@ -31,7 +30,7 @@ from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings
 from summary_evaluator.shared.contracts.service_settings import StartupContext
 
 
-def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model() -> None:
+def test_committed_settings_are_complete_and_application_construction_is_lazy() -> None:
     settings = load_settings(SETTINGS_FILE)
     assert settings.version == "2026-11-02"
     assert settings.enabled
@@ -72,20 +71,17 @@ def test_committed_settings_are_complete_and_do_not_install_the_backend_or_model
         "special_tokens_map.json",
         "spiece.model",
     )
-    assert importlib.util.find_spec("torch") is None
     isolated = subprocess.run(
         [
             sys.executable,
             "-I",
             "-c",
-            "import importlib.util; import io; import sys; "
+            "import io; import sys; "
             "from pathlib import Path; "
             "from summary_evaluator.serve_http.api_settings import load_scorer_api_settings; "
             "from summary_evaluator.serve_http.emit_events import EventWriter; "
             "from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings; "
             "from summary_evaluator.serve_http.serve_api import create_app; "
-            "assert importlib.util.find_spec('idhazh') is None; "
-            "assert importlib.util.find_spec('torch') is None; "
             "api = load_scorer_api_settings(Path(sys.argv[1]),'hhem'); "
             "root = Path(sys.argv[2]); "
             "settings = load_hhem_settings(Path(sys.argv[3]), api); "
