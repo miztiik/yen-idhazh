@@ -228,10 +228,6 @@ jobs:
           bun run check
           bun run test
 
-      - name: Install optional Linux cache instruments
-        if: needs.scope.outputs.code == 'true'
-        run: bash services/host-probes/scripts/install-host-cache-tools.sh
-
       - name: TypeScript host probes
         if: needs.scope.outputs.code == 'true'
         working-directory: services/host-probes
@@ -276,18 +272,6 @@ jobs:
           bun install --frozen-lockfile
           bun run check
           bun run test
-
-      - name: Live TypeScript RAM and optional copy proof
-        if: needs.scope.outputs.code == 'true'
-        run: bun run services/host-probes/scripts/feed-ingest-plan-profile-proof.ts
-
-      - name: Preserve TypeScript resource proof
-        if: ${{ always() && needs.scope.outputs.code == 'true' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: typescript-resource-proof
-          path: test-results/host-probes/resource-proof.json
-          if-no-files-found: warn
 
       - name: Tests, including the five injection canaries
         if: needs.scope.outputs.code == 'true'

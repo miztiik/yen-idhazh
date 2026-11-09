@@ -67,6 +67,10 @@ def _unavailable_features(
 
     if not has_entities:
         unavailable.add("entities")
+    if nlp.lang != "en" or not has_entities or not has_sentences:
+        unavailable.add("named_entities")
+    if nlp.lang != "en" or not has_sentences:
+        unavailable.add("important_terms")
     if not has_sentences:
         unavailable.add("sentences")
     if not has_parser:
