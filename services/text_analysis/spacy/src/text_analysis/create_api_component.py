@@ -95,6 +95,18 @@ def _health_capabilities(settings: ServiceSettings) -> tuple[LanguageCapability,
                 enabled=language_settings.enabled,
                 default_profile=language_settings.default_profile,
                 supported_features=language_settings.supported_features,
+                default_features=(
+                    settings.resolve_default_features(cast(LanguageCode, language))
+                    if language_settings.enabled
+                    else ()
+                ),
+                important_terms_limit=(
+                    settings.important_terms.max_results
+                    if language == "en"
+                    and language_settings.enabled
+                    and "important_terms" in language_settings.supported_features
+                    else None
+                ),
                 profiles=tuple(
                     ProfileCapability(
                         profile=profile,
@@ -314,7 +326,7 @@ def create_app(settings: ServiceSettings) -> FastAPI:
             }
         },
     )
-    async def analyze_text(request: Request) -> Response:
+    async def run_ner_spacy(request: Request) -> Response:
         started_at = observe_request_started_at(request)
         if not settings.enabled:
             return await request_error(
@@ -354,7 +366,7 @@ def create_app(settings: ServiceSettings) -> FastAPI:
         finally:
             del body
 
-        features = parsed.features or settings.default_features
+        features = parsed.features or settings.resolve_default_features(parsed.language)
         if any(feature not in settings.allowed_features for feature in features):
             return await request_error(
                 request,

@@ -28,14 +28,43 @@ from text_analysis.declare_service_settings import (
     FeatureName,
     LanguageCode,
     ModelProfile,
+    RawFeatureName,
 )
 
-API_SCHEMA_VERSION = "2026-11-07"
-API_PREFIX = "/api/2026-11-07"
-ANALYZE_TEXT_PATH = f"{API_PREFIX}/analyze-text"
-HEALTH_PATH = f"{API_PREFIX}/get-text-analysis-health"
-SCHEMA_PATH = f"{API_PREFIX}/get-text-analysis-schema"
+API_SCHEMA_VERSION = "2026-11-08"
+INITIAL_API_SCHEMA_VERSION = "2026-11-07"
+API_PREFIX = "/api/2026-11-08"
+ANALYZE_TEXT_PATH = f"{API_PREFIX}/run-ner-spacy"
+HEALTH_PATH = f"{API_PREFIX}/get-spacy-health"
+SCHEMA_PATH = f"{API_PREFIX}/get-spacy-schema"
 EVENT_SOURCE = "/services/text-analysis"
+
+COMPACT_FEATURE_SCHEMA = {
+    "version": API_SCHEMA_VERSION,
+    "changelog": [
+        {
+            "version": API_SCHEMA_VERSION,
+            "change": "Add grouped English entities and ranked source-anchored terms.",
+        },
+        {
+            "version": INITIAL_API_SCHEMA_VERSION,
+            "change": "Declare multilingual text-analysis API contracts.",
+        },
+    ],
+}
+HEALTH_SCHEMA = {
+    "version": API_SCHEMA_VERSION,
+    "changelog": [
+        {
+            "version": API_SCHEMA_VERSION,
+            "change": "Expose resolved language defaults and known English term limits.",
+        },
+        {
+            "version": INITIAL_API_SCHEMA_VERSION,
+            "change": "Declare multilingual text-analysis API contracts.",
+        },
+    ],
+}
 
 OutcomeStatus = Literal["complete", "partial", "failed"]
 FeatureStatus = Literal["complete", "failed"]
@@ -134,6 +163,15 @@ FeatureSequence = Annotated[
     tuple[FeatureName, ...],
     BeforeValidator(_normalize_json_tuple),
 ]
+RawFeatureSequence = Annotated[
+    tuple[RawFeatureName, ...],
+    BeforeValidator(_normalize_json_tuple),
+]
+EvidenceOccurrences = Annotated[
+    tuple["EvidenceSpan", ...],
+    BeforeValidator(_normalize_json_tuple),
+    Field(min_length=1),
+]
 
 
 class ApiContract(BaseModel):
@@ -146,10 +184,10 @@ class ApiContract(BaseModel):
         hide_input_in_errors=True,
         allow_inf_nan=False,
         json_schema_extra={
-            "version": API_SCHEMA_VERSION,
+            "version": INITIAL_API_SCHEMA_VERSION,
             "changelog": [
                 {
-                    "version": API_SCHEMA_VERSION,
+                    "version": INITIAL_API_SCHEMA_VERSION,
                     "change": "Declare multilingual text-analysis API contracts.",
                 }
             ],
@@ -159,6 +197,8 @@ class ApiContract(BaseModel):
 
 class AnalyzeTextRequest(ApiContract):
     """Select exact text, language, model profile and ordered features."""
+
+    model_config = ConfigDict(json_schema_extra=COMPACT_FEATURE_SCHEMA)
 
     text: NonblankText
     language: LanguageCode
@@ -192,6 +232,8 @@ class AnalyzeTextRequest(ApiContract):
 
 class ErrorDetail(ApiContract):
     """Return one fixed safe error without retaining request or exception data."""
+
+    model_config = ConfigDict(json_schema_extra=COMPACT_FEATURE_SCHEMA)
 
     code: ErrorCode
     message: str
@@ -245,6 +287,38 @@ class EntityMention(EvidenceSpan):
     """Add the model's entity label to one exact source mention."""
 
     label: str = Field(min_length=1)
+
+
+class NamedEntityRecord(ApiContract):
+    """Group one presented name while retaining every exact source occurrence."""
+
+    model_config = ConfigDict(json_schema_extra=COMPACT_FEATURE_SCHEMA)
+
+    text: NonblankText
+    type: NonblankText
+    occurrences: EvidenceOccurrences
+
+    @model_validator(mode="after")
+    def require_first_source_spelling(self) -> Self:
+        if self.text != self.occurrences[0].text:
+            raise ValueError("Grouped entity text must preserve the first source spelling")
+        return self
+
+
+class ImportantTermRecord(ApiContract):
+    """Return one finite phrase rank with its exact original-source occurrences."""
+
+    model_config = ConfigDict(json_schema_extra=COMPACT_FEATURE_SCHEMA)
+
+    text: NonblankText
+    score: float = Field(ge=0, allow_inf_nan=False)
+    occurrences: EvidenceOccurrences
+
+    @model_validator(mode="after")
+    def require_original_phrase_spelling(self) -> Self:
+        if self.text != self.occurrences[0].text:
+            raise ValueError("Important term text must preserve its first source spelling")
+        return self
 
 
 class SentenceSpan(EvidenceSpan):
@@ -309,6 +383,28 @@ class EntitiesData(ApiContract):
     ]
 
 
+class NamedEntitiesData(ApiContract):
+    """Return source-ordered document-local entity groups."""
+
+    model_config = ConfigDict(json_schema_extra=COMPACT_FEATURE_SCHEMA)
+
+    entities: Annotated[
+        tuple[NamedEntityRecord, ...],
+        BeforeValidator(_normalize_json_tuple),
+    ]
+
+
+class ImportantTermsData(ApiContract):
+    """Return unique source-anchored terms in ascending YAKE score order."""
+
+    model_config = ConfigDict(json_schema_extra=COMPACT_FEATURE_SCHEMA)
+
+    terms: Annotated[
+        tuple[ImportantTermRecord, ...],
+        BeforeValidator(_normalize_json_tuple),
+    ]
+
+
 class SentencesData(ApiContract):
     sentences: Annotated[
         tuple[SentenceSpan, ...],
@@ -360,6 +456,8 @@ FeatureData = (
     | NounPhrasesData
     | LinguisticTokensData
     | DocumentMetricsData
+    | NamedEntitiesData
+    | ImportantTermsData
 )
 
 FEATURE_DATA_TYPES: dict[FeatureName, type[ApiContract]] = {
@@ -369,11 +467,15 @@ FEATURE_DATA_TYPES: dict[FeatureName, type[ApiContract]] = {
     "noun_phrases": NounPhrasesData,
     "linguistic_tokens": LinguisticTokensData,
     "document_metrics": DocumentMetricsData,
+    "named_entities": NamedEntitiesData,
+    "important_terms": ImportantTermsData,
 }
 
 
 class FeatureResult(ApiContract):
     """Return exactly one complete data value or one feature-local failure."""
+
+    model_config = ConfigDict(json_schema_extra=COMPACT_FEATURE_SCHEMA)
 
     feature: FeatureName
     status: FeatureStatus
@@ -441,19 +543,56 @@ class ProfileCapability(ApiContract):
     model_version: str = Field(min_length=1)
 
 
-class LanguageCapability(ApiContract):
+class LegacyLanguageCapability(ApiContract):
+    """Read one exact initial language capability without inventing new fields."""
+
     language: LanguageCode
     enabled: StrictBool
     default_profile: ModelProfile | None
-    supported_features: FeatureSequence
+    supported_features: RawFeatureSequence
     profiles: Annotated[
         tuple[ProfileCapability, ...],
         BeforeValidator(_normalize_json_tuple),
     ]
 
 
-class TextAnalysisHealth(ApiContract):
-    """Report configured capacity and capabilities without loading a model."""
+class LanguageCapability(ApiContract):
+    """Declare resolved feature defaults and an explicitly known or unknown limit."""
+
+    model_config = ConfigDict(json_schema_extra=HEALTH_SCHEMA)
+
+    language: LanguageCode
+    enabled: StrictBool
+    default_profile: ModelProfile | None
+    supported_features: FeatureSequence
+    default_features: FeatureSequence
+    important_terms_limit: int | None = Field(ge=0)
+    profiles: Annotated[
+        tuple[ProfileCapability, ...],
+        BeforeValidator(_normalize_json_tuple),
+    ]
+
+    @model_validator(mode="after")
+    def require_applicable_term_limit(self) -> Self:
+        if self.enabled and (
+            not self.default_features
+            or len(set(self.default_features)) != len(self.default_features)
+        ):
+            raise ValueError("Enabled language defaults must be nonempty and distinct")
+        if not self.enabled and self.default_features:
+            raise ValueError("Disabled languages must not declare default features")
+        available = (
+            self.language == "en"
+            and self.enabled
+            and "important_terms" in self.supported_features
+        )
+        if available != (self.important_terms_limit is not None):
+            raise ValueError("Only available English Important Terms declare a known limit")
+        return self
+
+
+class _HealthState(ApiContract):
+    """Validate the shared live and retained health-state invariants."""
 
     enabled: StrictBool
     status: HealthStatus
@@ -461,12 +600,6 @@ class TextAnalysisHealth(ApiContract):
     max_concurrent_requests: int = Field(ge=1, le=2)
     pool_ready: StrictBool
     spacy_version: str = Field(min_length=1)
-    default_features: FeatureSequence
-    allowed_features: FeatureSequence
-    languages: Annotated[
-        tuple[LanguageCapability, ...],
-        BeforeValidator(_normalize_json_tuple),
-    ]
 
     @model_validator(mode="after")
     def require_consistent_health(self) -> Self:
@@ -479,8 +612,48 @@ class TextAnalysisHealth(ApiContract):
         return self
 
 
+class LegacyTextAnalysisHealth(_HealthState):
+    """Read exact initial health evidence with recorded global defaults only."""
+
+    default_features: RawFeatureSequence
+    allowed_features: RawFeatureSequence
+    languages: Annotated[
+        tuple[LegacyLanguageCapability, ...],
+        BeforeValidator(_normalize_json_tuple),
+    ]
+
+    def resolve_default_features(
+        self, language: LanguageCode
+    ) -> tuple[RawFeatureName, ...]:
+        """Use the recorded global order, never the current service configuration."""
+        if not any(item.language == language for item in self.languages):
+            raise ValueError("Language is absent from retained health evidence")
+        return self.default_features
+
+    def resolve_important_terms_limit(self, language: LanguageCode) -> None:
+        """Keep a historical limit unknown even when English was available."""
+        if not any(item.language == language for item in self.languages):
+            raise ValueError("Language is absent from retained health evidence")
+        return None
+
+
+class TextAnalysisHealth(_HealthState):
+    """Report current configured capacity and complete language capabilities."""
+
+    model_config = ConfigDict(json_schema_extra=HEALTH_SCHEMA)
+
+    default_features: FeatureSequence
+    allowed_features: FeatureSequence
+    languages: Annotated[
+        tuple[LanguageCapability, ...],
+        BeforeValidator(_normalize_json_tuple),
+    ]
+
+
 class AnalysisCommand(ApiContract):
     """Carry only trusted validated analysis input into one executor process."""
+
+    model_config = ConfigDict(json_schema_extra=COMPACT_FEATURE_SCHEMA)
 
     text: NonblankText
     language: Literal["en", "zh"]
@@ -515,6 +688,8 @@ class AnalysisOutcome(ApiContract):
 
 class RequestFeatureStatus(ApiContract):
     """Summarize one feature without retaining its returned evidence."""
+
+    model_config = ConfigDict(json_schema_extra=COMPACT_FEATURE_SCHEMA)
 
     feature: FeatureName
     status: FeatureStatus
@@ -559,6 +734,8 @@ class ServiceEventData(ApiContract):
 
 class RequestEventData(ApiContract):
     """Expose request outcomes and timings without text, spans or raw failures."""
+
+    model_config = ConfigDict(json_schema_extra=COMPACT_FEATURE_SCHEMA)
 
     level: EventLevel
     language: LanguageCode | SkipJsonSchema[None] = Field(

@@ -10,11 +10,13 @@ from declare_spacy_verification import (
     SuccessfulVerificationReport,
     SummaryLimitExceededError,
     classify_cleanup,
+    read_retained_native_evidence,
     render_oversized_failure_summary,
     render_summary,
     validate_native_evidence,
 )
 from pydantic import ValidationError
+from text_analysis.declare_api_contracts import LegacyTextAnalysisHealth
 
 
 def _native_payloads(source_text: str = "A source sentence.") -> dict[str, object]:
@@ -40,6 +42,8 @@ def _native_payloads(source_text: str = "A source sentence.") -> dict[str, objec
                     "enabled": True,
                     "default_profile": "md",
                     "supported_features": ["entities"],
+                    "default_features": ["entities"],
+                    "important_terms_limit": None,
                     "profiles": [
                         {
                             "profile": "md",
@@ -159,6 +163,22 @@ class NativeEvidenceTests(unittest.TestCase):
         invalid["analysis_request"] = request
         with self.assertRaises(ValidationError):
             validate_native_evidence(invalid)
+
+    def test_retained_health_reads_global_defaults_without_inventing_limits(self) -> None:
+        payloads = _native_payloads()
+        language = payloads["health_response"]["languages"][0]
+        del language["default_features"]
+        del language["important_terms_limit"]
+        native = read_retained_native_evidence(payloads)
+        assert isinstance(native.health, LegacyTextAnalysisHealth)
+        self.assertEqual(native.health.resolve_default_features("en"), ("entities",))
+        self.assertIsNone(native.health.resolve_important_terms_limit("en"))
+        self.assertEqual(native.health.model_dump(mode="json"), payloads["health_response"])
+        with self.assertRaises(ValidationError):
+            validate_native_evidence(payloads)
+        language["default_features"] = ["entities"]
+        with self.assertRaises(ValidationError):
+            read_retained_native_evidence(payloads)
 
 
 class VerificationSummaryTests(unittest.TestCase):

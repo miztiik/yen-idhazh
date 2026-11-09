@@ -14,7 +14,7 @@ class ServiceSettingsLoadError(ValueError):
 
 
 def load_service_settings(root: Path) -> ServiceSettings:
-    """Load the fixed production settings file below one trusted repository root."""
+    """Read current or previous settings without changing their recorded defaults."""
     try:
         return ServiceSettings.model_validate_json((root / SETTINGS_PATH).read_bytes())
     except OSError:

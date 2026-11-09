@@ -7,17 +7,20 @@ vocabularies exposed by the local multilingual text-analysis service.
 
 ## Routes
 
-All paths use the fixed first-party family `/api/2026-11-07`.
+All spaCy paths use the fixed first-party family `/api/2026-11-08`.
 
-| Method | Path | Result |
-| --- | --- | --- |
-| `POST` | `/api/2026-11-07/analyze-text` | Selected feature result or safe request error |
-| `GET` | `/api/2026-11-07/get-text-analysis-health` | Configured readiness and capabilities |
-| `GET` | `/api/2026-11-07/get-text-analysis-schema` | Current OpenAPI document |
+Table A - Native spaCy routes
+
+| Id | Method | Path | Result |
+| --- | --- | --- | --- |
+| A1 | `POST` | `/api/2026-11-08/run-ner-spacy` | Selected feature result or safe request error |
+| A2 | `GET` | `/api/2026-11-08/get-spacy-health` | Configured readiness and capabilities |
+| A3 | `GET` | `/api/2026-11-08/get-spacy-schema` | Current OpenAPI document |
 
 Routes match exactly. There are no trailing-slash aliases, redirects or
 interactive documentation pages. Unknown paths return 404; wrong methods
-retain `Allow`.
+retain `Allow`. The former `2026-11-07` analysis, health and schema paths
+return 404 without aliases or redirects.
 
 The default listener is `127.0.0.1:3020`. Browser `Origin`, duplicate `Host`
 and any host outside that binding are refused before body reading. Every
@@ -35,8 +38,9 @@ The JSON object is strict.
 | `model_profile` | no | `sm`, `md`, `lg`; omission selects the language's configured default |
 | `features` | no | Nonempty unique ordered names from the feature vocabulary |
 
-The default feature order is `relations`, `entities`, `sentences`,
-`document_metrics`.
+English defaults to `named_entities`, `important_terms`. Chinese inherits the
+global order: `relations`, `entities`, `sentences`, `document_metrics`.
+Omitting a language override inherits that recorded global order.
 
 The feature vocabulary is:
 
@@ -46,9 +50,11 @@ The feature vocabulary is:
 - `noun_phrases`
 - `linguistic_tokens`
 - `document_metrics`
+- `named_entities`
+- `important_terms`
 
-Tamil is declared but unavailable. Chinese supports every feature except
-`noun_phrases`.
+The two compact features are English-only. Tamil is declared but unavailable.
+Chinese retains its raw features except `noun_phrases`.
 
 ## Analyze result
 
@@ -84,6 +90,30 @@ Linguistic tokens contain text, offsets, sentence index and nullable `lemma`,
 Document metrics contain source code-point and UTF-8 byte counts, token,
 sentence and entity counts, plus nullable `relation_count`. Relation count is
 null when relations were not selected or their feature calculation failed.
+
+### Named Entities
+
+`named_entities.data.entities` contains `text`, `type` and nonempty
+`occurrences` of evidence spans. Grouping uses the configured case rule and
+mapped type, preserves the first original spelling and every source occurrence,
+and orders both groups and occurrences by source position. This is
+document-local grouping, not cross-document identity or topic classification.
+Unmapped labels remain available through raw `entities`.
+
+### Important Terms
+
+`important_terms.data.terms` contains `text`, finite nonnegative `score` and
+nonempty `occurrences`. YAKE supplies statistical phrase scores; lower scores
+rank first, with first source position breaking ties. Scores are not confidence
+or model-quality claims.
+
+spaCy's `PhraseMatcher` anchors candidate tokens in the original document.
+Pattern tokenization does not rerun the model. Matching phrases are deduplicated
+before the configured maximum is applied. The displayed text preserves the
+first source spelling. A selected candidate without an exact source occurrence
+fails only this feature with `FEATURE_FAILED`; there is no fabricated offset
+or substring repair. No candidates or a configured zero maximum returns a
+completed empty list.
 
 ## Request errors
 
@@ -133,10 +163,14 @@ Health returns:
 - configured spaCy version
 - default and allowed features
 - ordered language capabilities with enablement, default profile, supported
-  features and package/version profile declarations
+  features, resolved `default_features`, `important_terms_limit` and
+  package/version profile declarations
 
 HTTP 200 requires `ready`; every other status uses 503. Health never loads a
 model and never reports worker PIDs, queue depth or loaded-model state.
+Each current language capability requires both added fields. Enabled English
+with Important Terms support declares its configured nonnegative limit; other
+capabilities declare `null`. Disabled language defaults are empty.
 
 ## Production settings
 
@@ -144,7 +178,7 @@ model and never reports worker PIDs, queue depth or loaded-model state.
 
 | Setting | Initial value or rule |
 | --- | --- |
-| `version` | `2026-11-07` with newest-first changelog |
+| `version` | `2026-11-08` with newest-first changelog |
 | `enabled` | `true` |
 | listener | `127.0.0.1:3020` |
 | maximum body | `1,048,576` bytes |
@@ -159,6 +193,43 @@ Each enabled language declares exact `sm`, `md` and `lg` package versions and
 HTTPS wheel destinations. Requests and environment variables cannot replace a
 destination. The preparation script selects one configured language/profile
 for workflow use, or all enabled profiles when no selection is supplied.
+
+Table B - Compact English feature settings
+
+| Id | Setting | Default and meaning |
+| --- | --- | --- |
+| B1 | `named_entities.ignore_case` | `true`; case-fold names when forming groups |
+| B2 | `named_entities.label_map` | `PERSON -> person`, `ORG -> organization`, `GPE/LOC -> location`; unmapped labels remain raw |
+| B3 | `important_terms.max_results` | `25`; maximum returned terms, with `0` selecting an empty successful list |
+| B4 | `important_terms.max_phrase_words` | `3`; positive maximum candidate phrase width |
+| B5 | `important_terms.deduplication_threshold` | `0.9`; finite similarity threshold from `0` through `1` |
+| B6 | `important_terms.deduplication_method` | `seqm`; native choices are `seqm`, `jaro`, `levs` |
+| B7 | `important_terms.window_size` | `1`; positive statistical co-occurrence window |
+| B8 | `important_terms.stopwords` | `null` uses library English stopwords; a custom nonempty distinct list replaces them |
+| B9 | `languages.en.default_features` | `named_entities`, `important_terms`; an omitted override inherits global defaults |
+
+Every option is validated by the native settings model. There is no second
+enable-switch system, model selection or classification registry for these
+outputs.
+
+## Read compatibility
+
+Current schemas advance independently of the fixed HTTP date and package
+release. Changed feature-bearing declarations and live health use
+`2026-11-08`; unchanged raw evidence, result envelopes and service-event
+definitions retain their original schema metadata.
+
+Settings versions `2026-11-07` and `2026-11-08` remain readable. Missing new
+options receive the declared defaults, while a missing language override
+preserves the file's recorded global feature order and version.
+
+New live health must contain complete current capabilities. The separate
+`read_retained_native_evidence` reader accepts exact current or initial health
+shapes. Initial health uses its recorded global defaults; its absent term
+limits stay unknown rather than being filled from current settings. Mixed or
+partial new fields are rejected. Existing request/result/event payloads remain
+readable and retained files are not rewritten. The verification receipt has
+its own unchanged version and changelog.
 
 ## CloudEvents
 

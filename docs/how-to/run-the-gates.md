@@ -480,11 +480,19 @@ Ordinary CI runs repository-wide source checks without claiming spaCy behavior
 or testing workflow execution.
 
 The workflow syncs the frozen environment, installs only the selected
-configured model wheel, starts one owned process group, and validates live
+configured model wheel after its named in-memory unittest checks, starts one
+owned process group, and validates live
 English or Chinese results through the actual shared TypeScript CloudEvents
 and trace contracts. The required candidate evidence is one `md` run per
 language against the same immutable commit. A changed candidate
 needs both runs again.
+
+The named native tests cover compact grouping, actual YAKE ranking, configured
+maximum/zero behavior, feature-local failures, old settings/evidence reads and
+unchanged Chinese defaults. The existing live probe verifies the current
+spaCy routes, health-derived defaults/limits, exact source occurrences, raw
+outputs and the unchanged capacity/reuse/cleanup policies. These results do
+not claim recognition or ranking quality.
 
 ### Independent TypeScript packages and services
 

@@ -77,7 +77,7 @@ def _execute_analysis(command_json: str) -> str:
             analysis_ms=(time.monotonic() - analysis_started_at) * 1000,
             error=ErrorDetail.from_code("ANALYSIS_FAILED"),
         ).model_dump_json()
-    features = extract_feature_results(doc, command, loaded)
+    features = extract_feature_results(doc, command, loaded, settings)
     return AnalysisOutcome(
         model=loaded.identity,
         features=features,

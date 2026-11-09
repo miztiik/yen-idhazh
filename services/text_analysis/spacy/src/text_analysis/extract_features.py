@@ -17,6 +17,7 @@ from text_analysis.declare_api_contracts import (
     EvidenceSpan,
     FeatureData,
     FeatureResult,
+    ImportantTermsData,
     LinguisticTokensData,
     NounPhrasesData,
     RelationsData,
@@ -24,9 +25,11 @@ from text_analysis.declare_api_contracts import (
     SentenceSpan,
     TokenRecord,
 )
-from text_analysis.declare_service_settings import FeatureName
+from text_analysis.declare_service_settings import FeatureName, ServiceSettings
 from text_analysis.extract_relations import extract_relations
+from text_analysis.group_named_entities import group_named_entities
 from text_analysis.manage_models import LoadedModel
+from text_analysis.rank_important_terms import rank_important_terms
 
 
 class FeatureUnavailableError(RuntimeError):
@@ -61,6 +64,7 @@ def extract_feature_results(
     doc: Doc,
     command: AnalysisCommand,
     loaded: LoadedModel,
+    settings: ServiceSettings,
 ) -> tuple[FeatureResult, ...]:
     """Extract each requested feature in order and isolate post-processing failures."""
     source = command.text
@@ -145,6 +149,18 @@ def extract_feature_results(
             )
         )
 
+    def important_terms() -> ImportantTermsData:
+        if settings.important_terms.max_results == 0:
+            return ImportantTermsData(terms=())
+        _sentence_list, sentence_indexes = sentences()
+        return rank_important_terms(
+            doc,
+            loaded.nlp,
+            source,
+            sentence_indexes,
+            settings.important_terms,
+        )
+
     def document_metrics() -> DocumentMetricsData:
         sentence_list, _sentence_indexes = sentences()
         relation_count: int | None = None
@@ -171,6 +187,11 @@ def extract_feature_results(
         "noun_phrases": noun_phrases,
         "linguistic_tokens": linguistic_tokens,
         "document_metrics": document_metrics,
+        "named_entities": lambda: group_named_entities(
+            entities(),
+            settings.named_entities,
+        ),
+        "important_terms": important_terms,
     }
 
     def calculate(feature: FeatureName) -> FeatureData:

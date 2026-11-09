@@ -54,6 +54,13 @@ caller-owned evidence. The
 [text-analysis reference](../../reference/text-analysis-api.md) owns the exact
 fields and vocabulary.
 
+Current live spaCy health is strict; retained evidence has a separate exact
+initial-shape reader. New feature and health declarations carry their current
+date, while unchanged raw/event definitions and the workflow receipt retain
+their own metadata. Older settings inherit their recorded feature defaults,
+and historical term limits remain unknown. The native reader validates the
+request, health and result together without rewriting retained artifacts.
+
 The manual summary workflow's same-run generation, phase evidence and private launcher packets
 live outside that API, under
 `tools/summary-eval/summary_eval_pipeline/`. The

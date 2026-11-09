@@ -14,9 +14,11 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic.json_schema import JsonSchemaValue, SkipJsonSchema
 
-SETTINGS_VERSION = "2026-11-07"
-FeatureName = Literal[
+SETTINGS_VERSION = "2026-11-08"
+SettingsVersion = Literal["2026-11-07", "2026-11-08"]
+RawFeatureName = Literal[
     "entities",
     "sentences",
     "relations",
@@ -24,6 +26,7 @@ FeatureName = Literal[
     "linguistic_tokens",
     "document_metrics",
 ]
+FeatureName = RawFeatureName | Literal["named_entities", "important_terms"]
 LanguageCode = Literal["en", "zh", "ta"]
 EnabledLanguage = Literal["en", "zh"]
 ModelProfile = Literal["sm", "md", "lg"]
@@ -36,12 +39,18 @@ ALL_FEATURES: tuple[FeatureName, ...] = (
     "noun_phrases",
     "linguistic_tokens",
     "document_metrics",
+    "named_entities",
+    "important_terms",
 )
 MODEL_PROFILES: tuple[ModelProfile, ...] = ("sm", "md", "lg")
 
 
 def _normalize_json_tuple(value: object, info: ValidationInfo) -> object:
     return tuple(value) if info.mode == "json" and isinstance(value, list) else value
+
+
+def _omit_default(schema: JsonSchemaValue) -> None:
+    schema.pop("default", None)
 
 
 FeatureSequence = Annotated[
@@ -69,7 +78,7 @@ class SettingsContract(BaseModel):
 class SettingsChange(SettingsContract):
     """Describe one current settings-shape change."""
 
-    version: Literal["2026-11-07"]
+    version: SettingsVersion
     change: str = Field(min_length=1)
 
 
@@ -113,10 +122,43 @@ class ModelProfileSettings(SettingsContract):
 class LanguageSettings(SettingsContract):
     """Declare one language's enabled profiles and feature capabilities."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": SETTINGS_VERSION,
+            "changelog": [
+                {
+                    "version": SETTINGS_VERSION,
+                    "change": "Add optional per-language feature defaults.",
+                }
+            ],
+        }
+    )
+
     enabled: StrictBool
     default_profile: ModelProfile | None
     supported_features: FeatureSequence
     profiles: dict[ModelProfile, ModelProfileSettings]
+    default_features: FeatureSequence | SkipJsonSchema[None] = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        json_schema_extra=_omit_default,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def refuse_null_default_features(cls, value: object) -> object:
+        if isinstance(value, Mapping) and value.get("default_features", ...) is None:
+            raise ValueError("Omit inherited default features instead of supplying null")
+        return value
+
+    @field_validator("default_features")
+    @classmethod
+    def require_distinct_default_features(
+        cls, value: tuple[FeatureName, ...] | None
+    ) -> tuple[FeatureName, ...] | None:
+        if value is not None and (not value or len(set(value)) != len(value)):
+            raise ValueError("Language default features must be nonempty and distinct")
+        return value
 
     @field_validator("supported_features")
     @classmethod
@@ -134,7 +176,12 @@ class LanguageSettings(SettingsContract):
                 raise ValueError("Enabled languages require a configured default profile")
             if set(self.profiles) != set(MODEL_PROFILES):
                 raise ValueError("Enabled languages must declare sm, md and lg profiles")
-        elif self.default_profile is not None or self.supported_features or self.profiles:
+        elif (
+            self.default_profile is not None
+            or self.supported_features
+            or self.profiles
+            or self.default_features is not None
+        ):
             raise ValueError("Disabled languages must not declare profiles or features")
         return self
 
@@ -223,6 +270,75 @@ class LoggingSettings(SettingsContract):
     max_event_bytes: int = Field(gt=0)
 
 
+class NamedEntitiesSettings(SettingsContract):
+    """Configure document-local name grouping and native-label presentation."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": SETTINGS_VERSION,
+            "changelog": [
+                {
+                    "version": SETTINGS_VERSION,
+                    "change": "Declare case normalization and named-entity label mapping.",
+                }
+            ],
+        }
+    )
+
+    ignore_case: StrictBool = True
+    label_map: dict[str, str] = Field(
+        default_factory=lambda: {
+            "PERSON": "person",
+            "ORG": "organization",
+            "GPE": "location",
+            "LOC": "location",
+        }
+    )
+
+    @field_validator("label_map")
+    @classmethod
+    def require_nonblank_mapping(cls, value: dict[str, str]) -> dict[str, str]:
+        if any(not label.strip() or not kind.strip() for label, kind in value.items()):
+            raise ValueError("Named-entity labels and presentation types must be nonblank")
+        return value
+
+
+class ImportantTermsSettings(SettingsContract):
+    """Configure English statistical phrase ranking without another model."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": SETTINGS_VERSION,
+            "changelog": [
+                {
+                    "version": SETTINGS_VERSION,
+                    "change": "Declare YAKE ranking, result limits and English stopwords.",
+                }
+            ],
+        }
+    )
+
+    max_results: int = Field(default=25, ge=0)
+    max_phrase_words: int = Field(default=3, ge=1)
+    deduplication_threshold: float = Field(default=0.9, ge=0, le=1)
+    deduplication_method: Literal["seqm", "jaro", "levs"] = "seqm"
+    window_size: int = Field(default=1, ge=1)
+    stopwords: TextSequence | None = None
+
+    @field_validator("stopwords")
+    @classmethod
+    def require_distinct_stopwords(
+        cls, value: tuple[str, ...] | None
+    ) -> tuple[str, ...] | None:
+        if value is not None and (
+            not value
+            or any(not word.strip() for word in value)
+            or len({word.casefold() for word in value}) != len(value)
+        ):
+            raise ValueError("Custom English stopwords must be nonempty and distinct")
+        return value
+
+
 class ServiceSettings(SettingsContract):
     """Own the complete production configuration for text analysis."""
 
@@ -237,13 +353,17 @@ class ServiceSettings(SettingsContract):
             "changelog": [
                 {
                     "version": SETTINGS_VERSION,
+                    "change": "Add compact English feature settings and language defaults.",
+                },
+                {
+                    "version": "2026-11-07",
                     "change": "Declare multilingual model, feature and runtime settings.",
-                }
+                },
             ],
         },
     )
 
-    version: Literal["2026-11-07"]
+    version: SettingsVersion
     changelog: Annotated[
         tuple[SettingsChange, ...],
         BeforeValidator(_normalize_json_tuple),
@@ -256,7 +376,14 @@ class ServiceSettings(SettingsContract):
     allowed_features: FeatureSequence
     languages: LanguageCatalog
     relation_rules: RelationRules
+    named_entities: NamedEntitiesSettings = Field(default_factory=NamedEntitiesSettings)
+    important_terms: ImportantTermsSettings = Field(default_factory=ImportantTermsSettings)
     logging: LoggingSettings
+
+    def resolve_default_features(self, language: LanguageCode) -> tuple[FeatureName, ...]:
+        """Inherit the recorded global order only when no language override exists."""
+        override = self.languages.select(language).default_features
+        return self.default_features if override is None else override
 
     @model_validator(mode="after")
     def require_current_complete_configuration(self) -> Self:
@@ -288,6 +415,14 @@ class ServiceSettings(SettingsContract):
         ):
             if not set(settings.supported_features).issubset(self.allowed_features):
                 raise ValueError(f"{language} features must be globally allowed")
+            if settings.default_features is not None and not set(
+                settings.default_features
+            ).issubset(settings.supported_features):
+                raise ValueError("Language defaults must be a supported feature subset")
+            if language != "en" and set(settings.supported_features).intersection(
+                {"named_entities", "important_terms"}
+            ):
+                raise ValueError("Compact entity and term features support English only")
             for profile, model in settings.profiles.items():
                 expected_package = f"{language}_core_web_{profile}"
                 if model.package != expected_package:

@@ -16,7 +16,9 @@ type Feature =
   | "relations"
   | "noun_phrases"
   | "linguistic_tokens"
-  | "document_metrics";
+  | "document_metrics"
+  | "named_entities"
+  | "important_terms";
 type FeatureStatus = "complete" | "failed";
 type ResultStatus = "complete" | "partial" | "failed";
 
@@ -61,6 +63,7 @@ type TraceCall = {
   body: unknown;
   traceparent: string;
   tracestate?: string;
+  allow: string | null;
 };
 
 type ExpectedModelIdentity = {
@@ -69,10 +72,15 @@ type ExpectedModelIdentity = {
   spacy_version: string;
 };
 
-const API_PREFIX = "/api/2026-11-07";
-const ANALYZE_PATH = `${API_PREFIX}/analyze-text`;
-const HEALTH_PATH = `${API_PREFIX}/get-text-analysis-health`;
-const SCHEMA_PATH = `${API_PREFIX}/get-text-analysis-schema`;
+const API_PREFIX = "/api/2026-11-08";
+const ANALYZE_PATH = `${API_PREFIX}/run-ner-spacy`;
+const HEALTH_PATH = `${API_PREFIX}/get-spacy-health`;
+const SCHEMA_PATH = `${API_PREFIX}/get-spacy-schema`;
+const RETIRED_PATHS = [
+  "/api/2026-11-07/analyze-text",
+  "/api/2026-11-07/get-text-analysis-health",
+  "/api/2026-11-07/get-text-analysis-schema",
+] as const;
 const FEATURES: readonly Feature[] = [
   "entities",
   "sentences",
@@ -80,12 +88,8 @@ const FEATURES: readonly Feature[] = [
   "noun_phrases",
   "linguistic_tokens",
   "document_metrics",
-];
-const DEFAULT_FEATURES: readonly Feature[] = [
-  "relations",
-  "entities",
-  "sentences",
-  "document_metrics",
+  "named_entities",
+  "important_terms",
 ];
 const EVENT_TRACE_STATE = "workflow=spacy";
 const CONCURRENCY_TEXT_BYTES = 750_000;
@@ -164,10 +168,11 @@ function distinctFeatures(value: unknown, message: string): Feature[] {
 function selectFeatures(
   input: VerificationInput,
   supportedFeatures: readonly Feature[],
+  defaultFeatures: readonly Feature[],
 ): Feature[] {
   if (input.feature_mode === "default") {
     expect(input.custom_features === "", "Custom features must be blank in default mode");
-    return [...DEFAULT_FEATURES];
+    return [...defaultFeatures];
   }
   if (input.feature_mode === "all") {
     expect(input.custom_features === "", "Custom features must be blank in all mode");
@@ -222,7 +227,7 @@ async function callApi(
   } catch {
     fail("API response is not JSON");
   }
-  return { status: response.status, body: parsed, ...traced };
+  return { status: response.status, body: parsed, allow: response.headers.get("allow"), ...traced };
 }
 
 function validateProfile(value: unknown): JsonRecord {
@@ -264,6 +269,8 @@ function validateHealth(value: unknown): JsonRecord {
       "enabled",
       "default_profile",
       "supported_features",
+      "default_features",
+      "important_terms_limit",
       "profiles",
     ]);
     expect(["en", "zh", "ta"].includes(text(language.language, "Health language is invalid")), "Health language is invalid");
@@ -271,6 +278,16 @@ function validateHealth(value: unknown): JsonRecord {
     expect(language.default_profile === null || ["sm", "md", "lg"].includes(text(language.default_profile, "Health default profile is invalid")), "Health default profile is invalid");
     const supported = array(language.supported_features, "Health supported features are invalid");
     expect(supported.every(item => typeof item === "string" && FEATURES.includes(item as Feature)), "Health supported features are invalid");
+    if (language.enabled) {
+      distinctFeatures(language.default_features, "Health language defaults are invalid");
+    } else {
+      expect(array(language.default_features, "Disabled language defaults are invalid").length === 0, "Disabled language defaults must be empty");
+    }
+    if (language.language === "en" && language.enabled && supported.includes("important_terms")) {
+      expect(integer(language.important_terms_limit, "English term limit is invalid") >= 0, "English term limit is invalid");
+    } else {
+      expect(language.important_terms_limit === null, "Unsupported term limits must remain unknown");
+    }
     array(language.profiles, "Health profiles are invalid").forEach(validateProfile);
   }
   return health;
@@ -280,7 +297,12 @@ function configuredModel(
   health: JsonRecord,
   language: Language,
   profile: Profile,
-): { supported_features: Feature[]; identity: ExpectedModelIdentity } {
+): {
+  supported_features: Feature[];
+  default_features: Feature[];
+  important_terms_limit: number | null;
+  identity: ExpectedModelIdentity;
+} {
   const capability = array(health.languages, "Health languages are invalid")
     .map(item => record(item, "Health language capability is invalid"))
     .find(item => item.language === language);
@@ -293,6 +315,10 @@ function configuredModel(
   expect(configuredProfile !== undefined, "Selected profile is not configured");
   return {
     supported_features: supported,
+    default_features: distinctFeatures(capability.default_features, "Configured language defaults are invalid"),
+    important_terms_limit: capability.important_terms_limit === null
+      ? null
+      : integer(capability.important_terms_limit, "Configured term limit is invalid"),
     identity: {
       package: text(configuredProfile.package, "Configured package is invalid"),
       model_version: text(configuredProfile.model_version, "Configured model version is invalid"),
@@ -319,7 +345,7 @@ function validateEvidenceSpan(value: unknown, sourceCodePoints: readonly string[
   const spanText = text(span.text, "Evidence text is invalid");
   const start = integer(span.start_char, "Evidence start is invalid");
   const end = integer(span.end_char, "Evidence end is invalid");
-  integer(span.sentence_index, "Evidence sentence index is invalid");
+  expect(integer(span.sentence_index, "Evidence sentence index is invalid") >= 0, "Evidence sentence index is invalid");
   validateEvidenceOffsets(sourceCodePoints, start, end, spanText);
   evidence.add(spanText);
   return span;
@@ -330,8 +356,60 @@ function validateFeatureData(
   value: unknown,
   sourceCodePoints: readonly string[],
   evidence: Set<string>,
+  importantTermsLimit: number | null,
 ): void {
   const data = record(value, "Feature data is invalid");
+  if (feature === "named_entities" || feature === "important_terms") {
+    const key = feature === "named_entities" ? "entities" : "terms";
+    exactKeys(data, [key]);
+    const items = array(data[key], "Compact feature list is invalid");
+    if (feature === "important_terms") {
+      expect(importantTermsLimit !== null, "Completed Important Terms has no configured limit");
+      expect(items.length <= importantTermsLimit, "Important Terms exceeded the configured maximum");
+    }
+    const identities = new Set<string>();
+    let previousScore = -1;
+    let previousPosition = -1;
+    for (const rawItem of items) {
+      const item = record(rawItem, "Compact feature item is invalid");
+      exactKeys(item, ["text", feature === "named_entities" ? "type" : "score", "occurrences"]);
+      const itemText = text(item.text, "Compact feature text is invalid");
+      expect(itemText.length > 0, "Compact feature text must be nonempty");
+      const occurrences = array(item.occurrences, "Compact feature occurrences are invalid");
+      expect(occurrences.length > 0, "Compact feature occurrences must be nonempty");
+      let previousStart = -1;
+      const offsets = new Set<string>();
+      const spans = occurrences.map(rawSpan => {
+        const span = validateEvidenceSpan(rawSpan, sourceCodePoints, evidence);
+        const start = integer(span.start_char, "Occurrence start is invalid");
+        expect(start >= previousStart, "Occurrences changed source order");
+        previousStart = start;
+        const offset = `${start}:${span.end_char}`;
+        expect(!offsets.has(offset), "An occurrence was repeated");
+        offsets.add(offset);
+        return span;
+      });
+      const first = spans[0]!;
+      expect(itemText === first.text, "Compact feature lost the first source spelling");
+      const position = integer(first.start_char, "First occurrence start is invalid");
+      if (feature === "named_entities") {
+        const kind = text(item.type, "Named entity type is invalid");
+        expect(kind.trim().length > 0, "Named entity type must be nonblank");
+        const identity = JSON.stringify([itemText, kind]);
+        expect(!identities.has(identity), "A named entity group was repeated");
+        identities.add(identity);
+        expect(position >= previousPosition, "Named entity groups changed source order");
+      } else {
+        const score = finiteNonnegative(item.score, "Important term score is invalid");
+        expect(score > previousScore || (score === previousScore && position >= previousPosition), "Important Terms changed rank or tie order");
+        previousScore = score;
+        expect(!identities.has(itemText), "An important term was repeated");
+        identities.add(itemText);
+      }
+      previousPosition = position;
+    }
+    return;
+  }
   if (feature === "entities") {
     exactKeys(data, ["mentions"]);
     for (const rawMention of array(data.mentions, "Entity mentions are invalid")) {
@@ -422,6 +500,7 @@ function validateAnalysisResult(
   expectedFeatures: readonly Feature[],
   expectedModel: ExpectedModelIdentity,
   source: string,
+  importantTermsLimit: number | null,
 ): { result: JsonRecord; evidence: string[]; featureStatuses: ExpectedEvent["feature_statuses"] } {
   const result = record(value, "Analysis result is invalid");
   exactKeys(result, ["status", "language", "model", "features"]);
@@ -448,7 +527,7 @@ function validateAnalysisResult(
     if (status === "complete") {
       expect(featureResult.error === null, "Complete feature retained an error");
       expect(featureResult.data !== null, "Complete feature omitted data");
-      validateFeatureData(feature, featureResult.data, sourceCodePoints, evidence);
+      validateFeatureData(feature, featureResult.data, sourceCodePoints, evidence, importantTermsLimit);
       featureStatuses.push({ feature, status });
     } else {
       expect(featureResult.data === null, "Failed feature retained data");
@@ -520,12 +599,15 @@ async function waitForActiveRequests(input: VerificationInput, count: number): P
 function inspectSchema(value: unknown): { paths: string[]; feature_failed_declared: boolean } {
   const schema = record(value, "OpenAPI response is invalid");
   const paths = record(schema.paths, "OpenAPI paths are invalid");
-  expect(Object.hasOwn(paths, ANALYZE_PATH), "OpenAPI omitted analyze-text");
-  expect(Object.hasOwn(paths, HEALTH_PATH), "OpenAPI omitted text-analysis health");
+  expect(Object.hasOwn(paths, ANALYZE_PATH), "OpenAPI omitted run-ner-spacy");
+  expect(Object.hasOwn(paths, HEALTH_PATH), "OpenAPI omitted spaCy health");
+  expect(RETIRED_PATHS.every(path => !Object.hasOwn(paths, path)), "OpenAPI retained an old spaCy route");
   expect(!Object.hasOwn(paths, "/docs") && !Object.hasOwn(paths, "/redoc"), "Interactive documentation is enabled");
   const components = record(schema.components, "OpenAPI components are invalid");
   const schemas = record(components.schemas, "OpenAPI schemas are invalid");
   expect(Object.hasOwn(schemas, "AnalyzeTextRequest"), "OpenAPI omitted the request contract");
+  expect(Object.hasOwn(schemas, "NamedEntitiesData"), "OpenAPI omitted grouped entities");
+  expect(Object.hasOwn(schemas, "ImportantTermsData"), "OpenAPI omitted ranked terms");
   const serialized = JSON.stringify(schemas);
   expect(serialized.includes("\"FEATURE_FAILED\""), "OpenAPI omitted FEATURE_FAILED");
   return {
@@ -545,24 +627,40 @@ async function verifyApi(input: VerificationInput): Promise<JsonRecord> {
   const health = validateHealth(healthCall.body);
   expect(health.status === "ready" && health.pool_ready === true, "Health route did not report a ready pool");
   expect(health.active_requests === 0 && health.max_concurrent_requests === 2, "Health capacity is unexpected");
-  expect(
-    JSON.stringify(health.default_features) === JSON.stringify(DEFAULT_FEATURES),
-    "Configured default feature order is unexpected",
-  );
   const configured = configuredModel(health, input.language, input.profile);
-  const selectedFeatures = selectFeatures(input, configured.supported_features);
+  const selectedFeatures = selectFeatures(input, configured.supported_features, configured.default_features);
+  if (input.language === "en") {
+    expect(configured.supported_features.includes("named_entities") && configured.supported_features.includes("important_terms"), "English compact features are unavailable");
+  } else {
+    expect(!configured.supported_features.includes("named_entities") && !configured.supported_features.includes("important_terms"), "Chinese capabilities changed");
+    expect(JSON.stringify(configured.default_features) === JSON.stringify(health.default_features), "Chinese defaults stopped inheriting the global order");
+  }
   noEventTraceparents.push(healthCall.traceparent);
 
   const schemaCall = await callApi(input, SCHEMA_PATH, "GET");
   expect(schemaCall.status === 200, "Schema route failed");
   inspectSchema(schemaCall.body);
   noEventTraceparents.push(schemaCall.traceparent);
+  for (const path of RETIRED_PATHS) {
+    const retired = await callApi(input, path, "GET");
+    expect(retired.status === 404, "An old spaCy route was not retired");
+    noEventTraceparents.push(retired.traceparent);
+  }
+  for (const [path, method, allowed] of [
+    [ANALYZE_PATH, "GET", "POST"],
+    [HEALTH_PATH, "POST", "GET"],
+    [SCHEMA_PATH, "POST", "GET"],
+  ] as const) {
+    const refused = await callApi(input, path, method);
+    expect(refused.status === 405 && refused.allow?.includes(allowed), "Wrong-method behavior changed");
+    noEventTraceparents.push(refused.traceparent);
+  }
 
   const selectedCall = await callApi(input, ANALYZE_PATH, "POST", {
     text: input.text,
     language: input.language,
     model_profile: input.profile,
-    features: selectedFeatures,
+    ...(input.feature_mode === "default" ? {} : { features: selectedFeatures }),
   });
   const selectedSupportedCount = selectedFeatures.filter(feature =>
     configured.supported_features.includes(feature)
@@ -584,6 +682,7 @@ async function verifyApi(input: VerificationInput): Promise<JsonRecord> {
     selectedFeatures,
     configured.identity,
     input.text,
+    configured.important_terms_limit,
   );
   expect(selected.result.status === expectedSelectedStatus, "Selected analysis status is unexpected");
   expectedEvents.push(expectedRequestEvent(
@@ -591,7 +690,7 @@ async function verifyApi(input: VerificationInput): Promise<JsonRecord> {
     selectedCall,
     expectedSelectedStatus,
     selected.featureStatuses,
-    expectedSelectedStatus === "partial" ? "FEATURE_UNAVAILABLE" : undefined,
+    expectedSelectedStatus !== "complete" ? "FEATURE_UNAVAILABLE" : undefined,
   ));
 
   const tamilCall = await callApi(input, ANALYZE_PATH, "POST", {
@@ -610,6 +709,67 @@ async function verifyApi(input: VerificationInput): Promise<JsonRecord> {
     "LANGUAGE_UNAVAILABLE",
   ));
 
+  const rawFeatures = configured.supported_features.filter(
+    feature => feature !== "named_entities" && feature !== "important_terms",
+  );
+  const rawCall = await callApi(input, ANALYZE_PATH, "POST", {
+    text: input.text,
+    language: input.language,
+    model_profile: input.profile,
+    features: rawFeatures,
+  });
+  expect(rawCall.status === 200, "Existing raw features failed");
+  const rawResult = validateAnalysisResult(
+    rawCall.body,
+    input.language,
+    input.profile,
+    rawFeatures,
+    configured.identity,
+    input.text,
+    configured.important_terms_limit,
+  );
+  expect(rawResult.result.status === "complete", "Existing raw features did not complete");
+  expectedEvents.push(expectedRequestEvent("raw-analysis", rawCall, "complete", rawResult.featureStatuses));
+  selected.evidence.push(...rawResult.evidence);
+
+  if (input.language === "en") {
+    const boundaryText = "River\nmapping improves flood planning. River\nmapping improves flood planning.";
+    const boundaryFeatures: Feature[] = ["named_entities", "important_terms", "sentences"];
+    const boundaryCall = await callApi(input, ANALYZE_PATH, "POST", {
+      text: boundaryText,
+      language: input.language,
+      model_profile: input.profile,
+      features: boundaryFeatures,
+    });
+    expect(boundaryCall.status === 200, "Important Terms did not preserve completed siblings");
+    const boundary = validateAnalysisResult(
+      boundaryCall.body,
+      input.language,
+      input.profile,
+      boundaryFeatures,
+      configured.identity,
+      boundaryText,
+      configured.important_terms_limit,
+    );
+    const termStatus = boundary.featureStatuses.find(item => item.feature === "important_terms");
+    const suppressed = configured.important_terms_limit === 0;
+    expect(
+      suppressed
+        ? boundary.result.status === "complete" && termStatus?.status === "complete"
+        : boundary.result.status === "partial" && termStatus?.error_code === "FEATURE_FAILED",
+      "Important Terms boundary did not match the configured zero or feature-local failure policy",
+    );
+    expect(boundary.featureStatuses.filter(item => item.feature !== "important_terms").every(item => item.status === "complete"), "Important Terms damaged a sibling feature");
+    expectedEvents.push(expectedRequestEvent(
+      "english-important-terms-boundary",
+      boundaryCall,
+      suppressed ? "complete" : "partial",
+      boundary.featureStatuses,
+      suppressed ? undefined : "FEATURE_FAILED",
+    ));
+    selected.evidence.push(...boundary.evidence);
+  }
+
   if (input.language === "zh") {
     const nounFeatures: Feature[] = ["sentences", "noun_phrases", "document_metrics"];
     const nounCall = await callApi(input, ANALYZE_PATH, "POST", {
@@ -626,6 +786,7 @@ async function verifyApi(input: VerificationInput): Promise<JsonRecord> {
       nounFeatures,
       configured.identity,
       input.text,
+      configured.important_terms_limit,
     );
     expect(nounResult.result.status === "partial", "Chinese noun phrase result is not partial");
     const nounStatus = nounResult.featureStatuses.find(item => item.feature === "noun_phrases");
@@ -638,6 +799,32 @@ async function verifyApi(input: VerificationInput): Promise<JsonRecord> {
       "FEATURE_UNAVAILABLE",
     ));
     selected.evidence.push(...nounResult.evidence);
+
+    const unavailableFeatures: Feature[] = ["named_entities", "important_terms"];
+    const unavailableCall = await callApi(input, ANALYZE_PATH, "POST", {
+      text: input.text,
+      language: input.language,
+      model_profile: input.profile,
+      features: unavailableFeatures,
+    });
+    expect(unavailableCall.status === 422, "All-feature failure did not retain HTTP 422");
+    const unavailable = validateAnalysisResult(
+      unavailableCall.body,
+      input.language,
+      input.profile,
+      unavailableFeatures,
+      configured.identity,
+      input.text,
+      configured.important_terms_limit,
+    );
+    expect(unavailable.result.status === "failed" && unavailable.featureStatuses.every(item => item.error_code === "FEATURE_UNAVAILABLE"), "English-only features did not fail locally for Chinese");
+    expectedEvents.push(expectedRequestEvent(
+      "chinese-english-features",
+      unavailableCall,
+      "failed",
+      unavailable.featureStatuses,
+      "FEATURE_UNAVAILABLE",
+    ));
   }
 
   const largeText = generatedConcurrencyText();
@@ -681,6 +868,7 @@ async function verifyApi(input: VerificationInput): Promise<JsonRecord> {
       metricsFeatures,
       configured.identity,
       largeText,
+      configured.important_terms_limit,
     );
     const metrics = record(record(array(result.result.features, "Metrics result is invalid")[0], "Metrics feature is invalid").data, "Metrics data is invalid");
     expect(metrics.codepoint_count === CONCURRENCY_TEXT_BYTES, "Concurrency code-point count is unexpected");
@@ -692,7 +880,7 @@ async function verifyApi(input: VerificationInput): Promise<JsonRecord> {
     text: input.text,
     language: input.language,
     model_profile: input.profile,
-    features: selectedFeatures,
+    ...(input.feature_mode === "default" ? {} : { features: selectedFeatures }),
   });
   expect(
     warmCall.status === (expectedSelectedStatus === "failed" ? 422 : 200),
@@ -705,13 +893,14 @@ async function verifyApi(input: VerificationInput): Promise<JsonRecord> {
     selectedFeatures,
     configured.identity,
     input.text,
+    configured.important_terms_limit,
   );
   expectedEvents.push(expectedRequestEvent(
     "warm-repeat",
     warmCall,
     warm.result.status as ResultStatus,
     warm.featureStatuses,
-    warm.result.status === "partial" ? "FEATURE_UNAVAILABLE" : undefined,
+    warm.result.status !== "complete" ? "FEATURE_UNAVAILABLE" : undefined,
     true,
   ));
   selected.evidence.push(...warm.evidence);
