@@ -1,15 +1,12 @@
 {
   "default_entity_tier": 1,
   "default_source_kind": "reporting",
+  "version": "2026-10-20",
   "events": [
     {"definition": "Something was made available to use or buy for the first time, or a new version of it was.","display_name": "Release","id": "release","keywords": ["released","launch","launched","unveiled","now available","general availability","rolled out","new version"],"retired_on": null,"status": "active"},
-    {"definition": "Two or more organisations agreed to work together, with neither buying the other.","display_name": "Deal","id": "deal","keywords": ["partnership","agreement","signed a deal","joint venture","contract with","teamed up"],"retired_on": null,"status": "active"},
     {"definition": "One organisation bought another, or a controlling share of it.","display_name": "Acquisition","id": "acquisition","keywords": ["acquired","acquisition","takeover","buyout","merger","to buy"],"retired_on": null,"status": "active"},
     {"definition": "An organisation raised money from investors, or was valued in the course of doing so.","display_name": "Funding","id": "funding","keywords": ["funding round","series a","series b","series c","seed round","venture capital","raised","valuation"],"retired_on": null,"status": "active"},
     {"definition": "An organisation committed money to build or expand physical capacity - a plant, a data centre, a power connection or the land for one.","display_name": "Capital spending","id": "capex","keywords": ["capital expenditure","capex","data centre","data center","gigawatt","build-out","megawatt"],"retired_on": null,"status": "active"},
-    {"definition": "An organisation reported its results for a trading period, or told the market what to expect from the next one.","display_name": "Earnings","id": "earnings","keywords": ["earnings","quarterly results","fiscal quarter","operating income","earnings per share","quarterly revenue","full-year guidance"],"retired_on": null,"status": "active"},
-    {"definition": "A government, a regulator or a court acted on what an organisation may do, or moved to.","display_name": "Regulation","id": "regulation","keywords": ["regulator","regulators","regulation","regulatory","antitrust","lawsuit","legislation","sanctions"],"retired_on": null,"status": "active"},
-    {"definition": "A study, a paper or a benchmark was published, stating a method and a result a reader could check.","display_name": "Research","id": "research","keywords": ["researchers","arxiv","peer-reviewed","preprint","research paper","new study","the study","benchmark results"],"retired_on": null,"status": "active"},
     {"definition": "Something broke, leaked or stopped working, and somebody outside the organisation was affected.","display_name": "Incident","id": "incident","keywords": ["outage","data breach","security incident","recall","disruption","went down","took the site down"],"retired_on": null,"status": "active"}
   ],
   "lenses": [
@@ -35,7 +32,6 @@
     {"display_name": "Trade press","id": 2,"retired_on": null,"status": "active","weight": 0.6},
     {"display_name": "Community","id": 3,"retired_on": null,"status": "active","weight": 0.3}
   ],
-  "version": "2026-10-20",
   "verticals": [
     {"ceiling": 0.35,"definition": "The story is mainly about artificial intelligence - the models, the people and companies building or selling them, the machines and data centres they run on, or the rules being written for them.","display_name": "AI","floor": 6,"id": "ai","is_auto_discovered": false,"retired_on": null,"status": "active"},
     {"ceiling": 0.25,"definition": "The story is mainly about how energy is made, moved, stored or paid for - electricity, oil, gas, renewables, nuclear power and the grids that carry them.","display_name": "Energy","floor": 6,"id": "energy","is_auto_discovered": false,"retired_on": null,"status": "active"},
