@@ -1,6 +1,6 @@
 # How the UniEval API checks a complete source
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How the local evaluator produces applicable distinct scores without silently
 cutting the article or replacing an unfinished result. The
@@ -29,29 +29,36 @@ fact.
 
 ## Complete source processing
 
-The default consistency mode splits the summary into its native sentence
-units and the source into overlapping tokenizer-sized spans. Each source span
-is a slice of the unchanged original string. The plan reserves room for the
-question, the longest summary sentence and special tokens, then verifies
-every complete prompt again with the actual tokenizer. It never uses the
-tokenizer's truncation option.
+The default `full_source_prompt` consistency mode compares each native summary
+sentence with the complete unchanged source. Consistency is the arithmetic
+mean of all completed sentence scores, not one question over the whole summary.
+Its one original-character span covers the source from start through end.
+Every complete question/text input, including special tokens, is counted with
+the actual pinned tokenizer against the configured resource allowance.
+An oversized input fails explicitly; there is no truncation, window retry or
+automatic mode fallback.
+
+Explicit `all_source_windows`, selected by request or committed configuration,
+splits the source into overlapping tokenizer-sized spans. Each span is a slice
+of the unchanged original string. The plan reserves room for the question,
+the longest summary sentence and special tokens, then verifies every complete
+input again with the actual tokenizer. It never uses tokenizer truncation.
 
 When normalization maps several tokens to one original character, windows
 end and restart only at complete character boundaries. Overlap rounds
 outward, never below its configured target. If that prevents forward
-progress within the prompt allowance, consistency receives a declared
-planning error; other admissible dimensions still run.
+progress within the input allowance, consistency receives
+`WINDOW_BUDGET_INSUFFICIENT`; other admissible dimensions still run.
+This is a geometry refusal, not an invented measurement of an oversized article.
+An actually oversized summary-sentence question is checked first and retains
+its measured `SUMMARY_SENTENCE_TOO_LONG` refusal.
 
-Every summary sentence is compared with every source window. A sentence's
+In this explicit mode, every summary sentence is compared with every source window. A sentence's
 score is the highest completed window score; consistency is the mean of
 these sentence scores. Taking one best window against the whole summary
 would miss support spread across different sections, so that is not the
 calculation. Source offsets and completed counts let the caller verify
 coverage of the supplied article, including its end.
-
-The alternative full-source mode compares each sentence with the complete
-source and retains the native sentence mean. An oversized complete prompt
-fails explicitly; the service does not silently select another mode.
 
 Neither mode proves global factual correctness. A segmented comparison
 cannot join evidence split across distant windows, and choosing a best
@@ -61,12 +68,18 @@ actual mode so it cannot be confused with a native whole-source score.
 ## Native dimensions and incomplete work
 
 Fluency keeps its native sentence mean and needs no article windows.
-Coherence uses one full-source/full-summary prompt. Relevance uses one
+Coherence uses one full-source/full-summary prompt, even when consistency
+explicitly uses windows; those windows do not make oversized coherence fit.
+Relevance uses one
 full-reference/full-summary prompt. Averaging either score over source
 windows would define a different measure, so the service does not do it.
 
 If a complete prompt exceeds its allowance, that dimension has a safe error
-and no numeric score. Other admissible dimensions can finish. Missing
+and no numeric score. Its actual assembled token count, configured allowance
+and zero-based comparison index survive planning, predictor defense, bounded
+worker packets, parent reduction and reporting. The predictor's neutral size
+refusal is projected to the actual comparison dimension, never assumed to be
+consistency. Other admissible dimensions can finish. Missing
 reference text does not block the other scores. Disabled relevance has reason
 `disabled`, even without a reference; enabled relevance without one has reason
 `reference_not_supplied`. A supplied blank or null reference is invalid input.
@@ -142,7 +155,8 @@ new packets are issued.
 ## Design rationale
 
 One mode control describes source handling without creating interacting
-flags or changing the saved summary. All-window consistency trades more
+flags or changing the saved summary. Complete-source sentence comparisons
+retain the native summarization calculation by default. Explicit all-window consistency trades more
 comparisons for direct source-span coverage, rather than a retrieval promise
 that selected passages represent the entire article.
 Exact operation equality is part of native progress validation, alongside
@@ -155,12 +169,33 @@ provenance. A nullable skip reason distinguishes intentional absence of work
 from failure while retaining the four numeric fields. Frozen four-score readers
 keep earlier results and recordings meaningful; current saved handoffs bind
 selection and nullable reference identity before generation and through reporting.
+Frozen applicable-score readers also retain unmeasured errors without creating
+counts or rewriting original receipt bytes.
 
-A larger configured input allowance permits complete native coherence and
-reference prompts when execution supports them. It is not evidence that
-judging accuracy is unchanged at longer lengths. Recorded real predictions
-prove composition and reduction; they are not live workflow proof or an
-accuracy certificate. Workflow delivery remains a separate integration.
+A short question is only the fixed template. The complete model input also
+contains its substituted summary sentence or full summary, source or reference
+where applicable, and special tokens. Only that assembled input's actual
+tokenizer count is compared with the configured allowance; separately counted
+components are not assumed to add up. A fitting sentence/question can still
+leave too little room for source progress and overlap, so geometry has its own
+body-free error rather than a misleading size claim.
+
+The scorer at the committed `assets.reference_code_revision` has a configurable
+`max_length` constructor default of 1024 tokens and requests tokenizer
+truncation in `metric/scorer.py`. Its `metric/evaluator.py` averages sentence
+scores for consistency and fluency, while coherence and relevance use the
+complete summary. The model configuration at `assets.model.revision` uses
+relative attention and declares no fixed input-position ceiling.
+Its pinned `tokenizer_config.json` advertises 512 tokens; this is advisory
+metadata, not a second input cap.
+
+The native `max_input_tokens` resource allowance is currently 4096 tokens,
+above that upstream constructor default, and remains operator-configurable.
+It counts the complete assembled input without clipping. Neither the
+allowance, the constructor default nor tokenizer metadata establishes a fixed
+model context maximum or arbitrary-length capacity. Recorded real predictions
+prove composition and reduction, not judging accuracy or live workflow
+execution. Workflow delivery remains a separate integration.
 
 ## See also
 

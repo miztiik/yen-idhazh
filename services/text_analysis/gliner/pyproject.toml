@@ -1,0 +1,70 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gliner-api"
+version = "2026.11.8"
+description = "Local native GLiNER2 entity extraction and text classification."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.121,<0.122",
+    "huggingface-hub>=0.36,<3",
+    "local-api-host",
+    "pydantic>=2.12,<3",
+]
+
+[project.optional-dependencies]
+model = [
+    "gliner2[local]==2.1.0",
+    "torch>=2.1,<3",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28,<1",
+    "mypy>=1.14,<2",
+    "pytest>=8.3,<10",
+    "pytest-socket>=0.7,<1",
+    "ruff>=0.9,<1",
+    "text-analysis",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+local-api-host = { path = "../../local_api_host" }
+text-analysis = { path = "../spacy" }
+torch = { index = "pytorch-cpu" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gliner_api"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = ["src", "../../local_api_host/src", "../spacy/src"]
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["gliner2", "gliner2.*", "transformers", "transformers.*", "torch", "torch.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["text_analysis", "text_analysis.*"]
+follow_imports = "silent"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --import-mode=importlib --disable-socket --allow-unix-socket"

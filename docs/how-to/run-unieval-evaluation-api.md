@@ -1,6 +1,6 @@
 # Run the local UniEval API
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How to prepare the named resources, start the real evaluator and retain its
 actual applicable-score response. This is separate from workflow generation.
@@ -46,12 +46,26 @@ alone does not enable relevance. Send that file as JSON data to the
 named UniEval operation. Do not place any text into a shell expression,
 destination or path.
 
+Omit `consistency_source_mode` to use the committed `full_source_prompt`
+default: every native summary sentence is compared with the complete source.
+Select `all_source_windows` explicitly for sentence-by-window consistency,
+or choose it in committed scorer configuration. Both existing mode spellings
+are valid explicit controls. An oversized complete input has no automatic
+retry or truncation; consistency windows do not shorten coherence's complete
+source/summary input. The configured token allowance is a resource policy,
+not a fixed model context maximum.
+
 Retain the complete native response even with an error HTTP status. Check
 all four fields, actual loaded identity, selected consistency mode, source
 spans and planned/completed counts. Three applicable scores with an authorized
 relevance skip and no errors are complete. Missing required work is not zero;
 an attempted relevance failure is not a skip. Supplied but unused reference
 bytes still have a hash.
+For a size refusal, inspect the affected dimension and zero-based comparison
+index with `input_tokens` against `allowed_tokens`. These are measured complete
+inputs, not component estimates. Missing historical measurements remain
+unavailable. `WINDOW_BUDGET_INSUFFICIENT` is a separate source-progress/overlap
+refusal; it does not claim that an assembled article input was too long.
 
 ## Capture real offline predictions
 

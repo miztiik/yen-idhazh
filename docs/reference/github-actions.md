@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -10,7 +10,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 
 | File | Display name | Automatic trigger | Purpose |
 | --- | --- | --- | --- |
-| `ci.yml` | `CI` | Pull request; push to `main` | Code, site and complete model-free evaluator checks |
+| `ci.yml` | `CI` | Pull request; push to `main` | Backend, native TypeScript, site and browser checks |
 | `digest.yml` | `Content refresh` | `20 2 * * *`, `20 6 * * *`, `20 10 * * *`, `20 14 * * *`, `20 18 * * *` | Digest and production state |
 | `llm-council.yml` | `LLM-COUNCIL` | `0 22 * * *` | Model judges' verdicts |
 | `pages.yml` | `Pages publication` | Passing push CI; completed Content refresh or assembly recovery | Static site |
@@ -21,7 +21,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |
 | `feed-ingest-plan-test.yml` | `Feed ingest plan test` | none | Run the real planner HTTP API and publish its completed planner and host metadata |
 | `summary-eval-tests.yml` | `summary-eval-tests` | none | Generate natively with one declared model, stop it, score the saved answer through independent HHEM and UniEval APIs with optional independent-reference relevance, and report applicable work and machine/server outcomes without Git delivery |
-| `spacy-tests.yml` | `Text-Analysis-spaCy-tests` | none | Verify the multilingual text-analysis API at an immutable commit |
+| `ner-tests.yml` | `Text-Analysis-NER-tests` | none | Verify the multilingual text-analysis API at an immutable commit |
 | `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
 | `ai-pipeline-tests.yml` | `Yen-Summarizers` | Manual inference; pull-request saved-event checks | Run independent TypeScript inference and preserve generation/event/report checks |
 
@@ -161,14 +161,15 @@ See [host metrics](host-metrics.md) for the fingerprint and its unavailable reas
 
 ## Manual text analysis
 
-`spacy-tests.yml` is a read-only manual workflow. The dispatch selects a branch
+`ner-tests.yml` is a read-only manual workflow. The dispatch selects a branch
 or tag; GitHub resolves it to `github.sha`. The workflow checks out that exact
 commit with credentials disabled and verifies the checkout before execution.
 
-One stock Ubuntu job uses CPython 3.12, pinned uv and Bun, and the locked
+The `spacy_ner_test` job uses stock Ubuntu, CPython 3.12, pinned uv and Bun, and the locked
 `packages/common-contracts` toolchain. It syncs the selected commit's
-text-analysis environment, prepares only the selected configured model and
-runs only the service-local preparation and verification scripts. Dispatch
+text-analysis environment, runs the exact named native feature and artifact
+unittest inputs, prepares only the selected configured model and runs the
+service-local verification scripts. Dispatch
 text reaches the runner through the workflow event on stdin; custom feature
 names use a step environment value. Neither becomes inline shell or a command
 argument.
@@ -192,6 +193,14 @@ event byte limit, writes canonical validated events to `events.jsonl` and
 mirrors those same bytes to live workflow stderr. Production
 pipelines use their own supervisor with the health and analyze routes rather
 than this verification runner.
+
+English defaults exercise grouped Named Entities and ranked Important Terms,
+with exact code-point evidence, configured limits and a feature-local
+unanchored-phrase failure. The same probe checks raw output, retired dated
+routes and method refusal. Chinese retains its inherited defaults, raw
+capabilities and unavailable-feature behavior. Both required `md` runs must
+record the same final immutable head and confirmed cleanup; ordinary CI is
+not a substitute for them.
 
 ## Pages publication
 

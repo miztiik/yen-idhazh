@@ -20,7 +20,7 @@ on:
           - md
           - lg
       feature_mode:
-        description: "default: relations, entities, sentences, document_metrics; all: every feature supported by selected language; custom: CSV from custom_features"
+        description: "default: configured language defaults; all: every supported feature; custom: CSV from custom_features"
         required: false
         type: choice
         options:
@@ -76,24 +76,54 @@ jobs:
       - name: Install the shared TypeScript contracts
         run: bun install --frozen-lockfile --cwd packages/common-contracts
 
-      - name: Sync the text-analysis environment
-        working-directory: services/text_analysis
-        run: uv sync --frozen
+      - name: Check Unicode evidence spans
+        run: bun test ./services/text_analysis/spacy/scripts/validate-evidence-spans.test.ts
 
-      - name: Check verification artifact contracts
-        env:
-          PYTHONPATH: services/text_analysis/scripts
+      - name: Check existing Python host regressions
         run: >-
-          uv run --project services/text_analysis --no-sync python
-          services/text_analysis/tests/test_spacy_verification.py
+          uv run --project services/summary_evaluator --frozen --group dev
+          pytest -c services/summary_evaluator/pyproject.toml
+          services/summary_evaluator/tests/test_component_registration.py::test_neutral_host_reports_startup_failure_without_stopped
+          services/summary_evaluator/tests/test_component_registration.py::test_startup_failure_cleans_all_components_and_retains_native_errors
+          services/summary_evaluator/tests/test_server_lifecycle.py
+          services/summary_evaluator/tests/test_trace_context.py
+
+      - name: Verify the provider dependency locks
+        run: |
+          uv lock --locked --project services/local_api_host
+          uv lock --locked --project services/text_analysis/spacy
+          uv lock --locked --project services/text_analysis/gliner
+
+      - name: Sync the shared provider environment
+        run: uv sync --project services/text_analysis/gliner --frozen --extra model --group dev
+
+      - name: Check native and shared API source
+        working-directory: services/text_analysis/gliner
+        env:
+          MYPYPATH: ../hosting
+        run: |
+          uv run --no-sync ruff check --config pyproject.toml src tests scripts
+          uv run --no-sync ruff check --config ../../../pyproject.toml ../../local_api_host/src ../hosting
+          uv run --no-sync mypy --config-file pyproject.toml src tests scripts ../../local_api_host/src ../hosting
+
+      - name: Check native features and verification contracts
+        env:
+          PYTHONPATH: services/text_analysis/spacy/scripts
+        run: >-
+          uv run --project services/text_analysis/gliner --no-sync python
+          -m unittest
+          services/text_analysis/spacy/tests/test_named_entities.py
+          services/text_analysis/spacy/tests/test_important_terms.py
+          services/text_analysis/spacy/tests/test_api_contracts.py
+          services/text_analysis/spacy/tests/test_spacy_verification.py
 
       - name: Prepare the selected spaCy model
         env:
           TEXT_ANALYSIS_LANGUAGE: ${{ inputs.language }}
           TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
         run: >-
-          uv run --project services/text_analysis --no-sync python
-          services/text_analysis/scripts/prepare-selected-model.py
+          uv run --project services/text_analysis/gliner --no-sync python
+          services/text_analysis/spacy/scripts/prepare-selected-model.py
 
       - name: Run live text-analysis verification
         env:
@@ -106,8 +136,8 @@ jobs:
           TEXT_ANALYSIS_RUN_ID: ${{ github.run_id }}
           TEXT_ANALYSIS_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: >-
-          uv run --project services/text_analysis --no-sync python
-          services/text_analysis/scripts/run-spacy-test.py
+          uv run --project services/text_analysis/gliner --no-sync python
+          services/text_analysis/spacy/scripts/run-spacy-test.py
           < "$GITHUB_EVENT_PATH"
 
       - name: Upload text-analysis evidence
@@ -123,5 +153,32 @@ jobs:
             ${{ runner.temp }}/spacy-tests/events.jsonl
             ${{ runner.temp }}/spacy-tests/report.md
           include-hidden-files: false
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Prepare the configured GLiNER model
+        run: >-
+          uv run --project services/text_analysis/gliner --no-sync
+          python services/text_analysis/gliner/scripts/prepare_model.py --root .
+
+      - name: Check the prepared provider environment
+        run: uv pip check --python services/text_analysis/gliner/.venv/bin/python
+
+      - name: Check the native and shared APIs
+        env:
+          PYTHONPATH: services/text_analysis/hosting
+          TEXT_ANALYSIS_LANGUAGE: ${{ inputs.language }}
+          TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
+        run: >-
+          uv run --project services/text_analysis/gliner --no-sync
+          pytest services/text_analysis/gliner/tests/test_api.py
+          --junitxml="${{ runner.temp }}/gliner-api-results.xml"
+
+      - name: Upload GLiNER API results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gliner-api-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gliner-api-results.xml
           if-no-files-found: error
           retention-days: 90

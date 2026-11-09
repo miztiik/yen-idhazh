@@ -1,6 +1,6 @@
 # Summary evaluation workflow
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 Which inputs, saved results and process outcomes belong to the manual
 `summary-eval-tests.yml` workflow. Its task programs live in
@@ -31,8 +31,8 @@ checks. Workflow filenames, artifact names and private output directories keep
 their existing spellings.
 
 The evaluator's `pyproject.toml` names the tool root in `mypy_path` and
-`pythonpath`, and its `summary_eval_tests` directory in `testpaths`. Local and
-CI invocations use that existing locked environment. The
+`pythonpath`, and its `summary_eval_tests` directory in `testpaths`. Explicit
+native verification uses that existing locked environment. The
 [gate commands](../how-to/run-the-gates.md#independent-python-service-contracts)
 own model-free preparation and verification; the
 [manual procedure](../how-to/run-hhem-evaluation-api.md) owns live dispatch.
@@ -44,6 +44,13 @@ independent reference; optional boolean `evaluate_relevance` defaults false.
 Only the exactly empty form reference means absent; whitespace-only or null
 references are invalid. The platform reader accepts only native booleans or
 canonical `true`/`false` strings before strict validation. Optional
+string `consistency_source_mode` accepts exactly `full_source_prompt` or
+`all_source_windows`; omission or an exactly empty form value follows the
+scorer's committed default, currently `full_source_prompt`. Other nonempty
+values, including whitespace-only text, are invalid. This control is sent
+only to UniEval, never generation or HHEM. Native response controls must match
+the resolved request, including an explicit override rather than only the
+configured default. Optional
 `models_file` is a JSON path relative
 to `config/`, such as `models/ornith-1.5-9b-q5km.json`. The form default matches
 `config/idhazh.json.models_file`; blank uses that committed pointer. The existing
@@ -61,8 +68,9 @@ reading that one file; the caller preserves every UTF-8 space and newline.
 The default has no final newline, matching its former inline value.
 This authored settings family is version `2026-11-07`, current-only, without
 an inline-instruction fallback. Resolution yields the existing effective
-generation instruction. Current saved preparation, receipt, phase and report
-contracts use `2026-11-08`; machine and scorer-control protocols remain independent.
+generation instruction. Current saved preparation and receipt contracts use
+`2026-11-08`; current phase/report contracts use `2026-11-09`
+for measured native errors. Machine and scorer-control protocols remain independent.
 Neither scorer reads this workflow configuration.
 
 The file also owns the input, generation-request and generation-response byte
@@ -204,8 +212,12 @@ overall completion even when a sibling returns a score.
 
 `summary_eval_pipeline/contracts.py` retains the unchanged `2026-11-05`
 generation/preparation contracts and frozen shared-API evidence.
-`run_contracts.py`, `phase_contracts.py` and `report_contracts.py` declare current
-`2026-11-08` handoffs with relevance selection and nullable reference identity.
+`run_contracts.py` retains `2026-11-08` preparation and receipt handoffs.
+`phase_contracts.py` and `report_contracts.py` declare current `2026-11-09`
+handoffs with unchanged relevance selection and reference identity, plus
+measured native refusals.
+`previous_selected_phase_contracts.py` and `previous_selected_report_contracts.py`
+freeze `2026-11-08` handoffs, including unmeasured errors and intentional relevance skips.
 `previous_phase_contracts.py` and `previous_report_contracts.py` preserve
 `2026-11-07` independent evidence and its supported shared phases.
 `scorer_evidence.py` keeps the unchanged `2026-11-07` process observations.
@@ -246,7 +258,7 @@ Table B - Named output under `backend/var/summary-eval-tests/`
 | B1 | `run.json` | Platform run/attempt, UTC start, source revision, selected declaration, exact source hash, nullable reference hash and relevance boolean captured before startup; preparation status and safe errors are atomically updated here. |
 | B2 | `generation.json` | The same identities and relevance selection, observed loaded model, source/nullable-reference hashes, validated final `summary_text`, answer hash, generation status and safe errors. This is the one answer handoff. |
 | B3 | `generation-phase.json` | Generation measurements, server observations, cleanup and errors, bound to the exact saved receipt. |
-| B4 | `evaluation.json` | Imported native HHEM and UniEval results, per-scorer API process/application identities, native readiness, request/nullable-reference hashes and relevance selection, machine readings and each API/worker shutdown outcome, bound to that receipt. |
+| B4 | `evaluation.json` | Imported native HHEM and UniEval results with actual source mode and comparison geometry, per-scorer API process/application identities, native readiness, request/nullable-reference hashes and relevance selection, machine readings and each API/worker shutdown outcome, bound to that receipt. |
 | B5 | `results.json`, `report.md` | Combined native outcome and its escaped human report. |
 | B6 | `logs/` | Append-only per-role CloudEvents JSONL files and current native Hono server evidence. Not Git or site output. |
 
@@ -282,6 +294,10 @@ Without a completed score, the workflow is failed. A genuine computed zero is re
 oversized UniEval dimensions remain null with their native errors; completed
 dimensions and the other evaluator's result survive. Error HTTP responses are
 validated and read, not discarded.
+The report places actual complete-input tokens, the configured allowance,
+their difference and zero-based comparison index beside the affected score.
+Historical or unmeasured size errors show "Not recorded", never a reconstructed
+count. Window geometry is labelled separately without claiming an oversized input.
 Authorized skipped relevance has a null score, no planned or completed work
 and no relevance error. It does not prevent completion; attempted failures do.
 
@@ -381,6 +397,9 @@ adding another server configuration authority.
 Binding a separate relevance boolean and nullable reference identity preserves
 the same-run guarantee without forcing a reference into ordinary source/summary
 evaluation. Earlier four-score evidence keeps its original validators and meaning.
+Frozen applicable-score reports preserve their original errors, selection and
+receipt bytes. Reporting an old run does not rewrite its saved result into the
+new error family.
 
 A named instruction file makes the task independently editable without mixing
 its title/summary answer with the generator API's different product. Resolving

@@ -9,11 +9,17 @@ from summary_evaluator_cases.unieval_cases import read_unieval_recordings
 
 from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
+from summary_evaluator.unieval.contracts.previous_selected_unieval_result import (
+    PreviousSelectedUnievalResult,
+)
 from summary_evaluator.unieval.contracts.previous_unieval_result import PreviousUnievalResult
 from summary_evaluator.unieval.contracts.unieval_contract import (
     DIMENSIONS,
+    UNIEVAL_RESULT_VERSION,
     UNIEVAL_SCORING_VERSION,
+    SourceMode,
 )
+from summary_evaluator.unieval.contracts.unieval_error import POLICIES, UnievalError
 from summary_evaluator.unieval.contracts.unieval_recording import UnievalRecordingInputs
 from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
@@ -43,6 +49,11 @@ def test_optional_reference_and_strict_controls_preserve_original_text() -> None
         {"evaluate_relevance": "false"},
         {"evaluate_relevance": "true"},
         {"consistency_source_mode": None},
+        {"consistency_source_mode": ""},
+        {"consistency_source_mode": " full_source_prompt"},
+        {"consistency_source_mode": "all_source_windows "},
+        {"consistency_source_mode": False},
+        {"consistency_source_mode": ["full_source_prompt"]},
         {"consistency_source_mode": "retrieved_source_passages"},
         {"summary_text": True},
         {"destination": "PrivateValueCanary"},
@@ -59,7 +70,7 @@ def test_named_settings_freeze_all_assets_and_source_geometry() -> None:
     assert settings.version == UNIEVAL_SCORING_VERSION
     assert settings.scoring.evaluate_relevance is False
     assert settings.listener == api.listener
-    assert settings.scoring.consistency_source_mode == "all_source_windows"
+    assert settings.scoring.consistency_source_mode == "full_source_prompt"
     assert settings.assets.model.revision == "ed8da5a8aa01b19d49a5f8738d382ced54b73ad0"
     assert settings.prompts.relevance.format(summary="Answer", reference="Reference")
     changed = settings.model_dump(mode="json")
@@ -76,7 +87,7 @@ def test_recordings_have_no_fabricated_missing_or_out_of_range_scores() -> None:
     )
     assert set(DIMENSIONS) == {"fluency", "coherence", "consistency", "relevance"}
     schema = UnievalResult.model_json_schema()
-    assert schema["version"] == UNIEVAL_SCORING_VERSION
+    assert schema["version"] == UNIEVAL_RESULT_VERSION
     assert set(schema["$defs"]["UnievalScores"]["properties"]) == set(DIMENSIONS)
 
 
@@ -108,6 +119,72 @@ def test_previous_recording_reader_keeps_required_reference_and_original_control
         UnievalRecordingInputs.model_validate_json(json.dumps(payload))
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"input_tokens": None},
+        {"allowed_tokens": None},
+        {"input_tokens": 16},
+        {"input_tokens": 15},
+        {"input_tokens": -1},
+        {"input_tokens": True},
+        {"allowed_tokens": 0},
+        {"allowed_tokens": "16"},
+        {"dimension": "consistency"},
+        {"index": None},
+        {"code": "WINDOW_BUDGET_INSUFFICIENT"},
+    ],
+)
+def test_measured_refusals_require_a_strict_pair_and_actual_comparison(
+    mutation: dict[str, object],
+) -> None:
+    error = UnievalError.from_code(
+        "COHERENCE_INPUT_TOO_LONG", "coherence", 0, input_tokens=17, allowed_tokens=16,
+    )
+    assert UnievalError.model_validate_json(error.model_dump_json()) == error
+    payload = {**error.model_dump(), **mutation}
+    if mutation.get("code") == "WINDOW_BUDGET_INSUFFICIENT":
+        payload["message"] = POLICIES["WINDOW_BUDGET_INSUFFICIENT"].message
+    with pytest.raises(ValidationError):
+        UnievalError.model_validate(payload)
+
+
+def test_frozen_selected_result_preserves_unmeasured_errors_without_a_current_writer() -> None:
+    from summary_evaluator.unieval.contracts.previous_unieval_result import PREVIOUS_POLICIES
+
+    payload = example_previous_unieval_result("a" * 64).model_dump(mode="json")
+    payload["version"] = "2026-11-08"
+    payload["relevance_skip_reason"] = None
+    payload["effective_settings"]["evaluate_relevance"] = True
+    payload["status"] = "partial"
+    payload["scores"]["coherence"] = None
+    payload["work"]["coherence"]["completed"] = 0
+    payload["errors"] = [{
+        "code": "COHERENCE_INPUT_TOO_LONG", "dimension": "coherence", "index": None,
+        "message": PREVIOUS_POLICIES["COHERENCE_INPUT_TOO_LONG"].message,
+    }]
+    encoded = json.dumps(payload).encode("utf-8")
+    before = bytes(encoded)
+    preserved = PreviousSelectedUnievalResult.model_validate_json(encoded)
+    assert preserved.version == "2026-11-08"
+    assert preserved.model_dump(mode="json") == payload
+    assert encoded == before and "input_tokens" not in preserved.errors[0].model_dump()
+    with pytest.raises(ValidationError):
+        UnievalResult.model_validate_json(encoded)
+    payload["errors"][0].update({"input_tokens": 17, "allowed_tokens": 16})
+    with pytest.raises(ValidationError):
+        PreviousSelectedUnievalResult.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize("mutation", [{"dimension": "fluency"}, {"index": 0}])
+def test_window_geometry_cannot_be_relabelled_as_another_comparison(
+    mutation: dict[str, object],
+) -> None:
+    error = UnievalError.from_code("WINDOW_BUDGET_INSUFFICIENT", "consistency")
+    with pytest.raises(ValidationError):
+        UnievalError.model_validate({**error.model_dump(), **mutation})
+
+
 @pytest.mark.parametrize("default", [False, True])
 @pytest.mark.parametrize("selected", [None, False, True])
 @pytest.mark.parametrize("reference", [None, "  Exact reference.\n"])
@@ -131,8 +208,38 @@ def test_only_resolved_boolean_and_reference_presence_select_relevance(
     )
     enabled = default if selected is None else selected
     assert controls.evaluate_relevance is enabled
-    assert controls.consistency_source_mode == "all_source_windows"
+    assert controls.consistency_source_mode == settings.scoring.consistency_source_mode
     assert reason == (
         "disabled" if not enabled else "reference_not_supplied" if reference is None else None
     )
     assert request.reference_summary_text == reference
+
+
+@pytest.mark.parametrize("default", ["full_source_prompt", "all_source_windows"])
+@pytest.mark.parametrize("selected", [None, "full_source_prompt", "all_source_windows"])
+def test_explicit_mode_overrides_configuration_without_selecting_relevance(
+    default: SourceMode, selected: SourceMode | None,
+) -> None:
+    from summary_evaluator.unieval.resolve_unieval_selection import resolve_unieval_selection
+
+    api = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
+    )
+    settings = load_unieval_settings(REPOSITORY, api)
+    payload: dict[str, object] = {
+        "source_text": " Source.\n", "summary_text": "Summary.",
+        "reference_summary_text": " Unused independent reference.\n",
+    }
+    if selected is not None:
+        payload["consistency_source_mode"] = selected
+    request = UnievalRequest.model_validate(payload)
+    configured = settings.scoring.model_copy(update={"consistency_source_mode": default})
+    controls, reason = resolve_unieval_selection(request, configured)
+    assert controls.consistency_source_mode == (default if selected is None else selected)
+    assert controls.model_dump(exclude={"consistency_source_mode"}) == configured.model_dump(
+        exclude={"consistency_source_mode"}
+    )
+    assert reason == "disabled" and request.reference_summary_text == payload[
+        "reference_summary_text"
+    ]
+    assert request.consistency_source_mode == selected

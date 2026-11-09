@@ -1,8 +1,10 @@
 """Prove sentence-by-window reduction and partial truth through the real UniEval API."""
 
 import asyncio
+import hashlib
 
 import pytest
+from summary_evaluator_cases.contract_examples import REPOSITORY
 from summary_evaluator_cases.unieval_cases import (
     UnievalScenario,
     read_unieval_recordings,
@@ -11,11 +13,56 @@ from summary_evaluator_cases.unieval_cases import (
     unieval_settings,
 )
 
+from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
+from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
 from summary_evaluator.shared.contracts.api_paths import API_HEALTH_PATH
-from summary_evaluator.unieval.contracts.unieval_request import UnievalControls
+from summary_evaluator.unieval.contracts.unieval_request import UnievalControls, UnievalRequest
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
 from summary_evaluator.unieval.unieval_router import UNIEVAL_PATH
+
+
+def test_default_full_source_worker_keeps_unchanged_recorded_native_scores() -> None:
+    async def check() -> None:
+        inputs, predictions, _ = read_unieval_recordings()
+        case = next(case for case in inputs.cases if case.id == "contradicted")
+        recorded = next(case for case in predictions.cases if case.id == "contradicted")
+        api = load_scorer_api_settings(
+            REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
+        )
+        settings = load_unieval_settings(REPOSITORY, api)
+        request = UnievalRequest(
+            source_text=case.request.source_text,
+            summary_text=case.request.summary_text,
+            reference_summary_text=case.request.reference_summary_text,
+        )
+        async with running_unieval(settings=settings) as (client, worker, log):
+            response = await client.post(UNIEVAL_PATH, json=request.model_dump())
+            result = UnievalResult.model_validate_json(response.content)
+            assert response.status_code == 200 and result.status == "complete", response.text
+            assert request.consistency_source_mode is None and request.evaluate_relevance is None
+            assert result.effective_settings is not None
+            assert result.effective_settings.consistency_source_mode == "full_source_prompt"
+            assert result.effective_settings.source_budget_tokens is None
+            assert result.work.source_spans == recorded.work.source_spans
+            assert result.work.consistency.planned == result.work.summary_sentences
+            for dimension in ("fluency", "coherence", "consistency"):
+                scores = [
+                    item.score for item in recorded.comparisons if item.dimension == dimension
+                ]
+                assert getattr(result.scores, dimension) == sum(scores) / len(scores)
+                assert getattr(result.work, dimension).completed == len(scores)
+            assert result.scores.relevance is None and result.relevance_skip_reason == "disabled"
+            assert result.work.relevance.planned is None and result.work.relevance.completed == 0
+            assert result.reference_summary_sha256 == hashlib.sha256(
+                case.request.reference_summary_text.encode("utf-8")
+            ).hexdigest()
+            assert result.worker == worker.worker
+            assert case.request.source_text not in response.text
+            assert case.request.summary_text not in log.getvalue()
+        assert worker.exit_confirmed and worker.last_exit is not None
+
+    asyncio.run(check())
 
 
 def test_four_scores_use_sentence_maxima_not_one_best_whole_summary_window() -> None:
@@ -79,10 +126,16 @@ def test_normalization_planning_error_keeps_recorded_independent_dimensions() ->
                     item.score for item in recorded.comparisons if item.dimension == dimension
                 )
                 assert getattr(result.scores, dimension) == expected
-            assert any(
-                error.code == "CONSISTENCY_INPUT_TOO_LONG" and error.dimension == "consistency"
-                for error in result.errors
+            geometry = next(
+                (
+                    error for error in result.errors
+                    if error.code == "WINDOW_BUDGET_INSUFFICIENT"
+                    and error.dimension == "consistency"
+                ),
+                None,
             )
+            assert geometry is not None
+            assert geometry.input_tokens is None and geometry.allowed_tokens is None
             assert all(error.code != "WORKER_EXITED" for error in result.errors)
             assert (await client.get(API_HEALTH_PATH)).status_code == 200
             assert worker.is_alive

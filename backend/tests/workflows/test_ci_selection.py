@@ -21,10 +21,10 @@ requires_node: Final = pytest.mark.skipif(
 )
 SELECTOR: Final = REPO_ROOT / "frontend" / "scripts" / "test-scope.ts"
 BROWSER_SCOPE_CASES: Final = (
-    ("frontend/src/routes/console/+page.svelte", True, True, True, False, False, False),
-    ("frontend/src/routes/[date]/+page.svelte", True, True, False, False, False, True),
-    ("config/idhazh.json", True, True, False, True, True, True),
-    ("docs/reference/pipeline-cost.md", False, False, False, False, False, False),
+    ("frontend/src/routes/console/+page.svelte", True, True, True, False, False),
+    ("frontend/src/routes/[date]/+page.svelte", True, True, False, False, True),
+    ("config/idhazh.json", True, True, False, True, True),
+    ("docs/reference/pipeline-cost.md", False, False, False, False, False),
 )
 
 
@@ -66,7 +66,7 @@ def _browser_scope(
 
 @requires_node
 @pytest.mark.parametrize(
-    ("changed", "browser", "code", "console", "robots", "validate_all", "model_absent"),
+    ("changed", "browser", "code", "console", "validate_all", "model_absent"),
     BROWSER_SCOPE_CASES,
 )
 def test_changed_paths_select_the_expected_checks(
@@ -74,7 +74,6 @@ def test_changed_paths_select_the_expected_checks(
     browser: bool,
     code: bool,
     console: bool,
-    robots: bool,
     validate_all: bool,
     model_absent: bool,
     tmp_path: Path,
@@ -84,7 +83,6 @@ def test_changed_paths_select_the_expected_checks(
         "code": str(code).lower(),
         "model_absent": str(model_absent).lower(),
         "console": str(console).lower(),
-        "robots": str(robots).lower(),
         "validate_all": str(validate_all).lower(),
     }
 
@@ -102,7 +100,6 @@ def test_a_push_with_code_runs_every_check_without_path_filtering(tmp_path: Path
         "code": "true",
         "model_absent": "true",
         "console": "true",
-        "robots": "true",
         "validate_all": "true",
     }
 
@@ -114,6 +111,5 @@ def test_a_documentation_only_push_starts_no_code_jobs(tmp_path: Path) -> None:
         "code": "false",
         "model_absent": "false",
         "console": "false",
-        "robots": "false",
         "validate_all": "false",
     }

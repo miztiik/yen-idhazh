@@ -1,4 +1,4 @@
-"""How do source data and one model path enter from the bounded platform event?"""
+"""How do exact texts and scorer/model controls enter from the bounded platform event?"""
 
 import json
 import os
@@ -9,6 +9,7 @@ from pydantic.json_schema import SkipJsonSchema
 from summary_evaluator.hhem.contracts.evaluate_request import EvaluateRequest
 from summary_evaluator.shared.contracts.base import NativeContract, NonblankText
 from summary_evaluator.shared.contracts.optional_fields import is_absent, omit_default
+from summary_evaluator.unieval.contracts.unieval_contract import SourceMode
 from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
 
 from .contracts import text_sha256
@@ -22,13 +23,16 @@ class ManualInputs(NativeContract):
         default=None, exclude_if=is_absent, json_schema_extra=omit_default
     )
     evaluate_relevance: StrictBool = False
+    consistency_source_mode: SourceMode | SkipJsonSchema[None] = Field(
+        default=None, exclude_if=is_absent, json_schema_extra=omit_default
+    )
     models_file: str = ""
 
-    @field_validator("reference_summary_text")
+    @field_validator("reference_summary_text", "consistency_source_mode")
     @classmethod
     def refuse_explicit_null(cls, value: object) -> object:
         if value is None:
-            raise ValueError("Omit an absent reference instead of supplying null")
+            raise ValueError("Omit an unused input instead of supplying null")
         return value
 
     @property
@@ -58,6 +62,8 @@ def read_manual_inputs(manual: PipelineSettings) -> ManualInputs:
         supplied = dict(event["inputs"])
         if supplied.get("reference_summary_text") == "":
             del supplied["reference_summary_text"]
+        if supplied.get("consistency_source_mode") == "":
+            del supplied["consistency_source_mode"]
         if "evaluate_relevance" in supplied:
             boolean = supplied["evaluate_relevance"]
             if type(boolean) is bool:

@@ -52,7 +52,7 @@ from summary_evaluator.unieval.contracts.previous_unieval_result import (
     PreviousUnievalResult,
 )
 from summary_evaluator.unieval.contracts.unieval_contract import (
-    UNIEVAL_SCORING_VERSION,
+    UNIEVAL_RESULT_VERSION,
     UNIEVAL_VERSION,
 )
 from summary_evaluator.unieval.contracts.unieval_result import (
@@ -267,7 +267,7 @@ def in_memory_pipeline() -> tuple[ManualInputs, PipelineEvidence]:
         phase["evaluate_relevance"] = True
         phase["generation_sha256"] = receipt_hash
         if phase["unieval"] is not None:
-            phase["unieval"]["version"] = UNIEVAL_SCORING_VERSION
+            phase["unieval"]["version"] = UNIEVAL_RESULT_VERSION
             phase["unieval"]["relevance_skip_reason"] = None
             phase["unieval"]["effective_settings"]["evaluate_relevance"] = True
     current = PipelineEvidence.model_validate_json(json.dumps(payload))

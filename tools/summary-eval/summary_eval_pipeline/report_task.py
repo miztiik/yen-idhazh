@@ -17,6 +17,8 @@ from .inputs import read_manual_inputs
 from .phase_contracts import PhaseEvidence, PhaseResult, starts_no_scorers
 from .preparation import read_prepared
 from .previous_report_contracts import PipelineEvidence as PreviousPipelineEvidence
+from .previous_selected_phase_contracts import PhaseEvidence as PreviousSelectedPhaseEvidence
+from .previous_selected_report_contracts import PipelineEvidence as PreviousSelectedPipelineEvidence
 from .report import render_report
 from .report_contracts import REPORT_VERSION, PipelineEvidence, PipelineResult
 from .run_contracts import GenerationReceipt, GenerationResult, PreparedRun
@@ -33,7 +35,11 @@ def collect_results(root: Path) -> PipelineResult:
     directory = root / pipeline.output_directory
     prepared, _ = read_prepared(root)
     current = isinstance(prepared, PreparedRun)
-    contract = PipelineEvidence if current else PreviousPipelineEvidence
+    contract: (
+        type[PipelineEvidence]
+        | type[PreviousSelectedPipelineEvidence]
+        | type[PreviousPipelineEvidence]
+    ) = PipelineEvidence if current else PreviousPipelineEvidence
     version = REPORT_VERSION if current else EVIDENCE_VERSION
     if prepared.status != "complete":
         return contract.model_validate({
@@ -75,9 +81,10 @@ def collect_results(root: Path) -> PipelineResult:
                 result.run != prepared.run
                 or result.phase != phase
                 or result.reference_summary_sha256 != prepared.reference_summary_sha256
-                or isinstance(result, PhaseEvidence) != current
+                or isinstance(result, PhaseEvidence | PreviousSelectedPhaseEvidence) != current
                 or (
-                    isinstance(prepared, PreparedRun) and isinstance(result, PhaseEvidence)
+                    isinstance(prepared, PreparedRun)
+                    and isinstance(result, PhaseEvidence | PreviousSelectedPhaseEvidence)
                     and result.evaluate_relevance != prepared.evaluate_relevance
                 )
                 or (
@@ -104,6 +111,14 @@ def collect_results(root: Path) -> PipelineResult:
                 evaluation_phase = result
         except WorkflowError as error:
             errors.append(error.error)
+    if current:
+        versions = {
+            phase.version for phase in (generated_phase, evaluation_phase) if phase is not None
+        }
+        if len(versions) > 1:
+            raise WorkflowError("RECEIPT_INVALID", "report")
+        if versions == {"2026-11-08"}:
+            contract, version = PreviousSelectedPipelineEvidence, "2026-11-08"
     complete = (
         generation is not None
         and generation.status == "complete"

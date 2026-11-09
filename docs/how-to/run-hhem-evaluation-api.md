@@ -1,6 +1,6 @@
 # Generate and evaluate one summary
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How to dispatch `summary-eval-tests.yml` and inspect the generated answer,
 actual HHEM and applicable UniEval scores, machine readings and owned-process cleanup. This procedure
@@ -25,6 +25,12 @@ The form requires `source_text`. The optional reference is independently written
 `reference_summary_text` for that source. Select `evaluate_relevance` explicitly
 to evaluate agreement; its false default does not depend on reference presence.
 The exactly empty form reference means absent; whitespace-only text is invalid.
+Leave optional string `consistency_source_mode` blank to follow scorer
+configuration, whose default is `full_source_prompt`. Enter that spelling or
+`all_source_windows` for an explicit override; every other nonempty value is
+invalid. Full-source consistency still compares individual summary sentences.
+An oversized input is not retried in another mode or clipped. Explicit
+consistency windows do not make oversized full-source coherence fit.
 When supplied, the reference is captured before
 generation and sent only to UniEval, not to the summarizer or HHEM.
 Optional `models_file` is the committed JSON
@@ -39,12 +45,16 @@ runs with the same source and reference. The generation instruction stays fixed 
 There is no manual summary input or model matrix.
 
 This command sends the named, project-authored source/reference fixture through standard
-input, not command arguments. It explicitly selects its four-score journey.
+input, not command arguments. It explicitly selects its four-score, windowed journey
+without changing the fixture's source or reference.
 Use the intended verified ref and retain its actual
 `headSha` with the result.
 
 ```powershell
-Get-Content -Raw .\tests\fixtures\unieval-evaluator\workflow-inputs.json |
+$inputs = Get-Content -Raw .\tests\fixtures\unieval-evaluator\workflow-inputs.json |
+  ConvertFrom-Json -AsHashtable
+$inputs["consistency_source_mode"] = "all_source_windows"
+$inputs | ConvertTo-Json -Compress |
   gh workflow run summary-eval-tests.yml --ref main --json
 ```
 
@@ -72,14 +82,21 @@ comparisons and confirmed API/worker cleanup. A failed generation must leave bot
 a zero score or numeric duration.
 
 For the explicitly opted-in named fixture, require its four-score journey.
-It requires multiple tokenizer-sized source windows. With the
+Its explicit window selection requires multiple tokenizer-sized source spans. With the
 pinned tokenizer, even its complete source-only coherence prompt exceeds the
-original 1024-token cutoff. Inspect the actual generated answer's native
-coherence prompt: it must exceed that cutoff and fit the configured total
+upstream scorer's configurable constructor default. Inspect the actual generated answer's native
+coherence prompt: it must exceed that default and fit the configured resource
 allowance without clipping. Require all four actual scores, every planned
 sentence/window comparison, source spans from zero through the source's final
 character, both independently stopped API processes and their joined worker exits. Three completed dimensions, an
 unexercised larger setting or an offline recording cannot close live proof.
+
+For the default full-source mode, require one complete original-source span
+and one consistency comparison per native summary sentence, not a single
+whole-summary score. Check the report's actual mode against the submitted
+override or resolved scorer configuration. The
+[native token-policy rationale](../architecture/evaluation/unieval-api.md#design-rationale)
+owns the distinction between resource allowance and model metadata.
 
 The report contains separate phase and server outcomes, actual startup times,
 shutdown results and log names. An unavailable observation remains unavailable.
@@ -88,6 +105,11 @@ actual hardware and
 whole-machine CPU/RAM, explicit uninterrupted profile close and clean confirmed
 shutdown. A valid relevance skip is not a failure. A supplied but unused reference
 must be labelled unused. A score alone does not close live verification.
+For a native size failure, read the affected score's complete-input token count,
+configured allowance and comparison index. Missing measurements are not
+estimated. A window-geometry refusal describes unavailable source progress
+and overlap, not an oversized-input count. Completed siblings and HHEM
+outcomes must remain in the saved response and report.
 
 If work fails, available results and the report still upload. The
 `summary-eval-tests-server-logs` artifact retains available role logs after

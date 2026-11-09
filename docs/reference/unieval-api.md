@@ -1,6 +1,6 @@
 # UniEval evaluation API
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 Which requests, applicable scores and settings belong to the local API.
 The [architecture](../architecture/evaluation/unieval-api.md) defines score
@@ -10,13 +10,14 @@ meaning, complete-source processing and process ownership.
 
 `services/summary_evaluator/src/summary_evaluator/unieval/contracts/` owns
 the native Pydantic contracts and on-demand schemas. Their version is
-`2026-11-08` for requests, scoring results and effective controls.
+`2026-11-08` for requests and effective controls, and `2026-11-09` for results
+and measured errors.
 Health, model identity, work and genuine recordings retain `2026-11-04`.
-Private worker packets use their separate `2026-11-08` version and require the
-resolved relevance skip. Live producers and consumers change together.
-Frozen readers preserve original four-score results and recordings without
+Private worker packets use their separate `2026-11-09` version and require the
+resolved relevance skip and dimension-bound measurements. Live producers and consumers change together.
+Frozen readers preserve original four-score and `2026-11-08` applicable-score results without
 rewriting their versions, hashes or meaning; invalid current data never selects
-an older reader. There are no old-route aliases.
+an older reader. Genuine recordings remain unchanged. There are no old-route aliases.
 There is no result store, polling API or published-data contract.
 
 The comparison workflow starts separate HHEM and native UniEval APIs.
@@ -50,7 +51,7 @@ Table B - Inputs
 | --- | --- | --- |
 | B1 | `source_text`, `summary_text` | Required nonblank UTF-8 source and generated summary. |
 | B2 | `reference_summary_text` | Omittable independent reference for the same source. Supplied null or blank text is invalid; exact UTF-8 bytes are preserved. The API generates or substitutes no reference. |
-| B3 | `consistency_source_mode` | Omittable `all_source_windows` or `full_source_prompt`; omission uses the committed scoring default. |
+| B3 | `consistency_source_mode` | Omittable `full_source_prompt` or `all_source_windows`; omission uses the committed `full_source_prompt` default. Windows require an explicit request or committed configuration selection. |
 | B4 | `request_id`, `correlation_id` | Omittable native UUIDv4 strings; supplied spelling is retained. The API creates its own execution identity. |
 | B5 | `evaluate_relevance` | Omittable strict boolean; omission uses validated `scoring.evaluate_relevance`, default false. Explicit false overrides a configured true. Reference presence never selects work. |
 
@@ -58,10 +59,13 @@ Fluency, coherence and consistency remain required. Disabled relevance takes
 precedence over reference absence. Enabled relevance without a reference is
 also skipped, not a failed evaluation.
 
-`all_source_windows` scores every summary sentence against every planned
-source span, then averages per-sentence maxima. `full_source_prompt` retains
-native full-source consistency. Both leave the other dimensions unchanged;
-neither permits input clipping or a shortened summary.
+Default `full_source_prompt` compares each native summary sentence with the
+complete unchanged source, then averages every completed sentence score.
+Explicit `all_source_windows` scores every sentence against every planned
+original-source span, then averages per-sentence maxima. Both leave the other
+dimensions unchanged; neither permits clipping, a shortened summary or an
+automatic retry in another mode. Coherence remains one complete-source and
+complete-summary question even with explicit consistency windows.
 
 ## Body-free result
 
@@ -77,7 +81,7 @@ Table C - Output
 | C6 | `scores` | Nullable finite `fluency`, `coherence`, `consistency` and `relevance`, each from zero to one. No scoring-time rounding or overall aggregate. |
 | C7 | `work` | Per-dimension planned/completed counts, summary-sentence count, source-character count and complete source-span plan. Span offsets are zero-based, end-exclusive Unicode code-point offsets into the original source. |
 | C8 | `timings_ms` | Nullable queue-wait, scoring and total durations, in milliseconds measured with a monotonic clock. |
-| C9 | `errors` | Closed safe codes, nullable dimension/index and fixed message. No exception, raw validation value, source passage or model body. |
+| C9 | `errors` | Closed safe codes, nullable dimension and zero-based comparison index, fixed message and paired nullable `input_tokens`/`allowed_tokens`. Measured refusals count the actual complete assembled input and exceed the configured allowance. Both fields may be absent for historical or unmeasured errors; absence is not reconstructed. No text or raw exception is included. |
 | C10 | `relevance_skip_reason` | Required nullable `disabled` or `reference_not_supplied`. A skip has no relevance score, plan, completed comparison or relevance error. Attempted relevance failures and invalid requests have no skip reason. |
 
 A numeric dimension requires every planned comparison and its observed
@@ -101,6 +105,12 @@ preserves all UTF-8 whitespace, and builds the existing effective `prompts`
 model before placeholder validation, worker handoff or model input hashing.
 Effective scoring settings use `2026-11-08`; recordings retain `2026-11-04`.
 No file path is hashed as though it changed question wording.
+
+`scoring.max_input_tokens` is an operator resource allowance for each complete
+assembled question/text input, including special tokens. The
+[token-policy rationale](../architecture/evaluation/unieval-api.md#design-rationale)
+distinguishes it from the upstream constructor default and advisory tokenizer
+metadata; none is a fixed architectural context maximum.
 
 Table D - Native question files
 
@@ -147,15 +157,26 @@ old recordings or change their captured prompt hashes.
 
 Existing native body, media, origin/host, input-read, queue and process
 policies apply. A reserved input is bounded before it is read.
-Context and plan-limit refusals use HTTP 400, queue admission uses HTTP 429,
+Input-size and plan-limit refusals use HTTP 400, queue admission uses HTTP 429,
 unready/stopping service uses HTTP 503, model/protocol failures use HTTP 500
 and the complete evaluation deadline uses HTTP 504.
 
 `SUMMARY_SENTENCE_TOO_LONG`, `COHERENCE_INPUT_TOO_LONG`,
 `RELEVANCE_INPUT_TOO_LONG` and `CONSISTENCY_INPUT_TOO_LONG` identify complete
-prompts that do not fit. `WINDOW_LIMIT_EXCEEDED` and
+inputs that do not fit, preserving the affected dimension, comparison index
+and actual token count against its configured allowance. The internal
+`MODEL_INPUT_TOO_LONG` predictor refusal is mapped at the comparison boundary;
+it is never returned as an unidentified public size error.
+`WINDOW_BUDGET_INSUFFICIENT` instead means that the summary-sentence question
+fits but original-character source windows cannot reserve positive progress
+and required overlap. It has no oversized-input measurement.
+An oversized summary-sentence question remains `SUMMARY_SENTENCE_TOO_LONG`
+for consistency planning. The
+[token-policy rationale](../architecture/evaluation/unieval-api.md#design-rationale)
+defines which complete input is counted.
+`WINDOW_LIMIT_EXCEEDED` and
 `COMPARISON_LIMIT_EXCEEDED` refuse excessive plans rather than omit work.
-Context failures leave affected scores null; other admissible dimensions
+Input-size failures leave affected scores null; other admissible dimensions
 can finish. A real computed zero is never a missing-value marker.
 
 Shutdown closes admission and joins the exact owned worker. A blocked or

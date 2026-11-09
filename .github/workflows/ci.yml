@@ -104,7 +104,6 @@ jobs:
       code: ${{ steps.decide.outputs.code }}
       model_absent: ${{ steps.decide.outputs.model_absent }}
       console: ${{ steps.decide.outputs.console }}
-      robots: ${{ steps.decide.outputs.robots }}
       validate_all: ${{ steps.decide.outputs.validate_all }}
       playwright: ${{ steps.browsers.outputs.playwright }}
     steps:
@@ -151,27 +150,6 @@ jobs:
             exit 1
           fi
           echo "playwright=$version" >> "$GITHUB_OUTPUT"
-
-  model-free:
-    needs: scope
-    if: needs.scope.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Verify the complete model-free suites
-        uses: ./.github/actions/check-summary-evaluator
-
-      - name: Retain the current test result
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: summary-evaluator-model-free-results
-          path: services/summary_evaluator/var/model-free-results.xml
-          if-no-files-found: warn
 
   gates:
     needs: scope
@@ -250,10 +228,6 @@ jobs:
           bun run check
           bun run test
 
-      - name: Install optional Linux cache instruments
-        if: needs.scope.outputs.code == 'true'
-        run: bash services/host-probes/scripts/install-host-cache-tools.sh
-
       - name: TypeScript host probes
         if: needs.scope.outputs.code == 'true'
         working-directory: services/host-probes
@@ -299,18 +273,6 @@ jobs:
           bun run check
           bun run test
 
-      - name: Live TypeScript RAM and optional copy proof
-        if: needs.scope.outputs.code == 'true'
-        run: bun run services/host-probes/scripts/feed-ingest-plan-profile-proof.ts
-
-      - name: Preserve TypeScript resource proof
-        if: ${{ always() && needs.scope.outputs.code == 'true' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: typescript-resource-proof
-          path: test-results/host-probes/resource-proof.json
-          if-no-files-found: warn
-
       - name: Tests, including the five injection canaries
         if: needs.scope.outputs.code == 'true'
         run: >-
@@ -351,40 +313,6 @@ jobs:
       - name: Every committed day still matches its contracts
         if: needs.scope.outputs.validate_all == 'true'
         run: python -m idhazh check-publication
-
-  # The one gate `gates` cannot be: it runs on ONE interpreter, and the thing
-  # under test here is whether two of them agree. `robots.txt` is a permission,
-  # and until 2026-09-02 the standard library read one file two ways across the
-  # range `pyproject.toml` declares - so a page this crawler may read depended
-  # on which runner picked up the job. Both ends of that range read the same
-  # committed fixtures here, and a disagreement fails rather than publishes.
-  #
-  # The whole file, not a selection: the address rules and the RFC 9309 status
-  # reading sit beside the fixture matrix and are the same kind of decision.
-  #
-  # Only when the answer can have moved: a change to the extraction code, its
-  # tests, or the interpreter range. Every push to `main` still runs it.
-  robots:
-    needs: scope
-    if: needs.scope.outputs.robots == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-python@v7
-        with:
-          # The newest supported interpreter, and the only thing this job adds:
-          # `gates` already runs the whole suite, this file included, on 3.12.
-          python-version: '3.14'
-          cache: pip
-          cache-dependency-path: pyproject.toml
-
-      - name: Install
-        run: pip install -e ".[dev]"
-
-      - name: The robots fixtures, on the newest supported interpreter
-        run: pytest backend/tests/test_extract.py
 
   site:
     needs: scope

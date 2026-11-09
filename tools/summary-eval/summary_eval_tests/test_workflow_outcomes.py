@@ -1,6 +1,7 @@
 """Do independent evidence and preserved shared evidence require their actual observations?"""
 
 import json
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,12 @@ def test_native_zero_scores_complete_only_with_both_results_measurement_and_join
     assert prepared.reference_summary_sha256 is not None
     hhem = example_result()
     unieval = example_unieval_result(prepared.reference_summary_sha256)
+    assert unieval.effective_settings is not None
+    unieval = unieval.model_copy(update={
+        "effective_settings": unieval.effective_settings.model_copy(
+            update={"consistency_source_mode": "all_source_windows"}
+        ),
+    })
     apis = (scorer_api_example("hhem", hhem), scorer_api_example("unieval", unieval))
     prepare_proc(tmp_path)
     host = NativeHostPipe(tmp_path)
@@ -280,6 +287,7 @@ def test_current_report_checks_the_original_receipt_hash_supplied_by_its_bounded
 def test_unknown_report_versions_are_refused_without_reading_a_different_variant() -> None:
     _, pipeline = in_memory_pipeline()
     payload = pipeline.model_dump(mode="json")
-    for version in ("2026-11-06", "2026-11-09"):
+    future_version = (date.fromisoformat(REPORT_VERSION) + timedelta(days=1)).isoformat()
+    for version in ("2026-11-06", future_version):
         with pytest.raises(ValidationError):
             PipelineDocument.model_validate_json(json.dumps({**payload, "version": version}))

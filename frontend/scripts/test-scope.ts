@@ -53,13 +53,8 @@ export type CiAnswer = {
 	code: boolean;
 	modelAbsent: boolean;
 	console: boolean;
-	robots: boolean;
 	validateAll: boolean;
 };
-
-/** The module the `robots` job runs on a second interpreter. A change that does
- * not select it cannot move how two interpreters read a `robots.txt`. */
-const ROBOTS_TESTS = 'backend/tests/test_extract.py';
 
 /** Anything under here IS the archive, so a change to it has to be re-read. */
 const ARCHIVE_TOUCHED = /^frontend\/public\/(digest|telemetry|assist)\//;
@@ -92,8 +87,6 @@ export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
 			return groups.some((group) => group !== 'backend');
 		})),
 		console: selection.groups.includes('console') && !deferred,
-		// A full backend selection (null) is an unknown change, so it buys the job.
-		robots: selection.backendFiles?.includes(ROBOTS_TESTS) ?? true,
 		// A published day is frozen, so the only thing that can invalidate one is a
 		// change to the shape it is read through - or an edit to the day itself.
 		// Everything else leaves an answer that was settled when the day was
@@ -299,7 +292,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 		console.log(`code=${answer.code}`);
 		console.log(`model_absent=${answer.modelAbsent}`);
 		console.log(`console=${answer.console}`);
-		console.log(`robots=${answer.robots}`);
 		console.log(`validate_all=${answer.validateAll}`);
 	} else {
 		console.log(JSON.stringify(selectPaths(paths), null, 2));
