@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Final, Protocol, runtime_checkable
 
 from gliner_api.configure_native_diagnostics import (
     configure_native_diagnostics,
+    filter_encoder_deprecation,
     native_operation,
 )
 
@@ -121,11 +122,12 @@ def load_model(settings: GlinerSettings, root: Path) -> NativeModel:
         with native_operation():
             configure_native_diagnostics()
             snapshot = _resolve_snapshot(settings, root, local_files_only=True)
-            from gliner2 import AutoExtractor
+            with filter_encoder_deprecation():
+                from gliner2 import AutoExtractor
 
-            model: object = AutoExtractor.from_pretrained(
-                str(snapshot), map_location=CPU_DEVICE, local_files_only=True
-            )
+                model: object = AutoExtractor.from_pretrained(
+                    str(snapshot), map_location=CPU_DEVICE, local_files_only=True
+                )
             if (
                 not isinstance(model, NativeModel)
                 or not callable(model.extract_entities_long)

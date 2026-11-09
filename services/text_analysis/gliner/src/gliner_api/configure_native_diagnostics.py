@@ -48,6 +48,20 @@ _VERBOSITY_OPTIONS: Final = {
 
 
 @contextmanager
+def filter_encoder_deprecation() -> Iterator[None]:
+    """Recognize the SDK's benign TorchScript warning during model construction only."""
+    with _CONFIGURATION_LOCK, warnings.catch_warnings():
+        # The SDK already excludes a related encoder notice but misses this newer message.
+        warnings.filterwarnings(
+            "ignore",
+            message=r"^`torch\.jit\.script` is deprecated\.",
+            category=FutureWarning,
+            module=r"^torch\.jit\._script$",
+        )
+        yield
+
+
+@contextmanager
 def native_operation() -> Iterator[None]:
     """Refuse a latched diagnostic even when native code catches its exception."""
     parent_record = _CURRENT_OPERATION.get()
