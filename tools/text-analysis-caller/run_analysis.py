@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import httpx
+from capture_events import ApiEventCapture
 from collect_classifications import collect_classifications
 from collect_operations import Outcome, collect_gliner_operations
 from collect_results import (
@@ -15,7 +16,7 @@ from collect_results import (
     read_inputs,
     save_settings,
 )
-from supervise_apis import start_apis, stop_apis, wait_for_apis
+from supervise_apis import EXIT_GRACE_SECONDS, start_apis, stop_apis, wait_for_apis
 from write_reports import deliver_reports
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -34,13 +35,18 @@ async def main() -> int:
     spacy = Outcome(error="The spaCy API did not become ready.")
     gliner = Outcome(error="The GLiNER API did not become ready.")
     classification = Outcome(error="The GLiNER API did not become ready for classification.")
-    cleanup_error: str | None = None
+    process_errors: list[str] = []
     process = None
     settings = None
+    capture = None
     try:
         settings = save_settings(ROOT, output)
+        capture = ApiEventCapture(output, sys.stderr.buffer)
         process = start_apis(ROOT)
-        spacy_health, gliner_health = wait_for_apis(process, settings.listener)
+        capture.start(process.stderr)
+        spacy_health, gliner_health = await asyncio.to_thread(
+            wait_for_apis, process, settings.listener
+        )
         timeout = settings.listener.body_read_timeout_ms / 1000
         async with httpx.AsyncClient(
             base_url=f"http://{settings.listener.host}:{settings.listener.port}",
@@ -55,13 +61,19 @@ async def main() -> int:
                     collect_classifications(client, inputs, ROOT, output),
                 )
     except (OSError, ValueError):
-        cleanup_error = "The API configuration, process or native artifacts could not be prepared."
+        process_errors.append(
+            "The API configuration, process or native artifacts could not be prepared."
+        )
     finally:
         if process is not None and settings is not None:
             try:
-                stop_apis(process, settings.listener)
+                await asyncio.to_thread(stop_apis, process, settings.listener)
             except (OSError, RuntimeError):
-                cleanup_error = "The API process did not shut down cleanly."
+                process_errors.append("The API process did not shut down cleanly.")
+        if capture is not None:
+            capture_error = await capture.finish(EXIT_GRACE_SECONDS)
+            if capture_error is not None:
+                process_errors.append(capture_error)
 
     delivery_failed = deliver_reports(
         output,
@@ -71,7 +83,7 @@ async def main() -> int:
         spacy_error=spacy.error,
         gliner_error=gliner.error,
         classification_error=classification.error,
-        process_error=cleanup_error,
+        process_error=" ".join(process_errors) or None,
     )
     return int(delivery_failed or spacy.incomplete)
 

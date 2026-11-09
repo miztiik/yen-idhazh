@@ -1,5 +1,6 @@
-"""How is one native GLiNER classification request built and collected from the taxonomy?"""
+"""How is one caller-defined native GLiNER classification request collected?"""
 
+import json
 from pathlib import Path
 
 import httpx
@@ -11,45 +12,42 @@ from gliner_api.declare_api_contracts import (
     ClassificationResult,
     ErrorResult,
 )
+from prepare_default_tasks import default_classification_tasks
 from pydantic import ValidationError
 from render_classifications import (
-    active_classification_tasks,
     read_classification_selections,
     read_classification_tasks,
 )
-from write_reports import write_atomic
 
 
 async def collect_classifications(
     client: httpx.AsyncClient, inputs: Inputs, root: Path, directory: Path
 ) -> Outcome:
-    """Offer active definitions once, preserving exact source and native evidence."""
+    """Forward native task data once, preserving exact source and independent failures."""
     try:
-        from idhazh.contracts.taxonomy import Taxonomy
+        if inputs.classification_tasks.strip():
+            tasks = json.loads(inputs.classification_tasks)
+        else:
+            from idhazh.contracts.taxonomy import Taxonomy
 
-        native = (root / "config" / "taxonomy.json").read_bytes()
-        taxonomy = Taxonomy.model_validate_json(native)
-        write_atomic(directory / "gliner" / "taxonomy.json", native)
-        request = ClassificationRequest.model_validate(
-            {
-                "text": inputs.text,
-                "tasks": active_classification_tasks(taxonomy.model_dump(mode="json")),
-            }
-        )
+            taxonomy = Taxonomy.model_validate_json(
+                (root / "config" / "taxonomy.json").read_bytes()
+            )
+            tasks = default_classification_tasks(taxonomy.model_dump(mode="json"))
+        request = ClassificationRequest.model_validate({"text": inputs.text, "tasks": tasks})
     except ImportError:
         return Outcome(
-            error="The GLiNER classification Taxonomy schema is unavailable; "
-            "expose the backend source root without installing the backend runtime."
+            error="Default GLiNER classification tasks need the taxonomy schema; "
+            "supply native classification_tasks JSON or expose the backend source root."
         )
     except ValidationError:
         return Outcome(
-            error="The GLiNER classification taxonomy or request failed native validation; "
-            "every active taxonomy entry requires a definition."
+            error="The GLiNER classification tasks or default taxonomy failed native validation."
         )
     except (OSError, KeyError, ValueError):
         return Outcome(
-            error="The GLiNER classification taxonomy could not be prepared; "
-            "active offerings must be nonempty and their definitions nonblank."
+            error="The GLiNER classification tasks could not be prepared; "
+            "supply native tasks JSON or a valid default taxonomy."
         )
     try:
         response = await send_request(

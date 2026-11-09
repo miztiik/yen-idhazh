@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -168,7 +168,7 @@ def _safe_section(
 
 
 def _safe_classifications(
-    source: str, files: NativeFiles | None, taxonomy: dict[str, object] | None
+    source: str, files: NativeFiles | None
 ) -> tuple[ClassificationReport | None, bool]:
     if files is None:
         return None, False
@@ -177,15 +177,12 @@ def _safe_classifications(
             source,
             None if files.error else files.response,
             request=files.request,
-            taxonomy=taxonomy,
             error=files.error,
         ), False
     except (KeyError, ValueError):
         error = "The saved classification evidence is invalid; inspect its native files."
     try:
-        return render_classifications(
-            source, None, request=files.request, taxonomy=taxonomy, error=error
-        ), True
+        return render_classifications(source, None, request=files.request, error=error), True
     except (KeyError, ValueError):
         return render_classifications(source, None, error=error), True
 
@@ -196,15 +193,12 @@ def render_saved_reports(
     gliner: NativeFiles,
     *,
     classification: NativeFiles | None = None,
-    taxonomy: dict[str, object] | None = None,
     process_error: str | None = None,
     repository: str | None = None,
 ) -> Reports:
     """Compose every output from the same pure provider sections."""
     read_text(source)
-    classification_section, invalid_classification = _safe_classifications(
-        source, classification, taxonomy
-    )
+    classification_section, invalid_classification = _safe_classifications(source, classification)
     spacy_section, invalid_spacy = _safe_section(source, spacy, spacy=True, repository=repository)
     gliner_section, invalid_gliner = _safe_section(
         source,
@@ -245,24 +239,12 @@ def read_saved_reports(
     classification = read_native_files(
         directory / "gliner", "classification", classification_error, settings=False
     )
-    taxonomy = None
-    try:
-        taxonomy = read_object(json.loads((directory / "gliner" / "taxonomy.json").read_bytes()))
-    except FileNotFoundError:
-        pass
-    except (OSError, ValueError):
-        error = "The saved GLiNER taxonomy.json could not be read as native JSON."
-        classification = replace(
-            classification,
-            error=f"{classification.error} {error}" if classification.error else error,
-        )
     has_classification = any(
         value is not None
         for value in (
             classification.request,
             classification.response,
             classification.error,
-            taxonomy,
         )
     )
     if source is None:
@@ -282,7 +264,6 @@ def read_saved_reports(
         spacy,
         gliner,
         classification=classification if has_classification else None,
-        taxonomy=taxonomy,
         process_error=process_error,
         repository=_read_repository(),
     )
