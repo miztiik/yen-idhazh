@@ -3,7 +3,7 @@
   "changelog": [
     {
       "version": "2026-11-09",
-      "change": "Add compact English feature settings and language defaults."
+      "change": "Add compact English settings and include relations in English defaults."
     },
     {
       "version": "2026-11-07",
@@ -42,7 +42,8 @@
       "default_profile": "md",
       "default_features": [
         "named_entities",
-        "important_terms"
+        "important_terms",
+        "relations"
       ],
       "supported_features": [
         "entities",

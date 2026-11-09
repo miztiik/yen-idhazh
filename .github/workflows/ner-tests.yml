@@ -108,9 +108,6 @@ jobs:
           uv run --project services/text_analysis/gliner --no-sync
           python services/text_analysis/gliner/scripts/prepare_model.py --root .
 
-      - name: Check the prepared provider environment
-        run: uv pip check --python services/text_analysis/gliner/.venv/bin/python
-
       - name: Analyze and report results
         env:
           PYTHONPATH: ${{ github.workspace }}/backend

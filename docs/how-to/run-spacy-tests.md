@@ -158,6 +158,8 @@ independently available operation is attempted once. Classification failure
 does not hide successful spaCy or GLiNER NER work, and NER failure does not hide
 successful classification. Missing native output stays missing.
 Available reports/files are uploaded after failure and execution exits nonzero.
+A partial spaCy response also makes the reporting step fail even when both
+GLiNER operations complete.
 If the combined UTF-8 report exceeds GitHub's 1 MiB per-step summary limit,
 the Summary points to both complete provider reports rather than truncating or
 referring to an unuploaded combined file.
@@ -195,6 +197,11 @@ Full response bodies remain in `response.json` and GLiNER's
 `classification/response.json`; they are not dumped to the console or event
 files. Neither API gains a file sink, and report regeneration does not read
 or rewrite diagnostics.
+
+Capture covers emitted native diagnostics, not every internal model action.
+A `FEATURE_FAILED` outcome identifies the failing feature but omits the
+underlying exception and traceback. Preparation steps run before API startup
+and therefore have no API events.
 
 ## Regenerate reports without inference
 

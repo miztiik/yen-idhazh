@@ -106,7 +106,8 @@ candidates and a zero maximum produce successful empty lists.
 
 The executor passes the freshly validated feature settings into extraction;
 they do not live in the spaCy model cache. English's optional default override
-selects these outputs, while an omitted override inherits global defaults.
+selects these outputs plus sentence-local relations, while an omitted override
+inherits global defaults.
 Chinese's raw features, default order and model behavior remain unchanged.
 
 ## Relations are configured dependency evidence

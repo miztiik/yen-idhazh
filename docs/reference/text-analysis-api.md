@@ -38,7 +38,8 @@ The JSON object is strict.
 | `model_profile` | no | `sm`, `md`, `lg`; omission selects the language's configured default |
 | `features` | no | Nonempty unique ordered names from the feature vocabulary |
 
-English defaults to `named_entities`, `important_terms`. Chinese inherits the
+English defaults to `named_entities`, `important_terms`, `relations`. An explicit
+`features` list replaces these defaults rather than extending them. Chinese inherits the
 global order: `relations`, `entities`, `sentences`, `document_metrics`.
 Omitting a language override inherits that recorded global order.
 
@@ -208,7 +209,7 @@ Table B - Compact English feature settings
 | B6 | `important_terms.deduplication_method` | `seqm`; native choices are `seqm`, `jaro`, `levs` |
 | B7 | `important_terms.window_size` | `1`; positive statistical co-occurrence window |
 | B8 | `important_terms.stopwords` | `null` uses library English stopwords; a custom nonempty distinct list replaces them |
-| B9 | `languages.en.default_features` | `named_entities`, `important_terms`; an omitted override inherits global defaults |
+| B9 | `languages.en.default_features` | `named_entities`, `important_terms`, `relations`; an omitted override inherits global defaults |
 
 Every option is validated by the native settings model. There is no second
 enable-switch system, model selection or classification registry for these
