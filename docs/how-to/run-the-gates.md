@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is

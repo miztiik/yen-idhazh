@@ -1,6 +1,6 @@
 # Text-analysis API reference
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 The exact routes, settings, request/result fields, errors and diagnostic
 vocabularies exposed by the local multilingual text-analysis service.
@@ -178,7 +178,7 @@ capabilities declare `null`. Disabled language defaults are empty.
 
 | Setting | Initial value or rule |
 | --- | --- |
-| `version` | `2026-11-08` with newest-first changelog |
+| `version` | `2026-11-09` with newest-first changelog |
 | `enabled` | `true` |
 | listener | `127.0.0.1:3020` |
 | maximum body | `1,048,576` bytes |
@@ -216,10 +216,10 @@ outputs.
 
 Current schemas advance independently of the fixed HTTP date and package
 release. Changed feature-bearing declarations and live health use
-`2026-11-08`; unchanged raw evidence, result envelopes and service-event
+`2026-11-09`; unchanged raw evidence, result envelopes and service-event
 definitions retain their original schema metadata.
 
-Settings versions `2026-11-07` and `2026-11-08` remain readable. Missing new
+Settings versions `2026-11-07`, `2026-11-08` and `2026-11-09` remain readable. Missing new
 options receive the declared defaults, while a missing language override
 preserves the file's recorded global feature order and version.
 

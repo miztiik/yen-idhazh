@@ -16,8 +16,8 @@ from pydantic import (
 )
 from pydantic.json_schema import JsonSchemaValue, SkipJsonSchema
 
-SETTINGS_VERSION = "2026-11-08"
-SettingsVersion = Literal["2026-11-07", "2026-11-08"]
+SETTINGS_VERSION = "2026-11-09"
+SettingsVersion = Literal["2026-11-07", "2026-11-08", "2026-11-09"]
 RawFeatureName = Literal[
     "entities",
     "sentences",

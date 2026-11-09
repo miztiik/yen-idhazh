@@ -1,6 +1,6 @@
 # How multilingual text analysis runs
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How one independently started local service turns validated English or Chinese
 text into selected linguistic evidence without persisting source text or

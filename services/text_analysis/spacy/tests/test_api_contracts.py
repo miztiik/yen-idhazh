@@ -41,7 +41,7 @@ from text_analysis.manage_models import LoadedModel, _unavailable_features
 GLOBAL_DEFAULTS = ("relations", "entities", "sentences", "document_metrics")
 
 
-def _settings(version: SettingsVersion = "2026-11-08") -> ServiceSettings:
+def _settings(version: SettingsVersion = "2026-11-09") -> ServiceSettings:
     """Use the one named configuration contract, altering old-shape inputs in memory."""
     current = load_service_settings(Path(__file__).resolve().parents[4])
     if version == current.version:

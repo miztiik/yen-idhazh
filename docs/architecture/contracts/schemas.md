@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 10.
 

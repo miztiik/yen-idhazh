@@ -1,6 +1,6 @@
 # Run the text-analysis verification
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How to dispatch the `spacy_ner_test` job in `ner-tests.yml` against one selected
 implementation ref and inspect its live multilingual API evidence. This procedure is
@@ -78,12 +78,16 @@ The single artifact is named
 days. A successful artifact contains exactly:
 
 - `report.json` - the strict workflow receipt;
-- `analysis-request.json` - the exact validated selected request, including
+- `analysis-request.json` - the validated selected request for replay, including
   source text and resolved feature order;
 - `health-response.json` - the exact validated ready health response;
 - `analysis-response.json` - the exact validated selected analysis response;
 - `events.jsonl` - the canonical validated CloudEvents; and
 - `report.md` - the same escaped bytes appended to the GitHub step summary.
+
+Default-mode HTTP calls omit `features` to verify server-side selection. The
+replay request records that exact resolved order from validated health and
+requires the response and terminal event to agree with it.
 
 The successful receipt has only version `2026-11-08`, conclusion `success`,
 the lowercase 40-hex `commit_sha`, positive run ID and attempt, and cleanup

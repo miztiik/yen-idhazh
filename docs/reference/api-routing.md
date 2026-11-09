@@ -1,6 +1,6 @@
 # First-party API routing
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How this repository names HTTP operations and distinguishes them from an
 upstream native protocol. Each API's native contracts own its payloads;
@@ -177,7 +177,7 @@ Table E - Text-analysis operations
 | E2 | GET | `/api/2026-11-08/get-spacy-health` | Read configured capacity, resolved language defaults and applicable term limits without loading a model. |
 | E3 | GET | `/api/2026-11-08/get-spacy-schema` | Read the current native OpenAPI document without an interactive UI. |
 
-The current settings and changed native definitions use `2026-11-08`;
+The current settings and changed native definitions use `2026-11-09`;
 unchanged raw/event definitions and retained evidence keep their own metadata.
 The package release, spaCy version and model versions are separate identities.
 The former `2026-11-07` analysis, health and schema paths return 404 without

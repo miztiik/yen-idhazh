@@ -1,8 +1,8 @@
 {
-  "version": "2026-11-08",
+  "version": "2026-11-09",
   "changelog": [
     {
-      "version": "2026-11-08",
+      "version": "2026-11-09",
       "change": "Add compact English feature settings and language defaults."
     },
     {

@@ -31,7 +31,7 @@ from text_analysis.declare_service_settings import (
     RawFeatureName,
 )
 
-API_SCHEMA_VERSION = "2026-11-08"
+API_SCHEMA_VERSION = "2026-11-09"
 INITIAL_API_SCHEMA_VERSION = "2026-11-07"
 API_PREFIX = "/api/2026-11-08"
 ANALYZE_TEXT_PATH = f"{API_PREFIX}/run-ner-spacy"
