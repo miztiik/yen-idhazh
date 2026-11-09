@@ -226,6 +226,12 @@ def test_a_shallow_checkout_fetches_the_named_anchor(
     assert result["ref"] == tip
 
 
+def test_unavailable_deployment_does_not_hide_passing_ci(repository: tuple[Path, str]) -> None:
+    repo, tip = repository
+    result = scheduled(repo, tip=tip, checked=tip, deployed="f" * 40, conclusion="success")
+    assert result["publish"] == "true"
+
+
 @pytest.mark.parametrize(("dispatched", "published"), [("main", "true"), ("other", "false")])
 def test_manual_publish_runs_from_main_only(
     tmp_path: Path, dispatched: str, published: str

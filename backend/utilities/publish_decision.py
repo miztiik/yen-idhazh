@@ -92,10 +92,13 @@ def same_code(anchor: str, tip: str) -> bool:
         check=False,
     )
     if present.returncode != 0:
-        subprocess.run(
+        fetched = subprocess.run(
             ["git", "fetch", "--quiet", "--no-tags", "--depth=1", "origin", anchor],
-            check=True,
+            check=False,
         )
+        if fetched.returncode != 0:
+            print(f"Publication evidence {anchor} is unavailable", file=sys.stderr)
+            return False
     changes = _tree_changes(f"{anchor}^{{tree}}", f"{tip}^{{tree}}", NON_CODE_ENTRIES[""])
     if changes is None:
         return False
