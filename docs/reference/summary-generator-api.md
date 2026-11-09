@@ -1,6 +1,6 @@
 # Summary generator API
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-09
 
 Which prepared inputs, summary results and listener controls does the independent
 TypeScript generation API expose?
@@ -150,6 +150,9 @@ Native server flags, verbosity and metrics stay in the selected model file.
 
 API diagnostics contain only operation identities, safe codes, elapsed time
 and effective-prompt digests, never source bodies, prompts, raw replies or secrets.
+Generation failures also identify validation, invalid JSON, byte limits or a
+native failure. Validation records only the first issue's code and schema path,
+never its message, expected/received values or model output.
 The API writes no `pipeline-events.jsonl` or step summary.
 
 ## Offline verification
