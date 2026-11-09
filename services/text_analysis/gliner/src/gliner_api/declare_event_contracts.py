@@ -6,10 +6,15 @@ from typing import Final, Literal, Self
 from uuid import UUID
 
 from local_api_host.propagate_trace_context import read_trace_context
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 from starlette.datastructures import Headers
 
-from gliner_api.declare_api_contracts import ApiContract, ErrorCode, OperationName
+from gliner_api.declare_api_contracts import (
+    ANALYSIS_CONTRACT_VERSION,
+    ApiContract,
+    ErrorCode,
+    OperationName,
+)
 
 EVENT_SOURCE: Final = "/services/text-analysis/gliner"
 EventType = Literal[
@@ -44,6 +49,18 @@ class ServiceEventData(ApiContract):
 
 class RequestEventData(ApiContract):
     """Describe only the native operation and its fixed terminal outcome."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": ANALYSIS_CONTRACT_VERSION,
+            "changelog": [
+                {
+                    "version": ANALYSIS_CONTRACT_VERSION,
+                    "change": "Include native schema-driven analysis outcomes.",
+                }
+            ],
+        }
+    )
 
     operation: OperationName
     status: Literal["complete", "failed"]

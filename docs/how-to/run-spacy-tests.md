@@ -31,9 +31,10 @@ and order is preserved. Leave `custom_features` blank for other modes.
 GLiNER uses distinct presentation types from `named_entities.label_map` in
 `config/text-analysis/settings.json`, in configuration order. An empty label
 selection is refused. NER has no separate dispatch source or entity-label input.
+Its request uses the unified API's `schema.entities` section.
 
 GLiNER also classifies the unchanged source in one separate request. Optional
-`classification_tasks` accepts the API's native tasks JSON object: one or any
+`classification_tasks` accepts the caller's task mapping as JSON: one or any
 number of arbitrary named tasks, each with an ID-to-label-text `labels` mapping
 and a `multi_label` boolean. Names and IDs must be nonblank strings, not members
 of a caller-maintained list. Label text can be a plain display name; no extra
@@ -42,6 +43,10 @@ definition field or taxonomy membership is required. For example:
 ```json
 {"tone":{"labels":{"neutral":"Neutral","opinion":"Opinion"},"multi_label":false}}
 ```
+
+The caller converts this mapping into ordered native `schema.classifications`
+entries. Both GLiNER requests use `analyze-text-gliner`; they are not combined
+and neither failure hides the other.
 
 Leave `classification_tasks` blank to build the convenience request from
 `config/taxonomy.json`: single-label `vertical` and `desk` use active vertical
@@ -143,7 +148,7 @@ Each artifact contains available exact native `request.json`, `response.json`
 and validated `settings.json`, plus a complete standalone `report.md` with
 source and the same provider section used in the Summary. Each also contains
 `events.jsonl`; see [console and saved events](#console-and-saved-events).
-The GLiNER root request/response remain NER; its other files are
+The GLiNER root request/response remain entity-only analysis; its other files are
 `classification/request.json` and `classification/response.json`. Each upload runs
 independently even after failure. The existing retention policy is unchanged.
 Files are written atomically under a run-owned runner-temporary directory.
@@ -218,6 +223,11 @@ network or load current repository configurations. Classification reuses only
 its saved native request and response, retaining exact task names, label text,
 selections and scores. Historical requests including `events` remain replayable
 unchanged; a historical `taxonomy.json` is not read or required.
+Current requests contain `text` and `schema`, and current responses contain
+`result` with native entity maps or root classification tasks. A report-only
+projection also reads historical `text`/`labels`, `text`/`tasks` and normalized
+results. It never rewrites saved requests/responses or treats invalid current
+evidence as a historical success.
 Source comes from any available saved native request, so
 regeneration cannot recover source when no request was saved. Artifacts
 without classification evidence retain their original not-requested state.

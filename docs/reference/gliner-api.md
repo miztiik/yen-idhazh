@@ -1,6 +1,6 @@
 # Native GLiNER2 API reference
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 The exact routes, payloads, settings and safe diagnostic vocabulary of the
 independent local GLiNER2 provider.
@@ -15,10 +15,9 @@ Table A - Native operations
 
 | Id | Method | Path | Result |
 | --- | --- | --- | --- |
-| A1 | POST | `/api/2026-11-08/run-ner-gliner` | Scored exact source mentions |
-| A2 | POST | `/api/2026-11-08/classify-text-gliner` | Requested classification IDs and native scores |
-| A3 | GET | `/api/2026-11-08/get-gliner-health` | Genuine provider availability |
-| A4 | GET | `/api/2026-11-08/get-gliner-schema` | Native OpenAPI, without an interactive UI |
+| A1 | POST | `/api/2026-11-08/analyze-text-gliner` | Request-validated native extraction JSON |
+| A2 | GET | `/api/2026-11-08/get-gliner-health` | Genuine provider availability |
+| A3 | GET | `/api/2026-11-08/get-gliner-schema` | Native OpenAPI, without an interactive UI |
 
 Matching is exact. Unknown and trailing-slash paths return 404; wrong methods
 return 405 with `Allow`. The existing text-analysis settings supply the
@@ -31,33 +30,70 @@ host's W3C carrier rather than trace fields in its JSON body.
 All live objects reject undeclared fields and coercion. Text is nonblank valid
 UTF-8 and is preserved exactly.
 
-NER requests contain only `text` and a nonempty, unique, ordered `labels` array.
-Results contain only `entities`, an array of:
+Analysis requests have exactly `text` and `schema`. `schema` uses the pinned
+GLiNER2 `SchemaInput` object grammar, not JSON Schema, chat messages or a field
+string shorthand. Its optional sections are `entities`, `classifications`,
+`structures`, `relations` and `entity_attributes`; at least one extraction or
+classification section is required. The native schema owns their options.
 
-- `text`: the exact mention;
-- `label`: one requested entity type;
-- `start_char` and `end_char`: zero-based, half-open Python Unicode code-point
-  offsets whose source slice reproduces `text`;
-- `score`: finite native confidence in `[0, 1]`.
+```json
+{
+  "text": "Mira bought a bicycle in Paris.",
+  "schema": {
+    "entities": ["person", "location"],
+    "classifications": [
+      {"task": "category", "labels": ["purchase", "other"], "multi_label": false}
+    ],
+    "structures": {
+      "purchase": {
+        "fields": [
+          {"name": "buyer", "dtype": "str"},
+          {"name": "item", "dtype": "str"},
+          {"name": "place", "dtype": "str"}
+        ]
+      }
+    }
+  }
+}
+```
 
-An empty prediction array is valid, not a replacement for an inference error.
+Entity and relation types accept native ordered lists or mappings with
+descriptions/configuration. Classifications accept ordered task definitions
+with list labels or ID-to-definition mappings. Label offerings are nonempty,
+distinct and nonblank; mapped definitions are also nonblank. A singleton
+offering is valid, using the SDK's public classification builder rather than
+its stricter JSON label minimum. Classification task names, structure names
+and relation names cannot overlap or use the reserved native output keys
+`entities` and `relation_extraction`. Record field names cannot repeat.
+Event roles are caller-defined record fields, not a service vocabulary.
 
-Classification requests contain only `text` and a nonempty `tasks` object.
-Each named task contains a nonempty `labels` mapping from ID to nonblank
-definition and a strict `multi_label` boolean. Task and label order are retained.
-There is no fixed API membership list. Callers offer current active entries
-from `config/taxonomy.json`; draft and retired entries are not new targets.
+Successful responses have exactly `result`, containing the native JSON
+object. Entity output is a type-to-mention mapping under `entities`;
+classifications use their task names at the root and native
+`{label, confidence}` selections or lists; structures use root record lists;
+relations group native `head`/`tail` span pairs under `relation_extraction`.
+Native scalar, list and nullable fields retain their representation.
+Choice fields contain offered selections, which need not occur in the source.
 
-Results contain only `classifications`, mapping every requested task to an
-array of `{id, score}` selections. IDs must belong to that task's request,
-scores are finite native confidence in `[0, 1]`, and selections cannot repeat
-an ID. Single-label tasks have at most one selection. Native multi-label
-selection can retain its strongest label when none clears the SDK's threshold;
-it is not an abstention or entropy policy.
+Confidence and spans are mandatory native output controls. Every confidence
+must be finite in `[0, 1]`. Span `start` and `end` are zero-based, half-open
+Python Unicode code-point offsets whose original source slice equals `text`.
+Returned task names, label IDs, record fields, choices, entity attributes and
+relations must belong to the request. Missing tasks, invalid cardinality,
+duplicate selections and damaged spans fail explicitly; the API does not
+repair or manufacture evidence. Valid empty native collections remain empty.
 
-Native long-text helpers perform chunking and confidence merging. No additional
-character, label-count or arbitrary source-token limit is introduced. Body
-limits and explicit native-input failures remain enforced.
+The direct SDK `extract_long` operation owns overlapping chunks, global
+offsets and confidence merging. Single-label classification has at most one
+selection; multi-label chunk selections can retain the strongest label below
+the native threshold. Scores are not calibrated document probabilities or
+an abstention guarantee. No extra source, label-count or token cap is added
+beyond the existing body bound and native input refusals.
+
+The new analysis payload metadata is `2026-11-09`; the route family, settings
+and unchanged payload families keep their own dates. Saved reporting evidence
+is read by its declared old or new request fields, never rewritten or retried
+as an older shape after current validation fails.
 
 ## Errors
 
@@ -100,7 +136,7 @@ Health contains only `enabled`, `status` and nullable fixed `error`.
 Status is `loading`, `ready`, `disabled`, `failed` or `stopping`.
 Only `ready` has no error and uses HTTP 200. All other states use 503.
 Finding a package or cache file is not readiness; startup must load the native
-model and expose both promised operations.
+model and expose direct long-text analysis.
 
 ## Settings
 

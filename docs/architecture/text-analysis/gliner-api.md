@@ -2,8 +2,8 @@
 
 **Last Updated**: 2026-11-09
 
-How one local model turns exact source text and caller-defined labels into
-validated entities or classifications without becoming an article pipeline.
+How one local model turns exact source text and a caller-defined native schema
+into validated extraction evidence without becoming an article pipeline.
 
 ## Independent provider, existing transport
 
@@ -46,7 +46,7 @@ Each application retains one actually loaded model. Native calls use standard
 framework thread offloading and serialize access to that instance. The tensor
 runtime retains its native CPU threading; there are no worker replicas,
 process pools or thread caps. Health becomes ready only after native loading
-and verification of both promised operation interfaces. Missing or incompatible
+and verification of the direct long-text operation. Missing or incompatible
 assets leave an observable failed provider, not an apparently ready cache.
 
 The runtime, not the HTTP caller, owns each completion task and model lease.
@@ -63,18 +63,28 @@ lifespan so the external process owner can stop it.
 
 ## Native operations, strict results
 
-NER delegates long input to the SDK's overlapping word chunks and document
-offset remapping. Confidence and span inclusion are mandatory output controls.
-The API validates finite native confidence, requested label membership and
-exact slicing against the original Python Unicode string. It never repairs an
-offset, clips source text or manufactures a prediction.
+`analyze_text` calls the loaded model's `extract_long` directly. Its schema is
+the SDK's own `SchemaInput` grammar.
+Non-classification sections use `Schema.from_dict`; ordered classifications
+are appended through the public builder. A small input subtype changes only
+the JSON classification label minimum to one, preserving an existing accepted
+singleton without invented labels or private SDK metadata. Native validation
+still owns the other schema options.
 
-Classification passes named tasks, ID-to-definition mappings and single- or
-multi-label selection directly to the SDK's schema-based operation. Native
-long-text classification merges chunk selections; retained confidence is a
-native chunk aggregate, not a newly calibrated document probability.
-Single-label output contains at most one selection. Every returned ID must
-belong to that request, and every requested task must survive normalization.
+The SDK owns overlapping word chunks and global document offset remapping.
+Confidence and span inclusion are mandatory. Request-aware validation checks
+task presence, offered names and IDs, field cardinality, duplicate selections,
+finite confidence and exact slicing of the original Python Unicode string.
+Choice fields are offered selections rather than source spans. Entity
+attributes and relation arguments remain native payloads. Results retain
+native names, scalar/list/null forms and values inside one `result` envelope;
+the API never repairs an offset, clips source text or manufactures a prediction.
+
+Classification merges native chunk selections; retained confidence is a chunk
+aggregate, not a newly calibrated document probability. Single-label output
+has at most one selection. Event roles come from the requested record fields.
+Distinct root task names and reserved output keys are checked before inference
+so native formatting cannot silently overwrite a different task.
 
 The SDK may append terminal punctuation during its own preprocessing. The
 transport still passes the exact request string and validates all returned
@@ -118,9 +128,12 @@ provider health fail.
 
 ## Dependency cost
 
-GLiNER2 supplies native schemas, extraction and chunk merging. The CPU tensor
-runtime, transformer libraries and configured weights dominate installation
-and resident-memory cost, so inference stays in the optional `model` extra.
+The pinned GLiNER2 core supplies native schema validation as a base dependency;
+its HTTP/progress dependencies add installation cost but no weights or tensor
+runtime. Native extraction and chunk merging use the same SDK version. The CPU
+tensor runtime, transformer libraries and configured weights dominate model
+installation and resident-memory cost, so inference stays in the optional
+`model` extra.
 FastAPI, Pydantic and the neutral host reuse existing transport and validation
 behavior. HTTPX is also used by the external reporting caller; pytest, Ruff and
 mypy support development checks.
@@ -131,9 +144,13 @@ not create a production dependency on that provider's model or feature logic.
 The manual reporting workflow uses this one prepared development environment
 for both providers and installs only its selected spaCy wheel plus the
 configured GLiNER snapshot. Its caller sends one NER request for the same
-source as the spaCy request, without invoking classification. The API does
-not write the report or artifacts. Native manifests and locks remain
-independent.
+source as the spaCy request and one independent taxonomy classification
+request. Both call the unified route with different schemas, retain independent
+failures and share the serialized model. Exact wire bytes stay in their
+existing artifact locations. A standard-library-only report projection reads
+both historical and current request/result shapes without changing saved
+evidence or loading later configuration. The API does not write reports or
+artifacts. Native manifests and locks remain independent.
 
 ## Design rationale
 

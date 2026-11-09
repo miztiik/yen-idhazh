@@ -13,6 +13,7 @@ from urllib.parse import urljoin
 import test_capture_stream
 from collect_operations import Outcome, collect_gliner_operations
 from prepare_default_tasks import default_classification_tasks
+from project_gliner_analysis import project_classification_request
 from render_classifications import (
     read_classification_selections,
     read_classification_tasks,
@@ -241,8 +242,24 @@ class ReportTests(unittest.TestCase):
         self.assertEqual([item["score"] for item in groups[0].occurrences], [0.6, 0.5, 0.0])
         escaped_report = render_gliner_results(
             source,
-            {"entities": mentions},
-            gliner_request={"text": source, "labels": labels},
+            {
+                "result": {
+                    "entities": {
+                        label: [
+                            {
+                                "text": item["text"],
+                                "confidence": item["score"],
+                                "start": item["start_char"],
+                                "end": item["end_char"],
+                            }
+                            for item in mentions
+                            if item["label"] == label
+                        ]
+                        for label in labels
+                    }
+                }
+            },
+            gliner_request={"text": source, "schema": {"entities": labels}},
         )
         self.assertNotIn("<type>", escaped_report)
         report = html.unescape(escaped_report)
@@ -392,8 +409,8 @@ class ReportTests(unittest.TestCase):
         gliner_report = html.unescape(
             render_gliner_results(
                 source,
-                {"entities": []},
-                gliner_request={"text": source, "labels": ["person"]},
+                {"result": {"entities": {"person": []}}},
+                gliner_request={"text": source, "schema": {"entities": ["person"]}},
                 gliner_settings={
                     "model": {"repo": "configured/model", "base_url": "https://example.test"}
                 },
@@ -420,10 +437,10 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn("threshold", gliner_report)
         unavailable = html.unescape(
             render_gliner_results(
-                source, None, gliner_request={"text": source, "labels": ["person"]}
+                source, None, gliner_request={"text": source, "schema": {"entities": ["person"]}}
             )
         )
-        self.assertIn("run-ner-gliner (request.json; no successful response)", unavailable)
+        self.assertIn("analyze-text-gliner (request.json; no successful response)", unavailable)
         self.assertIn("Not recorded; no saved model settings", unavailable)
         for gliner in (False, True):
             reference = render_settings_link(repository, gliner=gliner)
@@ -688,8 +705,22 @@ class ClassificationTests(unittest.TestCase):
                 + ([{"id": "label / 1", "score": 0.95}] if task["multi_label"] else [])
                 for name, task in reversed(list(tasks.items()))
             }
-            request: dict[str, object] = {"text": source, "tasks": tasks}
-            response: dict[str, object] = {"classifications": selections}
+            request: dict[str, object] = {
+                "text": source,
+                "schema": {
+                    "classifications": [{"task": name, **task} for name, task in tasks.items()]
+                },
+            }
+            response: dict[str, object] = {
+                "result": {
+                    name: (
+                        [{"label": item["id"], "confidence": item["score"]} for item in selected]
+                        if tasks[name]["multi_label"]
+                        else {"label": selected[0]["id"], "confidence": selected[0]["score"]}
+                    )
+                    for name, selected in selections.items()
+                }
+            }
             before = json.dumps((request, response))
             with self.subTest(count=count):
                 classification = render_classifications(source, response, request=request)
@@ -768,14 +799,30 @@ class ClassificationTests(unittest.TestCase):
 
     def test_classification_composes_identically_and_failure_does_not_hide_ner(self) -> None:
         source = "X"
-        request = historical_classification_request(source)
-        response = classification_result()
+        tasks = read_classification_tasks(historical_classification_request(source)["tasks"])
+        request: dict[str, object] = {
+            "text": source,
+            "schema": {
+                "classifications": [{"task": name, **task} for name, task in tasks.items()]
+            },
+        }
+        response: dict[str, object] = {
+            "result": {
+                "desk": {"label": "second", "confidence": 0.8},
+                "lenses": [
+                    {"label": "lens-b", "confidence": 0.25},
+                    {"label": "lens-a", "confidence": 0.95},
+                ],
+                "events": [],
+            }
+        }
         spacy = NativeFiles(
             request={"text": source, "language": "en"},
             response=spacy_result([feature("named_entities", {"entities": []})]),
         )
         gliner = NativeFiles(
-            request={"text": source, "labels": ["person"]}, response={"entities": []}
+            request={"text": source, "schema": {"entities": ["person"]}},
+            response={"result": {"entities": {"person": []}}},
         )
         files = NativeFiles(request=request, response=response)
         reports = render_saved_reports(source, spacy, gliner, classification=files)
@@ -784,10 +831,11 @@ class ClassificationTests(unittest.TestCase):
         self.assertIn(section.content, reports.gliner)
         self.assertIn(section.content, reports.combined)
         self.assertNotIn(section.content, reports.spacy)
-        self.assertIn("classify&#45;text&#45;gliner", reports.gliner)
+        self.assertIn("analyze&#45;text&#45;gliner", reports.gliner)
         self.assertIn("single&#45;label", reports.gliner)
         self.assertIn("Second <desk>", html.unescape(reports.gliner))
-        for name, task in read_classification_tasks(request["tasks"]).items():
+        projected = project_classification_request(request)
+        for name, task in read_classification_tasks(projected["tasks"]).items():
             mode = "multi-label" if task["multi_label"] else "single-label"
             self.assertIn(
                 f"| Classification task: {name} | {mode}; "

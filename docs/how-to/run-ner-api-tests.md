@@ -14,6 +14,11 @@ observation, inspect one Linux run at the intended commit and compare its
 saved requests and responses with the summary. All operations use the same
 source. This observation is not a test suite or a quality assessment.
 Ordinary required pull-request CI remains separate.
+For a replacement candidate, let its existing CI pass before dispatching this
+workflow on that exact feature ref. Confirm the run's `headSha`, successful
+conclusion, saved `text`/`schema` requests, `result` envelopes and
+`analyze-text-gliner` operation events before removing superseded inference
+code. A run on the default branch does not verify a different candidate.
 
 ## Prepare and collect on Linux
 
@@ -26,7 +31,8 @@ The caller under `tools/text-analysis-caller/` starts the existing
 `services/text_analysis/hosting/serve_apis.py` assembly as a child. It uses
 bounded readiness checks and the existing listener settings, sends one spaCy
 analysis POST, then dispatches one GLiNER NER POST and one classification POST
-concurrently. Both GLiNER outcomes are awaited before it stops its owned
+concurrently to `analyze-text-gliner`, using independent native schemas.
+Both GLiNER outcomes are awaited before it stops its owned
 process group in a `finally` path. The caller drains native stderr before
 readiness and throughout cleanup, then confirms EOF and finalizes each
 provider's `events.jsonl` before reporting and upload. The
@@ -41,8 +47,9 @@ internals; neither API writes report files.
 
 Before startup, the caller saves an exact copy of each provider's settings
 bytes after validation with that provider's native model. It renders available
-results from saved requests, responses, settings and the native-validated
-taxonomy copy, then uploads two
+results from saved requests, responses and settings. Taxonomy-derived label
+definitions are retained in the classification request, not reconstructed
+from later configuration. It uploads two
 independent provider artifacts even after failure. Each has a complete
 standalone report with its source and the same provider section used in the
 combined Summary. GLiNER NER and classification keep independent outcomes:

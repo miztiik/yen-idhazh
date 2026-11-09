@@ -5,10 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "gliner-api"
 version = "2026.11.8"
-description = "Local native GLiNER2 entity extraction and text classification."
+description = "Local native schema-driven GLiNER2 text analysis."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.121,<0.122",
+    "gliner2==2.1.0",
     "huggingface-hub>=0.36,<3",
     "local-api-host",
     "pydantic>=2.12,<3",

@@ -225,6 +225,7 @@ version = "2026.11.8"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "gliner2" },
     { name = "huggingface-hub" },
     { name = "local-api-host" },
     { name = "pydantic" },
@@ -250,6 +251,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.121,<0.122" },
+    { name = "gliner2", specifier = "==2.1.0" },
     { name = "gliner2", extras = ["local"], marker = "extra == 'model'", specifier = "==2.1.0" },
     { name = "huggingface-hub", specifier = ">=0.36,<3" },
     { name = "local-api-host", directory = "../../local_api_host" },

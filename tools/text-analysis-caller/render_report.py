@@ -9,6 +9,7 @@ Offsets are zero-based, half-open Unicode code-point offsets into source_text.
 
 from __future__ import annotations
 
+from project_gliner_analysis import project_entity_request, project_entity_result
 from render_classifications import ClassificationReport
 from render_configuration import (
     configured_types,
@@ -62,6 +63,8 @@ def _validate_request(
 ) -> None:
     if request is None:
         return
+    if gliner:
+        request = project_entity_request(request)
     required = {"text", "labels"} if gliner else {"text", "language"}
     allowed = required if gliner else required | {"model_profile", "features"}
     if not required.issubset(request) or not set(request).issubset(allowed):
@@ -218,7 +221,7 @@ def render_gliner_results(
     _validate_request(gliner_request, source, gliner=True)
     labels = read_selection(gliner_labels) if gliner_labels is not None else None
     if gliner_request is not None:
-        requested = read_selection(gliner_request["labels"])
+        requested = read_selection(project_entity_request(gliner_request)["labels"])
         if labels is not None and requested != labels:
             raise ValueError("Requested labels differ from the saved native request")
         labels = requested
@@ -234,7 +237,7 @@ def render_gliner_results(
     elif _has_error(gliner):
         outcome = "Provider error: " + _error(_object(gliner, {"error"})["error"])
     else:
-        result = _object(gliner, {"entities"})
+        result = project_entity_result(gliner, gliner_request)
         groups = project_gliner_groups(result["entities"], source, labels)
         outcome = "Status: complete."
     if result is None:
