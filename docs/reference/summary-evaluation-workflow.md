@@ -68,8 +68,8 @@ reading that one file; the caller preserves every UTF-8 space and newline.
 The default has no final newline, matching its former inline value.
 This authored settings family is version `2026-11-07`, current-only, without
 an inline-instruction fallback. Resolution yields the existing effective
-generation instruction. Current saved preparation, receipt, phase and report
-contracts use `2026-11-08`; current phase/report contracts use `2026-11-09`
+generation instruction. Current saved preparation and receipt contracts use
+`2026-11-08`; current phase/report contracts use `2026-11-09`
 for measured native errors. Machine and scorer-control protocols remain independent.
 Neither scorer reads this workflow configuration.
 
