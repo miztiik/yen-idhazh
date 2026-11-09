@@ -1,6 +1,6 @@
 # 23 - What an article is about, decided by reading it
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-09
 **Level**: 5 (a persisted contract, the published vocabulary, the call structure and the trust boundary)
 
 **Chain**: previous the two-call summariser plan (delivered, removed from TODO/).
@@ -1041,6 +1041,7 @@ So the swap, when it happens, is **one commit that changes the source of the exi
 ## 16. Row #9 - Confidence is a masked probability over the label's whole span
 
 - **Scope:** A confidence figure per label, recorded on every classification row. Grammar-masked, and **the product of the renormalised probabilities at every token position the label occupies** - not one position. **Row #P5 decides first whether that figure is a measurement or the constant 1.000**; this row does not start until it has an answer.
+- **Shared uncertainty follow-up (pending design):** Define the probability distribution, candidate support and uncertainty evidence for row #16's unlisted-label discovery before selecting an entropy threshold. GLiNER2 classification scores are native chunk aggregates, NER confidence describes spans, and encoder cosine similarity is not a probability distribution. Do not equate these with this row's generative token-span probability. No entropy metric, candidate payload or threshold is settled here.
 - **Files touched:** `backend/idhazh/llm/server.py`, `backend/idhazh/classify/confidence.py`, `backend/idhazh/contracts/{classification_row,app_config}.py`, `schemas/{classification-row,app-config}.schema.json`, `config/idhazh.json`, `backend/utilities/build_vocabulary_tokens.py`, `tests/fixtures/vocabulary-tokens.json`, `tests/fixtures/logprobs/colliding-label.json`, `backend/tests/test_classify.py`, `docs/concepts/classification.md`
 - **Acceptance gates:** `GATE-PY` with `backend/tests/test_classify.py`, `GATE-SCHEMA`, `GATE-SUITE`, and a recorded-response replay carrying token probabilities. Plus, in this row:
   - both schemas carry today's `version` and a `changelog` entry naming the four confidence columns;
@@ -1378,6 +1379,7 @@ Every metric in the earlier draft was about what the **model produced**. None wa
 ## 21. Row #16 - A vertical is proposed into a channel and promoted by a person
 
 - **Scope:** The model may **propose** a new vertical into a channel. **Only a human commit changes the publish vocabulary.**
+- **Shared discovery follow-up (pending design):** This row receives unlisted-label discovery across the shared taxonomy, including evidence from native text-analysis APIs. GLiNER2 classification selects only supplied labels; it does not generate an unlisted candidate. Settle eligible vocabulary families, candidate evidence and one shared proposal contract before implementation. Provider APIs create no private vocabulary or proposal ledger; row #9 owns uncertainty inputs and any entropy rule.
 - **Files touched:** `backend/idhazh/classify/proposal.py`, `backend/idhazh/classify/labels.py`, `backend/idhazh/{cli,ledger}.py`, `backend/idhazh/contracts/vertical_proposal.py`, `schemas/vertical-proposal.schema.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `config/idhazh.json`, `backend/utilities/review_vertical_proposals.py`, `backend/tests/{test_classify,test_ledger}.py`, `tests/fixtures/canaries/vertical-proposal-injection.json`, `docs/how-to/promote-a-vertical.md`, `docs/concepts/growing-reads.md`
 - **`config/taxonomy.json` and the two lifecycle markers are row #2's, not this row's.** `is_auto_discovered` and the `draft` member of `status` are vocabulary shape, so they land with the vocabulary in row #2, and **no entry is committed by this row** - the utility writes one when a person runs it. That is also what keeps this row out of row #19's files in group N.
 - **The ledger it writes is `state/vertical-proposals/<YYYY>/<MM>/<DD>.csv`.** That path is output rather than a file this row authors, which is why it is named here and not in the list above.
