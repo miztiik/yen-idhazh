@@ -222,6 +222,7 @@
   - `services/summary_evaluator/src/summary_evaluator/unieval/reduce_unieval.py`
   - `services/summary_evaluator/tests/summary_evaluator_cases/contract_examples.py`
   - `services/summary_evaluator/tests/test_unieval_contracts.py`
+  - `services/summary_evaluator/tests/test_unieval_scoring.py`
   - `services/summary_evaluator/tests/test_unieval_windows.py`
   - `services/summary_evaluator/tests/test_unieval_reduction.py`
   - `services/summary_evaluator/tests/test_worker_trace_contracts.py`
@@ -236,6 +237,7 @@
   - `tools/summary-eval/summary_eval_tests/scorer_evidence_cases.py`
   - `tools/summary-eval/summary_eval_tests/test_pipeline_report.py`
   - `tools/summary-eval/summary_eval_tests/test_unieval_workflow.py`
+  - `tools/summary-eval/summary_eval_tests/test_workflow_outcomes.py`
   - `docs/reference/unieval-api.md`
   - `docs/architecture/evaluation/unieval-api.md`
   - `docs/reference/summary-evaluation-workflow.md`
