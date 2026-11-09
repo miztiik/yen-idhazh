@@ -1,6 +1,6 @@
 # What optional cache probes measure
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-09
 
 The TypeScript host probe separates last-level-cache event counts from a
 controlled working-set latency curve. Neither is the existing memory-copy
@@ -9,7 +9,7 @@ L3 means the third-level cache; the last-level cache is called LLC and is not
 necessarily L3 on every processor.
 
 Native latency, integrated HTTP routing, verified affinity and complete owned
-cleanup have real Linux evidence with the Python-free build. Actual LLC
+cleanup have recorded Linux evidence with the Python-free build. Actual LLC
 counter access remains unavailable on the measured runner; detecting that
 refusal is not evidence that a counter was measured.
 
@@ -60,11 +60,12 @@ translation overhead; it does not remove that overhead.
 
 This is a cache-working-set latency curve, not a direct L3 hit latency.
 Translation, prefetch, processor frequency, scheduling and memory placement
-can affect it. The proof pairs it with the existing fingerprint's CPU,
-capacity and L3 context, rather than collecting another hardware identity.
+can affect it. The historical proof paired it with the existing fingerprint's
+CPU, capacity and L3 context, rather than collecting another hardware identity.
 The standalone response names its kernel and architecture. Pair it with the
 existing collector's hardware row from the same machine when comparing hosts.
-It records whether the largest measured working set exceeds the reported L3.
+The historical proof recorded whether the largest measured working set exceeded
+the reported L3.
 
 ## Controls and bounds
 
@@ -119,35 +120,37 @@ measurements have no numeric values; zero is not a substitute.
 The service does not lower `perf_event_paranoid`, request a privileged runner,
 change kernel security, or run counters as root.
 
-## Linux proof and optional installation
+## Historical Linux proof and installation
 
-The existing resource proof explicitly enables these controls in memory.
-Ordinary service configuration remains off. The existing PR CI and isolated
-Linux workflow install only the declared optional tools in
-`config/host-cache-tools.json`. The isolated workflow remains manual and has
-no new input.
+The retired resource proof explicitly enabled these controls in memory.
+Ordinary service configuration remains off. CI no longer installs optional
+cache tools or runs native RAM, copy, cache and affinity proofs. Operators who
+enable live cache measurements supply compatible native tools on their Linux
+host. Per-change native perf control/SIGINT, cache measurement, affinity and
+native-tool cleanup verification is no longer automatic. Retained service and
+recorded-input tests do not replace that live evidence.
 
-`perf` is built from a pinned official Linux source revision, not installed
-from the distribution's perf package. `NO_LIBPYTHON=1` disables its Python
-support and `NO_JEVENTS=1` omits Python-generated vendor event tables.
-The two requested LLC aliases remain native builtins. Both Python tool
-variables name the system's failure command, so an unexpected invocation
-cannot silently use an interpreter. The build's execution trace must show
-zero Python executions, and the resulting ELF library list must not contain
-libpython. Only the native executable is installed, never a Python extension.
+`perf` was built from a pinned official Linux source revision, not installed
+from the distribution's perf package. `NO_LIBPYTHON=1` disabled its Python
+support and `NO_JEVENTS=1` omitted Python-generated vendor event tables.
+The two requested LLC aliases remained native builtins. Both Python tool
+variables named the system's failure command, so an unexpected invocation
+could not silently use an interpreter. The build's execution trace showed
+zero Python executions, and the resulting ELF library list contained no
+libpython. Only the native executable was installed, never a Python extension.
 The initial distribution package was rejected after inspection found its
 CPython extension; linking alone was not its full cost.
 
-`multichase` is Apache-2.0 software built at the committed upstream revision
-with GCC, make and Perl. Flex and bison build perf's native parsers; strace
-verifies its build executions; binutils verifies ELF dependencies; util-linux
-provides taskset. These are optional CI/measurement dependencies, not default
-service or browser dependencies.
-The installation records elapsed seconds and the actual perf and multichase
-binary byte counts, added OS packages and perf's actual ELF dependencies.
-The measured setup and native bytes are in the current benchmark record.
-It adds no Python package, default npm dependency,
-browser asset or committed binary. Missing or failed installation fails the
+`multichase` is Apache-2.0 software, built at the upstream revision recorded
+with the benchmark using GCC, make and Perl. Flex and bison built perf's native
+parsers; strace verified its build executions; binutils verified ELF
+dependencies; util-linux provided taskset. These were optional measurement
+dependencies, not default service or browser dependencies.
+The retired installer recorded elapsed seconds and the actual perf and
+multichase binary byte counts, added OS packages and perf's actual ELF dependencies.
+The measured setup and native bytes remain in the historical benchmark record.
+It added no Python package, default npm dependency,
+browser asset or committed binary. Missing or failed installation failed the
 proof rather than fabricating an instrument.
 
 A runner can refuse all hardware counters. Its refusal verifies detection
@@ -156,21 +159,21 @@ pending on an operator-controlled Linux host that already exposes the
 hardware performance-monitoring unit and permits these user-space events for
 an owned PID. No permission change is part of this feature.
 
-The [current native reading](benchmarks/cache-working-set-latency.md) names
-the machine, method and limits. The CI resource proof wrote
+The [recorded native reading](benchmarks/cache-working-set-latency.md) names
+the machine, method and limits. The retired CI resource proof wrote
 `resource-proof.json`; its validated counter refusal and latency result are
 copied into the two named recordings under `tests/fixtures/host-probes/`.
 Those fixtures test parsing and missing-value behavior without contacting
-the network or claiming a live measurement.
+the network or claiming a current live measurement.
 
-The optional workflow report appends one compact Table L and one notice after
-the existing H/I/J/K reports. It shows exact event refusals with null counts,
+The historical optional workflow report appended one compact Table L and one
+notice after the H/I/J/K reports. It showed exact event refusals with null counts,
 the brief native curve, observed CPU/host context and measured native-tool
-cost. Python execution counts are labelled as perf-build counts. It never
-calls the curve direct L3-hit latency or a denied counter a measured count.
+cost. Python execution counts were labelled as perf-build counts. It never
+called the curve direct L3-hit latency or a denied counter a measured count.
 Before rendering, cache target/start identity, handle, expiry and initial/final
-results must match the controlled task proof; foreign or changed metadata
-fails explicitly. Older evidence with `cache: null` preserves the previous
+results had to match the controlled task proof; foreign or changed metadata
+failed explicitly. Older evidence with `cache: null` preserved the previous
 tables and notice batch unchanged.
 
 ## Design rationale
@@ -186,8 +189,6 @@ event counts and a controlled latency curve answer different questions.
 
 - [host-metrics.md](host-metrics.md) - existing CPU, memory and hardware context.
 - [host-probe-api.md](host-probe-api.md) - the shared task lifetime and PID commands.
-- [../how-to/run-feed-ingest-plan-test.md#resource-proof](../how-to/run-feed-ingest-plan-test.md#resource-proof) - isolated proof boundaries.
-- [../../config/host-cache-tools.json](../../config/host-cache-tools.json) - optional Linux tool dependencies.
 - [perf stat](https://man7.org/linux/man-pages/man1/perf-stat.1.html) - event, control and output semantics.
 - [Pinned perf signal handling](https://github.com/torvalds/linux/blob/028ef9c96e96197026887c0f092424679298aae8/tools/perf/builtin-stat.c#L1097-L1137) - final counter output can end with the adapter's SIGINT.
 - [multichase](https://github.com/google/multichase) - established native pointer-chase tool.

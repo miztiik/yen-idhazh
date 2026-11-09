@@ -158,15 +158,13 @@ second thing to keep correct. `ciAnswer` in `test-scope.ts` is the one place
 that decides, and the truth table is in
 `frontend/scripts/tests/test-scope.test.mjs`.
 
-`ciAnswer` returns six answers. **`code` says whether the change carries
-anything but documentation, and `gates` and `site` skip when it does
-not** - a changed sentence cannot break an application check, on a branch or on
-a merge. **`robots` says whether the change selects
-`backend/tests/test_extract.py`**, the one module the `robots` job runs on the
-newest supported interpreter; an unknown change and every `main` push carrying
-code select it. That branch is a closed list of prefixes rather than a guess, so a path
-nobody classified falls to full coverage instead; and a document that a test
-reads is that test's input rather than documentation, which is why an edit to
+`ciAnswer` returns decisions for code checks, browser and console journeys,
+the model-absent rebuild and committed-day validation. **`code` says whether the
+change carries anything but documentation, and `gates` and `site` skip when it
+does not** - a changed sentence cannot break an application check, on a branch
+or on a merge. The documentation branch is a closed list of prefixes rather
+than a guess, so a path nobody classified falls to full coverage instead; and a
+document that a test reads is that test's input rather than documentation, which is why an edit to
 the page listing chart vocabulary buys its logic spec. Such a page
 is named once, in `frontend/scripts/doc-test-inputs.ts`: the spec reads its
 path from there and the selector keys on the same constant, so a page that
@@ -175,6 +173,9 @@ whether the `gates` job opens every committed day or none of them: a `main` push
 carrying code, and any change to the contracts, the tooling or a committed
 payload under `frontend/public/`, open all of them; every other change opens
 none.
+
+Python extraction remains in `gates`' full backend suite on its normal
+interpreter. CI provides no additional interpreter-parity evidence.
 
 **`model_absent` buys the second site build with model assets removed.**
 Every code push to `main` runs it. On a pull request, backend-only changes,
@@ -263,8 +264,9 @@ Remove-Item -LiteralPath .\services\summary_evaluator\var\checks-requirements.tx
 ```
 
 After that successful check, add `--no-sync` to local `uv run` verification
-commands so they use the checked environment. CI keeps its frozen uv
-preparation. No lock, model extra, backend installation or destination changes.
+commands so they use the checked environment. The manual scoring workflow keeps
+its frozen uv preparation. No lock, model extra, backend installation or
+destination changes.
 
 If Bun cannot copy the local writer dependency on Windows, repeat its locked
 install with `--linker=isolated`; do not change either package manifest or lock.
@@ -273,12 +275,14 @@ contract fields. Refresh that package's frozen install with
 `--force --linker=isolated` before diagnosing a missing-field type error as an
 application defect. This refresh changes installed copies, not source limits
 or committed manifests.
-The evaluator's complete offline suite, strict types and lint run in the Linux
-`model-free` job in `ci.yml`, using the existing code-change gate and
-`check-summary-evaluator` action. The dedicated manual `summary-eval-tests.yml`
+The evaluator's complete offline suites, strict types and lint remain explicit
+native verification; there is no automatic evaluator Linux gate in
+`ci.yml`. The remaining backend suite does not execute these service paths.
+The dedicated manual `summary-eval-tests.yml`
 workflow exercises live HHEM and UniEval scoring separately; the
 [manual procedure](run-hhem-evaluation-api.md) owns dispatch and live evidence.
-The model-free environment installs neither the backend nor the model extra.
+The default service dependency set includes neither the backend nor the model
+extra.
 The `src` package is installed from this project, not supplied through pytest's
 source path. Shared test support is `tests/summary_evaluator_cases`; the
 comparison tool's independent tests are under
@@ -288,7 +292,7 @@ caller distribution. The three tool launchers still establish backend imports
 before entering their existing task modules.
 The named UUID test fails with preparation
 instructions when its real TypeScript dependency is absent; it never skips.
-The model-free environment includes the pinned tokenizer and sentence-rule
+The default service environment includes the pinned tokenizer and sentence-rule
 libraries for UniEval. Preparation fetches only their named resources, not
 Torch or weights; tests read them locally. The
 [UniEval run guide](run-unieval-evaluation-api.md) owns model preparation and
@@ -310,8 +314,8 @@ owned Uvicorn lifespans with no listening sockets. Native ASGI operations use
 the existing recorded model boundaries. Restarting each selected API must
 change its own process/application identity while the sibling API, worker and
 already saved result remain unchanged. Different worker PIDs behind one API
-cannot pass this check. Run it with the complete model-free Linux suite; a
-Windows skip is not API-process isolation evidence.
+cannot pass this check. Run it explicitly with the complete offline Linux suite;
+a Windows skip is not API-process isolation evidence.
 The evaluator application has no generation route or client lifespan.
 Direct native generation cases live with the workflow and replay the named
 model response at the HTTPX boundary; they do not start an evaluation proxy.
@@ -328,7 +332,7 @@ cases under that guard. Record this platform limitation rather than weakening
 the guard; run the complete offline service suite on Linux.
 
 Real recordings are a separate operator check, not an ordinary test. From the
-service directory, prepare a separate environment so later model-free checks
+service directory, prepare a separate environment so later offline checks
 do not inherit optional model packages:
 
 ```powershell
@@ -338,7 +342,7 @@ uv run --frozen --extra model python .\scripts\capture-model-recordings.py --roo
 ```
 
 Keep the model-extra selector while using that environment. In a fresh shell,
-ordinary commands use the service's default model-free environment again.
+ordinary commands use the service's default environment again.
 Commit only the named bounded fixtures and actual provenance, never `var/`,
 weights, caches or raw third-party diagnostics. A cached-only reload must match
 the captured model identity. Recordings do not replace the offline service checks.
@@ -390,8 +394,14 @@ longer than the unchanged health request deadline. The actual transport failure
 must remain in evidence while an already-ready HHEM worker scores.
 The named live fixture's
 long coherence input and source-tail spans use the actual pinned tokenizer,
-not word counts. Separate declaration
-invocations and the named form-default check keep model selection real.
+not word counts. Historical four-score/window journeys select relevance and
+`all_source_windows` explicitly without changing recorded inputs or predictions.
+The default-mode oracle in `test_unieval_windows.py` requires one complete source
+span and one comparison per native summary sentence; its explicit override
+retains complete window geometry. It counts assembled inputs against the unchanged
+operator allowance, not advisory tokenizer metadata. Executable platform-input,
+native-request and response-binding cases verify empty mode omission and both
+exact override spellings. Separate declaration invocations keep model selection real.
 The machine-task regression launches the actual Python owner, Bun helper and
 machine-only Hono child over private pipes and a generated loopback listener
 configuration. It sends the serialized Python run including its source revision,
@@ -423,29 +433,23 @@ processes and a private pre-arm pipe, not model weights or network access.
 They prove refusal when the owner dies before protection is armed, confirmed
 kernel stop after exec, and normal same-PID startup/shutdown. Run these cases
 on Linux; their Windows skips do not count as launch-boundary proof.
-The candidate CI job runs the complete model-free service and workflow suites
-on Linux. The same invocation is available for local Linux debugging from the
-service directory:
+Run the complete offline evaluator and workflow suites explicitly on Linux
+from the service directory:
 
 ```powershell
 uv run --frozen pytest -c pyproject.toml tests ../../tools/summary-eval/summary_eval_tests
 ```
 
-Keep the socket guard and resource preparation above. The ordinary CI job
-is the repeatable merge gate, not the live manual workflow.
+Keep the socket guard and resource preparation above. These native checks are
+separate from the real-model manual workflow and do not run automatically in CI.
 Windows contract or lint results do not replace Linux process,
 ASGI and serialized Python-to-Bun bridge evidence.
 
-When a local Linux host is unavailable, use the candidate's ordinary CI run
-or dispatch `ci.yml` on that branch. Its `model-free` job runs for code changes,
-with read-only repository permissions. The shared action prepares frozen model-free dependencies and the
-named tokenizer/sentence resources, then runs lint, strict types and the
-complete Linux suites with the existing socket guard. It installs no model
-weights, starts no production pipeline and publishes no production data.
-Retain the run's source revision and current test-result artifact. A changed
-candidate needs new evidence; unchanged tested inputs reuse their passed run.
-The result artifact remains `summary-evaluator-model-free-results`; a failed
-check propagates failure rather than selecting a smaller suite.
+When a local Linux host is unavailable, arrange explicit verification on a
+controlled Linux host. Neither the remaining backend CI suite nor a `ci.yml`
+dispatch supplies evaluator Linux evidence. Retain the tested source revision
+and current native result. A changed candidate needs applicable new evidence;
+unchanged tested inputs reuse their passed run.
 The complete pytest roots retain both native scorer/API/process suites,
 strict previous-settings and disabled-coverage health reading, and both API
 isolation directions. Windows portable records must list omitted ASGI/control
@@ -457,9 +461,11 @@ has a different PID. The runtime ownership check stays strict.
 The local caller checks require the host's locked dependencies, not model packages.
 Ordinary evaluator preparation
 installs neither feed-ingest-plan nor data-delivery.
-Workflow files have no dedicated content tests. Keep the existing full suites
-in CI; tests of application programs remain focused on those programs rather
-than declarations that call them.
+Workflow files have no dedicated content tests. CI retains its full backend and
+native TypeScript suites; explicit evaluator checks remain focused on application
+programs rather than declarations that call them.
+Review the actual manual string field directly; declaration parsing is not
+proof that platform inputs reach the native scorer.
 The [manual procedure](run-hhem-evaluation-api.md) owns registration and real
 hosted evidence; offline results do not close that check.
 
@@ -480,11 +486,19 @@ Ordinary CI runs repository-wide source checks without claiming spaCy behavior
 or testing workflow execution.
 
 The workflow syncs the frozen environment, installs only the selected
-configured model wheel, starts one owned process group, and validates live
+configured model wheel after its named in-memory unittest checks, starts one
+owned process group, and validates live
 English or Chinese results through the actual shared TypeScript CloudEvents
 and trace contracts. The required candidate evidence is one `md` run per
 language against the same immutable commit. A changed candidate
 needs both runs again.
+
+The named native tests cover compact grouping, actual YAKE ranking, configured
+maximum/zero behavior, feature-local failures, old settings/evidence reads and
+unchanged Chinese defaults. The existing live probe verifies the current
+spaCy routes, health-derived defaults/limits, exact source occurrences, raw
+outputs and the unchanged capacity/reuse/cleanup policies. These results do
+not claim recognition or ranking quality.
 
 ### Independent GLiNER2 API
 
@@ -630,10 +644,11 @@ package's explicit locked Bun type binding:
 node .\services\host-probes\node_modules\typescript\bin\tsc --noEmit --target ESNext --module ESNext --moduleResolution Bundler --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --noUnusedLocals --noUnusedParameters --verbatimModuleSyntax --skipLibCheck --types .\services\host-probes\node_modules\@types\bun .\tools\summary-eval\machine-task.ts .\tools\summary-eval\machine-results.ts .\tools\summary-eval\summary_eval_tests\host-profile-bridge.ts
 ```
 
-The bridge remains an importer of the native route constants. Its model-free
+The bridge remains an importer of the native route constants. Its offline
 Python schema and recorded-measurement cases above exercise the real handler
-and private pipes. The complete Linux gate still covers the actual machine
-child, PID ownership and confirmed cleanup; Windows passes do not replace it.
+and private pipes. Explicit Linux service/workflow verification covers the
+actual machine child, PID ownership and confirmed cleanup; Windows passes do
+not replace it.
 
 For native API event changes, use the same declared checks and combine these
 functional cases within each package invocation:
@@ -652,8 +667,11 @@ including disabled commands, retained profile operations, native delivery
 before supervision and unchanged relay identity. Private profiles and
 summarizer contents remain private. Reuse unchanged summarizer/workflow check
 records only when their tested inputs are unchanged. Keep Linux-only native
-instrument coverage and the full suite in merge-candidate CI; no live
-data-writing workflow or published-site browser gate is added.
+API/process/lifecycle tests and the full suite in merge-candidate CI. CI no
+longer installs optional Linux cache tools or runs RAM, copy, cache and
+affinity proofs. Automatic native perf control/SIGINT and cache/affinity
+measurement verification is retired; recorded parser cases do not replace
+it. No live data-writing workflow or published-site browser gate is added.
 
 The native package command supplies its declared timeout. Keep shorter
 process deadlines and existing independent failure checks; do not raise
@@ -832,22 +850,20 @@ historical readback described in
 [summary-generator-caller.md](../reference/summary-generator-caller.md#full-analysis-saved-events).
 Pure summary responses and nullable native usage are checked independently.
 Ordinary CI runs both complete native suites; `Saved workflow handoff` remains
-in its existing workflow. The separate model-free Linux evaluator/workflow gate
-still applies to the merge candidate. These checks do not dispatch either live
+in its existing workflow. Evaluator/workflow verification is explicit, as
+described above. These checks do not dispatch either live
 content workflow or prove new summary quality.
 
 ## Design rationale
 
 ### Model-free Linux verification
 
-A separate Linux job in ordinary CI preserves complete process and ASGI coverage
-without turning a live content workflow into a test gate or requiring a
-developer-host installation. Its read-only job uses the existing code-change
-decision and the same complete recorded-boundary suite, not a smaller substitute.
-The shared composite action holds one copy of preparation and verification.
-Removing a redundant checker workflow therefore changes where the checks run,
-not their maintained coverage. Changed candidates need new evidence; unchanged
-tested inputs reuse their passed run.
+The evaluator and its workflow caller have no automatic Linux CI gate. Their
+complete recorded-boundary suites remain explicit native verification, separate
+from real-model manual scoring. This gives up an automatic regression verdict
+for evaluator process and ASGI behavior; the backend suite is not evidence for
+those service paths. Useful contract, API, scoring and process tests remain
+runnable with their existing dependencies and resource preparation.
 
 ### Bounded state CSV integrity check
 
@@ -910,7 +926,7 @@ selector: `-m contract`, `-m visual`, `-m workflow` or `-m "not slow"`, priced
 [below](#run-only-the-tests-a-change-can-break).
 
 **Read the jobs, not the run's conclusion.** The `scope` job selects which of
-`gates`, `site`, `browser` and `robots` run, so a commit that
+`gates`, `site` and `browser` run, so a commit that
 touched no matching path produces a run marked success with most of them
 skipped. That is correct for the commit and worthless as a statement about the
 branch: a suite can be fatally broken while every run on `main` reads green,
@@ -1009,7 +1025,7 @@ Two extras are declared. Install only what you need:
 
 | Extra | Pulls | When |
 | --- | --- | --- |
-| `dev` | `ruff`, `mypy`, `pytest`, `PyYAML` | always - this is the gate set |
+| `dev` | `ruff`, `mypy`, `pytest` and backend test dependencies | always - this is the gate set |
 | `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it uses the current `tokenizers` range |
 
 `faithfulness` is the heavy one, and it is the only one a gate does not need. No

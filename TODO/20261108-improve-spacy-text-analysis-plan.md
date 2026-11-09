@@ -39,8 +39,8 @@ channel and promoted by a person". No entropy measure or threshold is added here
 
 | Id | # | Outcome | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Correct Unicode evidence validation | - | A | DONE | jubilant-waffle | - | Unicode evidence reader |
-| C2 | 2 | Deliver the compact English spaCy API | 1 | B | PENDING | - | - | - |
+| C1 | 1 | Correct Unicode evidence validation | - | A | DONE | jubilant-waffle | #1975 | Unicode evidence reader |
+| C2 | 2 | Deliver the compact English spaCy API | 1 | B | DONE | fictional-disco | - | English spaCy API |
 
 ## 2. Evidence reader
 

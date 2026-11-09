@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 10.
 
@@ -53,6 +53,13 @@ record; the manual workflow's same-run report and captured stderr are
 caller-owned evidence. The
 [text-analysis reference](../../reference/text-analysis-api.md) owns the exact
 fields and vocabulary.
+
+Current live spaCy health is strict; retained evidence has a separate exact
+initial-shape reader. New feature and health declarations carry their current
+date, while unchanged raw/event definitions and the workflow receipt retain
+their own metadata. Older settings inherit their recorded feature defaults,
+and historical term limits remain unknown. The native reader validates the
+request, health and result together without rewriting retained artifacts.
 
 The manual summary workflow's same-run generation, phase evidence and private launcher packets
 live outside that API, under

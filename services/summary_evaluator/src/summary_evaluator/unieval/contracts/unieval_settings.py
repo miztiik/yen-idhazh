@@ -114,7 +114,7 @@ class AuthoredUnievalSettings(UnievalContract):
             "changelog": [
                 {
                     "version": AUTHORED_UNIEVAL_VERSION,
-                    "change": "Default relevance off independently of reference presence.",
+                    "change": "Default relevance off and consistency to complete-source sentences.",
                 },
                 {
                     "version": "2026-11-07",

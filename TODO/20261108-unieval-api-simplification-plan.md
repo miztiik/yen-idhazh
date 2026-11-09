@@ -33,7 +33,7 @@
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Optional relevance across API and saved workflow | - | A | DONE | fantastic-happiness | - | Optional UniEval relevance |
-| C2 | 2 | Full-source consistency by default | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Full-source consistency by default | 1 | B | DONE | legendary-train | - | Full-source UniEval defaults |
 | C3 | 3 | Specific model-input and window-budget errors | 2 | C | PENDING | - | - | - |
 
 ## 2 - Row #1 - Optional relevance across API and saved workflow
@@ -168,6 +168,7 @@
   - `tools/summary-eval/summary_eval_tests/test_manual_workflow.py`
   - `tools/summary-eval/summary_eval_tests/test_unieval_workflow.py`
   - `tools/summary-eval/summary_eval_tests/test_unieval_workflow_fixture.py`
+  - `tools/summary-eval/summary_eval_tests/test_workflow_outcomes.py`
   - `tools/summary-eval/summary_eval_tests/test_evaluator_response_binding.py`
   - `.github/workflows/summary-eval-tests.yml`
   - `docs/reference/unieval-api.md`
@@ -230,7 +231,7 @@
   - `docs/how-to/run-unieval-evaluation-api.md`
   - `docs/how-to/run-hhem-evaluation-api.md`
 - **Acceptance gates - local:** Use the existing frozen lint/type checks and the shared selector. Selected tokenizer-boundary and error-projection tests may run locally for debugging; no live model or network is necessary to verify a refused input.
-- **Acceptance gates - CI:** Complete existing Linux model-free suites, including intact byte-bound and worker-identity checks. Version-bound old artifact readers from row #1 must still accept previously valid errors and reject invalid current packets.
+- **Acceptance gates - native verification:** Explicitly run the complete offline service/workflow suites on Linux using the gate guide, including intact byte-bound and worker-identity checks. Version-bound old artifact readers from row #1 must still accept previously valid errors and reject invalid current packets; the remaining backend CI suite does not provide evaluator runtime evidence.
 - **Acceptance gates - operator surface:** The report displays actual input tokens against the configured allowance beside the affected score; an absent historical measurement is unavailable, not reconstructed. Fixed messages describe which text was involved without including source, summary, reference, prompt contents or raw exceptions.
 - **Oracle:** Add a parameterized real-tokenizer regression to the existing window/planning tests for an input exactly at its configured allowance and one token over it, across each applicable dimension. Exercise the shared refusal helper and worker projection as well as planning; require the same measured sizes and the correct dimension after bounded packet round trip. This does not measure feasible memory use or judging quality above the current allowance.
 

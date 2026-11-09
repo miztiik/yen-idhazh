@@ -44,6 +44,13 @@ independent reference; optional boolean `evaluate_relevance` defaults false.
 Only the exactly empty form reference means absent; whitespace-only or null
 references are invalid. The platform reader accepts only native booleans or
 canonical `true`/`false` strings before strict validation. Optional
+string `consistency_source_mode` accepts exactly `full_source_prompt` or
+`all_source_windows`; omission or an exactly empty form value follows the
+scorer's committed default, currently `full_source_prompt`. Other nonempty
+values, including whitespace-only text, are invalid. This control is sent
+only to UniEval, never generation or HHEM. Native response controls must match
+the resolved request, including an explicit override rather than only the
+configured default. Optional
 `models_file` is a JSON path relative
 to `config/`, such as `models/ornith-1.5-9b-q5km.json`. The form default matches
 `config/idhazh.json.models_file`; blank uses that committed pointer. The existing
@@ -246,7 +253,7 @@ Table B - Named output under `backend/var/summary-eval-tests/`
 | B1 | `run.json` | Platform run/attempt, UTC start, source revision, selected declaration, exact source hash, nullable reference hash and relevance boolean captured before startup; preparation status and safe errors are atomically updated here. |
 | B2 | `generation.json` | The same identities and relevance selection, observed loaded model, source/nullable-reference hashes, validated final `summary_text`, answer hash, generation status and safe errors. This is the one answer handoff. |
 | B3 | `generation-phase.json` | Generation measurements, server observations, cleanup and errors, bound to the exact saved receipt. |
-| B4 | `evaluation.json` | Imported native HHEM and UniEval results, per-scorer API process/application identities, native readiness, request/nullable-reference hashes and relevance selection, machine readings and each API/worker shutdown outcome, bound to that receipt. |
+| B4 | `evaluation.json` | Imported native HHEM and UniEval results with actual source mode and comparison geometry, per-scorer API process/application identities, native readiness, request/nullable-reference hashes and relevance selection, machine readings and each API/worker shutdown outcome, bound to that receipt. |
 | B5 | `results.json`, `report.md` | Combined native outcome and its escaped human report. |
 | B6 | `logs/` | Append-only per-role CloudEvents JSONL files and current native Hono server evidence. Not Git or site output. |
 

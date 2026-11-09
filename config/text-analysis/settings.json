@@ -1,6 +1,10 @@
 {
-  "version": "2026-11-07",
+  "version": "2026-11-09",
   "changelog": [
+    {
+      "version": "2026-11-09",
+      "change": "Add compact English feature settings and language defaults."
+    },
     {
       "version": "2026-11-07",
       "change": "Declare the multilingual text-analysis service settings."
@@ -28,19 +32,27 @@
     "relations",
     "noun_phrases",
     "linguistic_tokens",
-    "document_metrics"
+    "document_metrics",
+    "named_entities",
+    "important_terms"
   ],
   "languages": {
     "en": {
       "enabled": true,
       "default_profile": "md",
+      "default_features": [
+        "named_entities",
+        "important_terms"
+      ],
       "supported_features": [
         "entities",
         "sentences",
         "relations",
         "noun_phrases",
         "linguistic_tokens",
-        "document_metrics"
+        "document_metrics",
+        "named_entities",
+        "important_terms"
       ],
       "profiles": {
         "sm": {
@@ -126,6 +138,23 @@
       "FAC"
     ],
     "language_overrides": {}
+  },
+  "named_entities": {
+    "ignore_case": true,
+    "label_map": {
+      "PERSON": "person",
+      "ORG": "organization",
+      "GPE": "location",
+      "LOC": "location"
+    }
+  },
+  "important_terms": {
+    "max_results": 25,
+    "max_phrase_words": 3,
+    "deduplication_threshold": 0.9,
+    "deduplication_method": "seqm",
+    "window_size": 1,
+    "stopwords": null
   },
   "logging": {
     "level": "INFO",

@@ -1,6 +1,6 @@
 # Run the text-analysis verification
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How to dispatch the `spacy_ner_test` job in `ner-tests.yml` against one selected
 implementation ref and inspect its live multilingual API evidence. This procedure is
@@ -26,13 +26,15 @@ that the resulting `HEAD` is the same 40-character commit.
 
 Always supply `language` as `en` or `zh` and `feature_mode` as `default`, `all`
 or `custom`. `profile` defaults to `md`; `sm` and `lg` remain optional manual
-profiles. `text` is required. `default` selects `relations`, `entities`,
-`sentences`, `document_metrics`; `all` selects every feature supported by the
-selected language.
+profiles. `text` is required. `default` reads the selected language's resolved
+defaults from health: English selects `named_entities`, `important_terms`;
+Chinese inherits `relations`, `entities`, `sentences`, `document_metrics`.
+`all` selects every feature supported by the selected language.
 
 For `custom` mode, set `custom_features` to a nonempty comma-separated list
 drawn from `entities`, `sentences`, `relations`, `noun_phrases`,
-`linguistic_tokens` and `document_metrics`. Names are case-sensitive, duplicate
+`linguistic_tokens`, `document_metrics`, `named_entities` and `important_terms`.
+The compact features are English-only. Names are case-sensitive, duplicate
 names are refused, surrounding CSV whitespace is ignored and supplied order is
 preserved. Leave `custom_features` blank for the other modes.
 
@@ -76,12 +78,16 @@ The single artifact is named
 days. A successful artifact contains exactly:
 
 - `report.json` - the strict workflow receipt;
-- `analysis-request.json` - the exact validated selected request, including
+- `analysis-request.json` - the validated selected request for replay, including
   source text and resolved feature order;
 - `health-response.json` - the exact validated ready health response;
 - `analysis-response.json` - the exact validated selected analysis response;
 - `events.jsonl` - the canonical validated CloudEvents; and
 - `report.md` - the same escaped bytes appended to the GitHub step summary.
+
+Default-mode HTTP calls omit `features` to verify server-side selection. The
+replay request records that exact resolved order from validated health and
+requires the response and terminal event to agree with it.
 
 The successful receipt has only version `2026-11-08`, conclusion `success`,
 the lowercase 40-hex `commit_sha`, positive run ID and attempt, and cleanup
@@ -125,6 +131,23 @@ cleanup, not a service failure. New receipts expose no raw exit code.
 
 ## Local execution boundary
 
+The Linux job runs the four exact unittest inputs before preparing model
+weights: `test_named_entities.py`, `test_important_terms.py`,
+`test_api_contracts.py` and `test_spacy_verification.py`, all under
+`services/text_analysis/spacy/tests/`. They exercise the one named settings
+contract and real in-memory native documents, grouping, YAKE calculations,
+ranking/limits including zero, local failures, current schemas and old reads.
+There are no new fixtures, directory
+scans, test networking or business-logic mocks.
+
+The live probe reads language defaults and the term maximum from current
+health, verifies the new English outputs and every selected raw feature, and
+checks retired routes and wrong methods. Its English whitespace boundary
+proves `FEATURE_FAILED` preserves siblings; a zero configured maximum instead
+completes with no terms. The Chinese checks preserve raw/default behavior,
+noun-phrase unavailability and HTTP 422 for an all-unavailable selection.
+Successful receipt cleanup must still be `confirmed`.
+
 Run the probe's model-free evidence-span check without installing or starting
 the service:
 
@@ -137,12 +160,13 @@ helper with exact source spans after non-BMP characters and invalid bounds or
 text. It proves [evidence offset handling](../reference/text-analysis-api.md#evidence-spans),
 not model recognition quality.
 
-Do not install, import, start or load the text-analysis service locally for
-this verification. CI does not test the workflow declaration or execute the
-service; this manual workflow is the live functional check.
+Do not install, import, lint, type-check, start or load the text-analysis service
+locally for this verification. Ordinary CI does not test the workflow
+declaration or execute the service; the manual Linux workflow owns the native
+functional checks and live API execution.
 
-Production pipelines use their own process supervisor and call the health and
-analyze routes directly. They do not reuse this verification runner.
+Production pipelines use their own process supervisor and call the native
+spaCy health and analysis operations directly. They do not reuse this runner.
 
 ## See also
 
