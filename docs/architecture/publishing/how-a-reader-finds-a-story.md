@@ -34,7 +34,10 @@ Real cross-day search belongs on the archive, later, where the question "where w
 
 ## The filter bar: topics and a field in one panel
 
-One panel carries the topic pills and the field, on the day page and on the archive. It replaced `TopicPills.svelte` on 2026-09-01, and the reason is vertical space: a field and a pill row each claiming their own band is why the top of a reading page was tall, and on the archive the search box was the last thing on the page - under every story it might have replaced.
+One panel carries the topic pills and the field. The day page keeps its compact
+inline layout. The archive leads with a full-width field and Search button,
+then topic names without counts. Its two-row panel stays in normal flow rather
+than sticking over the answer.
 
 Eight decisions. Susan's, except the two the row order added on 2026-09-13: the Editor set the margin and Jony ruled the cap soft.
 
@@ -47,10 +50,19 @@ Eight decisions. Susan's, except the two the row order added on 2026-09-13: the 
   button is disabled, Enter cannot submit, and the state sentence explains why
   broader search is unavailable. An empty match list still leaves the field
   available to edit or clear.
-- **Pressing `Search` turns the box from a filter into a question, and a question is not a substring.** So the list under it stops being narrowed by the words in it until the next keystroke. Without that rule a search which found nothing would leave an empty page instead of the browse list it is supposed to fall back to: a sentence like "medieval basket weaving techniques" is in no title, so the substring filter would empty the one list the page has. `Show all stories` empties the box as well as dropping the answer, for the same reason - it means all of them.
-- **Sticky at 1024px and up, and nowhere below it.** That is `frame.breakpoints_px[1]`, where the pills and the field share one band. Below it the panel can run to several wrapped lines, and a control holding a third of a phone screen for the whole scroll is screen the reader paid for.
+- **Pressing `Search` turns the box from a title filter into a semantic query.**
+  Related words can rank together without being literal title matches. The
+  result list replaces browsing, including when no result qualifies. A no-match
+  answer names the searched dates and offers different words or date browsing;
+  unrelated recent stories are not presented as an answer. `Clear search`
+  empties the field and restores browsing with the selected topic.
+- **The day-page panel sticks at 1024px and up, and nowhere below it.** That is
+  `frame.breakpoints_px[1]`, where the pills and field share one band. The
+  archive's search-first panel stays in normal flow at every width because it
+  deliberately uses separate search and topic rows.
 - **With no script the field is not rendered as a dead box.** A `<noscript>` rule hides it and one sentence takes its place, because an input that swallows typing is worse than no input. The day page's pills are prerendered links and keep working; the archive's pills are buttons over a list a script fetched, so they go with the field.
-- **The archive's pills carry whole-archive totals**, one integer a vertical, computed in `+page.server.ts` which already loads every day. That number is also the honest denominator of a topic-filtered list while months are still unread. The pill count and the list count are different numbers and never share a sentence.
+- **Archive topic pills show names, not inventory totals.** Counts still
+  determine the shared ordering, but only the day page displays them.
 - **The archive's model-state and scope sentences moved up**, under the panel. They used to sit below the story list, which put the control behind the answer.
 
 Two shapes were refused. **A search field that expands to reveal filters** hides the filter set behind a control, which is the failure this replaced. **Keeping two separate blocks** was the maintainer's rejection: the two bands of vertical space are the cost the row exists to remove.
@@ -79,11 +91,21 @@ corpus. This keeps the initial story download bounded as the archive grows
 
 What it renders now, top to bottom:
 
-- The counts and the retention promise: "6 days, 2237 stories. Nothing here is deleted."
-- **The filter bar** - every topic the archive holds with its whole-archive count, and the search field beside them. Under it, the two sentences about the on-device model: what it would cost, and how far back a search would reach.
-- **The day list** - the newest `ui.archive_recent_days` days as rows carrying the long date, the story count and a mark when some stories did not finish, then one disclosure a month and one a year for every year before the newest published one. A month row reads `20 of 31 days, 4086 stories` and holds its own days as a wrapped grid of numbers. It was a single wrapped row of every date until 2026-09-01, which is 700 links after two years.
-- **The stories**, newest day first, each a link to its own anchor on the day that published it, with the date and the topic beneath.
-- **`Show 25 more`** - the same explicit control the day list and the console's failure list already use, sized by `ui.archive_page_size`.
+- **Archive**, without day or story totals.
+- **The filter bar**, with the search field first and uncounted topic names below.
+  A short explanation distinguishes loaded-title filtering from submitted
+  related-story search. Download cost and privacy remain visible before
+  submission. Search coverage names actual dates, without a story-count total.
+- **The answer**, labelled `Recent stories`, `Matching titles` or `Search results`.
+  `Clear search` restores browsing. The one list follows these controls rather
+  than an expanded inventory of dates. Ordering is stated as `Newest first` or
+  `Closest matches`; only a binding result cap needs a numerical notice.
+- **Browse by date**, an initially closed native disclosure beside the answer
+  heading. It holds recent dates and the existing month/year disclosures.
+  Dates and partial-publication warnings remain; daily, monthly and yearly
+  totals do not.
+- **Show more stories**, sized by `ui.archive_page_size`, then quiet chart
+  retention information when a retention window applies.
 
 **The stories are fetched, not inlined**, from `index/<YYYY-MM>.json` staged into `static/`. [layout.md](layout.md) owns why, and the short version is that inlining them would leave the page growing per story, which is the defect the index exists to end. Paging back into an older month fetches that month; a month already in hand is not fetched twice.
 
@@ -91,20 +113,23 @@ What it renders now, top to bottom:
 
 **Nothing the list needs sits under `assist/`.** That path is the on-device encoder, which the bundle must render complete without. Browsing is not a model feature, so the index is served from its own `index/` path and the list works with the whole model directory deleted. `frontend/tests/archive.spec.ts` holds it by failing every request under `/assist/` and asking for the stories anyway.
 
-Four rulings behind the shape, the first three Jony's and the last one Susan's:
+The constraints behind the shape:
 
 - **No sort control.** Per-reader ordering is forbidden by [layout.md](layout.md) - two people at one URL see one order.
 - **No infinite scroll.** It takes the footer away from the reader and has no resting state.
-- **The header states the retention window**, which the page did not do and which [layout.md](layout.md) requires before anything is deleted.
-- **The per-day story count and the partial flag came back on 2026-09-01, on the newest `ui.archive_recent_days` rows only.** They left the day row in the first place because a count beside every one of 700 dates is what turns a compact row into a wall. That argument holds against 700 rows and not against fourteen: `ui.archive_recent_days` rows are a list somebody reads, and "how big was Tuesday, and did it finish" is what decides whether to open it. Every older day is a number inside its month and carries neither. Run health in the aggregate still belongs to the console.
+- **Retention remains stated**, after the story list rather than in the primary
+  search area.
+- **Date navigation is secondary and uncounted.** A partial-publication warning
+  can help a reader choose a day; an inventory total does not help answer a
+  search. Aggregate run health belongs to the console.
 
 The degraded states, and each one is designed rather than discovered:
 
 | State | What ships |
 | --- | --- |
-| No index, or a month that will not load | The day list, and one line: "The story list could not be loaded. Open a day above to read it." |
-| A filter or a topic that matches nothing read so far | The day list, and one line: "No story on this page matches that. Press Search to look through the whole archive." The field narrows what the browser has fetched, so the sentence names that scope and points at the control that reaches past it |
-| JavaScript off | The day list, and two `<noscript>` lines - one saying the story list needs it, one saying the search and the topic filters do. The day rows and the month disclosures are prerendered and native, so navigation and opening a month both still work |
+| No index, or a month that will not load | Browse by date remains available, and the list explains that it could not load |
+| A title filter that matches nothing loaded | The field remains editable; offer related-story search only when available, otherwise offer a changed filter or date browsing |
+| JavaScript off | Search, topic and window controls are hidden; a sentence points to the native Browse by date disclosure and its working day links |
 | Nothing published at all | "Nothing has been published yet.", as before |
 
 ### The day list grows with months on the page and with days in the document
@@ -181,7 +206,7 @@ every date, which fetches two whole shards on 29 days out of 30 and charges a
 second browse index to every visitor who only browses.
 
 **The page says how far back it searched**, in one line under the box:
-`Searching 1 to 20 August 2026 - 8 stories.`, and `Older stories are not
+`Searching 1 to 20 August 2026.`, and `Older stories are not
 searched.` when the archive holds more than the scope read. It names days rather
 than months because the month name is what hid the defect: on 1 September
 `September 2026` reads like a month and holds one day. A reader who gets nothing

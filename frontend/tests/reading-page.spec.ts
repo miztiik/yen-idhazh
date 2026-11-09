@@ -8,6 +8,7 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	page.on('pageerror', (error) => errors.push(String(error)));
 	await page.goto('/');
 	await dayReady(page);
+	await expect(page.locator('[data-topic-row] a').first()).toHaveText(/^All \d+$/);
 	const stories = page.locator('article.item');
 	await expect(stories.first()).toBeVisible();
 	await expect(stories.first().locator('[data-item-summary]').first()).not.toBeEmpty();

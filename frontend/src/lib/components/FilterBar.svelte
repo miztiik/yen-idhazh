@@ -60,6 +60,8 @@
 		submitLabel = null,
 		submitVisible = true,
 		submitDisabled = false,
+		fieldFirst = false,
+		showCounts = true,
 		onSubmit = null,
 		onType = null,
 		matchNote = '',
@@ -102,6 +104,8 @@
 		submitVisible?: boolean;
 		/** Broader search may be unavailable while local filtering still works. */
 		submitDisabled?: boolean;
+		fieldFirst?: boolean;
+		showCounts?: boolean;
 		onSubmit?: (() => void) | null;
 		onType?: (() => void) | null;
 		/** What the field has narrowed to, drawn UNDER the panel rather than in it.
@@ -169,7 +173,9 @@
 		<Icon id={mark(vertical.id) as IconId} size={14} />
 	{/if}
 	{vertical.display_name}
-	{deskCount(vertical)}
+	{#if showCounts}
+		{deskCount(vertical)}
+	{/if}
 {/snippet}
 
 {#snippet pill(vertical: DigestVerticalRef)}
@@ -196,47 +202,7 @@
 	{/if}
 {/snippet}
 
-<section class="filter-bar" aria-label={label} data-filter-bar>
-	<div class="pills" data-filter-scripted={linked ? undefined : ''}>
-		<div class="pill-row" data-topic-row>
-			{#if linked}
-				<a
-					href={root}
-					class="pill"
-					class:on={active === null}
-					aria-current={active === null ? 'page' : undefined}
-				>
-					All {total}
-				</a>
-			{:else}
-				<button
-					type="button"
-					class="pill"
-					class:on={active === null}
-					aria-pressed={active === null}
-					onclick={() => onTopic?.(null)}
-				>
-					All {total}
-				</button>
-			{/if}
-
-			{#each split.shown as vertical (vertical.id)}
-				{@render pill(vertical)}
-			{/each}
-
-			{#if split.folded.length > 0}
-				<details class="more" data-topic-more={split.folded.length}>
-					<summary class="pill">+{split.folded.length} more</summary>
-					<div class="folded">
-						{#each split.folded as vertical (vertical.id)}
-							{@render pill(vertical)}
-						{/each}
-					</div>
-				</details>
-			{/if}
-		</div>
-	</div>
-
+{#snippet field()}
 	{#if showField}
 		<div class="field" data-filter-scripted>
 			{#if submitLabel}
@@ -255,6 +221,57 @@
 				<div class="field-row">{@render box()}</div>
 			{/if}
 		</div>
+	{/if}
+{/snippet}
+
+<section class="filter-bar" aria-label={label} data-filter-bar data-field-first={fieldFirst || undefined}>
+	{#if fieldFirst}
+		{@render field()}
+	{/if}
+	<div class="pills" data-filter-scripted={linked ? undefined : ''}>
+		<div class="pill-row" data-topic-row>
+			{#if linked}
+				<a
+					href={root}
+					class="pill"
+					class:on={active === null}
+					aria-current={active === null ? 'page' : undefined}
+				>
+					All{#if showCounts}{' '}{total}{/if}
+				</a>
+			{:else}
+				<button
+					type="button"
+					class="pill"
+					class:on={active === null}
+					aria-pressed={active === null}
+					onclick={() => onTopic?.(null)}
+				>
+					All{#if showCounts}{' '}{total}{/if}
+				</button>
+			{/if}
+
+			{#each split.shown as vertical (vertical.id)}
+				{@render pill(vertical)}
+			{/each}
+
+			{#if split.folded.length > 0}
+				<details class="more" data-topic-more={split.folded.length}>
+					<summary class="pill">
+						{showCounts ? `+${split.folded.length} more` : 'More topics'}
+					</summary>
+					<div class="folded">
+						{#each split.folded as vertical (vertical.id)}
+							{@render pill(vertical)}
+						{/each}
+					</div>
+				</details>
+			{/if}
+		</div>
+	</div>
+
+	{#if !fieldFirst}
+		{@render field()}
 	{/if}
 
 	{#if scripted}
@@ -296,6 +313,15 @@
 		border: 1px solid var(--color-rule);
 		border-radius: var(--radius-lg);
 		background: var(--color-surface);
+	}
+
+	.filter-bar[data-field-first] {
+		position: static;
+		flex-wrap: wrap;
+	}
+
+	.filter-bar[data-field-first] .field {
+		flex: 1 1 100%;
 	}
 
 	/* No `display` on either group that carries `data-filter-scripted`: the

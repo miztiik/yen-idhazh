@@ -142,7 +142,7 @@ test.describe('every way a question refuses, and what it says', () => {
 		expect(
 			stateSentence({ phase: last, held: false, cached: 'absent', cost: COST })
 		).toBe(
-			'Search is unavailable here - this browser cannot run it. Everything above still works.'
+			'Search is unavailable here - this browser cannot run it.'
 		);
 	});
 
@@ -276,6 +276,12 @@ test.describe('every way a question refuses, and what it says', () => {
 		expect(
 			scopeSentence({ indexes: [], searched: 1, label: '1 September 2026', partial: true })
 		).toBe('Searching 1 September 2026 - 1 story. Older stories are not searched.');
+		expect(
+			scopeSentence(
+				{ indexes: [], searched: 431, label: '1 to 20 August 2026', partial: true },
+				false
+			)
+		).toBe('Searching 1 to 20 August 2026. Older stories are not searched.');
 	});
 });
 

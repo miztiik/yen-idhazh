@@ -309,7 +309,7 @@ export interface SearchState {
 export function stateSentence(state: SearchState): string {
 	const { phase, cost } = state;
 	if (phase.name === 'blocked') {
-		return `Search is unavailable here - ${phase.reason}. Everything above still works.`;
+		return `Search is unavailable here - ${phase.reason}.`;
 	}
 	if (phase.name === 'failed') {
 		return 'Search is unavailable right now - the download did not finish.';
@@ -355,11 +355,11 @@ export function costNote(cost: DownloadCost): string {
  * a promise the search cannot keep: on 1 September "September 2026" looks like
  * thirty days and holds one.
  */
-export function scopeSentence(scope: SearchScope): string {
+export function scopeSentence(scope: SearchScope, showCount = true): string {
 	if (scope.label === '') return '';
 	const stories = scope.searched === 1 ? 'story' : 'stories';
 	return (
-		`Searching ${scope.label} - ${scope.searched} ${stories}.` +
+		`Searching ${scope.label}${showCount ? ` - ${scope.searched} ${stories}` : ''}.` +
 		(scope.partial ? ' Older stories are not searched.' : '')
 	);
 }

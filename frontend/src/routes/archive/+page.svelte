@@ -1,32 +1,9 @@
 <script lang="ts">
-	/** The archive: one list of stories, newest first, over a compact row of days.
+	/** Find a story, with one answer list and optional date browsing.
 	 *
-	 * The stories are fetched a month at a time rather than inlined. Everything
-	 * this page renders from its own data - the day list, the counts, the topic
-	 * names - grows per day or per month; nothing grows per story.
-	 *
-	 * **There is one list, and a search replaces what is in it.** The heading
-	 * changes, the count changes, and a link gives the browse list back. Two
-	 * lists side by side would leave a reader working out which one answered
-	 * them, and it would leave the search with no empty state - which this list
-	 * already is, because a search that matches nothing leaves it exactly where
-	 * it was.
-	 *
-	 * Search reads the same months. The page used to carry every committed day
-	 * whole so search could reach the vectors inside them; it now reads the
-	 * sibling vector file and fetches a day only when a result from it is shown.
-	 *
-	 * **The panel sits above the answer.** Until 2026-09-01 the search box was
-	 * the last thing on the page, under every story it might have replaced, and
-	 * the topic names were nowhere. One panel now carries the topics and the
-	 * field, and the two sentences about the on-device model follow it.
-	 *
-	 * **The day list stopped growing one link a published day.** It is the newest
-	 * `archive_recent_days` days as rows, then one disclosure a month and one a
-	 * year before this one. At 700 days that is about twenty rows instead of a
-	 * wall of dates. The links themselves are kept rather than dropped: they are
-	 * the only part of this page that works with no script, which is what the
-	 * `<noscript>` line below says out loud.
+	 * Typing filters loaded titles; submitted search ranks the indexed stories.
+	 * Dates stay inside a native disclosure so they remain usable without
+	 * JavaScript and never stand between a question and its answer.
 	 */
 	import { base } from '$app/paths';
 	import { longDate, plural, shortDate } from '$lib/format';
@@ -54,10 +31,8 @@
 	 * and fetches nothing; only the Search button spends the encoder download. */
 	let query = $state('');
 	let topic = $state<string | null>(null);
-	/** True from the moment the reader presses Search until they type again. A
-	 * question is not a substring, so the words in the box stop narrowing the
-	 * list under it - otherwise a search that found nothing would leave an empty
-	 * page instead of the browse list it is supposed to fall back to. */
+	/** Submitted questions rank complete phrases rather than filter titles.
+	 * Typing again restores loaded-title filtering. */
 	let asked = $state(false);
 	let searchAvailable = $state(true);
 	/** How many days back the browse list reaches. The reader widens or narrows
@@ -96,12 +71,8 @@
 	// wider window loaded earlier leaves months a narrower one now filters out but
 	// never unloads.
 	const allWindowLoaded = $derived(loadedMonths.length >= windowMonths.length);
-	// A search with no answer leaves the browse list showing. That is the whole
-	// empty state, and it is why there is only one list here.
-	const showingResults = $derived(results !== null && results.hits.length > 0);
-	// The window's total is known only once every month it reaches is read - the
-	// payload's whole-archive counts are not the window's, so there is no honest
-	// denominator before then. Null means "do not print an of-N".
+	const showingResults = $derived(results !== null);
+	// Until every month is loaded, another page may require another shard.
 	const reachable = $derived(allWindowLoaded || filtering ? browsable.length : null);
 	const remaining = $derived(reachable !== null ? Math.max(reachable - listed.length, 0) : page);
 	const widest = $derived(Math.max(...data.window.presets));
@@ -119,20 +90,15 @@
 	// before the first chart can age into it (Reader, 2026-09-13).
 	const retention = $derived(
 		data.retentionMonths > 0
-			? `Charts are kept for ${plural(data.retentionMonths, 'month', 'months')}, ` +
-					'then deleted; every story and every link stays.'
-			: 'Nothing here is deleted.'
+			? `Charts are kept for ${plural(data.retentionMonths, 'month', 'months')}; ` +
+					'stories and links remain.'
+			: ''
 	);
 
-	// The count is over the stories that were searched, never over the archive -
-	// a total taken across months this did not read would be the page claiming an
-	// answer it does not hold. The cap is stated when it bites, for the same
-	// reason: ten of ten is a ceiling, and printing it as a total is a lie.
 	const countSentence = $derived(
 		results === null
 			? ''
-			: `${plural(results.hits.length, 'result', 'results')} from the ` +
-				`${plural(results.searched, 'story', 'stories')} searched.` +
+			: 'Closest matches.' +
 				(results.capped ? ` Only the closest ${results.hits.length} are shown.` : '')
 	);
 
@@ -171,12 +137,8 @@
 		if (outcome) void fetchDays(outcome.hits);
 	}
 
-	/** `Show all stories` means all of them, so it empties the box as well as
-	 * dropping the answer. Leaving the question in there would put the reader one
-	 * keystroke away from a list narrowed by a sentence no title contains. */
-	function showAll() {
+	function clearSearch() {
 		query = '';
-		topic = null;
 		asked = false;
 		results = null;
 	}
@@ -217,13 +179,6 @@
 	<details class="fold" data-archive-month={month.month}>
 		<summary class="fold-summary">
 			<span class="fold-name">{month.label}</span>
-			<span class="fold-facts">
-				{month.days.length} of {plural(month.length, 'day', 'days')}, {plural(
-					month.stories,
-					'story',
-					'stories'
-				)}
-			</span>
 		</summary>
 		<ul class="fold-body day-grid">
 			{#each month.days as day (day)}
@@ -238,11 +193,6 @@
 
 <section class="py-6">
 	<h1 class="text-xl font-semibold text-text">Archive</h1>
-	<p class="mt-1 text-base text-text-secondary" data-archive-scope>
-		{plural(data.dayCount, 'day', 'days')}, {plural(data.stories, 'story', 'stories')}.
-		{retention}
-	</p>
-
 	{#if data.dayCount === 0}
 		<p class="mt-8 text-base text-text-secondary">Nothing has been published yet.</p>
 	{:else}
@@ -265,12 +215,27 @@
 			}}
 		/>
 
-		<nav class="days" aria-label="Published days" data-day-row>
+		<div class="answer-heading" data-archive-answer>
+			<h2 class="text-lg font-semibold text-text">
+				{showingResults ? 'Search results' : filtering ? 'Matching titles' : 'Recent stories'}
+			</h2>
+			{#if query.trim() !== '' || showingResults}
+				<button
+					type="button"
+					onclick={clearSearch}
+					class="text-sm text-accent hover:underline"
+					data-search-clear
+				>
+					Clear search
+				</button>
+			{/if}
+			<details class="date-browser" data-archive-dates>
+				<summary class="fold-summary">Browse by date</summary>
+				<nav class="days" aria-label="Published days" data-day-row>
 			<ul class="recent" data-day-recent>
 				{#each data.recent as entry (entry.date)}
 					<li class="recent-row">
 						<a href="{base}/{entry.date}/" class="recent-date">{longDate(entry.date)}</a>
-						<span class="recent-count">{plural(entry.items, 'story', 'stories')}</span>
 						{#if entry.partial}
 							<span class="recent-partial">Some stories did not finish</span>
 						{/if}
@@ -286,13 +251,6 @@
 				<details class="fold" data-archive-year={year.year}>
 					<summary class="fold-summary">
 						<span class="fold-name">{year.year}</span>
-						<span class="fold-facts">
-							{year.days} of {plural(year.length, 'day', 'days')}, {plural(
-								year.stories,
-								'story',
-								'stories'
-							)}
-						</span>
 					</summary>
 					<div class="fold-body">
 						{#each year.months as month (month.month)}
@@ -301,22 +259,8 @@
 					</div>
 				</details>
 			{/each}
-		</nav>
-
-		<div class="mt-8 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-			<h2 class="text-lg font-semibold text-text">
-				{showingResults ? 'Search results' : 'Stories'}
-			</h2>
-			{#if showingResults}
-				<button
-					type="button"
-					onclick={showAll}
-					class="text-sm text-accent hover:underline"
-					data-search-clear
-				>
-					Show all stories
-				</button>
-			{/if}
+				</nav>
+			</details>
 		</div>
 
 		{#if !showingResults}
@@ -325,7 +269,7 @@
 			     surfaces on the site read the same way. Hidden while a search answer is
 			     up, because a search reads its own scope, not this window. -->
 			<fieldset class="window" data-archive-window data-window-days={windowDays}>
-				<legend class="window-legend">Days shown</legend>
+				<legend class="window-legend">Look back</legend>
 				<div class="segments">
 					{#each data.window.presets as preset (preset)}
 						<label
@@ -349,8 +293,13 @@
 		{/if}
 
 		<noscript>
+			<style>
+				[data-archive-window] {
+					display: none;
+				}
+			</style>
 			<p class="mt-1 text-base text-text-secondary">
-				The story list needs JavaScript. The days above work without it.
+				Open Browse by date to read a published day. Search and the story list need JavaScript.
 			</p>
 		</noscript>
 
@@ -358,18 +307,17 @@
 			<p
 				class="mt-1 text-base text-text-secondary"
 				data-search-empty
-			>{`No story from ${results.scope} is close to that.`}</p>
+			>No matching stories in {results.scope}. Try different words or browse by date.</p>
 		{/if}
 
 		{#if status === 'unavailable' && !showingResults}
 			<p class="mt-1 text-base text-text-secondary" data-story-list="unavailable">
-				The story list could not be loaded. Open a day above to read it.
+				The story list could not be loaded. Browse by date to open a published day.
 			</p>
 		{:else if showingResults && results !== null}
-			<p
-				class="mt-1 text-sm text-text-tertiary"
-				data-story-scope
-			>{countSentence}</p>
+			{#if results.hits.length > 0}
+				<p class="mt-1 text-sm text-text-tertiary" data-story-scope>{countSentence}</p>
+			{/if}
 			<ul class="mt-3" data-story-list="rows">
 				{#each results.hits as hit (`${hit.entry.date}-${hit.entry.item_id}`)}
 					{@const item = itemOf(dayPayloads[hit.entry.date] ?? null, hit.entry.item_id)}
@@ -401,9 +349,7 @@
 			</ul>
 		{:else if listed.length > 0}
 			<p class="mt-1 text-sm text-text-tertiary" data-story-scope>
-				{reachable !== null
-					? `Showing ${listed.length} of ${reachable}, newest first.`
-					: `Showing ${listed.length}, newest first.`}
+				Newest first.
 			</p>
 			<!-- The one list on the site that goes multi-column. It is a scan
 			     surface - a reader here is finding the one they remember, not
@@ -434,7 +380,7 @@
 					class="min-h-11 w-full py-6 text-base text-accent hover:underline"
 					data-story-more
 				>
-					Show {Math.min(page, remaining)} more
+					Show more stories
 				</button>
 			{/if}
 		{:else if status === 'loading'}
@@ -442,11 +388,11 @@
 		{:else if status === 'ready'}
 			<p class="mt-1 text-base text-text-secondary" data-story-list="empty">
 				{#if filtering}
-					No loaded story matches that.
+					No loaded titles match "{query.trim()}".
 					{#if searchAvailable}
-						Press Search to look through the whole archive.
+						Press Search to find related stories.
 					{:else}
-						Change the filter or open a day above.
+						Change the filter or browse by date.
 					{/if}
 				{:else}
 					{emptySentence}
@@ -455,24 +401,39 @@
 							type="button"
 							onclick={() => onWindow(widest)}
 							class="text-accent hover:underline"
-							data-window-widen>Look back {plural(widest, 'day', 'days')}</button>, or press
-						{#if searchAvailable}
-							Search to look through the whole archive.
-						{:else}
-							open a day above.
-						{/if}
-					{:else if searchAvailable}
-						Press Search to look through the whole archive.
+							data-window-widen>Look back {plural(widest, 'day', 'days')}</button>.
+					{/if}
+					{#if searchAvailable}
+						Press Search to find related stories.
 					{:else}
-						Open a day above.
+						Browse by date to open a published day.
 					{/if}
 				{/if}
 			</p>
+		{/if}
+		{#if retention}
+			<p class="mt-8 text-sm text-text-tertiary" data-archive-retention>{retention}</p>
 		{/if}
 	{/if}
 </section>
 
 <style>
+	.answer-heading {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-2) var(--space-4);
+		margin-block-start: var(--space-5);
+	}
+
+	.answer-heading h2 {
+		flex: 1 1 auto;
+	}
+
+	.date-browser[open] {
+		flex-basis: 100%;
+	}
+
 	.days {
 		margin-block: var(--space-5);
 	}
@@ -495,12 +456,6 @@
 
 	.recent-date:hover {
 		text-decoration: underline;
-	}
-
-	.recent-count {
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-		color: var(--color-text-tertiary);
 	}
 
 	/* A tinted fill, because it tells the reader something and cannot be tapped
@@ -554,7 +509,8 @@
 		transition: transform var(--dur-fast) ease;
 	}
 
-	.fold[open] > .fold-summary::before {
+	.fold[open] > .fold-summary::before,
+	.date-browser[open] > .fold-summary::before {
 		transform: rotate(90deg);
 	}
 
@@ -562,12 +518,6 @@
 		flex: 1 1 auto;
 		min-inline-size: 0;
 		font-size: var(--text-base);
-	}
-
-	.fold-facts {
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-		color: var(--color-text-tertiary);
 	}
 
 	.fold-body {

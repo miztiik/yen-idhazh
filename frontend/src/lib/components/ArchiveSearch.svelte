@@ -128,10 +128,15 @@
 		},
 		onScope: (next: SearchScope) => (scope = next)
 	};
-	const sentence = $derived(stateSentence({ phase, held, cached, cost: COST }));
+	const sentence = $derived(
+		stateSentence({ phase, held, cached, cost: COST }) +
+			(phase.name === 'blocked'
+				? ' You can still filter loaded titles or browse by date.'
+				: '')
+	);
 
 	onMount(async () => {
-		// The newest month is the one the story list above has already asked for,
+		// The newest month is the first shard the story list asks for,
 		// from the same cache. A second shard is read only when that one is thin,
 		// which is when it is small, and the sentence under the box can then say how
 		// far back a search would reach before a reader spends anything on it.
@@ -166,18 +171,27 @@
 	showField={months.length > 0}
 	submitLabel="Search"
 	submitDisabled={phase.name === 'blocked'}
+	fieldFirst
+	showCounts={false}
 	onSubmit={() => void run()}
 	onType={() => onType()}
 	noscriptNote="Search and the topic filters need JavaScript."
 />
 
 {#if months.length > 0}
-	<SearchState
-		{phase}
-		{sentence}
-		scope={scopeSentence(scope)}
-		surface="archive"
-		onStop={() => search.stop(report)}
-		onRetry={() => void run()}
-	/>
+	<div data-filter-scripted>
+		<p class="text-sm text-text-secondary" data-archive-filter-note>
+			{phase.name === 'blocked'
+				? 'Typing filters loaded titles.'
+				: 'Typing filters loaded titles. Press Search to find related stories.'}
+		</p>
+		<SearchState
+			{phase}
+			{sentence}
+			scope={scopeSentence(scope, false)}
+			surface="archive"
+			onStop={() => search.stop(report)}
+			onRetry={() => void run()}
+		/>
+	</div>
 {/if}

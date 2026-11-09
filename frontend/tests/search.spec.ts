@@ -70,11 +70,14 @@ test('one click downloads the encoder and answers the question already typed', a
     await page.waitForLoadState('networkidle');
     await expect(page.locator('#archive-query')).toBeVisible();
     await expect(page.locator('[data-search-state]')).toContainText('The first search downloads');
-    await expect(page.locator('h2').first()).toHaveText('Stories');
+    await expect(page.locator('h2').first()).toHaveText('Recent stories');
     const { query, expect_canary } = gold.queries[0]!;
     await ask(page, query);
     await answered(page);
     await expect(page.locator('h2').first()).toHaveText('Search results');
+    await expect(page.locator('[data-archive-dates]')).not.toHaveAttribute('open');
+    await expect(page.locator('[data-day-recent] a').first()).not.toBeVisible();
+    await expect(page.locator('[data-search-scope]')).not.toContainText(/\d+ stories/);
     // One labelled query proves the browser ranks, not merely returns. Recall
     // over the whole labelled set is an evaluation, and `evals/retrieval.py`
     // measures it with no browser and no download.
