@@ -20,7 +20,7 @@ on:
           - md
           - lg
       feature_mode:
-        description: "default: relations, entities, sentences, document_metrics; all: every feature supported by selected language; custom: CSV from custom_features"
+        description: "default: configured language defaults; all: every supported feature; custom: CSV from custom_features"
         required: false
         type: choice
         options:
@@ -83,11 +83,15 @@ jobs:
         working-directory: services/text_analysis/spacy
         run: uv sync --frozen
 
-      - name: Check verification artifact contracts
+      - name: Check native features and verification contracts
         env:
           PYTHONPATH: services/text_analysis/spacy/scripts
         run: >-
           uv run --project services/text_analysis/spacy --no-sync python
+          -m unittest
+          services/text_analysis/spacy/tests/test_named_entities.py
+          services/text_analysis/spacy/tests/test_important_terms.py
+          services/text_analysis/spacy/tests/test_api_contracts.py
           services/text_analysis/spacy/tests/test_spacy_verification.py
 
       - name: Prepare the selected spaCy model

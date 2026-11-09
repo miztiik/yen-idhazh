@@ -13,10 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
 from text_analysis.declare_api_contracts import (
     AnalysisResult,
     AnalyzeTextRequest,
+    LegacyTextAnalysisHealth,
     TextAnalysisHealth,
 )
 
@@ -115,7 +116,7 @@ class CleanupOutcome:
 @dataclass(frozen=True, slots=True)
 class NativeEvidence:
     request: AnalyzeTextRequest
-    health: TextAnalysisHealth
+    health: TextAnalysisHealth | LegacyTextAnalysisHealth
     analysis: AnalysisResult
 
 
@@ -182,19 +183,46 @@ def classify_cleanup(
 
 
 def validate_native_evidence(value: Mapping[str, object]) -> NativeEvidence:
-    """Validate the three persisted API payloads with their native contracts."""
+    """Validate freshly produced evidence with the strict current live contracts."""
 
-    request = AnalyzeTextRequest.model_validate_json(
-        json.dumps(value["analysis_request"], ensure_ascii=False)
+    return _validate_native_components(
+        AnalyzeTextRequest.model_validate_json(
+            json.dumps(value["analysis_request"], ensure_ascii=False)
+        ),
+        TextAnalysisHealth.model_validate_json(
+            json.dumps(value["health_response"], ensure_ascii=False)
+        ),
+        AnalysisResult.model_validate_json(
+            json.dumps(value["analysis_response"], ensure_ascii=False)
+        ),
     )
-    health = TextAnalysisHealth.model_validate_json(
-        json.dumps(value["health_response"], ensure_ascii=False)
+
+
+def read_retained_native_evidence(value: Mapping[str, object]) -> NativeEvidence:
+    """Read exact current or initial evidence without rewriting retained payloads."""
+
+    return _validate_native_components(
+        AnalyzeTextRequest.model_validate_json(
+            json.dumps(value["analysis_request"], ensure_ascii=False)
+        ),
+        TypeAdapter(TextAnalysisHealth | LegacyTextAnalysisHealth).validate_json(
+            json.dumps(value["health_response"], ensure_ascii=False)
+        ),
+        AnalysisResult.model_validate_json(
+            json.dumps(value["analysis_response"], ensure_ascii=False)
+        ),
     )
-    analysis = AnalysisResult.model_validate_json(
-        json.dumps(value["analysis_response"], ensure_ascii=False)
-    )
+
+
+def _validate_native_components(
+    request: AnalyzeTextRequest,
+    health: TextAnalysisHealth | LegacyTextAnalysisHealth,
+    analysis: AnalysisResult,
+) -> NativeEvidence:
     if request.model_profile is None or request.features is None:
         raise ValueError("Selected request must retain resolved profile and features")
+    if not set(request.features).issubset(health.allowed_features):
+        raise ValueError("Selected request features are not allowed by recorded health")
     if health.status != "ready" or not health.pool_ready:
         raise ValueError("Persisted health evidence must be ready")
     if analysis.language != request.language:

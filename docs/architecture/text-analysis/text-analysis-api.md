@@ -1,6 +1,6 @@
 # How multilingual text analysis runs
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How one independently started local service turns validated English or Chinese
 text into selected linguistic evidence without persisting source text or
@@ -86,8 +86,28 @@ feature-level code changes service health. Request-level executor or process
 failure does.
 
 Every returned span carries exact source text and zero-based half-open Python
-code-point offsets. The verification probe slices the original input with
-those offsets and requires the same text.
+code-point offsets. The verification probe converts the original source once
+per response and uses the same code-point array for every occurrence check.
+
+## Compact English outputs reuse the document
+
+Named Entities groups native mentions by configured case normalization and
+mapped presentation type. It preserves the first source spelling and every
+source-ordered occurrence; labels outside the mapping remain available in raw
+entities. These presentation types are not a classification taxonomy.
+
+Important Terms runs YAKE's native candidate generation, statistical feature
+calculations and configured deduplication metric. `PhraseMatcher` anchors the
+ranked token patterns in the original spaCy document, with pattern documents
+made by the tokenizer rather than another model invocation. Matching phrases
+are deduplicated before the final configured limit; ties use first source
+position. An unanchored selected phrase fails only Important Terms. Empty
+candidates and a zero maximum produce successful empty lists.
+
+The executor passes the freshly validated feature settings into extraction;
+they do not live in the spaCy model cache. English's optional default override
+selects these outputs, while an omitted override inherits global defaults.
+Chinese's raw features, default order and model behavior remain unchanged.
 
 ## Relations are configured dependency evidence
 
@@ -132,6 +152,10 @@ download and resident-memory cost. The manual workflow therefore installs one
 selected profile, while production preparation may install all enabled
 profiles. AnyIO supplies immediate capacity admission without a custom queue.
 HTTPX is verification-only. The service adds no Torch or transformer runtime.
+YAKE supplies English article phrase ranking. Its Python package and transitive
+statistical/tokenization dependencies add installation bytes and time, but no
+model download or published JavaScript. The manifest and frozen lock own that
+cost; no additional extraction dependency is introduced.
 
 ## Design rationale
 
@@ -149,6 +173,21 @@ Selectable features keep expensive or verbose data caller-controlled, while
 feature-local errors preserve useful siblings. Keeping timings out of HTTP
 results prevents diagnostic state from becoming application data; the traced
 event remains the one operational record.
+
+YAKE's convenience method turns calculation exceptions into an empty list.
+This service invokes the library's native statistical stages directly so
+calculation failures reach `FEATURE_FAILED` instead of looking like successful
+no-candidate output. Candidate generation, scoring and similarity remain
+library-owned; the service owns source evidence and its public result limit.
+Token-pattern deduplication and score/source ordering precede similarity
+selection, which stops as soon as the configured maximum is filled. Filtering
+against every accumulated candidate would charge for discarded output; selected
+patterns retain all occurrences without that growing comparison set.
+
+Live validation remains strict even as old evidence stays readable. A separate
+retained reader recognizes the initial health shape, preserving recorded global
+defaults and unknown limits without modifying files. Missing new settings
+options use native defaults but never replace a historical feature selection.
 
 ## See also
 
