@@ -10,7 +10,7 @@ import type { ModelRuntime } from "../config/load-model-runtime.js";
 import { SummarizeRequestSchema } from "../schemas/request-payload.schema.js";
 import { summarizeText } from "../services/summarize-text.service.js";
 import {
-  BodyLimitError, cancelResponseBody, readBoundedText, type CompletionFetch,
+  BodyLimitError, cancelResponseBody, isCompletionTimeout, readBoundedText, type CompletionFetch,
 } from "../services/request-completion.service.js";
 import { GENERATE_SUMMARY_PATH, SUMMARY_GENERATOR_HEALTH_PATH } from "./api-paths.js";
 
@@ -22,7 +22,7 @@ export type SummaryHandlerOptions = {
   writeEvent?: (event: unknown) => void;
 };
 const failureDiagnostic = z.object({
-  kind: z.enum(["validation", "invalid_json", "body_limit", "timeout", "native_failure"]),
+  kind: z.enum(["validation", "invalid_json", "body_limit", "timeout", "caller_cancelled", "native_failure"]),
   issue_code: z.nativeEnum(z.ZodIssueCode).optional(),
   issue_path: z.array(z.union([z.string(), z.number()])).optional(),
   expected_type: z.nativeEnum(z.ZodParsedType).optional(),
@@ -47,8 +47,7 @@ function describeFailure(error: unknown): z.infer<typeof failureDiagnostic> {
   }
   if (error instanceof SyntaxError) return { kind: "invalid_json" };
   if (error instanceof BodyLimitError) return { kind: "body_limit" };
-  if (error instanceof Error && (error.name === "TimeoutError"
-    || "code" in error && error.code === "ETIMEDOUT")) return { kind: "timeout" };
+  if (isCompletionTimeout(error)) return { kind: "timeout" };
   return { kind: "native_failure" };
 }
 
@@ -141,7 +140,8 @@ export function createSummaryHandler(options: SummaryHandlerOptions) {
       if (error instanceof BodyLimitError && error.boundary === "request") {
         return fail("REQUEST_TOO_LARGE", 413, "The native summary request is too large.");
       }
-      return fail("GENERATE_SUMMARY_FAILED", 500, "The summary could not be generated.", describeFailure(error));
+      return fail("GENERATE_SUMMARY_FAILED", 500, "The summary could not be generated.",
+        request.signal.aborted ? { kind: "caller_cancelled" } : describeFailure(error));
     }
   };
 }

@@ -11,7 +11,9 @@ import {
   generatorRepositoryRoot, GeneratorLoggingSchema, readGeneratorConfig,
 } from "../../services/summary-generator/src/config/load-generator-config.js";
 import { loadModelRuntime } from "../../services/summary-generator/src/config/load-model-runtime.js";
-import type { CompletionFetch } from "../../services/summary-generator/src/services/request-completion.service.js";
+import {
+  isCompletionTimeout, type CompletionFetch,
+} from "../../services/summary-generator/src/services/request-completion.service.js";
 import type { SourceInput } from "./contracts/analysis-request.schema.js";
 import {
   SUMMARY_WORKFLOW_VERSION, SUMMARY_WORKFLOW_EVENT_TYPE, SummaryWorkflowDataSchema, type SummaryWorkflowEvent,
@@ -104,8 +106,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     const event = await runSummaryApi();
     process.stdout.write(JSON.stringify(event.data.result) + "\n");
-  } catch {
-    console.error(JSON.stringify({ code: "SUMMARY_API_FAILED", source: SUMMARY_GENERATOR_TESTS_EVENT_SOURCE }));
+  } catch (error) {
+    console.error(JSON.stringify({
+      code: "SUMMARY_API_FAILED", source: SUMMARY_GENERATOR_TESTS_EVENT_SOURCE,
+      failure: { kind: isCompletionTimeout(error) ? "timeout" : "api_failure" },
+    }));
     process.exitCode = 1;
   }
 }

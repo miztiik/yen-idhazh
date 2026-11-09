@@ -85,6 +85,7 @@ Table B - Caller controls
 
 The summary-only caller writes named `summary-response.json`,
 `summary-events.jsonl` and `summary-report.md` files with temp-file-plus-rename.
+Its body-free failure diagnostic distinguishes transport timeouts from API failures.
 Its step summary is caller-owned. The saved event uses the shared metadata
 envelope, with nested response validation against the API contract.
 Its data version/changelog is `2026-11-07`. The reader also accepts

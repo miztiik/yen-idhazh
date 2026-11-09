@@ -5,6 +5,11 @@ import type { ModelRuntime } from "../config/load-model-runtime.js";
 import type { NativeBounds } from "../config/load-generator-config.js";
 
 export type CompletionFetch = (request: Request) => Promise<Response>;
+export function isCompletionTimeout(error: unknown): boolean {
+  return error instanceof Error && (error.name === "TimeoutError"
+    || "code" in error && error.code === "ETIMEDOUT");
+}
+
 // Runtime proxy environment names are transport protocol controls, not model parameters.
 const NATIVE_PROXY_VARIABLES = [
   "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy",

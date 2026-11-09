@@ -151,7 +151,7 @@ Native server flags, verbosity and metrics stay in the selected model file.
 API diagnostics contain only operation identities, safe codes, elapsed time
 and effective-prompt digests, never source bodies, prompts, raw replies or secrets.
 Generation failures also identify validation, invalid JSON, byte limits,
-transport timeouts or a native failure. Validation records only the first
+transport timeouts, caller cancellation or a native failure. Validation records only the first
 issue's code, schema path and expected/received types, never its message,
 field values or model output.
 The API writes no `pipeline-events.jsonl` or step summary.
