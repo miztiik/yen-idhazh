@@ -2,6 +2,7 @@
 
 **Last Updated**: 2026-11-09
 **Level**: 5 - resolve design gates before implementation.
+**Status**: Row 1 is in flight. L2 and L3 remain open; implementation rows stay pending.
 
 ## 0. Operating contract
 
@@ -37,7 +38,7 @@ Table C
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Settle panel purposes and the console design contract | - | A | PENDING | - | - | - |
+| C1 | 1 | Settle panel purposes and the console design contract | - | A | IN-FLIGHT | `../reimagined-bassoon` | - | App session `5a68b1fe-c1ab-4f8d-b706-ef758cc38288`; branch `console-design-contract` |
 | C2 | 2 | Reduce closed-day data delay without another writer | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Replace oversized console chrome and share window behavior | 1 | C | PENDING | - | - | - |
 | C4 | 4 | Consolidate repeated chart entry points | 1, 3 | D | PENDING | - | - | - |
@@ -50,8 +51,8 @@ Table C
 - **Scope:** Settle panel dispositions, visual scope and config contracts before implementation.
 - **Files touched:**
   - `TODO/20261109-console-redesign-plan.md`
-- **Acceptance gates:** Local: verify Tables F-K against route configs, resolve Table L and complete downstream file/config inventories. CI: docs-only checks.
-- **Oracle:** Each configured panel appears once; each merge preserves grain, denominator and window. This does not settle visual preference or justify losing a diagnostic.
+- **Acceptance gates:** Local: verify Tables F-K against the six named route configs, resolve every Table L gate and verify the downstream inventories. CI: docs-only checks. Do not mark this row DONE while L2 or L3 is open.
+- **Oracle:** Each configured panel appears once; consolidation preserves grain, denominator, clock, evidence dates and old anchors. A roster match does not establish metric equivalence.
 
 ### Decisions
 
@@ -61,9 +62,9 @@ Table D
 | --- | --- | --- |
 | D1 | Native panels already query Parquet with SQL; many aggregates remain in TypeScript. Retain A5. | `data/engine.ts`, `slice-query.ts`, `console/queries/window.ts`; Fowler. |
 | D2 | Build-time exceptions remain: Pipelines manifests/item facts/day metrics; Summaries cards/item decisions; Voices source decisions; Judgement judging/holdout evidence. | Console delivery contract. |
-| D3 | Default ownership: Pipelines - delivery/stage latency; Summaries - quality/model rates; Hardware - constraints/resources; Voices - sources; Judgement - merges. | Jony; Tables F-K are proposals. |
-| D4 | Proposed shell: slim left rail, compact route header/window control, neutral surfaces and one control accent. Keep chart/status color semantics distinct and navigation labels accessible without hover. | Susan; scope is L1. |
-| D5 | Put secondary diagnostics behind named disclosure or detail links; retain their data. No nested disclosure chains. | Jony. |
+| D3 | Default ownership: Pipelines - delivery/stage latency; Summaries - quality/model rates; Hardware - constraints/resources; Voices - sources; Judgement - merges. F-K retain every diagnostic; L3 gates the composition mechanism. | Jony; roster reconciliation. |
+| D4 | Console-only shell: intrinsic-width labelled left rail, compact route header/window control, existing neutral surfaces and control accent. Preserve reader styling and chart/status color semantics. | Susan; L1 construction below. |
+| D5 | Put secondary diagnostics behind named disclosure or detail links. Keep native panels, queries and evidence on their original routes. No nested disclosure chains or metric substitution. | Jony; publication contract. |
 | D6 | Table M is selective triage, not a mandatory nine-fix bundle. | Plan scope. |
 | D7 | The inspected Hardware viewport contains chrome and repeated status before chart evidence. Put a useful comparison in the first viewport; do not shrink chart text. | Browser/source inspection; Susan. |
 
@@ -77,7 +78,7 @@ Table E
 | E2 | Fix every panel before pruning | Repairs presentations that may leave the default view. | Implement and verify the full old inventory. | Jony. |
 | E3 | Delete visually similar charts | Similar charts can use different clocks or cohorts. | Prove metric parity or name the diagnostic loss. | Jony. |
 
-### Proposed panel-by-panel dispositions
+### Panel-by-panel dispositions
 
 Table F - Pipelines; source: `config/console/pipelines.json`
 
@@ -90,7 +91,7 @@ Table F - Pipelines; source: `config/console/pipelines.json`
 | F5 | `item-time-split` | Stage contribution to elapsed time | DISCLOSE under `stage-timings`; preserve complete-cohort means and signed overlap. |
 | F6 | `slower-on-same-work` | Fixed-work latency trend | DISCLOSE under `stage-timings`; preserve normalization/reference cohort. |
 | F7 | `stage-timings` | Daily stage medians | KEEP; each stage has its own timed cohort. |
-| F8 | `item-cost` | Model read/write latency | DETAIL from Summaries `model-throughput`; preserve seconds/token and independent clocks. |
+| F8 | `item-cost` | Model read/write latency | DETAIL linked from Summaries `model-throughput`; native panel stays on Pipelines. Preserve seconds/token and independent clocks. |
 | F9 | `run-timeline` | Newest-run work, waits and overlap | KEEP; run scheduling, not window averages. |
 | F10 | `chart-drawing` | Visual delivery versus cost | KEEP as visual-production entry point; retain published-item denominators. |
 | F11 | `pipeline-funnel` | Where visual attempts stop | DISCLOSE under `chart-drawing`; attempts are not publications. |
@@ -98,7 +99,7 @@ Table F - Pipelines; source: `config/console/pipelines.json`
 | F13 | `visual-refusals` | First plan-check refusals | DISCLOSE beside F11; a later attempt can succeed. |
 | F14 | `visual-written-types` | Requested versus written types | DISCLOSE beside F11; written is not published/accepted. |
 | F15 | `extraction` | Extraction integrity and chartable yield | KEEP; distinct from final visual coverage. |
-| F16 | `article-age` | Source age at work start | REVIEW; current title incorrectly claims publication age. |
+| F16 | `article-age` | Source age at work start | KEEP; Row 5 corrects the publication-age title, not the recorded clock. |
 
 Table G - Summaries; source: `config/console/model.json`
 
@@ -107,11 +108,11 @@ Table G - Summaries; source: `config/console/model.json`
 | G1 | `model-cards` | Summary outcome status | KEEP; preserve instruments and evidence dates. |
 | G2 | `model-throughput` | Read/write rates | KEEP; distinct from elapsed-time distributions. |
 | G3 | `call-ending` | Normal endings versus truncation | KEEP; calls are not failed items. |
-| G4 | `refusing-rule` | Model reply refusals | MERGE into Pipelines `failure-mix`; preserve stage access and old anchor. |
+| G4 | `refusing-rule` | Model reply refusals | ALIAS to Pipelines `failure-mix`; preserve the old Summaries anchor and all existing stage/rule readings. No second query or new stage filter. |
 | G5 | `doubt-reasons` | Published summary band reasons | KEEP; distinct from request failures. |
 | G6 | `faithfulness` | Score median/spread versus bands | KEEP; counts alone miss distribution changes. |
 | G7 | `source-doubts` | Quality by source | KEEP; distinct from feed/fetch reliability. |
-| G8 | `write-cost` | Summarizing latency distribution | DETAIL from Pipelines `stage-timings`; preserve positive-clock distribution and tail. |
+| G8 | `write-cost` | Summarizing latency distribution | DETAIL linked from Pipelines `stage-timings`; native panel stays on Summaries. Preserve positive-clock distribution and tail. |
 | G9 | `score-cost` | Checker latency | DISCLOSE under `faithfulness`; not model-writing time. |
 | G10 | `summary-length` | Output length versus requested bands | KEEP; distinct from context and source cuts. |
 | G11 | `model-change` | Before/after model change | DISCLOSE under `model-cards`; unmatched cohorts do not establish causality. |
@@ -122,18 +123,18 @@ Table H - Hardware; source: `config/console/machine.json`
 | --- | --- | --- | --- |
 | H1 | `two-clocks` | Rate-instrument agreement | KEEP first; independent clocks versus tolerance. |
 | H2 | `processor-lost` | CPU contention | KEEP; distinct slowdown cause. |
-| H3 | `disk-reads` | Paging/re-read activity | REVIEW before M2; removal loses paging diagnosis. |
+| H3 | `disk-reads` | Paging/re-read activity | KEEP; M2 restores the missing process readings. Absence is not zero. |
 | H4 | `machine-cards` | Newest-run machine constraints | DISCLOSE under `two-clocks`; preserve identity, quota, topology and location. |
 | H5 | `slower-machines` | Relative machine performance | KEEP; distinct from a daily fixed-work trend. |
 | H6 | `platform-mix` | Observed job placement | DISCLOSE under `slower-machines`; history, not prediction. |
-| H7 | `slowest-articles` | Newest-run latency outliers | DETAIL from Pipelines `run-timeline`; preserve stage and queue evidence. |
-| H8 | `tail-trend` | Summarizing latency tails | DETAIL from Pipelines `stage-timings`; preserve per-run percentiles versus daily medians. |
+| H7 | `slowest-articles` | Newest-run latency outliers | DETAIL linked from Pipelines `run-timeline`; native panel stays on Hardware. Preserve stage and queue evidence. |
+| H8 | `tail-trend` | Summarizing latency tails | DETAIL linked from Pipelines `stage-timings`; native panel stays on Hardware. Preserve per-run percentiles versus daily medians. |
 | H9 | `closest-to-memory` | Article memory headroom | KEEP; each article uses its own machine total. |
-| H10 | `memory-held` | OS/process memory composition | REVIEW as disclosure under `closest-to-memory`; process readings require M2. |
+| H10 | `memory-held` | OS/process memory composition | DISCLOSE under `closest-to-memory`; retain OS, process and swap readings. M2 restores process collection. |
 | H11 | `context-headroom` | Prompt size versus slot limit | KEEP; repair M3 rather than invent a limit. |
 | H12 | `article-cost` | Per-article resource use | KEEP; distinguish CPU seconds, model time and incremental memory. |
 | H13 | `prompt-reuse` | Cache reuse versus prompt growth | KEEP; per-call held/fresh counts differ from token totals. |
-| H14 | `read-against-written` | Input/output token mix | REMOVE-CANDIDATE; available as a saved query. Retain the query for H15. |
+| H14 | `read-against-written` | Input/output token mix | KEEP at its current placement; token totals are not prompt-cache reuse or throughput. Retain its query for H15. |
 | H15 | `counterfactual-cost` | Token-price scenario | DISCLOSE under `article-cost`; retain editable prices and hypothetical label. |
 
 Table I - Judgement; source: `config/console/judgement.json`
@@ -168,17 +169,127 @@ Table K - Data explorer; source: `config/console/data-explorer.json`
 | K2 | `data-explorer-rows` | Exact query result | KEEP as the default answer. |
 | K3 | `data-explorer-shape` | Result visualization | KEEP as optional; automatic selection is L4. |
 
-### Decisions still required before implementation
+The six named configs contain exactly the F-K rosters: Pipelines 16, Summaries
+11, Hardware 15, Judgement 6, Voices 8 and Data explorer 3. All 59 panel IDs
+appear once. The current judged set contains 58 IDs because
+`data-explorer-ask` is an input, not a judged answer. L3 would remove only the
+alias `refusing-rule` from `judged`; it removes no recorded measurement.
+
+### Construction decisions and remaining gates
 
 Table L
 
-| ID | Decision | Recommendation | What the next worker must not assume |
+| ID | Decision | Construction | State / boundary |
 | --- | --- | --- | --- |
-| L1 | Console versus site-wide redesign | Start with D4; preserve the reading layout. | Settle tokens, rail dimensions, icon mappings and config defaults before edits. No framework migration or implicit site-wide recoloring. |
-| L2 | Closed-day eligibility/cadence | Remove the extra whole-day wait for retained public ledgers; retain serialized compaction and observe publication. | The validator currently rejects `compact_after_days = 0`. Faster cron alone changes no eligibility. No current-day or latency SLA. |
-| L3 | Panel dispositions | Review G4, timing overlaps, visual-attempt detail, then optional Hardware diagnostics. | No bulk deletion. Preserve distinct cohorts and diagnostics. |
-| L4 | Automatic explorer chart choice | Keep rows authoritative; automatic choice must fit valid readings. | Do not lower shared floors or remove manual chart types to rescue an example. |
-| L5 | SQL aggregation | Add named aggregates only for retained consumers that benefit; reuse the reader. | No generic dashboard framework. Aggregation alone does not reduce whole-file transfers. |
+| L1 | Console versus site-wide redesign | Console-only labelled rail and compact status; use intrinsic sizing and existing tokens, breakpoints and defaults. | RESOLVED construction; no new appearance fields, icons, theme palette or reader-layout change. |
+| L2 | Closed-day eligibility/cadence | Propose zero for item-health, summary-quality-evals, host-fingerprint and run-shards, retaining cadence and retention. | OPEN config-contract gate: `CompactionPolicy` currently requires >=1. Execution permission does not change it. |
+| L3 | Panel composition | Retain F-K through the stamped, legacy-readable metadata proposal below. | OPEN config-contract gate. The current flat parser cannot express these relationships; no convention-based substitute. |
+| L4 | Automatic explorer chart choice | Count valid readings against existing floors; allow a small named grouped result to rank instead of selecting an undrawable scatter. | RESOLVED construction below. Preserve manual choices, table answers, date refusals and reporting floors. |
+| L5 | SQL aggregation | Keep existing named column/date queries and reducers for these changes. No new aggregate API is required. | RESOLVED: placement, units, window labels and eligibility do not require a query-contract migration. No transfer-saving claim. |
+
+#### L1 - Shell and window construction
+
+- At `frame.breakpoints_px[1]` and above, use a text-labelled rail sized by
+  its contents and existing spacing tokens. Below it, use one native navigation
+  disclosure with the active route named while closed. Labels never depend on
+  hover. No new route icons or icon mappings.
+- Reuse existing surface, rule, accent, focus, type and spacing tokens. Scope
+  compact header and panel styling to the operator surface; leave global token
+  values, reading routes, URLs, theme preference and header controls unchanged.
+  Keep the existing frame maximums and chart text sizes.
+- Keep publication completion, native-record reach and newest-run scope
+  separate. The compact band retains its three facts and run-verdict access.
+  Workbench chrome retains its own controls and usable result area, without a
+  duplicate console band.
+- Add `window-preference.ts` as a small optional-storage boundary. The mounted
+  console layout owns the in-memory choice; routes receive that choice through
+  `window-slot.ts` and `WindowControlSource.svelte`. Read storage on mount only.
+  Keep the existing key and integer-preset encoding; validate against configured
+  presets. A failed read uses the configured choice, a failed write retains the
+  chosen span across route changes, and both warn. Storage never gates queries.
+
+#### L2 - Closed-day proposal
+
+The scheduler already supports zero. At `2026-11-09T12:00:00Z`, the current
+one-day wait admits at most `2026-11-07`; zero admits `2026-11-08`, not the open
+UTC day. The proposed change removes 24 hours of eligibility delay, not job or
+deployment delay. Keep positive historical values readable and reject negatives.
+Stamp the changed native schema and state its read compatibility in Row 2.
+
+Only the four named ordinary-panel ledgers change. Voices' browser queries use
+item-health; its feed census and source decisions remain private build-time
+inputs. Data explorer can query feed-health, but this proposal does not change
+that ledger's cadence, source or permission.
+
+Publication diagnosis remains Row 2 work. The inspected failed Pages run
+produced no jobs or check runs and no failed-job log; that evidence does not
+identify a repository defect. Read the next normal run and deployment result,
+without dispatching production as a test. No publication-code fix is selected.
+If diagnosis requires one, name its cause and exact files before expanding the
+row; do not infer a workflow fix from the absence of logs.
+
+#### L3 - Panel-presentation proposal
+
+Keep the flat roster as the identity/order source. The TypeScript parser remains
+the sole route-config authority. Propose this optional metadata, keyed by an
+existing panel ID:
+
+```ts
+type PanelPresentation =
+  | { kind: 'disclosure'; parent: string; label: string }
+  | { kind: 'detail'; from: string; label: string }
+  | { kind: 'alias'; target: string; label: string };
+```
+
+- Legacy files keep exactly `panel_groups`, `judged` and `knobs` and normalize
+  to empty presentation metadata. Changed files add a supported date-only
+  `version`, newest-first `changelog` and `presentation`; unstamped new keys,
+  unknown versions and unknown fields fail. An empty map preserves flat
+  rendering. Follow section 10 for changelog bounds and compatibility.
+- Keys must belong to their route roster. References resolve against the six
+  globally unique rosters. A disclosure names a primary parent in the same
+  group; detail and alias targets are primary native panels. Reject self-links,
+  secondary parents, alias chains and empty labels. No arbitrary URL or filter
+  fields. Use each F-K operator-question phrase as its initial control label;
+  retain the native panel heading.
+- Same-route disclosures follow their parent in roster order. Cross-route
+  detail panels stay at their native route position, initially closed; reverse
+  `from` to derive one related link on the primary panel. No second relationship
+  list. Generate paths from the fixed route mapping and encoded panel fragment.
+- Keep native children mounted so closing a disclosure cannot reset query
+  status, instrument bindings or editable prices. The shared renderer composes
+  snippets; route/native components still execute their own queries and draws.
+  An alias mounts no query and is excluded from query-status tallies and
+  `judged`. Legacy flat configs still render the original native panel.
+- Emit each old panel anchor once. Initial hashes, client navigation and history
+  changes open the relevant disclosure, then scroll and focus its summary.
+  Preserve group anchors. `/console/model/#refusing-rule` becomes a labelled
+  link to `/console/#failure-mix`, retaining the existing stage/rule table.
+  No new stage-filter protocol.
+- Keep `DRAWN_BY` receivers unchanged, including `score_ms -> score-cost`.
+  `ItemTimeSplit.svelte` and `VerdictSplit.svelte` already contain disclosures:
+  show their inner records inline when the panel itself is disclosed, while
+  preserving flat-mode behavior. Do not create a nested disclosure chain.
+
+This proposal changes an authored config contract even though telemetry shapes
+stay unchanged. Row 4 remains blocked on L3.
+
+#### L4 - Explorer opening policy
+
+Keep typed-date precedence and its existing missing/duplicate/unplaceable-day
+refusals. For non-date answers, retain the current candidate order where it can
+draw. Evaluate candidates through `resolveRoles` and `chartShape`, using finite
+numeric readings and distinct subjects rather than raw row count. A scatter or
+distribution must satisfy its existing configured floors. If a small result has
+one text label and two numeric columns, try Ranked on the first numeric column;
+retain its existing unique-name, nonnegative and nonzero checks. Otherwise keep
+the table and an explicit refusal. Never silently group duplicate labels.
+
+Manual chart types and role choices remain available and keep their current
+floor/refusal behavior. Cast the scored-per-day example's date in SQL. Direct
+open reuses the already typed `__UI_CONFIG__.number_format` in the universal
+console layout; delete its number-format-only server load. No new define,
+serialized field, fallback document, reader or source is needed.
 
 ### Enumerated defect triage
 
@@ -187,23 +298,23 @@ Table M
 | ID | Original cause | Evidence and consequence | Disposition |
 | --- | --- | --- | --- |
 | M1 | 1 - percentage units | Geometry uses 0-100; the component multiplies readout/ARIA shares by 100 again. | Row 5: fix retained distributions once. |
-| M2 | 2 - missing process identity | Work omits `--server-pid`; server RSS/major faults are absent while worker/OS readings exist. | Row 6 if consumed; no backfill. |
-| M3 | 3 - flag alias mismatch | Long config flags versus short lookups lose context, pinning and fingerprint changes. | Row 6 if retained diagnostics consume them; fix shared interpretation. |
-| M4 | 4 - window mismatch | Pipelines misanchors build-time evidence; Summaries mixes published-day and compact endpoints. | Row 5: preserve and label each evidence window. |
-| M5 | 5 - publication lag | Deployment preceded packing. Run `42673624810` failed before jobs; cause unknown. | Row 2: diagnose before prescribing a workflow fix. |
+| M2 | 2 - missing process identity | Work omits `--server-pid`; server RSS/major faults are absent while worker/OS readings exist. | Row 6; H3/H10 are retained. No backfill. |
+| M3 | 3 - flag alias mismatch | Long config flags versus short lookups lose slot limits, requested pinning and fingerprint changes. | Row 6; H11 is retained. Fix shared interpretation. |
+| M4 | 4 - window mismatch | Pipelines reanchors private evidence on compact reach. Summaries correctly keeps two anchors but does not make their different dates clear. | Row 5: fix Pipelines selection; label both evidence windows without unifying them. |
+| M5 | 5 - publication lag | Deployment preceded packing. One failed Pages run has no jobs, checks or failed-job log; cause remains unknown. | Row 2: distinguish packing from deployment and diagnose before any publication-code change. |
 | M6 | 6 - explorer direct open | Server layout data is absent from static fallback output. | Row 7: remove runtime server-data dependency. |
 | M7 | 7 - undrawable default | Paired was selected for seven rows against a 160-reading floor; Ranked worked. | Resolve L4, then Row 7; manual chart types remain. |
 | M8 | 8 - text date example | Day-by-day SQL omits the date cast. | Row 7: fix retained example, not the ledger schema. |
 | M9 | 9 - preference failure | Storage exceptions block loading or leave chart/control windows inconsistent. | Row 3: share optional-preference handling; no separate hardening project. |
 | M10 | Conditional query rejection | Unexpected rejections can leave loading unresolved; ordinary boundary failures are already typed. | Row 5: fix demonstrated retained paths, not hypothetical failures. |
 | M11 | Expected missing readings | Frequency collection is disabled; other readings are absent or await packing/publication. | Explain absence; do not invent values or enable unused collectors. |
+| M12 | Mislabelled age clock | `article-age` measures source publication to item start, but the route heading claims age at publication. | Row 5: correct the heading and retain the existing successful-item cohort and exclusions. |
 
 ## 3. Row #2 - Reduce closed-day data delay without another writer
 
-- **Scope:** Apply L2 through existing compaction and publication.
+- **Scope:** Apply the settled L2 choice through existing compaction; diagnose M5 without adding another writer.
 - **Files touched:**
   - `backend/idhazh/contracts/knobs/gardener.py`
-  - `backend/idhazh/gardener/schedule.py`
   - `config/gardener/compact-item-health.json`
   - `config/gardener/compact-summary-quality-evals.json`
   - `config/gardener/compact-host-fingerprint.json`
@@ -214,8 +325,8 @@ Table M
   - `docs/architecture/publishing/ledger-compaction.md`
   - `docs/concepts/config/idhazh-gardener.md`
   - `TODO/20261109-console-redesign-plan.md`
-- **Acceptance gates:** Local: shared selector, applicable lint/types and focused config/schedule/retry tests. CI: merge-candidate gates. Observe normal compaction/publication; no production dispatch as a test. Diagnose M5 before expanding publication code changes.
-- **Oracle:** Fixed UTC inputs select the newest eligible closed day, exclude today and preserve retries with fewer rows. This cannot guarantee scheduler latency or deployment inclusion.
+- **Acceptance gates:** L2 must be resolved first. Local: shared selector, applicable lint/types and focused config/schedule/retry tests. CI: merge-candidate gates. Observe normal compaction and deployment separately; diagnose M5 before adding any publication-code edit. No production dispatch as a test.
+- **Oracle:** The config boundary rejects zero on the base and accepts it after the selected contract expansion. Fixed UTC inputs preserve existing scheduling arithmetic, exclude today and retain late-arrival/retry behavior. This cannot guarantee scheduler latency or deployment inclusion.
 
 ### Decisions
 
@@ -223,7 +334,7 @@ Table N
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| N1 | If L2 selects zero, expand the validator before config uses it. Keep positive values readable; reject negatives. | `CompactionPolicy`, `gardener/schedule.py`; Fowler. |
+| N1 | If L2 selects zero, expand and version the native validator before config uses it. Keep positive values readable; reject negatives. Scheduling arithmetic already handles zero and needs no source edit. | `CompactionPolicy`, `gardener/schedule.py`; Fowler. |
 | N2 | Update required ledgers coherently; the oldest required endpoint still limits the route. | Window contract. |
 | N3 | Preserve retention, packing ownership, raw writers, compact shapes and late-arrival handling. | Compaction contract. |
 | N4 | Track eligibility, job cadence and deployment separately. A green compaction does not refresh staged panels. | Reader bindings; M5. |
@@ -243,18 +354,14 @@ Table O
 
 - **Scope:** Replace console chrome and decouple window queries from preference storage.
 - **Files touched:**
-  - `config/appearance.json`
-  - `backend/idhazh/contracts/appearance_config.py`
-  - `backend/idhazh/contracts/knobs/console.py`
-  - `frontend/src/lib/server/config.ts`
-  - `frontend/src/routes/+layout.svelte`
   - `frontend/src/routes/console/+layout.svelte`
   - `frontend/src/lib/components/ConsoleNav.svelte`
   - `frontend/src/lib/components/ConsoleBand.svelte`
   - `frontend/src/lib/components/WindowControl.svelte`
+  - `frontend/src/lib/components/WindowControlSource.svelte`
   - `frontend/src/lib/components/WindowStatus.svelte`
   - `frontend/src/lib/console/window-slot.ts`
-  - `frontend/src/lib/console/window-preference.ts` (new shared preference boundary, if extraction is needed)
+  - `frontend/src/lib/console/window-preference.ts` (new optional-storage boundary)
   - `frontend/src/lib/console/strip.ts`
   - `frontend/src/routes/console/+page.svelte`
   - `frontend/src/routes/console/model/+page.svelte`
@@ -262,15 +369,17 @@ Table O
   - `frontend/src/routes/console/voices/+page.svelte`
   - `frontend/src/routes/console/judgement/+page.svelte`
   - `frontend/src/styles/app.css`
-  - `frontend/src/styles/tokens.css`
   - `frontend/tests/console-nav.spec.ts`
   - `frontend/tests/console-shell.spec.ts`
   - `frontend/tests/console-window.spec.ts`
-  - `frontend/tests/tokens.spec.ts`
+  - `frontend/tests/console-machine-journey.spec.ts`
+  - `frontend/tests/console-data-explorer-still.spec.ts`
+  - `frontend/tests/support/console-sources.ts`
   - `docs/concepts/design-system.md`
   - `docs/architecture/publishing/what-sits-above-every-console-route.md`
+  - `docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md`
   - `TODO/20261109-console-redesign-plan.md`
-- **Acceptance gates:** Local: applicable lint/types and in-memory preference tests. CI: existing console journey/layout coverage. Browser: populated route, cross-route navigation and missing/empty data; review narrow navigation and both themes with Susan. No panel matrix.
+- **Acceptance gates:** Local: applicable lint/types and in-memory preference tests, including throwing storage and route handoff. Register the new source in the bounded support inventory. CI: existing console journey/layout coverage. Browser: populated route, cross-route navigation and missing/empty data; review narrow navigation and both themes with Susan. No panel matrix.
 - **Oracle:** The first viewport shows a usable comparison, window and evidence date; storage errors do not block navigation or queries. This does not establish panel value.
 
 ### Decisions
@@ -279,9 +388,9 @@ Table P
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| P1 | Resolve L1 before D4. Preserve URLs, theme preference, semantic navigation and keyboard access. | Susan. |
+| P1 | Apply L1 without new appearance fields, fixed rail dimensions or icon assets. Preserve URLs, theme preference, semantic navigation and keyboard access. | Susan; existing tokens and frame config. |
 | P2 | Compact status without conflating publication, chart reach and newest-run scope. | Susan; window contract. |
-| P3 | Share M9 handling: storage failure logs a warning but cannot block queries or desynchronize windows. | Reproduction; existing guarded routes. |
+| P3 | Share M9 handling in the mounted layout's preference state: storage failure warns but cannot block queries, lose the current choice on navigation or desynchronize windows. | Reproduction; existing guarded routes. |
 | P4 | Reuse Svelte components, native disclosure, tokens and icons. | Design system. |
 | P5 | Retain explorer controls and workspace; omit redundant console status blocks. | Workbench contract. |
 
@@ -304,28 +413,32 @@ Table Q
   - `config/console/machine.json`
   - `config/console/judgement.json`
   - `config/console/voices.json`
+  - `frontend/src/lib/console/route-console.ts`
+  - `frontend/src/lib/components/ConsolePanels.svelte` (new presentation composition)
   - `frontend/src/routes/console/+page.svelte`
   - `frontend/src/routes/console/model/+page.svelte`
   - `frontend/src/routes/console/machine/+page.svelte`
   - `frontend/src/routes/console/judgement/+page.svelte`
   - `frontend/src/routes/console/voices/+page.svelte`
-  - `frontend/src/lib/console/model/panels.ts`
-  - `frontend/src/lib/console/model/Panels.svelte`
-  - `frontend/src/lib/console/machine/MachineCharts.svelte`
-  - `frontend/src/lib/console/eval-instruments.ts`
+  - `frontend/src/lib/console/pipelines/ItemTimeSplit.svelte`
+  - `frontend/src/routes/console/judgement/VerdictSplit.svelte`
+  - `frontend/tests/appearance-config.spec.ts`
   - `frontend/tests/console-model-instruments.spec.ts`
-  - `frontend/tests/console-model-panels.spec.ts`
   - `frontend/tests/console-model-ledgers.spec.ts`
-  - `frontend/tests/console-panel-queries.spec.ts`
-  - `frontend/tests/console-pipelines-native.spec.ts`
   - `frontend/tests/console-machine-journey.spec.ts`
+  - `frontend/tests/console-pipelines-lifecycle.spec.ts`
+  - `frontend/tests/console-judgement-nothings.spec.ts`
+  - `frontend/tests/support/panel-tab.ts`
+  - `frontend/tests/support/console-sources.ts`
+  - `frontend/tests/support/console-expect/console-built-page/model.ts`
+  - `docs/concepts/config/appearance.md`
   - `docs/architecture/publishing/console.md`
   - `docs/architecture/publishing/what-the-pipelines-route-draws.md`
   - `docs/architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md`
   - `docs/architecture/publishing/console-machine.md`
   - `docs/architecture/publishing/who-supplied-the-day-and-which-feeds-failed.md`
   - `TODO/20261109-console-redesign-plan.md`
-- **Acceptance gates:** Local: focused reducer/query coverage and consumer search for selected cuts; add affected test-support paths before dispatch. CI: instrument bindings and merge-candidate gates. Browser: existing entry-to-detail journey. Do not edit historical mentions mechanically.
+- **Acceptance gates:** L3 must be resolved first. Local: legacy/stamped config validation, reference/order/alias tests and existing model-panel, native-query and Voices regression coverage. Extend named support for disclosure opening; register the new component. CI: unchanged instrument bindings and merge-candidate gates. Browser: extend the existing journey for keyboard disclosure, direct hash, history and cross-route detail. No panel matrix or mechanical historical edits.
 - **Oracle:** Each question has one default home; distinct readings and old anchors remain reachable. This does not prove cohort equivalence.
 
 ### Decisions
@@ -334,11 +447,11 @@ Table R
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| R1 | G4 shares `failedRuleQuery` and the failure-list component with Pipelines. Preserve model-stage access when merging the entry point. | Query/consumer inspection; Jony. |
+| R1 | G4 shares `failedRuleQuery` and the failure-list component with Pipelines. Preserve the existing all-stage readings through an alias; add no stage-filter protocol. | Query/consumer inspection; Jony. |
 | R2 | Keep means, medians, distributions, per-run tails and normalized comparisons distinct. Consolidate navigation, not metrics. | Jony; existing reducers. |
 | R3 | Preserve D2's publication boundary; relocation does not permit new exposure or cohort substitution. | Console delivery contract. |
 | R4 | Preserve `DRAWN_BY` bindings for disclosed instruments; retain native fields and producers. | Instrument contracts. |
-| R5 | Settle composition metadata, config compatibility and consumer changes in Row 1 before adding components or config shapes. | L3; contracts before logic. |
+| R5 | Apply only the settled L3 contract. Keep native query dispatch and instrument ownership; aliases never enter query tallies. Do not edit the server loader or build-time envelope, which already carries `RouteConsole`. | L3; Fowler construction consultation. |
 
 ### Rejected alternatives
 
@@ -355,15 +468,15 @@ Table S
 - **Scope:** Fix retained unit/window errors and demonstrated unresolved loading.
 - **Files touched:**
   - `frontend/src/lib/charts/d3/Distribution.svelte`
-  - `frontend/src/lib/charts/d3/distribution.ts`
   - `frontend/src/routes/console/+page.svelte`
   - `frontend/src/routes/console/model/+page.svelte`
   - `frontend/src/lib/console/model/Query.svelte`
   - `frontend/src/routes/console/voices/+page.svelte`
-  - `frontend/src/lib/console/queries/window.ts`
-  - `frontend/src/lib/console/machine/MachineCharts.svelte`
+  - `frontend/src/lib/console/pipelines/ArticleAge.svelte`
   - `frontend/tests/console-readout-data.spec.ts`
   - `frontend/tests/console-pipelines-window.spec.ts`
+  - `frontend/tests/console-pipelines-native.spec.ts`
+  - `frontend/tests/console-pipelines-window-page.spec.ts`
   - `frontend/tests/console-model-nothings.spec.ts`
   - `frontend/tests/console-panel-queries.spec.ts`
   - `docs/architecture/publishing/console-charts.md`
@@ -378,10 +491,11 @@ Table T
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| T1 | Fix M1 in shared formatting, not correct geometry. | Geometry/component inspection. |
+| T1 | Fix M1 in `Distribution.svelte` readout and mark ARIA, not correct 0-100 geometry. Its native consumers are ArticleAge, MachineCharts and explorer ShapePanel. | Geometry/component and consumer inspection. |
 | T2 | Native comparisons keep their common endpoint; build-time evidence keeps its published-day anchor. Label differing scope. | Window contract; M4. |
 | T3 | Missing is not zero. Do not backshift empty build-time windows or invent endpoints from the browser clock. | Window/missing-data contract. |
 | T4 | Fix M10 only on a demonstrated retained path. Preserve explicit failures and usable siblings; do not swallow programmer errors. | Query failure contract. |
+| T5 | For M12 use `Source age at work start`; retain feed-stated times, successful-item selection, inferred/future exclusions and the logarithmic-axis zero note. | `pipelines/article-age.ts`; M12. |
 
 ### Rejected alternatives
 
@@ -395,13 +509,14 @@ Table U
 
 ## 7. Row #6 - Restore collection needed by retained hardware diagnostics
 
-- **Scope:** Restore producer inputs consumed by retained H3/H10/H11 diagnostics.
+- **Scope:** Restore process identity for H3/H10 and shared flag interpretation for H11 and provenance.
 - **Files touched:**
   - `.github/workflows/digest.yml`
   - `backend/idhazh/llm/server.py`
   - `backend/idhazh/fingerprint.py`
   - `backend/idhazh/stages/work.py`
   - `backend/tests/test_fingerprint.py`
+  - `backend/tests/test_server_argv.py`
   - `backend/tests/test_host_readings.py`
   - `backend/tests/test_item_records.py`
   - `backend/tests/pipeline/test_work_health_payload.py`
@@ -417,8 +532,8 @@ Table V
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| V1 | M2 depends on H3/H10 retention. If dropped, name the diagnostic loss and collapse collection work only. | Panel review. |
-| V2 | Fix M3 in shared config interpretation; runtime flags and provenance must agree. | Config/recorder inspection. |
+| V1 | H3/H10 remain, so pass the model process identity already produced by the workflow. Do not discover a process by name. | Panel review; work recorder. |
+| V2 | Fix M3 in shared flag interpretation used by settings and fingerprints; use the aliases in the existing recorded server-help contract. Preserve canonical recorded keys and verbatim runtime arguments. | `llm/server.py`, `fingerprint.py`, recorded runtime help. |
 | V3 | Requested load mode does not prove applied locking. Historical missing parallel counts remain unknown. | Native field contracts. |
 | V4 | Leave disabled frequency collection unchanged. | M11. |
 
@@ -437,11 +552,7 @@ Table W
 - **Files touched:**
   - `frontend/src/routes/console/+layout.server.ts`
   - `frontend/src/routes/console/+layout.ts`
-  - `frontend/src/routes/console/data-explorer/+page.ts`
   - `frontend/src/lib/console/explorer/shape.ts`
-  - `frontend/src/lib/console/explorer/ShapePanel.svelte`
-  - `frontend/vite.config.ts`
-  - `frontend/src/app.d.ts`
   - `config/appearance.json`
   - `frontend/tests/console-data-explorer-address.spec.ts`
   - `frontend/tests/console-data-explorer-shape.spec.ts`
@@ -459,9 +570,9 @@ Table X
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| X1 | Supply validated number-format config to the universal/browser path through the existing build-time define mechanism; remove the server-data dependency. | `vite.config.ts`; static fallback contract. |
+| X1 | Read the existing `__UI_CONFIG__.number_format` in universal layout success and absence paths; delete its server-only number-format load. No Vite, global-type or payload change is needed. | Existing typed build-time define; static fallback contract. |
 | X2 | Preserve client fallback, manual charts, table answers and publication consent. No new prerendered data document. | Explorer delivery contract. |
-| X3 | Apply L4 using valid-reading counts and configured floors. A small grouped result may rank instead of scatter. | M7; `openingType`. |
+| X3 | Apply L4 through existing role/shape validation. Cover valid-reading and subject floors, the small grouped-result fallback and unchanged manual refusal behavior in the existing shape spec. | M7; `openingType`, `resolveRoles`, `chartShape`. |
 | X4 | Cast the retained example date in SQL; keep the ledger schema unchanged. | M8. |
 
 ### Rejected alternatives
