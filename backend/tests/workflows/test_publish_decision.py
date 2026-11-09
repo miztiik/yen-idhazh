@@ -1,9 +1,4 @@
-"""When does the Pages workflow publish, and which commit does it build?
-
-Each case runs the decision the way the workflow does - a fresh interpreter, the
-step's environment, stdout read as step outputs - inside a real repository built
-in a temporary folder, so every path it compares comes from a real commit.
-"""
+"""When does the Pages workflow publish, and which commit does it build?"""
 
 from __future__ import annotations
 
@@ -15,39 +10,29 @@ from typing import Final
 
 import pytest
 
+from utilities.pages_ci_evidence import CiRun, select_ci_anchor
+
 from ._harness import PUBLISH_DECISION_MODULE
 
 pytestmark = pytest.mark.workflow
 
-#: The environment the workflow's `rule` step hands the program, by name.
 STEP_NAMES: Final = frozenset(
-    {
-        "EVENT_NAME",
-        "TRIGGER",
-        "TRIGGER_EVENT",
-        "CONCLUSION",
-        "CHECKED",
-        "BEFORE",
-        "TIP",
-        "DISPATCHED_REF",
-        "DEFAULT_BRANCH",
-    }
+    {"EVENT_NAME", "CONCLUSION", "CHECKED", "DEPLOYED", "TIP", "DISPATCHED_REF", "DEFAULT_BRANCH"}
 )
 
 
-
 def _git(repo: Path, *args: str) -> str:
-    done = subprocess.run(
+    result = subprocess.run(
         ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True
     )
-    return done.stdout.strip()
+    return result.stdout.strip()
 
 
-def a_commit(repo: Path, files: dict[str, str]) -> str:
-    for name, text in files.items():
+def _commit(repo: Path, files: dict[str, str]) -> str:
+    for name, content in files.items():
         path = repo / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        path.write_text(content, encoding="utf-8")
     _git(repo, "add", "--", *files)
     _git(
         repo,
@@ -59,209 +44,217 @@ def a_commit(repo: Path, files: dict[str, str]) -> str:
     return _git(repo, "rev-parse", "HEAD")
 
 
-def a_repository(tmp_path: Path) -> tuple[Path, str]:
-    """A checkout holding one file in each kind of place, and its first commit."""
+@pytest.fixture
+def repository(tmp_path: Path) -> tuple[Path, str]:
     repo = tmp_path / "checkout"
     repo.mkdir()
     _git(repo, "init", "--quiet")
-    first = a_commit(
-        repo,
-        {
-            "README.md": "about\n",
-            "docs/page.md": "# A page\n",
-            "frontend/src/page.ts": "export const page = 1;\n",
-            "frontend/public/digest/2026/10/03/digest.json": "{}\n",
-            "state/raw/feed-health/2026/10/03/rows.parquet": "rows\n",
-        },
-    )
+    first = _commit(repo, {"frontend/src/page.ts": "export const page = 1;\n"})
     return repo, first
 
 
-def decision(repo: Path, **step_env: str) -> dict[str, str]:
+def decision(workspace: Path, **step_env: str) -> dict[str, str]:
     env = {name: value for name, value in os.environ.items() if name not in STEP_NAMES}
     env.update(step_env)
-    done = subprocess.run(
+    result = subprocess.run(
         [sys.executable, str(PUBLISH_DECISION_MODULE)],
-        cwd=repo,
+        cwd=workspace,
         env=env,
         check=True,
         capture_output=True,
         text=True,
     )
-    return dict(line.split("=", 1) for line in done.stdout.splitlines())
+    return dict(line.split("=", 1) for line in result.stdout.splitlines())
 
 
-def after_ci(
-    repo: Path, *, before: str, checked: str, tip: str, event: str = "push", conclusion: str = "success"
+def scheduled(
+    repo: Path,
+    *,
+    tip: str,
+    checked: str = "",
+    deployed: str = "",
+    conclusion: str = "not_verified",
+    branch: str = "main",
 ) -> dict[str, str]:
     return decision(
         repo,
-        EVENT_NAME="workflow_run",
-        TRIGGER="CI",
-        TRIGGER_EVENT=event,
+        EVENT_NAME="schedule",
         CONCLUSION=conclusion,
         CHECKED=checked,
-        BEFORE=before,
+        DEPLOYED=deployed,
         TIP=tip,
+        DISPATCHED_REF=branch,
+        DEFAULT_BRANCH="main",
     )
 
 
-def after_daily_run(repo: Path, *, checked: str, tip: str, conclusion: str) -> dict[str, str]:
-    return decision(
+def _run(number: int, *, conclusion: str, gates: str, event: str = "push") -> CiRun:
+    return CiRun(number, number, f"{number:040x}", "completed", conclusion, event, gates)
+
+
+def test_ci_evidence_skips_documentation_only_runs() -> None:
+    code = _run(1, conclusion="success", gates="success")
+    docs = _run(2, conclusion="success", gates="skipped")
+    evidence = select_ci_anchor([docs, code])
+    assert evidence.sha == code.sha
+    assert not evidence.blocked
+
+
+def test_ci_evidence_does_not_skip_a_failed_push() -> None:
+    docs = _run(3, conclusion="success", gates="skipped")
+    failed = _run(2, conclusion="failure", gates="")
+    older = _run(1, conclusion="success", gates="success")
+    evidence = select_ci_anchor([docs, failed, older])
+    assert evidence.sha == ""
+    assert evidence.blocked
+
+
+def test_ci_evidence_does_not_skip_a_pending_push() -> None:
+    pending = CiRun(2, 2, "2" * 40, "in_progress", "", "push")
+    older = _run(1, conclusion="success", gates="success")
+    evidence = select_ci_anchor([pending, older])
+    assert evidence.sha == ""
+    assert evidence.blocked
+
+
+def test_a_later_manual_full_ci_can_verify_code_after_a_failure() -> None:
+    manual = _run(3, conclusion="success", gates="success", event="workflow_dispatch")
+    failed = _run(2, conclusion="failure", gates="")
+    evidence = select_ci_anchor([manual, failed])
+    assert evidence.sha == manual.sha
+    assert not evidence.blocked
+
+
+def test_missing_code_gate_blocks_and_no_recent_code_gate_needs_evidence() -> None:
+    missing = select_ci_anchor([_run(1, conclusion="success", gates="missing")])
+    docs = select_ci_anchor([_run(1, conclusion="success", gates="skipped")])
+    assert missing.blocked
+    assert not docs.blocked
+    assert docs.sha == ""
+
+
+def test_generated_updates_can_reuse_deployed_code(repository: tuple[Path, str]) -> None:
+    repo, deployed = repository
+    tip = _commit(
         repo,
-        EVENT_NAME="workflow_run",
-        TRIGGER="Content refresh",
-        TRIGGER_EVENT="schedule",
-        CONCLUSION=conclusion,
-        CHECKED=checked,
-        TIP=tip,
+        {
+            "frontend/public/publication.json": "{}\n",
+            "state/raw/ledger/row.json": "{}\n",
+            "corpus/corpus.jsonl": "{}\n",
+            "corpus/corpus.meta.json": "{}\n",
+            "docs/page.md": "# Updated\n",
+        },
     )
-
-
-@pytest.mark.parametrize("landed", [False, True])
-def test_recovery_completion_deploys_only_committed_public_output(
-    tmp_path: Path,
-    landed: bool,
-) -> None:
-    repo, first = a_repository(tmp_path)
-    tip = (
-        a_commit(repo, {"frontend/public/digest/2026/10/03/digest.json": '{"recovered":true}\n'})
-        if landed
-        else first
-    )
-    result = decision(
-        repo,
-        EVENT_NAME="workflow_run",
-        TRIGGER="Digest assembly recovery",
-        TRIGGER_EVENT="workflow_dispatch",
-        CONCLUSION="failure",
-        CHECKED=first,
-        TIP=tip,
-    )
-    assert result["publish"] == ("true" if landed else "false")
+    result = scheduled(repo, tip=tip, deployed=deployed)
+    assert result["publish"] == "true"
     assert result["ref"] == tip
 
 
-def test_a_pull_request_never_publishes_even_when_it_changed_the_site(tmp_path: Path) -> None:
-    repo, first = a_repository(tmp_path)
-    head = a_commit(repo, {"frontend/src/page.ts": "export const page = 2;\n"})
-    result = after_ci(repo, before=first, checked=head, tip=head, event="pull_request")
-    assert result["publish"] == "false", "an unmerged commit must never reach readers"
-
-
-@pytest.mark.parametrize(("event", "conclusion"), [("push", "failure"), ("workflow_dispatch", "success")])
-def test_a_failed_push_or_a_manual_ci_run_does_not_publish(
-    tmp_path: Path, event: str, conclusion: str
-) -> None:
-    repo, first = a_repository(tmp_path)
-    head = a_commit(repo, {"frontend/src/page.ts": "export const page = 2;\n"})
-    result = after_ci(repo, before=first, checked=head, tip=head, event=event, conclusion=conclusion)
-    assert result["publish"] == "false"
+def test_generated_updates_can_use_a_full_ci_anchor(repository: tuple[Path, str]) -> None:
+    repo, checked = repository
+    tip = _commit(repo, {"frontend/public/digest/day.json": "{}\n"})
+    result = scheduled(repo, tip=tip, checked=checked, conclusion="success")
+    assert result["publish"] == "true"
+    assert result["ref"] == tip
 
 
 @pytest.mark.parametrize(
-    ("changed", "published"),
+    "path",
     [
-        ("frontend/src/page.ts", "true"),
-        ("config/appearance.json", "true"),
-        (".github/workflows/pages.yml", "true"),
-        ("docs/page.md", "false"),
-        ("README.md", "false"),
-        ("backend/idhazh/stage.py", "false"),
-        ("frontend/tests/page.spec.ts", "false"),
-        (".github/workflows/ci.yml", "false"),
-        ("state/raw/feed-health/2026/10/03/rows.parquet", "false"),
-        ("state/compact/feed-health/daily/2026/10/03.parquet", "false"),
+        "frontend/src/page.ts",
+        ".github/workflows/ci.yml",
+        "corpus/reference-dataset-1/config.json",
+        "new-code.py",
     ],
 )
-def test_a_push_publishes_only_when_it_changed_what_the_site_is_built_from(
-    tmp_path: Path, changed: str, published: str
+def test_unverified_code_changes_block_publication(
+    repository: tuple[Path, str], path: str
 ) -> None:
-    repo, first = a_repository(tmp_path)
-    head = a_commit(repo, {changed: "changed\n"})
-    result = after_ci(repo, before=first, checked=head, tip=head)
-    assert result["publish"] == published
-    assert result["ref"] == head
+    repo, anchor = repository
+    tip = _commit(repo, {path: "changed\n"})
+    assert scheduled(repo, tip=tip, checked=anchor, deployed=anchor, conclusion="success")[
+        "publish"
+    ] == "false"
+    assert scheduled(repo, tip=tip, checked=tip, deployed=anchor, conclusion="success")[
+        "publish"
+    ] == "true"
 
 
-def test_telemetry_mixed_with_existing_noninputs_does_not_publish(tmp_path: Path) -> None:
-    repo, first = a_repository(tmp_path)
-    head = a_commit(
-        repo,
-        {
-            "state/raw/feed-health/2026/10/04/rows.parquet": "new raw rows\n",
-            "state/compact/feed-health/daily/2026/10/04.parquet": "new compact rows\n",
-            "docs/page.md": "# A revised page\n",
-        },
-    )
-    assert after_ci(repo, before=first, checked=head, tip=head)["publish"] == "false"
+@pytest.mark.parametrize("path", ["state", "frontend/public"])
+def test_generated_directories_cannot_be_replaced_by_files(
+    repository: tuple[Path, str], path: str
+) -> None:
+    repo, anchor = repository
+    tip = _commit(repo, {path: "not a data directory\n"})
+    assert scheduled(repo, tip=tip, deployed=anchor)["publish"] == "false"
 
 
-def test_telemetry_mixed_with_a_published_digest_still_publishes(tmp_path: Path) -> None:
-    repo, first = a_repository(tmp_path)
-    head = a_commit(
-        repo,
-        {
-            "state/raw/feed-health/2026/10/04/rows.parquet": "new raw rows\n",
-            "state/compact/feed-health/daily/2026/10/04.parquet": "new compact rows\n",
-            "frontend/public/digest/2026/10/04/digest.json": "{}\n",
-        },
-    )
-    assert after_ci(repo, before=first, checked=head, tip=head)["publish"] == "true"
+def test_failed_or_pending_push_ci_blocks_even_when_code_was_deployed(
+    repository: tuple[Path, str]
+) -> None:
+    repo, tip = repository
+    assert scheduled(repo, tip=tip, deployed=tip, conclusion="blocked")["publish"] == "false"
 
 
-def test_every_commit_of_a_push_counts_not_only_the_last(tmp_path: Path) -> None:
-    repo, first = a_repository(tmp_path)
-    a_commit(repo, {"frontend/src/page.ts": "export const page = 2;\n"})
-    head = a_commit(repo, {"docs/page.md": "# A changed page\n"})
-    assert after_ci(repo, before=first, checked=head, tip=head)["publish"] == "true"
+def test_scheduled_publish_is_limited_to_the_default_branch(
+    repository: tuple[Path, str]
+) -> None:
+    repo, tip = repository
+    assert scheduled(repo, tip=tip, checked=tip, conclusion="success", branch="other")[
+        "publish"
+    ] == "false"
 
 
-def test_a_day_landing_while_ci_runs_is_published_with_the_push(tmp_path: Path) -> None:
-    """The verdict arrives after the day, so building the checked commit would drop the day."""
-    repo, first = a_repository(tmp_path)
-    checked = a_commit(repo, {"frontend/src/page.ts": "export const page = 2;\n"})
-    tip = a_commit(repo, {"frontend/public/digest/2026/10/04/digest.json": "{}\n"})
-    result = after_ci(repo, before=first, checked=checked, tip=tip)
+def test_missing_evidence_cannot_publish(repository: tuple[Path, str]) -> None:
+    repo, tip = repository
+    assert scheduled(repo, tip=tip)["publish"] == "false"
+    with pytest.raises(subprocess.CalledProcessError):
+        scheduled(repo, tip=tip, deployed="invalid")
+    with pytest.raises(subprocess.CalledProcessError):
+        scheduled(repo, tip=tip, deployed=tip, conclusion="invalid")
+
+
+def test_a_shallow_checkout_fetches_the_named_anchor(
+    repository: tuple[Path, str], tmp_path: Path
+) -> None:
+    origin, checked = repository
+    tip = _commit(origin, {"frontend/public/publication.json": "{}\n"})
+    shallow = tmp_path / "shallow"
+    _git(tmp_path, "clone", "--quiet", "--no-local", "--depth=1", str(origin), str(shallow))
+    result = scheduled(shallow, tip=tip, checked=checked, conclusion="success")
     assert result["publish"] == "true"
     assert result["ref"] == tip
 
 
-def test_a_newer_push_of_site_code_waits_for_its_own_ci(tmp_path: Path) -> None:
-    repo, first = a_repository(tmp_path)
-    checked = a_commit(repo, {"frontend/src/page.ts": "export const page = 2;\n"})
-    tip = a_commit(repo, {"frontend/src/page.ts": "export const page = 3;\n"})
-    assert after_ci(repo, before=first, checked=checked, tip=tip)["publish"] == "false"
-
-
-@pytest.mark.parametrize("before", ["", "0" * 40, "1" * 40], ids=["absent", "new-branch", "unknown"])
-def test_a_push_whose_range_cannot_be_read_publishes(tmp_path: Path, before: str) -> None:
-    repo, _ = a_repository(tmp_path)
-    head = a_commit(repo, {"docs/page.md": "# A changed page\n"})
-    assert after_ci(repo, before=before, checked=head, tip=head)["publish"] == "true"
-
-
-@pytest.mark.parametrize("conclusion", ["success", "failure"])
-def test_the_daily_run_publishes_a_day_it_landed_whatever_its_conclusion(
-    tmp_path: Path, conclusion: str
-) -> None:
-    repo, first = a_repository(tmp_path)
-    tip = a_commit(repo, {"frontend/public/digest/2026/10/04/digest.json": "{}\n"})
-    result = after_daily_run(repo, checked=first, tip=tip, conclusion=conclusion)
+def test_unavailable_deployment_does_not_hide_passing_ci(repository: tuple[Path, str]) -> None:
+    repo, tip = repository
+    result = scheduled(repo, tip=tip, checked=tip, deployed="f" * 40, conclusion="success")
     assert result["publish"] == "true"
-    assert result["ref"] == tip
 
 
-def test_the_daily_run_that_landed_nothing_the_site_serves_does_not_publish(tmp_path: Path) -> None:
-    repo, first = a_repository(tmp_path)
-    tip = a_commit(repo, {"state/raw/feed-health/2026/10/04/rows.parquet": "rows\n"})
-    assert after_daily_run(repo, checked=first, tip=tip, conclusion="success")["publish"] == "false"
-
-
-@pytest.mark.parametrize(("dispatched", "published"), [("main", "true"), ("a-branch", "false")])
-def test_a_manual_publish_runs_from_main_only(tmp_path: Path, dispatched: str, published: str) -> None:
-    repo, first = a_repository(tmp_path)
+@pytest.mark.parametrize(("dispatched", "published"), [("main", "true"), ("other", "false")])
+def test_manual_publish_runs_from_main_only(
+    tmp_path: Path, dispatched: str, published: str
+) -> None:
+    tip = "b" * 40
     result = decision(
-        repo, EVENT_NAME="workflow_dispatch", TIP=first, DISPATCHED_REF=dispatched, DEFAULT_BRANCH="main"
+        tmp_path,
+        EVENT_NAME="workflow_dispatch",
+        TIP=tip,
+        DISPATCHED_REF=dispatched,
+        DEFAULT_BRANCH="main",
     )
     assert result["publish"] == published
+    assert result["ref"] == tip
+
+
+@pytest.mark.parametrize("event", ["push", "pull_request", "workflow_run"])
+def test_other_events_do_not_publish(tmp_path: Path, event: str) -> None:
+    result = decision(
+        tmp_path,
+        EVENT_NAME=event,
+        TIP="c" * 40,
+        DEFAULT_BRANCH="main",
+        DISPATCHED_REF="main",
+    )
+    assert result["publish"] == "false"
