@@ -3,10 +3,12 @@
 import argparse
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, replace
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from render_classifications import ClassificationReport, render_classifications
 from render_report import (
@@ -34,6 +36,25 @@ class Reports:
     spacy: str
     gliner: str
     failed: bool
+
+
+def _read_repository() -> str:
+    repository = os.environ.get("GITHUB_REPOSITORY")
+    if repository is not None:
+        return repository
+    result = subprocess.run(
+        ["git", "-C", str(Path(__file__).resolve().parents[2]), "remote", "get-url", "origin"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError("The report repository could not be read from the checkout.")
+    remote = result.stdout.strip()
+    if "://" not in remote:
+        remote = "ssh://" + remote.replace(":", "/", 1)
+    return urlsplit(remote).path.strip("/").removesuffix(".git")
 
 
 def write_atomic(path: Path, content: bytes) -> None:
@@ -89,6 +110,7 @@ def _provider_section(
     files: NativeFiles,
     *,
     spacy: bool,
+    repository: str | None,
     classification: ClassificationReport | None = None,
 ) -> str:
     if spacy:
@@ -98,6 +120,7 @@ def _provider_section(
             spacy_error=files.error,
             spacy_request=files.request,
             spacy_settings=files.settings,
+            repository=repository,
         )
     return render_gliner_results(
         source,
@@ -106,6 +129,7 @@ def _provider_section(
         gliner_request=files.request,
         gliner_settings=files.settings,
         classification=classification,
+        repository=repository,
     )
 
 
@@ -114,21 +138,32 @@ def _safe_section(
     files: NativeFiles,
     *,
     spacy: bool,
+    repository: str | None,
     classification: ClassificationReport | None = None,
 ) -> tuple[str, bool]:
     try:
-        return _provider_section(source, files, spacy=spacy, classification=classification), False
+        return _provider_section(
+            source, files, spacy=spacy, repository=repository, classification=classification
+        ), False
     except (KeyError, ValueError):
         provider = "spaCy" if spacy else "GLiNER"
         error = f"The saved {provider} evidence is invalid; inspect its native files."
     try:
         unavailable = NativeFiles(request=files.request, settings=files.settings, error=error)
         return _provider_section(
-            source, unavailable, spacy=spacy, classification=classification
+            source,
+            unavailable,
+            spacy=spacy,
+            repository=repository,
+            classification=classification,
         ), True
     except (KeyError, ValueError):
         return _provider_section(
-            source, NativeFiles(error=error), spacy=spacy, classification=classification
+            source,
+            NativeFiles(error=error),
+            spacy=spacy,
+            repository=repository,
+            classification=classification,
         ), True
 
 
@@ -163,15 +198,20 @@ def render_saved_reports(
     classification: NativeFiles | None = None,
     taxonomy: dict[str, object] | None = None,
     process_error: str | None = None,
+    repository: str | None = None,
 ) -> Reports:
     """Compose every output from the same pure provider sections."""
     read_text(source)
     classification_section, invalid_classification = _safe_classifications(
         source, classification, taxonomy
     )
-    spacy_section, invalid_spacy = _safe_section(source, spacy, spacy=True)
+    spacy_section, invalid_spacy = _safe_section(source, spacy, spacy=True, repository=repository)
     gliner_section, invalid_gliner = _safe_section(
-        source, gliner, spacy=False, classification=classification_section
+        source,
+        gliner,
+        spacy=False,
+        repository=repository,
+        classification=classification_section,
     )
     failed = (
         _failed(spacy, spacy=True)
@@ -244,6 +284,7 @@ def read_saved_reports(
         classification=classification if has_classification else None,
         taxonomy=taxonomy,
         process_error=process_error,
+        repository=_read_repository(),
     )
 
 

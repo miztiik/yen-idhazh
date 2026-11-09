@@ -8,6 +8,7 @@ import re
 import sys
 import unittest
 from html.parser import HTMLParser
+from urllib.parse import urljoin
 
 from collect_operations import Outcome, collect_gliner_operations
 from render_classifications import (
@@ -16,6 +17,7 @@ from render_classifications import (
     read_classification_tasks,
     render_classifications,
 )
+from render_configuration import render_settings_link
 from render_entities import project_gliner_groups, project_spacy_groups
 from render_report import (
     compose_report,
@@ -130,7 +132,7 @@ class ReportTests(unittest.TestCase):
         parsed = SourceText()
         parsed.feed(markdown)
         self.assertEqual(parsed.value, source)
-        self.assertTrue(markdown.startswith("<details><summary>Source text</summary>"))
+        self.assertTrue(markdown.startswith("<details><summary><h2>Source text</h2></summary>"))
         self.assertNotIn("<details open", markdown)
         self.assertNotIn("<code", markdown)
         self.assertNotIn("<pre", markdown)
@@ -322,22 +324,32 @@ class ReportTests(unittest.TestCase):
         )
         self.assertIn("| C26 | 26 | term25 | 1 | 0.25 |", report)
         self.assertIn("Important Terms: max_results", report)
-        self.assertIn("25 (settings.json)", report)
-        self.assertIn("3 (settings.json)", report)
+        self.assertIn("| Important Terms: max_results | 25 |", report)
+        self.assertIn("| Important Terms: max_phrase_words | 3 |", report)
 
     def test_configuration_shows_only_effective_values_without_changing_requests(self) -> None:
         source = "X"
+        repository = "fixture/repository"
         request: dict[str, object] = {"text": source, "language": "en", "model_profile": "md"}
         response = spacy_result(
             [feature("important_terms", {"terms": []}), feature("named_entities", {"entities": []})]
         )
         report = html.unescape(
             render_spacy_results(
-                source, response, spacy_request=request, spacy_settings=spacy_settings()
+                source,
+                response,
+                spacy_request=request,
+                spacy_settings=spacy_settings(),
+                repository=repository,
             )
         )
         self.assertIn("| Id | Setting | Effective value |", report)
         self.assertNotIn("Requested value", report)
+        self.assertEqual(report.count("[settings.json]("), 1)
+        self.assertNotIn("(settings.json)", report)
+        self.assertLess(
+            report.index("Status: complete."), report.index("<summary>spaCy configuration")
+        )
         self.assertIn(
             '| A4 | Features (ordered) | ["important_terms", "named_entities"] (response.json) |',
             report,
@@ -362,16 +374,23 @@ class ReportTests(unittest.TestCase):
                 gliner_settings={
                     "model": {"repo": "configured/model", "base_url": "https://example.test"}
                 },
+                repository=repository,
             )
         )
         self.assertIn("configured/model", gliner_report)
         self.assertIn('| J2 | Entity labels (ordered) | ["person"] (request.json) |', gliner_report)
         self.assertIn(
             '| J3 | Configured model identity | {"repo": "configured/model", '
-            '"base_url": "https://example.test"} (settings.json) |',
+            '"base_url": "https://example.test"} |',
             gliner_report,
         )
-        self.assertIn("not reported by the NER API", gliner_report)
+        self.assertIn("not NER response metadata", gliner_report)
+        self.assertEqual(gliner_report.count("[settings.json]("), 1)
+        self.assertNotIn("(settings.json)", gliner_report)
+        self.assertLess(
+            gliner_report.index("Status: complete."),
+            gliner_report.index("<summary>GLiNER configuration"),
+        )
         self.assertIn("| Id | Setting | Effective value |", gliner_report)
         self.assertNotIn("Requested value", gliner_report)
         self.assertIn("| J6 | Classification | Not requested |", gliner_report)
@@ -382,7 +401,18 @@ class ReportTests(unittest.TestCase):
             )
         )
         self.assertIn("run-ner-gliner (request.json; no successful response)", unavailable)
-        self.assertIn("Not recorded; no saved settings.json", unavailable)
+        self.assertIn("Not recorded; no saved model settings", unavailable)
+        for gliner in (False, True):
+            reference = render_settings_link(repository, gliner=gliner)
+            path = "config/text-analysis/" + ("gliner/" if gliner else "") + "settings.json"
+            href = f"/{repository}/blob/main/{path}"
+            self.assertIn(f"[settings.json]({href})", reference)
+            for page in ("actions/runs/42", "actions/runs/42/job/7"):
+                base = f"https://example.test/{repository}/{page}"
+                self.assertEqual(urljoin(base, href), f"https://example.test{href}")
+        for invalid in ("../repository", "fixture/../repository", "fixture/repository?query"):
+            with self.subTest(repository=invalid), self.assertRaises(ValueError):
+                render_settings_link(invalid)
 
     def test_partial_failed_empty_and_not_requested_are_distinct(self) -> None:
         failed: dict[str, object] = {
@@ -413,6 +443,14 @@ class ReportTests(unittest.TestCase):
         text = html.unescape(reports.combined)
         self.assertTrue(reports.failed)
         self.assertIn("Status: partial.", text)
+        self.assertLess(
+            reports.spacy.index("Status: partial."),
+            reports.spacy.index("<summary>spaCy configuration"),
+        )
+        self.assertLess(
+            reports.gliner.index("Provider error:"),
+            reports.gliner.index("<summary>GLiNER configuration"),
+        )
         self.assertEqual(text.count("Failed: FEATURE_FAILED"), 4)
         self.assertIn("No results were returned.", text)
         self.assertIn("Failed: no successful NER result", text)
@@ -489,6 +527,7 @@ class ReportTests(unittest.TestCase):
 
     def test_combined_and_standalone_sections_are_identical_and_ids_unique(self) -> None:
         source = "X"
+        repository = "fixture/repository"
         spacy = NativeFiles(
             request={"text": source, "language": "en"},
             response=spacy_result([feature("named_entities", {"entities": []})]),
@@ -498,12 +537,16 @@ class ReportTests(unittest.TestCase):
             request={"text": source, "labels": ["organization", "location", "person"]},
             response={"entities": []},
         )
-        reports = render_saved_reports(source, spacy, gliner)
+        reports = render_saved_reports(source, spacy, gliner, repository=repository)
         spacy_section = render_spacy_results(
-            source, spacy.response, spacy_request=spacy.request, spacy_settings=spacy.settings
+            source,
+            spacy.response,
+            spacy_request=spacy.request,
+            spacy_settings=spacy.settings,
+            repository=repository,
         )
         gliner_section = render_gliner_results(
-            source, gliner.response, gliner_request=gliner.request
+            source, gliner.response, gliner_request=gliner.request, repository=repository
         )
         self.assertFalse(reports.failed)
         self.assertEqual(reports.spacy, compose_report(source, spacy_section))
@@ -517,9 +560,10 @@ class ReportTests(unittest.TestCase):
                 spacy_request=spacy.request,
                 spacy_settings=spacy.settings,
                 gliner_request=gliner.request,
+                repository=repository,
             ),
         )
-        self.assertEqual(reports.combined.count("<summary>Source text</summary>"), 1)
+        self.assertEqual(reports.combined.count("<h2>Source text</h2>"), 1)
         self.assertNotIn("Entity groups are sorted", reports.combined)
         self.assertNotIn(
             "spaCy sentence indexes and native case groups are retained", reports.combined

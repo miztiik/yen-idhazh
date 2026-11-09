@@ -14,6 +14,7 @@ from render_configuration import (
     configured_types,
     read_selection,
     render_gliner_configuration,
+    render_settings_link,
     render_spacy_configuration,
 )
 from render_entities import (
@@ -53,7 +54,7 @@ def render_source(source_text: str) -> str:
         .replace("\r", "&#13;<br>")
         .replace("\n", "&#10;<br>")
     )
-    return "<details><summary>Source text</summary>\n\n<p>" + source + "</p>\n\n</details>"
+    return "<details><summary><h2>Source text</h2></summary>\n\n<p>" + source + "</p>\n\n</details>"
 
 
 def _validate_request(
@@ -104,6 +105,7 @@ def render_spacy_results(
     spacy_error: str | None = None,
     spacy_request: dict[str, object] | None = None,
     spacy_settings: dict[str, object] | None = None,
+    repository: str | None = None,
 ) -> str:
     """Render configuration and native spaCy features without regrouping evidence."""
     source = _text(source_text)
@@ -191,9 +193,10 @@ def render_spacy_results(
     return "\n\n".join(
         [
             "## spaCy results",
+            outcome,
+            render_settings_link(repository),
             render_spacy_configuration(spacy_request, result, spacy_settings),
             "### Results",
-            outcome,
             *sections,
         ]
     )
@@ -208,6 +211,7 @@ def render_gliner_results(
     gliner_request: dict[str, object] | None = None,
     gliner_settings: dict[str, object] | None = None,
     classification: ClassificationReport | None = None,
+    repository: str | None = None,
 ) -> str:
     """Group flat native GLiNER mentions by exact text and requested label."""
     source = _text(source_text)
@@ -238,11 +242,12 @@ def render_gliner_results(
     return "\n\n".join(
         [
             "## GLiNER results",
+            outcome,
+            render_settings_link(repository, gliner=True),
             render_gliner_configuration(
                 gliner_request, result, gliner_settings, labels, classification=classification
             ),
             "### Results",
-            outcome,
             "Native GLiNER confidence is between 0 and 1: higher means stronger model "
             "confidence, not calibrated correctness. It is not comparable to YAKE scores. "
             "Every occurrence retains its own score; GLiNER returns no sentence indexes.",
@@ -270,6 +275,7 @@ def render_report(
     gliner_request: dict[str, object] | None = None,
     gliner_settings: dict[str, object] | None = None,
     classification: ClassificationReport | None = None,
+    repository: str | None = None,
 ) -> str:
     """Compose the source, spaCy and GLiNER sections without truncating results."""
     return compose_report(
@@ -280,6 +286,7 @@ def render_report(
             spacy_error=spacy_error,
             spacy_request=spacy_request,
             spacy_settings=spacy_settings,
+            repository=repository,
         ),
         render_gliner_results(
             source_text,
@@ -289,5 +296,6 @@ def render_report(
             gliner_request=gliner_request,
             gliner_settings=gliner_settings,
             classification=classification,
+            repository=repository,
         ),
     )
