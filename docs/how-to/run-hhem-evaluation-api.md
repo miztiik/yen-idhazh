@@ -1,6 +1,6 @@
 # Generate and evaluate one summary
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How to dispatch `summary-eval-tests.yml` and inspect the generated answer,
 actual HHEM and applicable UniEval scores, machine readings and owned-process cleanup. This procedure
@@ -105,6 +105,11 @@ actual hardware and
 whole-machine CPU/RAM, explicit uninterrupted profile close and clean confirmed
 shutdown. A valid relevance skip is not a failure. A supplied but unused reference
 must be labelled unused. A score alone does not close live verification.
+For a native size failure, read the affected score's complete-input token count,
+configured allowance and comparison index. Missing measurements are not
+estimated. A window-geometry refusal describes unavailable source progress
+and overlap, not an oversized-input count. Completed siblings and HHEM
+outcomes must remain in the saved response and report.
 
 If work fails, available results and the report still upload. The
 `summary-eval-tests-server-logs` artifact retains available role logs after

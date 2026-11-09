@@ -8,6 +8,12 @@ from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
 from summary_evaluator.shared.contracts.process_identity import ProcessIdentity
 from summary_evaluator.shared.contracts.worker_exit import WorkerExit
+from summary_evaluator.unieval.check_unieval_input_size import INPUT_SIZE_CODES
+from summary_evaluator.unieval.contracts.previous_selected_unieval_result import (
+    PreviousSelectedUnievalResult,
+)
+from summary_evaluator.unieval.contracts.previous_unieval_result import PreviousUnievalError
+from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 
 from .contracts import PhaseEvidence as LegacyPhaseEvidence
@@ -118,6 +124,23 @@ def describe_hhem(result: EvaluationResult | None) -> str:
     return f"{score}; {work}"
 
 
+def describe_unieval_input_size(error: UnievalError | PreviousUnievalError) -> str:
+    if error.code == "WINDOW_BUDGET_INSUFFICIENT":
+        return "Window geometry; no oversized-input measurement"
+    if error.code not in INPUT_SIZE_CODES.values():
+        return "-"
+    if (
+        not isinstance(error, UnievalError)
+        or error.input_tokens is None
+        or error.allowed_tokens is None
+    ):
+        return "Not recorded"
+    return (
+        f"Index {error.index}: {error.input_tokens} input / {error.allowed_tokens} allowed "
+        f"({error.input_tokens - error.allowed_tokens} over)"
+    )
+
+
 def render_report(
     evidence: PipelineResult,
     inputs: ManualInputs,
@@ -128,7 +151,8 @@ def render_report(
     result = evaluation.evaluation if evaluation is not None else None
     unieval = evaluation.unieval if evaluation is not None else None
     relevance_skip = (
-        unieval.relevance_skip_reason if isinstance(unieval, UnievalResult) else None
+        unieval.relevance_skip_reason
+        if isinstance(unieval, UnievalResult | PreviousSelectedUnievalResult) else None
     )
     applicable = 4 if relevance_skip is None else 3
     work_rows = [
@@ -170,6 +194,10 @@ def render_report(
             [error.code for error in unieval.errors if error.dimension == dimension]
             if unieval else []
         )
+        measurements = [
+            describe_unieval_input_size(error) for error in unieval.errors
+            if error.dimension == dimension
+        ] if unieval else []
         state = (
             "Skipped - disabled" if dimension == "relevance" and relevance_skip == "disabled"
             else "Skipped - reference not supplied"
@@ -189,6 +217,7 @@ def render_report(
                     if dimension_work and dimension_work.planned is not None
                     else "Not planned"
                 ),
+                "; ".join(value for value in measurements if value != "-") or "-",
             )
         )
     readings: list[tuple[object, ...]] = []
@@ -441,6 +470,7 @@ def render_report(
                 (
                     "Dimension", "Score (0-1)", "Status", "Meaning",
                     "Completed / planned comparisons",
+                    "Complete input / allowance (tokens; index zero-based)",
                 ),
                 score_rows,
             ),

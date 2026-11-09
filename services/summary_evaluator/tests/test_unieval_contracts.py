@@ -9,12 +9,17 @@ from summary_evaluator_cases.unieval_cases import read_unieval_recordings
 
 from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
+from summary_evaluator.unieval.contracts.previous_selected_unieval_result import (
+    PreviousSelectedUnievalResult,
+)
 from summary_evaluator.unieval.contracts.previous_unieval_result import PreviousUnievalResult
 from summary_evaluator.unieval.contracts.unieval_contract import (
     DIMENSIONS,
+    UNIEVAL_RESULT_VERSION,
     UNIEVAL_SCORING_VERSION,
     SourceMode,
 )
+from summary_evaluator.unieval.contracts.unieval_error import POLICIES, UnievalError
 from summary_evaluator.unieval.contracts.unieval_recording import UnievalRecordingInputs
 from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
@@ -82,7 +87,7 @@ def test_recordings_have_no_fabricated_missing_or_out_of_range_scores() -> None:
     )
     assert set(DIMENSIONS) == {"fluency", "coherence", "consistency", "relevance"}
     schema = UnievalResult.model_json_schema()
-    assert schema["version"] == UNIEVAL_SCORING_VERSION
+    assert schema["version"] == UNIEVAL_RESULT_VERSION
     assert set(schema["$defs"]["UnievalScores"]["properties"]) == set(DIMENSIONS)
 
 
@@ -112,6 +117,72 @@ def test_previous_recording_reader_keeps_required_reference_and_original_control
     del payload["cases"][0]["request"]["reference_summary_text"]
     with pytest.raises(ValidationError):
         UnievalRecordingInputs.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"input_tokens": None},
+        {"allowed_tokens": None},
+        {"input_tokens": 16},
+        {"input_tokens": 15},
+        {"input_tokens": -1},
+        {"input_tokens": True},
+        {"allowed_tokens": 0},
+        {"allowed_tokens": "16"},
+        {"dimension": "consistency"},
+        {"index": None},
+        {"code": "WINDOW_BUDGET_INSUFFICIENT"},
+    ],
+)
+def test_measured_refusals_require_a_strict_pair_and_actual_comparison(
+    mutation: dict[str, object],
+) -> None:
+    error = UnievalError.from_code(
+        "COHERENCE_INPUT_TOO_LONG", "coherence", 0, input_tokens=17, allowed_tokens=16,
+    )
+    assert UnievalError.model_validate_json(error.model_dump_json()) == error
+    payload = {**error.model_dump(), **mutation}
+    if mutation.get("code") == "WINDOW_BUDGET_INSUFFICIENT":
+        payload["message"] = POLICIES["WINDOW_BUDGET_INSUFFICIENT"].message
+    with pytest.raises(ValidationError):
+        UnievalError.model_validate(payload)
+
+
+def test_frozen_selected_result_preserves_unmeasured_errors_without_a_current_writer() -> None:
+    from summary_evaluator.unieval.contracts.previous_unieval_result import PREVIOUS_POLICIES
+
+    payload = example_previous_unieval_result("a" * 64).model_dump(mode="json")
+    payload["version"] = "2026-11-08"
+    payload["relevance_skip_reason"] = None
+    payload["effective_settings"]["evaluate_relevance"] = True
+    payload["status"] = "partial"
+    payload["scores"]["coherence"] = None
+    payload["work"]["coherence"]["completed"] = 0
+    payload["errors"] = [{
+        "code": "COHERENCE_INPUT_TOO_LONG", "dimension": "coherence", "index": None,
+        "message": PREVIOUS_POLICIES["COHERENCE_INPUT_TOO_LONG"].message,
+    }]
+    encoded = json.dumps(payload).encode("utf-8")
+    before = bytes(encoded)
+    preserved = PreviousSelectedUnievalResult.model_validate_json(encoded)
+    assert preserved.version == "2026-11-08"
+    assert preserved.model_dump(mode="json") == payload
+    assert encoded == before and "input_tokens" not in preserved.errors[0].model_dump()
+    with pytest.raises(ValidationError):
+        UnievalResult.model_validate_json(encoded)
+    payload["errors"][0].update({"input_tokens": 17, "allowed_tokens": 16})
+    with pytest.raises(ValidationError):
+        PreviousSelectedUnievalResult.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize("mutation", [{"dimension": "fluency"}, {"index": 0}])
+def test_window_geometry_cannot_be_relabelled_as_another_comparison(
+    mutation: dict[str, object],
+) -> None:
+    error = UnievalError.from_code("WINDOW_BUDGET_INSUFFICIENT", "consistency")
+    with pytest.raises(ValidationError):
+        UnievalError.model_validate({**error.model_dump(), **mutation})
 
 
 @pytest.mark.parametrize("default", [False, True])
