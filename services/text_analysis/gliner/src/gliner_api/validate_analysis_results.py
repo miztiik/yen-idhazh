@@ -98,8 +98,8 @@ def _structures(value: JsonValue, structure: StructureInput, text: str) -> None:
     seen_records = set()
     exclusive_spans: set[tuple[int, int]] = set()
     bound_spans: set[tuple[int, int]] = set()
-    for value in _list(value):
-        record = _object(value)
+    for raw_record in _list(value):
+        record = _object(raw_record)
         if record.keys() != fields.keys():
             raise ValueError("Native records must retain exactly the requested fields")
         record_identity = []

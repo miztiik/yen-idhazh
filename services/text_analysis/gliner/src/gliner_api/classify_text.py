@@ -11,7 +11,6 @@ from gliner_api.declare_api_contracts import (
 )
 from gliner_api.load_model import NativeModel
 
-
 _NATIVE_CLASSIFICATIONS = TypeAdapter(
     dict[str, NativeSelection | list[NativeSelection]],
     config=ConfigDict(strict=True, allow_inf_nan=False, hide_input_in_errors=True),

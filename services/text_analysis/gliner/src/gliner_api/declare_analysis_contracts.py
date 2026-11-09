@@ -35,7 +35,7 @@ _ANALYSIS_METADATA: dict[str, JsonValue] = {
     "version": ANALYSIS_CONTRACT_VERSION,
     "changelog": [
         {"version": ANALYSIS_CONTRACT_VERSION, "change": "Declare native schema-driven analysis."},
-        {"version": API_VERSION, "change": "Earlier inference payloads remain historical evidence."},
+        {"version": API_VERSION, "change": "Keep earlier inference payloads readable as evidence."},
     ],
 }
 
