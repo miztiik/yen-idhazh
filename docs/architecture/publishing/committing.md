@@ -1,6 +1,6 @@
 # How completed output reaches the repository
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-08
 
 Start here when a workflow delivers generated files. Python jobs use
 [`backend/utilities/publish_to_repo.py`](../../../backend/utilities/publish_to_repo.py)
@@ -14,21 +14,19 @@ The Python publisher builds a private candidate on fetched `main`. The
 TypeScript `safe_persist_data` API does the same for Git output, without moving
 the caller's HEAD, index or sparse patterns. Neither API reruns a producer.
 
-## When a data commit publishes the site
+## When committed data reaches the site
 
-After successful CI on a push, `publish_decision.py` checks the commits in that
-push. Changes confined to `state/raw/` and `state/compact/` do not trigger a
-site build, including when they land with paths the decision already ignores,
-such as documentation. Changes to published digest files, site code or other
-existing build inputs still trigger publication. Manual publication remains
-available from the default branch, and an unreadable Git range still publishes
-so the site does not stay stale. The rule stays in this decision program; the
-workflow adds no path filter or second event mechanism.
+The Pages workflow publishes on a 30-minute schedule or by manual dispatch from
+the default branch. The schedule accepts generated data on already deployed or
+fully CI-verified code; a pending or failed push CI blocks it unless a later
+full CI run passes. PR checks, merges and content generation do not start a
+Pages run. New digest content can therefore wait until the next scheduled run;
+the scheduler can start runs late when busy.
 
-This avoids rebuilding the site only to refresh ledger copies: the Data
-explorer reads consented compact data from the configured repository, while
-existing panels retain their build-time compact copies. New raw rows still wait
-for compaction before the explorer can read them.
+The scheduled build republishes the site's committed copies on its cadence.
+The Data explorer also reads consented compact data from the configured
+repository, while existing panels retain their build-time compact copies. New
+raw rows still wait for compaction before the explorer can read them.
 
 ## Evidence is not permission
 

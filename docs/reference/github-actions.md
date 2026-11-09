@@ -13,7 +13,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `ci.yml` | `CI` | Pull request; push to `main` | Backend, native TypeScript, site and browser checks |
 | `digest.yml` | `Content refresh` | `20 2 * * *`, `20 6 * * *`, `20 10 * * *`, `20 14 * * *`, `20 18 * * *` | Digest and production state |
 | `llm-council.yml` | `LLM-COUNCIL` | `0 22 * * *` | Model judges' verdicts |
-| `pages.yml` | `Pages publication` | Passing push CI; completed Content refresh or assembly recovery | Static site |
+| `pages.yml` | `Pages publication` | Every 30 minutes; manual dispatch | Static site |
 | `drift.yml` | `Drift review` | `0 8 * * 0` | Quality drift review |
 | `idhazh-gardener.yml` | `Idhazh Gardener` | `40 0 * * *` | Retention and history maintenance |
 | `backfill.yml` | `Vector backfill` | none | Repair closed days' vectors |
@@ -118,8 +118,8 @@ Corpus harvest retains its normal optional-failure policy.
 Day contracts, site build, Pages size and published-column checks precede the
 commit. Fresh-main regeneration, immutable collisions, published-input import,
 the final site rebuild and bundle gate use the normal publication path.
-Recovery completion also wakes Pages, which deploys only when the run committed
-published files. A check-only run with no published changes does not deploy.
+Recovery does not start Pages publication; committed changes reach the site on
+the publication schedule or through a manual dispatch.
 
 ## Manual feed planner
 
@@ -206,22 +206,21 @@ not a substitute for them.
 
 - Build committed data only. Do not run the producer or a model during publication.
 - [`publish_decision.py`](../../backend/utilities/publish_decision.py) holds the
-  rule, one case a trigger, and every publish builds main's tip:
-  - A pull request's CI, a failed CI and a manual CI run never publish. A pull
-    request publishes when it merges.
-  - A push to `main` publishes after its CI passes, when the push changed a path
-    the site build reads. The program lists the paths the build never reads;
-    every other path counts, so a new build input publishes by default. The
-    push's range comes from its check suite, so every commit of the push counts.
-  - Content refresh publishes when it landed a change under `frontend/public/`,
-    whatever the run's conclusion. Its producer validated the committed day; a
-    sibling failure does not invalidate it.
+  rule, one case per trigger, and every publish builds the run's main commit:
+  - The schedule runs every 30 minutes. Generated data and documentation can
+    advance beyond the last successful deployment or a full passing CI run
+    without requiring CI on the generated commit.
+  - A pending or failed push CI blocks the schedule unless a later full CI run
+    passes. Changed code must match a full passing CI run;
+    documentation-only CI runs do not establish that proof. The lookup reads
+    at most the latest 100 push runs and the latest successful manual CI run.
+    If it finds no proof and the code differs from the last deployment,
+    dispatch CI on `main` or publish manually. Comparisons inspect only named
+    tree levels, not the contents of generated data or source directories.
   - A manual publish from `main` always publishes.
-  - A diff the program cannot read publishes.
-- A push whose CI passes while a newer push has changed site code publishes
-  nothing; the newer push's own CI publishes both. Building the tip means a late
-  verdict cannot take the site back to an older commit, and a day that landed
-  while CI ran stays published.
+- PR checks, merges and content-generation workflows run independently of site
+  publication. New digest content can wait until the next schedule; the
+  scheduler can start runs late when busy.
 - Cancel superseded builds, but let an active deployment finish. Deploy requires
   a successful build and its complete artifact. These are separate job groups.
 

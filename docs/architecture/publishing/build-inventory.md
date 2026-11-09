@@ -18,8 +18,8 @@ certify old output. The build runs on Node alone and starts no Python.
 `idhazh site-weight --site-tree build` writes the inventory, then reads it. It
 runs right after `npm run build` in the three jobs that measure the site: the
 `site` job of `ci.yml`, the `assemble` job of `digest.yml` before the day's
-commit, and `backfill.yml`. The Pages deploy builds a commit one of those jobs
-already measured, and writes no inventory.
+commit, and `backfill.yml`. A scheduled Pages deploy can also include later
+generated updates; it builds committed data and writes no inventory.
 
 The writer, `build_publication.record_build_inventory`, walks only the generated
 output directory. It measures every regular file: generated HTML and JavaScript,
