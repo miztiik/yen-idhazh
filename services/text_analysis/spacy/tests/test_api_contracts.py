@@ -102,7 +102,8 @@ class LanguageSettingsTests(unittest.TestCase):
         settings = _settings()
         capabilities = {item.language: item for item in _health_capabilities(settings)}
         self.assertEqual(
-            settings.resolve_default_features("en"), ("named_entities", "important_terms")
+            settings.resolve_default_features("en"),
+            ("named_entities", "important_terms", "relations"),
         )
         self.assertEqual(settings.resolve_default_features("zh"), GLOBAL_DEFAULTS)
         self.assertEqual(
