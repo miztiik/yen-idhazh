@@ -8,7 +8,7 @@ from pydantic import ConfigDict, field_validator
 from summary_evaluator.shared.bound_operation_metadata import validate_worker_operation_metadata
 from summary_evaluator.shared.contracts.base import NativeContract
 
-UNIEVAL_WORKER_VERSION: Final = "2026-11-08"
+UNIEVAL_WORKER_VERSION: Final = "2026-11-09"
 
 
 class UnievalWorkerContract(NativeContract):
@@ -21,13 +21,17 @@ class UnievalWorkerContract(NativeContract):
             "changelog": [
                 {
                     "version": UNIEVAL_WORKER_VERSION,
+                    "change": "Retain dimension-bound input measurements in refused work.",
+                },
+                {
+                    "version": "2026-11-08",
                     "change": "Bind actual operations and optional relevance selection.",
                 }
             ],
         }
     )
 
-    version: Literal["2026-11-08"]
+    version: Literal["2026-11-09"]
     operation_metadata: OperationMetadata
 
     @field_validator("operation_metadata")

@@ -19,9 +19,10 @@ from .contracts import (
 from .contracts import PhaseEvidence as LegacyPhaseEvidence
 from .host_reader import HonoServerReader, MachineUsage, measurement_complete
 from .previous_phase_contracts import PhaseEvidence as PreviousPhaseEvidence
+from .previous_selected_phase_contracts import PhaseEvidence as PreviousSelectedPhaseEvidence
 from .scorer_evidence import EvidenceContract, ScorerApiEvidence
 
-PHASE_VERSION: Final = "2026-11-08"
+PHASE_VERSION: Final = "2026-11-09"
 
 
 class PhaseShutdown(EvidenceContract):
@@ -78,6 +79,10 @@ class PhaseEvidence(EvidenceContract):
             "changelog": [
                 {
                     "version": PHASE_VERSION,
+                    "change": "Retain native measured input refusals without changing old phases.",
+                },
+                {
+                    "version": "2026-11-08",
                     "change": "Bind optional reference and relevance selection.",
                 },
                 {"version": "2026-11-07", "change": "Record independent API lifetimes."}
@@ -85,7 +90,7 @@ class PhaseEvidence(EvidenceContract):
         }
     )
 
-    version: Literal["2026-11-08"]
+    version: Literal["2026-11-09"]
     run: RunIdentity
     phase: PhaseName
     status: OutcomeStatus
@@ -181,7 +186,9 @@ class PhaseEvidence(EvidenceContract):
         return self
 
 
-PhaseResult = PhaseEvidence | PreviousPhaseEvidence | LegacyPhaseEvidence
+PhaseResult = (
+    PhaseEvidence | PreviousSelectedPhaseEvidence | PreviousPhaseEvidence | LegacyPhaseEvidence
+)
 
 
 class PhaseDocument(

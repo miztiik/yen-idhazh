@@ -367,6 +367,12 @@ def test_same_pair_and_reference_requests_preserve_native_sibling_and_partial_re
                         error.code == "COHERENCE_INPUT_TOO_LONG"
                         for error in outcomes.unieval.errors
                     )
+                    refusal = next(
+                        error for error in outcomes.unieval.errors
+                        if error.code == "COHERENCE_INPUT_TOO_LONG"
+                    )
+                    assert refusal.dimension == "coherence" and refusal.index == 0
+                    assert refusal.input_tokens == tokens and refusal.allowed_tokens == tokens - 1
                     assert any(
                         error.service == "unieval" and error.http_status == 400 for error in errors
                     )

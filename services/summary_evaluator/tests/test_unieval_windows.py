@@ -1,5 +1,6 @@
 """Prove real tokenizer windows cover source ends without clipping native prompts."""
 
+import pytest
 from summary_evaluator_cases.contract_examples import REPOSITORY
 from summary_evaluator_cases.unieval_cases import (
     read_unieval_inputs,
@@ -14,6 +15,101 @@ from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
 from summary_evaluator.unieval.contracts.unieval_result import SourceSpan
 from summary_evaluator.unieval.load_unieval_resources import load_unieval_resources
 from summary_evaluator.unieval.score_unieval import prepare_unieval
+
+
+@pytest.mark.parametrize("dimension", ["fluency", "coherence", "consistency", "relevance"])
+def test_complete_input_token_boundary_preserves_dimension_index_and_worker_measurement(
+    dimension: str,
+) -> None:
+    from summary_evaluator_cases.contract_examples import EXAMPLE_OPERATION, OPERATION_ID
+
+    from summary_evaluator.shared.exchange_packets import encode_packet
+    from summary_evaluator.unieval.contracts.unieval_worker_contract import UNIEVAL_WORKER_VERSION
+    from summary_evaluator.unieval.contracts.unieval_worker_message import (
+        RequestPacket,
+        UnievalCommand,
+        UnievalPrediction,
+        UnievalReply,
+        validate_request_reply,
+    )
+    from summary_evaluator.unieval.fail_unieval import UnievalFailure
+    from summary_evaluator.unieval.load_unieval import CpuUnievalPredictor
+    from summary_evaluator.unieval.unieval_worker import score_comparison
+
+    _, settings = unieval_settings(consistency_source_mode="full_source_prompt")
+    resources = load_unieval_resources(settings, REPOSITORY)
+    request = UnievalRequest(
+        source_text="The garden opened on Monday. Many visitors entered.",
+        summary_text="It opened. Many visitors entered the garden on Monday.",
+        reference_summary_text="The garden opened on Monday.",
+        evaluate_relevance=True,
+    )
+    original = prepare_unieval(request, settings, resources)
+    comparison = [item for item in original.comparisons if item.dimension == dimension][-1]
+    measured = resources.token_count(comparison.prompt)
+    at_limit = settings.model_copy(update={
+        "scoring": settings.scoring.model_copy(update={"max_input_tokens": measured}),
+    })
+    accepted = prepare_unieval(request, at_limit, resources)
+    assert comparison in accepted.comparisons
+    assert not any(error.dimension == dimension for error in accepted.errors)
+
+    over_limit = at_limit.model_copy(update={
+        "scoring": at_limit.scoring.model_copy(update={"max_input_tokens": measured - 1}),
+    })
+    refused = prepare_unieval(request, over_limit, resources)
+    error = next(error for error in refused.errors if error.dimension == dimension)
+    assert getattr(error, "input_tokens", None) == measured, (
+        "A refused comparison must retain the real complete-input token count."
+    )
+    assert getattr(error, "allowed_tokens", None) == measured - 1
+    assert error.index == comparison.index
+    assert getattr(refused.work, dimension).planned is None
+    assert not any(item.dimension == dimension for item in refused.comparisons)
+
+    from summary_evaluator.unieval.check_unieval_input_size import check_unieval_input_size
+
+    assert check_unieval_input_size(measured, measured, comparison.dimension) is None
+    assert check_unieval_input_size(
+        measured, measured - 1, comparison.dimension, comparison.index
+    ) == error
+    _, _, model_identity = read_unieval_recordings()
+    predictor = CpuUnievalPredictor(
+        None,
+        model_identity,
+        resources,
+        resources.tokenizer.encode(settings.prompts.positive_answer)[0],
+        resources.tokenizer.encode(settings.prompts.negative_answer)[0],
+        measured - 1,
+    )
+    with pytest.raises(UnievalFailure) as failure:
+        predictor.score(comparison.prompt)
+    assert failure.value.error.code == "MODEL_INPUT_TOO_LONG"
+    assert failure.value.error.input_tokens == measured
+    assert failure.value.error.allowed_tokens == measured - 1
+    identity = RequestPacket(
+        version=UNIEVAL_WORKER_VERSION,
+        operation_metadata=EXAMPLE_OPERATION,
+        execution_id=OPERATION_ID,
+        generation=1,
+    )
+    command = UnievalCommand(**identity.model_dump(), request=request)
+    prediction = score_comparison(predictor, comparison, identity)
+    encoded = encode_packet(prediction, settings.worker.max_reply_bytes)
+    decoded = UnievalReply.model_validate_json(encoded).root
+    assert isinstance(decoded, UnievalPrediction)
+    validate_request_reply(command, decoded)
+    assert decoded == prediction and decoded.error == error and decoded.score is None
+    assert decoded.dimension == comparison.dimension and decoded.index == comparison.index
+    assert encode_packet(decoded, len(encoded)) == encoded
+    with pytest.raises(ValueError, match="byte limit"):
+        encode_packet(decoded, len(encoded) - 1)
+    print(
+        f"TOKEN_BOUNDARY dimension={dimension} index={comparison.index} "
+        f"input_tokens={measured} accepted_allowance={measured} "
+        f"refused_allowance={measured - 1} code={error.code} "
+        f"packet_bytes={len(encoded)} configured_packet_allowance={settings.worker.max_reply_bytes}"
+    )
 
 
 def test_default_full_source_has_one_consistency_comparison_per_summary_sentence() -> None:
@@ -182,6 +278,33 @@ def test_comparison_limit_refuses_matrix_before_materializing_it() -> None:
     assert len(plan.comparisons) <= settings.scoring.max_comparisons
 
 
+@pytest.mark.parametrize("sentence_fits", [False, True])
+def test_summary_question_overflow_is_distinct_from_reserved_window_geometry(
+    sentence_fits: bool,
+) -> None:
+    _, settings = unieval_settings(source_window_tokens=24, source_overlap_tokens=4)
+    resources = load_unieval_resources(settings, REPOSITORY)
+    summary = "A short claim."
+    measured = resources.token_count(
+        settings.prompts.consistency.format(source="", summary=summary)
+    )
+    allowance = measured if sentence_fits else measured - 1
+    settings = settings.model_copy(update={
+        "scoring": settings.scoring.model_copy(update={"max_input_tokens": allowance}),
+    })
+    request = UnievalRequest(source_text="The source continues.", summary_text=summary)
+    plan = prepare_unieval(request, settings, resources)
+    failure = next(error for error in plan.errors if error.dimension == "consistency")
+    assert plan.work.consistency.planned is None and not plan.work.source_spans
+    if sentence_fits:
+        assert failure.code == "WINDOW_BUDGET_INSUFFICIENT"
+        assert failure.input_tokens is None and failure.allowed_tokens is None
+        assert "forward progress" in failure.message and "overlap" in failure.message
+    else:
+        assert failure.code == "SUMMARY_SENTENCE_TOO_LONG" and failure.index == 0
+        assert failure.input_tokens == measured and failure.allowed_tokens == allowance
+
+
 def test_normalized_character_offsets_refuse_impossible_overlap_only_for_consistency() -> None:
     api = load_scorer_api_settings(
         REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
@@ -197,7 +320,7 @@ def test_normalized_character_offsets_refuse_impossible_overlap_only_for_consist
     )
     plan = prepare_unieval(request, settings, resources)
     assert any(
-        error.code == "CONSISTENCY_INPUT_TOO_LONG" and error.dimension == "consistency"
+        error.code == "WINDOW_BUDGET_INSUFFICIENT" and error.dimension == "consistency"
         for error in plan.errors
     )
     assert plan.work.consistency.planned is None

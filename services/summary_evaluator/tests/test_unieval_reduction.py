@@ -12,6 +12,7 @@ from summary_evaluator_cases.unieval_cases import (
     unieval_settings,
 )
 
+from summary_evaluator.shared.exchange_packets import encode_packet
 from summary_evaluator.shared.read_process_identity import read_process_identity
 from summary_evaluator.unieval.contracts.unieval_contract import DIMENSIONS
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
@@ -22,6 +23,7 @@ from summary_evaluator.unieval.contracts.unieval_worker_contract import UNIEVAL_
 from summary_evaluator.unieval.contracts.unieval_worker_message import (
     UnievalPrediction,
     UnievalPrepared,
+    UnievalReply,
 )
 from summary_evaluator.unieval.fail_unieval import UnievalFailure
 from summary_evaluator.unieval.load_unieval_resources import load_unieval_resources
@@ -53,6 +55,103 @@ def prepared_packet(state: UnievalState, plan: UnievalPlan) -> UnievalPrepared:
         work=plan.work,
         errors=plan.errors,
     )
+
+
+@pytest.mark.parametrize("dimension", ["coherence", "fluency"])
+def test_parent_rejects_a_measured_refusal_outside_its_actual_comparison_range(
+    dimension: str,
+) -> None:
+    inputs, _, _ = read_unieval_recordings()
+    request = recorded_unieval_request(inputs.cases[0].request)
+    state, plan, settings = selected_state(request)
+    packet = prepared_packet(state, plan)
+    count = plan.work.summary_sentences
+    assert count is not None
+    error = UnievalError.from_code(
+        "COHERENCE_INPUT_TOO_LONG" if dimension == "coherence" else "SUMMARY_SENTENCE_TOO_LONG",
+        "coherence" if dimension == "coherence" else "fluency",
+        1 if dimension == "coherence" else count,
+        input_tokens=settings.scoring.max_input_tokens + 1,
+        allowed_tokens=settings.scoring.max_input_tokens,
+    )
+    changed = packet.model_copy(update={"errors": (error,)})
+    with pytest.raises(ValueError, match="actual comparison index"):
+        UnievalPrepared.model_validate_json(changed.model_dump_json())
+    with pytest.raises(UnievalFailure, match="invalid packet"):
+        state.accept_plan(changed, settings)
+    assert not state.prepared and state.errors == []
+
+
+def test_measured_planning_refusal_retains_completed_recorded_sibling_scores() -> None:
+    from summary_evaluator.unieval.check_unieval_input_size import check_unieval_input_size
+
+    inputs, predictions, identity = read_unieval_recordings()
+    request = recorded_unieval_request(inputs.cases[0].request)
+    _, settings = unieval_settings(consistency_source_mode="full_source_prompt")
+    resources = load_unieval_resources(settings, REPOSITORY)
+    measured = resources.token_count(settings.prompts.coherence.format(
+        source=request.source_text, summary=request.summary_text,
+    ))
+    settings = settings.model_copy(update={
+        "scoring": settings.scoring.model_copy(update={"max_input_tokens": measured - 1}),
+    })
+    plan = prepare_unieval(request, settings, resources)
+    state = UnievalState()
+    state.set_request(request)
+    state.evaluation_operation = create_child_operation(state.operation_metadata)
+    state.model = identity
+    state.worker = read_process_identity(1, settings.worker.max_proc_identity_bytes)
+    encoded = encode_packet(prepared_packet(state, plan), settings.worker.max_reply_bytes)
+    packet = UnievalReply.model_validate_json(encoded).root
+    assert isinstance(packet, UnievalPrepared)
+    state.accept_plan(packet, settings)
+    first = next(item for item in plan.comparisons if item.dimension == "fluency")
+    first_size = resources.token_count(first.prompt)
+    wrong_allowance = check_unieval_input_size(
+        first_size, first_size - 1, first.dimension, first.index,
+    )
+    assert wrong_allowance is not None
+    assert wrong_allowance.allowed_tokens != settings.scoring.max_input_tokens
+    with pytest.raises(UnievalFailure, match="invalid packet"):
+        state.accept_prediction(UnievalPrediction(
+            version=UNIEVAL_WORKER_VERSION,
+            operation_metadata=state.evaluation_operation,
+            execution_id=state.execution_id,
+            generation=1,
+            dimension=first.dimension,
+            index=first.index,
+            sentence_index=first.sentence_index,
+            source_index=first.source_index,
+            score=None,
+            error=wrong_allowance,
+        ))
+    assert state.processed["fluency"] == 0 and state.errors == list(plan.errors)
+    captured = {
+        comparison.prompt_sha256: comparison.score
+        for comparison in predictions.cases[0].comparisons
+    }
+    for comparison in plan.comparisons:
+        if comparison.dimension != "fluency":
+            continue
+        state.accept_prediction(UnievalPrediction(
+            version=UNIEVAL_WORKER_VERSION,
+            operation_metadata=state.evaluation_operation,
+            execution_id=state.execution_id,
+            generation=1,
+            dimension=comparison.dimension,
+            index=comparison.index,
+            sentence_index=comparison.sentence_index,
+            source_index=comparison.source_index,
+            score=captured[hashlib.sha256(comparison.prompt.encode("utf-8")).hexdigest()],
+            error=None,
+        ))
+    result = state.result()
+    assert result.status == "partial" and result.scores.fluency is not None
+    assert result.scores.coherence is None
+    error = next(error for error in result.errors if error.code == "COHERENCE_INPUT_TOO_LONG")
+    assert error.dimension == "coherence" and error.index == 0
+    assert error.input_tokens == measured and error.allowed_tokens == measured - 1
+    assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
 def test_zero_is_complete_data_and_duplicate_or_unfinished_progress_is_refused() -> None:

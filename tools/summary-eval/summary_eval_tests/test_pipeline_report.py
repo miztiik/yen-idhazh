@@ -132,6 +132,151 @@ def test_report_keeps_the_selected_declaration_when_generation_did_not_start() -
     assert "Not loaded" in markdown and "Not generated" in markdown
 
 
+@pytest.mark.parametrize("measured", [False, True])
+def test_size_report_keeps_failed_dimension_measurements_and_completed_zeroes(
+    measured: bool,
+) -> None:
+    from summary_evaluator.unieval.contracts.unieval_error import UnievalError
+
+    inputs, evidence = in_memory_pipeline()
+    assert evidence.evaluation_phase is not None and evidence.evaluation_phase.unieval is not None
+    native = evidence.evaluation_phase.unieval
+    assert native.effective_settings is not None
+    allowance = native.effective_settings.max_input_tokens
+    refusal = UnievalError.from_code(
+        "COHERENCE_INPUT_TOO_LONG", "coherence", 0,
+        input_tokens=allowance + 1 if measured else None,
+        allowed_tokens=allowance if measured else None,
+    )
+    payload = evidence.model_dump(mode="json")
+    payload["status"] = payload["evaluation_phase"]["status"] = "partial"
+    failed = payload["evaluation_phase"]["unieval"]
+    failed["status"] = "partial"
+    failed["scores"]["coherence"] = None
+    failed["work"]["coherence"]["completed"] = 0
+    failed["errors"] = [refusal.model_dump(mode="json")]
+    report = render_report(
+        PipelineDocument.model_validate_json(json.dumps(payload)).root,
+        inputs, service_settings(), "https://example.test/config",
+    )
+    assert "| coherence | Not available | Failed - COHERENCE_INPUT_TOO_LONG |" in report
+    assert "| fluency | 0.0 | Complete |" in report
+    assert "| HHEM | complete | 0.0 source support (0-1);" in report
+    expected = (
+        f"Index 0: {allowance + 1} input / {allowance} allowed (1 over)"
+        if measured else "Not recorded"
+    )
+    assert expected in report
+    assert "Complete input / allowance (tokens; index zero-based)" in report
+
+
+def test_window_geometry_report_does_not_invent_an_oversized_input() -> None:
+    from summary_evaluator.unieval.contracts.unieval_error import UnievalError
+
+    inputs, evidence = in_memory_pipeline()
+    payload = evidence.model_dump(mode="json")
+    payload["status"] = payload["evaluation_phase"]["status"] = "partial"
+    native = payload["evaluation_phase"]["unieval"]
+    native["status"] = "partial"
+    native["scores"]["consistency"] = None
+    native["work"]["consistency"] = {"planned": None, "completed": 0}
+    native["effective_settings"]["consistency_source_mode"] = "all_source_windows"
+    native["errors"] = [UnievalError.from_code(
+        "WINDOW_BUDGET_INSUFFICIENT", "consistency",
+    ).model_dump(mode="json")]
+    report = render_report(
+        PipelineDocument.model_validate_json(json.dumps(payload)).root,
+        inputs, service_settings(), "https://example.test/config",
+    )
+    assert "Window geometry; no oversized-input measurement" in report
+    assert "forward progress and required overlap" in report
+    assert re.search(r"Index \d+: \d+ input / \d+ allowed", report) is None
+
+
+@pytest.mark.parametrize("skipped", [False, True])
+def test_selected_previous_report_retains_errors_reference_and_original_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, skipped: bool,
+) -> None:
+    from summary_eval_pipeline.previous_selected_report_contracts import (
+        PipelineEvidence as PreviousSelectedPipelineEvidence,
+    )
+    from summary_eval_pipeline.report_task import collect_results, main
+    from summary_eval_pipeline.run_contracts import GenerationReceipt
+    from summary_evaluator.unieval.contracts.previous_unieval_result import PREVIOUS_POLICIES
+
+    selected_root(tmp_path)
+    _, current = in_memory_pipeline()
+    inputs, prepared, generation = handoff_case()
+    payload = current.model_dump(mode="json")
+    payload["prepared"] = prepared.model_dump(mode="json")
+    payload["generation"] = generation.model_dump(mode="json")
+    payload["version"] = "2026-11-08"
+    payload["status"] = payload["evaluation_phase"]["status"] = "partial"
+    native = payload["evaluation_phase"]["unieval"]
+    native["version"] = "2026-11-08"
+    native["reference_summary_sha256"] = prepared.reference_summary_sha256
+    native["work"]["source_characters"] = len(inputs.source_text)
+    native["status"] = "partial"
+    native["scores"]["coherence"] = None
+    native["work"]["coherence"]["completed"] = 0
+    native["errors"] = [{
+        "code": "COHERENCE_INPUT_TOO_LONG", "dimension": "coherence", "index": None,
+        "message": PREVIOUS_POLICIES["COHERENCE_INPUT_TOO_LONG"].message,
+    }]
+    if skipped:
+        payload["prepared"]["evaluate_relevance"] = False
+        payload["generation"]["evaluate_relevance"] = False
+        native["effective_settings"]["evaluate_relevance"] = False
+        native["relevance_skip_reason"] = "disabled"
+        native["scores"]["relevance"] = None
+        native["work"]["relevance"] = {"planned": None, "completed": 0}
+    receipt = GenerationReceipt.model_validate_json(json.dumps(payload["generation"]))
+    receipt_hash = text_sha256(receipt.model_dump_json())
+    for name in ("generation_phase", "evaluation_phase"):
+        payload[name]["version"] = "2026-11-08"
+        payload[name]["run"] = prepared.run.model_dump(mode="json")
+        payload[name]["reference_summary_sha256"] = prepared.reference_summary_sha256
+        payload[name]["evaluate_relevance"] = not skipped
+        payload[name]["generation_sha256"] = receipt_hash
+    evidence = PreviousSelectedPipelineEvidence.model_validate_json(json.dumps(payload))
+    assert evidence.prepared is not None and evidence.generation is not None
+    assert evidence.generation_phase is not None and evidence.evaluation_phase is not None
+    directory = tmp_path / load_pipeline_settings(REPOSITORY).output_directory
+    named = (
+        ("run.json", evidence.prepared), ("generation.json", evidence.generation),
+        ("generation-phase.json", evidence.generation_phase),
+        ("evaluation.json", evidence.evaluation_phase), ("results.json", evidence),
+    )
+    for filename, value in named:
+        write_result(directory / filename, value)
+    before = tuple((directory / filename).read_bytes() for filename, _ in named)
+    event = tmp_path / "event.json"
+    event.write_text(json.dumps({"inputs": {
+        "source_text": inputs.source_text,
+        "reference_summary_text": inputs.reference_summary_text,
+        "evaluate_relevance": not skipped,
+    }}), encoding="utf-8")
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://example.test")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "fixture/repository")
+    monkeypatch.setenv("GITHUB_SHA", evidence.prepared.run.git_sha)
+    monkeypatch.setenv("GITHUB_RUN_ID", evidence.prepared.run.run_id)
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", str(evidence.prepared.run.attempt))
+    assert collect_results(tmp_path) == evidence
+    assert read_pipeline_result(directory / "results.json", 2 << 20) == evidence
+    monkeypatch.setattr(sys, "argv", ["report", "--root", str(tmp_path)])
+    with pytest.raises(SystemExit) as exit_observed:
+        main()
+    assert exit_observed.value.code == 1
+    assert before == tuple((directory / filename).read_bytes() for filename, _ in named)
+    report = (directory / "report.md").read_text(encoding="utf-8")
+    assert "Not recorded" in report
+    if skipped:
+        assert "2 of 3 applicable dimensions complete" in report
+        assert "Skipped - disabled" in report and "Supplied but unused" in report
+
+
 def test_missing_invalid_response_is_failed_not_reported_as_work_never_started() -> None:
     from summary_eval_tests.test_generation_handoff import generation_phase
 

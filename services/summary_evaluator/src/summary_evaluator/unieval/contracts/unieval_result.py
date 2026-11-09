@@ -20,11 +20,11 @@ from summary_evaluator.unieval.contracts.unieval_contract import (
     DIMENSIONS,
     RelevanceSkipReason,
     UnievalContract,
-    UnievalScoringContract,
-    UnievalScoringVersion,
+    UnievalResultContract,
+    UnievalResultVersion,
     UnievalVersion,
 )
-from summary_evaluator.unieval.contracts.unieval_error import UnievalError, UnievalErrorCode
+from summary_evaluator.unieval.contracts.unieval_error import UnievalError, UnievalHealthErrorCode
 from summary_evaluator.unieval.contracts.unieval_request import EffectiveUnievalControls
 
 
@@ -101,6 +101,27 @@ class UnievalWork(UnievalContract):
                 raise ValueError("A source plan must cover the complete source")
         return self
 
+    def require_refusal_index(self, error: UnievalError) -> None:
+        if error.input_tokens is None:
+            return
+        comparisons: int | None = 1
+        if error.dimension == "fluency" or (
+            error.dimension == "consistency" and error.code == "SUMMARY_SENTENCE_TOO_LONG"
+        ):
+            comparisons = self.summary_sentences
+        elif error.dimension == "consistency":
+            comparisons = (
+                self.summary_sentences * len(self.source_spans)
+                if self.summary_sentences is not None else None
+            )
+        if (
+            error.dimension is None
+            or error.index is None
+            or comparisons is None
+            or error.index >= comparisons
+        ):
+            raise ValueError("A measured refusal requires its actual comparison index")
+
 
 class UnievalScores(UnievalContract):
     fluency: Score | None = None
@@ -115,8 +136,8 @@ class UnievalTimings(UnievalContract):
     total: Milliseconds | None = None
 
 
-class UnievalResult(UnievalScoringContract):
-    version: UnievalScoringVersion
+class UnievalResult(UnievalResultContract):
+    version: UnievalResultVersion
     status: Literal["complete", "partial", "failed"]
     execution_id: Uuid4
     request_id: Uuid4 | None
@@ -133,6 +154,27 @@ class UnievalResult(UnievalScoringContract):
 
     @model_validator(mode="after")
     def require_observed_scores(self) -> Self:
+        if any(
+            error.code == "MODEL_INPUT_TOO_LONG"
+            or (
+                error.allowed_tokens is not None
+                and (
+                    self.effective_settings is None
+                    or error.allowed_tokens != self.effective_settings.max_input_tokens
+                )
+            )
+            for error in self.errors
+        ):
+            raise ValueError("Input refusals require public dimensions and resolved allowances")
+        if any(error.code == "WINDOW_BUDGET_INSUFFICIENT" for error in self.errors) and (
+            self.effective_settings is None
+            or self.effective_settings.consistency_source_mode != "all_source_windows"
+            or self.work.consistency.planned is not None
+            or self.work.source_spans
+        ):
+            raise ValueError("Window geometry requires a refused explicit source-window plan")
+        for error in self.errors:
+            self.work.require_refusal_index(error)
         expected_skip: RelevanceSkipReason | None = None
         if self.effective_settings is not None:
             expected_skip = (
@@ -187,7 +229,7 @@ class UnievalHealth(UnievalContract):
     worker: WorkerIdentity | None
     queue_depth: Count
     queue_capacity: PositiveCount
-    failure_code: UnievalErrorCode | None
+    failure_code: UnievalHealthErrorCode | None
 
     @model_validator(mode="after")
     def require_ready_identity(self) -> Self:

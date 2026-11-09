@@ -1,6 +1,6 @@
 # Run the local UniEval API
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How to prepare the named resources, start the real evaluator and retain its
 actual applicable-score response. This is separate from workflow generation.
@@ -61,6 +61,11 @@ spans and planned/completed counts. Three applicable scores with an authorized
 relevance skip and no errors are complete. Missing required work is not zero;
 an attempted relevance failure is not a skip. Supplied but unused reference
 bytes still have a hash.
+For a size refusal, inspect the affected dimension and zero-based comparison
+index with `input_tokens` against `allowed_tokens`. These are measured complete
+inputs, not component estimates. Missing historical measurements remain
+unavailable. `WINDOW_BUDGET_INSUFFICIENT` is a separate source-progress/overlap
+refusal; it does not claim that an assembled article input was too long.
 
 ## Capture real offline predictions
 

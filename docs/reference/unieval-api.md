@@ -1,6 +1,6 @@
 # UniEval evaluation API
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 Which requests, applicable scores and settings belong to the local API.
 The [architecture](../architecture/evaluation/unieval-api.md) defines score
@@ -10,13 +10,14 @@ meaning, complete-source processing and process ownership.
 
 `services/summary_evaluator/src/summary_evaluator/unieval/contracts/` owns
 the native Pydantic contracts and on-demand schemas. Their version is
-`2026-11-08` for requests, scoring results and effective controls.
+`2026-11-08` for requests and effective controls, and `2026-11-09` for results
+and measured errors.
 Health, model identity, work and genuine recordings retain `2026-11-04`.
-Private worker packets use their separate `2026-11-08` version and require the
-resolved relevance skip. Live producers and consumers change together.
-Frozen readers preserve original four-score results and recordings without
+Private worker packets use their separate `2026-11-09` version and require the
+resolved relevance skip and dimension-bound measurements. Live producers and consumers change together.
+Frozen readers preserve original four-score and `2026-11-08` applicable-score results without
 rewriting their versions, hashes or meaning; invalid current data never selects
-an older reader. There are no old-route aliases.
+an older reader. Genuine recordings remain unchanged. There are no old-route aliases.
 There is no result store, polling API or published-data contract.
 
 The comparison workflow starts separate HHEM and native UniEval APIs.
@@ -80,7 +81,7 @@ Table C - Output
 | C6 | `scores` | Nullable finite `fluency`, `coherence`, `consistency` and `relevance`, each from zero to one. No scoring-time rounding or overall aggregate. |
 | C7 | `work` | Per-dimension planned/completed counts, summary-sentence count, source-character count and complete source-span plan. Span offsets are zero-based, end-exclusive Unicode code-point offsets into the original source. |
 | C8 | `timings_ms` | Nullable queue-wait, scoring and total durations, in milliseconds measured with a monotonic clock. |
-| C9 | `errors` | Closed safe codes, nullable dimension/index and fixed message. No exception, raw validation value, source passage or model body. |
+| C9 | `errors` | Closed safe codes, nullable dimension and zero-based comparison index, fixed message and paired nullable `input_tokens`/`allowed_tokens`. Measured refusals count the actual complete assembled input and exceed the configured allowance. Both fields may be absent for historical or unmeasured errors; absence is not reconstructed. No text or raw exception is included. |
 | C10 | `relevance_skip_reason` | Required nullable `disabled` or `reference_not_supplied`. A skip has no relevance score, plan, completed comparison or relevance error. Attempted relevance failures and invalid requests have no skip reason. |
 
 A numeric dimension requires every planned comparison and its observed
@@ -162,7 +163,18 @@ and the complete evaluation deadline uses HTTP 504.
 
 `SUMMARY_SENTENCE_TOO_LONG`, `COHERENCE_INPUT_TOO_LONG`,
 `RELEVANCE_INPUT_TOO_LONG` and `CONSISTENCY_INPUT_TOO_LONG` identify complete
-prompts that do not fit. `WINDOW_LIMIT_EXCEEDED` and
+inputs that do not fit, preserving the affected dimension, comparison index
+and actual token count against its configured allowance. The internal
+`MODEL_INPUT_TOO_LONG` predictor refusal is mapped at the comparison boundary;
+it is never returned as an unidentified public size error.
+`WINDOW_BUDGET_INSUFFICIENT` instead means that the summary-sentence question
+fits but original-character source windows cannot reserve positive progress
+and required overlap. It has no oversized-input measurement.
+An oversized summary-sentence question remains `SUMMARY_SENTENCE_TOO_LONG`
+for consistency planning. The
+[token-policy rationale](../architecture/evaluation/unieval-api.md#design-rationale)
+defines which complete input is counted.
+`WINDOW_LIMIT_EXCEEDED` and
 `COMPARISON_LIMIT_EXCEEDED` refuse excessive plans rather than omit work.
 Input-size failures leave affected scores null; other admissible dimensions
 can finish. A real computed zero is never a missing-value marker.

@@ -34,7 +34,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Optional relevance across API and saved workflow | - | A | DONE | fantastic-happiness | - | Optional UniEval relevance |
 | C2 | 2 | Full-source consistency by default | 1 | B | DONE | legendary-train | - | Full-source UniEval defaults |
-| C3 | 3 | Specific model-input and window-budget errors | 2 | C | PENDING | - | - | - |
+| C3 | 3 | Specific model-input and window-budget errors | 2 | C | DONE | verbose-spork | - | Clarify UniEval size refusals |
 
 ## 2 - Row #1 - Optional relevance across API and saved workflow
 

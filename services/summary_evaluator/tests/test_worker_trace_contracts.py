@@ -43,7 +43,10 @@ from summary_evaluator.shared.exchange_packets import UUID4_EXAMPLE, encode_pack
 from summary_evaluator.shared.fail_runtime import RuntimeFailure
 from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_VERSION
 from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
-from summary_evaluator.unieval.contracts.unieval_worker_contract import UNIEVAL_WORKER_VERSION
+from summary_evaluator.unieval.contracts.unieval_worker_contract import (
+    UNIEVAL_WORKER_VERSION,
+    UnievalWorkerContract,
+)
 from summary_evaluator.unieval.contracts.unieval_worker_message import (
     UnievalBootstrap,
     UnievalCommand,
@@ -79,7 +82,13 @@ def test_private_worker_dates_do_not_reversion_public_scores(
     contract: type[NativeContract],
 ) -> None:
     schema = contract.model_json_schema()
-    assert schema["version"] == HHEM_WORKER_VERSION == UNIEVAL_WORKER_VERSION == "2026-11-08"
+    expected = (
+        UNIEVAL_WORKER_VERSION
+        if issubclass(contract, UnievalWorkerContract)
+        else HHEM_WORKER_VERSION
+    )
+    assert schema["version"] == expected
+    assert HHEM_WORKER_VERSION == "2026-11-08" and UNIEVAL_WORKER_VERSION == "2026-11-09"
     assert schema["properties"]["version"]["const"] == schema["version"]
     assert "operation_metadata" in schema["required"]
     assert "replace old owned processes" in schema["readCompatibility"]
