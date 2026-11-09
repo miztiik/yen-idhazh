@@ -7,6 +7,7 @@
     {"change": "Declare published UTC days and public-root-relative file names.","version": "2026-10-03","why": "Static builds read a named inventory instead of walking an archive."}
   ],
   "dates": [
+    "2026-11-09",
     "2026-11-08",
     "2026-11-07",
     "2026-11-06",
@@ -94,9 +95,9 @@
     {"bytes": 1663315,"items": 0,"path": "assist/index/2026-09.json","root": "public"},
     {"bytes": 4082304,"items": 0,"path": "assist/index/2026-10.bin","root": "public"},
     {"bytes": 1804729,"items": 0,"path": "assist/index/2026-10.json","root": "public"},
-    {"bytes": 1200384,"items": 0,"path": "assist/index/2026-11.bin","root": "public"},
-    {"bytes": 525189,"items": 0,"path": "assist/index/2026-11.json","root": "public"},
-    {"bytes": 5293,"items": 0,"path": "console/band.json","root": "public"},
+    {"bytes": 1219968,"items": 0,"path": "assist/index/2026-11.bin","root": "public"},
+    {"bytes": 533872,"items": 0,"path": "assist/index/2026-11.json","root": "public"},
+    {"bytes": 4922,"items": 0,"path": "console/band.json","root": "public"},
     {"bytes": 11547,"items": 4,"path": "digest/2026/08/21/digest.json","root": "public"},
     {"bytes": 4583,"items": 0,"path": "digest/2026/08/21/run.json","root": "public"},
     {"bytes": 27985,"items": 10,"path": "digest/2026/08/22/digest.json","root": "public"},
@@ -255,6 +256,8 @@
     {"bytes": 59009,"items": 0,"path": "digest/2026/11/07/run.json","root": "public"},
     {"bytes": 769951,"items": 393,"path": "digest/2026/11/08/digest.json","root": "public"},
     {"bytes": 52460,"items": 0,"path": "digest/2026/11/08/run.json","root": "public"},
+    {"bytes": 99566,"items": 51,"path": "digest/2026/11/09/digest.json","root": "public"},
+    {"bytes": 6620,"items": 0,"path": "digest/2026/11/09/run.json","root": "public"},
     {"bytes": 232658,"items": 0,"path": "source-health.json","root": "public"},
     {"bytes": 5985,"items": 0,"path": "compact/run-shards/daily/2026/10/01.parquet","root": "state"},
     {"bytes": 5986,"items": 0,"path": "compact/run-shards/daily/2026/10/02.parquet","root": "state"},
@@ -559,7 +562,7 @@
     {"bytes": 5626,"items": 0,"path": "raw/run-shards/2026/10/11/01a12c0c-ffa5-8f85-9fd8-de8fc15684f8.parquet","root": "state"},
     {"bytes": 5682,"items": 0,"path": "raw/run-shards/2026/10/11/01a12d2f-f6c6-8e13-968b-e5d8f66aa6c4.parquet","root": "state"}
   ],
-  "total_bytes": 79558060,
-  "total_items": 27509,
+  "total_bytes": 79692142,
+  "total_items": 27560,
   "version": "2026-10-03T13:33"
 }
