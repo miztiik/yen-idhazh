@@ -20,8 +20,7 @@ Ordinary required pull-request CI remains separate.
 Follow the [local execution boundary](run-the-gates.md#independent-text-analysis-service).
 The workflow verifies the named native locks, syncs the frozen GLiNER
 development environment, prepares the selected spaCy wheel and configured
-GLiNER snapshot, and checks installation compatibility. The providers retain
-independent production manifests.
+GLiNER snapshot. The providers retain independent production manifests.
 
 The caller under `tools/text-analysis-caller/` starts the existing
 `services/text_analysis/hosting/serve_apis.py` assembly as a child. It uses
