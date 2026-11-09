@@ -167,9 +167,11 @@ commit with credentials disabled and verifies the checkout before execution.
 
 The workflow prepares both providers in the frozen compatible environment.
 The caller in `tools/text-analysis-caller/` starts the existing shared API
-assembly, waits for bounded readiness, sends one spaCy analysis POST and one
-GLiNER NER POST using the same dispatch source, and cleans up its owned process
-group. Dispatch text reaches the caller through the workflow event on stdin.
+assembly, waits for bounded readiness, sends one spaCy analysis POST and
+concurrently dispatches one GLiNER NER POST and one classification POST using
+the unchanged dispatch source. It awaits both GLiNER outcomes before cleaning
+up its owned process group. Native operations remain serialized on the same
+loaded model. Dispatch text reaches the caller through the workflow event on stdin.
 Readiness and cleanup are operational work; no live-check suite, extra
 inference calls or automatic inference retries run in this workflow.
 
@@ -177,14 +179,23 @@ The job display name is `Text analysis`. Its Summary presents soft-wrapped
 escaped source once, spaCy configuration/results and GLiNER
 configuration/results, with expandable type-specific entity tables sorted by
 occurrence count descending. Empty, not-requested, partial and failed states
-remain distinct.
+remain distinct. The GLiNER configuration table records both operations and
+the classification task modes/offerings. A separate expandable classification
+table retains every selected ID, historical display name and native score;
+higher scores mean stronger model confidence, not correctness percentages.
 
 Only `spacy-results-YYYYMMDD-<run_id>-<attempt>` and
 `gliner-results-YYYYMMDD-<run_id>-<attempt>` are uploaded. Their shared UTC date
 is captured once near job start. Each independent always-run upload contains
 available exact native `request.json`, `response.json`, validated `settings.json`
-and a complete standalone `report.md`. Missing native output stays missing,
-and failures remain nonzero. The existing retention policy applies. A combined
+and a complete standalone `report.md`. GLiNER keeps NER in its root native
+files and adds only `classification/request.json`, `classification/response.json`
+and the exact validated `taxonomy.json` copy. Task definitions come from active
+taxonomy entries, using the existing backend schema through a step-local source
+root, without installing the backend runtime. Independent operation failures do
+not hide successful siblings; missing native output stays missing and failures
+remain nonzero. Offline replay uses these saved files, never current taxonomy.
+The existing retention policy applies. A combined
 report above GitHub's 1 MiB per-step summary limit produces a notice pointing
 to both complete provider reports, never an unuploaded combined file.
 Source text is visible to run viewers.

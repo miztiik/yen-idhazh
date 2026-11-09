@@ -3,9 +3,9 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import httpx
+from collect_operations import Outcome
 from gliner_api.declare_api_contracts import NER_PATH, NerRequest, NerResult
 from gliner_api.declare_api_contracts import ErrorResult as GlinerError
 from gliner_api.load_settings import SETTINGS_PATH as GLINER_SETTINGS_PATH
@@ -29,13 +29,6 @@ class Inputs:
     profile: str
     feature_mode: str
     custom_features: str
-
-
-@dataclass(frozen=True)
-class Outcome:
-    result: dict[str, Any] | None = None
-    error: str | None = None
-    incomplete: bool = False
 
 
 def read_inputs(event: object, environment: dict[str, str]) -> Inputs:
@@ -94,31 +87,31 @@ def spacy_request(inputs: Inputs, health: TextAnalysisHealth) -> AnalyzeTextRequ
     return request
 
 
-def _send(
-    client: httpx.Client,
+async def send_request(
+    client: httpx.AsyncClient,
     path: str,
     request: bytes,
     directory: Path,
-    provider: str,
 ) -> httpx.Response:
-    write_atomic(directory / provider / "request.json", request)
-    response = client.post(path, content=request, headers={"content-type": "application/json"})
-    write_atomic(directory / provider / "response.json", response.content)
+    write_atomic(directory / "request.json", request)
+    response = await client.post(
+        path, content=request, headers={"content-type": "application/json"}
+    )
+    write_atomic(directory / "response.json", response.content)
     return response
 
 
-def collect_spacy(
-    client: httpx.Client, inputs: Inputs, health: TextAnalysisHealth, directory: Path
+async def collect_spacy(
+    client: httpx.AsyncClient, inputs: Inputs, health: TextAnalysisHealth, directory: Path
 ) -> Outcome:
     """Collect and validate exactly one spaCy analysis response."""
     try:
         request = spacy_request(inputs, health)
-        response = _send(
+        response = await send_request(
             client,
             ANALYZE_TEXT_PATH,
             request.model_dump_json(exclude_none=True).encode("utf-8"),
-            directory,
-            "spacy",
+            directory / "spacy",
         )
         if response.status_code in (200, 422):
             try:
@@ -151,14 +144,14 @@ def collect_spacy(
         return Outcome(error="The spaCy request failed or returned an invalid response.")
 
 
-def collect_gliner(
-    client: httpx.Client, inputs: Inputs, labels: list[str], directory: Path
+async def collect_gliner(
+    client: httpx.AsyncClient, inputs: Inputs, settings: ServiceSettings, directory: Path
 ) -> Outcome:
     """Collect and validate exactly one GLiNER named-entity response."""
     try:
-        request = NerRequest(text=inputs.text, labels=labels)
-        response = _send(
-            client, NER_PATH, request.model_dump_json().encode("utf-8"), directory, "gliner"
+        request = NerRequest(text=inputs.text, labels=gliner_labels(settings))
+        response = await send_request(
+            client, NER_PATH, request.model_dump_json().encode("utf-8"), directory / "gliner"
         )
         if response.status_code == 200:
             result = NerResult.model_validate_json(response.content)
@@ -166,4 +159,4 @@ def collect_gliner(
         error = GlinerError.model_validate_json(response.content)
         return Outcome(error=f"{error.error.code}: {error.error.message}")
     except (httpx.HTTPError, OSError, ValidationError, ValueError):
-        return Outcome(error="The GLiNER request failed or returned an invalid response.")
+        return Outcome(error="The GLiNER NER request failed or returned an invalid response.")

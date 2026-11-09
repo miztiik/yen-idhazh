@@ -11,7 +11,7 @@ because it uses their committed settings and registered `ner-tests.yml`.
 Follow [the text-analysis dispatch procedure](run-spacy-tests.md) for the
 selected ref, profile, source disclosure and report. For a candidate
 observation, inspect one Linux run at the intended commit and compare its
-saved requests and responses with the summary. Both requests use the same
+saved requests and responses with the summary. All operations use the same
 source. This observation is not a test suite or a quality assessment.
 Ordinary required pull-request CI remains separate.
 
@@ -26,24 +26,32 @@ independent production manifests.
 The caller under `tools/text-analysis-caller/` starts the existing
 `services/text_analysis/hosting/serve_apis.py` assembly as a child. It uses
 bounded readiness checks and the existing listener settings, sends one spaCy
-analysis POST and one GLiNER NER POST, and stops its owned process group in a
-`finally` path. Readiness and cleanup are operational steps, not inference
-tests. There are no synthetic probes, classification calls, warm repeats or
-automatic inference retries. The caller uses HTTP rather than provider
-extraction internals; neither API writes report files.
+analysis POST, then dispatches one GLiNER NER POST and one classification POST
+concurrently. Both GLiNER outcomes are awaited before it stops its owned
+process group in a `finally` path. The native provider still serializes its
+operations on one loaded model; caller concurrency adds no second model,
+server or download. Readiness and cleanup are operational steps, not inference
+tests. There are no synthetic inference probes, warm repeats or automatic
+inference retries. The caller uses HTTP rather than provider extraction
+internals; neither API writes report files.
 
 Before startup, the caller saves an exact copy of each provider's settings
 bytes after validation with that provider's native model. It renders available
-results from saved requests, responses and settings, then uploads two
+results from saved requests, responses, settings and the native-validated
+taxonomy copy, then uploads two
 independent provider artifacts even after failure. Each has a complete
 standalone report with its source and the same provider section used in the
-combined Summary. Missing native output is not manufactured. The
+combined Summary. GLiNER NER and classification keep independent outcomes:
+failure of either does not hide the other's successful evidence. Missing
+native output is not manufactured. The
 [dispatch guide](run-spacy-tests.md#inspect-the-results) describes partial,
 empty, not-requested, failed and oversized results, and
 [pure regeneration](run-spacy-tests.md#regenerate-reports-without-inference)
 uses saved native files without loading later configurations or a provider
-runtime. The report does not establish recognition quality, concurrency,
-throughput or news-pipeline integration.
+runtime. The report does not establish recognition quality, parallel native
+inference, throughput or news-pipeline integration. The
+[dispatch guide](run-spacy-tests.md#select-the-ref-and-inputs) owns task
+selection from the active taxonomy and the schema-only backend source-root setup.
 
 ## Start the same application
 

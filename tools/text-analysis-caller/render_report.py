@@ -9,6 +9,7 @@ Offsets are zero-based, half-open Unicode code-point offsets into source_text.
 
 from __future__ import annotations
 
+from render_classifications import ClassificationReport
 from render_configuration import (
     configured_types,
     read_selection,
@@ -35,6 +36,9 @@ from render_tables import (
 from render_tables import (
     render_cell as _cell,
 )
+from render_tables import (
+    render_error as _error,
+)
 
 ENTITY_NOTE = (
     "Entity groups are sorted by returned occurrence count, descending; ties use "
@@ -42,20 +46,6 @@ ENTITY_NOTE = (
     "not weights. Row IDs retain original group order. Positions are zero-based, "
     "half-open Unicode code-point offsets into the unchanged source."
 )
-
-
-def _error(value: object, *, feature: str | None = None, spacy: bool = False) -> str:
-    keys = {"code", "message", "retryable"} | ({"feature"} if spacy else set())
-    error = _object(value, keys)
-    code = _text(error["code"], nonblank=True)
-    message = _text(error["message"])
-    if type(error["retryable"]) is not bool:
-        raise ValueError("Expected a boolean retryable field")
-    if spacy and error["feature"] != feature:
-        raise ValueError("Error feature does not match its outcome")
-    if feature is not None and code not in {"FEATURE_FAILED", "FEATURE_UNAVAILABLE"}:
-        raise ValueError("Invalid feature error code")
-    return f"{_cell(code)}: {_cell(message)}"
 
 
 def _has_error(value: object) -> bool:
@@ -220,6 +210,7 @@ def render_gliner_results(
     gliner_labels: list[str] | None = None,
     gliner_request: dict[str, object] | None = None,
     gliner_settings: dict[str, object] | None = None,
+    classification: ClassificationReport | None = None,
 ) -> str:
     """Group flat native GLiNER mentions by exact text and requested label."""
     source = _text(source_text)
@@ -250,7 +241,9 @@ def render_gliner_results(
     return "\n\n".join(
         [
             "## GLiNER results",
-            render_gliner_configuration(gliner_request, result, gliner_settings, labels),
+            render_gliner_configuration(
+                gliner_request, result, gliner_settings, labels, classification=classification
+            ),
             "### Results",
             outcome,
             ENTITY_NOTE,
@@ -258,6 +251,7 @@ def render_gliner_results(
             "confidence, not calibrated correctness. It is not comparable to YAKE scores. "
             "Every occurrence retains its own score; GLiNER returns no sentence indexes.",
             render_entity_tables(groups, labels, prefix="K", state=state, gliner=True),
+            *([classification.content] if classification is not None else []),
         ]
     )
 
@@ -279,6 +273,7 @@ def render_report(
     spacy_settings: dict[str, object] | None = None,
     gliner_request: dict[str, object] | None = None,
     gliner_settings: dict[str, object] | None = None,
+    classification: ClassificationReport | None = None,
 ) -> str:
     """Compose the source, spaCy and GLiNER sections without truncating results."""
     return compose_report(
@@ -297,5 +292,6 @@ def render_report(
             gliner_labels=gliner_labels,
             gliner_request=gliner_request,
             gliner_settings=gliner_settings,
+            classification=classification,
         ),
     )

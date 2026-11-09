@@ -482,8 +482,10 @@ uv lock --locked --project .\services\text_analysis\spacy
 Do not install, import, lint, type-check, start or load this service locally.
 The [operator guide](run-spacy-tests.md) owns manual dispatch and result
 inspection. The manual workflow is not a functional gate or a test suite:
-it prepares both providers, sends one analysis request to each for the same
-source and reports the native results. It does not claim recognition quality.
+it prepares both providers, sends one spaCy analysis request and concurrent
+GLiNER NER/classification requests for the same source, and reports their
+independent native results. Native GLiNER operations still share one model
+and execute serially. The report does not claim recognition quality.
 Ordinary required CI and existing independent model-free tests remain separate;
 ordinary CI does not test the workflow declaration or execute the service.
 

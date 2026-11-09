@@ -69,6 +69,20 @@ def render_cell(value: object) -> str:
     )
 
 
+def render_error(value: object, *, feature: str | None = None, spacy: bool = False) -> str:
+    keys = {"code", "message", "retryable"} | ({"feature"} if spacy else set())
+    error = read_object(value, keys)
+    code = read_text(error["code"], nonblank=True)
+    message = read_text(error["message"])
+    if type(error["retryable"]) is not bool:
+        raise ValueError("Expected a boolean retryable field")
+    if spacy and error["feature"] != feature:
+        raise ValueError("Error feature does not match its outcome")
+    if feature is not None and code not in {"FEATURE_FAILED", "FEATURE_UNAVAILABLE"}:
+        raise ValueError("Invalid feature error code")
+    return f"{render_cell(code)}: {render_cell(message)}"
+
+
 def render_table(
     letter: str,
     title: str,
