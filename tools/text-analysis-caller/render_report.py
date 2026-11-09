@@ -144,7 +144,8 @@ def _table(
 
 def render_source(source_text: str) -> str:
     """Render the unchanged source once in an expanded, escaped preformatted block."""
-    return "## Source text\n\n<pre>" + html.escape(_text(source_text), quote=True) + "</pre>"
+    source = html.escape(_text(source_text), quote=True).replace("\r", "&#13;")
+    return "## Source text\n\n<pre><code>" + source + "</code></pre>"
 
 
 def _group_rows(items: object, source: str, *, terms: bool) -> list[list[str]]:
