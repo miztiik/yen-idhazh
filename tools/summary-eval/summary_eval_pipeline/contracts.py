@@ -21,8 +21,16 @@ from summary_evaluator.shared.contracts.base import (
     Uuid4,
     validate_text,
 )
+from summary_evaluator.unieval.contracts.previous_selected_unieval_result import (
+    PreviousSelectedUnievalResult,
+)
+from summary_evaluator.unieval.contracts.previous_unieval_result import (
+    PreviousUnievalResult as UnievalResult,
+)
 from summary_evaluator.unieval.contracts.unieval_contract import DIMENSIONS
-from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
+from summary_evaluator.unieval.contracts.unieval_result import (
+    UnievalResult as CurrentUnievalResult,
+)
 
 from idhazh.contracts.app_config import ModelsFile
 
@@ -257,7 +265,10 @@ class ServerOutcome(WorkflowContract):
     cleanup_error_code: str | None = None
 
 
-def has_completed_score(evaluation: EvaluationResult | None, unieval: UnievalResult | None) -> bool:
+def has_completed_score(
+    evaluation: EvaluationResult | None,
+    unieval: UnievalResult | PreviousSelectedUnievalResult | CurrentUnievalResult | None,
+) -> bool:
     return (evaluation is not None and evaluation.hhem is not None) or (
         unieval is not None
         and any(getattr(unieval.scores, dimension) is not None for dimension in DIMENSIONS)

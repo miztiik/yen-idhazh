@@ -23,6 +23,7 @@ from summary_evaluator.hhem.resolve_request import resolve_request
 from summary_evaluator.serve_http.load_scorer_settings import load_hhem_settings as load_settings
 from summary_evaluator.shared.contracts.base import NativeContract
 from summary_evaluator.shared.contracts.worker_identity import WorkerIdentity
+from summary_evaluator.unieval.contracts.previous_unieval_result import PreviousUnievalResult
 from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 
 REPOSITORY = Path(__file__).resolve().parents[4]
@@ -147,12 +148,14 @@ def example_window_outcome() -> WindowOutcome:
     )
 
 
-def example_unieval_result(reference_hash: str) -> UnievalResult:
+def example_previous_unieval_result(reference_hash: str) -> PreviousUnievalResult:
     """Supply zero-valued contract examples, not model prediction evidence."""
     from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
     from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
+    from summary_evaluator.unieval.contracts.previous_unieval_result import (
+        PreviousEffectiveUnievalControls,
+    )
     from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_VERSION
-    from summary_evaluator.unieval.contracts.unieval_request import EffectiveUnievalControls
     from summary_evaluator.unieval.contracts.unieval_result import (
         DimensionWork,
         SourceSpan,
@@ -170,7 +173,7 @@ def example_unieval_result(reference_hash: str) -> UnievalResult:
         ).read_bytes()
     )
     work = DimensionWork(planned=1, completed=1)
-    return UnievalResult(
+    return PreviousUnievalResult(
         version=UNIEVAL_VERSION,
         status="complete",
         execution_id=OPERATION_ID,
@@ -179,8 +182,8 @@ def example_unieval_result(reference_hash: str) -> UnievalResult:
         reference_summary_sha256=reference_hash,
         model=model,
         worker=example_worker().model_copy(update={"pid": 1235}),
-        effective_settings=EffectiveUnievalControls(
-            **settings.scoring.model_dump(),
+        effective_settings=PreviousEffectiveUnievalControls(
+            **settings.scoring.model_dump(exclude={"evaluate_relevance"}),
             source_budget_tokens=settings.scoring.source_window_tokens,
         ),
         scores=UnievalScores(fluency=0.0, coherence=0.0, consistency=0.0, relevance=0.0),
@@ -196,3 +199,14 @@ def example_unieval_result(reference_hash: str) -> UnievalResult:
         timings_ms=UnievalTimings(queue_wait=0, scoring=0, total=0),
         errors=(),
     )
+
+
+def example_unieval_result(reference_hash: str) -> UnievalResult:
+    """Supply a current contract example, not a model prediction."""
+    from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_RESULT_VERSION
+
+    payload = example_previous_unieval_result(reference_hash).model_dump(mode="json")
+    payload["version"] = UNIEVAL_RESULT_VERSION
+    payload["relevance_skip_reason"] = None
+    payload["effective_settings"]["evaluate_relevance"] = True
+    return UnievalResult.model_validate_json(json.dumps(payload))

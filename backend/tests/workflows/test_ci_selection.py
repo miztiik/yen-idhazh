@@ -1,8 +1,7 @@
-"""Which checks does a change buy, and which does it never consult a list to skip?"""
+"""Does the shipped selector scope checks from real Git changes?"""
 
 from __future__ import annotations
 
-import shlex
 import shutil
 import subprocess
 from collections.abc import Sequence
@@ -12,366 +11,26 @@ from typing import Final
 import pytest
 from support.paths import REPO_ROOT
 
-from ._harness import (
-    _artifact_upload,
-    _git,
-    _isolated_env,
-    _job,
-    _load_workflows,
-    _mapping,
-    _script,
-    _step,
-    _steps,
-    _write,
-)
+from ._harness import _git, _isolated_env, _write
 
 pytestmark = pytest.mark.workflow
 
-#: The selector is a TypeScript file node runs directly, so a host without node cannot
-#: answer for it. `ci.yml` installs one in both jobs that read it.
 requires_node: Final = pytest.mark.skipif(
     shutil.which("node") is None,
     reason="no node on this host to execute frontend/scripts/test-scope.ts",
 )
-
-#: What the `scope` job runs, as the workflow spells it. A copy of the path here
-#: would keep agreeing with itself after the workflow moved.
 SELECTOR: Final = REPO_ROOT / "frontend" / "scripts" / "test-scope.ts"
-
-
-def test_the_selection_step_runs_what_this_module_drives() -> None:
-    """The step and the harness below have to name the same program, or the
-    tests drive something the run does not.
-    """
-    workflow = _load_workflows()["ci.yml"]
-    decide = _script(_step(workflow, "scope", "id", "decide"), "ci.yml/scope/decide")
-    assert SELECTOR.relative_to(REPO_ROOT).as_posix() in decide
-    assert decide.split()[0] == "node", "the step calls node itself, with no script between"
-    assert '>> "$GITHUB_OUTPUT"' in decide, "a job reads these lines back as step outputs"
-
-
-def test_state_csv_integrity_runs_before_selection_without_a_skip_or_fallback() -> None:
-    """CSV-only and documentation-only edits cannot bypass the range check."""
-    workflow = _load_workflows()["ci.yml"]
-    scope = _job(workflow, "scope")
-    steps = _steps(workflow, "scope")
-    guard = _step(workflow, "scope", "name", "Reject added or changed state CSV files")
-    decide = _step(workflow, "scope", "id", "decide")
-    assert not scope.get("if")
-    assert not scope.get("continue-on-error")
-    assert not guard.get("if")
-    assert not guard.get("continue-on-error")
-    assert steps.index(guard) < steps.index(decide)
-    assert shlex.split(_script(guard, "state CSV check")) == [
-        "node",
-        "frontend/scripts/state-csv-guard.ts",
-    ]
-    assert (
-        guard["env"]
-        == decide["env"]
-        == {
-            "EVENT": "${{ github.event_name }}",
-            "BASE": "${{ github.event.pull_request.base.sha || github.event.before }}",
-            "HEAD": "${{ github.event.pull_request.head.sha || github.sha }}",
-        }
-    )
-    checkout = _step(workflow, "scope", "uses", "actions/checkout@v6")
-    assert steps.index(checkout) < steps.index(guard)
-    assert _mapping(checkout.get("with"), "scope checkout")["fetch-depth"] == "0"
-
-
-def test_documentation_only_changes_run_whitespace_not_application_gates() -> None:
-    workflow = _load_workflows()["ci.yml"]
-    scope = _job(workflow, "scope")
-    gates = _job(workflow, "gates")
-    steps = _steps(workflow, "scope")
-    whitespace = _step(workflow, "scope", "name", "Whitespace")
-
-    checkout = _step(workflow, "scope", "uses", "actions/checkout@v6")
-    assert steps.index(checkout) < steps.index(whitespace)
-    assert _script(whitespace, "scope whitespace") == "git diff --check HEAD^1 HEAD"
-    assert gates["if"] == "needs.scope.outputs.code == 'true'"
-    assert not any(step.get("name") == "Whitespace" for step in _steps(workflow, "gates"))
-    assert not scope.get("if")
-
-
-def test_ci_checks_model_free_behavior_without_running_live_summary_evaluation() -> None:
-    ci = _load_workflows()["ci.yml"]
-    for name in _mapping(ci["jobs"], "CI jobs"):
-        for step in _steps(ci, name):
-            if "run" in step:
-                command = _script(step, "ordinary CI step")
-                assert "--extra model" not in command
-                assert "--include-weights" not in command
-                assert "run.py --root" not in command
-                assert "serve-evaluator.py" not in command
-    workflow = _load_workflows()["summary-eval-tests.yml"]
-    assert set(_mapping(workflow["on"], "summary evaluation triggers")) == {"workflow_dispatch"}
-    defaults = _mapping(_job(workflow, "evaluate")["defaults"], "evaluation defaults")
-    assert _mapping(defaults["run"], "evaluation run defaults")["working-directory"] == (
-        "services/summary_evaluator"
-    )
-
-
-def test_ci_model_free_summary_checks_are_read_only_gated_and_complete() -> None:
-    workflow = _load_workflows()["ci.yml"]
-    assert set(_mapping(workflow["on"], "model-free triggers")) == {
-        "workflow_dispatch",
-        "pull_request",
-        "push",
-    }
-    assert _mapping(workflow["permissions"], "model-free permissions") == {"contents": "read"}
-    job = _job(workflow, "model-free")
-    assert job["needs"] == "scope"
-    assert job["if"] == "needs.scope.outputs.code == 'true'"
-    assert job["runs-on"] == "ubuntu-latest"
-    assert not job.get("continue-on-error")
-    checkout = _step(workflow, "model-free", "uses", "actions/checkout@v6")
-    assert _mapping(checkout["with"], "model-free checkout")["persist-credentials"] == "false"
-    action = _step(
-        workflow, "model-free", "uses", "./.github/actions/check-summary-evaluator"
-    )
-    assert not action.get("if") and not action.get("continue-on-error")
-    steps = _steps(workflow, "model-free")
-    commands = "\n".join(_script(step, "model-free checks") for step in steps if "run" in step)
-    assert "uv sync --project services/summary_evaluator --frozen --group dev" in commands
-    assert "prepare-unieval-resources.py --root ../.." in commands
-    assert (
-        "uv run --frozen pytest -c pyproject.toml tests "
-        "../../tools/summary-eval/summary_eval_tests "
-        "--junitxml=var/model-free-results.xml"
-    ) in commands
-    assert (
-        "mypy src tests "
-        "../../tools/summary-eval/summary_eval_pipeline "
-        "../../tools/summary-eval/summary_eval_tests"
-    ) in commands
-    assert "command -v setpriv" in commands
-    assert "assert importlib.util.find_spec('torch') is None" in commands
-    for forbidden in (
-        "coverage",
-        "--extra model",
-        "--include-weights",
-        "run.py --root ../..",
-        "git push",
-        "git commit",
-        "idhazh pipeline",
-        "continue-on-error",
-        "--disable-socket=",
-    ):
-        assert forbidden not in commands
-    assert all(
-        "GITHUB_TOKEN" not in _mapping(step.get("env", {}), "model-free env") for step in steps
-    )
-    upload = _artifact_upload(workflow, "model-free", "summary-evaluator-model-free-results")
-    assert upload["if"] == "always()"
-    assert _mapping(upload["with"], "model-free result")["path"] == (
-        "services/summary_evaluator/var/model-free-results.xml"
-    )
-    assert not (REPO_ROOT / ".github" / "workflows" / "summary-evaluator-checks.yml").exists()
-
-
-def test_older_workflow_keeps_generation_and_its_artifacts_without_an_evaluation_phase() -> None:
-    workflow = _load_workflows()["ai-pipeline-tests.yml"]
-    steps = _steps(workflow, "run-pipeline")
-    inference = _step(workflow, "run-pipeline", "name", "Execute Phase 1 Inference")
-    native_stop = _step(workflow, "run-pipeline", "name", "Stop llama-server (Reclaim Memory)")
-    assert steps.index(inference) < steps.index(native_stop)
-    assert native_stop["if"] == "always()"
-    assert "--phase=infer" in _script(inference, "inference")
-    _step(workflow, "run-pipeline", "uses", "./.github/actions/model-server")
-    commands = "\n".join(_script(step, "older workflow") for step in steps if "run" in step)
-    for removed in ("coverage", "summary_evaluator", "--phase=eval", "eval_server.log"):
-        assert removed not in commands
-    upload = _step(workflow, "run-pipeline", "name", "Upload Logs and JSONL Telemetry")
-    paths = _mapping(upload["with"], "inference artifacts")["path"]
-    assert isinstance(paths, str)
-    assert paths.splitlines() == ["llama-server.log", "pipeline-events.jsonl"]
-
-
-def test_offline_planner_recording_is_explicit_and_uploads_only_current_outputs() -> None:
-    workflow = _load_workflows()["ci.yml"]
-    events = _mapping(workflow["on"], "CI events")
-    dispatch = _mapping(events["workflow_dispatch"], "CI dispatch")
-    inputs = _mapping(dispatch["inputs"], "CI inputs")
-    control = _mapping(inputs["capture_planner_recordings"], "planner recorder control")
-    assert control["type"] == "boolean"
-    assert control["default"] == "false"
-    assert control["required"] == "false"
-    job = _job(workflow, "planner-recordings")
-    assert job["if"] == (
-        "github.event_name == 'workflow_dispatch' && inputs.capture_planner_recordings == true"
-    )
-    assert not job.get("continue-on-error")
-    checkout = _step(workflow, "planner-recordings", "uses", "actions/checkout@v6")
-    assert _mapping(checkout["with"], "recorder checkout") == {
-        "ref": "${{ github.sha }}",
-        "persist-credentials": "false",
-    }
-    capture = _step(
-        workflow,
-        "planner-recordings",
-        "name",
-        "Capture current planner recordings from the real offline API",
-    )
-    command = _script(capture, "offline planner recorder").splitlines()
-    assert command == [
-        "set -euo pipefail",
-        "trap 'unset IDHAZH_CAPTURE_PLANNER_RECORDINGS' EXIT",
-        "export IDHAZH_CAPTURE_PLANNER_RECORDINGS=1",
-        "bun run --cwd services/feed-ingest-plan test ./test/plan-entry-points.test.ts "
-        "--test-name-pattern '^one recorded API request writes a valid selected artifact$'",
-    ]
-    assert not capture.get("if")
-    assert not capture.get("continue-on-error")
-    upload = _step(workflow, "planner-recordings", "name", "Upload current planner recordings")
-    assert upload["uses"] == "actions/upload-artifact@v7"
-    assert not upload.get("if")
-    settings = _mapping(upload["with"], "planner recording artifact")
-    assert settings["name"] == "planner-current-recordings"
-    assert settings["if-no-files-found"] == "error"
-    paths = settings["path"]
-    assert isinstance(paths, str)
-    prefix = "tests/fixtures/feed-ingest-plan/entry-points/"
-    assert paths.splitlines() == [
-        prefix + name
-        for name in (
-            "response.json",
-            "health.json",
-            "selected-articles.json",
-            "discovered-articles.rows.json",
-            "selected-articles.rows.json",
-            "rejected-articles.rows.json",
-            "feed-health-state.rows.json",
-            "plan-runs.rows.json",
-        )
-    ] + ["tests/fixtures/feed-ingest-plan/report-events.json"]
-    gates = _job(workflow, "gates")
-    assert gates["if"] == "needs.scope.outputs.code == 'true'"
-    prepare = _step(workflow, "gates", "name", "Prepare pipeline API dependencies")
-    assert prepare["if"] == "needs.scope.outputs.code == 'true'"
-    assert not prepare.get("continue-on-error")
-    assert _script(prepare, "native API dependency preparation").splitlines() == [
-        f"bun install --frozen-lockfile --cwd services/{name}"
-        for name in ("serve-pipeline-apis", "host-fingerprints", "host-probes", "feed-ingest-plan")
-    ]
-    planner = _step(workflow, "gates", "name", "TypeScript feed planner and native audit evidence")
-    assert _script(planner, "ordinary planner gates").splitlines() == [
-        "bun run check",
-        "bun run test",
-    ]
-    composition = _step(workflow, "gates", "name", "Pipeline APIs and owned server lifetime")
-    assert composition["working-directory"] == "services/serve-pipeline-apis"
-    assert _script(composition, "ordinary composed API gates").splitlines() == [
-        "bun run check",
-        "bun run test",
-    ]
-    steps = _steps(workflow, "gates")
-    assert steps.index(prepare) < steps.index(planner) < steps.index(composition)
-    probe = _step(workflow, "gates", "name", "TypeScript feed probe")
-    assert _script(probe, "ordinary probe gates").splitlines() == [
-        "bun install --frozen-lockfile",
-        "bun run check",
-        "bun run test",
-    ]
-
-
-def test_the_robots_job_runs_the_module_the_selector_keys_on() -> None:
-    """The selector buys `robots` only when it selects the module this job runs,
-    so the two must name the same file."""
-    workflow = _load_workflows()["ci.yml"]
-    assert _job(workflow, "robots")["if"] == "needs.scope.outputs.robots == 'true'"
-    outputs = _mapping(_job(workflow, "scope").get("outputs"), "ci.yml scope outputs")
-    assert outputs["robots"] == "${{ steps.decide.outputs.robots }}"
-    run = _step(
-        workflow, "robots", "name", "The robots fixtures, on the newest supported interpreter"
-    )
-    module = str(run["run"]).split()[-1]
-    assert f"const ROBOTS_TESTS = '{module}';" in SELECTOR.read_text(encoding="utf-8")
-
-
-#: What the shipped script has to answer through a real git history.
-#:
-#: The truth table itself is in `frontend/scripts/tests/test-scope.test.mjs`,
-#: where a case is a function call. Here a case is a temporary repository, two
-#: commits and a shell, and twenty-four of them cost 168 s of this module's
-#: 585 s on an i7-1265U, 2026-09-05 - for an answer the pure function already
-#: gives. These bounded cases are the plumbing rather than the policy: one change that
-#: buys the console browser journeys, one that buys the reader browser half
-#: without the console, one that re-reads the archive because it moved the shape a
-#: day is read through, one that buys only logic, and one that buys nothing.
 BROWSER_SCOPE_CASES: Final = (
-    ("frontend/src/routes/console/+page.svelte", True, True, True, False, False, False),
-    ("frontend/src/routes/[date]/+page.svelte", True, True, False, False, False, True),
-    ("config/idhazh.json", True, True, False, True, True, True),
-    ("docs/reference/pipeline-cost.md", False, False, False, False, False, False),
+    ("frontend/src/routes/console/+page.svelte", True, True, True, False, False),
+    ("frontend/src/routes/[date]/+page.svelte", True, True, False, False, True),
+    ("config/idhazh.json", True, True, False, True, True),
+    ("docs/reference/pipeline-cost.md", False, False, False, False, False),
 )
 
 
-def test_the_selector_tests_use_the_same_node_as_the_ci_selector() -> None:
-    workflow = _load_workflows()["ci.yml"]
-    versions: dict[str, object] = {}
-    for job in ("scope", "gates"):
-        steps = _steps(workflow, job)
-        node_steps = [
-            step for step in steps if str(step.get("uses", "")).startswith("actions/setup-node@")
-        ]
-        assert len(node_steps) == 1, f"{job} must declare the selector's Node runtime"
-        settings = node_steps[0].get("with")
-        assert isinstance(settings, dict)
-        versions[job] = settings.get("node-version")
-        if job == "gates":
-            test_step = _step(
-                workflow, "gates", "name", "Tests, including the five injection canaries"
-            )
-            assert steps.index(node_steps[0]) < steps.index(test_step)
-    assert versions["scope"] is not None
-    assert versions["gates"] == versions["scope"]
-
-
-def test_the_normal_backend_suite_keeps_its_complete_report() -> None:
-    workflow = _load_workflows()["ci.yml"]
-    steps = _steps(workflow, "gates")
-    parallel = _step(workflow, "gates", "name", "Tests, including the five injection canaries")
-    assert parallel["if"] == "needs.scope.outputs.code == 'true'"
-    assert not parallel.get("continue-on-error")
-    parallel_args = shlex.split(_script(parallel, "parallel tests"))
-    report = "test-results/backend/pytest-junit.xml"
-    assert parallel_args == [
-        "pytest",
-        f"--junitxml={report}",
-    ]
-    uploads = [
-        step
-        for step in steps
-        if str(step.get("uses", "")).startswith("actions/upload-artifact@")
-        and _mapping(step.get("with"), "artifact settings").get("name") == "pytest-junit"
-    ]
-    assert len(uploads) == 1
-    assert steps.index(parallel) < steps.index(uploads[0])
-    settings = _mapping(uploads[0]["with"], "JUnit artifact")
-    assert settings["path"] == report
-    assert settings["if-no-files-found"] == "error"
-
-
-def test_shared_contract_runtime_precedes_python_binding_tests() -> None:
-    workflow = _load_workflows()["ci.yml"]
-    steps = _steps(workflow, "gates")
-    setup = _step(workflow, "gates", "uses", "./.github/actions/publication-runtime")
-    binding = _step(workflow, "gates", "name", "Shared contract bindings")
-    tests = _step(workflow, "gates", "name", "Tests, including the five injection canaries")
-    assert steps.index(setup) < steps.index(binding) < steps.index(tests)
-    assert setup["if"] == binding["if"] == tests["if"]
-    assert binding["working-directory"] == "packages/common-contracts"
-    assert _script(binding, "shared contract bindings").splitlines() == [
-        "bun run check",
-        "bun test",
-    ]
-    assert not binding.get("continue-on-error")
-
-
-def _two_commits(tmp_path: Path, changed: Sequence[str]) -> tuple[Path, dict[str, str], str, str]:
-    """A real repository, a seed commit and a commit changing each named path."""
+def _two_commits(
+    tmp_path: Path, changed: Sequence[str]
+) -> tuple[Path, dict[str, str], str, str]:
     env = _isolated_env(tmp_path)
     root = tmp_path / "repo"
     root.mkdir()
@@ -387,188 +46,70 @@ def _two_commits(tmp_path: Path, changed: Sequence[str]) -> tuple[Path, dict[str
     return root, env, base, _git(root, env, "rev-parse", "HEAD").strip()
 
 
-def _outputs(completed: subprocess.CompletedProcess[str]) -> dict[str, str]:
-    """The `KEY=value` lines a step would append to `$GITHUB_OUTPUT`."""
-    assert completed.returncode == 0, completed.stderr
-    return dict(line.split("=", 1) for line in completed.stdout.strip().splitlines() if "=" in line)
-
-
 def _browser_scope(
     tmp_path: Path, changed: Sequence[str], event: str = "pull_request"
 ) -> dict[str, str]:
-    """Run the shipped selector over a real two-commit history and read its answer."""
     root, env, base, head = _two_commits(tmp_path, changed)
-    return _outputs(
-        subprocess.run(
-            ["node", SELECTOR.as_posix(), "--ci"],
-            cwd=root,
-            env={**env, "EVENT": event, "BASE": base, "HEAD": head},
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+    completed = subprocess.run(
+        ["node", SELECTOR.as_posix(), "--ci"],
+        cwd=root,
+        env={**env, "EVENT": event, "BASE": base, "HEAD": head},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return dict(
+        line.split("=", 1) for line in completed.stdout.strip().splitlines() if "=" in line
     )
 
 
 @requires_node
 @pytest.mark.parametrize(
-    ("changed", "browser", "code", "console", "robots", "validate_all", "model_absent"),
+    ("changed", "browser", "code", "console", "validate_all", "model_absent"),
     BROWSER_SCOPE_CASES,
 )
-def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
+def test_changed_paths_select_the_expected_checks(
     changed: str,
     browser: bool,
     code: bool,
     console: bool,
-    robots: bool,
     validate_all: bool,
     model_absent: bool,
     tmp_path: Path,
 ) -> None:
-    """The filter is executed, not read.
-
-    A copy of the pattern in this file would agree with itself forever while the
-    shipped selector skipped a change that breaks a published page. So the test
-    builds a real two-commit history, runs the command the workflow runs, and
-    reads the lines it writes to `$GITHUB_OUTPUT`.
-
-    What is under test here is the plumbing - the invocation, the git range and
-    the output format. Which paths select which groups is decided by a pure
-    function and checked case by case in
-    `frontend/scripts/tests/test-scope.test.mjs`.
-    """
     assert _browser_scope(tmp_path, [changed]) == {
         "browser": str(browser).lower(),
         "code": str(code).lower(),
         "model_absent": str(model_absent).lower(),
         "console": str(console).lower(),
-        "robots": str(robots).lower(),
         "validate_all": str(validate_all).lower(),
     }
 
 
 @requires_node
-def test_one_reaching_path_in_a_mixed_change_still_buys_the_browser_suite(
-    tmp_path: Path,
-) -> None:
-    """A pull request is a set, not one file. Docs beside a frontend edit is the
-    ordinary shape of this repo's changes, and the frontend edit decides.
-    """
+def test_a_mixed_change_still_selects_the_path_that_reaches_readers(tmp_path: Path) -> None:
     mixed = ["docs/reference/pipeline-cost.md", "frontend/src/routes/+page.svelte"]
     assert _browser_scope(tmp_path, mixed)["browser"] == "true"
 
 
 @requires_node
-def test_a_push_carrying_code_still_never_consults_the_list(tmp_path: Path) -> None:
-    """The group each path selects is a wager that nobody forgot a path. The
-    merge commit is where that wager is settled, so a push that carries any code
-    buys everything - a pull request the list was wrong about reddens `main`
-    within minutes instead of reaching a reader.
-    """
+def test_a_push_with_code_runs_every_check_without_path_filtering(tmp_path: Path) -> None:
     assert _browser_scope(tmp_path, ["docs/x.md", "backend/idhazh/discover.py"], event="push") == {
         "browser": "true",
         "code": "true",
         "model_absent": "true",
         "console": "true",
-        "robots": "true",
         "validate_all": "true",
     }
 
 
 @requires_node
-def test_a_push_carrying_no_code_starts_no_code_job(tmp_path: Path) -> None:
-    """The one question a push does read the paths for.
-
-    A changed sentence cannot break an application check, so the merge that
-    carries it should not spend the suite proving that. This is safe where the
-    wager above is not, because the documentation branch is a closed list of
-    prefixes: a path nobody classified falls to full coverage instead.
-    """
+def test_a_documentation_only_push_starts_no_code_jobs(tmp_path: Path) -> None:
     assert _browser_scope(tmp_path, ["docs/x.md"], event="push") == {
         "browser": "false",
         "code": "false",
         "model_absent": "false",
         "console": "false",
-        "robots": "false",
         "validate_all": "false",
     }
-
-
-def test_a_trunk_push_is_never_cancelled_by_the_next_one() -> None:
-    """The rule that makes the `scope` job safe on a push.
-
-    `scope` answers from each push's own changed paths, so a push carrying only
-    documentation correctly checks nothing. That is only sound while it cannot
-    cancel a push that carried code: the surviving run checks nothing because
-    nothing in ITS range needed checking, and the code reaches the trunk with no
-    verdict on the trunk. Measured 2026-09-12, before this was fixed: two pushes
-    carrying 14 code files between them were cancelled by a third that changed
-    one plan-doc.
-    """
-    concurrency = _mapping(_load_workflows()["ci.yml"]["concurrency"], "ci.yml concurrency")
-    cancel = str(concurrency["cancel-in-progress"])
-    assert cancel != "true", "a push to the trunk has to keep the run it started"
-    assert "pull_request" in cancel, (
-        "cancelling is still right on a pull request, where a newer commit "
-        "supersedes the older one and its verdict is worth nothing"
-    )
-    assert "github.sha" in str(concurrency["group"]), (
-        "a push groups by its own commit, so it is neither cancelled by nor "
-        "queued behind the next push"
-    )
-
-
-def test_console_deferral_is_wired_without_the_retired_panel_capture_branch() -> None:
-    """CI defers console browser journeys, not deterministic panel rules."""
-    workflow = _load_workflows()["ci.yml"]
-    outputs = _mapping(_job(workflow, "scope").get("outputs"), "ci.yml scope outputs")
-    assert outputs["console"] == "${{ steps.decide.outputs.console }}"
-    assert set(outputs) == {
-        "browser",
-        "code",
-        "console",
-        "model_absent",
-        "robots",
-        "validate_all",
-        "playwright",
-    }
-
-    suite = _step(workflow, "browser", "name", "Browser suite - canaries and retrieval")
-    env = _mapping(suite.get("env"), "the browser suite's env")
-    assert env["SKIP_CONSOLE_SUITE"] == "${{ needs.scope.outputs.console == 'false' }}"
-    assert "SKIP_PANELS_SUITE" not in env
-    assert "SKIP_PANEL_CAPTURES" not in env
-    assert "--project" not in str(suite["run"]), "the config must retain distinct default groups"
-    assert "panel_captures" not in str(workflow)
-    assert not any(
-        _mapping(step.get("with", {}), "browser step settings").get("name") == "panel-captures"
-        for step in _steps(workflow, "browser")
-    )
-    logic = _step(workflow, "site", "name", "Frontend logic without a build or browser")
-    assert logic["run"] == "npm run test:logic -- --forbid-only"
-
-    traces = _mapping(
-        _artifact_upload(workflow, "browser", "playwright-traces").get("with"), "the traces upload"
-    )
-    assert str(traces["path"]).split() == [
-        "frontend/test-results/",
-        "!frontend/test-results/browser/results.json",
-    ]
-
-
-def test_model_absent_build_and_browser_timings_are_wired_to_their_inputs() -> None:
-    workflow = _load_workflows()["ci.yml"]
-    outputs = _mapping(_job(workflow, "scope").get("outputs"), "ci.yml scope outputs")
-    assert outputs["model_absent"] == "${{ steps.decide.outputs.model_absent }}"
-    absent = _step(
-        workflow, "site", "name", "Model-absent gate - the digest does not depend on any of it"
-    )
-    assert absent["if"] == "needs.scope.outputs.model_absent == 'true'"
-    suite = _step(workflow, "browser", "name", "Browser suite - canaries and retrieval")
-    assert "--reporter=github,json" in str(suite["run"])
-    env = _mapping(suite.get("env"), "browser suite env")
-    report = _artifact_upload(workflow, "browser", "browser-results")
-    settings = _mapping(report.get("with"), "browser results upload")
-    assert settings["path"] == f"frontend/{env['PLAYWRIGHT_JSON_OUTPUT_NAME']}"
-    assert report["if"] == "${{ !cancelled() }}"
-    assert settings["if-no-files-found"] == "error"

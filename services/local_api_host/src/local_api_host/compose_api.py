@@ -3,6 +3,7 @@
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
@@ -32,6 +33,14 @@ from local_api_host.propagate_trace_context import (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class ApplicationBinding:
+    """Keep a complete native application beside its immutable hosting settings."""
+
+    app: FastAPI
+    host_settings: HostSettings
+
+
 class _HostedFastAPI(FastAPI):
     """Place trace propagation outside request guards and FastAPI error handling."""
 
@@ -44,6 +53,7 @@ class _HostedFastAPI(FastAPI):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
+        self.host_settings = host_settings
         default_refusal = component.default_refusal
         if default_refusal is None:
             raise ValueError("A local API component must declare its default refusal renderer")
@@ -61,6 +71,13 @@ class _HostedFastAPI(FastAPI):
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         await self._host_entry(scope, receive, send)
+
+
+def bind_application(app: FastAPI) -> ApplicationBinding:
+    """Require the native host's guarded entry and lossless lifecycle contract."""
+    if not isinstance(app, _HostedFastAPI):
+        raise TypeError("Only complete native local API applications can be composed")
+    return ApplicationBinding(app=app, host_settings=app.host_settings)
 
 
 def _cleanup_failures(error: BaseException) -> list[BaseException]:

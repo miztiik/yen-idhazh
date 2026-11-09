@@ -1,19 +1,24 @@
-"""Which unchanged texts and source-processing control can UniEval accept?"""
+"""Which exact texts and omittable scorer controls can UniEval accept?"""
 
 from typing import Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, StrictBool, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from summary_evaluator.shared.contracts.base import Count, NonblankText, PositiveCount, Uuid4
 from summary_evaluator.shared.contracts.optional_fields import is_absent, omit_default
-from summary_evaluator.unieval.contracts.unieval_contract import SourceMode, UnievalContract
+from summary_evaluator.unieval.contracts.unieval_contract import SourceMode, UnievalScoringContract
 
 
-class UnievalRequest(UnievalContract):
+class UnievalRequest(UnievalScoringContract):
     source_text: NonblankText
     summary_text: NonblankText
-    reference_summary_text: NonblankText
+    reference_summary_text: NonblankText | SkipJsonSchema[None] = Field(
+        default=None, exclude_if=is_absent, json_schema_extra=omit_default
+    )
+    evaluate_relevance: StrictBool | SkipJsonSchema[None] = Field(
+        default=None, exclude_if=is_absent, json_schema_extra=omit_default
+    )
     consistency_source_mode: SourceMode | SkipJsonSchema[None] = Field(
         default=None, exclude_if=is_absent, json_schema_extra=omit_default
     )
@@ -24,7 +29,10 @@ class UnievalRequest(UnievalContract):
         default=None, exclude_if=is_absent, json_schema_extra=omit_default
     )
 
-    @field_validator("consistency_source_mode", "request_id", "correlation_id", mode="after")
+    @field_validator(
+        "reference_summary_text", "evaluate_relevance", "consistency_source_mode",
+        "request_id", "correlation_id", mode="after",
+    )
     @classmethod
     def refuse_explicit_null(cls, value: object) -> object:
         if value is None:
@@ -32,9 +40,12 @@ class UnievalRequest(UnievalContract):
         return value
 
 
-class UnievalControls(UnievalContract):
+class UnievalControls(UnievalScoringContract):
     consistency_source_mode: SourceMode
-    max_input_tokens: PositiveCount
+    evaluate_relevance: StrictBool = False
+    max_input_tokens: PositiveCount = Field(
+        description="Operator resource allowance for full question/text input and special tokens."
+    )
     source_window_tokens: PositiveCount
     source_overlap_tokens: Count
     max_source_windows: PositiveCount
@@ -48,4 +59,5 @@ class UnievalControls(UnievalContract):
 
 
 class EffectiveUnievalControls(UnievalControls):
+    evaluate_relevance: StrictBool
     source_budget_tokens: PositiveCount | None

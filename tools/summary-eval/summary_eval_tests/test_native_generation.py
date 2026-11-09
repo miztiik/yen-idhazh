@@ -312,6 +312,7 @@ def test_repeated_generation_calls_are_fresh_and_keep_native_sampling_open(tmp_p
         body = json.loads(recorded.requests[0][1])
         assert body["typical_p"] == declaration["summarizer"]["sampling"]["typical_p"]
         assert [message["role"] for message in body["messages"]] == ["system", "user"]
+        assert inputs.reference_summary_text is not None
         assert inputs.reference_summary_text not in recorded.requests[0][1].decode("utf-8")
 
     asyncio.run(check())

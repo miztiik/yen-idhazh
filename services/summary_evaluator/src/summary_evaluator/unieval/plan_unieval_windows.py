@@ -2,6 +2,7 @@
 
 from bisect import bisect_right
 
+from summary_evaluator.unieval.check_unieval_input_size import check_unieval_input_size
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_result import SourceSpan
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
@@ -17,13 +18,18 @@ def plan_unieval_windows(
 ) -> tuple[tuple[SourceSpan, ...], int]:
     controls = settings.scoring
     template = settings.prompts.consistency
-    prefix_size = max(
-        resources.token_count(template.format(source="", summary=sentence))
-        for sentence in sentences
-    )
+    prefix_size = 0
+    for index, sentence in enumerate(sentences):
+        size = resources.token_count(template.format(source="", summary=sentence))
+        refusal = check_unieval_input_size(
+            size, controls.max_input_tokens, "consistency", index, summary_sentence_only=True,
+        )
+        if refusal is not None:
+            raise UnievalFailure(refusal)
+        prefix_size = max(prefix_size, size)
     budget = min(controls.source_window_tokens, controls.max_input_tokens - prefix_size)
     if budget <= controls.source_overlap_tokens:
-        raise UnievalFailure(UnievalError.from_code("SUMMARY_SENTENCE_TOO_LONG", "consistency"))
+        raise UnievalFailure(UnievalError.from_code("WINDOW_BUDGET_INSUFFICIENT", "consistency"))
     offsets = resources.source_offsets(source)
     boundaries = [
         0,
@@ -44,7 +50,10 @@ def plan_unieval_windows(
                 for sentence in sentences
             )
             if all(
-                resources.token_count(prompt) <= controls.max_input_tokens for prompt in prompts
+                check_unieval_input_size(
+                    resources.token_count(prompt), controls.max_input_tokens, "consistency", index,
+                ) is None
+                for index, prompt in enumerate(prompts)
             ):
                 break
             boundary -= 1
@@ -58,7 +67,7 @@ def plan_unieval_windows(
             )
         ):
             raise UnievalFailure(
-                UnievalError.from_code("CONSISTENCY_INPUT_TOO_LONG", "consistency")
+                UnievalError.from_code("WINDOW_BUDGET_INSUFFICIENT", "consistency")
             )
         spans.append(SourceSpan(start=left, end=right))
         if len(spans) > controls.max_source_windows:
@@ -67,12 +76,12 @@ def plan_unieval_windows(
             break
         if end - start <= controls.source_overlap_tokens:
             raise UnievalFailure(
-                UnievalError.from_code("CONSISTENCY_INPUT_TOO_LONG", "consistency")
+                UnievalError.from_code("WINDOW_BUDGET_INSUFFICIENT", "consistency")
             )
         next_start = boundaries[bisect_right(boundaries, end - controls.source_overlap_tokens) - 1]
         if next_start <= start or next_start > end:
             raise UnievalFailure(
-                UnievalError.from_code("CONSISTENCY_INPUT_TOO_LONG", "consistency")
+                UnievalError.from_code("WINDOW_BUDGET_INSUFFICIENT", "consistency")
             )
         start = next_start
     return tuple(spans), budget

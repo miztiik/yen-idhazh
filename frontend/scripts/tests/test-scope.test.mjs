@@ -274,7 +274,7 @@ test('data helpers select ledger logic and console consumers without unrelated f
 		assert.equal(selection.tooling, false);
 		assert.equal(selection.reasons[0].reason, 'ledger queries and console consumers');
 		assert.deepEqual(ciAnswer([path], true), {
-			browser: true, code: true, modelAbsent: false, console: false, robots: false, validateAll: false
+			browser: true, code: true, modelAbsent: false, console: false, validateAll: false
 		});
 	}
 });
@@ -350,21 +350,6 @@ test('the model-absent build runs for asset dependencies, unknown inputs and eve
 	assert.equal(ciAnswer(['frontend/src/routes/console/+page.svelte', 'frontend/src/lib/assist/day.ts'], true).modelAbsent, true);
 	assert.equal(ciAnswer(['full-ci-run'], false).modelAbsent, true);
 	assert.equal(ciAnswer(['docs/a.md'], false).modelAbsent, false);
-});
-
-test('the second-interpreter robots job runs only when its tests can have moved', () => {
-	for (const path of [
-		'backend/idhazh/extract.py', 'backend/idhazh/sanitize.py', 'backend/tests/test_extract.py',
-		'pyproject.toml', 'new-area/module.ts', 'full-ci-run', 'unresolved-change-base'
-	]) {
-		assert.equal(ciAnswer([path], true).robots, true, path);
-	}
-	for (const path of [
-		'docs/a.md', 'frontend/src/routes/+page.svelte', 'backend/idhazh/ledger.py',
-		'backend/tests/test_ledger.py'
-	]) {
-		assert.equal(ciAnswer([path], true).robots, false, path);
-	}
 });
 
 test('the data mapping preserves broader mixed edits and the unknown-path fallback', () => {
@@ -453,7 +438,7 @@ test('a utility nothing else runs selects only its own test module', () => {
 	assert.deepEqual(selection.groups, ['backend']);
 	assert.deepEqual(selection.backendFiles, ['backend/tests/test_doc_load.py']);
 	assert.deepEqual(ciAnswer([path], true), {
-		browser: false, code: true, modelAbsent: false, console: false, robots: false, validateAll: false
+		browser: false, code: true, modelAbsent: false, console: false, validateAll: false
 	});
 	// A closed list, not a directory rule: the canary build runs this one.
 	assert.equal(selectPaths(['backend/utilities/build_canary_day.py']).backendFiles, null);

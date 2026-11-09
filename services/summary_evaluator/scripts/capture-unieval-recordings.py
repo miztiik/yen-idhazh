@@ -9,6 +9,10 @@ from recording_json import canonical_bytes
 
 from summary_evaluator.serve_http.api_settings import load_scorer_api_settings
 from summary_evaluator.serve_http.load_scorer_settings import load_unieval_settings
+from summary_evaluator.unieval.contracts.previous_unieval_result import (
+    PreviousEffectiveUnievalControls,
+    PreviousUnievalError,
+)
 from summary_evaluator.unieval.contracts.unieval_contract import UNIEVAL_VERSION
 from summary_evaluator.unieval.contracts.unieval_recording import (
     RecordedUnievalCase,
@@ -16,6 +20,7 @@ from summary_evaluator.unieval.contracts.unieval_recording import (
     UnievalRecordingInputs,
     UnievalRecordingPredictions,
 )
+from summary_evaluator.unieval.contracts.unieval_request import UnievalControls, UnievalRequest
 from summary_evaluator.unieval.load_unieval import load_unieval
 from summary_evaluator.unieval.prepare_unieval_resources import (
     atomic_write,
@@ -41,8 +46,14 @@ def main() -> None:
     identity = canonical_bytes(predictor.identity.model_dump(mode="json"))
     cases: list[RecordedUnievalCase] = []
     for case in inputs.cases:
-        selected = settings.model_copy(update={"scoring": case.controls})
-        plan = prepare_unieval(case.request, selected, predictor.resources)
+        controls = UnievalControls.model_validate({
+            **case.controls.model_dump(), "evaluate_relevance": True,
+        })
+        request = UnievalRequest.model_validate({
+            **case.request.model_dump(), "evaluate_relevance": True,
+        })
+        selected = settings.model_copy(update={"scoring": controls})
+        plan = prepare_unieval(request, selected, predictor.resources)
         predictions = tuple(
             RecordedUnievalComparison(
                 dimension=comparison.dimension,
@@ -60,9 +71,14 @@ def main() -> None:
                 input_sha256=hashlib.sha256(
                     canonical_bytes(case.model_dump(mode="json"))
                 ).hexdigest(),
-                effective_settings=plan.controls,
+                effective_settings=PreviousEffectiveUnievalControls.model_validate(
+                    plan.controls.model_dump(exclude={"evaluate_relevance"})
+                ),
                 work=plan.work,
-                errors=plan.errors,
+                errors=tuple(
+                    PreviousUnievalError.model_validate_json(error.model_dump_json())
+                    for error in plan.errors
+                ),
                 comparisons=predictions,
             )
         )

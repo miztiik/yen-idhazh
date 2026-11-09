@@ -5,7 +5,7 @@
     "companion_files": [
       {
         "byte_count": 253708800,
-        "file": "mtp-gemma-4-12B-it-Q4_0.gguf",
+        "file": "MTP/mtp-gemma-4-12B-it-Q4_0.gguf",
         "flag": "--spec-draft-model",
         "repo": "unsloth/gemma-4-12B-it-qat-GGUF",
         "revision": "980b060c40a8539ac159e0501a3e0f66a6365af3",
@@ -70,5 +70,5 @@
     "chat_template_kwargs": {},
     "reasoning_delimiters": null
   },
-  "version": "2026-10-25"
+  "version": "2026-11-08"
 }

@@ -10,7 +10,7 @@ from typing import Literal
 
 import pytest
 from pydantic import ValidationError
-from summary_eval_pipeline.contracts import PreparedRun, text_sha256
+from summary_eval_pipeline.contracts import text_sha256
 from summary_eval_pipeline.failures import WorkflowError
 from summary_eval_pipeline.inputs import ManualInputs
 from summary_eval_pipeline.model_selection import select_model, stage_configuration
@@ -18,6 +18,7 @@ from summary_eval_pipeline.phases import collect_phase
 from summary_eval_pipeline.preparation import prepare_assets, prepare_run, read_prepared
 from summary_eval_pipeline.report_contracts import PipelineEvidence
 from summary_eval_pipeline.report_task import collect_results
+from summary_eval_pipeline.run_contracts import PreparedRun
 from summary_eval_pipeline.settings import load_pipeline_settings
 from summary_evaluator_cases.contract_examples import REPOSITORY
 
@@ -162,10 +163,11 @@ def test_generation_preparation_and_handoff_need_no_evaluator_configuration(
     prepared, selected = prepare_run(tmp_path)
     assert prepared.status == "pending"
     assert prepared.source_sha256 == text_sha256(inputs.source_text)
-    assert prepared.reference_summary_sha256 == text_sha256(inputs.reference_summary_text)
+    assert prepared.reference_summary_sha256 == inputs.reference_summary_sha256
     saved, selected_again = read_prepared(tmp_path)
     assert saved == prepared and selected_again == selected
     assert inputs.source_text not in prepared.model_dump_json()
+    assert inputs.reference_summary_text is not None
     assert inputs.reference_summary_text not in prepared.model_dump_json()
 
 
@@ -252,12 +254,11 @@ def test_reference_identity_is_saved_before_generation_and_changed_reference_is_
 ) -> None:
     inputs = prepare_dispatch(tmp_path, monkeypatch)
     prepared, _ = prepare_run(tmp_path)
-    from summary_eval_pipeline.contracts import text_sha256
-
     assert prepared.status == "pending"
-    assert prepared.reference_summary_sha256 == text_sha256(inputs.reference_summary_text)
+    assert prepared.reference_summary_sha256 == inputs.reference_summary_sha256
     directory = tmp_path / load_pipeline_settings(REPOSITORY).output_directory
     assert not (directory / "generation.json").exists()
+    assert inputs.reference_summary_text is not None
     assert inputs.reference_summary_text not in (directory / "run.json").read_text(encoding="utf-8")
     event = tmp_path / "event.json"
     event.write_text(
@@ -272,7 +273,7 @@ def test_reference_identity_is_saved_before_generation_and_changed_reference_is_
 
 
 @pytest.mark.parametrize("reference", [None, "", " \n", True, "\ud800"])
-def test_invalid_reference_blocks_preparation_before_a_model_or_asset_can_start(
+def test_optional_reference_admits_absence_but_refuses_invalid_supplied_text(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     reference: object,
@@ -284,6 +285,14 @@ def test_invalid_reference_blocks_preparation_before_a_model_or_asset_can_start(
     else:
         payload["reference_summary_text"] = reference
     (tmp_path / "event.json").write_text(json.dumps({"inputs": payload}), encoding="utf-8")
+    if reference is None or reference == "":
+        prepared, _ = prepare_run(tmp_path)
+        assert prepared.reference_summary_sha256 is None and prepared.status == "pending"
+        assert prepared.evaluate_relevance is True
+        assert not (
+            tmp_path / load_pipeline_settings(REPOSITORY).output_directory / "generation.json"
+        ).exists()
+        return
     with pytest.raises(WorkflowError) as failure:
         prepare_assets(tmp_path)
     assert failure.value.error.code == "INPUT_INVALID"
@@ -326,3 +335,26 @@ def test_preparation_reader_never_assumes_assets_were_prepared(change: str) -> N
         ]
     with pytest.raises(ValidationError):
         PreparedRun.model_validate_json(json.dumps(value))
+
+
+@pytest.mark.parametrize("change", ["selection", "absence", "reference"])
+def test_preparation_binds_unused_reference_presence_bytes_and_selection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str,
+) -> None:
+    inputs = prepare_dispatch(tmp_path, monkeypatch)
+    payload = {**inputs.model_dump(), "evaluate_relevance": False}
+    event = tmp_path / "event.json"
+    event.write_text(json.dumps({"inputs": payload}), encoding="utf-8")
+    prepared, _ = prepare_run(tmp_path)
+    assert prepared.evaluate_relevance is False
+    assert prepared.reference_summary_sha256 == inputs.reference_summary_sha256
+    if change == "selection":
+        payload["evaluate_relevance"] = True
+    elif change == "absence":
+        del payload["reference_summary_text"]
+    else:
+        payload["reference_summary_text"] = " Changed reference bytes.\n"
+    event.write_text(json.dumps({"inputs": payload}), encoding="utf-8")
+    with pytest.raises(WorkflowError) as failure:
+        read_prepared(tmp_path)
+    assert failure.value.error.code == "RECEIPT_INVALID"

@@ -6,15 +6,13 @@ from pathlib import Path
 from string import Template
 
 from summary_eval_pipeline.contracts import (
-    WORKFLOW_VERSION,
-    GenerationReceipt,
     LoadedModel,
-    PreparedRun,
     RunIdentity,
     text_sha256,
 )
 from summary_eval_pipeline.inputs import ManualInputs
 from summary_eval_pipeline.model_selection import SelectedModel, select_model
+from summary_eval_pipeline.run_contracts import RUN_VERSION, GenerationReceipt, PreparedRun
 from summary_eval_pipeline.settings import AuthoredPipelineSettings
 from summary_evaluator.unieval.contracts.unieval_settings import AuthoredUnievalSettings
 from summary_evaluator_cases.contract_examples import REPOSITORY
@@ -65,22 +63,24 @@ def handoff_case() -> tuple[ManualInputs, PreparedRun, GenerationReceipt]:
     case = cases.cases[0]
     inputs = ManualInputs(
         source_text=case.source_text,
+        evaluate_relevance=True,
         reference_summary_text=(
             "The library opened a reading room on Monday, with twelve desks and no booking."
         ),
     )
     selected = select_model(REPOSITORY, "")
     prepared = PreparedRun(
-        version=WORKFLOW_VERSION,
+        version=RUN_VERSION,
         run=example_run(),
         selected=selected.identity,
         source_sha256=text_sha256(inputs.source_text),
-        reference_summary_sha256=text_sha256(inputs.reference_summary_text),
+        reference_summary_sha256=inputs.reference_summary_sha256,
+        evaluate_relevance=inputs.evaluate_relevance,
         status="complete",
         errors=(),
     )
     receipt = GenerationReceipt(
-        version=WORKFLOW_VERSION,
+        version=RUN_VERSION,
         run=prepared.run,
         selected=prepared.selected,
         loaded=LoadedModel(
@@ -91,6 +91,7 @@ def handoff_case() -> tuple[ManualInputs, PreparedRun, GenerationReceipt]:
         ),
         source_sha256=prepared.source_sha256,
         reference_summary_sha256=prepared.reference_summary_sha256,
+        evaluate_relevance=prepared.evaluate_relevance,
         summary_text=case.summary_text,
         summary_sha256=text_sha256(case.summary_text),
         status="complete",
@@ -120,13 +121,15 @@ def native_generation_case(
     inputs = ManualInputs(
         source_text="  PrivateSourceCanary\nexact source \u00e9.  ",
         reference_summary_text="PrivateReferenceCanary: an independent expected summary.",
+        evaluate_relevance=True,
     )
     prepared = PreparedRun(
-        version=WORKFLOW_VERSION,
+        version=RUN_VERSION,
         run=example_run(),
         selected=selected.identity,
         source_sha256=text_sha256(inputs.source_text),
-        reference_summary_sha256=text_sha256(inputs.reference_summary_text),
+        reference_summary_sha256=inputs.reference_summary_sha256,
+        evaluate_relevance=inputs.evaluate_relevance,
         status="complete",
         errors=(),
     )

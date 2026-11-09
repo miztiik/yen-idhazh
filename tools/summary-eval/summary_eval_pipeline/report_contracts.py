@@ -1,28 +1,42 @@
 """Which current or preserved legacy phases belong to one combined evaluation report?"""
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Final, Literal, Self
 
-from pydantic import Field, RootModel, ValidationInfo, model_validator
+from pydantic import ConfigDict, Field, RootModel, ValidationInfo, model_validator
 from summary_evaluator.shared.contracts.base import OutcomeStatus
 
 from .contracts import (
-    GenerationReceipt,
     PipelineError,
-    PreparedRun,
     has_completed_score,
 )
 from .contracts import PipelineEvidence as LegacyPipelineEvidence
-from .phase_contracts import PhaseResult, starts_no_scorers
+from .phase_contracts import PhaseEvidence, starts_no_scorers
+from .previous_report_contracts import PipelineEvidence as PreviousPipelineEvidence
+from .previous_selected_report_contracts import PipelineEvidence as PreviousSelectedPipelineEvidence
+from .run_contracts import GenerationReceipt, PreparedRun
 from .scorer_evidence import EvidenceContract
+
+REPORT_VERSION: Final = "2026-11-09"
 
 
 class PipelineEvidence(EvidenceContract):
-    version: Literal["2026-11-07"]
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": REPORT_VERSION,
+            "readCompatibility": "read frozen shared and independent reports by exact version",
+            "changelog": [
+                {"version": REPORT_VERSION, "change": "Retain measured native input refusals."},
+                {"version": "2026-11-08", "change": "Complete and disclose applicable scores."},
+                {"version": "2026-11-07", "change": "Keep independent maintained scorer APIs."},
+            ],
+        }
+    )
+    version: Literal["2026-11-09"]
     status: OutcomeStatus
     prepared: PreparedRun | None
     generation: GenerationReceipt | None
-    generation_phase: Annotated[PhaseResult, Field(discriminator="version")] | None
-    evaluation_phase: Annotated[PhaseResult, Field(discriminator="version")] | None
+    generation_phase: PhaseEvidence | None
+    evaluation_phase: PhaseEvidence | None
     errors: tuple[PipelineError, ...]
 
     @model_validator(mode="after")
@@ -36,6 +50,7 @@ class PipelineEvidence(EvidenceContract):
             or generated.selected != self.prepared.selected
             or generated.source_sha256 != self.prepared.source_sha256
             or generated.reference_summary_sha256 != self.prepared.reference_summary_sha256
+            or generated.evaluate_relevance != self.prepared.evaluate_relevance
         ):
             raise ValueError("Generation requires this run's completed preparation")
         if self.prepared is not None and self.prepared.status != "complete" and (
@@ -49,6 +64,7 @@ class PipelineEvidence(EvidenceContract):
                     self.prepared is None
                     or observed.run != self.prepared.run
                     or observed.reference_summary_sha256 != self.prepared.reference_summary_sha256
+                    or observed.evaluate_relevance != self.prepared.evaluate_relevance
                 )
             ):
                 raise ValueError("Every phase must retain this run and independent reference")
@@ -84,7 +100,12 @@ class PipelineEvidence(EvidenceContract):
         return self
 
 
-PipelineResult = PipelineEvidence | LegacyPipelineEvidence
+PipelineResult = (
+    PipelineEvidence
+    | PreviousSelectedPipelineEvidence
+    | PreviousPipelineEvidence
+    | LegacyPipelineEvidence
+)
 
 
 class PipelineDocument(

@@ -2,8 +2,13 @@
 
 from dataclasses import dataclass
 
-from summary_evaluator.unieval.contracts.unieval_contract import DIMENSIONS, Dimension
-from summary_evaluator.unieval.contracts.unieval_error import UnievalError, UnievalErrorCode
+from summary_evaluator.unieval.check_unieval_input_size import check_unieval_input_size
+from summary_evaluator.unieval.contracts.unieval_contract import (
+    DIMENSIONS,
+    Dimension,
+    RelevanceSkipReason,
+)
+from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_request import (
     EffectiveUnievalControls,
     UnievalRequest,
@@ -17,6 +22,7 @@ from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
 from summary_evaluator.unieval.fail_unieval import UnievalFailure
 from summary_evaluator.unieval.load_unieval_resources import UnievalResources
 from summary_evaluator.unieval.plan_unieval_windows import plan_unieval_windows
+from summary_evaluator.unieval.resolve_unieval_selection import resolve_unieval_selection
 
 
 @dataclass(frozen=True)
@@ -43,6 +49,7 @@ class UnievalPlan:
     work: UnievalWork
     comparisons: tuple[UnievalComparison, ...]
     errors: tuple[UnievalError, ...]
+    relevance_skip_reason: RelevanceSkipReason | None
 
 
 def prepare_unieval(
@@ -51,13 +58,7 @@ def prepare_unieval(
     sentences = tuple(resources.sentences.tokenize(request.summary_text))
     if not sentences:
         raise UnievalFailure(UnievalError.from_code("INVALID_REQUEST"))
-    controls = settings.scoring.model_copy(
-        update={
-            "consistency_source_mode": (
-                request.consistency_source_mode or settings.scoring.consistency_source_mode
-            )
-        }
-    )
+    controls, relevance_skip_reason = resolve_unieval_selection(request, settings.scoring)
     errors: list[UnievalError] = []
     spans: tuple[SourceSpan, ...] = ()
     budget: int | None = None
@@ -74,6 +75,9 @@ def prepare_unieval(
     counts: dict[str, DimensionWork] = {}
     source_windows = tuple(request.source_text[span.start : span.end] for span in spans)
     for dimension in DIMENSIONS:
+        if dimension == "relevance" and relevance_skip_reason is not None:
+            counts[dimension] = DimensionWork()
+            continue
         required_count = (
             len(sentences) * len(spans)
             if dimension == "consistency"
@@ -92,6 +96,8 @@ def prepare_unieval(
         elif dimension == "coherence":
             inputs = [(request.summary_text, request.source_text, "", None, None)]
         elif dimension == "relevance":
+            if request.reference_summary_text is None:
+                raise UnievalFailure(UnievalError.from_code("INTERNAL_ERROR"))
             inputs = [(request.summary_text, "", request.reference_summary_text, None, None)]
         elif spans:
             inputs = [
@@ -116,18 +122,18 @@ def prepare_unieval(
                 inputs
             )
         ]
-        too_long = any(
-            resources.token_count(comparison.prompt) > controls.max_input_tokens
-            for comparison in comparisons
+        refusal = next(
+            (
+                error for comparison in comparisons
+                if (error := check_unieval_input_size(
+                    resources.token_count(comparison.prompt), controls.max_input_tokens,
+                    dimension, comparison.index,
+                )) is not None
+            ),
+            None,
         )
-        if too_long:
-            codes: dict[Dimension, UnievalErrorCode] = {
-                "fluency": "SUMMARY_SENTENCE_TOO_LONG",
-                "coherence": "COHERENCE_INPUT_TOO_LONG",
-                "relevance": "RELEVANCE_INPUT_TOO_LONG",
-                "consistency": "CONSISTENCY_INPUT_TOO_LONG",
-            }
-            errors.append(UnievalError.from_code(codes[dimension], dimension))
+        if refusal is not None:
+            errors.append(refusal)
             counts[dimension] = DimensionWork()
             continue
         counts[dimension] = DimensionWork(planned=len(comparisons))
@@ -144,4 +150,5 @@ def prepare_unieval(
         ),
         tuple(selected),
         tuple(errors),
+        relevance_skip_reason,
     )

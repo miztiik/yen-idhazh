@@ -1,6 +1,6 @@
 # First-party API routing
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 How this repository names HTTP operations and distinguishes them from an
 upstream native protocol. Each API's native contracts own its payloads;
@@ -165,23 +165,46 @@ owns the real stage HTTP composition and its supervised clients.
 
 ## Current text-analysis family
 
-The independent Python text-analysis service uses the fixed HTTP date
-`2026-11-07`. Its constants live in
-`services/text_analysis/src/text_analysis/declare_api_contracts.py`.
+The independent Python spaCy service uses the fixed HTTP date
+`2026-11-08`. Its constants live in
+`services/text_analysis/spacy/src/text_analysis/declare_api_contracts.py`.
 
 Table E - Text-analysis operations
 
 | Id | Method | Path | Meaning |
 | --- | --- | --- | --- |
-| E1 | POST | `/api/2026-11-07/analyze-text` | Extract the selected ordered linguistic features. |
-| E2 | GET | `/api/2026-11-07/get-text-analysis-health` | Read configured capacity and language/profile/feature capabilities without loading a model. |
-| E3 | GET | `/api/2026-11-07/get-text-analysis-schema` | Read the current OpenAPI document without an interactive UI. |
+| E1 | POST | `/api/2026-11-08/run-ner-spacy` | Extract the selected ordered raw or compact English features. |
+| E2 | GET | `/api/2026-11-08/get-spacy-health` | Read configured capacity, resolved language defaults and applicable term limits without loading a model. |
+| E3 | GET | `/api/2026-11-08/get-spacy-schema` | Read the current native OpenAPI document without an interactive UI. |
 
-The application and settings schema date is `2026-11-07`. The package release,
-spaCy version and model versions are separate identities. Unknown and previous
-paths return 404 without aliases. Wrong methods retain `Allow`.
+The current settings and changed native definitions use `2026-11-09`;
+unchanged raw/event definitions and retained evidence keep their own metadata.
+The package release, spaCy version and model versions are separate identities.
+The former `2026-11-07` analysis, health and schema paths return 404 without
+aliases or redirects. Wrong methods retain `Allow`.
 The [text-analysis reference](text-analysis-api.md) owns request, result,
 feature-error, health and event fields.
+
+## Current GLiNER2 family
+
+The independent local GLiNER2 provider uses the fixed creation date
+`2026-11-08`. Its constants live in
+`services/text_analysis/gliner/src/gliner_api/declare_api_contracts.py`.
+Model selection and caller-defined label vocabulary do not change this family.
+
+Table F - GLiNER2 operations
+
+| Id | Method | Path | Meaning |
+| --- | --- | --- | --- |
+| F1 | POST | `/api/2026-11-08/run-ner-gliner` | Native scored entity spans in exact source text |
+| F2 | POST | `/api/2026-11-08/classify-text-gliner` | Native selections from named ID-to-definition tasks |
+| F3 | GET | `/api/2026-11-08/get-gliner-health` | Actual loaded-provider availability |
+| F4 | GET | `/api/2026-11-08/get-gliner-schema` | Native OpenAPI without an interactive UI |
+
+Unknown and trailing-slash paths return 404. Wrong methods retain 405 and
+`Allow`; there are no permanent aliases. The
+[GLiNER reference](gliner-api.md) owns strict payloads, model settings,
+safe refusals and diagnostics.
 
 ## Upstream native-protocol exception
 
@@ -206,3 +229,4 @@ implementation.
 - [serve-pipeline-apis.md](serve-pipeline-apis.md) - shared process identity and owned-child lifetime.
 - [feed-operator-api.md](../architecture/sources/feed-operator-api.md) - planner and delivery operations and native control flow.
 - [text-analysis-api.md](text-analysis-api.md) - multilingual extraction routes and payloads.
+- [gliner-api.md](gliner-api.md) - native local NER and schema-based classification.

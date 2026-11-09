@@ -1,5 +1,6 @@
 """Does the named live input exercise complete long-source prompts with the actual tokenizer?"""
 
+import json
 from itertools import pairwise
 
 import pytest
@@ -15,16 +16,17 @@ from summary_evaluator.unieval.load_unieval_resources import load_unieval_resour
 from summary_evaluator.unieval.plan_unieval_windows import plan_unieval_windows
 from summary_evaluator_cases.contract_examples import REPOSITORY, example_unieval_result
 
-# The pinned upstream implementation clipped complete prompts at this fixed token count.
+# The pinned scorer's configurable constructor default, not a model context maximum.
 UPSTREAM_PROMPT_CUTOFF = 1024
 
 
 def test_named_source_alone_exceeds_the_original_coherence_cutoff_and_covers_its_tail() -> None:
-    inputs = ManualInputs.model_validate_json(
-        (
+    inputs = ManualInputs.model_validate({
+        **json.loads((
             REPOSITORY / "tests" / "fixtures" / "unieval-evaluator" / "workflow-inputs.json"
-        ).read_bytes()
-    )
+        ).read_bytes()),
+        "consistency_source_mode": "all_source_windows",
+    })
     api = load_scorer_api_settings(
         REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
     )
@@ -44,15 +46,35 @@ def test_named_source_alone_exceeds_the_original_coherence_cutoff_and_covers_its
         for previous, current in pairwise(spans)
     )
     assert "Thursday" in inputs.source_text[spans[-1].start : spans[-1].end]
+    assert inputs.reference_summary_text is not None and inputs.evaluate_relevance is True
+    assert inputs.consistency_source_mode == "all_source_windows"
     assert "Thursday" in inputs.reference_summary_text
 
 
 def test_native_zero_examples_still_require_the_exact_dimension_work_counts() -> None:
     request = UnievalRequest(
-        source_text="S", summary_text="A claim.", reference_summary_text="Independent reference."
+        source_text="S", summary_text="A claim.", reference_summary_text="Independent reference.",
+        evaluate_relevance=True,
+        consistency_source_mode="all_source_windows",
     )
+    api = load_scorer_api_settings(
+        REPOSITORY / "config" / "summary-evals" / "api.json", "unieval"
+    )
+    settings = load_unieval_settings(REPOSITORY, api)
+    assert request.reference_summary_text is not None
     result = example_unieval_result(text_sha256(request.reference_summary_text))
-    require_unieval_work(result, request, 200)
+    settings = settings.model_copy(update={
+        "scoring": settings.scoring.model_copy(
+            update={"consistency_source_mode": "all_source_windows"}
+        ),
+    })
+    assert result.effective_settings is not None
+    result = UnievalResult.model_validate_json(result.model_copy(update={
+        "effective_settings": result.effective_settings.model_copy(
+            update={"consistency_source_mode": "all_source_windows"}
+        ),
+    }).model_dump_json())
+    require_unieval_work(result, request, settings, 200)
     for dimension, count in (
         ("fluency", 2),
         ("coherence", 2),
@@ -68,4 +90,4 @@ def test_native_zero_examples_still_require_the_exact_dimension_work_counts() ->
             ).model_dump_json()
         )
         with pytest.raises(WorkflowError):
-            require_unieval_work(invalid, request, 200)
+            require_unieval_work(invalid, request, settings, 200)

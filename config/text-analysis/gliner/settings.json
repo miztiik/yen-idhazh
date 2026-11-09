@@ -1,0 +1,18 @@
+{
+  "version": "2026-11-08",
+  "changelog": [
+    {
+      "version": "2026-11-08",
+      "change": "Declare local GLiNER2 model selection and diagnostic bounds."
+    }
+  ],
+  "enabled": true,
+  "model": {
+    "repo": "fastino/gliner2.5-base-v1",
+    "base_url": "https://huggingface.co"
+  },
+  "logging": {
+    "level": "INFO",
+    "max_event_bytes": 4096
+  }
+}

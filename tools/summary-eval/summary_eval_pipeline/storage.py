@@ -5,10 +5,15 @@ from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
-from .contracts import GenerationReceipt
 from .failures import WorkflowError
 from .phase_contracts import PhaseDocument, PhaseResult
 from .report_contracts import PipelineDocument, PipelineResult
+from .run_contracts import (
+    GenerationDocument,
+    GenerationResult,
+    PreparedDocument,
+    PreparedResult,
+)
 
 
 def write_result(path: Path, value: BaseModel) -> str:
@@ -38,10 +43,14 @@ def read_result[Result: BaseModel](path: Path, contract: type[Result], limit: in
         raise WorkflowError("RECEIPT_INVALID", "input") from None
 
 
-def read_generation_result(path: Path, limit: int) -> tuple[GenerationReceipt, str]:
+def read_prepared_result(path: Path, limit: int) -> PreparedResult:
+    return read_result(path, PreparedDocument, limit).root
+
+
+def read_generation_result(path: Path, limit: int) -> tuple[GenerationResult, str]:
     encoded = read_result_bytes(path, limit)
     try:
-        receipt = GenerationReceipt.model_validate_json(encoded)
+        receipt = GenerationDocument.model_validate_json(encoded).root
     except (ValueError, ValidationError):
         raise WorkflowError("RECEIPT_INVALID", "input") from None
     return receipt, hashlib.sha256(encoded).hexdigest()

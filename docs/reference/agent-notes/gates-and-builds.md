@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-09
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -62,6 +62,13 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   `backend/tests/ledger/test_engine_threads.py` on `ubuntu-latest` with Python
   3.12 to compare thread counts around each engine call.
 - Confirm the interpreter and imported package belong to the intended environment and checkout. Use the documented `IDHAZH_PYTHON` setting for frontend commands that invoke Python.
+- **A tokenizer advisory can print a closed-stream traceback without refusing
+  the input.** Quiet resource imports can leave a retained logger using a closed
+  devnull sink. In a fresh process, source offsets and explicit-window planning
+  can emit it; token counting with `verbose=False` does not. Inspect the actual
+  result separately from stderr. Do not change truncation or token allowances
+  to hide the diagnostic; its structural repair is
+  [known-defects execution row 76](../../../TODO/20260823-known-defects-plan.md).
 - Keep inputs unchanged during a check. If a test dirties tracked files, fix its output location rather than bypassing the input check.
 - Drive migrations and failure states with bounded fixtures. Confirm the fixture reaches the behavior under test; do not skip an assertion because its required control or data is absent.
 - A generic file-format test needs a real fixture of that format, not a ledger chosen only because it currently uses it. After a ledger migrates, keep old-format reader coverage explicit and test its current writer through the native persistence API.

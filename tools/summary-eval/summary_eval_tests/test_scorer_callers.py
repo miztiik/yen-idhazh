@@ -44,7 +44,7 @@ def test_a_request_exceeding_its_listener_bound_never_runs_or_cancels_its_ready_
             })
             prepared = prepared.model_copy(update={
                 "source_sha256": text_sha256(inputs.source_text),
-                "reference_summary_sha256": text_sha256(inputs.reference_summary_text),
+                "reference_summary_sha256": inputs.reference_summary_sha256,
             })
             receipt = receipt.model_copy(update={
                 "source_sha256": prepared.source_sha256,

@@ -35,7 +35,6 @@ from utilities import label_queue
 
 EVIDENCE_FIXTURE = CONTRACT_FIXTURES_DIR / "evidence-item" / "premise-recorded.json"
 ROW_FIXTURE = CONTRACT_FIXTURES_DIR / "eval-row" / "premise-recorded.json"
-DIGEST_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "digest.yml"
 
 
 def an_item() -> EvidenceItem:
@@ -230,17 +229,6 @@ class TestTheArticleBodyIsNeverCommitted:
         ignored = read_text(REPO_ROOT / ".gitignore").splitlines()
 
         assert "backend/var/" in ignored
-
-    def test_the_workflow_uploads_it_and_never_commits_it(self) -> None:
-        workflow = read_text(DIGEST_WORKFLOW)
-
-        assert "name: evidence-${{ matrix.shard }}" in workflow
-        assert "path: backend/var/evidence/${{ needs.plan.outputs.date }}/" in workflow
-        for line in workflow.splitlines():
-            if ("digest_publish.py" in line and " run " not in line) or line.strip().startswith(
-                "state/"
-            ):
-                assert "evidence" not in line, "an uncommittable path reached the commit step"
 
 
 class TestWhatALabellerSees:

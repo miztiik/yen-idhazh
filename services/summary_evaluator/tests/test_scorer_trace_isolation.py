@@ -26,6 +26,7 @@ from summary_evaluator_cases.unieval_cases import (
     RecordedUnievalSupervisor,
     UnievalScenario,
     read_unieval_recordings,
+    recorded_unieval_request,
     run_recorded_unieval_worker,
     unieval_settings,
 )
@@ -90,7 +91,7 @@ def test_owned_unieval_progress_returns_the_issued_evaluation_operation() -> Non
         operation_metadata=create_child_operation(create_root_operation(trace_state="test=worker")),
         execution_id=create_execution_id(),
         generation=1,
-        request=inputs.cases[0].request,
+        request=recorded_unieval_request(inputs.cases[0].request),
     )
     context = multiprocessing.get_context("spawn")
     parent, child = context.Pipe(duplex=True)
@@ -229,7 +230,7 @@ def test_two_concurrent_carriers_reach_both_real_apis_and_their_independent_work
                                     UNIEVAL_PATH,
                                     [
                                         {
-                                            **case.request.model_dump(),
+                                            **recorded_unieval_request(case.request).model_dump(),
                                             "request_id": REQUEST_ID.upper(),
                                             "correlation_id": CORRELATION_ID.upper(),
                                         }

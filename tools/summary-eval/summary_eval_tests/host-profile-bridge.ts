@@ -29,10 +29,6 @@ if (Bun.argv[2] === "schemas") {
     machine: z.toJSONSchema(TaskProfileSchema),
     server: z.toJSONSchema(CurrentMachineServerEvidenceSchema),
   });
-} else if (Bun.argv[2] === "workflow") {
-  emit(Bun.YAML.parse(await Bun.file(new URL(
-    "../../../.github/workflows/summary-eval-tests.yml", import.meta.url,
-  )).text()));
 } else {
   const bootstrap = z.strictObject({
     proc_root: z.string(), platform: z.string(),

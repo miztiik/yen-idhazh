@@ -10,6 +10,7 @@ from summary_evaluator.shared.exchange_packets import ByteChannel, encode_packet
 from summary_evaluator.shared.quiet_model_output import quiet_model_output
 from summary_evaluator.shared.read_process_identity import read_process_identity
 from summary_evaluator.shared.watch_worker_parent import arm_parent_exit, watch_parent
+from summary_evaluator.unieval.check_unieval_input_size import project_unieval_error
 from summary_evaluator.unieval.contracts.unieval_error import UnievalError
 from summary_evaluator.unieval.contracts.unieval_request import EffectiveUnievalControls
 from summary_evaluator.unieval.contracts.unieval_result import UnievalWork
@@ -27,6 +28,7 @@ from summary_evaluator.unieval.contracts.unieval_worker_message import (
 )
 from summary_evaluator.unieval.fail_unieval import UnievalFailure
 from summary_evaluator.unieval.load_unieval import UnievalPredictor, load_unieval
+from summary_evaluator.unieval.resolve_unieval_selection import resolve_unieval_selection
 from summary_evaluator.unieval.score_unieval import UnievalComparison, prepare_unieval
 
 
@@ -53,7 +55,7 @@ def score_comparison(
             error=None,
         )
     except UnievalFailure as failure:
-        error = UnievalError.from_code(failure.error.code, comparison.dimension, comparison.index)
+        error = project_unieval_error(failure.error, comparison.dimension, comparison.index)
     except ValidationError:
         error = UnievalError.from_code(
             "INVALID_MODEL_OUTPUT", comparison.dimension, comparison.index
@@ -123,23 +125,22 @@ def run_unieval_worker(
                     prepared = UnievalPrepared(
                         **identity.model_dump(),
                         effective_settings=plan.controls,
+                        relevance_skip_reason=plan.relevance_skip_reason,
                         work=plan.work,
                         errors=plan.errors,
                     )
                 except UnievalFailure as failure:
                     plan = None
+                    controls, relevance_skip_reason = resolve_unieval_selection(
+                        command.request, bootstrap.settings.scoring
+                    )
                     prepared = UnievalPrepared(
                         **identity.model_dump(),
                         effective_settings=EffectiveUnievalControls(
-                            **{
-                                **bootstrap.settings.scoring.model_dump(),
-                                "consistency_source_mode": (
-                                    command.request.consistency_source_mode
-                                    or bootstrap.settings.scoring.consistency_source_mode
-                                ),
-                            },
+                            **controls.model_dump(),
                             source_budget_tokens=None,
                         ),
+                        relevance_skip_reason=relevance_skip_reason,
                         work=UnievalWork(),
                         errors=(failure.error,),
                     )

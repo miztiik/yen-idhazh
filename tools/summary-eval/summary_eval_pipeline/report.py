@@ -8,6 +8,13 @@ from summary_evaluator.hhem.contracts.evaluation_result import EvaluationResult
 from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
 from summary_evaluator.shared.contracts.process_identity import ProcessIdentity
 from summary_evaluator.shared.contracts.worker_exit import WorkerExit
+from summary_evaluator.unieval.check_unieval_input_size import INPUT_SIZE_CODES
+from summary_evaluator.unieval.contracts.previous_selected_unieval_result import (
+    PreviousSelectedUnievalResult,
+)
+from summary_evaluator.unieval.contracts.previous_unieval_result import PreviousUnievalError
+from summary_evaluator.unieval.contracts.unieval_error import UnievalError
+from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 
 from .contracts import PhaseEvidence as LegacyPhaseEvidence
 from .contracts import PhaseName, PipelineError
@@ -16,6 +23,7 @@ from .inputs import ManualInputs
 from .phase_contracts import PhaseResult
 from .report_contracts import PipelineResult
 from .report_models import model_rows, scorer_health
+from .run_contracts import PreparedRun
 
 
 def format_seconds(milliseconds: float | None) -> str:
@@ -116,6 +124,23 @@ def describe_hhem(result: EvaluationResult | None) -> str:
     return f"{score}; {work}"
 
 
+def describe_unieval_input_size(error: UnievalError | PreviousUnievalError) -> str:
+    if error.code == "WINDOW_BUDGET_INSUFFICIENT":
+        return "Window geometry; no oversized-input measurement"
+    if error.code not in INPUT_SIZE_CODES.values():
+        return "-"
+    if (
+        not isinstance(error, UnievalError)
+        or error.input_tokens is None
+        or error.allowed_tokens is None
+    ):
+        return "Not recorded"
+    return (
+        f"Index {error.index}: {error.input_tokens} input / {error.allowed_tokens} allowed "
+        f"({error.input_tokens - error.allowed_tokens} over)"
+    )
+
+
 def render_report(
     evidence: PipelineResult,
     inputs: ManualInputs,
@@ -125,6 +150,11 @@ def render_report(
     generation, evaluation = evidence.generation, evidence.evaluation_phase
     result = evaluation.evaluation if evaluation is not None else None
     unieval = evaluation.unieval if evaluation is not None else None
+    relevance_skip = (
+        unieval.relevance_skip_reason
+        if isinstance(unieval, UnievalResult | PreviousSelectedUnievalResult) else None
+    )
+    applicable = 4 if relevance_skip is None else 3
     work_rows = [
         ("Preparation", evidence.prepared.status if evidence.prepared else "Not run", "-", "-"),
         (
@@ -144,7 +174,7 @@ def render_report(
             describe_evaluator(unieval.status if unieval else None, evaluation, "unieval"),
             (
                 f"{sum(value is not None for value in unieval.scores.model_dump().values())}"
-                " of 4 dimensions complete"
+                f" of {applicable} applicable dimensions complete"
             )
             if unieval
             else "-",
@@ -159,16 +189,35 @@ def render_report(
         ("relevance", "Agreement with the independent reference, not source coverage."),
     ):
         dimension_work = getattr(unieval.work, dimension) if unieval else None
+        score = getattr(unieval.scores, dimension) if unieval else None
+        failures = (
+            [error.code for error in unieval.errors if error.dimension == dimension]
+            if unieval else []
+        )
+        measurements = [
+            describe_unieval_input_size(error) for error in unieval.errors
+            if error.dimension == dimension
+        ] if unieval else []
+        state = (
+            "Skipped - disabled" if dimension == "relevance" and relevance_skip == "disabled"
+            else "Skipped - reference not supplied"
+            if dimension == "relevance" and relevance_skip == "reference_not_supplied"
+            else "Complete" if score is not None
+            else "Failed - " + ", ".join(failures) if failures
+            else "Not run"
+        )
         score_rows.append(
             (
                 dimension,
-                getattr(unieval.scores, dimension) if unieval else None,
+                score,
+                state,
                 meaning,
                 (
                     f"{dimension_work.completed} / {dimension_work.planned}"
                     if dimension_work and dimension_work.planned is not None
                     else "Not planned"
                 ),
+                "; ".join(value for value in measurements if value != "-") or "-",
             )
         )
     readings: list[tuple[object, ...]] = []
@@ -418,10 +467,15 @@ def render_report(
             "## UniEval scores",
             table(
                 "B",
-                ("Dimension", "Score (0-1)", "Meaning", "Completed / planned comparisons"),
+                (
+                    "Dimension", "Score (0-1)", "Status", "Meaning",
+                    "Completed / planned comparisons",
+                    "Complete input / allowance (tokens; index zero-based)",
+                ),
                 score_rows,
             ),
-            "All four scores are required. Missing work is not zero. Segmented consistency "
+            "Every applicable score is required. Skipped relevance is not a failure or zero. "
+            "Missing required work is not zero. Segmented consistency "
             "checks every source window for every summary sentence, then averages each "
             "sentence's best score. It cannot join evidence across windows and may miss "
             "contradictions outside the best match. Coherence and relevance each use one "
@@ -471,8 +525,19 @@ def render_report(
             )
             + "</pre>\n</details>",
             "<details>\n<summary>Independent reference summary</summary>\n\n"
-            "Supplied before generation; sent only to UniEval.\n\n<pre>"
-            + html.escape(inputs.reference_summary_text)
+            + (
+                "Not supplied; relevance has no reference to evaluate."
+                if inputs.reference_summary_text is None
+                else "Supplied but unused; relevance is disabled."
+                if isinstance(evidence.prepared, PreparedRun)
+                and not evidence.prepared.evaluate_relevance
+                else "Supplied before generation; available only to UniEval relevance."
+            )
+            + " Never sent to generation or HHEM.\n\n<pre>"
+            + (
+                html.escape(inputs.reference_summary_text)
+                if inputs.reference_summary_text is not None else "Not supplied"
+            )
             + "</pre>\n</details>",
         ]
     )

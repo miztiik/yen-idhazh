@@ -19,23 +19,35 @@ from summary_evaluator.unieval.contracts.unieval_result import UnievalResult
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
 from summary_evaluator.unieval.unieval_router import UNIEVAL_PATH
 
-from .contracts import GenerationReceipt, PreparedRun, ServiceName, text_sha256
+from .contracts import ServiceName, text_sha256
 from .failures import WorkflowError
 from .http import call_local_api
 from .inputs import ManualInputs, encode_request
-from .phase_contracts import PhaseResult, starts_no_scorers
+from .phase_contracts import PhaseEvidence, PhaseResult, starts_no_scorers
+from .run_contracts import (
+    GenerationReceipt,
+    GenerationResult,
+    PreparedResult,
+    PreparedRun,
+)
 from .settings import PipelineSettings
 from .trace_context import ResponseTraceObserver
 
 
 def bind_evaluations(
-    prepared: PreparedRun,
+    prepared: PreparedResult,
     inputs: ManualInputs,
-    receipt: GenerationReceipt,
+    receipt: GenerationResult,
     generation: PhaseResult,
     *,
     generation_sha256: str,
 ) -> tuple[EvaluateRequest, UnievalRequest]:
+    if (
+        not isinstance(prepared, PreparedRun)
+        or not isinstance(receipt, GenerationReceipt)
+        or not isinstance(generation, PhaseEvidence)
+    ):
+        raise WorkflowError("RECEIPT_INVALID", "input")
     if (
         prepared.status != "complete"
         or receipt.status != "complete"
@@ -46,7 +58,9 @@ def bind_evaluations(
         or receipt.source_sha256 != text_sha256(inputs.source_text)
         or receipt.source_sha256 != prepared.source_sha256
         or receipt.reference_summary_sha256 != prepared.reference_summary_sha256
-        or receipt.reference_summary_sha256 != text_sha256(inputs.reference_summary_text)
+        or receipt.reference_summary_sha256 != inputs.reference_summary_sha256
+        or receipt.evaluate_relevance != prepared.evaluate_relevance
+        or receipt.evaluate_relevance != inputs.evaluate_relevance
         or receipt.summary_sha256 != text_sha256(receipt.summary_text)
         or receipt.loaded.model_id != prepared.selected.model_id
         or receipt.loaded.sha256 != prepared.selected.sha256
@@ -58,6 +72,7 @@ def bind_evaluations(
         or generation.shutdown.host_stopped is not True
         or generation.generation_sha256 != generation_sha256
         or generation.reference_summary_sha256 != prepared.reference_summary_sha256
+        or generation.evaluate_relevance != prepared.evaluate_relevance
     ):
         raise WorkflowError("RECEIPT_INVALID", "input")
     request = EvaluateRequest(
@@ -67,13 +82,14 @@ def bind_evaluations(
         request_id=create_execution_id(),
         correlation_id=create_execution_id(),
     )
-    unieval = UnievalRequest(
-        source_text=request.source_text,
-        summary_text=request.summary_text,
-        reference_summary_text=inputs.reference_summary_text,
-        request_id=request.request_id,
-        correlation_id=request.correlation_id,
-    )
+    unieval = UnievalRequest.model_validate({
+        **inputs.model_dump(include={"reference_summary_text", "consistency_source_mode"}),
+        "source_text": request.source_text,
+        "summary_text": request.summary_text,
+        "evaluate_relevance": prepared.evaluate_relevance,
+        "request_id": request.request_id,
+        "correlation_id": request.correlation_id,
+    })
     return request, unieval
 
 

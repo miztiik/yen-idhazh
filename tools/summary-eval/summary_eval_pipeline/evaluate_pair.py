@@ -17,6 +17,7 @@ from summary_evaluator.hhem.contracts.service_settings import ServiceSettings
 from summary_evaluator.unieval.contracts.unieval_request import UnievalRequest
 from summary_evaluator.unieval.contracts.unieval_result import UnievalHealth, UnievalResult
 from summary_evaluator.unieval.contracts.unieval_settings import UnievalSettings
+from summary_evaluator.unieval.resolve_unieval_selection import resolve_unieval_selection
 
 from .contracts import PipelineError, text_sha256
 from .evaluation import evaluate, evaluate_unieval
@@ -36,18 +37,45 @@ class EvaluatorOutcomes:
     unieval_trace: ResponseTraceObservation | None = None
 
 
-def require_unieval_work(result: UnievalResult, request: UnievalRequest, status: int) -> None:
+def require_unieval_work(
+    result: UnievalResult, request: UnievalRequest, settings: UnievalSettings, status: int
+) -> None:
     work = result.work
+    controls, skip = resolve_unieval_selection(request, settings.scoring)
+    if (
+        (
+            result.effective_settings is not None
+            and (
+                result.effective_settings.model_dump(exclude={"source_budget_tokens"})
+                != controls.model_dump()
+                or result.relevance_skip_reason != skip
+            )
+        )
+        or (
+            skip is not None
+            and (
+                work.relevance.planned is not None
+                or work.relevance.completed != 0
+                or result.scores.relevance is not None
+                or any(error.dimension == "relevance" for error in result.errors)
+            )
+        )
+    ):
+        raise WorkflowError("RECEIPT_INVALID", "evaluation", "unieval", status)
     has_score = any(value is not None for value in result.scores.model_dump().values())
     valid = not has_score or (
         work.source_characters == len(request.source_text) and work.summary_sentences is not None
     )
-    if result.scores.consistency is not None:
+    if work.consistency.planned is not None:
         valid = (
             valid
             and bool(work.source_spans)
             and work.summary_sentences is not None
             and work.consistency.planned == work.summary_sentences * len(work.source_spans)
+            and (
+                controls.consistency_source_mode != "full_source_prompt"
+                or len(work.source_spans) == 1
+            )
         )
     if result.scores.fluency is not None:
         valid = valid and work.fluency.planned == work.summary_sentences
@@ -80,6 +108,10 @@ async def evaluate_pair(
         or hhem_request.correlation_id != unieval_request.correlation_id
     ):
         raise WorkflowError("RECEIPT_INVALID", "input")
+    reference_hash = (
+        text_sha256(unieval_request.reference_summary_text)
+        if unieval_request.reference_summary_text is not None else None
+    )
     phase_operation = operation_metadata or create_root_operation()
 
     def observe_hhem(value: ResponseTraceObservation) -> None:
@@ -202,21 +234,16 @@ async def evaluate_pair(
                 result.request_id != unieval_request.request_id
                 or result.correlation_id != unieval_request.correlation_id
                 or result.reference_summary_sha256
-                != text_sha256(unieval_request.reference_summary_text)
+                != reference_hash
                 or (result.model is not None and result.model != health.unieval.model)
                 or (result.worker is not None and result.worker != health.unieval.worker)
-                or (
-                    result.effective_settings is not None
-                    and result.effective_settings.consistency_source_mode
-                    != unieval_settings.scoring.consistency_source_mode
-                )
                 or (
                     result.work.source_characters is not None
                     and result.work.source_characters != len(unieval_request.source_text)
                 )
             ):
                 raise WorkflowError("RECEIPT_INVALID", "evaluation", "unieval", status)
-            require_unieval_work(result, unieval_request, status)
+            require_unieval_work(result, unieval_request, unieval_settings, status)
             outcomes.unieval = result
             if status != 200 or result.status != "complete":
                 errors.append(
