@@ -39,6 +39,7 @@ evaluates saved summary text without changing either caller product or the API.
 
 Both caller products acquire one operator-supplied URL or direct text outside
 HTTP. A supplied URL takes precedence; omit it to use direct text without fetching.
+`Yen-AI-Pipeline` defaults to an empty URL and its supplied `input_text`.
 A failed URL may use supplied direct text; a failed URL with no fallback fails
 the invocation. The real extractor constructs an existing JSDOM instance
 for Defuddle, with scripts and extra resources disabled, and closes its window

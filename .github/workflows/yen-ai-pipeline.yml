@@ -8,11 +8,11 @@ on:
         required: false
         default: ''
       url:
-        description: 'Target URL to summarize (leave blank to use fallback text)'
+        description: 'Optional target URL; blank uses input_text directly.'
         required: false
-        default: 'https://en.wikipedia.org/wiki/Ternary_numeral_system'
+        default: ''
       input_text:
-        description: 'Direct/fallback input text'
+        description: 'Default direct input; also used as fallback when a supplied URL fails.'
         required: false
         default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.'
       prompt:
