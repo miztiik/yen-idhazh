@@ -5,7 +5,6 @@ import unittest
 import spacy
 from spacy.language import Language
 from spacy.tokens import Doc
-
 from text_analysis.declare_service_settings import ImportantTermsSettings
 from text_analysis.rank_important_terms import anchor_ranked_terms, rank_important_terms
 

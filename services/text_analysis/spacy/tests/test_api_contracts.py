@@ -7,7 +7,6 @@ from pathlib import Path
 import spacy
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-
 from text_analysis.create_api_component import _health_capabilities, create_app
 from text_analysis.declare_api_contracts import (
     ANALYZE_TEXT_PATH,
@@ -106,7 +105,9 @@ class LanguageSettingsTests(unittest.TestCase):
             settings.resolve_default_features("en"), ("named_entities", "important_terms")
         )
         self.assertEqual(settings.resolve_default_features("zh"), GLOBAL_DEFAULTS)
-        self.assertEqual(capabilities["en"].default_features, settings.resolve_default_features("en"))
+        self.assertEqual(
+            capabilities["en"].default_features, settings.resolve_default_features("en")
+        )
         self.assertEqual(
             capabilities["en"].important_terms_limit, settings.important_terms.max_results
         )
@@ -243,7 +244,9 @@ class FeatureExecutionTests(unittest.TestCase):
         )
         chinese = spacy.blank("zh")
         chinese.add_pipe("sentencizer")
-        unavailable = _unavailable_features(chinese, settings.languages.zh.supported_features, policy)
+        unavailable = _unavailable_features(
+            chinese, settings.languages.zh.supported_features, policy
+        )
         self.assertIn("named_entities", unavailable)
         self.assertIn("important_terms", unavailable)
         self.assertIn("noun_phrases", unavailable)
