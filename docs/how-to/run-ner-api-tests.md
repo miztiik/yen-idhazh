@@ -28,7 +28,12 @@ The caller under `tools/text-analysis-caller/` starts the existing
 bounded readiness checks and the existing listener settings, sends one spaCy
 analysis POST, then dispatches one GLiNER NER POST and one classification POST
 concurrently. Both GLiNER outcomes are awaited before it stops its owned
-process group in a `finally` path. The native provider still serializes its
+process group in a `finally` path. The caller drains native stderr before
+readiness and throughout cleanup, then confirms EOF and finalizes each
+provider's `events.jsonl` before reporting and upload. The
+[event inspection guide](run-spacy-tests.md#console-and-saved-events) owns
+console mirroring, source isolation and capture-failure handling.
+The native provider still serializes its
 operations on one loaded model; caller concurrency adds no second model,
 server or download. Readiness and cleanup are operational steps, not inference
 tests. There are no synthetic inference probes, warm repeats or automatic

@@ -24,7 +24,11 @@ validated CloudEvents leave through stderr. The manual workflow's caller under
 `tools/text-analysis-caller/` owns process supervision and reporting outside
 the API. It saves the exact native requests and responses for both providers
 and the complete Markdown report in a run-owned temporary directory; stderr
-diagnostics stay in workflow logs.
+diagnostics are mirrored live to workflow logs and saved unchanged in the
+matching provider artifact's `events.jsonl`. The caller owns bounded native
+validation, source routing and draining through shutdown EOF; the
+[operator guide](../../how-to/run-spacy-tests.md#console-and-saved-events)
+describes inspection and failures.
 
 ## Admission precedes executor submission
 
