@@ -10,11 +10,11 @@ Table A - Scope and execution
 | ID | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | Restore useful chart and Who/What grid generation by repairing the evidence passed to the planner, preserving exact refusals and proving the complete publication path |
-| A2 | Hard scope - in | Finalized evidence handoff; article-specific reference grammar; rule-derived visual guidance; context accounting; existing refusal diagnostics; chart/grid publication and reader verification |
-| A3 | Hard scope - out | Table B prices separate capability and policy work; it does not mark those capabilities delivered |
+| A2 | Hard scope - in | Finalized evidence handoff; article-specific reference grammar; rule-derived visual guidance; context accounting; existing refusal diagnostics; chart/grid publication and reader verification; active type selection restricted to implemented chart and Who/What types |
+| A3 | Hard scope - out | Table B distinguishes abandoned types from separate policy work; abandoned types are not a delivery queue |
 | A4 | Chosen strategy | Repair the existing two-call path and existing payload families before adding renderers; Fowler architectural consultation |
-| A5 | Contracts | Reuse `ElementTable`, `VisualPlan`, `VisualDecision`, `ItemHealthRow` and `VisualAttemptRow`; request-only projections do not become another persisted format |
-| A6 | ESCALATE triggers | 1. A persisted field, enum meaning, visual role or published shape must change. 2. A third model call, different model, larger context window or changed fallback policy is proposed. 3. Source text would become an instruction, path or destination. 4. A warranted example still cannot produce a valid visual and the proposed remedy is to weaken evidence validation or force publication. 5. A row changes the scope in Table B |
+| A5 | Contracts | Reuse `ElementTable`, `VisualPlan`, `VisualDecision`, `ItemHealthRow` and `VisualAttemptRow`; request-only projections do not become another persisted format. Retain historical type names for old-record compatibility, not as active request choices |
+| A6 | ESCALATE triggers | 1. A persisted field, enum meaning, visual role or published shape must change. 2. A third model call, different model, larger context window or changed fallback policy is proposed. 3. Source text would become an instruction, path or destination. 4. A warranted example still cannot produce a valid visual and the proposed remedy is to weaken evidence validation or force publication. 5. A row revives an abandoned type or changes the scope in Table B. 6. Article-admission behavior or the recorded meaning of a context refusal must change |
 | A7 | Execution | Autonomous orchestrator per `docs/how-to/execute-a-plan.md`; parallel N = 4, with rows serialized by their dependencies and shared files |
 
 Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
@@ -23,10 +23,10 @@ Table B - Separate work and its cost
 
 | ID | What is separate | Cost of leaving it separate | What brings it into delivery |
 | --- | --- | --- | --- |
-| B1 | Area and timeline compilers | These declared forms still cannot render directly; repairing requests does not implement them | One capability PR per type, including compilation, existing-format compatibility and reader behavior |
-| B2 | Table, comparison, callout, quotecard and keyfacts | These declared forms still lack evidence/role rules and compilers | Settle each form's evidence and payload contracts, then deliver one complete type per PR; use restored request evidence to choose the order |
-| B3 | Flow and other deferred diagrams, including their supporting classification | Process and relationship stories remain without those illustrations | Reopen the diagram design, including evidence for every arrow's direction and meaning; then size its implementation PRs |
-| B4 | Production activation of type selection or fallback; historical redraw | Existing switches retain their settings, and old text-only items do not gain visuals | A separate policy or revision decision; direct deliveries first supply the fallback population that is currently absent |
+| B1 | Abandoned types: area, timeline, table, flow, comparison, callout, quotecard and keyfacts | These forms are neither offered for new production requests nor implemented; their contexts use an active supported form only when it preserves the evidence and purpose, otherwise no visual | No delivery row in this plan; revival requires a new product and design decision |
+| B2 | Deleting historical type names or rewriting old payloads | Native readers retain the abandoned names so existing stored records still load | A separately designed, verified read-side migration; restricting new requests does not require historical deletion |
+| B3 | Other diagram families and their supporting classification | Process and relationship stories remain without those illustrations; retirement of flow does not decide the lifecycle of other undeclared diagram forms | A separate source-backed diagram design; none is introduced by this repair |
+| B4 | Fallback activation; historical redraw | Fallback stays off, and old text-only items do not gain visuals; active type selection is changed by row #1 | A separate fallback or revision decision; direct deliveries first supply the fallback population that is currently absent |
 | B5 | The unfinished article-classification roadmap | This work does not deliver article-kind, stance, sentiment or classification-ledger features | Reconcile that roadmap with the current classifier and execute its remaining outcomes independently |
 
 ## 1. Status Reckoner
@@ -46,8 +46,10 @@ Table C - One row per repair PR
   - `backend/idhazh/classify/plan_visual_request.py` (new; owns the bounded evidence menu, reference-schema projection and rule-derived guide)
   - `backend/idhazh/classify/calls.py`
   - `backend/idhazh/classify/dag.py`
+  - `backend/idhazh/contracts/visual_type.py` (documentation of historical names versus active selection)
   - `backend/idhazh/stages/two_calls.py`
   - `backend/utilities/measure_two_calls.py`
+  - `config/idhazh.json`
   - `config/prompts/plan-visual.txt`
   - `config/prompts/continue-summary.txt`
   - `backend/tests/test_classify.py`
@@ -57,8 +59,11 @@ Table C - One row per repair PR
   - `backend/tests/test_measure_two_calls.py`
   - `backend/tests/contracts/test_app_config.py`
   - `backend/tests/contracts/test_decoder_grammar.py`
+  - `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
   - `docs/architecture/summarize/prompt.md`
   - `docs/architecture/publishing/visuals.md`
+  - `docs/architecture/publishing/where-a-drawing-becomes-pixels.md`
+  - `docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md`
 - **Acceptance gates:** Inspect the shared `test:changed` selection from `frontend/`; locally run the selected lint/type checks and the named request, prompt, context and grammar cases needed for the oracle. CI owns the complete suite. No live dispatch or publication is required while authoring this plan.
 - **Oracle:** For a plannable in-memory article, the references offered by the request grammar equal the finalized table's ids and every such id is visible in the request, including model-anchored nonnumeric elements; a foreign id cannot decode. This proves input completeness and reference membership, not that a real model will select a useful visual.
 
@@ -68,18 +73,19 @@ Table D - Request decisions
 | --- | --- | --- |
 | D1 | Pass the exact post-anchoring table used by reachability and validation into the request builder. Preserve source spans, kinds, values, units and relevant existing label metadata; do not reconstruct ids from the raw label reply | Fowler consultation; [current handoff gap](../docs/architecture/summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once) |
 | D2 | Put the menu after the reusable prompt prefix as fenced item data. Keep shared instructions independent of the article and keep the two calls adjacent | [Prompt contract](../docs/architecture/summarize/prompt.md) |
-| D3 | Narrow reference fields in the derived request grammar to the visible ids. Retain the native persisted schema and the complete configured type selection. Handle an empty reference set with empty arrays and a null optional whole, not an invalid empty enum or an invented id | Fowler consultation; [native plan rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) |
-| D4 | Derive the type/role guide from the existing vocabulary and configured floors. Explain the grid's actor/claim pairing and give compact chart, grid and legitimate-decline examples. Identify unbuilt forms without deleting their request names or inventing rules for them | Fowler consultation; [visual rule](../docs/concepts/digest.md#the-visual-rule) |
+| D3 | Narrow reference fields in the derived request grammar to the visible ids. Retain the native persisted schema for historical reading. Handle an empty reference set with empty arrays and a null optional whole, not an invalid empty enum or an invented id | Fowler consultation; [native plan rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) |
+| D4 | Derive the type/role guide from the existing vocabulary and configured floors for active selected types only. Explain the grid's actor/claim pairing and give compact chart, grid and legitimate-decline examples. Do not present abandoned forms as request options or future work | [Visual rule](../docs/concepts/digest.md#the-visual-rule); Table B |
 | D5 | Include the added menu and guide in context accounting, including the bounded additions made by anchoring. Reuse the configured model's tokenizer or existing bounded sizing mechanism; do not invent a token rate, silently discard evidence or raise context limits | [Two-call context accounting](../docs/architecture/summarize/prompt.md#the-output-budget-is-derived-not-picked) |
 | D6 | Update the measurement utility and all direct builder callers with the same finalized evidence. Keep static schema/budget inspection possible without a live article, but require the production request to receive its real table | Verified callers in `classify/calls.py`, `stages/two_calls.py` and `utilities/measure_two_calls.py` |
 | D7 | Keep summary-first recovery, legitimate no-visual outcomes and existing evidence validators. Do not rely on unsupported JSON Schema conditionals to enforce cross-field rules | [Summary-first contract](../docs/architecture/summarize/prompt.md#summary-before-visual) |
+| D8 | Set the committed `enabled_types` to the implemented chart types and `whowhat`, and enable the existing type-selection policy so the actual request grammar enforces that selection. Keep fallback off. Native enum members remain available only for generic validation and historical compatibility, not as additional production choices | Table A; existing configuration mechanism |
 
 Table E - Rejected request shortcuts
 
 | ID | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | E1 | Only rewrite the prompt | Better wording still cannot expose ids omitted from the request | Continued invisible nonnumeric evidence and no structural reference-membership control | Fowler consultation |
-| E2 | Restrict requests to implemented chart types | It hides unmet demand and excludes the separate grid rather than repairing its inputs | Loss of the declared request vocabulary and a separate product-scope decision | [Request vocabulary](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#config-selects-requests-code-owns-correctness) |
+| E2 | Offer numeric charts only | It excludes the implemented source-backed text grid instead of repairing its inputs | Loss of the supported nonnumeric visual family | [Request vocabulary](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#config-selects-requests-code-owns-correctness) |
 
 ## 3. Row #2 - Preserve the exact reason a visual was refused
 
