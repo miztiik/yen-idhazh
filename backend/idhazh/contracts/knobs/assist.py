@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated, Literal
+
 from pydantic import Field
 
 from idhazh.contracts.base import Model
@@ -184,6 +186,16 @@ class AssistConfig(Model):
             "assist.search_min_days can add one more shard when the newest one is "
             "thin. The page names the days it read, so a wider scope is a sentence a "
             "reader can see."
+        ),
+    )
+    archive_search_months: Literal[-1] | Annotated[int, Field(ge=1)] = Field(
+        default=-1,
+        description=(
+            "Month shards an archive query may search, newest first. -1 searches "
+            "every registered month within the selected UTC dates. Each month is "
+            "read and ranked separately; total download and work grow with the "
+            "selected history, but vector memory does not. Day search keeps its "
+            "separate search_months limit."
         ),
     )
     search_min_days: int = Field(

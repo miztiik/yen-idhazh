@@ -78,6 +78,99 @@ function watcher() {
 }
 
 test.describe('what a question comes back with', () => {
+	test('archive search reaches old vectors without lexical overlap and rereads published updates', async () => {
+		const { index, vectors } = august();
+		const original = index.entries.find((entry) => entry.vector !== null)!;
+		const query = decodeVectorAt(vectors, original.vector!, index.dimensions, index.scale)!;
+		let published = { ...original, title: 'Manufacturers expand wafer capacity' };
+		const reads: string[] = [];
+		const watch = watcher();
+		const search = newSearch(parts({
+			loadIndex: async (month) => {
+				reads.push(`index:${month}`);
+				return month === index.month ? { ...index, entries: [published] }
+					: { ...index, month, entries: [] };
+			},
+			loadVectors: async (month) => {
+				reads.push(`vectors:${month}`);
+				return vectors;
+			},
+			embed: async () => query
+		}), { ...SETTINGS, archive_search_months: -1 });
+		const range = { from: '', to: '' };
+		const found = await search.ask(['2026-11', index.month], 'Computer processors', watch.report, range);
+		expect(found!.hits[0]!.entry.title).toBe(published.title);
+		expect(reads).toEqual(['index:2026-11', 'index:2026-08', 'vectors:2026-08']);
+		published = { ...published, item_id: 'world-republished', title: 'Updated published story' };
+		const fresh = await search.ask(['2026-11', index.month], 'Computer processors', watch.report, range);
+		expect(fresh!.hits.map((hit) => hit.entry.item_id)).toEqual([published.item_id]);
+		expect(reads.filter((name) => name === 'vectors:2026-08')).toHaveLength(2);
+	});
+
+	test('stopping an archive scan prevents the next file from being requested', async () => {
+		const { index } = august();
+		const watch = watcher();
+		let vectorReads = 0;
+		const search = newSearch(parts({
+			loadIndex: async () => {
+				search.stop(watch.report);
+				return index;
+			},
+			loadVectors: async () => {
+				vectorReads += 1;
+				return null;
+			}
+		}), { ...SETTINGS, archive_search_months: -1 });
+		expect(await search.ask([index.month], 'A question', watch.report, { from: '', to: '' }))
+			.toBeNull();
+		expect(vectorReads).toBe(0);
+		expect(watch.phases.at(-1)).toEqual({ name: 'offer' });
+	});
+
+	test('archive vector failures remain retryable and missing months disclose partial results', async () => {
+		const { index, vectors } = august();
+		const target = index.entries.find((entry) => entry.vector !== null)!;
+		const query = decodeVectorAt(vectors, target.vector!, index.dimensions, index.scale)!;
+		const watch = watcher();
+		let readable = false;
+		const search = newSearch(parts({
+			loadVectors: async () => readable ? vectors : null,
+			embed: async () => query
+		}), { ...SETTINGS, archive_search_months: -1 });
+		const range = { from: '', to: '' };
+		const months = [index.month, '2026-07'];
+
+		expect(await search.ask(months, 'A question', watch.report, range)).toBeNull();
+		expect(watch.phases.at(-1)).toEqual({ name: 'failed' });
+
+		readable = true;
+		const partial = await search.ask(months, 'A question', watch.report, range);
+		expect(partial!.partial).toBe(true);
+		expect(partial!.hits[0]!.entry.item_id).toBe(target.item_id);
+		expect(watch.phases.at(-1)).toEqual({ name: 'offer' });
+
+		const complete = await search.ask([index.month], 'A question', watch.report, range);
+		expect(complete!.partial).toBe(false);
+		expect(complete!.hits[0]!.entry.item_id).toBe(target.item_id);
+	});
+
+	test('an empty selected date is an empty answer without fetching vectors or an encoder', async () => {
+		const { index, vectors } = august();
+		let work = 0;
+		const search = newSearch(parts({
+			loadVectors: async () => { work += 1; return vectors; },
+			embed: async () => { work += 1; return []; }
+		}), { ...SETTINGS, archive_search_months: -1 });
+		const watch = watcher();
+		const empty = await search.ask(
+			[index.month], 'A question', watch.report, { from: '2026-08-31', to: '2026-08-31' }
+		);
+		expect(empty!.hits).toEqual([]);
+		expect(empty!.partial).toBe(false);
+		expect(work).toBe(0);
+		expect(watch.phases.at(-1)).toEqual({ name: 'offer' });
+	});
+
 	test('a story is found by its own vector, from the month the day sits in', async () => {
 		const { index, vectors } = august();
 		// One story, and its own vector as the question. It scores 1.0 against

@@ -26,7 +26,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import ClassVar, Final, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from idhazh.contracts.app_config import refuse_an_archive_window_no_preset_offers
 from idhazh.contracts.base import ChangelogEntry, Contract, Model
@@ -579,7 +579,17 @@ class AppearanceConfig(Contract):
     """`config/appearance.json` - everything the published surface is drawn from."""
 
     __schema_stem__: ClassVar[str] = "appearance-config"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "readCompatibility": "additive; absent archive controls use their declared defaults"
+        }
+    )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-10",
+            change="Archive search coverage and Top visibility have separate controls.",
+            why="Absent controls use defaults; existing day-search coverage is unchanged.",
+        ),
         ChangelogEntry(
             version="2026-10-25",
             change="Bounded browser geometry added for story charts.",
@@ -594,11 +604,6 @@ class AppearanceConfig(Contract):
             version="2026-10-09",
             change="console.panel_groups and console.judged_panel_ids removed.",
             why="Each route's console file owns its panel order and judged list.",
-        ),
-        ChangelogEntry(
-            version="2026-10-04",
-            change="Data explorer fetch-ceiling reading and held-byte total recorded.",
-            why="A refused run still leaves fetched files in the page keeper.",
         ),
         ChangelogEntry(
             version="2026-09-30",

@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkStatement } from '../src/lib/data/statement';
-import { consoleConfig, explorerConfig } from '../src/lib/server/config';
+import { consoleConfig, engineExtensionRepository, explorerConfig } from '../src/lib/server/config';
 import { parseLedgerCatalog, offersExample } from '../src/lib/data/ledger-catalog';
+import { nodeEngine } from '../src/lib/data/engine';
 
 /**
  * Can every configured Data explorer example be run as written?
@@ -39,6 +41,25 @@ test('every configured example names only registered ledgers and uses a configur
 		expect(example.ledgers.filter((ledger) => !ledgers.has(ledger)), `${example.id} names a ledger the registry does not list`).toEqual([]);
 		expect(presets, `${example.id} asks for ${example.days} days, which is not a preset`).toContain(example.days);
 	}
+});
+
+test('the day-by-day example returns a typed date and exact daily counts', async () => {
+	const example = explorerConfig().examples.find((example) => example.id === 'scored-per-day');
+	if (example === undefined) throw new Error('The day-by-day example is not configured.');
+	const resolver = createRequire(import.meta.url);
+	const engine = await nodeEngine((specifier) => resolver.resolve(specifier), engineExtensionRepository());
+	const rows = await engine.rows(`
+		WITH "summary-quality-evals" AS (
+			SELECT * FROM (VALUES ('2026-10-01'), ('2026-10-01'), ('2026-10-02'), ('2026-10-03')) AS recorded(date)
+		)
+		SELECT typeof(date) AS date_type, date::VARCHAR AS date, scored::VARCHAR AS scored
+		FROM (${example.sql})
+	`, []);
+	expect(rows).toEqual([
+		{ date_type: 'DATE', date: '2026-10-01', scored: '2' },
+		{ date_type: 'DATE', date: '2026-10-02', scored: '1' },
+		{ date_type: 'DATE', date: '2026-10-03', scored: '1' }
+	]);
 });
 
 test('offered examples require every ledger consent but not available data or an active family', () => {

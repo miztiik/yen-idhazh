@@ -113,8 +113,12 @@ export function dayUrl(date: string, root: string = base): string | null {
 }
 
 /** The day published on that date, or null when it cannot be read. */
-export function loadDay(date: string, fetcher: typeof fetch = fetch): Promise<DayForPage | null> {
-	return requestDay(date, fetcher, false).then((reply) => reply.day);
+export function loadDay(
+	date: string,
+	fetcher: typeof fetch = fetch,
+	refresh = false
+): Promise<DayForPage | null> {
+	return requestDay(date, fetcher, refresh).then((reply) => reply.day);
 }
 
 /** One ask for a date, answered from what the session holds or from the host.
