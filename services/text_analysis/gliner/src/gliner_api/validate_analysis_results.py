@@ -36,7 +36,7 @@ def _leaf(
     value: JsonValue, request: AnalyzeTextRequest, *, choice: bool = False
 ) -> tuple[str, tuple[int, int] | None]:
     spans = request.include_spans and (
-        not choice or isinstance(value, dict) and ("start" in value or "end" in value)
+        not choice or (isinstance(value, dict) and ("start" in value or "end" in value))
     )
     if spans:
         mention = (
@@ -135,7 +135,9 @@ def _structures(
     bound_spans: set[tuple[int, int]] = set()
     for raw_record in _list(value):
         record = _object(raw_record)
-        metadata = {"confidence"} if structure.mode is not None and "confidence" in record else set()
+        metadata = (
+            {"confidence"} if structure.mode is not None and "confidence" in record else set()
+        )
         if record.keys() != fields.keys() | metadata:
             raise ValueError("Native records must retain exactly the requested fields")
         if metadata:
@@ -222,7 +224,9 @@ def validate_analysis_results(raw: object, request: AnalyzeTextRequest) -> Analy
         if schema.entities is not None:
             _entities(native["entities"], request)
         for task in schema.classifications or []:
-            _selections(native[task.task], task.labels, task.multi_label, request.include_confidence)
+            _selections(
+                native[task.task], task.labels, task.multi_label, request.include_confidence
+            )
         for name, structure in (schema.structures or {}).items():
             if name in native:
                 _structures(native[name], structure, request)

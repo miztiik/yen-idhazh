@@ -223,7 +223,9 @@ def test_caller_configuration_uses_native_schema_and_the_ordered_presentation_of
         "schema": {"entities": raw["schema"]["entities"]},
         "include_confidence": False, "include_spans": False,
     }
-    compact = TypeAdapter(CallerAnalysisSettings).validate_json(json.dumps(entity_only), strict=True)
+    compact = TypeAdapter(CallerAnalysisSettings).validate_json(
+        json.dumps(entity_only), strict=True
+    )
     assert compact.analysis_schema.structures is None
     assert not compact.include_confidence
     assert not compact.include_spans
@@ -358,36 +360,6 @@ def test_native_leaf_profiles_preserve_all_task_families(
     malformed = native | {"task": "unknown"}
     with pytest.raises(ResultValidationError):
         validate_analysis_results(malformed, request)
-    rich_request = AnalyzeTextRequest.model_validate(
-    request.model_dump(by_alias=True) | {"include_confidence": True, "include_spans": True}
-    )
-    first = {"text": "a", "start": 0, "end": 1, "confidence": 0.6}
-    second = first | {"start": 2, "end": 3}
-    first_record = {"action": first, "actors": [second], "confidence": 0.7}
-    second_record = {"action": second, "actors": [first], "confidence": 0.8}
-    rich = {
-    "entities": {"mention": [first, second]}, "event": [first_record, second_record],
-    }
-    assert validate_analysis_results(rich, rich_request).model_dump() == {"result": rich}
-    for duplicate in (
-    rich | {"entities": {"mention": [first, first]}},
-    rich | {"event": [first_record, first_record]},
-    ):
-    with pytest.raises(ResultValidationError):
-        validate_analysis_results(duplicate, rich_request)
-    exclusive_structure = structure | {
-    "fields": [
-        {"name": "action", "dtype": "str", "cardinality": "required_one"},
-        {"name": "actors", "dtype": "list", "cardinality": "zero_or_more", "exclusive": True},
-    ],
-    }
-    exclusive_request = AnalyzeTextRequest.model_validate(
-    rich_request.model_dump(by_alias=True) | {
-        "schema": {"entities": ["mention"], "structures": {"event": exclusive_structure}},
-    }
-    )
-    with pytest.raises(ResultValidationError):
-    validate_analysis_results(rich, exclusive_request)
     with pytest.raises(ResultValidationError):
         validate_analysis_results(
             native | {"relation_extraction": {"links": [["a", "b"]]}}, request
@@ -424,6 +396,36 @@ def test_native_records_keep_aggregate_scores_omission_and_compact_repetitions()
     ):
         with pytest.raises(ResultValidationError):
             validate_analysis_results(malformed, request)
+    rich_request = AnalyzeTextRequest.model_validate(
+        request.model_dump(by_alias=True) | {"include_confidence": True, "include_spans": True}
+    )
+    first = {"text": "a", "start": 0, "end": 1, "confidence": 0.6}
+    second = first | {"start": 2, "end": 3}
+    first_record = {"action": first, "actors": [second], "confidence": 0.7}
+    second_record = {"action": second, "actors": [first], "confidence": 0.8}
+    rich = {
+        "entities": {"mention": [first, second]}, "event": [first_record, second_record],
+    }
+    assert validate_analysis_results(rich, rich_request).model_dump() == {"result": rich}
+    for duplicate in (
+        rich | {"entities": {"mention": [first, first]}},
+        rich | {"event": [first_record, first_record]},
+    ):
+        with pytest.raises(ResultValidationError):
+            validate_analysis_results(duplicate, rich_request)
+    exclusive_structure = structure | {
+        "fields": [
+            {"name": "action", "dtype": "str", "cardinality": "required_one"},
+            {"name": "actors", "dtype": "list", "cardinality": "zero_or_more", "exclusive": True},
+        ],
+    }
+    exclusive_request = AnalyzeTextRequest.model_validate(
+        rich_request.model_dump(by_alias=True) | {
+            "schema": {"entities": ["mention"], "structures": {"event": exclusive_structure}},
+        }
+    )
+    with pytest.raises(ResultValidationError):
+        validate_analysis_results(rich, exclusive_request)
     for name in ("confidence", "label", "text"):
         field = {"name": name, "dtype": "str"}
         with pytest.raises(ValidationError):
