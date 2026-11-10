@@ -25,9 +25,12 @@ def render_gliner_events(
         "positions and field scores appear only when returned. Record scores are native "
         "aggregates, not calibrated correctness probabilities."
     )
-    if event_structure(request) is None:
-        empty = "Not requested: the saved extraction schema did not select event records."
+    if request is None:
+        empty = "Unavailable: no extraction request was saved; event selection is unknown."
         records: list[dict[str, object]] = []
+    elif event_structure(request) is None:
+        empty = "Not requested: the saved extraction schema did not select event records."
+        records = []
     elif result is None:
         empty = "Failed: no successful event evidence is available; see the provider outcome."
         records = []

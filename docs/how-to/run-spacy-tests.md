@@ -141,6 +141,8 @@ can survive disabled leaf confidence, so that flag does not promise a
 score-free result. No sentence indexes, event status or normalized dates are
 invented. Not requested, successful empty records, successful omitted empty
 records, failed extraction and malformed evidence remain distinct outcomes.
+Without a saved extraction request, event selection is unknown rather than
+reported as not requested.
 
 The separate expandable Article classification table shows row ID, task,
 selected label ID, request label text and native score when returned.

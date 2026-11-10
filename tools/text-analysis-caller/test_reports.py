@@ -807,6 +807,9 @@ class EventReportTests(unittest.TestCase):
         self.assertIn("Not requested: the saved extraction schema", report)
         failed = render_gliner_results(source, None, gliner_request=request)
         self.assertIn("Failed: no successful event evidence", failed)
+        unknown = render_gliner_results(source, None)
+        self.assertIn("event selection is unknown", unknown)
+        self.assertNotIn("Not requested: the saved extraction schema", unknown)
         malformed: dict[str, object] = {
             "result": {
                 "entities": {},
