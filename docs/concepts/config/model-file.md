@@ -66,7 +66,7 @@ What the splat may not do is reach a decode control. `response_format`, `json_sc
 **An output limit is not a shape control.** Maintainer ruling,
 2026-10-24: `sampling.max_tokens` is accepted on every request route. The chat
 route defaults to 8,192 output tokens when the value is absent; an explicit
-value, including the active model's 4,096-token limit, wins. Rendered completions
+value, including the active model's 8,192-token limit, wins. Rendered completions
 use the caller's shape-derived `n_predict` budget when no `max_tokens` is
 declared, or 8,192 tokens when the caller supplies no budget. An explicit
 `max_tokens` replaces that limit, survives continuations,
