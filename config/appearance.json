@@ -167,7 +167,7 @@
           "summary-quality-evals"
         ],
         "days": 14,
-        "sql": "SELECT date, count(*) AS scored FROM \"summary-quality-evals\" GROUP BY date ORDER BY date"
+        "sql": "SELECT CAST(date AS DATE) AS date, count(*) AS scored FROM \"summary-quality-evals\" GROUP BY date ORDER BY date"
       }
     ],
     "explorer_max_files": 128,
