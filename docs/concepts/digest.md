@@ -77,7 +77,7 @@ Note the split this implies, because it is easy to lose: **code finds and cuts e
 
 ## Honesty is a design requirement
 
-The system knows things about its own output that a reader cannot see: that a source was an abstract, that a source was truncated, that a summary scored badly, that some of today's items did not finish. These are surfaced:
+The system knows source and summary limitations that a reader cannot see. These are surfaced beside the affected story:
 
 - A short or abstract source can publish as a brief item. Brevity is not a confidence band; a 100-word post can be summarized faithfully.
 - A source-limit sentence appears only where the missing context would surprise the reader. A normal short post does not get a label.
@@ -85,9 +85,8 @@ The system knows things about its own output that a reader cannot see: that a so
 - **The mark names what is missing, not how good the item is.** "Our summary leaves out names or figures from the opening" is something a reader can check when they click through. "Mostly matches the source" is a grade, and a reader can do nothing with it. The published item carries a `band_reason` identifier and the site owns the sentence ([evaluation.md](evaluation.md)).
 - A top-band item says nothing at all. Copy about the absence of a problem is ink a reader cannot act on.
 - **Confidence is stated per item and never as a day-level chart.** A three-segment bar of the day's bands was deleted on 2026-08-24: its proportions were the same every day (57.7 / 24.2 / 18.1 re-banded at n=447), it shared its tokens with the item mark so it trained a reader to ignore the mark that does vary, and it spread a number over hundreds of items a reader could neither locate nor act on. Colour is spent where it changes between two items on one screen.
-- A partial run **publishes, and says it was partial.** The failure count is a tracked number with a date on it, not something noticed when a human complains.
-- **The day's facts appear once in its header.** The date and stable published count come first. The update time and number come last, with the count added since the first update. These are recorded publication facts, not counts of the stories currently visible or the build clock of the site.
-- An incomplete day says "N articles did not finish", with the singular form for one. The count does not say why they failed, so the page does not attribute every failure to inadequate source text. An unknown count or absent update history adds no claim. The footer carries none of these day-specific facts.
+- A partial run **still publishes.** Its failure count remains in the pipeline records rather than becoming a notice above the stories.
+- **The day's facts appear once in a compact header:** edition date, stable published count and recorded update time in UTC. The count never changes with filtering or partial loading. Missing update time adds no claim. Failure totals and additions since first publication do not belong in this reading header.
 - A run with zero successes still publishes. A day whose failures are invisible is a day nobody fixes.
 
 Surfacing this without turning every item into a disclaimer is a typography and hierarchy problem, and it is a real one.

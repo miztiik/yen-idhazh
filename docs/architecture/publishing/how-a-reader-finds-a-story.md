@@ -92,19 +92,26 @@ search fails with retry rather than claiming no matches. A valid date with no
 indexed stories is an empty answer without a model download. A missing browsing file has retry;
 an empty publication inventory renders an empty page rather than throwing.
 
-## The filter bar: topics and a field in one panel
+## The filter bar: topics and a field in one strip
 
 The shared filter bar remains on day pages, not on the archive. Its topic
 links are published routes and work without JavaScript. Auto-created overflow
 topics use a native disclosure; configured topics remain visible.
-The band sticks only at the wide breakpoint where it fits on one line.
+The unboxed strip separates itself from the edition information with a rule.
+Wide screens give topics two shares of the width and the field one; narrow
+screens wrap topics above the field. The selected topic has an accent tint and
+outline. The strip scrolls with the page so wrapped controls cannot obscure
+stories.
 
 ## The day page: one field, two tiers
 
 Typing on a day page filters its loaded title, summary and key points without
-fetching index files, vectors or an encoder. Enter requests semantic search
-over the configured month scope. The field's caption distinguishes these
-gestures and discloses the first-use download before Enter can spend it.
+fetching index files, vectors or an encoder. Enter or `Search other days`
+requests semantic search over the configured month scope. The action appears
+for a non-empty query, without moving the field. A first-use download disclosure
+appears as soon as the reader can submit that query. At rest there is no
+instruction or status sentence; a filtered count or search state appears when
+there is something to report.
 
 An answer replaces the day's story list. The next keystroke restores local
 filtering, and a return control restores the day directly. A failed or canceled
@@ -124,6 +131,10 @@ and its scope together while retaining a bounded recent list before the first
 query. Existing monthly projections already contain the required vectors;
 another index would introduce a second publication and freshness obligation
 without being necessary for exact cosine search.
+
+On day pages the controls already have individual outlines, so another enclosing
+card adds no meaning. Removing it keeps the edition compact without shrinking
+tap targets. Query feedback and download disclosures remain below the strip.
 
 ## See also
 

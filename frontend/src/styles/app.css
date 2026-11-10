@@ -170,6 +170,11 @@ body {
 	max-width: var(--frame-reading);
 }
 
+/* The home page fills the window; prose keeps its own configured measure. */
+.frame:has([data-surface='home']) {
+	max-width: none;
+}
+
 /* An instrument has tables and charts where a digest has sentences, so it is
    allowed the screen it is on - measured 2026-08-28, the console rendered a
    ten-column table at 627px with 582px empty beside it.
@@ -248,10 +253,8 @@ body {
    570 px - so the item gives its rail back at the same width
    (DigestItem.svelte).
 
-   The aside stands beside the STREAM and never beside the day's controls. The
-   filter panel sticks only where it is one band, and one band needs the whole
-   content box: at 896 px its pills wrap under its field and a two-band panel
-   then follows the reader down the page.
+   The aside stands beside the STREAM and never beside the day's controls, so
+   the wrapping topics and search field can use the whole content box.
 
    Below the breakpoint these are plain blocks, so the parts stack in
    `digest.sections` order and the leads are exactly where config put them. */

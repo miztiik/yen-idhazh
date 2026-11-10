@@ -267,19 +267,52 @@ test('reader labels clear the text floor without scaling, and every mark survive
 	const relationship = page.locator('figure.visual').filter({
 		has: page.locator('circle.scatter-point, circle.bubble-point')
 	});
+	const relationshipData = axisCharts.find(({ data }) =>
+		data.type === 'scatter' || data.type === 'bubble'
+	)?.data;
+	if (!relationshipData) throw new Error('the fixture must include a relationship drawing');
+	const relationshipSvg = relationship.locator(':scope > svg');
+
+	async function waitForFittedRelationship() {
+		await expect.poll(async () => {
+			const measured = await relationshipSvg.evaluate((node) => {
+				const svg = node as SVGSVGElement;
+				const figure = svg.parentElement!;
+				const style = getComputedStyle(figure);
+				const shell = document.querySelector('[data-filter-bar]');
+				const shellStyle = shell ? getComputedStyle(shell) : null;
+				const occlusion = shell && shellStyle?.position === 'sticky'
+					? shell.getBoundingClientRect().height + (parseFloat(shellStyle.top) || 0) : 0;
+				const furniture = figure.getBoundingClientRect().height - svg.getBoundingClientRect().height +
+					parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+				const text = svg.querySelector('text');
+				return {
+					height: Number(svg.getAttribute('height')),
+					room: {
+						height: Math.max(0, (window.visualViewport?.height ?? window.innerHeight) - occlusion - furniture),
+						textHeight: text ? text.getBBox().height : parseFloat(style.fontSize)
+					}
+				};
+			});
+			return measured.height === fitChartGeometry(relationshipData!, geometry, measured.room).scatter_height_px;
+		}).toBe(true);
+	}
+
 	await relationship.scrollIntoViewIfNeeded();
+	await waitForFittedRelationship();
 	const accessible = await relationship.getAttribute('aria-label');
-	const before = await relationship.locator(':scope > svg').getAttribute('height');
+	const before = await relationshipSvg.getAttribute('height');
 	await page.setViewportSize({ width: 1440, height: 360 });
-	await expect.poll(() => relationship.locator(':scope > svg').getAttribute('height')).not.toBe(before);
+	await expect.poll(() => relationshipSvg.getAttribute('height')).not.toBe(before);
+	await waitForFittedRelationship();
 	await expect(relationship).toHaveAttribute('aria-label', accessible!);
-	const shortHeight = await relationship.locator(':scope > svg').getAttribute('height');
+	const shortHeight = await relationshipSvg.getAttribute('height');
 	await page.evaluate(() => window.scrollTo(0, 0));
-	await expect(relationship.locator(':scope > svg')).toHaveAttribute('height', shortHeight!);
+	await expect(relationshipSvg).toHaveAttribute('height', shortHeight!);
 	expect(await relationship.evaluate((node) => node.scrollHeight <= node.clientHeight)).toBe(true);
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await expect.poll(() => relationship.locator(':scope > svg').getAttribute('height')).toBe(before);
-	const relationshipSvg = relationship.locator(':scope > svg');
+	await waitForFittedRelationship();
+	await expect(relationshipSvg).toHaveAttribute('height', before!);
 	const wideWidth = Number(await relationshipSvg.getAttribute('width'));
 	const pointCount = await relationship.locator('circle.scatter-point, circle.bubble-point').count();
 	await page.setViewportSize({ width: 390, height: 900 });

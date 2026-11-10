@@ -2,7 +2,7 @@
 	import { base } from '$app/paths';
 	import ThemeToggle from './ThemeToggle.svelte';
 
-	let { title, tagline }: { title: string; tagline: string } = $props();
+	let { title }: { title: string } = $props();
 </script>
 
 <header class="flex items-center justify-between gap-4 py-5">
@@ -10,21 +10,11 @@
 		<a href={base || '/'} class="wordmark">
 			{title}
 		</a>
-		<p class="tagline mt-1 text-sm text-text-tertiary" data-site-tagline>{tagline}</p>
 	</div>
 	<ThemeToggle />
 </header>
 
 <style>
-	/* The site's one-line self-description is for a reader deciding what this
-	   is. An operator on the console already knows, and on a long route every
-	   line above the strip is a line between him and the figures. The page says
-	   what it is by `data-surface`, so CSS reads it rather than a script - the
-	   same way the frame widens for the console. */
-	:global(.frame:has([data-surface='operator'])) .tagline {
-		display: none;
-	}
-
 	/* Identity, and the one place on the site a gradient appears above the
 	   fold. It encodes nothing, so it is decoration and unconstrained - the
 	   colour rule binds a tint that tells a reader something. It never goes

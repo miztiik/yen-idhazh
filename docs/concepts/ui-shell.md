@@ -83,9 +83,9 @@ when needed. Mark first-sighting time as such; never present it as the feed's ti
 If `time_source` is unknown, show no time. If an older record has no attribution,
 do not invent one. A relative time may supplement, never replace, the absolute one.
 
-Use the same type as the other item metadata. On a dated page the stamp replaces
-the day link; search results keep the day link instead. State `Times shown in UTC.`
-once above the stream. These rules apply to browser-rendered content too.
+Use the same type as the other item metadata and label each clock `UTC`. On a
+dated page the stamp replaces the day link; search results keep the day link
+instead. These rules apply to browser-rendered content too.
 
 ## What the shell must never do
 
