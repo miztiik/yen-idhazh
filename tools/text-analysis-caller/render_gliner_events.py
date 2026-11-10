@@ -20,9 +20,10 @@ def render_gliner_events(
 ) -> str:
     """Keep candidate order, optional roles and aggregate scores separate from leaf evidence."""
     note = (
-        "Linked candidates, not verified completed events. Each row keeps the native action "
-        "and its own participants, times and places in returned order. Missing roles stay empty; "
-        "positions and field scores appear only when returned. Record scores are native "
+        "Linked candidates, not verified completed events. Matching source spans does not prove "
+        "that their links to the action are correct. Each row preserves the native action "
+        "and returned participants, times and places in their original order. Missing roles stay "
+        "empty; positions and field scores appear only when returned. Record scores are native "
         "aggregates, not calibrated correctness probabilities."
     )
     if request is None:

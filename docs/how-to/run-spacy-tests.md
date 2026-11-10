@@ -138,7 +138,10 @@ action beside its own actor, object, time and place lists. Missing roles
 remain empty. Field positions and confidence appear only when supplied;
 aggregate record confidence has its own column. Native aggregate scores
 can survive disabled leaf confidence, so that flag does not promise a
-score-free result. No sentence indexes, event status or normalized dates are
+score-free result. Matching source spans does not prove correct association
+with the action; the report preserves native links, including mistakes.
+These candidates are not clustering-ready or accuracy-proven.
+No sentence indexes, event status or normalized dates are
 invented. Not requested, successful empty records, successful omitted empty
 records, failed extraction and malformed evidence remain distinct outcomes.
 Without a saved extraction request, event selection is unknown rather than

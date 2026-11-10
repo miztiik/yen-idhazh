@@ -735,6 +735,10 @@ class EventReportTests(unittest.TestCase):
                     )
                     self.assertIn("| M1 | bought", report)
                     self.assertIn("| M2 | sold", report)
+                    self.assertIn(
+                        "Matching source spans does not prove that their links to the action "
+                        "are correct.", report,
+                    )
                     self.assertIn("|  |  | 0.7 |", report)
                     self.assertIn("| Record score |", report)
                     self.assertEqual("score 0.6" in report, confidence)
