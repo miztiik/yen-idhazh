@@ -13,10 +13,9 @@
  * the list downloads the JSON. Only a reader who searches downloads the sibling
  * `.bin`, and that reader has already accepted a 43 MB encoder.
  *
- * **Every fetch here is cached for the page's lifetime.** The list and the
- * search box read the same months, and a reader who searches twice reads them
- * again. The two maps below are that cache. Nothing in a `load` function calls
- * this module, so a prerender never fills them.
+ * The day view shares cached fetches through the two maps below. Archive
+ * submissions use the raw readers to revalidate published files without
+ * retaining every month's vectors. A prerender never fills either cache.
  *
  * The shape this returns, and the parsing that checks it, live in `month.ts`.
  * They are pure, and they stay out of this file because this file imports
@@ -48,14 +47,21 @@ export function loadIndex(
 	return pending;
 }
 
-async function readIndex(month: string, fetcher: typeof fetch): Promise<MonthIndex | null> {
+/** Read without retaining a month in the page cache; archive scans release it after ranking. */
+export async function readIndex(
+	month: string,
+	fetcher: typeof fetch = fetch,
+	cache: RequestCache = 'default'
+): Promise<MonthIndex | null> {
 	try {
-		const response = await fetcher(`${base}/index/${month}.json`);
+		const response = await fetcher(`${base}/index/${month}.json`, { cache });
 		if (!response.ok) {
 			console.warn(`[archive] the stories for ${month} are not available (${response.status})`);
 			return null;
 		}
-		return indexOf(await response.json());
+		const index = indexOf(await response.json());
+		if (index === null) console.warn(`[archive] the stories for ${month} have an incompatible index`);
+		return index;
 	} catch (error) {
 		console.warn(`[archive] the stories for ${month} could not be read`, error);
 		return null;
@@ -91,9 +97,13 @@ export function loadVectors(
 	return pending;
 }
 
-async function readVectors(month: string, fetcher: typeof fetch): Promise<Int8Array | null> {
+export async function readVectors(
+	month: string,
+	fetcher: typeof fetch = fetch,
+	cache: RequestCache = 'default'
+): Promise<Int8Array | null> {
 	try {
-		const response = await fetcher(`${base}/index/${month}.bin`);
+		const response = await fetcher(`${base}/index/${month}.bin`, { cache });
 		if (!response.ok) {
 			console.warn(`[archive] the vectors for ${month} are not available (${response.status})`);
 			return null;

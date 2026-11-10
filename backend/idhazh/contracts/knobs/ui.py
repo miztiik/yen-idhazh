@@ -105,7 +105,7 @@ class UiConfig(Model):
         le=8,
         description=(
             "How many characters a reader types before an in-place filter narrows a "
-            "list. It binds the day page and the archive, which share one panel. "
+            "list. It controls the day page's local filter, not archive search. "
             "Two rather than one because one letter narrows nothing: a single letter "
             "matches most story titles and the commonest matches almost all of them, "
             "where a two-letter pair matches a small fraction. A first "
@@ -331,10 +331,8 @@ class UiConfig(Model):
             "How far back a read mark is kept, counted in calendar days from today. "
             "Marks are held per digest date, so a mark made on one day can never "
             "grey out a different day's article, and every page load drops the dates "
-            "that now sit outside this window. Fourteen days, the same span "
-            "`archive_recent_days` lists, so the days the archive offers as rows of "
-            "their own are exactly the days a reader can still see their own marks "
-            "on. THIS RULE TRUSTS THE DEVICE CLOCK AND THE RULE IT REPLACED "
+            "that now sit outside this window. Fourteen days is the default retention. "
+            "THIS RULE TRUSTS THE DEVICE CLOCK AND THE RULE IT REPLACED "
             "DELIBERATELY DID NOT: keeping the newest N dates present in `localStorage` "
             "needed no clock at all, and expiry by calendar cannot work without one, "
             "so a clock set wrong now keeps marks too long or drops them early. That "
@@ -355,41 +353,28 @@ class UiConfig(Model):
             "it opens on the same twenty-five the console's failure list does."
         ),
     )
+    archive_top_viewports: float = Field(
+        default=1.0,
+        ge=0.5,
+        le=8.0,
+        description="Viewport heights scrolled before the archive offers its Top control.",
+    )
     archive_recent_days: int = Field(
         default=14,
         ge=1,
         le=31,
         description=(
-            "How many of the newest published days the archive lists as rows of their "
-            "own, each carrying the long date, the story count and whether every story "
-            "finished. Every other day sits inside a disclosure for its month, so this "
-            "block is the shortcut and never the only way in. Fourteen, and it matches "
-            "`read_mark_days` for the same reason it matched it at seven: a row here is "
-            "an invitation back to a day, and a day whose marks have already been "
-            "dropped comes back looking unread. The two numbers move together or the "
-            "block starts offering days it misrepresents. The ceiling is a month: "
-            "above that the block is the wall of dates it replaced, and a month row "
-            "already reaches any date in two clicks. Read by the build alone, like "
-            "`shell_seed_items`, so it never rides to a reader."
+            "Legacy quick-date count retained so existing appearance configs remain readable. "
+            "The archive uses an optional date range instead of a calendar."
         ),
     )
     archive_window_days: int = Field(
         default=30,
         ge=1,
         description=(
-            "The span the archive's window control opens on, in days. IT MUST BE ONE "
-            "OF `console.window_presets`, and `AppConfig` and `AppearanceConfig` both "
-            "refuse a file where it is not - that is how the archive reuses the "
-            "console's list of spans instead of declaring a second one, so the two "
-            "surfaces cannot offer different day counts for the same idea. It names a "
-            "span rather than a list for the reason `console.default_window_days` "
-            "does: the list is the presets, and a second list is one more thing to "
-            "keep in step. Thirty, because that is the span the console opens on and "
-            "about the reach `assist.search_months` gives a search today, so the "
-            "control ships opening on what the archive already costs. NOTHING READS "
-            "IT YET - the archive has no window control, so the span one would open "
-            "on is declared and unused. Read by the build alone, like "
-            "`archive_recent_days`, so it never rides to a reader."
+            "UTC days in the archive's initial story list, anchored to its newest published day. "
+            "Show more loads earlier stories. This does not restrict submitted semantic searches. "
+            "The value must remain in `console.window_presets` for configuration compatibility."
         ),
     )
     offline_version: int = Field(

@@ -17,7 +17,7 @@
  * falsehood, which they cannot.
  */
 
-import type { MonthIndex } from './month';
+import { dateInRange, type ArchiveRange, type MonthIndex } from './month';
 import type { SearchIndexEntry } from '$lib/payload/types';
 import { ENCODER_DIMENSIONS, ENCODER_ID } from './encoder';
 import { longDate, MONTHS } from '../format';
@@ -50,6 +50,10 @@ export interface SearchOutcome {
 	scope: string;
 	/** True when the result limit may have cut something off. */
 	capped: boolean;
+	/** A requested month could not be searched. Never imply complete coverage. */
+	partial?: boolean;
+	/** Configuration intentionally restricted the requested month range. */
+	limited?: boolean;
 }
 
 /** One stored vector back to the unit vector the runner produced, or null.
@@ -198,6 +202,7 @@ export interface RankOptions {
 	limit: number;
 	/** Below this a result is noise wearing a number. A selector, never a grade. */
 	minScore: number;
+	range?: ArchiveRange;
 }
 
 /** Rank the entries of every month whose vectors are in hand.
@@ -217,6 +222,7 @@ export function rank(
 	for (const { index, vectors } of months) {
 		if (!searchable(index, query.length)) continue;
 		for (const entry of index.entries) {
+			if (options.range && !dateInRange(entry.date, options.range)) continue;
 			if (entry.vector === null || entry.vector === undefined) continue;
 			const vector = decodeVectorAt(vectors, entry.vector, index.dimensions, index.scale);
 			if (vector === null) continue;
@@ -227,6 +233,11 @@ export function rank(
 
 	// Score, then most recent, then item id. The last key is what makes two
 	// identical searches return identical lists.
+	return closestHits(hits, limit);
+}
+
+/** Merge bounded month answers using the same ordering as a single-month search. */
+export function closestHits(hits: SearchHit[], limit: number): SearchHit[] {
 	hits.sort(
 		(left, right) =>
 			right.score - left.score ||

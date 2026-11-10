@@ -104,8 +104,9 @@ def test_old_app_configuration_uses_declared_paths_without_reading_them() -> Non
     raw = json.loads((CONFIG_DIR / "idhazh.json").read_bytes())
     del raw["prompt_files"]
     raw["version"] = "2026-10-29"
-    assert AppConfig.model_validate(raw).prompt_files == PromptFilesConfig()
-    assert AppConfig.json_schema()["version"] == "2026-11-07"
+    loaded = AppConfig.model_validate(raw)
+    assert loaded.prompt_files == PromptFilesConfig()
+    assert loaded.version == raw["version"]
     assert "additive" in AppConfig.json_schema()["readCompatibility"]
 
 

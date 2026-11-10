@@ -1,5 +1,6 @@
 {
   "assist": {
+    "archive_search_months": 2,
     "max_tokens": 256,
     "min_readable_letter_share": 0.5,
     "model_base_url": "https://huggingface.co/Xenova/all-MiniLM-L6-v2",
@@ -206,6 +207,7 @@
   "digest": {
     "archive_page_size": 25,
     "archive_recent_days": 7,
+    "archive_top_viewports": 2.5,
     "archive_window_days": 30,
     "desk_thin_max": 12,
     "draw_same_story": true,
