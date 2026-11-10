@@ -1,6 +1,6 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-10
 
 What the model is asked to produce, how the two calls share context, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
 
@@ -99,6 +99,26 @@ Use grammar-constrained decoding derived from the declared reply model. Refuse u
    and plan a visual.
 
 The completion prompts are rendered explicitly. The second extends the first prompt and its validated reply instead of reconstructing a chat-message array. Keep the calls adjacent on the same slot so another item cannot evict the shared prefix.
+
+**The finalized element table is currently missing from the continuation.**
+The first request prints quantities and dates. After that reply, `anchored()`
+adds source-backed entities, places, quotes, claims and recovered quantities,
+with code-computed element ids. Reachability and validation read this expanded
+table, but `build_summarize_and_plan_request()` receives only the first request
+and raw label reply. The planner therefore cannot copy the new ids from its
+input, even when reachability admits a chart or Who/What grid using them.
+The [visual rule](../../concepts/digest.md#the-visual-rule) does not depend on
+unfinished article classification; this is a missing evidence handoff inside
+the existing two-call path.
+
+The request grammar bounds reference spelling, not membership in this
+article's finalized table. The configured visual instructions describe field
+names but do not explain each type's required channels or the grid's pairing
+rule. Replaying a hand-authored valid plan proves parsing and compilation,
+not that the production planner received the evidence and instructions needed
+to produce one. Repairing the handoff must preserve the shared prefix and keep
+article-derived evidence in the item-dependent data turn, never the system
+instructions.
 
 The label reply still declares `keyphrases` and `lede_sentence_ids`, although
 neither has a downstream consumer. The user deferred their removal. This is

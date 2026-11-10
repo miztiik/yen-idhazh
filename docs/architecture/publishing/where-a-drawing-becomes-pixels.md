@@ -1,6 +1,6 @@
 # Where a drawing becomes pixels
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-11-10
 
 The reader's browser renders charts and lays out the whowhat grid; the pipeline
 never draws a chart. This page holds that ruling, what it cost and what it
@@ -289,8 +289,18 @@ the pairing is the plan's rather than a rule invented in the compiler, and the b
 that order. Re-ranking them here would be the compiler deciding what the comparison says.
 
 **Only a supported type is compiled.** This build compiles `bar`, `dot`, `slope`,
-`line`, `scatter`, `bubble`, `stacked_bar` and `pie`; a plan for any other declared type raises
-`CompileError` naming it rather than publishing a picture nobody planned.
+`line`, `scatter`, `bubble`, `stacked_bar`, `pie` and `histogram`; a plan for any
+other declared chart type raises `CompileError` naming it rather than publishing
+a picture nobody planned. The Who/What grid uses its separate compiler and
+reader described above.
+
+Declaring a type is not delivering it. `area` and `timeline` have role rules
+but no compiler. `table`, `flow`, `comparison`, `callout`, `quotecard` and
+`keyfacts` have neither role rules nor a compiler. Keep these gaps distinct
+from the [missing planner-input handoff](../summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once):
+adding a compiler cannot recover a request that was suppressed, declined or
+failed to parse before reaching it. Diagram delivery remains
+[deferred](visuals.md#diagrams-deferred).
 
 **A pie needs a separately stated whole.** `pie_exhaustive` checks that its parts
 use one measure and unit and exactly make that independent source quantity.
