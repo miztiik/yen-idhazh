@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-11-10
 
 **Known noncompliance:** Existing prerendering does not meet [Telemetry Intent](telemetry-intent.md) and will be removed as existing pages migrate. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -102,7 +102,7 @@ create an account, report reader activity or prefetch the archive.
 - Keep a retirement mechanism. `ui.offline_version` and `ui.offline_retired_through` control it. Both the worker and the page check retirement; a retired worker deletes its own caches and unregisters, and the page must not register it again. Failure to fetch the retirement declaration is not an instruction to retire.
 - Precache basic shell assets, not all application JavaScript or unopened days. Cache requested code as needed. Keep day data separate from the build's shell cache so a new deployment does not discard offline reading.
 - Bound saved days by both `ui.offline_days_kept` and `ui.offline_bytes_kept`. Measure cached body bytes, not compressed transfer headers. Retain at least one day even when it exceeds the byte limit. Do not put the search model, runtime or retirement declaration in that day cache.
-- Fetch the shell from the network first. Serve a saved day immediately; refresh the current UTC day in the background so the saved copy does not freeze the news.
+- Fetch the shell and day payloads from the network first. Revalidate day payloads against the host; use the saved day only when the network request fails. An HTTP error still reaches the page's missing or unreachable state rather than being hidden by an old copy.
 - Validate cached data as fetched data. Missing optional visuals may degrade the page, but must not prevent the saved text from being read.
 - Restrict the shell cache to its declared assets and opened routes. It must not collect every same-origin request or duplicate telemetry and search caches.
 
@@ -120,6 +120,7 @@ See [deployment](../how-to/ship-to-github-pages.md).
 - A spinner reports neither progress nor failure. A named wait and stable panel dimensions communicate what is missing without moving content.
 - Cookies transmit reader state with requests. Local preferences need not leave the device. Offline caches retain requested content without fetching the archive.
 - A service worker can outlive a broken page, so retirement must work from both the worker and the page before registration.
+- Background cache refresh does not update a day already rendered. Network-first day reads prevent an older offline copy from replacing newly published content; a failed cache write must not discard a successful network response.
 
 ## See also
 
