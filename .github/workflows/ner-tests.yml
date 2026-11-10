@@ -25,10 +25,6 @@ on:
         description: "spaCy: custom CSV, for example: entities, sentences, document_metrics"
         required: false
         type: string
-      classification_tasks:
-        description: "GLiNER: native tasks JSON; blank = configured vertical, desk, lenses, source_kind"
-        required: false
-        type: string
       text:
         description: "Text analyzed by both providers; visible in dispatch, artifacts, and run summary"
         required: true
