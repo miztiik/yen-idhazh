@@ -150,12 +150,14 @@ provider health fail.
 
 ## Dependency cost
 
-The pinned GLiNER2 core supplies native schema validation as a base dependency;
-its HTTP/progress dependencies add installation cost but no weights or tensor
-runtime. Native extraction and chunk merging use the same SDK version. The CPU
-tensor runtime, transformer libraries and configured weights dominate model
-installation and resident-memory cost, so inference stays in the optional
-`model` extra.
+The pinned GLiNER2 SDK supplies native schemas, extraction and chunk merging.
+Its schema import path reaches the tensor runtime through shared chunking
+and model types, so executable SDK validation needs the existing `model`
+extra even without loaded weights. The Linux contract job syncs that frozen
+extra but never prepares checkpoint assets or performs inference. Tensor
+and transformer packages add installation cost for these real SDK checks;
+configured weights remain separate inference assets. HTTP/progress
+dependencies support the same SDK, not a second extraction implementation.
 FastAPI, Pydantic and the neutral host reuse existing transport and validation
 behavior. HTTPX is also used by the external reporting caller; pytest, Ruff and
 mypy support development checks.

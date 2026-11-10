@@ -175,8 +175,8 @@ jobs:
         with:
           version: '0.9.7'
 
-      - name: Sync the frozen model-free provider environment
-        run: uv sync --frozen --group dev
+      - name: Sync the frozen provider environment without model weights
+        run: uv sync --frozen --extra model --group dev
 
       - name: Lint native provider
         run: uv run --no-sync ruff check --config pyproject.toml src tests

@@ -497,8 +497,11 @@ The provider has its own CPython 3.12 manifest and frozen lock under
 `services/text_analysis/gliner/`. Its production dependencies do not import
 spaCy model/feature logic. The development group consumes the existing
 text-analysis settings loader and resolves compatible dependencies.
-The pinned torch-free GLiNER2 core validates caller-defined native analysis
-schemas in the base environment; model extras remain optional.
+Executable validation of the pinned SDK's native schemas requires the
+existing model extra; the
+[dependency reference](../architecture/text-analysis/gliner-api.md#dependency-cost)
+explains its tensor-runtime import. This does not require prepared weights
+or inference.
 
 Verify the named lock without installing a provider:
 
@@ -515,13 +518,14 @@ shared changed-test selection and follow applicable ordinary CI gates
 independently. A result observation is not a test pass.
 
 The existing `ci.yml` runs `gliner-contracts` on Linux for code candidates.
-It syncs the frozen development group without the model extra, then runs
+It syncs the frozen development group with the existing model extra for SDK
+imports, then runs
 the provider/caller lint and type checks and the existing model-free tests.
 The job supplies the named hosting/caller source roots and the schema-only
 backend source root. From the provider directory, on allowed Linux only:
 
 ```bash
-uv sync --frozen --group dev
+uv sync --frozen --extra model --group dev
 uv run --no-sync ruff check --config pyproject.toml src tests
 uv run --no-sync mypy --config-file pyproject.toml src tests
 uv run --no-sync mypy --config-file pyproject.toml --ignore-missing-imports --follow-imports=skip --platform linux --python-version 3.12 --strict ../../../tools/text-analysis-caller
