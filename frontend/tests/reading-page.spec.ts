@@ -17,6 +17,17 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	expect(title.trim()).not.toBe('');
 
 	await expect(page.locator('[data-leading]')).toBeVisible();
+	const edition = page.getByRole('region', { name: 'About today' });
+	await expect(edition.getByRole('heading', { level: 1 })).toBeVisible();
+	await expect(edition).toContainText(/\d+ stories/);
+	await expect(edition).toContainText(/Updated \d{2}:\d{2} UTC/);
+	await expect(edition).not.toContainText('did not finish');
+	await expect(edition).not.toContainText('added after');
+	const editionText = await edition.innerText();
+	await expect(page.locator('[data-site-tagline]')).toHaveCount(0);
+	await expect(page.locator('[data-filter-note]')).toHaveCount(0);
+	const searchOtherDays = page.getByRole('button', { name: 'Search other days' });
+	await expect(searchOtherDays).toHaveCSS('clip-path', 'inset(50%)');
 	const field = page.locator('#page-filter');
 	await field.click();
 	const original = await field.elementHandle();
@@ -37,6 +48,10 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	await page.keyboard.insertText(title.slice(prefix.length));
 	await expect.poll(() => stories.count()).toBeLessThan(before);
 	await expect(stories.first().getByRole('heading')).toHaveText(title);
+	await expect(searchOtherDays).toBeVisible();
+	await expect(searchOtherDays).toHaveCSS('clip-path', 'none');
+	await expect(page.locator('[data-filter-note]')).not.toContainText('Press Enter');
+	await expect(edition).toHaveText(editionText);
 	await page.keyboard.press('Home');
 	await page.keyboard.press('ArrowRight');
 	await page.keyboard.insertText('x');
@@ -48,6 +63,8 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	await stableField();
 	await expect(page.locator('[data-leading]')).toBeVisible();
 	await expect(stories.first()).toBeVisible();
+	await expect(searchOtherDays).toHaveCSS('clip-path', 'inset(50%)');
+	await expect(page.locator('[data-filter-note]')).toHaveCount(0);
 
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(page.locator('#page-filter')).toBeVisible();

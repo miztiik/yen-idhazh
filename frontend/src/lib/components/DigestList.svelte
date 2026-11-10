@@ -295,11 +295,8 @@
 				? `No stories match. ${searched}`
 				: `${plural(found.hits.length, 'story', 'stories')} found. ${searched}`;
 		}
-		if (!filtering) return 'Typing filters this page. Press Enter to search other days.';
-		return (
-			`${settledCount} of ${plural(total, 'story', 'stories')} on this page. ` +
-			'Press Enter to search other days.'
-		);
+		if (!filtering) return '';
+		return `${settledCount} of ${plural(total, 'story', 'stories')} on this page.`;
 	});
 
 	// The count settles behind the list rather than with it. `visible.length` is
@@ -476,7 +473,7 @@
 			placeholder="Filter this page"
 			showField={ui.show_filter}
 			submitLabel="Search other days"
-			submitVisible={false}
+			submitVisible={query.trim().length > 0}
 			onSubmit={() => void ask()}
 			{onType}
 			deskThinMax={ui.desk_thin_max}

@@ -536,7 +536,7 @@ const DEFAULTS: UiConfig = {
 	payload_slow_ms: 1200,
 	repo_url: 'https://github.com/miztiik/yen-idhazh',
 	site_title: 'yen-idhazh',
-	tagline: 'A daily digest that checks its own work.',
+	tagline: 'Daily news summaries, with links to their sources.',
 	read_mark_days: 14,
 	archive_page_size: 25,
 	number_format: NUMBER_FORMAT_DEFAULTS,

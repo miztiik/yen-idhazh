@@ -11,7 +11,7 @@ New designs, charts and visuals render in the browser. Do not add prerendered da
 - Constrain prose, not the application shell. A dashboard may use the frame's width while paragraphs retain a comfortable measure.
 - Keep an item's hierarchy to title, summary and provenance. Use the configured display face for titles and the reading face for prose; data uses tabular numerals.
 - Keep article type readable on phones. Reduce columns before reducing prose size. Pair each size token with its leading token.
-- Edition headers and the leading-story index are unboxed. Story cards retain their surfaces and edges.
+- Edition headers, topic controls and the leading-story index are unboxed. Story cards retain their surfaces and edges.
 - Use the configured display-face toggle and type scale. Do not add a font for a single decorative treatment.
 
 ## The state-driven styling pattern
@@ -88,7 +88,11 @@ remain in the payload.
 
 ### A control only sticks where it is one band
 
-A sticky control occupies one band at the width where it sticks. Below that breakpoint, wrapped controls flow with the page. The console's route strip may scroll internally to stay one row; this does not permit sideways scrolling on reading pages.
+Reading topic and search controls flow with the page at every width. Their
+variable-height topics and query actions must not obscure the stories. Other
+sticky controls occupy one band at the width where they stick. The console's
+route strip may scroll internally to stay one row; this does not permit sideways
+scrolling on reading pages.
 
 ### The reading page spends its width in four named zones
 

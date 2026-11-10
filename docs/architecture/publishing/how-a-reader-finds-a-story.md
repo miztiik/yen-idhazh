@@ -30,13 +30,18 @@ The maintainer asked for it. What ships is the narrow defensible version, which 
 
 **A story's fields are lowercased separately and never joined.** One string per story would be smaller and faster, and it would also make the end of a title and the start of its summary into a substring - so a needle would match text no story holds. `frontend/tests/day-list.spec.ts` asserts it cannot.
 
-Real cross-day search belongs on the archive, later, where the question "where was that thing about the reactor?" is genuinely unanswerable by scrolling.
+Cross-day search is also available from this field through an explicit
+`Search other days` action, described below.
 
-## The filter bar: topics and a field in one panel
+## The filter bar: topics and a field in one strip
 
-One panel carries the topic pills and the field, on the day page and on the archive. It replaced `TopicPills.svelte` on 2026-09-01, and the reason is vertical space: a field and a pill row each claiming their own band is why the top of a reading page was tall, and on the archive the search box was the last thing on the page - under every story it might have replaced.
+An unboxed strip carries the topic pills and field on both the day page and
+archive. A single rule separates it from the edition information. Wide screens
+give topics two shares of the width and the field one; on narrow screens topics
+wrap above a full-width field. The selected topic has an accent tint, outline
+and stronger weight. Full labels and counts remain visible.
 
-Eight decisions. Susan's, except the two the row order added on 2026-09-13: the Editor set the margin and Jony ruled the cap soft.
+The controls preserve these behaviors:
 
 - **The pills are visible at rest.** Never behind the field, never collapsed as a set. The only thing a disclosure holds is an auto-created topic past `digest.topic_pills_max`, and its summary says how many.
 - **The row leads with the desk holding most of the day**, and a desk only passes one it is ahead of by `digest.pill_move_min` stories. The order is arithmetic over the payload, computed where the payload is drawn and never a measurement of the row: one order is published and a row that measured itself on the reader's device could disagree with it. Ordering by raw count was refused for years because a topic would move between two days for a reason a reader cannot see, and the margin is what answers that - the desk in front is ahead by at least the margin, and the counts on the pills say so. Below the margin the payload's own alphabetical order stands, so a smaller count can sit ahead of a bigger one: measured 2026-09-13 over the 23 committed days carrying all five desks, that is one adjacent pair in 92 at the committed margin of 2, reading 1 ahead of 2. **What the margin does not buy is steadiness across days** - the same measurement counted 31 desk-days moving at a margin of 2 against 28 at 1, so a bigger margin moves the row more. It bounds the reason a desk moves, never how often.
@@ -48,28 +53,22 @@ Eight decisions. Susan's, except the two the row order added on 2026-09-13: the 
   broader search is unavailable. An empty match list still leaves the field
   available to edit or clear.
 - **Pressing `Search` turns the box from a filter into a question, and a question is not a substring.** So the list under it stops being narrowed by the words in it until the next keystroke. Without that rule a search which found nothing would leave an empty page instead of the browse list it is supposed to fall back to: a sentence like "medieval basket weaving techniques" is in no title, so the substring filter would empty the one list the page has. `Show all stories` empties the box as well as dropping the answer, for the same reason - it means all of them.
-- **Sticky at 1024px and up, and nowhere below it.** That is `frame.breakpoints_px[1]`, where the pills and the field share one band. Below it the panel can run to several wrapped lines, and a control holding a third of a phone screen for the whole scroll is screen the reader paid for.
+- **The strip scrolls with the page at every width.** Wrapped topics and query actions must not obscure the stories.
 - **With no script the field is not rendered as a dead box.** A `<noscript>` rule hides it and one sentence takes its place, because an input that swallows typing is worse than no input. The day page's pills are prerendered links and keep working; the archive's pills are buttons over a list a script fetched, so they go with the field.
 - **The archive's pills carry whole-archive totals**, one integer a vertical, computed in `+page.server.ts` which already loads every day. That number is also the honest denominator of a topic-filtered list while months are still unread. The pill count and the list count are different numbers and never share a sentence.
 - **The archive's model-state and scope sentences moved up**, under the panel. They used to sit below the story list, which put the control behind the answer.
 
 Two shapes were refused. **A search field that expands to reveal filters** hides the filter set behind a control, which is the failure this replaced. **Keeping two separate blocks** was the maintainer's rejection: the two bands of vertical space are the cost the row exists to remove.
 
-**The thin-desk sentence is drawn by this component and rendered outside the panel.** A topic page whose desk published at most `digest.desk_thin_max` stories carries one line saying what our sources offered it and how much of that was too old. It is a sibling of the panel rather than a third child, because at 1024px and up the panel is one nowrap band and a third child would be squeezed in beside the pills - and because it is a fact about the desk rather than a control, so it should scroll away with the stories it is about. It draws for the active desk only; on the all-topics view there is no desk being read, and on the archive the counts are sums over every published day, so the panel is handed no threshold there at all. What the sentence says and the three clauses behind it are in [../../concepts/digest.md](../../concepts/digest.md#a-thin-desk-says-what-did-not-run).
+**The thin-desk sentence follows the controls.** A topic page whose desk published at most `digest.desk_thin_max` stories carries one line saying what our sources offered it and how much of that was too old. It is a fact about the desk, not a control. It draws for the active desk only; on the all-topics view there is no desk being read, and on the archive the counts are sums over every published day, so the strip is handed no threshold there at all. What the sentence says and the three clauses behind it are in [../../concepts/digest.md](../../concepts/digest.md#a-thin-desk-says-what-did-not-run).
 
-**The panel is a surface, not a rule.** It takes `--color-surface`, a hairline and `--radius-lg`, the same low-chrome card language the item took in row #8 - the sticky band needs a ground of its own to sit in front of, and a bordered panel is what says the pills and the field are one control rather than two things that happen to be adjacent.
+### Design rationale
 
-**What it costs in vertical space, measured rather than asserted.** Chromium on the built site, the real 2026-09-01 digest of 117 stories over five desks, an 800px-tall CSS viewport, a developer machine / / node 24.12.0, 2026-09-01. Geometry is deterministic for a given pill count, so the spread is zero across repeats and the numbers move with the number of desks that published, not with the day's story count.
-
-| CSS viewport width | Panel height | Share of the screen | Position |
-| --- | --- | --- | --- |
-| 360 | 281 px | 35.1 percent | static |
-| 801 | 177 px | 22.1 percent | static |
-| 1024 | 121 px | 15.1 percent | sticky |
-| 1280 | 69 px | 8.6 percent | sticky, one row |
-| 1536 | 69 px | 8.6 percent | sticky, one row |
-
-That table is the argument for decision 3 rather than an illustration of it. At 360 the panel is a third of the screen, which is exactly why it scrolls away there; the pills and the field only share a single 69px row from 1280 up, and between 1024 and 1280 the pills take two lines inside the same band. A day with more desks pushes the two middle rows up and does not touch the last two.
+Individual outlines identify the controls, so another enclosing card adds no
+meaning. Removing its padding and persistent background keeps the edition
+compact without shrinking tap targets. Query feedback and download disclosures
+remain below the strip; the field stays fixed in document order while results
+change.
 
 ## The archive lists stories, and fetches them a month at a time
 
@@ -301,16 +300,16 @@ showing.
 
 **The common path stays instant and download-free, and that is the constraint
 everything else here bends around.** Nothing on the reading route touches the
-month index, the vectors or the encoder until a reader presses Enter.
+month index, the vectors or the encoder until a reader submits broader search.
 `frontend/tests/filter-bar.spec.ts` counts the requests a page makes while
 somebody types and both counts are zero;
 `frontend/tests/search.spec.ts` holds the older half of the same claim, that a
 dated page reaches complete with no `/assist/` request at all.
 
-**The line under the panel is the mode tell, and it names the price before a key
-can spend it.** At rest it reads `Typing filters this page. Press Enter to search
-other days.` - which is also the only way a reader learns the second tier is
-there, because there is no visible button. While narrowing it counts
+**The feedback line appears only when there is a result or state to report.**
+At rest it is absent. Entering a non-whitespace query reveals the
+`Search other days` action below the field without changing the field's width
+or position. Enter submits the same form. While narrowing, the line counts
 (`12 of 431 stories on this page.`) and while an answer is up it names what was
 searched (`8 stories found. Searched 1 to 20 August 2026 - 431 stories.`). The
 43 MB sentence appears the moment the field holds enough to narrow by, and not
@@ -326,18 +325,9 @@ is 120 and the narrowing is zero: a list redrawing is the answer the reader aske
 for, and a count re-wrapping its own line on every letter moves the text under the
 hand that is typing.
 
-**The caption sits under the panel and not inside it.** At 1024px and up the
-field is one 18rem column of a sticky band - about 39 characters a line - so a
-sentence in there wraps to several lines and pins them to the top of the screen
-for the whole scroll, re-wrapping as the count changes.
-
-**There is no visible Search button, and the form is still a form.** A control
-placeheld `Filter this page` beside a button reading `Search` is two verbs on one
-field, and at the wide breakpoint the button eats about a third of the band. What
-the reader loses is discoverability, which the at-rest caption pays back in
-words. The `<form>` and its named button stay and the button is only moved off
-screen, because Enter submitting a form is the browser's own behaviour and a
-keydown handler in its place would drop the control's name; focus brings it back.
+**The caption sits below the controls.** It describes the list, not the topic
+totals. The broader-search button stays keyboard reachable when the query is
+empty and becomes visible on focus; the form retains native Enter submission.
 
 **An answer replaces the day, and the day is one keystroke away.** The next
 keystroke in the field restores it, narrowed, and `Show this day again` is the

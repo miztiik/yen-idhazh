@@ -76,9 +76,8 @@ with the title.
 **The aside stands beside the stream, never beside the day's controls.** The day
 is rendered in four parts - the sections before the leads, the leads, the
 sections between the leads and the stream, and the stream - and the two control
-parts span both columns. That is not a preference: the filter panel sticks only
-where it is one band, and at the 896px a two-column split leaves, its pills wrap
-under its field. Each part renders its own sections in `digest.sections` order
+parts span both columns, leaving room for wrapped topic controls and the search
+field without narrowing either beside the aside. Each part renders its own sections in `digest.sections` order
 and the parts are in that order too, so the document order a narrow screen and a
 reader with no script see is exactly what config asked for, and reordering the
 page is still a config edit.
@@ -111,17 +110,20 @@ font size changes from 16px to 22px.
 
 `DayNotice` starts with the edition date and the published count supplied by
 the caller. It never counts the seed or the currently visible items. The header
-is unboxed and wraps the count beside or below the date as space permits.
+is unboxed: date, count and `Updated HH:MM UTC` share a baseline when space
+permits; count and time move together below the date on a phone. An empty day
+says `No stories today`, and a single story uses the singular.
 
-An incomplete day carries the recorded failure count, with no invented cause.
-The old sentence attributed every failure to inadequate source text, although
-the payload carries no such shared reason. Unknown counts remain absent.
+The update time comes from `generated_at`, not a run-history entry or the site's
+deployment clock. A missing stamp omits the time and its separator.
 
-The last line uses `runs.at(-1)` for `Updated HH:MM UTC (update N).` Its time is
-the digest's recorded generation time, not the site's deployment time. The
-sum of `items_added` where `n > 1` states how many were added since the first
-update. Missing run history prints neither a time nor an assumed first run.
-These facts belong to the day header, never the shared site footer.
+### Design rationale
+
+The header identifies the edition rather than reporting pipeline progress.
+Failure counts, run numbers and additions since first publication remain in
+recorded payloads but do not render above the stories. The wordmark has no
+tagline; `digest.tagline` remains compatible configuration for the homepage's
+description metadata, not visible header copy.
 
 `introduced_by_run` is on every item and is drawn nowhere. It briefly was: from
 2026-08-31 a flat list carried one hairline divider - `Added later today` -
@@ -146,7 +148,7 @@ Asked for, and Reader ruled **no**, decisively:
 
 > Every other piece of text on that page has a link under it, so when a sentence smells wrong I can go check. A paragraph at the top summarising the day would be the only text on the page with nowhere to click.
 
-It would also be three removes from the source - a summary of summaries of articles - and every layer of compression is a layer of invention. What sits at the top instead is a line of facts with no voice: the date, the counts, and, when a run was partial, plainly how many did not finish. If four of five items failed and the page does not say so, a reader who works it out later has spent the trust the digest was saving.
+It would also be three removes from the source - a summary of summaries of articles - and every layer of compression is a layer of invention. The compact edition header instead identifies the date, published count and recorded update time.
 
 ## The footer is its links, and nothing else
 
@@ -162,7 +164,8 @@ many stories did not finish. The footer is on every page that has one, so both
 were printed under `/archive/` and `/console/`, which render no day at
 all, and printed a second time under `/`, where
 [the day notice](#the-day-header-states-each-publication-fact-once)
-was already saying them. Both live beside the day now.
+was already saying them. The current header keeps only the edition facts
+described above; pipeline failure counts no longer appear there.
 
 **Three more went on 2026-09-09, and those did not move anywhere.** They are the
 build line - the commit and the deploy date - and the promise about what is
