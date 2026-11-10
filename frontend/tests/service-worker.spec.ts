@@ -145,6 +145,28 @@ test.describe('a day already opened', () => {
         // asking for it once. Nothing prefetched it and nothing will.
         const first = await page.evaluate((url) => fetch(url).then((answer) => answer.status), DAY_URL);
         expect(first, 'the day this case is about is not served').toBe(200);
+        const revision = await page.evaluate(async (url) => {
+            const cache = await caches.open('idhazh-days');
+            const saved = await cache.match(url);
+            if (!saved) throw new Error('the requested day was not saved');
+            const current = await saved.json();
+            const older = { ...current, generated_at: new Date(0).toISOString(), items: [] };
+            await cache.put(url, new Response(JSON.stringify(older), {
+                headers: { 'Content-Type': 'application/json' }
+            }));
+            const fresh = await (await fetch(url)).json();
+            const stored = await (await cache.match(url))!.json();
+            return {
+                expected: current.generated_at,
+                received: fresh.generated_at,
+                saved: stored.generated_at,
+                expectedItems: current.items.length,
+                receivedItems: fresh.items.length
+            };
+        }, DAY_URL);
+        expect(revision.received, 'an online read returned the saved revision instead of the published day').toBe(revision.expected);
+        expect(revision.saved, 'the published revision did not replace the offline copy').toBe(revision.expected);
+        expect(revision.receivedItems, 'an online read lost stories to an older cached day').toBe(revision.expectedItems);
         // One reload online, so the document itself is on the device too. The
         // first load came from the network - a worker claims a page it did not
         // serve.

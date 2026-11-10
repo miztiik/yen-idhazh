@@ -66,15 +66,10 @@
  * served and then forgotten, so a `Cache` named for one build's shell stops
  * taking a share of the archive.
  *
- * **The shell is network-first and a day is served from the device first.** The
- * shell changes on every deploy, so a stale one is the bug the switch above
- * exists for. A day is different: an archived day never changes again, so
- * reading it off the device is correct. **Today's day is the exception, and it
- * is why this is not a plain cache-first.** The pipeline republishes the current
- * day several times an hour, so a reader who opened it at nine would otherwise
- * be held at nine for the rest of the day. What ships returns the copy on the
- * device at once and refreshes it behind the reader, which costs exactly the
- * request they would have made with no worker at all.
+ * The shell and day payloads use the network first, with saved copies only
+ * when the network is unavailable. Returning a saved day while refreshing it
+ * in the background leaves the open page showing the old revision: refreshing
+ * a cache does not update the response the page already received.
  */
 
 import { base, build, files, version } from '$service-worker';
@@ -248,7 +243,7 @@ sw.addEventListener('fetch', (event) => {
 	}
 
 	event.respondWith(
-		DAY_PAYLOAD.test(url.pathname) ? fromDayCache(event) : fromNetworkFirst(request, url)
+		DAY_PAYLOAD.test(url.pathname) ? fromDayCache(request) : fromNetworkFirst(request, url)
 	);
 });
 
@@ -271,38 +266,32 @@ async function fromEngineCache(request: Request): Promise<Response> {
 	return answer;
 }
 
-/** A published day: from the device if it is there, and refreshed behind the
- * reader either way.
- *
- * An archived day never changes again, so the copy on the device is the right
- * answer and no reader should wait for the network to confirm it. The day being
- * published right now does change - several times an hour - so the copy is
- * replaced as soon as the network answers, and the next read is current.
- *
- * A miss is an ordinary fetch, and a fetch that fails throws - which is the
- * designed Unreachable state the reading page already draws
- * (docs/concepts/ui-shell.md), not an error this worker should swallow.
+/** Read the published revision online, or the saved day when offline.
+ * Revalidate the HTTP cache too; a successful request must not freeze a day at
+ * the revision the browser downloaded before the latest publication.
  */
-async function fromDayCache(event: FetchEvent): Promise<Response> {
-	const request = event.request;
-	const cache = await caches.open(DAY_CACHE);
-	const held = await cache.match(request, { ignoreVary: true });
-	const fresh = fetch(request).then(async (answer) => {
-		if (answer.ok && answer.status === 200 && !answer.redirected) {
+async function fromDayCache(request: Request): Promise<Response> {
+	let answer: Response;
+	try {
+		answer = await fetch(request, {
+			cache: request.cache === 'default' ? 'no-cache' : request.cache
+		});
+	} catch (error) {
+		const held = await caches.match(request, { cacheName: DAY_CACHE, ignoreVary: true });
+		if (held) return held;
+		throw error;
+	}
+	if (answer.ok && answer.status === 200 && !answer.redirected) {
+		try {
+			const cache = await caches.open(DAY_CACHE);
 			await cache.put(request, await measured(answer));
 			await evict(cache);
+		} catch (error) {
+			console.warn('[offline] The day was not kept on this device.', error);
 		}
-		return answer;
-	});
-	if (held === undefined) return fresh;
-	// The refresh outlives the response, so the worker is asked to stay awake for
-	// it. A refresh that fails is a reader with no network, which is the whole
-	// point of the copy just returned.
-	event.waitUntil(fresh.then(noop, noop));
-	return held;
+	}
+	return answer;
 }
-
-function noop(): void {}
 
 /** The same body, carrying what it costs the device.
  *
