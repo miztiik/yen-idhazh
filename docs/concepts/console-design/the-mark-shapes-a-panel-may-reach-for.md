@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-11-10
 
 Nine chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -71,8 +71,8 @@ Five rules hold every type.
 ## When nobody wrote the panel, the columns choose the shape
 
 The Data explorer page draws an answer whose question was typed by the operator, so no
-panel author can name the right chart in advance. It opens on the shape the columns
-choose, in this order. Every chart type the explorer draws is offered on every
+panel author can name the right chart in advance. It opens on the shape its typed
+columns and valid readings support, in this order. Every chart type the explorer draws is offered on every
 answer, in one order, and the operator may press any of them and choose the columns
 for each of its roles. A type these columns cannot support draws nothing, and its box
 says what it needs, so the page still never draws a story the columns do not tell
@@ -80,15 +80,23 @@ says what it needs, so the page still never draws a story the columns do not tel
 
 | Order | Columns in the answer | Shape |
 | --- | --- | --- |
-| 1 | one UTC date or timestamp, at least one number, and at most one row a day | `dateSeries` |
-| 2 | one text column and one non-negative number | `rankedList` |
-| 3 | two number columns and at most one text column | `pairedScatter` |
-| 4 | one number column | `distribution` |
+| 1 | one UTC date or timestamp and at least one number; invalid days keep the date chart's refusal | `dateSeries` |
+| 2 | two number columns and at most one text column; valid paired readings and distinct subjects meet both reporting floors | `pairedScatter` |
+| 3 | one text column and one or two numbers; valid first-number readings have unique names, no negatives and at least one nonzero value | `rankedList`, using the first number |
+| 4 | one number column whose valid readings meet the reporting floor | `distribution` |
 | 5 | anything else | no tile checked, and the box says `The page does not pick a chart for these columns. Choose one under Draw it as.` |
 
-The order opens a chart and never closes one: what it picks does not change once the
-operator can choose, and an answer it opens on the date chart whose day column the
-chart cannot use still opens there, with the box saying why. With no number column at
+Automatic candidates use the same role defaults and shape checks as a manual
+choice. Paired and Spread keep `console.fleet_min_rows`; Paired also keeps
+`console.bandwidth_min_kinds` distinct subjects. Invalid, non-finite and unsafe
+numeric cells do not count as readings. A small named two-number result can
+therefore rank without lowering a reporting floor or inventing a relationship
+between its numbers. If no candidate passes, the table remains authoritative
+and no tile is checked.
+
+The order never replaces the operator's chart or role choices. A typed-date
+answer keeps the date chart even when its day column cannot be used, with the
+box saying why. With no number column at
 all and no date with a true/false column, no chart can be filled, and the box says `Nothing here to draw: the answer has no
 number in it.` whichever tile is checked.
 
@@ -701,6 +709,10 @@ checks the shared coverage arithmetic and sentence independently of the number
 of plotted series.
 
 ## Design rationale
+
+**Automatic charts must be drawable.** Column counts alone can select a paired
+plot below its reading floor. Reusing the role and shape checks lets a small
+named answer rank without changing shared floors or manual choices.
 
 **`console.shimmer_after_ms` ships at 400 and 400 is a declared estimate, not a
 measurement.** Guardrail #10 refuses an unmeasured number the right to justify a

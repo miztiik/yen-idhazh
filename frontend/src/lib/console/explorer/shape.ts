@@ -1,13 +1,8 @@
-/** What the Data explorer's chart draws for an answer: the chart the page opens on, the columns
- * each role holds, and the shape a chart takes with them - or the one sentence its box says when
- * those columns cannot draw it.
+/** Which chart and column roles can draw this Data explorer answer?
  *
- * Until the reader presses a tile or picks a column, each answer opens on the chart its own
- * columns choose, first match wins (`openingType`), with each role holding the columns that rule
- * has always drawn. After that the reader's chart and columns hold across runs, while the answer
- * still has each column in a family the role takes. Every chart is offered on every answer, and
- * one these columns cannot support draws nothing and says what it needs, so the page still never
- * draws a story the columns do not tell. The sentences are Susan's (2026-10-07).
+ * Automatic non-date choices must pass the same shape checks and reporting floors as manual
+ * choices. A typed date keeps precedence, including its explicit refusals. Manual chart and
+ * column choices hold across runs while the answer still has compatible columns.
  */
 
 // Relative, not `$lib`: the logic suite imports this module in plain Node.
@@ -240,19 +235,21 @@ function biggestRow(rows: readonly Row[], column: string): Row | undefined {
 	return [...rows].sort((left, right) => (firstNumber(right, column) ?? Number.NEGATIVE_INFINITY) - (firstNumber(left, column) ?? Number.NEGATIVE_INFINITY))[0];
 }
 
-/** The chart an answer opens on before the reader chooses: the first type its columns fit, in the
- *  order the mark-shapes page gives, or null where none fits. A date column that holds a day the
- *  chart cannot place, only NULL, or several rows a UTC day still opens the date chart, whose box
- *  then says why it draws nothing. What this rule picks does not change with the reader's choices. */
-export function openingType(columns: readonly Column[], rows: readonly Row[]): ExplorerChartType | null {
+/** The automatic chart, using the existing role defaults, shape checks and reporting floors.
+ *  A typed date keeps its own refusal instead of falling back to an unordered chart. */
+export function openingType(columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerChartType | null {
 	const dateColumns = namesOf(columns, isDay);
 	const numericColumns = namesOf(columns, isNumber);
 	const textColumns = namesOf(columns, (family) => family === 'text');
 	if (numericColumns.length === 0) return null;
 	if (dateColumns.length === 1) return 'dateSeries';
-	if (numericColumns.length === 1 && textColumns.length === 1 && rows.every((row) => (numericValue(row, numericColumns[0]) ?? 0) >= 0)) return 'rankedList';
-	if (numericColumns.length === 2 && textColumns.length <= 1) return 'pairedScatter';
-	if (numericColumns.length === 1) return 'distribution';
+	const drawable = (type: ExplorerChartType): boolean => {
+		const shape = chartShape(type, resolveRoles(type, columns, rows, bounds), columns, rows, bounds);
+		return shape.kind === 'chart' && (!('tooFew' in shape) || !shape.tooFew);
+	};
+	if (numericColumns.length === 2 && textColumns.length <= 1 && drawable('pairedScatter')) return 'pairedScatter';
+	if ((numericColumns.length === 1 || numericColumns.length === 2) && textColumns.length === 1 && drawable('rankedList')) return 'rankedList';
+	if (numericColumns.length === 1 && drawable('distribution')) return 'distribution';
 	return null;
 }
 
@@ -577,7 +574,7 @@ function fills(roles: readonly RoleState[]): boolean {
  *  says whether another chart can be filled from these columns; when none can, it says so
  *  whichever tile is checked, because pressing another would not help. */
 export function chooseChart(columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds, chosenType: ExplorerChartType | null = null, chosenRoles: ChosenRoles = {}): ExplorerChart {
-	const type = chosenType ?? openingType(columns, rows);
+	const type = chosenType ?? openingType(columns, rows, bounds);
 	const fillable = CHART_KINDS.some((kind) => fills(resolveRoles(kind.type, columns, rows, bounds)));
 	if (type === null) return { type, roles: [], shape: fillable ? NOT_PICKED : NO_NUMBER };
 	const roles = resolveRoles(type, columns, rows, bounds, chosenRoles[type] ?? {});
