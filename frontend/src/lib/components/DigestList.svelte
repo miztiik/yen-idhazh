@@ -532,14 +532,6 @@
 					You have read everything here today.
 				</p>
 			{:else}
-				<!-- The zone, once, above the stream it explains. Not a suffix on 627
-				     stamps: every clock on this page is in the same zone, so it is a fact
-				     about the page and it is drawn where the page's own facts are. It
-				     hung above the time rail until 2026-09-12 and it outlived it - the
-				     rail was the duplicate; this sentence is what makes a bare clock
-				     readable. -->
-				<p class="zone-note" data-time-note>Times shown in UTC.</p>
-
 				{#each paged as item (item.item_id)}
 					<DigestItemView
 						{item}
@@ -639,15 +631,3 @@
 		</div>
 	{/if}
 </div>
-
-<style>
-	/* The zone, once, in the day's own chrome type. The rail that used to carry
-	   this sentence is gone; the sentence is not, because it is the fact that
-	   makes every bare clock on the page readable. */
-	.zone-note {
-		margin-block-start: var(--space-5);
-		color: var(--color-text-tertiary);
-		font-size: var(--text-xs);
-		line-height: var(--leading-xs);
-	}
-</style>

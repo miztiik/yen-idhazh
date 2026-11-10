@@ -55,6 +55,10 @@ the run strip's axis does, so the rules can be tested without a browser.
 
 ## The day is a stream with an aside, and the aside is a zone rather than a width
 
+The home page uses the full window width with the configured gutters. Dated and
+topic pages keep `frame.reading_max_px`; story prose keeps `frame.measure_ch`
+on every route, so the wider home page does not lengthen lines of text.
+
 From `frame.breakpoints_px[2]` (1400px) the day page is two columns: the story
 stream at `minmax(0, 1fr)` and an `18rem` sticky column carrying the leading
 stories. Below that width nothing changes - the block draws above the stream
