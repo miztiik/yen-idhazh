@@ -1,8 +1,8 @@
 # Compact-ledger console recovery and redesign
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-10
 **Level**: 5 - resolve design gates before implementation.
-**Status**: Row 1 is in flight. L2 and L3 remain open; implementation rows stay pending.
+**Status**: Row 1 is in flight. L2 retains the current wait; L3 remains open. Implementation rows stay pending.
 
 ## 0. Operating contract
 
@@ -10,8 +10,8 @@ Table A
 
 | ID | Field | Value |
 | --- | --- | --- |
-| A1 | Goal | Reduce clutter, fix retained charts and improve compact-data freshness. |
-| A2 | In scope | - Review each panel.<br>- Triage fixes against retained capabilities.<br>- Redesign console navigation and chart presentation.<br>- Retain compact Parquet, DuckDB-Wasm and D3.<br>- Evaluate earlier closed-day compaction and fix publication lag. |
+| A1 | Goal | Reduce clutter, fix retained charts and diagnose compact-data publication lag. |
+| A2 | In scope | - Review each panel.<br>- Triage fixes against retained capabilities.<br>- Redesign console navigation and chart presentation.<br>- Retain compact Parquet, DuckDB-Wasm and D3.<br>- Diagnose publication lag without changing compaction eligibility, cadence or retention. |
 | A3 | Out of scope | Table B. |
 | A4 | Governing pages | [Console delivery](../docs/architecture/publishing/console.md), [chart data](../docs/concepts/console-design/how-a-console-chart-gets-its-data.md), [window rules](../docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md), [compaction](../docs/architecture/publishing/ledger-compaction.md), [design system](../docs/concepts/design-system.md). |
 | A5 | Architecture | Compact Parquet -> shared DuckDB-Wasm reader -> typed result -> presentation adapter -> D3. No chart exports. Fowler supports retaining this path. |
@@ -39,7 +39,7 @@ Table C
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Settle panel purposes and the console design contract | - | A | IN-FLIGHT | `../reimagined-bassoon` | - | App session `5a68b1fe-c1ab-4f8d-b706-ef758cc38288`; branch `console-design-contract` |
-| C2 | 2 | Reduce closed-day data delay without another writer | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Diagnose compact-data publication lag | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Replace oversized console chrome and share window behavior | 1 | C | PENDING | - | - | - |
 | C4 | 4 | Consolidate repeated chart entry points | 1, 3 | D | PENDING | - | - | - |
 | C5 | 5 | Correct retained chart readings and evidence windows | 4 | E | PENDING | - | - | - |
@@ -51,7 +51,7 @@ Table C
 - **Scope:** Settle panel dispositions, visual scope and config contracts before implementation.
 - **Files touched:**
   - `TODO/20261109-console-redesign-plan.md`
-- **Acceptance gates:** Local: verify Tables F-K against the six named route configs, resolve every Table L gate and verify the downstream inventories. CI: docs-only checks. Do not mark this row DONE while L2 or L3 is open.
+- **Acceptance gates:** Local: verify Tables F-K against the six named route configs, resolve every Table L gate and verify the downstream inventories. CI: docs-only checks. Do not mark this row DONE while L3 is open.
 - **Oracle:** Each configured panel appears once; consolidation preserves grain, denominator, clock, evidence dates and old anchors. A roster match does not establish metric equivalence.
 
 ### Decisions
@@ -62,9 +62,9 @@ Table D
 | --- | --- | --- |
 | D1 | Native panels already query Parquet with SQL; many aggregates remain in TypeScript. Retain A5. | `data/engine.ts`, `slice-query.ts`, `console/queries/window.ts`; Fowler. |
 | D2 | Build-time exceptions remain: Pipelines manifests/item facts/day metrics; Summaries cards/item decisions; Voices source decisions; Judgement judging/holdout evidence. | Console delivery contract. |
-| D3 | Default ownership: Pipelines - delivery/stage latency; Summaries - quality/model rates; Hardware - constraints/resources; Voices - sources; Judgement - merges. F-K retain every diagnostic; L3 gates the composition mechanism. | Jony; roster reconciliation. |
+| D3 | Default ownership: Pipelines - delivery/stage latency; Summaries - quality/model rates; Hardware - constraints/resources; Voices - sources; Judgement - merges. F-K propose retaining every diagnostic; L3 settles dispositions and construction. | Jony; roster reconciliation. |
 | D4 | Console-only shell: intrinsic-width labelled left rail, compact route header/window control, existing neutral surfaces and control accent. Preserve reader styling and chart/status color semantics. | Susan; L1 construction below. |
-| D5 | Put secondary diagnostics behind named disclosure or detail links. Keep native panels, queries and evidence on their original routes. No nested disclosure chains or metric substitution. | Jony; publication contract. |
+| D5 | The metadata proposal puts secondary diagnostics behind named disclosure or detail links, retaining native routes, queries and evidence. No nested disclosure chains or metric substitution. L3 may instead select explicit cuts. | Jony; publication contract. |
 | D6 | Table M is selective triage, not a mandatory nine-fix bundle. | Plan scope. |
 | D7 | The inspected Hardware viewport contains chrome and repeated status before chart evidence. Put a useful comparison in the first viewport; do not shrink chart text. | Browser/source inspection; Susan. |
 
@@ -78,7 +78,7 @@ Table E
 | E2 | Fix every panel before pruning | Repairs presentations that may leave the default view. | Implement and verify the full old inventory. | Jony. |
 | E3 | Delete visually similar charts | Similar charts can use different clocks or cohorts. | Prove metric parity or name the diagnostic loss. | Jony. |
 
-### Panel-by-panel dispositions
+### Proposed panel-by-panel dispositions
 
 Table F - Pipelines; source: `config/console/pipelines.json`
 
@@ -172,8 +172,9 @@ Table K - Data explorer; source: `config/console/data-explorer.json`
 The six named configs contain exactly the F-K rosters: Pipelines 16, Summaries
 11, Hardware 15, Judgement 6, Voices 8 and Data explorer 3. All 59 panel IDs
 appear once. The current judged set contains 58 IDs because
-`data-explorer-ask` is an input, not a judged answer. L3 would remove only the
-alias `refusing-rule` from `judged`; it removes no recorded measurement.
+`data-explorer-ask` is an input, not a judged answer. The metadata proposal would
+remove only the alias `refusing-rule` from `judged`, without removing a recorded
+measurement. A cut choice must settle its own judged set and diagnostic costs.
 
 ### Construction decisions and remaining gates
 
@@ -182,10 +183,10 @@ Table L
 | ID | Decision | Construction | State / boundary |
 | --- | --- | --- | --- |
 | L1 | Console versus site-wide redesign | Console-only labelled rail and compact status; use intrinsic sizing and existing tokens, breakpoints and defaults. | RESOLVED construction; no new appearance fields, icons, theme palette or reader-layout change. |
-| L2 | Closed-day eligibility/cadence | Propose zero for item-health, summary-quality-evals, host-fingerprint and run-shards, retaining cadence and retention. | OPEN config-contract gate: `CompactionPolicy` currently requires >=1. Execution permission does not change it. |
-| L3 | Panel composition | Retain F-K through the stamped, legacy-readable metadata proposal below. | OPEN config-contract gate. The current flat parser cannot express these relationships; no convention-based substitute. |
+| L2 | Closed-day eligibility/cadence | Keep `compact_after_days = 1` for item-health, summary-quality-evals, host-fingerprint and run-shards; retain validator >=1, cadence and retention. | RESOLVED: the extra whole-day wait remains. Row 2 diagnoses publication only; no freshness gain is assumed. |
+| L3 | Panel dispositions and composition | Choose the metadata proposal, explicit panel cuts using the current flat config, or unchanged flat entry points. | OPEN: no cuts or new config schema selected. Settle exact IDs, diagnostic costs and consumer inventories before implementation. |
 | L4 | Automatic explorer chart choice | Count valid readings against existing floors; allow a small named grouped result to rank instead of selecting an undrawable scatter. | RESOLVED construction below. Preserve manual choices, table answers, date refusals and reporting floors. |
-| L5 | SQL aggregation | Keep existing named column/date queries and reducers for these changes. No new aggregate API is required. | RESOLVED: placement, units, window labels and eligibility do not require a query-contract migration. No transfer-saving claim. |
+| L5 | SQL aggregation | Keep existing named column/date queries and reducers for these changes. No new aggregate API is required. | RESOLVED: placement, units, window labels and publication diagnosis do not require a query-contract migration. No transfer-saving claim. |
 
 #### L1 - Shell and window construction
 
@@ -208,25 +209,25 @@ Table L
   presets. A failed read uses the configured choice, a failed write retains the
   chosen span across route changes, and both warn. Storage never gates queries.
 
-#### L2 - Closed-day proposal
+#### L2 - Retained closed-day wait
 
-The scheduler already supports zero. At `2026-11-09T12:00:00Z`, the current
-one-day wait admits at most `2026-11-07`; zero admits `2026-11-08`, not the open
-UTC day. The proposed change removes 24 hours of eligibility delay, not job or
-deployment delay. Keep positive historical values readable and reject negatives.
-Stamp the changed native schema and state its read compatibility in Row 2.
+For item-health, summary-quality-evals, host-fingerprint and run-shards,
+`compact_after_days` stays at 1 and `CompactionPolicy` continues to require >=1.
+Eligibility remains one whole UTC day after the period ends. The newest closed
+day therefore keeps its extra-day wait before any job or deployment delay.
+No validator, config, cadence, retention or schema change is planned.
 
-Only the four named ordinary-panel ledgers change. Voices' browser queries use
-item-health; its feed census and source decisions remain private build-time
-inputs. Data explorer can query feed-health, but this proposal does not change
-that ledger's cadence, source or permission.
+Voices' browser queries still use item-health; its feed census and source
+decisions remain private build-time inputs. Data explorer's feed-health access
+keeps its existing cadence, source and permission.
 
 Publication diagnosis remains Row 2 work. The inspected failed Pages run
 produced no jobs or check runs and no failed-job log; that evidence does not
 identify a repository defect. Read the next normal run and deployment result,
 without dispatching production as a test. No publication-code fix is selected.
-If diagnosis requires one, name its cause and exact files before expanding the
-row; do not infer a workflow fix from the absence of logs.
+If diagnosis identifies a needed fix, record the cause and exact files for a
+separate scope decision before implementation. Do not infer a workflow fix or
+freshness improvement from the absence of logs.
 
 #### L3 - Panel-presentation proposal
 
@@ -272,7 +273,11 @@ type PanelPresentation =
   preserving flat-mode behavior. Do not create a nested disclosure chain.
 
 This proposal changes an authored config contract even though telemetry shapes
-stay unchanged. Row 4 remains blocked on L3.
+stay unchanged. It is not selected. Explicit cuts can instead use the current
+flat config, but each cut must name its panel ID, remaining equivalent evidence
+or diagnostic loss, consumer changes and instrument bindings. The Row 4 metadata
+inventory below applies only to that proposal; a cut choice needs its own exact
+inventory. Row 4 remains blocked on L3.
 
 #### L4 - Explorer opening policy
 
@@ -298,10 +303,10 @@ Table M
 | ID | Original cause | Evidence and consequence | Disposition |
 | --- | --- | --- | --- |
 | M1 | 1 - percentage units | Geometry uses 0-100; the component multiplies readout/ARIA shares by 100 again. | Row 5: fix retained distributions once. |
-| M2 | 2 - missing process identity | Work omits `--server-pid`; server RSS/major faults are absent while worker/OS readings exist. | Row 6; H3/H10 are retained. No backfill. |
-| M3 | 3 - flag alias mismatch | Long config flags versus short lookups lose slot limits, requested pinning and fingerprint changes. | Row 6; H11 is retained. Fix shared interpretation. |
+| M2 | 2 - missing process identity | Work omits `--server-pid`; server RSS/major faults are absent while worker/OS readings exist. | Row 6 if L3 retains H3/H10. No backfill. |
+| M3 | 3 - flag alias mismatch | Long config flags versus short lookups lose slot limits, requested pinning and fingerprint changes. | Row 6 if L3 retains the consuming diagnostics. Fix shared interpretation. |
 | M4 | 4 - window mismatch | Pipelines reanchors private evidence on compact reach. Summaries correctly keeps two anchors but does not make their different dates clear. | Row 5: fix Pipelines selection; label both evidence windows without unifying them. |
-| M5 | 5 - publication lag | Deployment preceded packing. One failed Pages run has no jobs, checks or failed-job log; cause remains unknown. | Row 2: distinguish packing from deployment and diagnose before any publication-code change. |
+| M5 | 5 - publication lag | Deployment preceded packing. One failed Pages run has no jobs, checks or failed-job log; cause remains unknown. | Row 2: evidence-backed diagnosis only. Keep the extra-day wait and prescribe no workflow fix or freshness gain. |
 | M6 | 6 - explorer direct open | Server layout data is absent from static fallback output. | Row 7: remove runtime server-data dependency. |
 | M7 | 7 - undrawable default | Paired was selected for seven rows against a 160-reading floor; Ranked worked. | Resolve L4, then Row 7; manual chart types remain. |
 | M8 | 8 - text date example | Day-by-day SQL omits the date cast. | Row 7: fix retained example, not the ledger schema. |
@@ -310,23 +315,14 @@ Table M
 | M11 | Expected missing readings | Frequency collection is disabled; other readings are absent or await packing/publication. | Explain absence; do not invent values or enable unused collectors. |
 | M12 | Mislabelled age clock | `article-age` measures source publication to item start, but the route heading claims age at publication. | Row 5: correct the heading and retain the existing successful-item cohort and exclusions. |
 
-## 3. Row #2 - Reduce closed-day data delay without another writer
+## 3. Row #2 - Diagnose compact-data publication lag
 
-- **Scope:** Apply the settled L2 choice through existing compaction; diagnose M5 without adding another writer.
+- **Scope:** Diagnose M5 from normal compaction, publication and deployment evidence. Keep eligibility, cadence, retention and writers unchanged.
 - **Files touched:**
-  - `backend/idhazh/contracts/knobs/gardener.py`
-  - `config/gardener/compact-item-health.json`
-  - `config/gardener/compact-summary-quality-evals.json`
-  - `config/gardener/compact-host-fingerprint.json`
-  - `config/gardener/compact-run-shards.json`
-  - `backend/tests/contracts/test_gardener_config.py`
-  - `backend/tests/gardener/test_schedule.py`
-  - `backend/tests/gardener/tasks/test_compaction.py`
-  - `docs/architecture/publishing/ledger-compaction.md`
-  - `docs/concepts/config/idhazh-gardener.md`
   - `TODO/20261109-console-redesign-plan.md`
-- **Acceptance gates:** L2 must be resolved first. Local: shared selector, applicable lint/types and focused config/schedule/retry tests. CI: merge-candidate gates. Observe normal compaction and deployment separately; diagnose M5 before adding any publication-code edit. No production dispatch as a test.
-- **Oracle:** The config boundary rejects zero on the base and accepts it after the selected contract expansion. Fixed UTC inputs preserve existing scheduling arithmetic, exclude today and retain late-arrival/retry behavior. This cannot guarantee scheduler latency or deployment inclusion.
+- **Read-only inputs:** `.github/workflows/idhazh-gardener.yml`, `.github/workflows/pages.yml`, `backend/utilities/publish_decision.py`, `frontend/scripts/stage-publication.mjs`, the four L2 compaction configs and one selected normal run/deployment chain.
+- **Acceptance gates:** Local: verify evidence against its source commits and UTC instants; confirm the four configs still use 1 and the validator still requires >=1. CI: docs-only checks. Record an evidence-backed cause or the precise missing evidence and bounded next observation. No production dispatch, workflow edit or eligibility change as a test.
+- **Oracle:** Trace a selected compact endpoint through its committed input, normal publication run and deployment result. Separate an expected eligibility wait from packing and deployment. Missing jobs or logs establish an evidence gap, not a workflow defect. This diagnosis cannot promise a freshness gain or deployment SLA.
 
 ### Decisions
 
@@ -334,11 +330,11 @@ Table N
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| N1 | If L2 selects zero, expand and version the native validator before config uses it. Keep positive values readable; reject negatives. Scheduling arithmetic already handles zero and needs no source edit. | `CompactionPolicy`, `gardener/schedule.py`; Fowler. |
-| N2 | Update required ledgers coherently; the oldest required endpoint still limits the route. | Window contract. |
+| N1 | Retain `compact_after_days = 1` and validator >=1 for all four L2 ledgers. No schema expansion or zero-setting work. | Current compaction contract. |
+| N2 | Record each required ledger's endpoint; the oldest available endpoint still limits the route. Do not change data to make endpoints agree. | Window contract. |
 | N3 | Preserve retention, packing ownership, raw writers, compact shapes and late-arrival handling. | Compaction contract. |
 | N4 | Track eligibility, job cadence and deployment separately. A green compaction does not refresh staged panels. | Reader bindings; M5. |
-| N5 | Keep cadence initially; do not run all retention/history tasks more frequently to fix eligibility. | Existing serialized gardener workflow. |
+| N5 | Retain cadence and retention. Any fix suggested by the diagnosis needs a named cause, exact files and a separate scope decision. | Existing serialized gardener workflow; diagnosis scope. |
 
 ### Rejected alternatives
 
@@ -346,7 +342,7 @@ Table O
 
 | ID | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| O1 | Cron-only change | Cannot change eligibility. | More executions with the same extra-day wait. | Eligibility predicate. |
+| O1 | Change eligibility or cadence | Not part of publication diagnosis and does not establish a cause for the observed failure. | A separate config/schedule decision; the current extra-day wait otherwise remains. | L2; diagnosis scope. |
 | O2 | Another packer or raw index | Adds ownership, coverage and cleanup complexity. | Separate B1/B2 design. | B1/B2. |
 | O3 | Move ordinary panels to another origin | Changes source policy, not existing publication. | Source/permission design and protected-contract changes. | B4. |
 
@@ -509,7 +505,7 @@ Table U
 
 ## 7. Row #6 - Restore collection needed by retained hardware diagnostics
 
-- **Scope:** Restore process identity for H3/H10 and shared flag interpretation for H11 and provenance.
+- **Scope:** Restore process identity and shared flag interpretation only for the diagnostics and provenance consumers retained by L3.
 - **Files touched:**
   - `.github/workflows/digest.yml`
   - `backend/idhazh/llm/server.py`
@@ -523,7 +519,7 @@ Table U
   - `docs/architecture/sources/item-health.md`
   - `docs/architecture/publishing/console-machine.md`
   - `TODO/20261109-console-redesign-plan.md`
-- **Acceptance gates:** Local: lint/types and focused flag/recording tests. CI: merge-candidate gates. Inspect the next normal production record; no production dispatch or workflow-file tests.
+- **Acceptance gates:** Name L3's retained consumers first; collapse unneeded collection work only against the explicit cut list. Local: lint/types and focused flag/recording tests. CI: merge-candidate gates. Inspect the next normal production record; no production dispatch or workflow-file tests.
 - **Oracle:** Long/short flag aliases yield identical settings/fingerprints; work recording with a process identity captures process readings. This cannot recover history or prove requested locking was applied.
 
 ### Decisions
@@ -532,7 +528,7 @@ Table V
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| V1 | H3/H10 remain, so pass the model process identity already produced by the workflow. Do not discover a process by name. | Panel review; work recorder. |
+| V1 | If H3/H10 are retained, pass the model process identity already produced by the workflow. Do not discover a process by name. | L3; work recorder. |
 | V2 | Fix M3 in shared flag interpretation used by settings and fingerprints; use the aliases in the existing recorded server-help contract. Preserve canonical recorded keys and verbatim runtime arguments. | `llm/server.py`, `fingerprint.py`, recorded runtime help. |
 | V3 | Requested load mode does not prove applied locking. Historical missing parallel counts remain unknown. | Native field contracts. |
 | V4 | Leave disabled frequency collection unchanged. | M11. |
