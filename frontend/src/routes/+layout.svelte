@@ -2,6 +2,7 @@
 	import '../styles/app.css';
 	import { afterNavigate } from '$app/navigation';
 	import { base } from '$app/paths';
+	import { page } from '$app/state';
 	import { restoreAnchor } from '$lib/assist/day';
 	import { startOfflineReader } from '$lib/offline';
 	import { OFFLINE_VERSION } from '$lib/offline.generated';
@@ -55,7 +56,7 @@
 	<main>
 		{@render children()}
 	</main>
-	{#if data?.ui}
+	{#if data?.ui && page.route.id !== '/archive'}
 		<SiteFooter repoUrl={data.ui.repo_url} />
 	{/if}
 </div>

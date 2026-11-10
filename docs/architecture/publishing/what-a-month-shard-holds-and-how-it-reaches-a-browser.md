@@ -1,6 +1,6 @@
 # What a month shard holds, and how it reaches a browser
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-11-10
 
 One month of published items in one file, its vectors in a sibling file, the
 ceilings that say when a month stops being the right period, and the staging
@@ -87,7 +87,13 @@ That is a second copy of the day in the published bundle, and it is worth statin
 
 **The staging source is derived from the digest root, in the script and in the page loader alike**, because an index is a projection of exactly those days. One switch rather than two is what stops a canary build serving the real archive's stories.
 
-**The archive fetches the index rather than inlining it, and that is the whole point.** Every other committed payload this site renders is read at build time and baked into the HTML, which is right for a day page: the day is bounded and the reader came to read it. The archive is the corpus. Inlining it would grow one document by about 50 gzipped bytes an item forever, which is the defect this index exists to end. The console already settled this shape - a bounded seed in the HTML, older months fetched from `static/` on demand - and the archive uses the same mechanism rather than inventing a second one. What the archive page still carries from its own data is a day list, three counts and about twenty topic names: none of it grows per story. The day list is the one part that still grows per day, at 8.0 gzipped bytes, because a link for every published day is what a reader with no script uses to reach one - what a reader SEES there grows by a row a month ([how-a-reader-finds-a-story.md](how-a-reader-finds-a-story.md#the-day-list-grows-with-months-on-the-page-and-with-days-in-the-document)).
+**The archive fetches the index rather than inlining it.** Its document carries
+registered month names and the newest publication date, not historical day
+payloads, topic counts or a date inventory. Browsing requests bounded month
+metadata. A submitted archive query reads the existing metadata/vector pairs
+one month at a time; the
+[archive behavior](how-a-reader-finds-a-story.md#the-archive-lists-stories-and-fetches-them-a-month-at-a-time)
+defines its optional UTC date constraints and explicit coverage.
 
 **A missing index is a designed state.** The page falls back to the day list and one plain sentence. It never white-screens ([../../../CLAUDE.md](../../../CLAUDE.md) section 12).
 

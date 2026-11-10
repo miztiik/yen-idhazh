@@ -1,183 +1,262 @@
 <script lang="ts">
-	/** The archive's search control: one field, one gesture, one sentence.
-	 *
-	 * **The field is always there and always typeable.** It used to be a link
-	 * that enabled a search box. Nobody wants to enable anything; they want an
-	 * answer. So a reader types the question first and clicks Search once, and
-	 * that one click fetches the vectors, downloads the encoder and runs the
-	 * query that was already in the box.
-	 *
-	 * **The machine is not here any more.** The phases, the scope and the five
-	 * state sentences moved to `$lib/assist/session` on 2026-09-24, when the day
-	 * page gained a search of its own: two phase machines and two spellings of
-	 * one privacy promise are how they drift apart (Guardrail #5, Guardrail #8).
-	 * What is left is what belongs to this page - that the cost is spent by a
-	 * named button rather than by a key, that the scope is read on arrival
-	 * because this page has already fetched the same month for its list, and that
-	 * the answer replaces the one story list below.
-	 *
-	 * **A stop is offered throughout, and it leaves the page exactly as it was.**
-	 * Nothing greys out while the download runs, the story list above stays live,
-	 * and a failed download offers a retry rather than turning the feature off
-	 * for the rest of the page's life. `SearchState` draws both.
-	 *
-	 * **The results are not rendered here.** They replace the contents of the one
-	 * story list this page already has, which is what makes that list the
-	 * search's empty state as well. Two lists would leave a reader working out
-	 * which one answered them.
-	 *
-	 * **The box and the list below always describe each other.** Typing narrows
-	 * the stories already fetched, by title, and costs nothing. Pressing the
-	 * button turns what is in the box into a question, and a question is not a
-	 * substring - so the page is told, and it stops narrowing the list by the
-	 * words in it until the next keystroke. Only the button spends the 43 MB, so
-	 * the cost is named before it is paid.
-	 *
-	 * Everything here is secondary by construction. Delete the model directory
-	 * and this control reports itself unavailable; the archive above it is
-	 * unchanged, and so is every digest assertion on the page.
-	 */
-	import FilterBar from '$lib/components/FilterBar.svelte';
-	import SearchState from '$lib/components/SearchState.svelte';
+	/** Submit one archive question and its optional UTC dates without replacing the field. */
 	import { onMount } from 'svelte';
+	import SearchState from '$lib/components/SearchState.svelte';
 	import {
-		cachedEncoder,
-		DOWNLOAD_MB,
-		DOWNLOAD_MB_ELSEWHERE,
-		embedQuery,
-		supported,
+		cachedEncoder, DOWNLOAD_MB, DOWNLOAD_MB_ELSEWHERE, embedQuery, supported,
 		type CachedEncoder
 	} from '$lib/assist/loader';
-	import { loadIndex, loadVectors } from '$lib/assist/index';
+	import { readIndex, readVectors } from '$lib/assist/index';
+	import type { ArchiveRange } from '$lib/assist/month';
 	import {
-		newSearch,
-		NO_SCOPE,
-		scopeSentence,
-		stateSentence,
-		type SearchPhase,
-		type SearchScope
+		newSearch, privacyNote, stateSentence, type SearchPhase, type SearchSettings
 	} from '$lib/assist/session';
 	import type { SearchOutcome } from '$lib/assist/search';
-	import type { DigestVerticalRef } from '$lib/payload/types';
 
-	// Every knob comes from `config/idhazh.json` through the route's load, so
-	// nothing here decides how many months to read, how many results to show, or
-	// how close is close enough.
-	let {
-		months,
-		assist: settings,
-		verticals,
-		activeTopic,
-		total,
-		pillsMax,
-		pillMoveMin,
-		query = $bindable(''),
-		onResults,
-		onTopic,
-		onAsk,
-		onType,
-		onSearchAvailability
-	}: {
+	let { months, assist, earliest, latest, onResults, onBrowse }: {
 		months: string[];
-		assist: {
-			similarity_floor: number;
-			result_limit: number;
-			search_months: number;
-			search_min_days: number;
-		};
-		/** Every topic the archive holds, with its whole-archive count. */
-		verticals: DigestVerticalRef[];
-		activeTopic: string | null;
-		/** Stories in the whole archive, for the `All` pill. */
-		total: number;
-		pillsMax: number;
-		pillMoveMin: number;
-		/** What the field holds. The page reads it to narrow its browse list. */
-		query?: string;
-		/** Hand the page one search, or null to give it its story list back. */
-		onResults: (outcome: SearchOutcome | null) => void;
-		onTopic: (id: string | null) => void;
-		/** The reader pressed the button, so the box now holds a question. */
-		onAsk: () => void;
-		/** The reader typed, so it is a filter again. */
-		onType: () => void;
-		onSearchAvailability: (available: boolean) => void;
+		assist: SearchSettings;
+		earliest: string;
+		latest: string;
+		onResults: (outcome: SearchOutcome, range: ArchiveRange) => void;
+		onBrowse: (range: ArchiveRange) => void;
 	} = $props();
 
-	/** What the two origins cost. Both figures live in `assist/loader`, beside
-	 * the code that fetches them; the words that print them are in `session`. */
-	const COST = { here: DOWNLOAD_MB, elsewhere: DOWNLOAD_MB_ELSEWHERE };
-
+	let query = $state('');
+	let from = $state('');
+	let to = $state('');
+	let ready = $state(false);
+	let field: HTMLInputElement;
+	let dates: HTMLDetailsElement;
 	let phase = $state<SearchPhase>({ name: 'offer' });
 	let cached = $state<CachedEncoder>('unknown');
-	/** True once the encoder has answered in this tab. Held on the component
-	 * rather than read off the session, so the sentence above re-reads it. */
 	let held = $state(false);
-	let scope = $state<SearchScope>(NO_SCOPE);
-
-	// One session per setting set. Derived rather than built once, so a knob that
-	// moved would move the session with it rather than leaving a page running on
-	// the numbers it was first handed.
-	const search = $derived(
-		newSearch({ supported, loadIndex, loadVectors, embed: embedQuery }, settings)
-	);
-	const report = {
-		onPhase: (next: SearchPhase) => {
-			phase = next;
-			onSearchAvailability(next.name !== 'blocked');
-		},
-		onScope: (next: SearchScope) => (scope = next)
-	};
-	const sentence = $derived(stateSentence({ phase, held, cached, cost: COST }));
+	const cost = { here: DOWNLOAD_MB, elsewhere: DOWNLOAD_MB_ELSEWHERE };
+	const search = $derived(newSearch({
+		supported,
+		loadIndex: (month) => readIndex(month, fetch, 'no-cache'),
+		loadVectors: (month) => readVectors(month, fetch, 'no-cache'),
+		embed: embedQuery
+	}, assist));
+	const report = { onPhase: (next: SearchPhase) => (phase = next) };
+	const sentence = $derived(stateSentence({ phase, held, cached, cost }));
 
 	onMount(async () => {
-		// The newest month is the one the story list above has already asked for,
-		// from the same cache. A second shard is read only when that one is thin,
-		// which is when it is small, and the sentence under the box can then say how
-		// far back a search would reach before a reader spends anything on it.
-		await search.open(months, report);
+		ready = true;
+		if (!supported()) phase = { name: 'blocked', reason: 'this browser cannot run it' };
 		cached = await cachedEncoder();
 	});
 
-	async function run() {
-		if (query.trim() === '' || phase.name === 'working' || phase.name === 'blocked') return;
-		onAsk();
-		const outcome = await search.ask(months, query, report);
-		// Null is a search that did not run, and the phase already says why.
+	async function run(event?: SubmitEvent) {
+		event?.preventDefault();
+		if (!ready || phase.name === 'working') return;
+		dates.open = false;
+		const range = { from, to };
+		if (query.trim() === '') {
+			search.stop(report);
+			if (!supported()) phase = { name: 'blocked', reason: 'this browser cannot run it' };
+			onBrowse(range);
+			return;
+		}
+		const outcome = await search.ask(months, query, report, range);
 		if (outcome === null) return;
-		held = true;
-		onResults(outcome);
+		held = search.held();
+		onResults(outcome, range);
+	}
+
+	function clearSearch() {
+		search.stop(report);
+		if (!supported()) phase = { name: 'blocked', reason: 'this browser cannot run it' };
+		query = '';
+		onBrowse({ from, to });
+		field.focus();
 	}
 </script>
 
-<FilterBar
-	label="Topics and search"
-	{verticals}
-	active={activeTopic}
-	{total}
-	{pillsMax}
-	{pillMoveMin}
-	linked={false}
-	{onTopic}
-	bind:query
-	fieldId="archive-query"
-	fieldLabel={phase.name === 'blocked' ? 'Filter this archive' : 'Search this archive'}
-	placeholder="What are you looking for?"
-	showField={months.length > 0}
-	submitLabel="Search"
-	submitDisabled={phase.name === 'blocked'}
-	onSubmit={() => void run()}
-	onType={() => onType()}
-	noscriptNote="Search and the topic filters need JavaScript."
-/>
+<form class="search-form" aria-label="Search archives" onsubmit={run} data-archive-form>
+	<div class="field">
+		<label class="sr-only" for="archive-query">Search our archives</label>
+		<input
+			bind:this={field}
+			id="archive-query"
+			type="search"
+			bind:value={query}
+			placeholder="What are you looking for?"
+			autocomplete="off"
+			disabled={!ready || months.length === 0}
+		/>
+		<button
+			class="clear"
+			type="button"
+			aria-label="Clear search"
+			onclick={clearSearch}
+			disabled={!ready || query === ''}
+			data-search-clear
+		>Clear</button>
+	</div>
 
-{#if months.length > 0}
-	<SearchState
-		{phase}
-		{sentence}
-		scope={scopeSentence(scope)}
-		surface="archive"
-		onStop={() => search.stop(report)}
-		onRetry={() => void run()}
-	/>
+	<details class="dates" bind:this={dates} data-selected={Boolean(from || to)}>
+		<summary>Dates</summary>
+		<div class="date-panel">
+			<div class="date-fields">
+				<label for="archive-from">From (UTC)
+					<input id="archive-from" type="date" bind:value={from}
+						min={earliest || undefined} max={to || latest || undefined} disabled={!ready} />
+				</label>
+				<label for="archive-to">To (UTC)
+					<input id="archive-to" type="date" bind:value={to}
+						min={from || earliest || undefined} max={latest || undefined} disabled={!ready} />
+				</label>
+			</div>
+			{#if from || to}
+				<button class="date-clear" type="button" disabled={!ready}
+					onclick={() => { from = ''; to = ''; }}>Clear dates</button>
+			{/if}
+		</div>
+	</details>
+
+	<button class="submit font-semibold" type="submit"
+		disabled={!ready || months.length === 0 || phase.name === 'working' ||
+			(phase.name === 'blocked' && query.trim() !== '')}>Search</button>
+</form>
+
+{#if phase.name !== 'offer'}
+	<SearchState {phase} {sentence} surface="archive"
+		onStop={() => search.stop(report)} onRetry={() => void run()} />
 {/if}
+
+<details class="search-info">
+	<summary>
+		On-device search{!held && cached !== 'present' ? ` - ${DOWNLOAD_MB} MB first use` : ''}
+	</summary>
+	<p>{privacyNote(cost)}</p>
+	<p>Date changes apply with Search.
+		{assist.archive_search_months === -1
+			? 'Leave both dates empty to search all indexed dates.'
+			: `Search covers up to ${assist.archive_search_months ?? assist.search_months} eligible months.`}
+	</p>
+</details>
+<noscript><p class="mt-3 text-base text-text-secondary">Archive search needs JavaScript.</p></noscript>
+
+<style>
+	.search-form {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto;
+		align-items: start;
+		gap: var(--space-3);
+		margin-block-start: var(--space-5);
+	}
+	.field {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		min-inline-size: 0;
+		min-block-size: var(--space-7);
+		padding-inline: var(--space-4);
+		border: 1px solid var(--color-rule-strong);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text-secondary);
+	}
+	.field:focus-within { border-color: var(--color-accent); }
+	.field input {
+		min-inline-size: 0;
+		inline-size: 100%;
+		min-block-size: var(--space-7);
+		background: transparent;
+		color: var(--color-text);
+		font-size: var(--text-base);
+		line-height: var(--leading-base);
+	}
+	.field input::-webkit-search-cancel-button { display: none; }
+	.field input::placeholder { color: var(--color-text-secondary); }
+	.clear {
+		min-block-size: var(--space-7);
+		color: var(--color-accent);
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+	}
+	.clear:disabled { visibility: hidden; }
+	.submit, .dates > summary {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-block-size: var(--space-7);
+		padding-inline: var(--space-5);
+		border: 1px solid var(--color-rule-strong);
+		border-radius: var(--radius-md);
+		font-size: var(--text-base);
+		line-height: var(--leading-base);
+		cursor: pointer;
+	}
+	.submit {
+		border-color: var(--color-accent);
+		background: var(--color-accent);
+		color: var(--color-on-accent);
+	}
+	.submit:hover:not(:disabled) { background: var(--color-accent-strong); }
+	.submit:disabled {
+		cursor: default;
+		background: var(--color-rule-strong);
+		border-color: var(--color-rule-strong);
+		color: var(--color-text-secondary);
+	}
+	.dates { position: relative; min-inline-size: 0; }
+	.dates > summary { color: var(--color-text-secondary); }
+	.dates[data-selected='true'] > summary { border-color: var(--color-accent); }
+	.dates[open] > summary, .dates > summary:hover { color: var(--color-accent); }
+	.date-panel {
+		position: absolute;
+		inset-inline-end: 0;
+		inline-size: var(--zone-aside);
+		margin-block-start: var(--space-2);
+		padding: var(--space-4);
+		border: 1px solid var(--color-rule-strong);
+		border-radius: var(--radius-md);
+		background: var(--color-surface-raised);
+		box-shadow: var(--shadow-md);
+	}
+	.date-fields { display: grid; gap: var(--space-3); }
+	.date-fields label {
+		display: grid;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		color: var(--color-text-secondary);
+	}
+	.date-fields input {
+		color-scheme: light;
+		min-inline-size: 0;
+		inline-size: 100%;
+		min-block-size: var(--space-7);
+		padding-inline: var(--space-2);
+		border: 1px solid var(--color-rule-strong);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+	}
+	:global([data-theme='dark']) .date-fields input { color-scheme: dark; }
+	.date-clear {
+		min-block-size: var(--space-7);
+		color: var(--color-accent);
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+	}
+	.date-clear:disabled { color: var(--color-text-secondary); cursor: default; }
+	.search-info {
+		margin-block-start: var(--space-3);
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		color: var(--color-text-secondary);
+	}
+	.search-info summary { width: fit-content; cursor: pointer; }
+	.search-info p { margin-block-start: var(--space-2); max-inline-size: var(--measure); }
+	@media (width < 640px) {
+		.search-form { grid-template-columns: minmax(0, 1fr) auto; }
+		.submit { grid-column: 2; grid-row: 1; padding-inline: var(--space-4); }
+		.dates { grid-column: 1 / -1; }
+		.dates > summary { justify-content: start; width: fit-content; }
+		.date-panel { position: static; inline-size: 100%; }
+		.date-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	}
+</style>

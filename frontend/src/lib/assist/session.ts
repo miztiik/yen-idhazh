@@ -23,13 +23,17 @@
  * them live here, once. One spelling of the promise, one home for the numbers.
  */
 
-import type { MonthIndex } from './month';
+import { dateInRange, monthsInRange, type ArchiveRange, type MonthIndex } from './month';
 import type { CachedEncoder, EncoderProgress } from './loader';
+import { ENCODER_DIMENSIONS } from './encoder';
 import {
+	closestHits,
 	dayRange,
 	rank,
 	readScope,
+	searchable,
 	searchedDays,
+	type SearchHit,
 	type SearchableMonth,
 	type SearchOutcome
 } from './search';
@@ -75,6 +79,7 @@ export interface SearchParts {
 
 /** How wide and how close, straight off `config/idhazh.json`. */
 export interface SearchSettings {
+	archive_search_months?: number;
 	similarity_floor: number;
 	result_limit: number;
 	search_months: number;
@@ -99,7 +104,12 @@ export interface Search {
 	 * has not been asked for a search never calls it. */
 	open(months: string[], report: SearchReport): Promise<SearchScope>;
 	/** One question. Null when the search did not run, and the phase says why. */
-	ask(months: string[], text: string, report: SearchReport): Promise<SearchOutcome | null>;
+	ask(
+		months: string[],
+		text: string,
+		report: SearchReport,
+		range?: ArchiveRange
+	): Promise<SearchOutcome | null>;
 	/** Leave the page exactly as it was.
 	 *
 	 * The bytes already asked for keep arriving - a browser fetch cannot be
@@ -187,7 +197,8 @@ export function newSearch(parts: SearchParts, settings: SearchSettings): Search 
 	async function ask(
 		months: string[],
 		text: string,
-		report: SearchReport
+		report: SearchReport,
+		range?: ArchiveRange
 	): Promise<SearchOutcome | null> {
 		const query = text.trim();
 		if (query === '') return null;
@@ -195,6 +206,7 @@ export function newSearch(parts: SearchParts, settings: SearchSettings): Search 
 		const mine = ++attempt;
 		report.onPhase({ name: 'working', progress: { loaded: 0, landed: false } });
 		try {
+			if (range !== undefined) return await askArchive(months, query, range, report, mine);
 			const reach = await open(months, report);
 			if (reach.indexes.length === 0) return null;
 			if (!(await readVectors(reach))) {
@@ -232,6 +244,89 @@ export function newSearch(parts: SearchParts, settings: SearchSettings): Search 
 			report.onPhase({ name: 'failed' });
 			return null;
 		}
+	}
+
+	async function askArchive(
+		months: string[],
+		query: string,
+		range: ArchiveRange,
+		report: SearchReport,
+		mine: number
+	): Promise<SearchOutcome | null> {
+		if (!parts.supported()) {
+			refuse(report, 'this browser cannot run it');
+			return null;
+		}
+		const eligible = monthsInRange(months, range);
+		const cover = settings.archive_search_months ?? settings.search_months;
+		// -1 covers every registered month: an archive-wide answer needs all of them.
+		// Only the current month's vectors and the best answer are retained.
+		const wanted = cover === -1 ? eligible : eligible.slice(0, cover);
+		const limited = wanted.length < eligible.length;
+		let partial = false;
+		let searched = 0;
+		let oldest = '';
+		let newest = '';
+		let vector: number[] | null = null;
+		let hits: SearchHit[] = [];
+
+		for (const month of wanted) {
+			const index = await parts.loadIndex(month);
+			if (mine !== attempt) return null;
+			if (index === null || !searchable(index, ENCODER_DIMENSIONS)) {
+				console.warn(`[search] archive month ${month} could not be searched`);
+				partial = true;
+				continue;
+			}
+			const entries = index.entries.filter(
+				(entry) => entry.vector !== null && entry.vector !== undefined && dateInRange(entry.date, range)
+			);
+			if (entries.length === 0) continue;
+			const bytes = await parts.loadVectors(month);
+			if (mine !== attempt) return null;
+			if (bytes === null || entries.some(
+				(entry) => entry.vector! < 0 || entry.vector! + index.dimensions > bytes.length
+			)) {
+				console.warn(`[search] archive vectors for ${month} could not be searched`);
+				partial = true;
+				continue;
+			}
+			if (vector === null) {
+				vector = await parts.embed(query, (progress) => {
+					if (mine === attempt) report.onPhase({ name: 'working', progress });
+				});
+				if (mine !== attempt) return null;
+				hasHeld = true;
+			}
+			hits = closestHits(
+				[...hits, ...rank([{ index, vectors: bytes }], vector, {
+					limit: settings.result_limit,
+					minScore: settings.similarity_floor,
+					range
+				})],
+				settings.result_limit
+			);
+			searched += entries.length;
+			for (const entry of entries) {
+				if (oldest === '' || entry.date < oldest) oldest = entry.date;
+				if (newest === '' || entry.date > newest) newest = entry.date;
+			}
+		}
+		if (partial && searched === 0) {
+			throw new Error('The selected archive files could not be read.');
+		}
+		report.onPhase({ name: 'offer' });
+		const label = oldest === '' ? '' : dayRange(oldest, newest);
+		report.onScope?.({ indexes: [], searched, label, partial });
+		return {
+			query,
+			hits,
+			searched,
+			scope: label,
+			capped: hits.length >= settings.result_limit,
+			partial,
+			limited
+		};
 	}
 
 	return {

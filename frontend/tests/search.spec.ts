@@ -57,7 +57,7 @@ async function ask(page: Page, query: string): Promise<void> {
  * answered - so a test that waits on it is waiting on what the reader waits on.
  */
 async function answered(page: Page): Promise<void> {
-    await expect(page.locator('[data-search-state]')).toContainText('The download is done', {
+    await expect(page.locator('h2').first()).toHaveText('Search results', {
         timeout: 180000
     });
 }
@@ -69,8 +69,8 @@ test('one click downloads the encoder and answers the question already typed', a
     await page.goto('/archive/');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('#archive-query')).toBeVisible();
-    await expect(page.locator('[data-search-state]')).toContainText('The first search downloads');
-    await expect(page.locator('h2').first()).toHaveText('Stories');
+    await expect(page.locator('.search-info > summary')).toContainText('MB first use');
+    await expect(page.locator('h2').first()).toHaveText('Latest stories');
     const { query, expect_canary } = gold.queries[0]!;
     await ask(page, query);
     await answered(page);
@@ -84,7 +84,7 @@ test('one click downloads the encoder and answers the question already typed', a
     const wanted = titleOf(expect_canary).replace(/<[^>]*>/g, '').split(' ').slice(0, 4).join(' ');
     expect(top, `${query} -> wanted "${wanted}" in the top three`).toContain(wanted);
     // Paid for, and the sentence says so rather than asking again.
-    await expect(page.locator('[data-search-state]')).toContainText('The download is done');
+    await expect(page.locator('.search-info > summary')).not.toContainText('MB first use');
 });
 test('a failed download offers a way to try again', async ({ page }) => {
     // One flaky connection must not turn the feature off for the rest of the

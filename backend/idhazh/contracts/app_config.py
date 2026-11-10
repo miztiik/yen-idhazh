@@ -112,10 +112,18 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     model_config = ConfigDict(
         json_schema_extra={
-            "readCompatibility": "additive; absent prompt_files uses the declared task paths"
+            "readCompatibility": (
+                "additive; absent archive controls use defaults; "
+                "absent prompt_files uses the declared task paths"
+            )
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-10",
+            change="Archive search coverage and Top visibility have separate controls.",
+            why="Absent controls use defaults; existing day-search coverage is unchanged.",
+        ),
         ChangelogEntry(
             version="2026-11-07",
             change="prompt_files names the production task instructions under the selected config.",
@@ -130,11 +138,6 @@ class AppConfig(Contract):
             version="2026-10-24T18:29",
             change="visuals.number_format added.",
             why="The digest and console need one declared number style.",
-        ),
-        ChangelogEntry(
-            version="2026-10-24",
-            change="bench.run_model_speed_case removed; the model_speed_case input decides it.",
-            why="A knob nothing reads is a second spelling of the dispatch input.",
         ),
         ChangelogEntry(
             version="2026-09-28",

@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-11-10
 
 **Known noncompliance:** Existing prerendering does not meet [Telemetry Intent](telemetry-intent.md) and will be removed as existing pages migrate. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -48,7 +48,7 @@ for panel titles and "the visual planner" for that actor.
 
 ## What the shell provides, once
 
-- **Page frame:** shared header, navigation, footer and spacing.
+- **Page frame:** shared header, navigation, footer and spacing. The archive omits the footer so the single search surface ends with its stories.
 - **Data loading:** validate fetched and cached payloads at the same boundary. A malformed payload must not leave a blank page. Publication checks still run before publishing; a successful static build is not proof that every day is valid.
 - **Page states:** shared loading, empty, missing and degraded behavior.
 - **Local logging:** the browser console records which payload failed and why. No remote log collector or reader tracking.

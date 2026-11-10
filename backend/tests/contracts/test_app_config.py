@@ -978,19 +978,17 @@ def test_the_holdout_reach_is_a_knob_the_frontend_agrees_with() -> None:
     assert int(mirrored.group(1)) == SimilarityConfig().holdout_reach_days
 
 
-def test_the_days_the_archive_lists_are_a_knob_the_frontend_agrees_with() -> None:
-    """The same two-copies problem, on another digest knob a browser never sees.
-
-    `archive_recent_days` decides how many days the archive lists as rows of
-    their own before the months take over, so the build reads it on its own
-    rather than through `uiConfig()`. A drift here would put a different number
-    of days on the page than the contract bounds, and on a clone with no
-    `config/` there is nothing else to catch it.
-    """
+def test_the_archive_bounds_are_knobs_the_frontend_agrees_with() -> None:
+    """A fresh clone must use the native browsing and Top defaults in both languages."""
     reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
-    mirrored = re.search(r"const ARCHIVE_RECENT_DAYS = (\d+);", reader)
-    assert mirrored is not None, "the frontend dropped its archive_recent_days fallback"
-    assert int(mirrored.group(1)) == UiConfig().archive_recent_days
+    expected = {
+        "ARCHIVE_WINDOW_DAYS": UiConfig().archive_window_days,
+        "ARCHIVE_TOP_VIEWPORTS": UiConfig().archive_top_viewports,
+    }
+    for constant, value in expected.items():
+        mirrored = re.search(rf"const {constant} = (\d+(?:\.\d+)?);", reader)
+        assert mirrored is not None, f"the frontend dropped its {constant} fallback"
+        assert float(mirrored.group(1)) == value
 
 
 def test_the_side_a_figure_sits_on_is_a_knob_the_frontend_agrees_with() -> None:

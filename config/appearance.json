@@ -1,5 +1,6 @@
 {
   "assist": {
+    "archive_search_months": -1,
     "result_limit": 10,
     "search_min_days": 7,
     "search_months": 1,
@@ -190,6 +191,7 @@
   },
   "digest": {
     "archive_page_size": 25,
+    "archive_top_viewports": 1,
     "archive_recent_days": 14,
     "archive_window_days": 30,
     "desk_thin_max": 12,
@@ -264,5 +266,5 @@
     "movement_good_light": "#2f6f5e",
     "surface_tint_alpha": 0.07
   },
-  "version": "2026-10-25"
+  "version": "2026-11-10"
 }
