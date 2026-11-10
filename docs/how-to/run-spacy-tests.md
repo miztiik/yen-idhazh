@@ -1,6 +1,6 @@
 # Run text analysis and inspect results
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-10
 
 How to dispatch `ner-tests.yml` for one source and inspect the native spaCy
 and GLiNER results. This procedure is project-specific because it uses the
@@ -33,30 +33,20 @@ GLiNER uses distinct presentation types from `named_entities.label_map` in
 selection is refused. NER has no separate dispatch source or entity-label input.
 Its request uses the unified API's `schema.entities` section.
 
-GLiNER also classifies the unchanged source in one separate request. Optional
-`classification_tasks` accepts the caller's task mapping as JSON: one or any
-number of arbitrary named tasks, each with an ID-to-label-text `labels` mapping
-and a `multi_label` boolean. Names and IDs must be nonblank strings, not members
-of a caller-maintained list. Label text can be a plain display name; no extra
-definition field or taxonomy membership is required. For example:
-
-```json
-{"tone":{"labels":{"neutral":"Neutral","opinion":"Opinion"},"multi_label":false}}
-```
-
-The caller converts this mapping into ordered native `schema.classifications`
-entries. Both GLiNER requests use `analyze-text-gliner`; they are not combined
-and neither failure hides the other.
-
-Leave `classification_tasks` blank to build the convenience request from
+GLiNER also classifies the unchanged source in one separate request. The workflow
+has no classification-task input and uses the configured default tasks from
 `config/taxonomy.json`: single-label `vertical` and `desk` use active vertical
 definitions, multi-label `lenses` uses active lens definitions, and single-label
 `source_kind` uses active source-kind display names without new definitions.
-Draft and retired entries are excluded. Only this default construction loads
-the native `Taxonomy` model; custom tasks do not read taxonomy. Invalid custom
-JSON or invalid defaults fail classification explicitly without preventing NER.
+Draft and retired entries are excluded. The caller validates these defaults with
+the native `Taxonomy` model and converts them into ordered native
+`schema.classifications` entries. Invalid defaults fail classification explicitly
+without preventing NER. Both GLiNER requests use `analyze-text-gliner`; they are
+not combined and neither failure hides the other.
 The workflow exposes the backend source root for default validation without
 installing the backend runtime or copying a taxonomy schema.
+Caller-defined tasks remain supported by the underlying
+[native GLiNER API](../reference/gliner-api.md), not the workflow dispatch form.
 
 These are model selections for the requested tasks only. Text alone supplies
 no feed provenance, so `vertical` is not a factual source vertical and
@@ -71,7 +61,6 @@ $inputs = @{
   profile = 'md'
   feature_mode = 'default'
   custom_features = ''
-  classification_tasks = ''
   text = Get-Content -Raw .\text-analysis-input.txt
 } | ConvertTo-Json -Compress
 
