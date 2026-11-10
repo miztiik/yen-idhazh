@@ -281,7 +281,7 @@ test.describe('the committed appearance file', () => {
  * question asked of the block beside it, and the answer had never been checked.
  */
 test.describe('the assist block a reader is handed', () => {
-const DECLARED = ['result_limit', 'search_min_days', 'search_months', 'similarity_floor'];
+const DECLARED = ['archive_search_months', 'result_limit', 'search_min_days', 'search_months', 'similarity_floor'];
 
 function blockOnDisk(file: string): Record<string, unknown> {
 const path = join(REPO, 'config', file);

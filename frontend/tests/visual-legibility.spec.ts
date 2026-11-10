@@ -320,12 +320,18 @@ test('a failed chart load leaves only the story text without marking chartless s
 
 	await page.locator('a[href="/archive/"]').first().click();
 	await expect(page).toHaveURL(/\/archive\/$/);
+	await page.locator('.dates > summary').click();
+	await page.getByLabel('From (UTC)').fill(date);
+	await page.getByLabel('To (UTC)').fill(date);
+	await page.getByRole('button', { name: 'Search', exact: true }).click();
+	const dayLink = page.locator(`[data-story-list="rows"] a[href^="/${date}/#"]`).first();
+	await expect(dayLink).toBeVisible();
 	const session = await page.context().newCDPSession(page);
 	await session.send('Network.clearBrowserCache');
 	await session.detach();
 	await page.context().setOffline(true);
-	await page.locator(`a[href="/${date}/"]`).first().click();
-	await page.waitForURL(`**/${date}/`);
+	await dayLink.click();
+	await page.waitForURL((url) => url.pathname === `/${date}/`);
 	await dayReady(page);
 	const returningStory = page.locator('article.item').and(
 		page.locator(`[id="${chartStory.item_id}"]`)

@@ -438,7 +438,7 @@
     "tagline": "Daily news summaries, with links to their sources.",
     "theme_default": "dark"
   },
-  "version": "2026-11-07",
+  "version": "2026-11-10",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,

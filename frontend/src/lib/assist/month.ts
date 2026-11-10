@@ -17,6 +17,25 @@ import type { SearchIndex, SearchIndexEntry } from '$lib/payload/types';
  */
 export type MonthIndex = Omit<SearchIndex, 'version'>;
 
+/** Inclusive UTC dates; an empty bound leaves that end of the range open. */
+export interface ArchiveRange {
+	from: string;
+	to: string;
+}
+
+export function dateInRange(date: string, range: ArchiveRange): boolean {
+	return (range.from === '' || date >= range.from) && (range.to === '' || date <= range.to);
+}
+
+/** Select registered month names before any file is requested. */
+export function monthsInRange(months: string[], range: ArchiveRange): string[] {
+	return months.filter(
+		(month) =>
+			(range.from === '' || month >= range.from.slice(0, 7)) &&
+			(range.to === '' || month <= range.to.slice(0, 7))
+	);
+}
+
 /** The index a payload actually carries, entries newest day first.
  *
  * The shape is checked rather than trusted. This file is ours, but a half-
@@ -93,29 +112,6 @@ export function windowStart(anchor: string, days: number): string {
 	const start = new Date(`${anchor}T00:00:00Z`);
 	start.setUTCDate(start.getUTCDate() - (days - 1));
 	return start.toISOString().slice(0, 10);
-}
-
-/** The months a window reaches into, newest first - and no month it cannot.
- *
- * The archive browses a window, not the whole corpus, so the list fetches only
- * the month files that window could hold a story from. A month is one of them
- * when it lies between the window's start month and the anchor's, inclusive;
- * every month older than that is out of reach and is never fetched, which is
- * what keeps the walk bounded by the window rather than by the archive
- * (`CLAUDE.md` Guardrail #12).
- *
- * `months` is the set that exists on disk (`indexMonths()`, newest first), so a
- * month the window reaches but nobody published is simply absent from the
- * result and costs no request. The return is a newest-first prefix of that
- * set, which is what lets the browse loop fetch it one month at a time.
- *
- * Pure, so a test drives it in Node the way the search scope is - the canary
- * publishes a single month and a rule about several cannot show up in it.
- */
-export function monthsInWindow(months: string[], anchor: string, days: number): string[] {
-	const startMonth = windowStart(anchor, days).slice(0, 7);
-	const anchorMonth = anchor.slice(0, 7);
-	return months.filter((month) => month >= startMonth && month <= anchorMonth);
 }
 
 /** The month a day sits in and the `back` months before it, newest first.

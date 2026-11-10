@@ -55,9 +55,14 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 		expect(current?.y).toBe(position?.y);
 	}
 	const prefix = title.slice(0, uiConfig().filter_min_chars + 1);
-	for (const character of prefix) {
+	for (const [index, character] of [...prefix].entries()) {
 		await page.keyboard.insertText(character);
 		await stableField();
+		if (index === 0) {
+			await expect(searchOtherDays).toBeVisible();
+			await expect(page.locator('[data-search-block="day"]'))
+				.toContainText('Searching other days downloads');
+		}
 	}
 	await expect(page.locator('[data-leading]')).toHaveCount(0);
 	await page.keyboard.insertText(title.slice(prefix.length));

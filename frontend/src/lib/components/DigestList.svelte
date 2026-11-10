@@ -277,13 +277,11 @@
 			? costNote(COST)
 			: stateSentence({ phase, held, cached, cost: COST })
 	);
-	// Shown while there is something to say: a download in flight, a refusal, or a
-	// price the reader has not paid and is one key away from spending. Never
-	// without the field, because every sentence it prints is about a key there is
-	// nowhere to press.
+	// Show the download cost as soon as a query can be submitted, even before it
+	// is long enough to filter the day.
 	const searchShown = $derived(
 		ui.show_filter &&
-			(phase.name !== 'offer' || (typed !== null && !held && cached !== 'present'))
+			(phase.name !== 'offer' || (query.trim() !== '' && !held && cached !== 'present'))
 	);
 	const answered = $derived(found !== null);
 
