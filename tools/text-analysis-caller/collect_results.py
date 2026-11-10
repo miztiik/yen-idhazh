@@ -65,7 +65,7 @@ def read_inputs(event: object, environment: dict[str, str]) -> Inputs:
 def save_settings(root: Path, directory: Path) -> ServiceSettings:
     """Save exactly the native bytes validated for this run, before API startup."""
     spacy = (root / SPACY_SETTINGS_PATH).read_bytes()
-    settings = ServiceSettings.model_validate_json(spacy)
+    settings: ServiceSettings = ServiceSettings.model_validate_json(spacy)
     write_atomic(directory / "spacy" / "settings.json", spacy)
     gliner = (root / GLINER_SETTINGS_PATH).read_bytes()
     GlinerSettings.model_validate_json(gliner)
@@ -93,7 +93,7 @@ def spacy_request(inputs: Inputs, health: TextAnalysisHealth) -> AnalyzeTextRequ
         payload["features"] = list(capability.supported_features)
     elif inputs.feature_mode == "custom":
         payload["features"] = [part.strip() for part in inputs.custom_features.split(",")]
-    request = AnalyzeTextRequest.model_validate_json(json.dumps(payload))
+    request: AnalyzeTextRequest = AnalyzeTextRequest.model_validate_json(json.dumps(payload))
     if request.features is not None and not set(request.features).issubset(
         capability.supported_features
     ):
