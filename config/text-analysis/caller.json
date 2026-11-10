@@ -1,0 +1,67 @@
+{
+  "version": "2026-11-10",
+  "changelog": [
+    {
+      "version": "2026-11-10",
+      "change": "Configure native entity descriptions and linked event evidence."
+    }
+  ],
+  "include_confidence": true,
+  "include_spans": true,
+  "schema": {
+    "entities": {
+      "person": {
+        "description": "Names of specific individual people. Exclude generic groups, occupations, standalone job titles, pronouns, organizations and publications."
+      },
+      "organization": {
+        "description": "Names of specific organizations, including companies, institutions and publications."
+      },
+      "location": {
+        "description": "Names of specific geographic places, including cities, regions and countries."
+      }
+    },
+    "structures": {
+      "events": {
+        "mode": "natural",
+        "anchor": "action",
+        "fields": [
+          {
+            "name": "action",
+            "dtype": "str",
+            "cardinality": "required_one",
+            "exclusive": false,
+            "description": "The verbatim action or event trigger for this candidate."
+          },
+          {
+            "name": "actors",
+            "dtype": "list",
+            "cardinality": "zero_or_more",
+            "exclusive": false,
+            "description": "Participants performing the action, not those affected."
+          },
+          {
+            "name": "objects",
+            "dtype": "list",
+            "cardinality": "zero_or_more",
+            "exclusive": false,
+            "description": "Participants or things affected by the action."
+          },
+          {
+            "name": "times",
+            "dtype": "list",
+            "cardinality": "zero_or_more",
+            "exclusive": false,
+            "description": "Time expressions belonging to this event, not unrelated dates or publication metadata."
+          },
+          {
+            "name": "places",
+            "dtype": "list",
+            "cardinality": "zero_or_more",
+            "exclusive": false,
+            "description": "Locations belonging to this event, not unrelated places or datelines."
+          }
+        ]
+      }
+    }
+  }
+}

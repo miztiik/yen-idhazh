@@ -13,9 +13,11 @@ from collect_operations import Outcome, collect_gliner_operations
 from collect_results import (
     collect_gliner,
     collect_spacy,
+    gliner_labels,
     read_inputs,
     save_settings,
 )
+from load_caller_settings import load_caller_settings
 from supervise_apis import EXIT_GRACE_SECONDS, start_apis, stop_apis, wait_for_apis
 from write_reports import deliver_reports
 
@@ -56,10 +58,16 @@ async def main() -> int:
             if spacy_health is not None:
                 spacy = await collect_spacy(client, inputs, spacy_health, output)
             if gliner_health is not None:
-                gliner, classification = await collect_gliner_operations(
-                    collect_gliner(client, inputs, settings, output),
-                    collect_classifications(client, inputs, ROOT, output),
-                )
+                try:
+                    caller = load_caller_settings(ROOT, gliner_labels(settings))
+                except (OSError, ValueError):
+                    gliner = Outcome(error="The GLiNER caller configuration is invalid.")
+                    classification = Outcome(error="The GLiNER caller configuration is invalid.")
+                else:
+                    gliner, classification = await collect_gliner_operations(
+                        collect_gliner(client, inputs, caller, output),
+                        collect_classifications(client, inputs, ROOT, output, caller),
+                    )
     except (OSError, ValueError):
         process_errors.append(
             "The API configuration, process or native artifacts could not be prepared."

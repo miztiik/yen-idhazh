@@ -6,7 +6,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validat
 
 # The creation date identifies this protocol, independently of the model or clock.
 API_VERSION: Final = "2026-11-08"
-ANALYSIS_CONTRACT_VERSION: Final = "2026-11-09"
+ANALYSIS_CONTRACT_VERSION: Final = "2026-11-10"
 API_PREFIX: Final = f"/api/{API_VERSION}"
 ANALYZE_TEXT_PATH: Final = f"{API_PREFIX}/analyze-text-gliner"
 HEALTH_PATH: Final = f"{API_PREFIX}/get-gliner-health"

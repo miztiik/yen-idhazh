@@ -14,7 +14,9 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from local_api_host.compose_applications import compose_applications
 from local_api_host.contracts import HostSettings, ListenerSettings
-from pydantic import ValidationError
+from load_caller_settings import CallerAnalysisSettings, load_caller_settings
+from project_gliner_analysis import EVENT_FIELDS, event_structure, project_entity_request
+from pydantic import TypeAdapter, ValidationError
 from serve_apis import create_app as create_shared_app
 from text_analysis.load_service_settings import load_service_settings
 
@@ -25,7 +27,7 @@ from gliner_api.configure_native_diagnostics import (
     native_operation,
 )
 from gliner_api.create_api_component import create_app
-from gliner_api.declare_analysis_contracts import AnalyzeTextRequest
+from gliner_api.declare_analysis_contracts import AnalysisSchema, AnalyzeTextRequest
 from gliner_api.declare_api_contracts import (
     ANALYZE_TEXT_PATH,
     API_VERSION,
@@ -37,7 +39,8 @@ from gliner_api.declare_api_contracts import (
     ResultValidationError,
 )
 from gliner_api.declare_event_contracts import GlinerEvent
-from gliner_api.load_settings import GlinerSettings, load_settings
+from gliner_api.load_model import require_record_capability
+from gliner_api.load_settings import SETTINGS_VERSION, GlinerSettings, load_settings
 from gliner_api.run_model import ModelRuntime
 from gliner_api.validate_analysis_results import validate_analysis_results
 
@@ -129,6 +132,110 @@ def test_strict_settings_and_requests() -> None:
     assert request.analysis_schema.to_native_schema().to_dict()["classifications"][0]["labels"] == {
         "id": "definition"
     }
+    assert not request.include_confidence
+    assert not request.include_spans
+    for field in ("include_confidence", "include_spans"):
+        for invalid in (1, "true", None):
+            with pytest.raises(ValidationError):
+                AnalyzeTextRequest.model_validate(
+                    {"text": "a", "schema": {"entities": ["mention"]}, field: invalid}
+                )
+    for invalid in (-0.1, 1.1, True, "0.8", None, float("inf"), float("nan")):
+        with pytest.raises(ValidationError):
+            GlinerSettings.model_validate(raw | {"entity_confidence_threshold": invalid})
+    for policy in ("disallow", "flat", "allow"):
+        configured = GlinerSettings.model_validate(raw | {"overlap_policy": policy})
+        assert configured.overlap_policy == policy
+    for invalid in (None, True, "unknown"):
+        with pytest.raises(ValidationError):
+            GlinerSettings.model_validate(raw | {"overlap_policy": invalid})
+    previous = {
+        key: value for key, value in raw.items()
+        if key not in {"entity_confidence_threshold", "overlap_policy"}
+    } | {
+        "version": API_VERSION,
+        "changelog": [{"version": API_VERSION, "change": "Initial settings."}],
+    }
+    historical = GlinerSettings.model_validate(previous)
+    assert historical.entity_confidence_threshold == 0.5
+    assert historical.overlap_policy is None
+    for malformed in (
+        previous | {"entity_confidence_threshold": 0.8},
+        previous | {"overlap_policy": "disallow"},
+        raw | {"version": "2026-11-07"},
+        raw | {"changelog": [{"version": API_VERSION, "change": "Wrong shape."}]},
+    ):
+        with pytest.raises(ValidationError):
+            GlinerSettings.model_validate(malformed)
+    assert settings.version == SETTINGS_VERSION
+
+
+def test_native_entity_defaults_preserve_overrides_and_other_tasks() -> None:
+    schema = AnalysisSchema.model_validate(
+        {
+            "entities": {
+                "default": "Named people.",
+                "nullable": {"threshold": None, "dtype": "str"},
+                "zero": {"threshold": 0.0, "description": "Specific places."},
+                "explicit": {"threshold": 0.2},
+            },
+            "classifications": [{"task": "task", "labels": ["id"]}],
+            "structures": {"item": {"fields": [{"name": "actor", "threshold": 0.3}]}},
+        }
+    )
+    before = schema.model_dump()
+    native = schema.to_native_schema(0.8).to_dict()
+    assert list(native["entities"]) == ["default", "nullable", "zero", "explicit"]
+    assert native["entities"]["default"] == {"description": "Named people.", "threshold": 0.8}
+    assert native["entities"]["nullable"] == {"dtype": "str", "threshold": 0.8}
+    assert native["entities"]["zero"]["threshold"] == 0.0
+    assert native["entities"]["explicit"]["threshold"] == 0.2
+    assert native["structures"]["item"]["fields"][0]["threshold"] == 0.3
+    assert schema.to_native_schema().to_dict()["classifications"] == native["classifications"]
+    assert AnalysisSchema(entities=["a", "b"]).to_native_schema(0.8).to_dict()["entities"] == {
+        "a": {"threshold": 0.8}, "b": {"threshold": 0.8},
+    }
+    assert schema.model_dump() == before
+
+
+def test_caller_configuration_uses_native_schema_and_the_ordered_presentation_offering() -> None:
+    labels = list(dict.fromkeys(load_service_settings(ROOT).named_entities.label_map.values()))
+    caller = load_caller_settings(ROOT, labels)
+    assert list(caller.analysis_schema.entities or []) == labels
+    assert caller.include_confidence
+    assert caller.include_spans
+    request = AnalyzeTextRequest.model_validate({
+        "text": "a",
+        "schema": caller.analysis_schema.model_dump(exclude_none=True),
+        "include_confidence": caller.include_confidence,
+        "include_spans": caller.include_spans,
+    })
+    wire = request.model_dump(by_alias=True, exclude_none=True)
+    assert project_entity_request(wire)["labels"] == labels
+    assert event_structure(wire) is not None
+    structures = request.analysis_schema.structures
+    assert structures is not None
+    assert [field.name for field in structures["events"].fields] == list(EVENT_FIELDS)
+    with pytest.raises(ValueError, match="presentation offering"):
+        load_caller_settings(ROOT, list(reversed(labels)))
+    raw = TypeAdapter(CallerAnalysisSettings).dump_python(caller, by_alias=True, exclude_none=True)
+    entity_only = raw | {
+        "schema": {"entities": raw["schema"]["entities"]},
+        "include_confidence": False, "include_spans": False,
+    }
+    compact = TypeAdapter(CallerAnalysisSettings).validate_json(json.dumps(entity_only), strict=True)
+    assert compact.analysis_schema.structures is None
+    assert not compact.include_confidence
+    assert not compact.include_spans
+    for malformed in (
+        raw | {"version": API_VERSION},
+        raw | {"include_confidence": 1},
+        raw | {"include_spans": "true"},
+        raw | {"extra": True},
+        raw | {"schema": {"entities": ["person"]}},
+    ):
+        with pytest.raises(ValidationError):
+            TypeAdapter(CallerAnalysisSettings).validate_json(json.dumps(malformed), strict=True)
 
 
 def test_native_result_boundaries() -> None:
@@ -136,6 +243,8 @@ def test_native_result_boundaries() -> None:
         json.dumps(
             {
                 "text": "a \u00e9 a",
+                "include_confidence": True,
+                "include_spans": True,
                 "schema": {
                     "entities": ["mention"],
                     "classifications": [{"task": "task", "labels": {"id": "definition"}}],
@@ -186,6 +295,149 @@ def test_native_result_boundaries() -> None:
     ):
         with pytest.raises(ResultValidationError):
             validate_analysis_results(prediction, request)
+
+
+@pytest.mark.parametrize("include_confidence", [False, True])
+@pytest.mark.parametrize("include_spans", [False, True])
+def test_native_leaf_profiles_preserve_all_task_families(
+    include_confidence: bool, include_spans: bool
+) -> None:
+    def leaf(text: str, start: int) -> object:
+        value: dict[str, object] = {"text": text}
+        if include_confidence:
+            value["confidence"] = 0.6
+        if include_spans:
+            value |= {"start": start, "end": start + len(text)}
+        return value if include_confidence or include_spans else text
+
+    request = AnalyzeTextRequest.model_validate(
+        {
+            "text": "a b",
+            "include_confidence": include_confidence,
+            "include_spans": include_spans,
+            "schema": {
+                "entities": {"mention": {"dtype": "str"}, "missing": {"dtype": "str"}},
+                "entity_attributes": {
+                    "kind": {"labels": ["id"], "applies_to": ["mention"]},
+                },
+                "classifications": [{"task": "task", "labels": ["id"]}],
+                "structures": {
+                    "item": {
+                        "fields": [
+                            {"name": "actor", "dtype": "str"},
+                            {"name": "related", "dtype": "list"},
+                            {"name": "choice", "dtype": "str", "choices": ["selected"]},
+                            {"name": "optional", "dtype": "str"},
+                        ]
+                    }
+                },
+                "relations": ["links"],
+            },
+        }
+    )
+    entity = leaf("a", 0)
+    entity = entity if isinstance(entity, dict) else {"text": entity}
+    native = {
+        "entities": {
+            "mention": entity | {"kind": {"label": "id", "confidence": 0.7}},
+            "missing": None,
+        },
+        "task": {"label": "id", "confidence": 0.7} if include_confidence else "id",
+        "item": [{
+            "actor": leaf("a", 0),
+            "related": [leaf("b", 2)],
+            "choice": {"text": "selected", "confidence": 0.6}
+            if include_confidence else "selected",
+            "optional": None,
+        }],
+        "relation_extraction": {
+            "links": [{"head": leaf("a", 0), "tail": leaf("b", 2), "confidence": 0.9}],
+        },
+    }
+    assert validate_analysis_results(native, request).model_dump() == {"result": native}
+    malformed = native | {"task": "unknown"}
+    with pytest.raises(ResultValidationError):
+        validate_analysis_results(malformed, request)
+    rich_request = AnalyzeTextRequest.model_validate(
+    request.model_dump(by_alias=True) | {"include_confidence": True, "include_spans": True}
+    )
+    first = {"text": "a", "start": 0, "end": 1, "confidence": 0.6}
+    second = first | {"start": 2, "end": 3}
+    first_record = {"action": first, "actors": [second], "confidence": 0.7}
+    second_record = {"action": second, "actors": [first], "confidence": 0.8}
+    rich = {
+    "entities": {"mention": [first, second]}, "event": [first_record, second_record],
+    }
+    assert validate_analysis_results(rich, rich_request).model_dump() == {"result": rich}
+    for duplicate in (
+    rich | {"entities": {"mention": [first, first]}},
+    rich | {"event": [first_record, first_record]},
+    ):
+    with pytest.raises(ResultValidationError):
+        validate_analysis_results(duplicate, rich_request)
+    exclusive_structure = structure | {
+    "fields": [
+        {"name": "action", "dtype": "str", "cardinality": "required_one"},
+        {"name": "actors", "dtype": "list", "cardinality": "zero_or_more", "exclusive": True},
+    ],
+    }
+    exclusive_request = AnalyzeTextRequest.model_validate(
+    rich_request.model_dump(by_alias=True) | {
+        "schema": {"entities": ["mention"], "structures": {"event": exclusive_structure}},
+    }
+    )
+    with pytest.raises(ResultValidationError):
+    validate_analysis_results(rich, exclusive_request)
+    with pytest.raises(ResultValidationError):
+        validate_analysis_results(
+            native | {"relation_extraction": {"links": [["a", "b"]]}}, request
+        )
+
+
+def test_native_records_keep_aggregate_scores_omission_and_compact_repetitions() -> None:
+    structure = {
+        "mode": "natural",
+        "anchor": "action",
+        "fields": [
+            {"name": "action", "dtype": "str", "cardinality": "required_one"},
+            {"name": "actors", "dtype": "list", "cardinality": "zero_or_more"},
+        ],
+    }
+    request = AnalyzeTextRequest.model_validate(
+        {"text": "a a", "schema": {"entities": ["mention"], "structures": {"event": structure}}}
+    )
+    record = {"action": "a", "actors": ["a", "a"], "confidence": 0.7}
+    native = {"entities": {"mention": ["a", "a"]}, "event": [record, record]}
+    assert validate_analysis_results(native, request).model_dump() == {"result": native}
+    omitted = {"entities": {}}
+    assert validate_analysis_results(omitted, request).model_dump() == {"result": omitted}
+    for malformed in (
+        native | {"event": [record | {"confidence": True}]},
+        native | {"event": [record | {"confidence": float("inf")}]},
+        native | {"event": [record | {"confidence": -0.1}]},
+        native | {"event": [record | {"confidence": 1.1}]},
+        native | {"event": [record | {"confidence": "0.7"}]},
+        native | {"event": [record | {"extra": []}]},
+        native | {"event": [record | {"action": None}]},
+        {"event": []},
+        omitted | {"unknown": []},
+    ):
+        with pytest.raises(ResultValidationError):
+            validate_analysis_results(malformed, request)
+    for name in ("confidence", "label", "text"):
+        field = {"name": name, "dtype": "str"}
+        with pytest.raises(ValidationError):
+            AnalysisSchema.model_validate(
+                {"structures": {"record": {"mode": "natural", "fields": [field]}}}
+            )
+        AnalysisSchema.model_validate({"structures": {"ordinary": {"fields": [field]}}})
+    ordinary = AnalyzeTextRequest.model_validate(
+        {"text": "a", "schema": {"structures": {"item": {"fields": [{"name": "value"}]}}}}
+    )
+    with pytest.raises(ResultValidationError):
+        validate_analysis_results({}, ordinary)
+    with pytest.raises(ValueError, match="does not support records"):
+        require_record_capability(object())
 
 
 @pytest.mark.anyio

@@ -13,6 +13,7 @@ from gliner_api.declare_api_contracts import ErrorResult as GlinerError
 from gliner_api.load_settings import SETTINGS_PATH as GLINER_SETTINGS_PATH
 from gliner_api.load_settings import GlinerSettings
 from gliner_api.validate_analysis_results import validate_analysis_results
+from load_caller_settings import CallerAnalysisSettings
 from pydantic import ValidationError
 from text_analysis.declare_api_contracts import (
     ANALYZE_TEXT_PATH,
@@ -158,12 +159,19 @@ async def collect_spacy(
 
 
 async def collect_gliner(
-    client: httpx.AsyncClient, inputs: Inputs, settings: ServiceSettings, directory: Path
+    client: httpx.AsyncClient, inputs: Inputs, settings: CallerAnalysisSettings, directory: Path
 ) -> Outcome:
-    """Collect and validate exactly one GLiNER named-entity response."""
+    """Collect entities and linked candidates in exactly one native extraction response."""
     try:
         request = GlinerRequest.model_validate_json(
-            json.dumps({"text": inputs.text, "schema": {"entities": gliner_labels(settings)}}),
+            json.dumps(
+                {
+                    "text": inputs.text,
+                    "schema": settings.analysis_schema.model_dump(exclude_none=True),
+                    "include_confidence": settings.include_confidence,
+                    "include_spans": settings.include_spans,
+                }
+            ),
             strict=True,
         )
         response = await send_request(

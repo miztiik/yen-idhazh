@@ -1,6 +1,6 @@
 # How the native GLiNER2 API runs
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-10
 
 How one local model turns exact source text and a caller-defined native schema
 into validated extraction evidence without becoming an article pipeline.
@@ -72,13 +72,32 @@ singleton without invented labels or private SDK metadata. Native validation
 still owns the other schema options.
 
 The SDK owns overlapping word chunks and global document offset remapping.
-Confidence and span inclusion are mandatory. Request-aware validation checks
+The request independently selects confidence and span inclusion, both off
+by default. The native long operation still obtains rich chunk evidence
+before its own merging/projection; the provider does not add another
+inference pass or strip native metadata itself. Request-aware validation checks
 task presence, offered names and IDs, field cardinality, duplicate selections,
 finite confidence and exact slicing of the original Python Unicode string.
 Choice fields are offered selections rather than source spans. Entity
 attributes and relation arguments remain native payloads. Results retain
 native names, scalar/list/null forms and values inside one `result` envelope;
 the API never repairs an offset, clips source text or manufactures a prediction.
+
+Entity defaults are prepared in the native schema only. A missing or null
+per-label threshold receives the saved entity cutoff; explicit values,
+including zero, keep precedence. The same native operation receives the saved
+overlap policy. Neither control alters classification, record/relation
+thresholds, native chunk sizes or article grouping.
+
+Native record and boundary-relation aggregate scores are validated separately
+from their leaf evidence and can survive disabled leaf confidence. Record
+fields cannot use native formatting keys that would overwrite or collapse
+them. A successful empty record-mode root may be absent, while unknown roots
+and other missing tasks still fail. Before inference, a record request checks
+the loaded model's `enable_records` capability rather than a checkpoint name.
+An unsupported model cannot turn a record request into an empty success.
+When offsets are present, duplicate/exclusive occurrence checks still use
+them; compact repeated text is never treated as proof of a duplicate.
 
 Classification merges native chunk selections; retained confidence is a chunk
 aggregate, not a newly calibrated document probability. Single-label output
@@ -91,8 +110,11 @@ transport still passes the exact request string and validates all returned
 mentions against it. Unsupported native input fails explicitly rather than
 being silently truncated.
 
-Callers build current active definitions from
-[the authoritative taxonomy](../../concepts/taxonomy.md). The API owns no second
+Classification callers build current active definitions from
+[the authoritative taxonomy](../../concepts/taxonomy.md). The reporting caller's
+native entity descriptions and optional record declaration live in its
+[committed caller configuration](../../how-to/run-spacy-tests.md#select-the-ref-and-inputs).
+The API owns no second
 vocabulary, article assignment, rank rule, proposal ledger or novelty policy.
 NER evidence is not automatic promotion into a configured registry.
 
@@ -143,13 +165,17 @@ existing settings-loader binding and locked compatibility resolution. It does
 not create a production dependency on that provider's model or feature logic.
 The manual reporting workflow uses this one prepared development environment
 for both providers and installs only its selected spaCy wheel plus the
-configured GLiNER snapshot. Its caller sends one NER request for the same
+configured GLiNER snapshot. Its caller sends one combined entity/record
+extraction request for the same
 source as the spaCy request and one independent taxonomy classification
 request. Both call the unified route with different schemas, retain independent
 failures and share the serialized model. Exact wire bytes stay in their
 existing artifact locations. A standard-library-only report projection reads
 both historical and current request/result shapes without changing saved
-evidence or loading later configuration. The API does not write reports or
+evidence or loading later configuration. Explicit output flags select strict
+leaf shapes; flagless evidence is recognized as complete historical-rich or
+current-compact leaves before validation, not after a failed validation.
+The API does not write reports or
 artifacts. Native manifests and locks remain independent.
 
 ## Design rationale
@@ -159,6 +185,9 @@ than a second classifier or tokenizer. One cached CPU model makes ownership
 and cleanup explicit without another worker protocol. Strict boundary
 normalization and conservative diagnostic refusal prevent native fallback or
 malformed output from looking like useful application data.
+Preserving native aggregate metadata and omitted empty record roots keeps
+validation aligned with the pinned long-text decoder without inventing
+evidence or a second extraction format.
 
 ## See also
 
