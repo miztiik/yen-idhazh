@@ -522,10 +522,17 @@ backend source root. From the provider directory, on allowed Linux only:
 
 ```bash
 uv sync --frozen --group dev
-uv run --no-sync ruff check --config pyproject.toml src tests ../../../tools/text-analysis-caller
+uv run --no-sync ruff check --config pyproject.toml src tests
 uv run --no-sync mypy --config-file pyproject.toml src tests
 uv run --no-sync mypy --config-file pyproject.toml --ignore-missing-imports --follow-imports=skip --platform linux --python-version 3.12 --strict ../../../tools/text-analysis-caller
 uv run --no-sync pytest -c pyproject.toml tests
+```
+
+Run caller lint from the repository root so first-party import discovery
+matches the documented host-safe caller check:
+
+```bash
+uv run --project services/text_analysis/gliner --no-sync ruff check --config services/text_analysis/gliner/pyproject.toml tools/text-analysis-caller
 ```
 
 These are real SDK schema/validation and model-free application checks,

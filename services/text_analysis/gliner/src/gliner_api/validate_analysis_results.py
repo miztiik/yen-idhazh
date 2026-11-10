@@ -52,8 +52,12 @@ def _leaf(
             raise ValueError("Native evidence must reproduce its global source span")
         return mention.text, (mention.start, mention.end)
     if request.include_confidence:
-        return NativeTextScore.model_validate(value).text, None
-    return NativeText.model_validate({"text": value}).text, None
+        text = NativeTextScore.model_validate(value).text
+    else:
+        text = NativeText.model_validate({"text": value}).text
+    if not choice and text not in request.text:
+        raise ValueError("Native source-backed evidence must occur verbatim in the input")
+    return text, None
 
 
 def _selections(
@@ -158,7 +162,11 @@ def _structures(
                 text, span = _leaf(item, request, choice=field.choices is not None)
                 if field.choices is not None and text not in field.choices:
                     raise ValueError("Native choices must belong to the requested field")
-                identity: str | tuple[int, int] = span if span is not None else text
+                identity: str | tuple[int, int] = (
+                    span if span is not None and field.choices is None else text
+                )
+                if field.choices is not None and identity in seen:
+                    raise ValueError("Native choice selections must be distinct")
                 if span is not None:
                     has_spans = True
                     if structure.mode is not None and field.choices is None:

@@ -113,7 +113,10 @@ def _values(value: object, *, scalar: bool) -> list[object]:
 def _leaf(value: object, source: str, profile: tuple[bool, bool]) -> dict[str, object]:
     confidence, spans = profile
     if not confidence and not spans:
-        return {"text": read_text(value, nonblank=True)}
+        text = read_text(value, nonblank=True)
+        if text not in source:
+            raise ValueError("Native source-backed evidence must occur verbatim in the input.")
+        return {"text": text}
     keys = {"text"} | ({"confidence"} if confidence else set()) | (
         {"start", "end"} if spans else set()
     )
@@ -121,6 +124,8 @@ def _leaf(value: object, source: str, profile: tuple[bool, bool]) -> dict[str, o
     text = read_text(leaf["text"], nonblank=True)
     if confidence:
         read_score(leaf["confidence"], confidence=True)
+    if not spans and text not in source:
+        raise ValueError("Native source-backed evidence must occur verbatim in the input.")
     if spans:
         start, end = read_integer(leaf["start"]), read_integer(leaf["end"])
         if start >= end or end > len(source) or source[start:end] != text:

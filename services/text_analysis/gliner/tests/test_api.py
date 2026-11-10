@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from load_caller_settings import CallerAnalysisSettings, load_caller_settings
 from local_api_host.compose_applications import compose_applications
 from local_api_host.contracts import HostSettings, ListenerSettings
-from load_caller_settings import CallerAnalysisSettings, load_caller_settings
 from project_gliner_analysis import EVENT_FIELDS, event_structure, project_entity_request
 from pydantic import TypeAdapter, ValidationError
 from serve_apis import create_app as create_shared_app
@@ -328,7 +328,7 @@ def test_native_leaf_profiles_preserve_all_task_families(
                         "fields": [
                             {"name": "actor", "dtype": "str"},
                             {"name": "related", "dtype": "list"},
-                            {"name": "choice", "dtype": "str", "choices": ["selected"]},
+                            {"name": "choice", "dtype": "list", "choices": ["selected"]},
                             {"name": "optional", "dtype": "str"},
                         ]
                     }
@@ -339,19 +339,20 @@ def test_native_leaf_profiles_preserve_all_task_families(
     )
     entity = leaf("a", 0)
     entity = entity if isinstance(entity, dict) else {"text": entity}
+    choice: object = {"text": "selected", "confidence": 0.6} if include_confidence else "selected"
+    record = {
+        "actor": leaf("a", 0),
+        "related": [leaf("b", 2)],
+        "choice": [choice],
+        "optional": None,
+    }
     native = {
         "entities": {
             "mention": entity | {"kind": {"label": "id", "confidence": 0.7}},
             "missing": None,
         },
         "task": {"label": "id", "confidence": 0.7} if include_confidence else "id",
-        "item": [{
-            "actor": leaf("a", 0),
-            "related": [leaf("b", 2)],
-            "choice": {"text": "selected", "confidence": 0.6}
-            if include_confidence else "selected",
-            "optional": None,
-        }],
+        "item": [record],
         "relation_extraction": {
             "links": [{"head": leaf("a", 0), "tail": leaf("b", 2), "confidence": 0.9}],
         },
@@ -360,6 +361,12 @@ def test_native_leaf_profiles_preserve_all_task_families(
     malformed = native | {"task": "unknown"}
     with pytest.raises(ResultValidationError):
         validate_analysis_results(malformed, request)
+    for malformed_record in (
+        record | {"choice": [choice, choice]},
+        record | {"actor": leaf("absent", 0)},
+    ):
+        with pytest.raises(ResultValidationError):
+            validate_analysis_results(native | {"item": [malformed_record]}, request)
     with pytest.raises(ResultValidationError):
         validate_analysis_results(
             native | {"relation_extraction": {"links": [["a", "b"]]}}, request

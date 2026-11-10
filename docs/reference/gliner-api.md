@@ -82,7 +82,7 @@ classifications use their task names at the root and native
 `{label, confidence}` selections or lists; structures use root record lists;
 relations group native `head`/`tail` span pairs under `relation_extraction`.
 Native scalar, list and nullable fields retain their representation.
-Choice fields contain offered selections, which need not occur in the source.
+Choice fields contain distinct offered selections, which need not occur in the source.
 
 With both controls false, native leaves are text; confidence alone adds a
 score object, spans alone adds source positions, and both retain rich leaves.
@@ -94,6 +94,8 @@ when leaf confidence is disabled. The API preserves these scores separately;
 Every present confidence must be finite in `[0, 1]`.
 Span `start` and `end` are zero-based, half-open
 Python Unicode code-point offsets whose original source slice equals `text`.
+Without offsets, source-backed text must still occur verbatim in the input;
+this membership check does not assign a position or constrain offered choices.
 Returned task names, label IDs, record fields, choices, entity attributes and
 relations must belong to the request. Missing required tasks, invalid
 cardinality, duplicate selections and damaged spans fail explicitly.

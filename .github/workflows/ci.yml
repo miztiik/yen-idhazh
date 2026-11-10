@@ -178,10 +178,14 @@ jobs:
       - name: Sync the frozen model-free provider environment
         run: uv sync --frozen --group dev
 
-      - name: Lint native provider and caller
+      - name: Lint native provider
+        run: uv run --no-sync ruff check --config pyproject.toml src tests
+
+      - name: Lint reporting caller
+        working-directory: ${{ github.workspace }}
         run: >-
-          uv run --no-sync ruff check --config pyproject.toml
-          src tests ../../../tools/text-analysis-caller
+          uv run --project services/text_analysis/gliner --no-sync ruff check
+          --config services/text_analysis/gliner/pyproject.toml tools/text-analysis-caller
 
       - name: Type-check native provider
         run: uv run --no-sync mypy --config-file pyproject.toml src tests

@@ -835,6 +835,20 @@ class EventReportTests(unittest.TestCase):
 
     def test_spans_scores_and_exclusive_bindings_are_validated_without_repair(self) -> None:
         source = "A bought B. C sold D."
+        for confidence in (False, True):
+            compact_request = self.request(source, confidence, False)
+            for role in ("entity", "action"):
+                compact = self.response(source, confidence, False)
+                absent: object = (
+                    {"text": "absent", "confidence": 0.6} if confidence else "absent"
+                )
+                native_compact = read_object(compact["result"])
+                if role == "entity":
+                    native_compact["entities"] = {"person": [absent]}
+                else:
+                    read_object(read_list(native_compact["events"])[0])["action"] = absent
+                with self.subTest(confidence=confidence, role=role), self.assertRaises(ValueError):
+                    project_entity_result(compact, compact_request)
         request = self.request(source, True, True)
         response = self.response(source, True, True)
         native = read_object(response["result"])

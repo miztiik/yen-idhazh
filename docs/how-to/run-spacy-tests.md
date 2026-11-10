@@ -249,7 +249,10 @@ select strict compact, scored, positioned or rich leaves. Flagless native
 artifacts are recognized as complete historical-rich or current-compact
 leaf shapes before validation; invalid current evidence is never retried
 as an older format. Repeated compact text is retained without fabricated
-positions or confidence. A report-only
+positions or confidence. The projection still checks that spanless
+entity/event text occurs verbatim in
+the saved source, without assigning positions or deduplicating repetitions.
+A report-only
 projection also reads historical `text`/`labels`, `text`/`tasks` and normalized
 results. It never rewrites saved requests/responses or treats invalid current
 evidence as a historical success.
