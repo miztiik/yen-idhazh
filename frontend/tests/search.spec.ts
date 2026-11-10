@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { plural } from '../src/lib/format';
 /**
  * Does on-device search actually work, or does it merely run?
  *
@@ -28,6 +29,9 @@ interface Gold {
     }[];
 }
 const gold: Gold = JSON.parse(readFileSync(resolve(FIXTURES, 'routing/search-gold.json'), 'utf8'));
+const appearance = JSON.parse(readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')) as {
+    assist: { result_limit: number };
+};
 /** The title the canary was published under, which is how a name finds its item. */
 function titleOf(canary: string): string {
     for (const dir of ['canaries', 'canaries/browser']) {
@@ -69,12 +73,18 @@ test('one click downloads the encoder and answers the question already typed', a
     await page.goto('/archive/');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('#archive-query')).toBeVisible();
-    await expect(page.locator('.search-info > summary')).toContainText('MB first use');
     await expect(page.locator('h2').first()).toHaveText('Latest stories');
     const { query, expect_canary } = gold.queries[0]!;
     await ask(page, query);
     await answered(page);
     await expect(page.locator('h2').first()).toHaveText('Search results');
+    const scope = page.locator('.answer-heading [data-story-scope]');
+    const count = await page.locator('[data-story-list="rows"] > li').count();
+    const capped = count >= appearance.assist.result_limit;
+    await expect(scope.locator('strong')).toHaveText(plural(count,
+        capped ? 'closest match' : 'result', capped ? 'closest matches' : 'results'));
+    await expect(scope).toContainText(`for "${query}"`);
+    await expect(scope).toContainText('All dates');
     // One labelled query proves the browser ranks, not merely returns. Recall
     // over the whole labelled set is an evaluation, and `evals/retrieval.py`
     // measures it with no browser and no download.
@@ -83,8 +93,7 @@ test('one click downloads the encoder and answers the question already typed', a
     // its opening words rather than the whole string.
     const wanted = titleOf(expect_canary).replace(/<[^>]*>/g, '').split(' ').slice(0, 4).join(' ');
     expect(top, `${query} -> wanted "${wanted}" in the top three`).toContain(wanted);
-    // Paid for, and the sentence says so rather than asking again.
-    await expect(page.locator('.search-info > summary')).not.toContainText('MB first use');
+    await expect(page.locator('[data-search-block="archive"]')).toHaveCount(0);
 });
 test('a failed download offers a way to try again', async ({ page }) => {
     // One flaky connection must not turn the feature off for the rest of the

@@ -2,6 +2,7 @@
 	/** Submit one archive question and its optional UTC dates without replacing the field. */
 	import { onMount } from 'svelte';
 	import SearchState from '$lib/components/SearchState.svelte';
+	import Icon from '$lib/icons/Icon.svelte';
 	import {
 		cachedEncoder, DOWNLOAD_MB, DOWNLOAD_MB_ELSEWHERE, embedQuery, supported,
 		type CachedEncoder
@@ -9,7 +10,7 @@
 	import { readIndex, readVectors } from '$lib/assist/index';
 	import type { ArchiveRange } from '$lib/assist/month';
 	import {
-		newSearch, privacyNote, stateSentence, type SearchPhase, type SearchSettings
+		newSearch, stateSentence, type SearchPhase, type SearchSettings
 	} from '$lib/assist/session';
 	import type { SearchOutcome } from '$lib/assist/search';
 
@@ -92,11 +93,11 @@
 			onclick={clearSearch}
 			disabled={!ready || query === ''}
 			data-search-clear
-		>Clear</button>
+		><Icon id="forget" /></button>
 	</div>
 
 	<details class="dates" bind:this={dates} data-selected={Boolean(from || to)}>
-		<summary>Dates</summary>
+		<summary><Icon id="shape-days" /> Dates</summary>
 		<div class="date-panel">
 			<div class="date-fields">
 				<label for="archive-from">From (UTC)
@@ -117,7 +118,7 @@
 
 	<button class="submit font-semibold" type="submit"
 		disabled={!ready || months.length === 0 || phase.name === 'working' ||
-			(phase.name === 'blocked' && query.trim() !== '')}>Search</button>
+			(phase.name === 'blocked' && query.trim() !== '')}><Icon id="search" /> Search</button>
 </form>
 
 {#if phase.name !== 'offer'}
@@ -125,17 +126,6 @@
 		onStop={() => search.stop(report)} onRetry={() => void run()} />
 {/if}
 
-<details class="search-info">
-	<summary>
-		On-device search{!held && cached !== 'present' ? ` - ${DOWNLOAD_MB} MB first use` : ''}
-	</summary>
-	<p>{privacyNote(cost)}</p>
-	<p>Date changes apply with Search.
-		{assist.archive_search_months === -1
-			? 'Leave both dates empty to search all indexed dates.'
-			: `Search covers up to ${assist.archive_search_months ?? assist.search_months} eligible months.`}
-	</p>
-</details>
 <noscript><p class="mt-3 text-base text-text-secondary">Archive search needs JavaScript.</p></noscript>
 
 <style>
@@ -152,7 +142,7 @@
 		gap: var(--space-3);
 		min-inline-size: 0;
 		min-block-size: var(--space-7);
-		padding-inline: var(--space-4);
+		padding-inline: var(--space-4) var(--space-1);
 		border: 1px solid var(--color-rule-strong);
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
@@ -171,16 +161,19 @@
 	.field input::-webkit-search-cancel-button { display: none; }
 	.field input::placeholder { color: var(--color-text-secondary); }
 	.clear {
+		display: grid;
+		place-items: center;
+		min-inline-size: var(--space-7);
 		min-block-size: var(--space-7);
-		color: var(--color-accent);
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
+		color: var(--color-text-secondary);
 	}
+	.clear:hover { color: var(--color-accent); }
 	.clear:disabled { visibility: hidden; }
 	.submit, .dates > summary {
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		gap: var(--space-2);
 		min-block-size: var(--space-7);
 		padding-inline: var(--space-5);
 		border: 1px solid var(--color-rule-strong);
@@ -243,14 +236,6 @@
 		line-height: var(--leading-sm);
 	}
 	.date-clear:disabled { color: var(--color-text-secondary); cursor: default; }
-	.search-info {
-		margin-block-start: var(--space-3);
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-		color: var(--color-text-secondary);
-	}
-	.search-info summary { width: fit-content; cursor: pointer; }
-	.search-info p { margin-block-start: var(--space-2); max-inline-size: var(--measure); }
 	@media (width < 640px) {
 		.search-form { grid-template-columns: minmax(0, 1fr) auto; }
 		.submit { grid-column: 2; grid-row: 1; padding-inline: var(--space-4); }
