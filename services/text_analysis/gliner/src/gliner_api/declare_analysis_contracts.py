@@ -94,7 +94,7 @@ class AnalysisSchema(SchemaInput):
             entities = {}
             for name in self.entities:
                 value = self.entities[name] if isinstance(self.entities, dict) else None
-                configuration = (
+                configuration: dict[str, object] = (
                     value.model_dump(exclude_none=True)
                     if isinstance(value, EntityInput)
                     else ({"description": value} if value is not None else {})

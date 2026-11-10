@@ -135,20 +135,20 @@ def test_strict_settings_and_requests() -> None:
     assert not request.include_confidence
     assert not request.include_spans
     for field in ("include_confidence", "include_spans"):
-        for invalid in (1, "true", None):
+        for invalid_flag in (1, "true", None):
             with pytest.raises(ValidationError):
                 AnalyzeTextRequest.model_validate(
-                    {"text": "a", "schema": {"entities": ["mention"]}, field: invalid}
+                    {"text": "a", "schema": {"entities": ["mention"]}, field: invalid_flag}
                 )
-    for invalid in (-0.1, 1.1, True, "0.8", None, float("inf"), float("nan")):
+    for invalid_threshold in (-0.1, 1.1, True, "0.8", None, float("inf"), float("nan")):
         with pytest.raises(ValidationError):
-            GlinerSettings.model_validate(raw | {"entity_confidence_threshold": invalid})
+            GlinerSettings.model_validate(raw | {"entity_confidence_threshold": invalid_threshold})
     for policy in ("disallow", "flat", "allow"):
         configured = GlinerSettings.model_validate(raw | {"overlap_policy": policy})
         assert configured.overlap_policy == policy
-    for invalid in (None, True, "unknown"):
+    for invalid_policy in (None, True, "unknown"):
         with pytest.raises(ValidationError):
-            GlinerSettings.model_validate(raw | {"overlap_policy": invalid})
+            GlinerSettings.model_validate(raw | {"overlap_policy": invalid_policy})
     previous = {
         key: value for key, value in raw.items()
         if key not in {"entity_confidence_threshold", "overlap_policy"}
@@ -386,11 +386,11 @@ def test_native_records_keep_aggregate_scores_omission_and_compact_repetitions()
         {"text": "a a", "schema": {"entities": ["mention"], "structures": {"event": structure}}}
     )
     record = {"action": "a", "actors": ["a", "a"], "confidence": 0.7}
-    native = {"entities": {"mention": ["a", "a"]}, "event": [record, record]}
+    native: dict[str, object] = {"entities": {"mention": ["a", "a"]}, "event": [record, record]}
     assert validate_analysis_results(native, request).model_dump() == {"result": native}
-    omitted = {"entities": {}}
+    omitted: dict[str, object] = {"entities": {}}
     assert validate_analysis_results(omitted, request).model_dump() == {"result": omitted}
-    for malformed in (
+    malformed_results: tuple[dict[str, object], ...] = (
         native | {"event": [record | {"confidence": True}]},
         native | {"event": [record | {"confidence": float("inf")}]},
         native | {"event": [record | {"confidence": -0.1}]},
@@ -400,7 +400,8 @@ def test_native_records_keep_aggregate_scores_omission_and_compact_repetitions()
         native | {"event": [record | {"action": None}]},
         {"event": []},
         omitted | {"unknown": []},
-    ):
+    )
+    for malformed in malformed_results:
         with pytest.raises(ResultValidationError):
             validate_analysis_results(malformed, request)
     rich_request = AnalyzeTextRequest.model_validate(
