@@ -22,8 +22,8 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `feed-ingest-plan-test.yml` | `Feed ingest plan test` | none | Run the real planner HTTP API and publish its completed planner and host metadata |
 | `summary-eval-tests.yml` | `summary-eval-tests` | none | Generate natively with one declared model, stop it, score the saved answer through independent HHEM and UniEval APIs with optional independent-reference relevance, and report applicable work and machine/server outcomes without Git delivery |
 | `ner-tests.yml` | `Text analysis results` | none | Report native spaCy and GLiNER results for one source at an immutable commit |
-| `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
-| `ai-pipeline-tests.yml` | `Yen-Summarizers` | Manual inference; pull-request saved-event checks | Run independent TypeScript inference and preserve generation/event/report checks |
+| `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Generate through the independent summary API, stop generation, and report native HHEM and UniEval scores |
+| `ai-pipeline-tests.yml` | `Yen-Summarizers` | Manual inference; pull-request saved-event checks | Generate independent TypeScript summaries, stop generation, and report native HHEM and UniEval scores |
 
 Use filenames for dispatch and API calls. `workflow_run.workflows` matches display
 names instead: update its callers when renaming a label.
@@ -32,6 +32,8 @@ The [HHEM manual procedure](../how-to/run-hhem-evaluation-api.md) covers its
 first default-branch registration, exact-ref dispatch and body-free evidence.
 
 Both independent inference workflows accept `models_file`.
+Their [native scoring phase](pipeline-summary-evaluation.md) evaluates saved text
+in the same job; it changes neither generation products nor evaluator APIs.
 `yen-ai-pipeline.yml` follows `config/idhazh.json` when it is blank.
 `ai-pipeline-tests.yml` also offers a `model` dropdown, defaulting to
 `models/ornith-1.5-9b-q5km.json`. Its fixed filename list lives in the workflow,

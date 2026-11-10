@@ -1,6 +1,6 @@
 # Summary generator API
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-09
 
 Which prepared inputs, summary results and listener controls does the independent
 TypeScript generation API expose?
@@ -106,6 +106,10 @@ the JSON representation, bounds response bytes, decodes UTF-8 strictly and
 keeps the selected model's deadline through complete consumption and decoding.
 Caller cancellation propagates to the native request. Refused or cancelled
 bodies are cancelled without waiting indefinitely for cleanup.
+The [Bun socket idle timer](https://bun.com/reference/globals/BunFetchRequestInit/timeout)
+is separate from the configured application deadline; an `AbortSignal` does not
+replace it. A caller timeout cancels the API request and its native generation,
+which diagnostics identify as `caller_cancelled`, not invalid model output.
 HTTP submits the entire prepared text; a model/context refusal is a failure,
 not a shortened-input retry.
 
@@ -150,6 +154,10 @@ Native server flags, verbosity and metrics stay in the selected model file.
 
 API diagnostics contain only operation identities, safe codes, elapsed time
 and effective-prompt digests, never source bodies, prompts, raw replies or secrets.
+Generation failures also identify validation, invalid JSON, byte limits,
+transport timeouts, caller cancellation or a native failure. Validation records only the first
+issue's code, schema path and expected/received types, never its message,
+field values or model output.
 The API writes no `pipeline-events.jsonl` or step summary.
 
 ## Offline verification

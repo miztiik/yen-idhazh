@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/scripts/ai-pipeline.ts'
       - '.github/workflows/ai-pipeline-tests.yml'
+      - 'tools/summary-eval/export-saved-summaries.ts'
   workflow_dispatch:
     inputs:
       input_source:
@@ -81,6 +82,7 @@ jobs:
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
           bun install --frozen-lockfile --cwd services/summary-generator
+          bun install --frozen-lockfile --cwd tools/summary-generator-caller
           npm install --no-save --package-lock=false --no-audit --no-fund defuddle linkedom feedsmith tidy-url
       - name: Check the real saved handoff without model dispatch
         run: |
@@ -88,7 +90,8 @@ jobs:
             --noEmit --target ESNext --module ESNext --moduleResolution Bundler \
             --strict --skipLibCheck --allowImportingTsExtensions --types bun \
             --typeRoots packages/common-contracts/node_modules/@types \
-            .github/scripts/ai-pipeline.ts tools/ai-pipeline-experiment/test/workflow-handoff.test.ts
+            .github/scripts/ai-pipeline.ts tools/ai-pipeline-experiment/test/workflow-handoff.test.ts \
+            tools/summary-eval/export-saved-summaries.ts
           bun test ./tools/ai-pipeline-experiment/test/workflow-handoff.test.ts
 
   run-pipeline:
@@ -118,6 +121,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Setup frozen evaluator tooling
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.9.7'
 
       - name: Install Shared Metadata Dependencies
         working-directory: packages/common-contracts
@@ -166,6 +174,7 @@ jobs:
           if [ ! -f package.json ]; then npm init -y; fi
           npm pkg set type="module"
           npm install --no-audit --no-fund defuddle linkedom feedsmith tidy-url
+          uv sync --project services/summary_evaluator --frozen --extra model --no-dev
 
       - name: Start selected model
         uses: ./.github/actions/model-server
@@ -177,6 +186,7 @@ jobs:
 
       # 5. PHASE 1: RUN INGESTION & LLM INFERENCE
       - name: Execute Phase 1 Inference
+        id: inference
         env:
           INPUT_SOURCE: "${{ github.event.inputs.input_source }}"
           FEED_URL: "${{ github.event.inputs.feed_url }}"
@@ -197,18 +207,31 @@ jobs:
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts --phase=infer
 
-      # 6. TEARDOWN LLAMA-SERVER & RECLAIM PHYSICAL RAM
-      - name: Stop llama-server (Reclaim Memory)
+      - name: Confirm generation has stopped before native evaluation
+        id: stop
         if: always()
         run: |
-          if [ -f llama-server.pid ]; then
-            echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"INFO","message":"Stopping llama-server after inference."}'
-            kill "$(cat llama-server.pid)" || true
-            rm -f llama-server.pid
-            sudo sync && echo 3 | sudo tee /proc/sys/vm/drop_caches
-          fi
+          set -euo pipefail
+          services/summary_evaluator/.venv/bin/python \
+            tools/summary-eval/score-saved.py --root . stop-generation \
+            --pid-file llama-server.pid
+          sudo sync && echo 3 | sudo tee /proc/sys/vm/drop_caches
 
-      # 10. UPLOAD LOGS & JSONL TELEMETRY
+      - name: Prepare saved inference for native evaluation
+        if: ${{ !cancelled() && steps.inference.outcome == 'success' && steps.stop.outcome == 'success' }}
+        run: >-
+          bun run --no-install tools/summary-eval/export-saved-summaries.ts
+          --format pipeline --input pipeline-events.jsonl
+          --output saved-summary-requests.jsonl
+
+      - name: Score saved inference with native HHEM and UniEval
+        id: scores
+        if: ${{ !cancelled() && steps.inference.outcome == 'success' && steps.stop.outcome == 'success' }}
+        run: >-
+          services/summary_evaluator/.venv/bin/python
+          tools/summary-eval/score-saved.py --root . evaluate
+          --requests saved-summary-requests.jsonl
+
       - name: Upload Logs and JSONL Telemetry
         if: always()
         uses: actions/upload-artifact@v4
@@ -217,3 +240,6 @@ jobs:
           path: |
             llama-server.log
             pipeline-events.jsonl
+            saved-summary-requests.jsonl
+            ${{ steps.scores.outputs.output_directory }}
+            ${{ steps.scores.outputs.log_directory }}

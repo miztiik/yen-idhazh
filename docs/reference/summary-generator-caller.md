@@ -1,6 +1,6 @@
 # Summary generator callers
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-09
 
 Which analysis and summary-only outputs does the independent private caller
 retain outside the generation API?
@@ -32,12 +32,16 @@ producer. Neither identity is a fetch destination or a source-registry entry.
 The older `ai-pipeline.ts` experiment keeps its separate `analytic_synthesis`
 product and [saved handoff](workflow-pipeline-events.md).
 Both `ai-pipeline-tests.yml` and `yen-ai-pipeline.yml` remain distinct workflows.
+After confirmed generator exit, their [private native scoring phase](pipeline-summary-evaluation.md)
+evaluates saved summary text without changing either caller product or the API.
 
 ## Preparation and prompts
 
 Both caller products acquire one operator-supplied URL or direct text outside
-HTTP. A failed URL may use supplied direct text; a failed URL with no fallback
-fails the invocation. The real extractor constructs an existing JSDOM instance
+HTTP. A supplied URL takes precedence; omit it to use direct text without fetching.
+`Yen-AI-Pipeline` defaults to an empty URL and its supplied `input_text`.
+A failed URL may use supplied direct text; a failed URL with no fallback fails
+the invocation. The real extractor constructs an existing JSDOM instance
 for Defuddle, with scripts and extra resources disabled, and closes its window
 after success or failure. Fetch callbacks retain one operation; parsing links
 to that completed fetch. Trace headers are not sent to the source.
@@ -83,6 +87,7 @@ Table B - Caller controls
 
 The summary-only caller writes named `summary-response.json`,
 `summary-events.jsonl` and `summary-report.md` files with temp-file-plus-rename.
+Its body-free failure diagnostic distinguishes transport timeouts from API failures.
 Its step summary is caller-owned. The saved event uses the shared metadata
 envelope, with nested response validation against the API contract.
 Its data version/changelog is `2026-11-07`. The reader also accepts

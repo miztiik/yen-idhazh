@@ -10,7 +10,7 @@ import type { ModelRuntime } from "../config/load-model-runtime.js";
 import { SummarizeRequestSchema } from "../schemas/request-payload.schema.js";
 import { summarizeText } from "../services/summarize-text.service.js";
 import {
-  BodyLimitError, cancelResponseBody, readBoundedText, type CompletionFetch,
+  BodyLimitError, cancelResponseBody, isCompletionTimeout, readBoundedText, type CompletionFetch,
 } from "../services/request-completion.service.js";
 import { GENERATE_SUMMARY_PATH, SUMMARY_GENERATOR_HEALTH_PATH } from "./api-paths.js";
 
@@ -21,11 +21,35 @@ export type SummaryHandlerOptions = {
   send?: CompletionFetch;
   writeEvent?: (event: unknown) => void;
 };
+const failureDiagnostic = z.object({
+  kind: z.enum(["validation", "invalid_json", "body_limit", "timeout", "caller_cancelled", "native_failure"]),
+  issue_code: z.nativeEnum(z.ZodIssueCode).optional(),
+  issue_path: z.array(z.union([z.string(), z.number()])).optional(),
+  expected_type: z.nativeEnum(z.ZodParsedType).optional(),
+  received_type: z.nativeEnum(z.ZodParsedType).optional(),
+}).strict();
 const diagnostic = z.object({
   code: z.string(),
   duration_ms: z.number().nonnegative().finite(),
   prompt_sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  failure: failureDiagnostic.optional(),
 }).strict();
+
+function describeFailure(error: unknown): z.infer<typeof failureDiagnostic> {
+  if (error instanceof z.ZodError) {
+    const issue = error.issues[0];
+    return {
+      kind: "validation", issue_code: issue?.code, issue_path: issue?.path,
+      ...(issue?.code === "invalid_type" ? {
+        expected_type: issue.expected, received_type: issue.received,
+      } : {}),
+    };
+  }
+  if (error instanceof SyntaxError) return { kind: "invalid_json" };
+  if (error instanceof BodyLimitError) return { kind: "body_limit" };
+  if (isCompletionTimeout(error)) return { kind: "timeout" };
+  return { kind: "native_failure" };
+}
 
 export function createSummaryHandler(options: SummaryHandlerOptions) {
   return async (request: Request): Promise<Response> => {
@@ -34,7 +58,7 @@ export function createSummaryHandler(options: SummaryHandlerOptions) {
     const headers = { "Content-Type": "application/json", ...writeTraceContext(context) };
     const reply = (body: unknown, status: number) => new Response(JSON.stringify(body), { status, headers });
     const started = performance.now();
-    const emit = (code: string, promptSha256?: string) => {
+    const emit = (code: string, promptSha256?: string, failure?: z.infer<typeof failureDiagnostic>) => {
       const levels = GeneratorLoggingSchema.shape.level.options;
       const level = code === "SUMMARY_GENERATOR_COMPLETED" ? "INFO" :
         code === "GENERATE_SUMMARY_FAILED" ? "ERROR" : "WARNING";
@@ -42,6 +66,7 @@ export function createSummaryHandler(options: SummaryHandlerOptions) {
       const data = {
         code, duration_ms: performance.now() - started,
         ...(promptSha256 === undefined ? {} : { prompt_sha256: promptSha256 }),
+        ...(failure === undefined ? {} : { failure }),
       };
       const event = createCloudEvent({
         source: SUMMARY_GENERATOR_EVENT_SOURCE, type: code, context, data,
@@ -67,9 +92,11 @@ export function createSummaryHandler(options: SummaryHandlerOptions) {
     if (path !== GENERATE_SUMMARY_PATH) {
       return reply({ error: "Not found.", code: "NOT_FOUND" }, 404);
     }
-    const fail = (code: string, status: number, message: string) => {
+    const fail = (
+      code: string, status: number, message: string, failure?: z.infer<typeof failureDiagnostic>,
+    ) => {
       try {
-        emit(code);
+        emit(code, undefined, failure);
       } catch {
         return reply({ error: "Summary diagnostics could not be recorded.", code: "GENERATE_SUMMARY_FAILED" }, 500);
       }
@@ -113,7 +140,8 @@ export function createSummaryHandler(options: SummaryHandlerOptions) {
       if (error instanceof BodyLimitError && error.boundary === "request") {
         return fail("REQUEST_TOO_LARGE", 413, "The native summary request is too large.");
       }
-      return fail("GENERATE_SUMMARY_FAILED", 500, "The summary could not be generated.");
+      return fail("GENERATE_SUMMARY_FAILED", 500, "The summary could not be generated.",
+        request.signal.aborted ? { kind: "caller_cancelled" } : describeFailure(error));
     }
   };
 }
