@@ -11,7 +11,9 @@ interaction and date coverage are deliberately different.
 The archive has one heading, "Search our archives", one form and one answer
 list. On a wide screen the field, Dates disclosure and Search button share a
 row. On a phone the field and Search stay together and Dates follows below.
-Clear is attached to the field, not to the result heading.
+Dates and Search pair their visible labels with shared calendar and search
+glyphs. The field's X control is labelled "Clear search" for assistive
+technology and is attached to the field, not to the result heading.
 
 Typing edits a draft. Search or Enter applies the question and both UTC date
 bounds together. Editing a draft does not discard the current answer or replace
@@ -73,10 +75,8 @@ The field remains mounted while loading, failing and presenting an answer.
 Search does not run on keystrokes. Query and date edits do not move focus,
 remount the control or replace the answer before submission.
 
-The long introductory, privacy and coverage paragraphs are not standing
-content above the list. A compact on-device download disclosure opens the
-existing privacy information on demand. The encoder loader and its verified
-fallback remain unchanged; the
+The archive does not render download, privacy or date-instruction disclosures.
+The encoder loader and its verified fallback remain unchanged; the
 [encoder contract](the-on-device-encoder-and-its-vectors.md) owns their origin
 and integrity requirements.
 
@@ -84,8 +84,10 @@ Loading exposes Stop, and a failed download exposes Try again. Stopping or
 starting a later attempt makes late results ineligible to update the page.
 A canceled archive scan does not request the next month.
 
-The applied question and date range accompany the result count. A successful
-zero-match answer is an empty result list, never a fallback to unrelated
+The answer heading, applied question, result count and date range form one
+compact group directly below the controls. A capped answer names its count
+as closest matches, not a total, and limited coverage remains explicit. A
+successful zero-match answer is an empty result list, never a fallback to unrelated
 recent stories. Missing or incompatible month files are reported as incomplete
 coverage. If no eligible vectors can be read because requested files failed,
 search fails with retry rather than claiming no matches. A valid date with no

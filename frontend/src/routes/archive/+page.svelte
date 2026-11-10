@@ -110,22 +110,28 @@
 		onResults={(outcome, selected) => void answer(outcome, selected)} onBrowse={browse} />
 
 	<section class="answers" aria-labelledby="archive-results">
-		<h2 id="archive-results" class="text-lg font-semibold text-text">
-			{results !== null ? 'Search results' : initial ? 'Latest stories' : 'Stories'}
-		</h2>
-		{#if results !== null}
-			<p class="caption" data-story-scope>
-				{plural(results.hits.length, 'result', 'results')} for "{results.query}" - {rangeLabel}.
-				{results.capped ? 'Showing the closest matches.' : ''}
-				{results.limited ? `Search coverage: ${results.scope}.` : ''}
-			</p>
-			{#if results.partial}
-				<p class="caption" role="status" data-search-partial>
-					Some requested dates could not be searched. Try Search again.
+		<header class="answer-heading">
+			<h2 id="archive-results" class="text-sm font-semibold text-text">
+				{results !== null ? 'Search results' : initial ? 'Latest stories' : 'Stories'}
+			</h2>
+			{#if results !== null}
+				<p class="answer-context caption" data-story-scope>
+					<span><strong class="font-semibold text-text">{plural(results.hits.length,
+						results.capped ? 'closest match' : 'result',
+						results.capped ? 'closest matches' : 'results')}</strong> for "{results.query}"</span>
+					<span>{rangeLabel}</span>
+					{#if results.limited}<span>Search coverage: {results.scope}</span>{/if}
+				</p>
+			{:else if !initial}
+				<p class="answer-context caption" data-story-scope>
+					<span>{rangeLabel}</span><span>Newest first</span>
 				</p>
 			{/if}
-		{:else if !initial}
-			<p class="caption" data-story-scope>{rangeLabel} - newest first.</p>
+		</header>
+		{#if results?.partial}
+			<p class="caption" role="status" data-search-partial>
+				Some requested dates could not be searched. Try Search again.
+			</p>
 		{/if}
 
 		{#if rows.length > 0}
@@ -186,13 +192,27 @@
 <style>
 	.archive { padding-block: var(--space-6) var(--space-8); }
 	h1 { text-wrap: balance; }
-	.answers { margin-block-start: var(--space-6); }
+	.answers { margin-block-start: var(--space-4); }
+	.answer-heading {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-1) var(--space-3);
+	}
+	.answer-heading h2 { flex: none; }
 	.caption {
 		margin-block-start: var(--space-1);
 		color: var(--color-text-secondary);
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		overflow-wrap: anywhere;
+	}
+	.answer-context {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1) var(--space-3);
+		min-inline-size: 0;
+		margin-block-start: 0;
 	}
 	.story-list { margin-block-start: var(--space-3); }
 	.story-row {

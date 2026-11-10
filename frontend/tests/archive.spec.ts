@@ -6,6 +6,13 @@ test('one archive form preserves drafts, constrains the list by date and links t
 	});
 	await page.goto('/archive/');
 	await expect(page.getByRole('heading', { name: 'Search our archives', exact: true })).toBeVisible();
+	await expect(page.locator('.search-info')).toHaveCount(0);
+	await expect(page.locator('body')).not.toContainText(
+		/On-device search|Nothing you type leaves your browser|Date changes apply with Search|Leave both dates empty/
+	);
+	await expect(page.getByRole('button', { name: 'Search', exact: true }).locator('svg')).toBeVisible();
+	await expect(page.locator('.dates > summary')).toHaveText('Dates');
+	await expect(page.locator('.dates > summary svg')).toBeVisible();
 	const first = page.locator('[data-story-list="rows"] li a').first();
 	await expect(first).toBeVisible();
 	await expect(page.locator('[data-topic-row], [data-day-row], footer')).toHaveCount(0);
@@ -21,6 +28,9 @@ test('one archive form preserves drafts, constrains the list by date and links t
 		expect(await field.evaluate((node, initial) => node === initial, original)).toBe(true);
 		expect((await field.boundingBox())?.y).toBe(position?.y);
 	}
+	const clear = page.getByRole('button', { name: 'Clear search', exact: true });
+	await expect(clear).toHaveText('');
+	await expect(clear.locator('svg')).toBeVisible();
 	await expect(first).toHaveText(title);
 	await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeDisabled();
 	const date = await page.locator('[data-story-date]').first().getAttribute('data-story-date');
@@ -28,7 +38,7 @@ test('one archive form preserves drafts, constrains the list by date and links t
 	await page.locator('.dates > summary').click();
 	await page.getByLabel('From (UTC)').fill(date!);
 	await page.getByLabel('To (UTC)').fill(date!);
-	await page.getByRole('button', { name: 'Clear search', exact: true }).click();
+	await clear.click();
 	await expect(field).toBeFocused();
 	await page.getByRole('button', { name: 'Search', exact: true }).click();
 	await expect(page.locator('[data-story-list="rows"]')).toBeVisible();
