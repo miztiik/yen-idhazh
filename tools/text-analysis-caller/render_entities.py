@@ -67,18 +67,29 @@ def project_gliner_groups(
 ) -> list[EntityGroup]:
     grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
     for value in read_list(items):
-        item = read_object(value, {"text", "label", "score", "start_char", "end_char"})
+        item = read_object(value)
+        if not {"text", "label"}.issubset(item) or item.keys() - {
+            "text", "label", "score", "start_char", "end_char",
+        }:
+            raise ValueError("Invalid GLiNER entity evidence")
         text = read_text(item["text"], nonblank=True)
         label = read_text(item["label"], nonblank=True)
-        start, end = _position(item)
-        read_score(item["score"], confidence=True)
-        if start >= end or source[start:end] != text:
-            raise ValueError("GLiNER span does not match the source")
+        if "score" in item:
+            read_score(item["score"], confidence=True)
+        if "start_char" in item or "end_char" in item:
+            start, end = _position(item)
+            if start >= end or end > len(source) or source[start:end] != text:
+                raise ValueError("GLiNER span does not match the source")
         if labels is not None and label not in labels:
             raise ValueError("GLiNER entity label was not requested")
         grouped.setdefault((text, label), []).append(item)
     return [
-        EntityGroup(text, label, tuple(sorted(spans, key=_position)), order)
+        EntityGroup(
+            text, label,
+            tuple(sorted(spans, key=_position)) if all("start_char" in span for span in spans)
+            else tuple(spans),
+            order,
+        )
         for order, ((text, label), spans) in enumerate(grouped.items(), 1)
     ]
 
@@ -91,6 +102,13 @@ def _table_letter(prefix: str, index: int) -> str:
         if not index:
             return prefix + suffix
         index -= 1
+
+
+def render_native_evidence(span: dict[str, object]) -> str:
+    parts = [render_offset(span)] if "start_char" in span else []
+    if "score" in span:
+        parts.append("score " + render_cell(span["score"]))
+    return "; ".join(parts)
 
 
 def render_entity_tables(
@@ -123,26 +141,37 @@ def render_entity_tables(
             (group for group in groups if group.kind == kind),
             key=lambda group: (
                 -len(group.occurrences),
-                min(read_integer(span["start_char"]) for span in group.occurrences),
+                min(
+                    (read_integer(span["start_char"]) for span in group.occurrences
+                     if "start_char" in span),
+                    default=float("inf"),
+                ),
                 group.order,
             ),
+        )
+        metadata = not gliner or any(
+            "start_char" in span or "score" in span
+            for group in selected for span in group.occurrences
         )
         rows = []
         for group in selected:
             positions = [
-                f"{render_offset(span)}; score {render_cell(span['score'])}"
+                render_native_evidence(span)
                 if gliner
                 else render_evidence(span)
                 for span in group.occurrences
             ]
-            rows.append(
-                [render_cell(group.text), str(len(group.occurrences)), "<br>".join(positions)]
-            )
+            row = [render_cell(group.text), str(len(group.occurrences))]
+            if metadata:
+                row.append("<br>".join(positions))
+            rows.append(row)
         sections.append(
             render_table(
                 _table_letter(prefix, index),
                 titles.get(kind, kind),
-                ["Original entity text", "Returned occurrence count", "Source positions"],
+                ["Original entity text", "Returned occurrence count"] + (
+                    ["Native evidence" if gliner else "Source positions"] if metadata else []
+                ),
                 rows,
                 empty=state or "No results were returned for this requested type.",
                 row_ids=[group.order for group in selected],

@@ -30,8 +30,20 @@ and order is preserved. Leave `custom_features` blank for other modes.
 
 GLiNER uses distinct presentation types from `named_entities.label_map` in
 `config/text-analysis/settings.json`, in configuration order. An empty label
-selection is refused. NER has no separate dispatch source or entity-label input.
-Its request uses the unified API's `schema.entities` section.
+selection is refused. `config/text-analysis/caller.json` owns the native
+descriptions, optional event structure and output controls, declared by
+`CallerAnalysisSettings` and validated with Pydantic and the SDK's `SchemaInput`.
+Its described entity keys must exactly match that ordered presentation
+offering; there is no fallback label map.
+Extraction has no separate dispatch source or entity-label input.
+One request combines `schema.entities` with the configured
+`schema.structures.events`: natural records anchored on the verbatim action,
+with optional actor, object, time and place lists. These are linked candidates,
+not independent NER bags or verified completed events. Descriptions guide the
+model and are not correctness guarantees. Remove the structure and omit the
+empty `structures` section to restore entity-only extraction.
+The committed caller explicitly requests confidence and spans in both
+GLiNER requests; the API itself independently defaults each flag to false.
 
 GLiNER also classifies the unchanged source in one separate request. The workflow
 has no classification-task input and uses the configured default tasks from
@@ -51,8 +63,9 @@ Caller-defined tasks remain supported by the underlying
 These are model selections for the requested tasks only. Text alone supplies
 no feed provenance, so `vertical` is not a factual source vertical and
 `source_kind` is not the feed-declared source kind. Nothing changes production
-article identity, desk placement or publication policy. `events` is not in the
-default request but remains a valid caller-supplied task like any other name.
+article identity, desk placement or publication policy. An `events`
+classification task remains caller-defined; it is independent of the
+configured event-record extraction.
 
 Send the JSON form through standard input so text is not a shell argument:
 
@@ -92,8 +105,10 @@ order. Occurrences sort by source position; native JSON order is unchanged.
 
 spaCy retains its existing groups, first spelling, configured case rule and
 every native span/sentence index. GLiNER groups only exact text with the same
-requested label, retaining each occurrence's native confidence beside its
-position. No aliases are merged or labels rewritten. Offsets are zero-based,
+requested label, retaining every occurrence and showing confidence/positions
+only when returned. Compact repeated text is counted without deduplication
+or reconstructed positions. No aliases are merged or labels rewritten.
+Offsets are zero-based,
 half-open Unicode code points; GLiNER supplies no sentence indexes.
 
 Important Terms shows rank, phrase, occurrence count, native YAKE score and
@@ -112,11 +127,29 @@ preserved. GLiNER shows actual saved values for both operations, exact entity
 labels, classification task modes and offered ID-to-label-text mappings.
 Its model identity comes from saved native settings, not response metadata;
 classification uses the same loaded model and its native SDK configuration,
-with no caller threshold or model override. Selected optional raw spaCy
-features retain their native fields and response order.
+with no caller model override. Native entity defaults and per-type overlap
+policy come from saved provider settings; explicit per-label thresholds,
+including zero, take precedence. Descriptions, record declarations and
+output flags come from saved requests, not later configuration. Selected
+optional raw spaCy features retain their native fields and response order.
+
+The expandable Event candidates table keeps native record order and each
+action beside its own actor, object, time and place lists. Missing roles
+remain empty. Field positions and confidence appear only when supplied;
+aggregate record confidence has its own column. Native aggregate scores
+can survive disabled leaf confidence, so that flag does not promise a
+score-free result. Matching source spans does not prove correct association
+with the action; the report preserves native links, including mistakes.
+These candidates are not clustering-ready or accuracy-proven.
+No sentence indexes, event status or normalized dates are
+invented. Not requested, successful empty records, successful omitted empty
+records, failed extraction and malformed evidence remain distinct outcomes.
+Without a saved extraction request, event selection is unknown rather than
+reported as not requested.
 
 The separate expandable Article classification table shows row ID, task,
-selected label ID, request label text and native score. Tasks keep request order;
+selected label ID, request label text and native score when returned.
+Tasks keep request order;
 selections keep returned order, without sorting or discarding labels.
 Label text comes directly from the saved request, not taxonomy or later
 configuration. Rendering never reconstructs an expected task list.
@@ -137,7 +170,8 @@ Each artifact contains available exact native `request.json`, `response.json`
 and validated `settings.json`, plus a complete standalone `report.md` with
 source and the same provider section used in the Summary. Each also contains
 `events.jsonl`; see [console and saved events](#console-and-saved-events).
-The GLiNER root request/response remain entity-only analysis; its other files are
+The GLiNER root request/response retain combined entity/event extraction;
+its other files are
 `classification/request.json` and `classification/response.json`. Each upload runs
 independently even after failure. The existing retention policy is unchanged.
 Files are written atomically under a run-owned runner-temporary directory.
@@ -160,7 +194,8 @@ referring to an unuploaded combined file.
 
 The manual workflow reports results, not recognition quality, performance or
 API correctness. It makes one spaCy analysis POST and dispatches one GLiNER
-NER POST and one classification POST concurrently for the same source.
+entity/event extraction POST and one classification POST concurrently for
+the same source.
 Both GLiNER calls finish before the shared API process stops. This is
 concurrent client dispatch, not parallel native model inference: the existing
 provider serializes operations on one loaded model. No second server, model,
@@ -212,8 +247,17 @@ network or load current repository configurations. Classification reuses only
 its saved native request and response, retaining exact task names, label text,
 selections and scores. Historical requests including `events` remain replayable
 unchanged; a historical `taxonomy.json` is not read or required.
-Current requests contain `text` and `schema`, and current responses contain
-`result` with native entity maps or root classification tasks. A report-only
+Current requests contain `text`, `schema` and explicit independent output
+flags. Current responses contain `result` with native entity maps, requested
+event records when nonempty, or root classification tasks. Explicit flags
+select strict compact, scored, positioned or rich leaves. Flagless native
+artifacts are recognized as complete historical-rich or current-compact
+leaf shapes before validation; invalid current evidence is never retried
+as an older format. Repeated compact text is retained without fabricated
+positions or confidence. The projection still checks that spanless
+entity/event text occurs verbatim in
+the saved source, without assigning positions or deduplicating repetitions.
+A report-only
 projection also reads historical `text`/`labels`, `text`/`tasks` and normalized
 results. It never rewrites saved requests/responses or treats invalid current
 evidence as a historical success.
@@ -232,6 +276,9 @@ npm --prefix frontend run test:changed -- --list
 ```
 
 Ordinary CI also runs the pure report assertions without starting a provider.
+The separate Linux native-contract job validates caller configuration with
+the real SDK and exercises the model-free provider suite; its commands and
+execution boundary are in the [gate guide](run-the-gates.md#independent-gliner2-api).
 These checks exercise rendering, independent outcomes, in-memory caller
 scheduling and bounded stream delivery, not workflow declarations or provider
 execution. Native event validation and console/file routing are observed on

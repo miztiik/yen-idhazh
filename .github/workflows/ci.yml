@@ -151,6 +151,54 @@ jobs:
           fi
           echo "playwright=$version" >> "$GITHUB_OUTPUT"
 
+  gliner-contracts:
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}/services/text_analysis/hosting:${{ github.workspace }}/tools/text-analysis-caller:${{ github.workspace }}/backend
+      MYPYPATH: ${{ github.workspace }}/services/text_analysis/hosting:${{ github.workspace }}/tools/text-analysis-caller
+    defaults:
+      run:
+        working-directory: services/text_analysis/gliner
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.9.7'
+
+      - name: Sync the frozen provider environment without model weights
+        run: uv sync --frozen --extra model --group dev
+
+      - name: Lint native provider
+        run: uv run --no-sync ruff check --config pyproject.toml src tests
+
+      - name: Lint reporting caller
+        working-directory: ${{ github.workspace }}
+        run: >-
+          uv run --project services/text_analysis/gliner --no-sync ruff check
+          --config services/text_analysis/gliner/pyproject.toml tools/text-analysis-caller
+
+      - name: Type-check native provider
+        run: uv run --no-sync mypy --config-file pyproject.toml src tests
+
+      - name: Type-check reporting caller
+        run: >-
+          uv run --no-sync mypy --config-file pyproject.toml
+          --ignore-missing-imports --follow-imports=skip
+          --platform linux --python-version 3.12 --strict ../../../tools/text-analysis-caller
+
+      - name: Native model-free contracts
+        run: uv run --no-sync pytest -c pyproject.toml tests
+
   gates:
     needs: scope
     if: needs.scope.outputs.code == 'true'
