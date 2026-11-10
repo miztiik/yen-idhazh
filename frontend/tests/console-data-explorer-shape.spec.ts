@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { renderConfigured as render } from './support/server-render';
 
-import { chartNotes, chooseChart, chooseDateSeriesDays, countChartNotes, openingType, resolveRoles, type ChosenRoles, type ExplorerChartType, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
+import { chartNotes, chooseChart, chooseDateSeriesDays, countChartNotes, resolveRoles, type ChosenRoles, type ExplorerChartType, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
 import { AT_MOST_SENTENCE, CHART_KINDS, MOST_ROLES, SERIES_TOKENS, chartKind, pillFace, pillName, roleOptions } from '../src/lib/console/explorer/chart-roles';
 import { roleRowLines, roleSlotsPerLine } from '../src/lib/console/explorer/role-row';
 import { tooFewSentence } from './support/number-format';
@@ -88,9 +88,63 @@ test('the five documented answer cases choose their chart type or neutral senten
 	});
 });
 
+test('a small named two-number answer ranks its first number only when that shape is valid', () => {
+	const columns: Column[] = [
+		{ name: 'host', type: 'VARCHAR' },
+		{ name: 'ms', type: 'DOUBLE' },
+		{ name: 'jobs', type: 'BIGINT' }
+	];
+	const rows: Row[] = [{ host: 'a', ms: '20', jobs: '3' }, { host: 'b', ms: '10', jobs: '5' }];
+	expect(chooseChart(columns, rows, bounds)).toMatchObject({
+		type: 'rankedList',
+		shape: { kind: 'chart', labelColumn: 'host', valueColumn: 'ms', rowsDrawn: 2, mainFigure: { label: 'a', value: 20, column: 'ms' } }
+	});
+	for (const invalid of [
+		[{ host: 'a', ms: '20', jobs: '3' }, { host: 'a', ms: '10', jobs: '5' }],
+		[{ host: 'a', ms: '-20', jobs: '3' }, { host: 'b', ms: '10', jobs: '5' }],
+		[{ host: 'a', ms: '0', jobs: '3' }, { host: 'b', ms: null, jobs: '5' }]
+	]) {
+		expect(chooseChart(columns, invalid, bounds)).toMatchObject({ type: null, shape: { kind: 'none', code: 'not-picked' } });
+	}
+	expect(chooseChart(columns, rows, bounds, 'pairedScatter')).toMatchObject({
+		type: 'pairedScatter', shape: { readings: 2, subjects: 2, tooFew: true }
+	});
+	expect(chooseChart(columns, rows, bounds, 'rankedList', { rankedList: { rankBy: ['jobs'] } })).toMatchObject({
+		type: 'rankedList', shape: { valueColumn: 'jobs', mainFigure: { label: 'b', value: 5, column: 'jobs' } }
+	});
+});
+
+test('automatic paired selection counts valid paired readings and distinct subjects at their floors', () => {
+	const columns: Column[] = [{ name: 'host', type: 'VARCHAR' }, { name: 'ms', type: 'DOUBLE' }, { name: 'jobs', type: 'BIGINT' }];
+	const rows: Row[] = [
+		{ host: 'a', ms: '10', jobs: '1' },
+		{ host: 'b', ms: '20', jobs: '2' },
+		{ host: 'c', ms: '30', jobs: '3' },
+		{ host: 'd', ms: '40', jobs: '4' }
+	];
+	expect(shape(columns, rows)).toMatchObject({ type: 'pairedScatter', readings: bounds.fleetMinRows, subjects: 4, tooFew: false });
+	const invalid: Row[] = [null, '', 'NaN', 'Infinity', '9007199254740992'].map((ms, index) => ({ host: `invalid-${index}`, ms, jobs: '1' }));
+	expect(shape(columns, [...rows.slice(0, -1), ...invalid])).toMatchObject({ type: 'rankedList', rowsDrawn: 3, valueColumn: 'ms' });
+	expect(chooseChart(columns.slice(1), [...rows.slice(0, -1), ...invalid], bounds)).toMatchObject({ type: null, shape: { code: 'not-picked' } });
+	const repeated = rows.map((row, index) => ({ ...row, host: index < 2 ? 'a' : 'b' }));
+	expect(chooseChart(columns, repeated, bounds)).toMatchObject({ type: null, shape: { code: 'not-picked' } });
+	expect(chooseChart(columns, repeated, bounds, 'pairedScatter')).toMatchObject({ shape: { readings: 4, subjects: 2, tooFew: true } });
+	const atSubjectFloor = rows.map((row, index) => ({ ...row, host: index === 3 ? 'c' : row.host }));
+	expect(shape(columns, atSubjectFloor)).toMatchObject({ type: 'pairedScatter', subjects: bounds.bandwidthMinKinds, tooFew: false });
+});
+
+test('automatic spread selection needs enough finite readings while manual selection keeps its refusal', () => {
+	const columns: Column[] = [{ name: 'latency', type: 'DOUBLE' }];
+	const rows: Row[] = [{ latency: '10' }, { latency: '20' }, { latency: '30' }, { latency: '40' }];
+	expect(shape(columns, rows)).toMatchObject({ type: 'distribution', readings: bounds.fleetMinRows, tooFew: false });
+	const below = [...rows.slice(0, -1), { latency: null }, { latency: 'NaN' }, { latency: 'Infinity' }, { latency: '9007199254740992' }];
+	expect(chooseChart(columns, below, bounds)).toMatchObject({ type: null, shape: { kind: 'none', code: 'not-picked' } });
+	expect(chooseChart(columns, below, bounds, 'distribution')).toMatchObject({ shape: { readings: 3, tooFew: true } });
+	expect(chooseChart(columns, [], bounds)).toMatchObject({ type: null, shape: { kind: 'none', code: 'not-picked' } });
+});
+
 test('cells arrive as text, as the door returns them, and still give each chart its figures', () => {
-	// The door casts every cell to text (plan section 2.5 rule 8). Fixtures with JavaScript
-	// numbers hid that the main figures read none of them.
+	// The query reader returns text cells, so parsing must preserve numeric figures.
 	expect(shape([
 		{ name: 'day', type: 'DATE' },
 		{ name: 'scored', type: 'INTEGER' }
@@ -109,7 +163,7 @@ test('cells arrive as text, as the door returns them, and still give each chart 
 		{ source: 'c', items: '1' }
 	])).toMatchObject({ type: 'rankedList', mainFigure: { label: 'b', value: 12, column: 'items' } });
 
-	expect(shape([
+	expect(chooseChart([
 		{ name: 'latency', type: 'DOUBLE' }
 	], [
 		{ latency: '10.5' },
@@ -117,7 +171,7 @@ test('cells arrive as text, as the door returns them, and still give each chart 
 		{ latency: '30.5' },
 		{ latency: null },
 		{ latency: '20.5' }
-	])).toMatchObject({ type: 'distribution', median: 20.5, mainFigure: 'Half of latency is at or under 20.5' });
+	], bounds, 'distribution').shape).toMatchObject({ type: 'distribution', median: 20.5, mainFigure: 'Half of latency is at or under 20.5' });
 
 	expect(shape([
 		{ name: 'source', type: 'VARCHAR' },
@@ -400,14 +454,14 @@ test('every whole number the engine prints is a number to the chart, and a list 
 });
 
 test('a NULL is no reading: the spread and paired floors, the paired figure and the ranked tail count only rows with a number', () => {
-	expect(shape([{ name: 'latency', type: 'DOUBLE' }], [
+	expect(chooseChart([{ name: 'latency', type: 'DOUBLE' }], [
 		{ latency: '10' },
 		{ latency: null },
 		{ latency: '20' },
 		{ latency: '30' }
-	])).toMatchObject({ type: 'distribution', readings: 3, tooFew: true });
+	], bounds, 'distribution').shape).toMatchObject({ type: 'distribution', readings: 3, tooFew: true });
 
-	expect(shape([
+	expect(chooseChart([
 		{ name: 'host', type: 'VARCHAR' },
 		{ name: 'ms', type: 'DOUBLE' },
 		{ name: 'tokens', type: 'DOUBLE' }
@@ -417,7 +471,7 @@ test('a NULL is no reading: the spread and paired floors, the paired figure and 
 		{ host: 'c', ms: '30', tokens: '120' },
 		{ host: 'd', ms: '40', tokens: null },
 		{ host: 'e', ms: '50', tokens: '90' }
-	])).toMatchObject({ type: 'pairedScatter', readings: 3, subjects: 3, tooFew: true, mainFigure: '3 rows of tokens against ms' });
+	], bounds, 'pairedScatter').shape).toMatchObject({ type: 'pairedScatter', readings: 3, subjects: 3, tooFew: true, mainFigure: '3 rows of tokens against ms' });
 
 	expect(shape([
 		{ name: 'source', type: 'VARCHAR' },
@@ -727,7 +781,7 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 	});
 });
 
-test('T1: every answer the existing cases draw opens on the same chart with the same columns', () => {
+test('automatic charts keep their role defaults when their readings meet the reporting floors', () => {
 	expect(opened([{ name: 'day', type: 'DATE' }, { name: 'scored', type: 'INTEGER' }], [
 		{ day: '2026-10-01', scored: 3 },
 		{ day: '2026-10-02', scored: 5 },
@@ -738,11 +792,17 @@ test('T1: every answer the existing cases draw opens on the same chart with the 
 		{ source: 'b', items: 2 }
 	])).toEqual({ type: 'rankedList', roles: { Name: ['source'], 'Rank by': ['items'] } });
 	expect(opened([{ name: 'host', type: 'VARCHAR' }, { name: 'ms', type: 'DOUBLE' }, { name: 'tokens', type: 'DOUBLE' }], [
-		{ host: 'a', ms: 10, tokens: 100 }
+		{ host: 'a', ms: 10, tokens: 100 },
+		{ host: 'b', ms: 20, tokens: 150 },
+		{ host: 'c', ms: 30, tokens: 120 },
+		{ host: 'd', ms: 40, tokens: 90 }
 	])).toEqual({ type: 'pairedScatter', roles: { Across: ['ms'], Up: ['tokens'], Name: ['host'] } });
-	expect(opened([{ name: 'ms', type: 'DOUBLE' }, { name: 'tokens', type: 'DOUBLE' }], [{ ms: 10, tokens: 100 }]), 'with no text column each row is its own point')
+	expect(opened([{ name: 'ms', type: 'DOUBLE' }, { name: 'tokens', type: 'DOUBLE' }], [
+		{ ms: 10, tokens: 100 }, { ms: 20, tokens: 150 }, { ms: 30, tokens: 120 }, { ms: 40, tokens: 90 }
+	]), 'with no text column each row is its own point')
 		.toEqual({ type: 'pairedScatter', roles: { Across: ['ms'], Up: ['tokens'], Name: [''] } });
-	expect(opened([{ name: 'latency', type: 'DOUBLE' }], [{ latency: 10 }])).toEqual({ type: 'distribution', roles: { Values: ['latency'] } });
+	expect(opened([{ name: 'latency', type: 'DOUBLE' }], [{ latency: 10 }, { latency: 20 }, { latency: 30 }, { latency: 40 }]))
+		.toEqual({ type: 'distribution', roles: { Values: ['latency'] } });
 	// A date chart the page refuses still opens as the date chart, holding that date column (Susan's B2).
 	for (const day of ['infinity', null]) {
 		expect(opened([{ name: 'day', type: 'DATE' }, { name: 'items', type: 'INTEGER' }], [{ day, items: '1' }]), String(day)).toEqual({ type: 'dateSeries', roles: { Date: ['day'], Lines: ['items'] } });
@@ -851,7 +911,6 @@ test('every role word fits the eight characters a pill gives it, and the role ta
 	expect(words.filter((word) => word.length > 8)).toEqual([]);
 	expect(CHART_KINDS.map((kind) => kind.option)).toEqual(['Over time', 'Ranked', 'Paired', 'Spread', 'Side by side', 'Which days', 'Flow']);
 	expect(MOST_ROLES).toBe(4);
-	expect(openingType([{ name: 'x', type: 'DOUBLE' }], [{ x: '1' }])).toBe('distribution');
 });
 
 test('the role row\'s lines by band follow the most roles any chart has, against the slots a line holds', () => {

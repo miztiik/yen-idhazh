@@ -44,7 +44,7 @@ Table C
 | C4 | 4 | Apply permanent cuts, page moves and the token-chart redesign | 1 | D | PENDING | - | - | - |
 | C5 | 5 | Correct retained chart readings and evidence windows | 4 | E | PENDING | - | - | - |
 | C6 | 6 | Restore collection needed by retained hardware diagnostics | 4 | F | PENDING | - | - | - |
-| C7 | 7 | Make retained explorer answers directly reachable and drawable | 1 | G | PENDING | - | - | - |
+| C7 | 7 | Make retained explorer answers directly reachable and drawable | 1 | G | DONE | `ubiquitous-doodle` | - | App session `735f58fd-23bf-4189-9efb-d08402988c46`; branch `explorer-reliability` |
 
 ## 2. Row #1 - Define console redesign and chart changes
 
@@ -644,10 +644,9 @@ Table Y
   - `frontend/src/routes/console/+layout.ts`
   - `frontend/src/lib/console/explorer/shape.ts`
   - `config/appearance.json`
-  - `frontend/tests/console-data-explorer-address.spec.ts`
   - `frontend/tests/console-data-explorer-shape.spec.ts`
   - `frontend/tests/console-data-explorer-examples.spec.ts`
-  - `frontend/tests/console-machine-journey.spec.ts`
+  - `frontend/tests/console-data-explorer-still.spec.ts`
   - `docs/architecture/publishing/data-explorer-state.md`
   - `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md`
   - `TODO/20261109-console-redesign-plan.md`

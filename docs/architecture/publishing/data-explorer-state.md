@@ -1,6 +1,6 @@
 # What the Data explorer keeps and shares
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-11-10
 
 Which data the Data explorer reads, keeps in this browser and carries in a shared address.
 
@@ -15,7 +15,10 @@ owns their visible arrangement.
 The route renders only in the browser. It uses the common `404.html` fallback,
 with `prerender = false` and `ssr = false`; it has no separate generated HTML
 file. Build-time configuration supplies knobs and the destination, not current
-membership or ledger rows. The browser fetches and validates the registry, indexes and
+membership or ledger rows. Direct opens, bookmarks and reloads need no server-layout
+payload: the universal console layout gets number formatting from the existing
+`__UI_CONFIG__` build-time define, even when `console/band.json` is absent.
+The browser fetches and validates the registry, indexes and
 chosen files. The registry's [explicit consent](../contracts/ledger-registry.md#explorer-consent-and-its-runtime-catalog)
 controls which ledgers the explorer offers and selects; it does not establish
 whether data is available.
@@ -83,6 +86,11 @@ types, formatting and sorting belong to
 [the console design](../../concepts/console-design.md#data-explorer-prints-the-engine-answer-as-written).
 
 ## Design rationale
+
+**Formatting must reach the static fallback.** Server-layout data exists on
+prerendered console routes but not on the explorer's fallback document. The
+existing build-time UI configuration carries the same resolved number-format
+settings without a runtime endpoint or another configuration copy.
 
 **Search-engine behavior is not a delivery requirement.** The page exists to
 answer an operator's questions over recorded data, not to serve a crawler.
