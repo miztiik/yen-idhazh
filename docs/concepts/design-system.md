@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-11-10
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -8,7 +8,7 @@ New designs, charts and visuals render in the browser. Do not add prerendered da
 
 ## Typography is the interface
 
-- The home page fills the window with configured gutters; other reading routes retain the configured frame maximum. Constrain prose independently to a comfortable measure.
+- The home and archive pages fill the window with configured gutters; other reading routes retain the configured frame maximum. Constrain prose independently to a comfortable measure.
 - Keep an item's hierarchy to title, summary and provenance. Use the configured display face for titles and the reading face for prose; data uses tabular numerals.
 - Keep article type readable on phones. Reduce columns before reducing prose size. Pair each size token with its leading token.
 - Edition headers, topic controls and the leading-story index are unboxed. Story cards retain their surfaces and edges.

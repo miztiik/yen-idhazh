@@ -170,8 +170,9 @@ body {
 	max-width: var(--frame-reading);
 }
 
-/* The home page fills the window; prose keeps its own configured measure. */
-.frame:has([data-surface='home']) {
+/* Home and archive fill the window; prose keeps its own configured measure. */
+.frame:has([data-surface='home']),
+.frame:has([data-surface='archive']) {
 	max-width: none;
 }
 

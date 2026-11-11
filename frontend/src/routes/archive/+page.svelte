@@ -104,7 +104,7 @@
 <svelte:window bind:scrollY bind:innerHeight />
 <svelte:head><title>Search our archives &mdash; {data.ui.site_title}</title></svelte:head>
 
-<section class="archive">
+<section class="archive" data-surface="archive">
 	<h1 bind:this={heading} tabindex="-1" class="text-3xl font-semibold text-text">Search our archives</h1>
 	<ArchiveSearch months={data.months} assist={data.assist} {earliest} latest={data.latest}
 		onResults={(outcome, selected) => void answer(outcome, selected)} onBrowse={browse} />
@@ -148,8 +148,10 @@
 								day={{ date: entry.date, href }} />
 						{:else}
 							<div class="story-row">
-								<a {href} class="story-title">{entry.title}</a>
-								<p class="caption">{shortDate(entry.date)}</p>
+								<div class="story-prose measure">
+									<a {href} class="story-title">{entry.title}</a>
+									<p class="caption">{shortDate(entry.date)}</p>
+								</div>
 							</div>
 						{/if}
 					</li>
@@ -219,6 +221,7 @@
 		padding-block: var(--space-4);
 		border-block-end: 1px solid var(--color-rule);
 	}
+	.story-prose { font-size: var(--text-lg); }
 	.story-title {
 		color: var(--color-text);
 		font-size: var(--text-lg);
