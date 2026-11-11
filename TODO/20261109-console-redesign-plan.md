@@ -452,6 +452,8 @@ Table S
 - **Scope:** Permanently remove G4/M5 and implement L6/H14 only. No other cut, page move, source change, collector or anomaly/baseline rule belongs to this delivery.
 - **Files touched:**
   - `config/console/model.json`
+  - `config/console/machine.json` (initial token metric in the existing numeric knobs)
+  - `frontend/src/lib/console/route-console.ts` (validate and project that metric)
   - `frontend/src/routes/console/machine/+page.svelte`
   - `frontend/src/lib/console/queries/model.ts`
   - `frontend/src/lib/console/queries/machine.ts`
@@ -467,6 +469,7 @@ Table S
   - `frontend/src/lib/charts/d3/RunSeries.svelte` (new shared drawing/readout consumer)
   - `frontend/src/lib/charts/readout.ts` (truthful runSeries type literal)
   - `backend/tests/contracts/test_panel_queries.py`
+  - `tests/fixtures/console/machine/readAgainstWrittenQuery.json` (regenerate the existing native answer with article identity)
   - `frontend/tests/appearance-config.spec.ts`
   - `frontend/tests/console-model-ledgers.spec.ts`
   - `frontend/tests/console-panel-queries.spec.ts`
@@ -498,7 +501,7 @@ Table T
 | T6 | H14 stays on Hardware. One builder returns Run total and actual Median per article over the same paired finite nonnegative item cohort, plus recorded/measured counts. Read includes cached prompt tokens and totals all recorded model calls; neither metric is a rate, words or uncached compute. Preserve cost helpers' dated semantics. | L6; native item-health grain. |
 | T7 | Use native runSeries geometry, not duplicate dates or fake IDs in dateSeries. Numeric run sequence has one position per known run; thin repeated UTC labels, never run points. Known unmeasured runs break paths; do not invent scheduled runs. | Shared run-axis and compareRuns contracts. |
 | T8 | Read is solid and Written dashed on one token scale. Monotone-X interpolation passes through actual readings without invented extrema; it is not statistical smoothing. Mark only selected/isolated values. Existing ChartReadout snaps to actual runs and shows exact values, full ID, UTC date and measured/recorded coverage; rest and Escape use the last known run, even if unmeasured. | Shared chart vocabulary and readout; Susan drawing ruling. |
-| T9 | Metric radios redraw the same in-memory answer, default Run total. No anomaly threshold, baseline, moving average or failure-color verdict is part of this chart. | Settled baseline feature; unresolved work retained in Row 8. |
+| T9 | Metric radios redraw the same in-memory answer. The existing numeric route knob `read_write_default_metric` selects the initial mode: 0 = Run total (shipped default), 1 = Median per article; reject other values at the config boundary. Runtime selection remains in memory. No anomaly threshold, baseline, moving average or failure-color verdict is part of this chart. | Settled baseline feature; unresolved work retained in Row 8. |
 
 ### Rejected alternatives
 

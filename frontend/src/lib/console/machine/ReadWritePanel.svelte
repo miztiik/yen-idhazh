@@ -11,25 +11,27 @@
 	import { formatNumber, MAX_SIGNIFICANT_DIGITS } from '$lib/number-format';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { nameSpan } from '$lib/console/span-words';
-	import { textRows } from './records';
+	import { textRows } from '$lib/console/machine/records';
+	import type { ReadWriteMetric } from '$lib/console/route-console';
 	import type { ConsoleShell } from '$lib/console/band';
 	import type { Row } from '$lib/data/ledger';
 	import type { ChartConfig } from '$lib/server/config';
 
-	let { rows, chart, shell, start, end, windowDays }: {
+	let { rows, chart, shell, start, end, windowDays, initialMetric }: {
 		rows: readonly Row[];
 		chart: ChartConfig;
 		shell: ConsoleShell;
 		start: string;
 		end: string;
 		windowDays: number;
+		initialMetric: ReadWriteMetric;
 	} = $props();
-	type Metric = 'total' | 'median';
 	const metrics = [
 		{ value: 'total', shown: 'Run total', spoken: 'Run total' },
 		{ value: 'median', shown: 'Median per article', spoken: 'Median per article' }
 	] as const;
-	let metric = $state<Metric>('total');
+	// svelte-ignore state_referenced_locally
+	let metric = $state<ReadWriteMetric>(initialMetric);
 	let width = $state<number | null>(null);
 	const frame = useChartFrame(() => chart);
 	const box = $derived(frame(chartWidth(width, chart.width_px), chart.height_px));

@@ -5,7 +5,7 @@
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
-	import { consoleKnobs, routeConsole, routeKnobs } from '$lib/console/route-console';
+	import { consoleKnobs, readWriteMetricDefault, routeConsole, routeKnobs } from '$lib/console/route-console';
 	import { routeReach, rangeFor, sliceOnce, retryAsks, tallyAsks, windowRange, type Range, type PanelQuery, type RouteReach } from '$lib/console/queries/window';
 	import type { LedgerReach, Row, SliceResult } from '$lib/data/ledger';
 	import * as queries from '$lib/console/queries/machine';
@@ -40,7 +40,7 @@
 	const groups = routeConsole('machine').panel_groups;
 	const configured = routeKnobs('machine', [
 		'clocks_agree_within_pct', 'slower_machines_min_articles', 'slowest_articles_rows',
-		'closest_to_memory_rows', 'context_min_values'
+		'closest_to_memory_rows', 'context_min_values', 'read_write_default_metric'
 	]);
 	const knobs = { ...configured, fleet_top_kinds: shared.fleet_top_kinds };
 	const cfg = $derived(data.machineConfig);
@@ -256,6 +256,7 @@
 								lost: lost.find((day) => day.date === newest?.date) ?? null })} />
 					{:else if id === 'read-against-written'}
 						<ReadWritePanel rows={rows('readAgainstWrittenQuery')} chart={cfg.chart} shell={data}
+							initialMetric={readWriteMetricDefault(knobs.read_write_default_metric)}
 							{start} {end} {windowDays} />
 					{:else if id === 'tail-trend'}
 						<TailTrendPanel rows={latency.runs} {start} {end} modelChanges={changes.map((move) => move.date)}

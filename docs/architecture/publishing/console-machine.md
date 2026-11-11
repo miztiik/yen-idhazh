@@ -180,8 +180,12 @@ compute. Measured versus recorded article counts qualify partial runs.
 qualified totals consumed by counterfactual cost. `ReadWritePanel` draws native
 `runSeries` geometry, ordered by `compareRuns`: every known run has its own
 position, including same-day runs and unmeasured gaps. No scheduled run or
-elapsed timestamp is inferred. Metric radios default to Run total and redraw
-the answer in memory without a fetch. Counterfactual cost keeps its daily sums.
+elapsed timestamp is inferred. The numeric route knob
+`config/console/machine.json` -> `knobs.read_write_default_metric` selects the
+initial mode: 0 is Run total (the shipped default), 1 is Median per article.
+The config boundary rejects other values. Runtime radio choices stay in memory
+and redraw without a fetch; changing the initial mode is not persistence of a
+reader's choice. Counterfactual cost keeps its daily sums.
 
 ### The retained measurements
 

@@ -76,6 +76,13 @@ test.describe('route-owned console configuration', () => {
 		expect(routeConsolesFrom(files)).toEqual(files);
 	});
 
+	test('keeps Run total as the shipped token metric and refuses unsupported configured modes', () => {
+		expect(routeConsoles().machine.knobs.read_write_default_metric).toBe(0);
+		const files = routeFiles();
+		files.machine.knobs.read_write_default_metric = 2;
+		expect(() => routeConsolesFrom(files)).toThrow('knobs.read_write_default_metric must be 0 (Run total) or 1 (Median per article)');
+	});
+
 	test('refuses a missing route file', () => {
 		const files = routeFiles();
 		delete files.model;

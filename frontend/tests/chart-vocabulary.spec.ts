@@ -37,6 +37,9 @@ import {
 } from './support/number-format';
 import { serverCompiler } from './support/server-render';
 import { drawnSourceFiles, readSource, resolveSource, scriptTree } from './support/console-sources';
+import { chartConfig, routeConsoles, routeConsolesFrom } from '../src/lib/server/config';
+import { readWriteMetricDefault } from '../src/lib/console/route-console';
+import { BAND_UNREAD } from '../src/lib/console/band';
 
 /**
  * The behavior checks for the documented chart vocabulary.
@@ -784,6 +787,13 @@ test.describe('drawn by Svelte, rendered on the server', () => {
 			['$lib/components/Reserved.svelte', './Reserved.server.mjs']
 		]);
 		await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', []);
+		await compiled('src/lib/components/Panel.svelte', 'Panel', []);
+		await compiled('src/lib/icons/Icon.svelte', 'Icon', [
+			['./generated', '$lib/icons/generated']
+		]);
+		await compiled('src/lib/components/ChoiceTiles.svelte', 'ChoiceTiles', [
+			['$lib/icons/Icon.svelte', './Icon.server.mjs']
+		]);
 		for (const name of ['EmptyState', 'DateSeries', 'RunSeries', 'Distribution', 'PartsOfOne', 'TileStrip', 'Flow', 'PairedScatter']) {
 			const module =
 				name === 'EmptyState'
@@ -795,9 +805,39 @@ test.describe('drawn by Svelte, rendered on the server', () => {
 			const loaded = await import(pathToFileURL(module).href);
 			draw[name] = (props) => render(loaded.default, { props }).body;
 		}
+		const panel = await compiled('src/lib/console/machine/ReadWritePanel.svelte', 'ReadWritePanel', [
+			['$lib/components/Panel.svelte', './Panel.server.mjs'],
+			['$lib/components/ChoiceTiles.svelte', './ChoiceTiles.server.mjs'],
+			['$lib/charts/d3/RunSeries.svelte', './RunSeries.server.mjs']
+		]);
+		const loaded = await import(pathToFileURL(panel).href);
+		draw.ReadWritePanel = (props) => render(loaded.default, { props }).body;
 	});
 
 	const sized = { name: 'test-chart', label: 'A chart under test', width: 400, height: 220 };
+
+	test('a substituted route knob changes the token panel initial mode without changing its cohort', () => {
+		const configured = routeConsoles();
+		for (const [knob, metric, read, written] of [
+			[0, 'total', 103, 204], [1, 'median', 2, 3]
+		] as const) {
+			const routes = routeConsolesFrom({ ...configured, machine: {
+				...configured.machine, knobs: { ...configured.machine.knobs, read_write_default_metric: knob }
+			} });
+			const body = draw.ReadWritePanel({
+				rows: [[1, 1], [2, 3], [100, 200]].map(([input_tokens, output_tokens], index) => ({
+					date: '2026-09-01', run_id: '2026-09-01-1', item_id: `article-${index}`, input_tokens, output_tokens
+				})),
+				chart: chartConfig(), shell: BAND_UNREAD, start: '2026-09-01', end: '2026-09-01',
+				windowDays: 1, initialMetric: readWriteMetricDefault(routes.machine.knobs.read_write_default_metric)
+			});
+			expect(body).toContain(`data-token-metric="${metric}"`);
+			expect(body).toContain(`data-token-measure="${metric}" data-selected="true"`);
+			expect(body).toMatch(new RegExp(`data-run-marker="Read"[^>]*data-run-value="${read}"`));
+			expect(body).toMatch(new RegExp(`data-run-marker="Written"[^>]*data-run-value="${written}"`));
+			expect(body).toContain('3 of 3 recorded');
+		}
+	});
 
 	test('the empty state keeps the chart height, and a wait is the only one with no words', () => {
 		const waiting = draw.EmptyState({ ...sized, drawing: emptyState('loading') });
