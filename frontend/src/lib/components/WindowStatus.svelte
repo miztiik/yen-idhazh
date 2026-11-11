@@ -27,7 +27,7 @@
 	let previousRecord = $state.raw<RecordWindow | null>(null);
 	$effect(() => { if (record !== null) previousRecord = record; });
 	const sizingRecord = $derived(record ?? previousRecord);
-	const recordSizes = $derived(sizingRecord === null ? [] :
+	const recordSizes = $derived(!ready || sizingRecord === null ? [] :
 		presets.map((asked) => recordWindowSentence({ ...sizingRecord, asked })));
 
 	/** Each wider preset that would fetch something, narrowest first. */
