@@ -1,11 +1,10 @@
 /** One native Summaries journey and independent real-ledger transport boundaries, not a presentation matrix. */
 import { expect, test } from './support/door-page';
 import { mkdirSync } from 'node:fs';
-import { consoleConfig } from '../src/lib/server/config';
 import { buildLedger, buildRows, serveToPage } from './support/ledger-lifecycle';
 
 const panelIds = ['model-cards', 'model-throughput', 'call-ending', 'doubt-reasons', 'faithfulness',
-	'source-doubts', 'write-cost', 'score-cost', 'summary-length', 'model-change'];
+	'source-doubts', 'write-cost', 'score-cost', 'summary-length'];
 
 test('the integrated Summaries route reads the native record and keeps all panels in declared order', async ({ page }) => {
 	await page.goto('/console/model/');
@@ -15,6 +14,8 @@ test('the integrated Summaries route reads the native record and keeps all panel
 	await expect(page.locator('[data-model-cards] [data-kpi]')).toHaveCount(12);
 	await expect(page.locator('[data-console-panel-id="recorded-only"]')).toHaveCount(0);
 	await expect(page.locator('[data-console-panel-id="refusing-rule"], [data-model-query="refusing-rule"], [data-failure-stages]')).toHaveCount(0);
+	await expect(page.locator('[data-console-panel-id="model-change"], [data-model-query="model-change"], [href="#model-change"]')).toHaveCount(0);
+	await expect(page.getByRole('heading', { name: 'What the model change moved', exact: true })).toHaveCount(0);
 	await expect(page.locator('[data-candle]')).not.toHaveCount(0);
 	await expect(page.locator('[data-run-length]')).not.toHaveCount(0);
 	await expect(page.locator('[data-histogram="write-times"]')).toHaveCount(1);
@@ -28,11 +29,9 @@ test('the integrated Summaries route reads the native record and keeps all panel
 	await page.locator('[data-window-preset="7"]').click();
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
 	const queries = page.locator('[data-model-query]');
-	await expect(queries).toHaveCount(8);
+	await expect(queries).toHaveCount(7);
 	for (const query of await queries.all()) {
-		const id = await query.getAttribute('data-model-query');
-		const requested = id === 'model-change' ? Math.max(...consoleConfig().window_presets) : 7;
-		await expect(query).toHaveAttribute('data-query-asked', String(requested));
+		await expect(query).toHaveAttribute('data-query-asked', '7');
 		await expect(query).toHaveAttribute('data-query-state', 'ready');
 	}
 	await expect(page.locator('[data-model="table"] caption')).toContainText('7 days');

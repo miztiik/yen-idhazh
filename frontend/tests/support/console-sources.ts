@@ -46,7 +46,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'RunLengths.svelte', 'RunSquares.svelte', 'RunYield.svelte', 'SearchState.svelte',
 		'ShapeSwitch.svelte', 'SiteFooter.svelte', 'SiteHeader.svelte',
 		'SourceCutRange.svelte', 'SourceLink.svelte', 'SourceMark.svelte', 'Sparkline.svelte',
-		'StageTimings.svelte', 'StatusChip.svelte', 'SwapDots.svelte', 'TargetBar.svelte',
+		'StageTimings.svelte', 'StatusChip.svelte', 'TargetBar.svelte',
 		'ThemeToggle.svelte', 'ThroughputTrend.svelte', 'TimeHistogram.svelte',
 		'WindowControl.svelte', 'WindowControlSource.svelte', 'WindowStatus.svelte'
 	],
@@ -69,7 +69,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/lib/console/model': [
 		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'source-doubts.ts', 'summary-length.ts',
-		'model-change.ts', 'model-throughput.ts', 'model-rule.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
+		'model-throughput.ts', 'model-rule.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
 		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'Reasons.svelte', 'doubt-reasons.ts', 'slice.ts', 'work.ts'
 	],
 	'src/lib/console/voices': [
@@ -138,7 +138,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'backend-python.ts', 'browser.ts', 'door-page.ts', 'check-addons.ts', 'charts-ready.ts',
 		'consecutive-days.ts', 'console-sources.ts', 'console-widths.ts',
 		'day-loader.ts', 'day-ready.ts', 'explorer-answer.ts', 'in-zone.ts',
-		'ledger-lifecycle.ts', 'machine-record-state.ts', 'machine-rows.ts', 'model-swap.ts',
+		'ledger-lifecycle.ts', 'machine-record-state.ts', 'machine-rows.ts',
 		'model-route.ts',
 		'month-shard.ts', 'panel-gates.ts', 'panel-tab.ts', 'published-site.ts', 'published.ts',
 		'range-host.ts', 'reduction-input.ts', 'server-render.ts',

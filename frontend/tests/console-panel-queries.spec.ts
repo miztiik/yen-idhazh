@@ -4,8 +4,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { FLEET_COLUMNS } from '../src/lib/charts/fleet';
-import { machineCardsItemsQuery, platformMixQuery } from '../src/lib/console/queries/machine';
-import { modelChangeQuery, summaryLengthQuery } from '../src/lib/console/queries/model';
+import { machineCardsItemsQuery, platformMixQuery, runShardsQuery } from '../src/lib/console/queries/machine';
+import { summaryLengthQuery } from '../src/lib/console/queries/model';
 import { slowerOnSameWorkQuery } from '../src/lib/console/queries/pipelines';
 import { compareRuns, failedRuleQuery, hostKey, joinItemHosts, newestRunRows } from '../src/lib/console/queries/shared';
 import { feedsFailedQuery } from '../src/lib/console/queries/voices';
@@ -202,6 +202,7 @@ test('each span uses the shared data end and widest takes the explicitly passed 
 	const reach: RouteReach = {
 		through: '2026-09-26',
 		ledgers: {
+			'run-shards': { state: 'ok', first: '2026-08-01', through: '2026-09-28', lastRows: null, fault: null },
 			'item-health': { state: 'ok', first: '2026-08-01', through: '2026-09-26', lastRows: null, fault: null },
 			'summary-quality-evals': { state: 'ok', first: '2026-08-01', through: '2026-09-28', lastRows: null, fault: null }
 		}
@@ -212,15 +213,15 @@ test('each span uses the shared data end and widest takes the explicitly passed 
 	expect(rangeFor({ ...slowerOnSameWorkQuery, span: 'newest-day' }, 3, reach, PRESETS)).toEqual({
 		from: '2026-09-26', to: '2026-09-26', days: 1, asked: 1
 	});
-	expect(rangeFor(modelChangeQuery, 3, reach, [7, 14])).toEqual({
+	expect(rangeFor(runShardsQuery, 3, reach, [7, 14])).toEqual({
 		from: '2026-09-13', to: '2026-09-26', days: 14, asked: 14
 	});
-	expect(rangeFor(modelChangeQuery, 3, reach, [4, 21])).toEqual({
+	expect(rangeFor(runShardsQuery, 3, reach, [4, 21])).toEqual({
 		from: '2026-09-06', to: '2026-09-26', days: 21, asked: 21
 	});
-	expect(() => rangeFor(modelChangeQuery, 3, reach, [])).toThrow('window_presets');
-	expect(() => rangeFor(modelChangeQuery, 3, reach, [0])).toThrow('window_presets');
-	expect(() => rangeFor(modelChangeQuery, 0, reach, PRESETS)).toThrow('preset');
+	expect(() => rangeFor(runShardsQuery, 3, reach, [])).toThrow('window_presets');
+	expect(() => rangeFor(runShardsQuery, 3, reach, [0])).toThrow('window_presets');
+	expect(() => rangeFor(runShardsQuery, 0, reach, PRESETS)).toThrow('preset');
 	expect(() => rangeFor(platformMixQuery, 3, reach, PRESETS)).toThrow('host-fingerprint');
 });
 

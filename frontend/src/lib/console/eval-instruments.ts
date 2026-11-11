@@ -70,7 +70,7 @@ export function matchTitle(windowDays?: number): string {
 /** Which panel answers for which ledger column.
  *
  * One maintainer each. A column can inform more than one surface - `band` sets a
- * card, sorts the source list and splits the model-change table - and the maintainer
+ * card and sorts the source list - and the maintainer
  * is the panel that is *about* it, the one an operator opens to ask how that
  * number is doing.
  */
@@ -121,7 +121,7 @@ export const NOT_A_MEASUREMENT: Readonly<Record<string, string>> = {
 	vertical: 'Which desk the article belongs to.',
 	model_id: 'Which model wrote the summary.',
 	pipeline_fingerprint:
-		'A digest of the declared settings, on rows written before 2026-09-12 and blank after. It has no direction to plot. It is the last shape in the repository that still declares the stamp, and it is here because the model-change panel reads this column for every day whose identity is a digest rather than a named input manifest.',
+		'A digest of the declared settings, on rows written before 2026-09-12 and blank after. It has no direction to plot. Historical setting-change markers retain this identity for days recorded before named input manifests.',
 	output_digest: 'A digest of the summary, kept so a re-run can be proved identical.',
 	source_digest: 'A digest of the article text, kept for the same reason.',
 	scorer_version: 'Which checker ran. It says the instrument changed, not that the summaries did.',

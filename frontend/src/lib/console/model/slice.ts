@@ -12,8 +12,6 @@ export function modelSlice(query: PanelQuery, range: Range) {
 		case 'writeCostQuery': return sliceOnce(queries.writeCostQuery, range);
 		case 'scoreCostQuery': return sliceOnce(queries.scoreCostQuery, range);
 		case 'summaryLengthQuery': return sliceOnce(queries.summaryLengthQuery, range);
-		case 'modelChangeQuery': return sliceOnce(queries.modelChangeQuery, range);
-		case 'modelChangeItemsQuery': return sliceOnce(queries.modelChangeItemsQuery, range);
 		default: throw new Error(`No declared Summaries query is named ${query.name}.`);
 	}
 }

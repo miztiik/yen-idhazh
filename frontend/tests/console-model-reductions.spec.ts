@@ -6,8 +6,8 @@ import { callEnding } from '../src/lib/console/model/call-ending';
 import { faithfulness } from './support/number-format';
 import { sourceDoubts } from '../src/lib/console/model/source-doubts';
 import { summaryLength } from '../src/lib/console/model/summary-length';
-import { modelChange } from '../src/lib/console/model/model-change';
 import { modelThroughput } from '../src/lib/console/model/model-throughput';
+import { modelRuleFor } from '../src/lib/console/model/panels';
 import { cost } from '../src/lib/console/model/cost';
 import { completeModelRule, ruleEvents } from '../src/lib/charts/d3/model-rule';
 import { failureRuleRows, failureRules } from '../src/lib/console/failure-rules';
@@ -49,21 +49,36 @@ test('source attribution takes the later URL score and refuses unknown small sha
 	expect(result.geometry?.rows[0].refused).toContain('Too few');
 });
 
-test('model change compares the newest dated set difference and independent date populations', () => {
-	const score = (date: string, model_id: string): Row => ({
-		date, model_id, summary_words: 100, source_words_before_cap: 500, source_words: 500,
-		extractiveness: null, verbatim_run: null, band: 'high', unsupported_numbers: 0, hedge_dropped: false
+test('retained metric trends keep model identities and dated setting changes', () => {
+	const from = '2030-06-10';
+	const to = '2030-06-14';
+	const score = (date: string, model_id: string, summary_words: number): Row => ({
+		date, run_id: `${date}-1`, model_id, summary_words, source_words_before_cap: 500, compression: 0.2
 	});
-	const result = modelChange([
-		score('2030-06-10', 'a'), score('2030-06-10', 'b'), score('2030-06-12', 'a'),
-		score('2030-06-14', 'c')
-	], [{ date: '2030-06-11', summarize_ms: 1000 }, { date: '2030-06-15', summarize_ms: 3000 }],
-	summarizeConfig().bands, 1);
-	expect(result?.at).toBe('2030-06-14');
-	expect(result?.before.model).toBe('a');
-	expect(result?.after.model).toBe('c');
-	expect(result?.measures.find((measure) => measure.label === 'Time to write one')).toMatchObject({ before: 1, after: 3 });
-	expect(result?.measures.find((measure) => measure.label === 'Copied, not rewritten')).toMatchObject({ before: null, after: null });
+	const scores = [score(from, 'before-model', 100), score(to, 'after-model', 50)];
+	const lengths = summaryLength(scores, summarizeConfig().bands);
+	expect(lengths.map(({ model, median }) => ({ model, median }))).toEqual([
+		{ model: 'before-model', median: 100 }, { model: 'after-model', median: 50 }
+	]);
+	const throughput = modelThroughput(scores.map((row) => ({
+		...row, input_tokens: 100, cached_tokens: 0, output_tokens: 100, prefill_ms: 1000, decode_ms: 2000
+	})), { start: from, end: to });
+	expect(throughput.map((day) => ({ date: day.date, read: day.read.median, write: day.write.median }))).toEqual([
+		{ date: from, read: 100, write: 50 }, { date: to, read: 100, write: 50 }
+	]);
+	const shell = { ...BAND_UNREAD,
+		settingsMoved: { compared_from: from, changes: [{ date: to, inputs: ['model_sha256'] }] },
+		checkerMoved: { compared_from: from, changes: [] }
+	};
+	for (const [id, dates] of [
+		['model-throughput', throughput.map((day) => day.date)],
+		['summary-length', lengths.map((run) => run.date)]
+	] as const) {
+		const rule = completeModelRule(modelRuleFor(id, shell, { from, to, days: 5, asked: 7 }), dates);
+		expect(rule).toMatchObject({
+			changes: [{ date: to, kind: 'settings', words: 'the weights changed on this day' }], note: null
+		});
+	}
 });
 
 test('the faithfulness scale stays bounded, never hides a measurement and keeps missing readings null', () => {
@@ -110,7 +125,6 @@ test('recorded native slices drive all eligible model reducers without broadenin
 	expect(sources.unattributed).toBeGreaterThan(0);
 	expect(sources.rows).toEqual([]);
 	expect(sources.share).toBeNull();
-	expect(modelChange(recorded('modelChangeQuery'), recorded('modelChangeItemsQuery'), summarizeConfig().bands, 1)).toBeNull();
 });
 
 test('the score-only checker rule and every-change rule retain distinct dated meanings', () => {

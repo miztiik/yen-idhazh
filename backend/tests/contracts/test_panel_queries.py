@@ -35,7 +35,7 @@ EXPECTED_NAMES: Final = {
     "model": (
         "modelThroughputQuery", "callEndingQuery", "faithfulnessQuery",
         "sourceDoubtsQuery", "sourceDoubtsItemsQuery", "writeCostQuery", "scoreCostQuery",
-        "summaryLengthQuery", "modelChangeQuery", "modelChangeItemsQuery",
+        "summaryLengthQuery",
     ),
     "machine": (
         "runShardsQuery",
@@ -68,8 +68,6 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "writeCostQuery": ("date", "summarize_ms"),
     "scoreCostQuery": ("date", "score_ms"),
     "summaryLengthQuery": ("date", "run_id", "model_id", "summary_words", "source_words_before_cap", "source_words", "compression"),
-    "modelChangeQuery": ("date", "model_id", "summary_words", "source_words_before_cap", "source_words", "extractiveness", "verbatim_run", "band", "unsupported_numbers", "hedge_dropped"),
-    "modelChangeItemsQuery": ("date", "summarize_ms", "prefill_ms", "decode_ms", "input_tokens", "cached_tokens", "output_tokens"),
     "twoClocksQuery": ("date", "run_id", "machine_job", "machine_shard", "prefill_ms", "input_tokens", "cached_tokens"),
     "twoClocksHostsQuery": ("date", "run_id", "job", "shard", "server_prompt_tokens", "server_prompt_seconds"),
     "processorLostQuery": ("date", "run_id", "machine_shard", "cpu_steal_pct"),
@@ -297,7 +295,7 @@ def test_word_and_machine_renames_are_the_actual_contract_mappings() -> None:
 def test_query_span_and_fetch_predicate_match_the_panel_contracts() -> None:
     queries = load_queries()
     assert {query.name for query in queries if query.span == "widest"} == {
-        "modelChangeQuery", "modelChangeItemsQuery", "runShardsQuery", "platformMixQuery"
+        "runShardsQuery", "platformMixQuery"
     }
     assert {query.name for query in queries if query.span == "newest-day"} == {
         "runTimelineQuery", "twoClocksQuery", "twoClocksHostsQuery", "machineCardsQuery",
