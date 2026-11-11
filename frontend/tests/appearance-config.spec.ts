@@ -54,7 +54,7 @@ test.describe('route-owned console configuration', () => {
 		const modelPanels = [
 			'model-cards', 'model-throughput', 'call-ending',
 			'doubt-reasons', 'faithfulness', 'source-doubts', 'write-cost',
-			'score-cost', 'summary-length', 'model-change'
+			'score-cost', 'summary-length'
 		];
 		expect(routes.model.panel_groups).toEqual([
 			{ id: 'summaries', title: '', panels: modelPanels }

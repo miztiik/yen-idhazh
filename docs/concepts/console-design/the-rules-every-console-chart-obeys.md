@@ -289,7 +289,7 @@ page. Tooltip text is text, never markup.
 The bounded renderer inventory is the native DateSeries, RunSeries,
 Distribution, PairedScatter, PartsOfOne, Flow and TileStrip components; shared
 Sparkline, RunYield/RunSquares, RunLengths, StageTimings, ThroughputTrend,
-TimeHistogram, SourceCutRange, SwapDots, RankedList, TargetBar and MachineCard;
+TimeHistogram, SourceCutRange, RankedList, TargetBar and MachineCard;
 FleetDots, TailTrend, AtAGlance, the processor/disk/memory/article-cost and
 source-yield/fetch-time presentations; and the retained timeline and Judgement
 drawings. New callers use these mechanisms rather than inventing another hover

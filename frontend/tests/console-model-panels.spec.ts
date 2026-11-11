@@ -1,7 +1,11 @@
 /** Deterministic model panels rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
-import { modelSwap, runLengths, scoreCost, writeTimes, type DayWindow } from '../src/lib/server/model-work';
-import { BANDS, pair } from './support/model-swap';
+import { runLengths, scoreCost, writeTimes, type DayWindow } from '../src/lib/server/model-work';
+const BANDS = [
+    { min_source_words: 0, target_words_min: 30, target_words_max: 45 },
+    { min_source_words: 60, target_words_min: 50, target_words_max: 90 },
+    { min_source_words: 700, target_words_min: 70, target_words_max: 150 }
+];
 const WEEK: DayWindow = { start: '2026-08-15', end: '2026-08-21', days: 7 };
 function timed(date: string, ms: number): Record<string, string> {
     return { date, summarize_ms: String(ms) };
@@ -109,79 +113,5 @@ test.describe('how long the summaries came out', () => {
         expect(runs).toHaveLength(1);
         expect(runs[0].askLow).toBeNull();
         expect(runs[0].askHigh).toBeNull();
-    });
-});
-test.describe('did the model change move anything', () => {
-    test('each measure is the after over the before, and both values are kept', () => {
-        const swap = modelSwap([
-            ...pair(10, '2026-08-20', 'old', { band: 'low' }),
-            ...pair(10, '2026-08-21', 'new', { summary_words: '50' })
-        ], [
-            ...Array.from({ length: 10 }, () => timed('2026-08-20', 100000)),
-            ...Array.from({ length: 10 }, () => timed('2026-08-21', 50000))
-        ], BANDS, 5) as NonNullable<ReturnType<typeof modelSwap>>;
-        expect(swap.at).toBe('2026-08-21');
-        expect(swap.before.model).toBe('old');
-        expect(swap.after.model).toBe('new');
-        expect(swap.before.articles).toBe(10);
-        expect(swap.after.articles).toBe(10);
-        expect(swap.enough).toBe(true);
-        const by = new Map(swap.measures.map((measure) => [measure.label, measure]));
-        expect(by.get('Time to write one')?.ratio).toBeCloseTo(0.5, 6);
-        expect(by.get('Summary length')?.before).toBe(100);
-        expect(by.get('Summary length')?.after).toBe(50);
-        expect(by.get('Marked "not sure"')?.before).toBe(100);
-        expect(by.get('Marked "not sure"')?.after).toBe(0);
-        expect(by.get('Summaries the checker doubted')?.before).toBe(100);
-        expect(by.get('Summaries the checker doubted')?.after).toBe(0);
-        expect(swap.measures).toHaveLength(10);
-    });
-    test('a measure neither side recorded is named, never drawn as a change', () => {
-        const swap = modelSwap([...pair(10, '2026-08-20', 'old'), ...pair(10, '2026-08-21', 'new')], [], BANDS, 5) as NonNullable<ReturnType<typeof modelSwap>>;
-        for (const label of ['Reading the article', 'Writing the summary', 'Time to write one']) {
-            const measure = swap.measures.find((entry) => entry.label === label);
-            expect(measure?.before, `${label} invented a value for a side with no rows`).toBeNull();
-            expect(measure?.after, `${label} invented a value for a side with no rows`).toBeNull();
-            expect(measure?.ratio, `${label} drew a ratio out of two absences`).toBeNull();
-        }
-    });
-    test('a rate both sides recorded is a comparison, and it is drawn', () => {
-        const rate = (date: string, prefill: number, decode: number) => ({
-            date,
-            prefill_ms: String(prefill),
-            decode_ms: String(decode),
-            input_tokens: '1000',
-            output_tokens: '100',
-            cached_tokens: '0'
-        });
-        const swap = modelSwap([...pair(10, '2026-08-20', 'old'), ...pair(10, '2026-08-21', 'new')], [
-            ...Array.from({ length: 10 }, () => rate('2026-08-20', 1000, 1000)),
-            ...Array.from({ length: 10 }, () => rate('2026-08-21', 2000, 1000))
-        ], BANDS, 5) as NonNullable<ReturnType<typeof modelSwap>>;
-        const read = swap.measures.find((entry) => entry.label === 'Reading the article');
-        expect(read?.before).toBe(1000);
-        expect(read?.after).toBe(500);
-        expect(read?.ratio).toBeCloseTo(0.5, 6);
-        expect(read?.polarity).toBe('no-agreed-direction');
-        expect(swap.measures.find((entry) => entry.label === 'Writing the summary')?.polarity).toBe('no-agreed-direction');
-    });
-    test('a thin side draws nothing, and the counts are the whole answer', () => {
-        const swap = modelSwap([...pair(2, '2026-08-20', 'old'), ...pair(30, '2026-08-21', 'new')], [], BANDS, 5) as NonNullable<ReturnType<typeof modelSwap>>;
-        expect(swap.before.articles).toBe(2);
-        expect(swap.enough).toBe(false);
-    });
-    test('no change of model is no panel at all', () => {
-        expect(modelSwap(pair(30, '2026-08-20', 'one'), [], BANDS, 5)).toBeNull();
-        expect(modelSwap([], [], BANDS, 5)).toBeNull();
-    });
-    test('a measure that was nothing before has no ratio, because a move away from nothing has no size', () => {
-        const swap = modelSwap([
-            ...pair(10, '2026-08-20', 'old'),
-            ...pair(10, '2026-08-21', 'new', { hedge_dropped: 'True' })
-        ], [], BANDS, 5) as NonNullable<ReturnType<typeof modelSwap>>;
-        const hedge = swap.measures.find((measure) => measure.label === '"Maybe" told as fact');
-        expect(hedge?.before).toBe(0);
-        expect(hedge?.after).toBe(100);
-        expect(hedge?.ratio).toBeNull();
     });
 });

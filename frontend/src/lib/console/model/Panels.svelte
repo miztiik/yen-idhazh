@@ -7,7 +7,6 @@
 	import ThroughputTrend from '../../components/ThroughputTrend.svelte';
 	import TimeHistogram from '../../components/TimeHistogram.svelte';
 	import RunLengths from '../../components/RunLengths.svelte';
-	import SwapDots from '../../components/SwapDots.svelte';
 	import RankedList from '../../components/RankedList.svelte';
 	import { modelThroughput } from './model-throughput';
 	import { callEnding } from './call-ending';
@@ -15,7 +14,6 @@
 	import { sourceDoubts } from './source-doubts';
 	import { cost } from './cost';
 	import { summaryLength } from './summary-length';
-	import { modelChange } from './model-change';
 	import { RECORDED } from '../eval-instruments';
 	import { rankedList } from '../../charts/d3/rankedList';
 	import { rank } from '../../charts/rank';
@@ -41,7 +39,6 @@
 	const sources = $derived(id === 'source-doubts' ? sourceDoubts(rows[0], rows[1], window, { limit: knobs.doubt_rows, minForShare: knobs.min_attempts_for_rate }) : null);
 	const times = $derived(id === 'write-cost' || id === 'score-cost' ? cost(rows[0], id === 'write-cost' ? 'summarize_ms' : 'score_ms') : null);
 	const lengths = $derived(id === 'summary-length' ? summaryLength(rows[0], bands) : []);
-	const swap = $derived(id === 'model-change' ? modelChange(rows[0], rows[1], bands, knobs.min_attempts_for_rate) : null);
 	const lengthRule = $derived(completeModelRule(rule, lengths.map((run) => run.date)));
 	const speedRule = $derived(completeModelRule(rule, throughputs.map((day) => day.date)));
 </script>
@@ -126,14 +123,5 @@
 		</table>
 		<p>{RECORDED.find((i) => i.id === 'compression')?.note}</p><p>Nothing acts on these numbers.</p>
 		{#if 'changes' in lengthRule && lengthRule.note !== null}<p data-model-rule-empty={lengthRule.changes.length ? undefined : 'summary-length'} data-model-rule-unread="summary-length">{lengthRule.note}</p>{/if}
-	</div>
-{:else if id === 'model-change'}
-	<p data-lede>{swap === null ? 'The published record holds no model change to compare.' : swap.lede}</p>
-	<p data-comparison="scores after the change against scores before it">Scores after the change against scores before it. Different article populations do not establish a cause.</p>
-	<div data-model-rule="no" data-model-rule-name="model-change" data-model-rule-none="This panel compares the two sides of the model change itself.">
-		{#if swap !== null}<p>The change on {swap.at}, from {swap.before.model} to {swap.after.model}; {swap.before.articles} summaries before and {swap.after.articles} after.</p>
-			{#if swap.enough}<div data-chart="model-change"><SwapDots {swap} width={chart.width_px} readoutMaxShare={chart.readout_max_share} /></div>
-			{:else}<p>Only {Math.min(swap.before.articles, swap.after.articles)} of the {knobs.min_attempts_for_rate} summaries this chart needs are on its smaller side, so it is not drawn.</p>{/if}
-		{/if}
 	</div>
 {/if}
