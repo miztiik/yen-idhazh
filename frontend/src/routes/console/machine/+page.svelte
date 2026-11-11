@@ -33,6 +33,7 @@
 	import MemoryHeldPanel from '$lib/console/machine/MemoryHeldPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
 	import TailTrendPanel from '$lib/console/machine/TailTrendPanel.svelte';
+	import ReadWritePanel from '$lib/console/machine/ReadWritePanel.svelte';
 
 	let { data } = $props();
 	const shared = consoleKnobs();
@@ -253,6 +254,9 @@
 							fingerprints(rows('machineCardsQuery')), { watchedFlags: cfg.flags, colour: { stops: shared.machine_colour_stops, floor: shared.machine_colour_floor_share },
 								recording: cfg.recording, cacheMargin: cfg.cacheMargin, numberFormat: cfg.chart.number_format, ramp, keys, items: rows('machineCardsItemsQuery'),
 								lost: lost.find((day) => day.date === newest?.date) ?? null })} />
+					{:else if id === 'read-against-written'}
+						<ReadWritePanel rows={rows('readAgainstWrittenQuery')} chart={cfg.chart} shell={data}
+							{start} {end} {windowDays} />
 					{:else if id === 'tail-trend'}
 						<TailTrendPanel rows={latency.runs} {start} {end} modelChanges={changes.map((move) => move.date)}
 							missingMarkers={changeNote} moved={changes.map((move) => ({ date: move.date, settings: [move.words] }))}

@@ -6,11 +6,9 @@
 	import Series from './Series.svelte';
 	import ThroughputTrend from '../../components/ThroughputTrend.svelte';
 	import TimeHistogram from '../../components/TimeHistogram.svelte';
-	import FailureList from '../../components/FailureList.svelte';
 	import RunLengths from '../../components/RunLengths.svelte';
 	import SwapDots from '../../components/SwapDots.svelte';
 	import RankedList from '../../components/RankedList.svelte';
-	import { failureRuleRows } from '../failure-rules';
 	import { modelThroughput } from './model-throughput';
 	import { callEnding } from './call-ending';
 	import { faithfulness } from './faithfulness';
@@ -23,7 +21,6 @@
 	import { rank } from '../../charts/rank';
 	import { SERIES_TOKENS } from '../series-tokens';
 	import { median } from './rows';
-	import { refusingRule, MODEL_STAGES } from './refusing-rule';
 	import { completeModelRule } from './model-rule';
 	import { grouped as formatGrouped } from '../../charts/series';
 	import { useNumberFormat } from '$lib/number-format-context';
@@ -45,7 +42,6 @@
 	const times = $derived(id === 'write-cost' || id === 'score-cost' ? cost(rows[0], id === 'write-cost' ? 'summarize_ms' : 'score_ms') : null);
 	const lengths = $derived(id === 'summary-length' ? summaryLength(rows[0], bands) : []);
 	const swap = $derived(id === 'model-change' ? modelChange(rows[0], rows[1], bands, knobs.min_attempts_for_rate) : null);
-	const refusals = $derived(id === 'refusing-rule' ? refusingRule(rows[0], window) : null);
 	const lengthRule = $derived(completeModelRule(rule, lengths.map((run) => run.date)));
 	const speedRule = $derived(completeModelRule(rule, throughputs.map((day) => day.date)));
 </script>
@@ -60,14 +56,6 @@
 	<p data-comparison="calls cut off against calls that ended on their own">Calls cut off at the length limit against calls that ended on their own. Each call has one ending.</p>
 	<Series series={endings.series} {rule} {chart} name="call-ending" stacked />
 	{#if endings.calls > 0 && endings.length === 0}<p>No call was cut off at the length limit in these {range.days} days.</p>{/if}
-{:else if refusals !== null}
-	<p data-lede>{refusals.top === undefined ? 'No named rule refused a model reply.' : `${refusals.top.label}: ${refusals.top.count} refusals`} at summarization</p>
-	<p data-comparison="the rule that refused most against every other rule">The rule that refused most against every other rule.</p>
-	<div data-model-rule="no" data-model-rule-name="refusing-rule" data-model-rule-none="A ranking pools the window and has no dated change position.">
-		<FailureList ranking={refusals.ranking} stages={{ options: [...MODEL_STAGES], chosen: 'summarize' }}
-			{window} max={knobs.failure_list_max} readoutMaxShare={chart.readout_max_share} />
-	</div>
-	{#if refusals.failed === 0}<p>No rule refused a model reply in these {range.days} days.</p>{/if}
 {:else if scores !== null}
 	<div data-eval-panel="faithfulness" data-match-floor={scores.floor}>
 	<p data-lede>{scores.days.at(-1)?.matchMid == null ? 'Faithfulness was not measured.' : `${scores.days.at(-1)?.matchMid}% median faithfulness`}</p>

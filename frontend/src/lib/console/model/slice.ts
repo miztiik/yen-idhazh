@@ -6,7 +6,6 @@ export function modelSlice(query: PanelQuery, range: Range) {
 	switch (query.name) {
 		case 'modelThroughputQuery': return sliceOnce(queries.modelThroughputQuery, range);
 		case 'callEndingQuery': return sliceOnce(queries.callEndingQuery, range);
-		case 'failedRuleQuery': return sliceOnce(queries.failedRuleQuery, range);
 		case 'faithfulnessQuery': return sliceOnce(queries.faithfulnessQuery, range);
 		case 'sourceDoubtsQuery': return sliceOnce(queries.sourceDoubtsQuery, range);
 		case 'sourceDoubtsItemsQuery': return sliceOnce(queries.sourceDoubtsItemsQuery, range);

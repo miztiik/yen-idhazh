@@ -525,6 +525,57 @@ test.describe('what a run reads against what it writes', () => {
 		]);
 	});
 
+	test('token comparisons keep same-day runs in numeric order, including zeros and unmeasured runs', () => {
+		const view = readAgainstWritten([
+			healthRow({ run_id: '2026-09-04-10', item_id: 'missing' }),
+			healthRow({ run_id: '2026-09-04-2', item_id: 'zero', input_tokens: 0, output_tokens: 0 }),
+			healthRow({ item_id: 'measured', input_tokens: 40, output_tokens: 8 })
+		]);
+		expect(view.tokenRuns).toEqual([
+			{ runId: '2026-09-04-1', date: '2026-09-04', total: { read: 40, written: 8 },
+				median: { read: 40, written: 8 }, measured: 1, recorded: 1 },
+			{ runId: '2026-09-04-2', date: '2026-09-04', total: { read: 0, written: 0 },
+				median: { read: 0, written: 0 }, measured: 1, recorded: 1 },
+			{ runId: '2026-09-04-10', date: '2026-09-04', total: { read: null, written: null },
+				median: { read: null, written: null }, measured: 0, recorded: 1 }
+		]);
+		expect(view.runs.map((run) => run.runId)).toEqual(['2026-09-04-1', '2026-09-04-2']);
+		expect(costOverDays(view.runs, { currency: 'USD', inputPerMillion: 1, outputPerMillion: 1 }).days)
+			.toMatchObject([{ date: '2026-09-04', items: 2 }]);
+	});
+
+	test('token totals and actual medians use the same paired finite nonnegative article cohort', () => {
+		const view = readAgainstWritten([
+			healthRow({ item_id: 'a', input_tokens: 0, cached_tokens: 0, output_tokens: 9 }),
+			healthRow({ item_id: 'b', input_tokens: 4, cached_tokens: 4, output_tokens: 0 }),
+			healthRow({ item_id: 'c', input_tokens: 100, cached_tokens: 90, output_tokens: 3 }),
+			healthRow({ item_id: 'missing-output', input_tokens: 9999 }),
+			healthRow({ item_id: 'negative-input', input_tokens: -1, output_tokens: 7 }),
+			healthRow({ item_id: 'negative-output', input_tokens: 7, output_tokens: -2 }),
+			healthRow({ item_id: 'infinite', input_tokens: 'Infinity', output_tokens: 8 }),
+			healthRow({ item_id: 'invalid', input_tokens: 'invalid', output_tokens: 9 }),
+			healthRow({ item_id: 'blank', input_tokens: '   ', output_tokens: 5 })
+		]);
+		expect(view.tokenRuns).toEqual([
+			{ runId: '2026-09-04-1', date: '2026-09-04', total: { read: 104, written: 12 },
+				median: { read: 4, written: 3 }, measured: 3, recorded: 9 }
+		]);
+		expect(view.runs[0]).toMatchObject({ input: 104, output: 12, items: 3 });
+		expect(view.tokenRuns[0].median.read).not.toBe(104 / 3);
+	});
+
+	test('even article medians retain their half token without pooling runs or days', () => {
+		const view = readAgainstWritten([
+			healthRow({ item_id: 'a', input_tokens: 12344, output_tokens: 0 }),
+			healthRow({ item_id: 'b', input_tokens: 12345, output_tokens: 1 }),
+			healthRow({ run_id: '2026-09-04-2', item_id: 'c', input_tokens: 5, output_tokens: 3 })
+		]);
+		expect(view.tokenRuns.map((run) => run.median)).toEqual([
+			{ read: 12344.5, written: 0.5 }, { read: 5, written: 3 }
+		]);
+		expect(readAgainstWritten([]).tokenRuns).toEqual([]);
+	});
+
 	test('input and output are priced apart, at the rate per million', () => {
 		const rate = { currency: 'USD', inputPerMillion: 0.2, outputPerMillion: 0.6 };
 		// 1.5 million prompt tokens at 0.20 is 0.30; 0.3 million written at 0.60 is

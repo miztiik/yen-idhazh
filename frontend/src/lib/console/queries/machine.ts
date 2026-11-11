@@ -121,6 +121,6 @@ export const promptReuseQuery = {
 
 export const readAgainstWrittenQuery = {
 	name: 'readAgainstWrittenQuery', ledger: 'item-health',
-	columns: ['date', 'run_id', 'input_tokens', 'output_tokens', 'prefill_ms', 'decode_ms'],
+	columns: ['date', 'run_id', 'item_id', 'input_tokens', 'output_tokens', 'prefill_ms', 'decode_ms'],
 	span: 'window'
 } as const satisfies PanelQuery;

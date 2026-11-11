@@ -52,7 +52,7 @@ test.describe('route-owned console configuration', () => {
 		]);
 		expect(routes.judgement.judged).toEqual(judgementPanels);
 		const modelPanels = [
-			'model-cards', 'model-throughput', 'call-ending', 'refusing-rule',
+			'model-cards', 'model-throughput', 'call-ending',
 			'doubt-reasons', 'faithfulness', 'source-doubts', 'write-cost',
 			'score-cost', 'summary-length', 'model-change'
 		];

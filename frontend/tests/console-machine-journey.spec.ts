@@ -19,6 +19,7 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	const privateRequests: string[] = [];
 	const errors: string[] = [];
 	const storageWarnings: string[] = [];
+	const nativeRequests: string[] = [];
 	page.on('console', (message) => {
 		if (message.type() === 'warning' && message.text().includes('Window preference could not')) storageWarnings.push(message.text());
 	});
@@ -39,6 +40,7 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 		if (response.status() === 404) errors.push(`404: ${new URL(response.url()).pathname}`);
 	});
 	page.on('request', (request) => {
+		if (NATIVE.test(request.url())) nativeRequests.push(request.url());
 		if (/\/(?:run|plan)\.json|\/state\/.*(?:run-plan|prompt)/.test(request.url())) privateRequests.push(request.url());
 	});
 	page.on('pageerror', (error) => errors.push(error.message));
@@ -77,15 +79,59 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(fleet).toHaveCount(1);
 	expect(Number(await fleet.getAttribute('data-fleet-placements'))).toBeGreaterThan(0);
 	const tokens = page.locator('[data-console-panel-id="read-against-written"]');
-	const plot = tokens.locator('[data-chart-type="dateSeries"]');
+	const plot = tokens.locator('[data-chart-type="runSeries"]');
 	await expect(plot).toBeVisible();
+	const readout = tokens.locator('[data-readout]');
+	const heading = readout.locator('[data-readout-day]');
+	const newestRun = await heading.textContent();
+	const newestSelected = newestRun!.replace(/, the newest run$/, '');
 	await plot.focus();
+	expect(await plot.evaluate((node) => {
+		const caption = node.closest('[data-console-panel-id]')!.querySelector('[data-token-unit]')!;
+		const style = getComputedStyle(node);
+		return node.getBoundingClientRect().top - parseFloat(style.outlineWidth) -
+			parseFloat(style.outlineOffset) - caption.getBoundingClientRect().bottom;
+	}), 'the focused plot must not overlap its unit caption').toBeGreaterThanOrEqual(0);
+	await expect(heading).toHaveText(newestRun!);
+	await page.keyboard.press('Home');
+	const firstRun = await heading.textContent();
+	expect(firstRun).not.toBe(newestRun);
+	await page.keyboard.press('ArrowRight');
+	await expect(heading).not.toHaveText(firstRun!);
+	await page.keyboard.press('End');
+	await expect(heading).toHaveText(newestSelected);
 	await page.keyboard.press('ArrowLeft');
+	await expect(heading).not.toHaveText(newestSelected);
 	await page.keyboard.press('Escape');
-	await expect(tokens.locator('[data-readout]')).toContainText('Read tokens');
-	await expect(tokens.locator('[data-readout]')).toContainText('Written tokens');
-	await expect(tokens.locator('[data-readout]')).toContainText('20 Aug 2026');
-	await expect(tokens.locator('[data-readout]')).not.toContainText('Not recorded');
+	await expect(heading).toHaveText(newestRun!);
+	await page.keyboard.press('ArrowLeft');
+	await expect(heading).not.toHaveText(newestSelected);
+	await page.keyboard.press('Escape');
+	const axisStart = Number(await plot.locator('line[stroke="var(--chart-axis)"]').first().getAttribute('x1'));
+	await plot.hover({ position: { x: axisStart, y: 80 } });
+	await expect(heading).toHaveText(firstRun!);
+	await plot.click({ position: { x: axisStart, y: 80 } });
+	await expect(heading).toHaveText(firstRun!);
+	await page.keyboard.press('Escape');
+	await expect(heading).toHaveText(newestRun!);
+	await expect(readout).toContainText('Read (solid)');
+	await expect(readout).toContainText('Written (dashed)');
+	await expect(readout).toContainText('2026-08-20 UTC');
+	await expect(readout).toContainText('Measured articles');
+	await expect(readout).not.toContainText('Not recorded');
+	await expect(tokens.getByRole('radio', { name: 'Run total', exact: true })).toBeChecked();
+	const totals = await readout.textContent();
+	const beforeMetric = [...nativeRequests];
+	await tokens.locator('[data-token-measure="median"]').click();
+	await expect(tokens.getByRole('radio', { name: 'Median per article', exact: true })).toBeChecked();
+	await expect(tokens.locator('[data-token-unit]')).toContainText('Median tokens per article');
+	await expect(heading).toHaveText(newestRun!);
+	await expect(readout).not.toHaveText(totals!);
+	await tokens.locator('[data-token-measure="total"]').click();
+	await expect(tokens.getByRole('radio', { name: 'Run total', exact: true })).toBeChecked();
+	await expect(readout).toHaveText(totals!);
+	expect(nativeRequests).toEqual(beforeMetric);
+	await tokens.screenshot({ path: test.info().outputPath('run-token-lines-wide.png') });
 
 	const context = page.locator('[data-console-panel-id="context-headroom"]');
 	await expect(context.locator('svg[data-chart-type="distribution"]')).toHaveCount(2);
@@ -121,6 +167,7 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	expect(await page.locator('[data-console-panel-id="two-clocks"] [data-ranked-row]').first()
 		.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(844);
 	await page.screenshot({ path: test.info().outputPath('hardware-narrow-light.png') });
+	await tokens.screenshot({ path: test.info().outputPath('run-token-lines-narrow.png') });
 	await expect.poll(contextFits).toBe(true);
 	await expect.poll(clockRulesFit).toBe(true);
 	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

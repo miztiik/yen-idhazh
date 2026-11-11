@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-11-11
 
 `/console/machine/` asks what machine the work actually got, whether its two
 clocks agree, and what would change the cost of that work.
@@ -106,7 +106,7 @@ Membership and order live in `config/console/machine.json`.
 | | `context-headroom` | Label and summary request distributions on one logarithmic domain, with recorded context and cut-request rules |
 | What the model spends | `article-cost` | Existing processor-time, model-time and incremental-memory tracks over the chosen window |
 | | `prompt-reuse` | Daily median label tokens held beside median summary tokens read fresh, plus the independent server-share check |
-| | `read-against-written` | Read and written token totals over the same qualified dated run population |
+| | `read-against-written` | Two run-sequence token lines; Run total or actual Median per article over one paired cohort, with measured/recorded coverage |
 | | `counterfactual-cost` | Running dated total, four editable-price figures; a counterfactual, never a bill |
 
 The two clocks open the route because a disagreement decides whether the rates
@@ -167,6 +167,21 @@ second question instead.
 Its lede quotes the upper-middle held count over requests in the selected
 window, not a median of daily medians that would give a quiet day extra weight.
 The dated lines still quote each day's own median.
+
+Read/write token volume reads the settled compact item-health rows, one per
+UTC date, run and article. Both sides require finite, nonnegative input and
+output on the same row. Run total sums those rows; Median per article takes
+each side's median within that run, never totals divided by article count or
+medians summed by day. Input includes cached prompt tokens, and the recorded
+totals include all model calls. These are token volumes, not words or uncached
+compute. Measured versus recorded article counts qualify partial runs.
+
+`readAgainstWritten` returns both metrics from that cohort and retains the
+qualified totals consumed by counterfactual cost. `ReadWritePanel` draws native
+`runSeries` geometry, ordered by `compareRuns`: every known run has its own
+position, including same-day runs and unmeasured gaps. No scheduled run or
+elapsed timestamp is inferred. Metric radios default to Run total and redraw
+the answer in memory without a fetch. Counterfactual cost keeps its daily sums.
 
 ### The retained measurements
 

@@ -4,7 +4,7 @@ export const EXPECT: RouteExpect = {
 	readout: true,
 	handWritten: null,
 	engineSeries: null,
-	keyboard: { id: 'read-against-written', dateSeries: true },
+	keyboard: { id: 'read-against-written' },
 	shape: null,
 	recording: {
 		intro: '[data-machine="intro"]',

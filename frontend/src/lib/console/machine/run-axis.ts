@@ -57,8 +57,8 @@ export function runTicks(
 	let carried = '';
 	for (let at = ticks.length - 1; at >= 0; at -= 1) {
 		if (ticks[at].text === '') continue;
-		if (ticks[at].text === carried) ticks[at] = { ...ticks[at], text: '' };
-		else carried = ticks[at].text;
+		if (ticks[at].date === carried) ticks[at] = { ...ticks[at], text: '' };
+		else carried = ticks[at].date;
 	}
 	return ticks;
 }
