@@ -5,16 +5,39 @@
 	let { title }: { title: string } = $props();
 </script>
 
-<header class="flex items-center justify-between gap-4 py-5">
+<header class="site-header flex items-center justify-between gap-4 py-5">
 	<div>
 		<a href={base || '/'} class="wordmark">
 			{title}
 		</a>
 	</div>
+	<span class="console-identity">Console</span>
 	<ThemeToggle />
 </header>
 
 <style>
+	.console-identity { display: none; }
+	:global(.frame:has([data-surface='operator'])) .site-header {
+		min-block-size: var(--console-header-min-height);
+		gap: var(--console-control-gap);
+		padding-block: var(--console-control-padding-block);
+		border-block-end: 1px solid var(--color-rule);
+	}
+	:global(.frame:has([data-surface='operator'])) .wordmark {
+		font-size: var(--console-panel-title-size);
+		line-height: var(--console-panel-title-leading);
+		font-weight: var(--console-panel-title-weight);
+		letter-spacing: var(--console-panel-title-tracking);
+		color: var(--color-text);
+		background: none;
+	}
+	:global(.frame:has([data-surface='operator'])) .console-identity {
+		display: block;
+		flex: 1;
+		color: var(--color-text-secondary);
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
+	}
 	/* Identity, and the one place on the site a gradient appears above the
 	   fold. It encodes nothing, so it is decoration and unconstrained - the
 	   colour rule binds a tint that tells a reader something. It never goes

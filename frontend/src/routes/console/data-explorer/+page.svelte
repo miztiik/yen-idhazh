@@ -1,6 +1,7 @@
 
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
+	import { useWindowChoice } from '$lib/console/window-slot';
 	import { createLedgerReader, explorerBaseUrl, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type LedgerReader, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
 	import Panel from '$lib/components/Panel.svelte';
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
@@ -40,6 +41,7 @@
 
 	const config = $derived(data.explorer);
 	const presets = $derived(data.console.window_presets);
+	const choice = useWindowChoice();
 	// svelte-ignore state_referenced_locally
 	let windowDays = $state(data.console.default_window_days);
 	let fromDay = $state('');
@@ -62,6 +64,14 @@
 	let sql = $state('SELECT count(*) AS rows FROM "published"');
 	let costing = $state(false);
 	let initializing = $state(true);
+	$effect(() => {
+		const days = choice.days;
+		if (ready && initializing) untrack(() => {
+			windowDays = days;
+			toDay = todayUtc();
+			fromDay = addDays(toDay, 1 - days);
+		});
+	});
 	let running = $state(false);
 	let refreshing = $state(false);
 	let cost = $state<SpanCost>({ files: 0, bytes: 0, readFrom: null, readTo: null, cut: [], through: {} });
@@ -306,9 +316,7 @@
 	function pick(example: ExplorerExample) {
 		selectConsented(example.ledgers);
 		const days = presets.includes(example.days) ? example.days : windowDays;
-		windowDays = days;
-		toDay = todayUtc();
-		fromDay = addDays(toDay, 1 - days);
+		setWindow(days);
 		sql = example.sql;
 		void updateCost();
 	}
@@ -327,6 +335,7 @@
 		void updateCost();
 	}
 	function setWindow(days: number) {
+		choice.select(days);
 		windowDays = days;
 		toDay = todayUtc();
 		fromDay = addDays(toDay, 1 - days);
@@ -617,7 +626,9 @@
 
 	onMount(() => {
 		ready = true;
-		setWindow(data.console.default_window_days);
+		windowDays = choice.days;
+		toDay = todayUtc();
+		fromDay = addDays(toDay, 1 - windowDays);
 		const query = matchMedia(`(min-width: ${data.frame.breakpoints_px[1]}px)`);
 		let previousWide = query.matches;
 		const sync = () => {
@@ -649,7 +660,7 @@
 				const catalog = registry;
 				const parsed = await parseExplorerAddress(location.search, {
 					ledgerNames: catalog?.entries.map((entry) => entry.name) ?? [],
-					windowPresets: presets, defaultDays: data.console.default_window_days, today: todayUtc(), reachDays: config.reach_days
+					windowPresets: presets, defaultDays: choice.days, today: todayUtc(), reachDays: config.reach_days
 				});
 				if (parsed.ledgers.length > 0) selectConsented(parsed.ledgers);
 				if (parsed.from !== null && parsed.end !== null) setSpan(parsed.from, parsed.end);
@@ -659,13 +670,13 @@
 			} else if (recentRuns[0] !== undefined) {
 				selectConsented(recentRuns[0].ledgers);
 				if (recentRuns[0].from !== undefined && recentRuns[0].end !== undefined) setSpan(recentRuns[0].from, recentRuns[0].end);
-				else setWindow(recentRuns[0].days);
+				else setWindow(choice.days);
 				sql = recentRuns[0].statement;
 			} else {
 				const first = examples[0];
 				if (first !== undefined) {
 					selectConsented(first.ledgers);
-					setWindow(presets.includes(first.days) ? first.days : windowDays);
+					setWindow(choice.days);
 					sql = first.sql;
 				}
 			}
@@ -717,6 +728,7 @@
 							presets={presets}
 							busy={costing || running}
 							ready={ready}
+							statusId={null}
 							onChange={setWindow}
 						/>
 						<div class="date-fields">
@@ -869,10 +881,7 @@
 		--role-row-height: calc(var(--role-lines) * var(--workbench-control) + (var(--role-lines) - 1) * var(--space-1) + 2 * var(--space-1));
 		--lede-line: var(--leading-xl);
 		--comparison-line: var(--leading-base);
-		/* A chart's readout sets no line height of its own, so its 0.75rem lines
-		   take the page's 1.5. The room is the tallest readout, the date chart's:
-		   its day, its entries and its key hint, and the space above each. */
-		--readout-line: calc(1.5 * var(--text-xs));
+		--readout-line: var(--console-small-leading);
 		--readout-room: calc(var(--space-3) + var(--space-1) + var(--space-2) + 3 * var(--readout-line));
 		--drawing-floor: calc(var(--lede-line) + var(--space-3) + var(--idle-height) + var(--readout-room) + var(--comparison-line) + var(--space-3));
 		--result-floor: calc(var(--strip-height) + var(--role-row-height) + var(--drawing-floor));

@@ -1,6 +1,7 @@
 <script lang="ts">
 	/** What did sources supply, and what did the ranking do with their articles? */
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
+	import { useWindowChoice } from '$lib/console/window-slot';
 	import { base } from '$app/paths';
 	import { consoleKnobs, routeConsole, routeKnobs } from '$lib/console/route-console';
 	import { rangeFor, routeReach, sliceOnce, retryAsks, type Range, type RouteReach } from '$lib/console/queries/window';
@@ -31,8 +32,8 @@
 	const console = consoleKnobs();
 	const config = routeConsole('voices');
 	const knobs = routeKnobs('voices', ['article_fails_marked', 'article_fails_named', 'why_chosen_rows', 'watchlist_hits_marked', 'watchlist_hits_named']);
-	const WINDOW_KEY = 'idhazh:console-window';
-	let windowDays = $state(console.default_window_days);
+	const choice = useWindowChoice();
+	const windowDays = $derived(choice.days);
 	let ready = $state(false);
 	let reach = $state<RouteReach | null>(null);
 	let feedsAnswer = $state<Answer>('pending');
@@ -65,16 +66,15 @@
 
 	onMount(() => {
 		ready = true;
-		const stored = Number(localStorage.getItem(WINDOW_KEY));
-		if (console.window_presets.includes(stored)) windowDays = stored;
-		void ask();
+	});
+	$effect(() => {
+		const days = windowDays;
+		if (ready) untrack(() => { void ask(false, days); });
 	});
 	function show(days: number) {
-		windowDays = days;
-		localStorage.setItem(WINDOW_KEY, String(days));
-		void ask();
+		choice.select(days);
 	}
-	async function ask(retry = false) {
+	async function ask(retry = false, days = windowDays) {
 		const turn = ++generation;
 		const current = readSession();
 		if (session !== current) retry = false;
@@ -96,11 +96,11 @@
 		const found = await routeReach(['item-health']);
 		if (turn !== generation) return;
 		reach = found;
-		const f = rangeFor(feedsFailedQuery, windowDays, found, console.window_presets);
-		const t = rangeFor(fetchTimeQuery, windowDays, found, console.window_presets);
-		const c = rangeFor(sourceCutsQuery, windowDays, found, console.window_presets);
-		const y = rangeFor(whyChosenQuery, windowDays, found, console.window_presets);
-		const w = rangeFor(watchlistQuery, windowDays, found, console.window_presets);
+		const f = rangeFor(feedsFailedQuery, days, found, console.window_presets);
+		const t = rangeFor(fetchTimeQuery, days, found, console.window_presets);
+		const c = rangeFor(sourceCutsQuery, days, found, console.window_presets);
+		const y = rangeFor(whyChosenQuery, days, found, console.window_presets);
+		const w = rangeFor(watchlistQuery, days, found, console.window_presets);
 		if (needFeeds) span = 'from' in f ? f : null;
 		if (needFetch) fetchSpan = 'from' in t ? t : null;
 		if (needCuts) cutsSpan = 'from' in c ? c : null;

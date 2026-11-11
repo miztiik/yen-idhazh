@@ -1,22 +1,5 @@
 <script lang="ts">
-	/** One named question on a console route, and the panels that answer it.
-	 *
-	 * The Hardware route was fifteen panels down one column, every title at one
-	 * weight, and an operator's eye had nothing to land on first. A group gives
-	 * that column three stops, each one a question the panels under it share -
-	 * so a reader who wants the run that just finished stops reading at the
-	 * second heading.
-	 *
-	 * An empty title draws no heading and no element at all. A route that wants
-	 * an order without a grouping - Pipelines - says so by leaving the title
-	 * empty, and gets exactly the flat siblings it had before, in the order its
-	 * config names.
-	 *
-	 * A titled group is also a place to jump to. Its id is the group's own, so the
-	 * console's `On this page` row links straight to it, and a `Top` link beside
-	 * the heading goes back to the head of the console. Both are plain anchors,
-	 * so they work with no script at every width.
-	 */
+	/** Keep a configured panel order, with an optional heading and group anchor. */
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -35,15 +18,13 @@
 	} = $props();
 </script>
 
-{#if title === ''}
-	{@render children()}
-{:else}
-	<section class="panel-group" {id} data-console-group={id} data-console-group-panels={panels}>
+<section class="panel-group" {id} data-console-group={title ? id : undefined} data-console-group-panels={panels}>
+	{#if title !== ''}
 		<h2 class="group-title">{title}</h2>
 		<a class="group-top" href="#console-top" data-console-group-top>Top</a>
-		{@render children()}
-	</section>
-{/if}
+	{/if}
+	<div class="panel-grid">{@render children()}</div>
+</section>
 
 <style>
 	/* No border, no tint and no card. The panels inside already carry an edge
@@ -52,7 +33,15 @@
 	   heavier line of type. */
 	.panel-group {
 		position: relative;
-		margin-top: var(--space-8);
+		margin-top: var(--console-group-gap);
+	}
+	.panel-grid { display: grid; gap: var(--console-panel-gap); min-inline-size: 0; }
+	.panel-grid > :global(*) { min-inline-size: 0; }
+	.panel-grid :global(.panel-block) { margin-top: 0; }
+	@media (min-width: 1400px) {
+		.panel-grid { grid-template-columns: repeat(var(--console-columns-wide), minmax(0, 1fr)); }
+		.panel-grid > :global(:has([data-panel-verdict='route'])),
+		.panel-grid > :global(:has(.panel-block.wide)) { grid-column: 1 / -1; }
 	}
 
 	/* A step up from the panel titles under it, which is the whole job: at one
@@ -64,10 +53,11 @@
 		padding-bottom: var(--space-2);
 		padding-inline-end: var(--space-8);
 		border-bottom: 1px solid var(--color-rule);
-		font-size: var(--text-xl);
-		line-height: var(--leading-xl);
-		font-weight: 600;
-		letter-spacing: -0.011em;
+		font-family: var(--font-display);
+		font-size: var(--console-panel-title-size);
+		line-height: var(--console-panel-title-leading);
+		font-weight: var(--console-panel-title-weight);
+		letter-spacing: var(--console-panel-title-tracking);
 		color: var(--color-text);
 	}
 
@@ -77,11 +67,15 @@
 		inset-block-start: 0;
 		inset-inline-end: 0;
 		font-size: var(--text-sm);
-		line-height: var(--leading-xl);
+		line-height: var(--console-panel-title-leading);
 		color: var(--color-accent);
 	}
 
 	.group-top:hover {
 		text-decoration: underline;
+	}
+	@media (max-width: 1023px) {
+		.panel-group:first-of-type { margin-block-start: var(--console-control-gap); }
+		.group-title { margin-block-end: var(--console-control-padding-block); padding-block-end: var(--console-control-padding-block); }
 	}
 </style>

@@ -41,10 +41,15 @@ test.describe('the strip is the key', () => {
 		const geometry = clocksChart(pairs, 5, numberFormat);
 		expect(geometry?.rows.map((row) => [row.label, row.value])).toEqual([['shard 1', 4], ['shard 0', 0.8]]);
 		expect(geometry?.rules.map((rule) => rule.at)).toEqual([5]);
+		expect(geometry?.rows.map((row) => row.row.value)).toEqual(['4%', '0.8%']);
 		expect(geometry?.rows.map((row) => row.row.context)).toEqual([
 			`item ledger ${formatNumber(9.5)}; server ${formatNumber(9.9)} tokens a second`,
 			`item ledger ${formatNumber(12.5)}; server ${formatNumber(12.4)} tokens a second`
 		]);
+		const precise = clocksChart([{ label: 'shard', ledger: 3, server: 2.99, gapPct: 1 / 3, agrees: true }],
+			5, { ...numberFormat, significant_digits: 2 });
+		expect(precise?.rows[0].row.value).toBe('0.33%');
+		expect(precise?.rows[0].value).toBe(1 / 3);
 	});
 
 	test('a strip is built from the labels, so it cannot be a different length', () => {

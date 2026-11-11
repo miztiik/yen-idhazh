@@ -6,6 +6,7 @@
 	import { restoreAnchor } from '$lib/assist/day';
 	import { startOfflineReader } from '$lib/offline';
 	import { OFFLINE_VERSION } from '$lib/offline.generated';
+	import { syncBrowserChrome } from '$lib/theme';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import SiteHeader from '$lib/components/SiteHeader.svelte';
 	import { onMount } from 'svelte';
@@ -37,6 +38,7 @@
 	// rendered, because the element does not exist yet when this runs.
 	afterNavigate(() => {
 		restoreAnchor();
+		syncBrowserChrome();
 	});
 </script>
 

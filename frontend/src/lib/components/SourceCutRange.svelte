@@ -17,7 +17,6 @@
 	 */
 	import {
 		chartWidth,
-		frame,
 		labelGutter,
 		labelWidth,
 		logAxis,
@@ -27,6 +26,7 @@
 		tickAnchor,
 		type Margin
 	} from '$lib/charts/frame';
+	import { useChartFrame, useChartLabels } from '$lib/charts/label-context';
 	import { capLabel, grouped as formatGrouped, rangeMarks } from '$lib/charts/series';
 	import { useNumberFormat } from '$lib/number-format-context';
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
@@ -47,6 +47,8 @@
 		readoutMaxShare: number;
 	} = $props();
 	const numberFormat = useNumberFormat();
+	const frame = useChartFrame();
+	const labels = useChartLabels();
 	const grouped = (value: number) => formatGrouped(value, numberFormat);
 
 	/** The row a pointer, a key or a tap has picked, or null for the first. */
@@ -72,8 +74,8 @@
 	);
 
 	/** The row label, and the count on the line under it. */
-	const NAME_PX = 11;
-	const COUNT_PX = 10;
+	const NAME_PX = $derived(labels().fontSize);
+	const COUNT_PX = $derived(labels().fontSize);
 	/** Clear pixels between the name column and the plot. */
 	const GUTTER_GAP = 10;
 	/** A row carries two lines of type and a 10px bar. The floor is that ink plus
@@ -86,7 +88,7 @@
 	 * as one set. */
 	const PITCH_MAX = 56;
 	/** Enough that two cap labels stack instead of sharing pixels at 10px. */
-	const LABEL_STEP = 12;
+	const LABEL_STEP = $derived(labels().leading);
 	/** The decade labels, then the axis title under them. */
 	const AXIS_ROOM = 40;
 	/** Whole decades read; the eight steps between them are what says the axis is
@@ -119,11 +121,11 @@
 	const gutter = $derived.by(() => {
 		const names = labelGutter(
 			rows.map((source) => source.sourceId),
-			NAME_PX,
+			labels(),
 			GUTTER_GAP,
 			chartBox
 		);
-		const counts = labelGutter(rows.map(countText), COUNT_PX, GUTTER_GAP, chartBox);
+		const counts = labelGutter(rows.map(countText), labels(), GUTTER_GAP, chartBox);
 		return names === null || counts === null ? null : Math.max(names, counts);
 	});
 	const stacked = $derived(gutter === null);
@@ -132,7 +134,7 @@
 	const leftRoom = $derived(gutter ?? RIGHT_ROOM);
 	const innerRoom = $derived(Math.max(1, chartBox - leftRoom - RIGHT_ROOM));
 	const pitch = $derived(
-		rowPitch(innerRoom, stacked ? PITCH_MIN_STACKED : PITCH_MIN, PITCH_MAX)
+		rowPitch(innerRoom, Math.max(stacked ? PITCH_MIN_STACKED : PITCH_MIN, labels().leading * 3), Math.max(PITCH_MAX, labels().leading * 4))
 	);
 
 	/** The labels sit above the first row rather than beside their rules, where
@@ -273,7 +275,7 @@
 					y={box.bottom + 17}
 					text-anchor={tickAnchor(index, xAxis.ticks.length)}
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-tick="x"
 				>
 					{grouped(tick)}
@@ -284,7 +286,7 @@
 				x={box.left}
 				y={box.bottom + 32}
 				fill="var(--color-text-tertiary)"
-				font-size="10"
+				font-size={box.labels.fontSize}
 				data-axis-title
 			>
 				Article length, words
@@ -310,7 +312,7 @@
 					y={box.top - 10 - (caps.length - 1 - index) * LABEL_STEP}
 					text-anchor={flips(x, index) ? 'end' : 'start'}
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-cap-label={cap.words}
 				>
 					{capLabel(caps, index, numberFormat)}

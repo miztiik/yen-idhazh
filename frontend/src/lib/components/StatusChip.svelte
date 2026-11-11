@@ -25,21 +25,24 @@
 		display: inline-flex;
 		align-items: center;
 		padding: 1px var(--space-2);
-		border: 1px solid currentColor;
-		border-radius: var(--radius-full);
-		font-size: var(--text-xs);
-		line-height: 1.6;
+		border-radius: var(--console-control-radius);
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
 		white-space: nowrap;
 		color: var(--color-text-tertiary);
+		background: var(--tint-neutral);
 	}
 
 	.chip[data-tone='good'] {
 		color: var(--band-high);
+		background: var(--tint-good);
 	}
 	.chip[data-tone='warn'] {
 		color: var(--band-medium);
+		background: var(--tint-warn);
 	}
 	.chip[data-tone='bad'] {
 		color: var(--band-low);
+		background: var(--tint-bad);
 	}
 </style>

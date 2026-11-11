@@ -15,9 +15,9 @@ import { bin } from 'd3-array';
 import { line } from 'd3-shape';
 import { scaleLog } from 'd3-scale';
 
-import type { Frame } from '../frame';
+import { DEFAULT_CHART_LABELS, type Frame } from '../frame';
 import { tooFewSentence } from '../../console/waiting';
-import { valueAxis, type ValueAxis } from './axis';
+import { spaceValueTicks, valueAxis, type ValueAxis } from './axis';
 import type { NumberFormatConfig } from '../../number-format';
 
 export interface DistributionRule {
@@ -119,7 +119,10 @@ export function distribution(values: readonly number[], opts: DistributionOption
 			const value = 10 ** power;
 			ticks.push({ value, at: scale(value), text: String(value) });
 		}
-		x = { domain, along: 'x', scale: (value) => scale(value), ticks };
+		x = {
+			domain, along: 'x', scale: (value) => scale(value),
+			ticks: box.labels === DEFAULT_CHART_LABELS ? ticks : spaceValueTicks(ticks, box, 'x')
+		};
 	} else if (opts.domain !== undefined) {
 		const scale = (value: number) => box.left + (value - domain[0]) / (domain[1] - domain[0]) * box.innerWidth;
 		const axis = valueAxis(domain, box, {

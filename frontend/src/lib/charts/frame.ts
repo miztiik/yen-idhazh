@@ -45,9 +45,48 @@ export interface Frame {
 	bottom: number;
 	innerWidth: number;
 	innerHeight: number;
+	labels: ChartLabels;
 }
 
-export function frame(width: number, height: number, margin: Margin = MARGIN): Frame {
+export interface ChartLabels {
+	fontSize: number;
+	leading: number;
+	tracking: number;
+	measure?: (text: string) => number;
+}
+
+/** Legacy and reader geometry stays unchanged unless a caller supplies labels. */
+export const DEFAULT_CHART_LABELS: ChartLabels = { fontSize: 10, leading: 10, tracking: 0 };
+
+export function labelsFromStyle(
+	style: { size_rem: number; leading_rem: number; tracking_em: number },
+	rootSize: number
+): ChartLabels {
+	if (!Number.isFinite(rootSize) || rootSize <= 0) throw new Error('Chart labels need a positive computed root font size.');
+	return {
+		fontSize: style.size_rem * rootSize,
+		leading: style.leading_rem * rootSize,
+		tracking: style.tracking_em * style.size_rem * rootSize
+	};
+}
+
+export function frame(
+	width: number,
+	height: number,
+	margin: Margin = MARGIN,
+	labels: ChartLabels = DEFAULT_CHART_LABELS
+): Frame {
+	if (labels !== DEFAULT_CHART_LABELS) {
+		const scale = labels.fontSize / DEFAULT_CHART_LABELS.fontSize;
+		const extra = Math.max(0, labels.leading - DEFAULT_CHART_LABELS.leading);
+		margin = {
+			top: Math.max(margin.top, margin.top * scale, labels.leading / 2),
+			right: Math.max(margin.right, margin.right * scale),
+			bottom: Math.max(margin.bottom, margin.bottom + extra),
+			left: Math.max(margin.left, margin.left * scale)
+		};
+		height = Math.max(height, margin.top + margin.bottom + labels.leading * 2);
+	}
 	const left = margin.left;
 	const top = margin.top;
 	// A frame narrower than its own margins would flip the plot inside out.
@@ -62,7 +101,8 @@ export function frame(width: number, height: number, margin: Margin = MARGIN): F
 		top,
 		bottom,
 		innerWidth: right - left,
-		innerHeight: bottom - top
+		innerHeight: bottom - top,
+		labels
 	};
 }
 
@@ -181,7 +221,7 @@ export function tickAnchor(at: number, count: number): TickAnchor {
 	return 'middle';
 }
 
-/** The size every console axis sets a tick label at. */
+/** The fallback for callers without measured label metrics. */
 export const AXIS_LABEL_PX = 10;
 
 /** Clear pixels between two neighbouring labels. Two dates that touch read as
@@ -208,8 +248,10 @@ export const LABEL_ADVANCE_EM = 0.58;
  * on the client one frame before the browser has laid a label out. So the width
  * is computed from the string rather than measured off the element.
  */
-export function labelWidth(text: string, fontSize: number = AXIS_LABEL_PX): number {
-	return text.length * fontSize * LABEL_ADVANCE_EM;
+export function labelWidth(text: string, size: number | ChartLabels = AXIS_LABEL_PX): number {
+	if (typeof size === 'number') return text.length * size * LABEL_ADVANCE_EM;
+	return (size.measure?.(text) ?? text.length * size.fontSize * LABEL_ADVANCE_EM)
+		+ Math.max(0, text.length - 1) * size.tracking;
 }
 
 /** The most of a frame a column of row labels may take before the plot stops
@@ -231,7 +273,7 @@ export const MAX_GUTTER_SHARE = 0.3;
  */
 export function labelGutter(
 	texts: readonly string[],
-	fontSize: number,
+	fontSize: number | ChartLabels,
 	gap: number,
 	width: number
 ): number | null {
@@ -244,6 +286,7 @@ export function labelGutter(
 export interface AxisLabel {
 	x: number;
 	text: string;
+	anchor?: TickAnchor;
 }
 
 /** Which of an axis's labels can be drawn without two of them touching.
@@ -261,21 +304,25 @@ export interface AxisLabel {
  */
 export function thinLabels<T extends AxisLabel>(
 	labels: readonly T[],
-	fontSize: number = AXIS_LABEL_PX,
+	fontSize: number | ChartLabels = AXIS_LABEL_PX,
 	gap: number = AXIS_LABEL_GAP_PX
 ): T[] {
-	if (labels.length <= 2) return [...labels];
-	const half = (text: string) => labelWidth(text, fontSize) / 2;
+	if (labels.length <= 1) return [...labels];
+	const extent = (label: T) => labelExtent(label.x, label.text, label.anchor ?? 'middle', fontSize);
 	const last = labels[labels.length - 1];
+	if (labels.some((label) => label.anchor !== undefined) &&
+		extent(last)[0] < extent(labels[0])[1] + gap) return [last];
+	if (labels.length === 2) return [...labels];
 	const kept = [labels[0]];
-	let right = labels[0].x + half(labels[0].text);
-	const lastLeft = last.x - half(last.text);
+	let right = extent(labels[0])[1];
+	const lastLeft = extent(last)[0];
 	for (const label of labels.slice(1, -1)) {
-		if (label.x - half(label.text) < right + gap) continue;
+		const [from, to] = extent(label);
+		if (from < right + gap) continue;
 		// It also has to clear the end label, which is always drawn.
-		if (label.x + half(label.text) + gap > lastLeft) continue;
+		if (to + gap > lastLeft) continue;
 		kept.push(label);
-		right = label.x + half(label.text);
+		right = to;
 	}
 	kept.push(last);
 	return kept;
@@ -307,7 +354,7 @@ function labelExtent(
 	x: number,
 	text: string,
 	anchor: TickAnchor,
-	fontSize: number
+	fontSize: number | ChartLabels
 ): [number, number] {
 	const wide = labelWidth(text, fontSize);
 	if (anchor === 'start') return [x, x + wide];
@@ -321,7 +368,7 @@ function fits(
 	xs: readonly number[],
 	texts: readonly string[],
 	anchorOf: (at: number) => TickAnchor,
-	fontSize: number,
+	fontSize: number | ChartLabels,
 	gap: number
 ): boolean {
 	let previous = Number.NEGATIVE_INFINITY;
@@ -355,6 +402,7 @@ export interface DayAxisOptions {
 	columns: readonly number[];
 	bounds?: readonly [number, number];
 	fontSize?: number;
+	labels?: ChartLabels;
 	gap?: number;
 }
 
@@ -374,7 +422,8 @@ export interface DayAxisOptions {
 export function dayTicks(dates: readonly string[], options: DayAxisOptions): DayTick[] {
 	const days = dates.length;
 	if (days === 0) return [];
-	const { density, columns, fontSize = AXIS_LABEL_PX, gap = AXIS_LABEL_GAP_PX } = options;
+	const { density, columns, gap = AXIS_LABEL_GAP_PX } = options;
+	const fontSize = options.labels ?? options.fontSize ?? AXIS_LABEL_PX;
 	const labelDate = (date: string) => /^\d{4}$/.test(date) ? date : shortDate(date);
 	const ceiling = Math.max(1, Math.min(days, Math.floor(density)));
 	if (ceiling === 1) {

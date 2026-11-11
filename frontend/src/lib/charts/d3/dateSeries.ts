@@ -202,7 +202,7 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 
 	const band = bandScale(dates, box, 'x', opts.padding);
 	const columns = dates.map((date) => (band(date) ?? 0) + band.bandwidth() / 2);
-	const ticks = dayTicks(dates, { density: opts.density, columns, bounds: [box.left, box.right] });
+	const ticks = dayTicks(dates, { density: opts.density, columns, bounds: [box.left, box.right], labels: box.labels });
 	const rules = opts.rules ?? [];
 	for (const named of rules) {
 		if (!Number.isFinite(named.at) || !named.label.trim()) throw new Error('A date series rule needs at and a label.');

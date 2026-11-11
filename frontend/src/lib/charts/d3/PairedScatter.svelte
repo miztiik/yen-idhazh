@@ -7,8 +7,8 @@
 	 * accessible name and readout. Where there is no geometry it draws the empty state it was handed,
 	 * which for a floor missed names the floor.
 	 */
-	import { AXIS_LABEL_PX } from '$lib/charts/frame';
 	import EmptyState from './EmptyState.svelte';
+	import { DEFAULT_CHART_LABELS, tickAnchor } from '$lib/charts/frame';
 	import type { EmptyDrawing } from './empty';
 	import type { ScatterGeometry } from './pairedScatter';
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
@@ -69,20 +69,20 @@
 					dy="0.32em"
 					text-anchor="end"
 					fill="var(--color-text-tertiary)"
-					font-size={AXIS_LABEL_PX}>{tick.text}</text
+					font-size={box.labels.fontSize}>{tick.text}</text
 				>
 			{/if}
 		{/each}
 		<line x1={box.left} x2={box.right} y1={box.bottom} y2={box.bottom} stroke="var(--chart-axis)" />
-		{#each geometry.x.ticks as tick (tick.value)}
+		{#each geometry.x.ticks as tick, index (tick.value)}
 			<line x1={tick.at} x2={tick.at} y1={box.bottom} y2={box.bottom + TICK} stroke="var(--chart-axis)" />
 			{#if tick.text}
 				<text
 					x={tick.at}
-					y={box.bottom + TICK + AXIS_LABEL_PX}
-					text-anchor="middle"
+					y={box.bottom + TICK + box.labels.fontSize}
+					text-anchor={box.labels === DEFAULT_CHART_LABELS ? 'middle' : tickAnchor(index, geometry.x.ticks.length)}
 					fill="var(--color-text-tertiary)"
-					font-size={AXIS_LABEL_PX}>{tick.text}</text
+					font-size={box.labels.fontSize}>{tick.text}</text
 				>
 			{/if}
 		{/each}

@@ -81,6 +81,7 @@
 				{band.verdict.sentence}
 			</p>
 			{#if band.verdict.runs.length > 0}
+				<details class="run-verdicts"><summary>Run verdicts</summary>
 				<!-- One square a run, in the order they ran. It says what the sentence
 				     cannot: whether one run ate every failure or all five limped. Every
 				     square names its verdict in words, and the words after the squares
@@ -105,11 +106,12 @@
 					{/if}
 					<span class="runs-said" data-band-runs-said>{verdictLine}</span>
 				</p>
+				</details>
 			{/if}
 		</div>
 
 		<div class="fact" data-band-fact="worst">
-			<p class="fact-label">Worst thing right now</p>
+			<p class="fact-label">Needs attention</p>
 			{#if band.worst}
 				<!-- What the state costs, not only what it is. The strip keeps the short
 				     fragment; the band printing the same two words was one fact told
@@ -120,13 +122,14 @@
 				</p>
 			{:else}
 				<p class="fact-body" data-band-worst="clear">
-					Nothing on any console route is asking for attention.
+					No current issues.
 				</p>
 			{/if}
 		</div>
 
 		<div class="fact" data-band-fact="size">
 			<p class="fact-label">Site size</p>
+			<p class="fact-body" data-band-size>{band.size.sentence}</p>
 			{#if capPct !== null}
 				<!-- Drawn as markup, so it is on the page before any script runs. The
 				     number is beside it because a 0.1 percent bar is invisible and a
@@ -141,7 +144,6 @@
 					<span class="fill" style="inline-size: {Math.max(capPct, 0.4).toFixed(2)}%"></span>
 				</div>
 			{/if}
-			<p class="fact-body" data-band-size>{band.size.sentence}</p>
 		</div>
 	</div>
 </section>
@@ -151,18 +153,17 @@
 	   three panels the page owns, and the band belongs to the console rather
 	   than to the route under it. */
 	.band {
-		margin-top: var(--space-4);
-		padding: var(--space-4);
+		margin-top: 0;
+		padding: var(--console-control-padding-inline) var(--console-panel-padding);
 		border: 1px solid var(--color-rule);
-		border-radius: var(--radius-lg);
-		background: var(--color-surface-raised);
-		box-shadow: var(--shadow-sm);
+		border-radius: var(--console-panel-radius);
+		background: var(--color-surface);
 	}
 
 	.facts {
 		display: grid;
-		gap: var(--space-4);
-		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+		gap: var(--console-control-gap) var(--console-panel-gap);
+		grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
 	}
 
 	.fact {
@@ -173,14 +174,14 @@
 		margin: 0;
 		font-size: var(--text-xs);
 		line-height: var(--leading-xs);
-		font-weight: 400;
+		font-weight: var(--console-control-weight);
 		color: var(--color-text-tertiary);
 	}
 
 	.fact-body {
 		margin: var(--space-1) 0 0;
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
 		color: var(--color-text);
 	}
 
@@ -191,6 +192,16 @@
 	.fact-link:hover {
 		text-decoration: underline;
 	}
+	@media (max-width: 639px) {
+		.band { padding-block: var(--console-control-gap); }
+		.fact-label, .fact-body { display: inline; margin: 0; }
+		.fact-label::after { content: ': '; }
+		.band .run-verdicts { display: inline-block; margin-block-start: 0; margin-inline-start: var(--console-control-padding-block); }
+		.band .run-verdicts[open] { display: block; margin-inline-start: 0; }
+		.band .track { margin-block: var(--console-control-padding-block) 0; }
+	}
+	.run-verdicts { margin-block-start: var(--console-control-padding-block); font-size: var(--console-small-size); line-height: var(--console-small-leading); color: var(--color-text-secondary); }
+	.run-verdicts summary { cursor: pointer; }
 
 	.runs {
 		display: flex;

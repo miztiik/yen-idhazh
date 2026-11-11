@@ -135,31 +135,13 @@
 </div>
 
 <style>
-	.kpi-value.lede { font-size: var(--text-3xl); line-height: var(--leading-3xl); }
+	.kpi-value.lede { font-size: var(--console-value-size); line-height: var(--console-value-leading); }
 	.kpi {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-1);
-		padding: var(--space-4);
-		border: 1px solid var(--color-rule);
-		border-radius: var(--radius-lg);
-		background: var(--tint-neutral);
-		box-shadow: var(--shadow-sm);
-	}
-
-	/* The panel takes the hue of what it means, which is the same rule the
-	   confidence marks follow. */
-	.kpi[data-tone='info'] {
-		background: var(--tint-info);
-	}
-	.kpi[data-tone='good'] {
-		background: var(--tint-good);
-	}
-	.kpi[data-tone='warn'] {
-		background: var(--tint-warn);
-	}
-	.kpi[data-tone='bad'] {
-		background: var(--tint-bad);
+		gap: var(--console-control-padding-block);
+		padding-block: var(--console-control-gap);
+		min-inline-size: 0;
 	}
 
 	.kpi-label {
@@ -170,9 +152,11 @@
 
 	.kpi-value {
 		margin: 0;
-		font-size: var(--text-2xl);
-		line-height: var(--leading-2xl);
-		font-weight: 600;
+		font-family: var(--font-data);
+		font-size: var(--console-value-size);
+		line-height: var(--console-value-leading);
+		font-weight: var(--console-value-weight);
+		letter-spacing: var(--console-value-tracking);
 		color: var(--color-text);
 	}
 

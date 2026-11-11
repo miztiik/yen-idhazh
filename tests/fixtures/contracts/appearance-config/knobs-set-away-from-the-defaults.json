@@ -204,6 +204,48 @@
       90
     ]
   },
+  "console_style": {
+    "colors": {
+      "light": {
+        "canvas": "#f3f2ee", "inset": "#eae8e2", "surface": "#fffefb", "raised": "#fffffe",
+        "text": "#262620", "text_secondary": "#635f56", "text_tertiary": "#757065",
+        "rule": "#dbd7cc", "rule_strong": "#b7b0a1", "accent": "#0c756f",
+        "accent_hover": "#095e59", "on_accent": "#fffffe", "focus": "#0c756f",
+        "selected": "#ddeceb", "chart_axis": "#b7b0a1", "chart_grid": "#dbd7cc",
+        "categorical": ["#366b9b", "#7e54a1", "#17809a", "#a4437d", "#5a69b0", "#2a749f", "#9a5bac", "#787369"]
+      },
+      "dark": {
+        "canvas": "#1a1a18", "inset": "#161614", "surface": "#232320", "raised": "#2c2c28",
+        "text": "#f1eee6", "text_secondary": "#c2bdb2", "text_tertiary": "#a49d90",
+        "rule": "#3a3a33", "rule_strong": "#575449", "accent": "#6cc8bf",
+        "accent_hover": "#95dad1", "on_accent": "#132823", "focus": "#6cc8bf",
+        "selected": "#273e39", "chart_axis": "#575449", "chart_grid": "#3a3a33",
+        "categorical": ["#8cbde6", "#bfa3e0", "#73c7da", "#e7a2ca", "#a5b2e9", "#84c0dd", "#cfa5e1", "#b1ab9f"]
+      }
+    },
+    "typography": {
+      "ui_face": "system-sans", "heading_face": "system-mono", "data_face": "system-mono",
+      "small": {"size_rem": 0.875, "leading_rem": 1.125, "weight": 500, "tracking_em": 0.01},
+      "body": {"size_rem": 1, "leading_rem": 1.5, "weight": 500, "tracking_em": 0.01},
+      "control": {"size_rem": 1, "leading_rem": 1.5, "weight": 600, "tracking_em": 0.01},
+      "panel_title": {"size_rem": 1.125, "leading_rem": 1.75, "weight": 500, "tracking_em": 0},
+      "page_title": {"size_rem": 1.75, "leading_rem": 2.25, "weight": 500, "tracking_em": -0.01},
+      "value": {"size_rem": 2, "leading_rem": 2.5, "weight": 500, "tracking_em": -0.01}
+    },
+    "layout": {
+      "rail_width_rem": 13, "header_min_height_rem": 4,
+      "rail_padding_rem": 1.25, "rail_gap_rem": 0.75, "content_gap_rem": 1.75,
+      "control_min_height_rem": 3, "control_padding_inline_rem": 1,
+      "control_padding_block_rem": 0.5, "control_gap_rem": 0.75,
+      "panel_padding_rem": 1.25, "panel_gap_rem": 1.25, "group_gap_rem": 1.75, "columns_wide": 1
+    },
+    "radii": {"control_rem": 0.375, "panel_rem": 0.625},
+    "elevation": {
+      "light": {"panel": {"y_px": 2, "blur_px": 3, "alpha": 0.07}, "floating": {"y_px": 7, "blur_px": 17, "alpha": 0.13}},
+      "dark": {"panel": {"y_px": 1, "blur_px": 1, "alpha": 0.01}, "floating": {"y_px": 1, "blur_px": 1, "alpha": 0.01}}
+    },
+    "chart": {"axis_width_px": 1.5, "grid_width_px": 1.5, "line_width_px": 2.5, "grid_opacity": 0.75, "grid_dash_px": [2, 4], "linecap": "square"}
+  },
   "digest": {
     "archive_page_size": 25,
     "archive_recent_days": 7,
@@ -281,5 +323,5 @@
     "movement_good_light": "#2f6f5e",
     "surface_tint_alpha": 0.07
   },
-  "version": "2026-10-04"
+  "version": "2026-11-10"
 }

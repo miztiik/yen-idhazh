@@ -27,7 +27,9 @@
 	 * pairs read as one story. None of them shares a column with another, so a
 	 * pointer, a tap or an arrow key picks one at a time, left to right.
 	 */
-	import { chartWidth, frame, linearAxis, observeWidth, tickAnchor } from '$lib/charts/frame';
+	import { chartWidth, linearAxis, observeWidth, tickAnchor } from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
+	const frame = useChartFrame();
 	import { factsOf, markReadout, recordsOf, type ReadoutFacts } from '$lib/charts/readout';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -385,7 +387,7 @@
 					x={at(zone[0]) + 4}
 					y={box.bottom - 6}
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-holdout-zone-label
 				>
 					one day's fall
@@ -420,7 +422,7 @@
 						y={markY - 10}
 						text-anchor="middle"
 						fill="var(--color-text-secondary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-holdout-span-label
 					>
 						{marginDistance(outcome.margin ?? 0, numberFormat)}
@@ -443,7 +445,7 @@
 					y={box.top + 10}
 					text-anchor="middle"
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-holdout-rule-label
 				>
 					the line, {reads(applied)}
@@ -453,7 +455,7 @@
 					x={box.left}
 					y={markY - 24}
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-holdout-row-label="apart"
 				>
 					{apartAt === null
@@ -482,7 +484,7 @@
 							y={markY + 20}
 							text-anchor="middle"
 							fill="var(--color-text-secondary)"
-							font-size="10"
+							font-size={box.labels.fontSize}
 							data-holdout-dot-label={mark.score.toFixed(4)}
 						>
 							{reads(mark.score)}
@@ -519,7 +521,7 @@
 					x={box.left}
 					y={stripY - 14}
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-holdout-strip-label
 				>
 					{agreedAt === null
@@ -574,10 +576,10 @@
 				{#each xAxis.ticks as tick, index (tick)}
 					<text
 						x={xAxis.scale(tick)}
-						y={box.bottom + 12}
+						y={box.bottom + box.labels.leading}
 						text-anchor={tickAnchor(index, xAxis.ticks.length)}
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-tick="x"
 					>
 						{reads(tick)}

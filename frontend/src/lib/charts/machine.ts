@@ -200,12 +200,16 @@ export function clocksChart(
 	tolerancePct: number,
 	numberFormat: NumberFormatConfig
 ): RankedGeometry | null {
-	return rankedList(pairs.flatMap((pair) => pair.gapPct === null ? [] : [{
+	const ranked = rankedList(pairs.flatMap((pair) => pair.gapPct === null ? [] : [{
 		label: pair.label,
 		value: pair.gapPct,
 		context: `item ledger ${pair.ledger === null ? '-' : formatNumber(pair.ledger, numberFormat)}; server ${pair.server === null ? '-' : formatNumber(pair.server, numberFormat)} tokens a second`,
 		...(pair.agrees === false ? { status: 'disagrees' } : {})
 	}]), { rules: [{ at: tolerancePct, label: 'Allowed disagreement' }] });
+	for (const entry of ranked?.rows ?? []) {
+		entry.row.value = `${formatNumber(entry.value, numberFormat, { si: false })}%`;
+	}
+	return ranked;
 }
 
 // ---------------------------------------------------------------------------

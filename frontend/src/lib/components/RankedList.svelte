@@ -179,6 +179,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
+		container-type: inline-size;
 	}
 
 	.ranked-note {
@@ -334,7 +335,7 @@
 	/* The console frame is wide, and a row that keeps four columns on a laptop
 	   half-window crushes the bar the row exists to show. Below that the bar
 	   takes the full width instead of a sliver of it. */
-	@media (max-width: 48rem) {
+	@container (max-width: 48rem) {
 		.ranked-rows {
 			grid-template-columns: minmax(0, 1fr) auto;
 		}

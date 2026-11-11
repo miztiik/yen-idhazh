@@ -14,6 +14,7 @@
 	import type { Tile, TileGeometry } from './tileStrip';
 	import { tileWindow } from '$lib/charts/d3/tileStrip';
 	import { chartWidth, dayTicks, observeWidth } from '$lib/charts/frame';
+	import { useChartLabels } from '$lib/charts/label-context';
 	import { markReadout, type Readout } from '$lib/charts/readout';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 
@@ -42,12 +43,13 @@
 		showAxis?: boolean;
 		stateWords?: Record<Tile['state'], string>;
 	} = $props();
+	const labels = useChartLabels();
 	let selected = $state<number | null>(null);
 	let measured = $state<number | null>(null);
 	const visible = $derived(geometry === null ? null : tileWindow(geometry, chartWidth(measured, width), tileMinPx));
 	const endpoints = $derived(visible === null || visible.tiles.length === 0 ? [] : dayTicks(
 		[visible.tiles[0].date, visible.tiles[visible.tiles.length - 1].date],
-		{ density: 2, columns: [0, chartWidth(measured, width)] }
+		{ density: 2, columns: [0, chartWidth(measured, width)], labels: labels() }
 	));
 	$effect(() => {
 		if (selected !== null && visible !== null &&

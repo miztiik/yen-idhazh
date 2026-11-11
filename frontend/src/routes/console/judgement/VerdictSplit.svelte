@@ -20,7 +20,9 @@
 	 * ranges on one score axis answer the question a reader actually brings: do
 	 * the two populations still separate?
 	 */
-	import { chartWidth, frame, linearAxis, observeWidth } from '$lib/charts/frame';
+	import { chartWidth, linearAxis, observeWidth } from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
+	const frame = useChartFrame();
 	import Panel from '$lib/components/Panel.svelte';
 	import { grouped as formatGrouped } from '$lib/charts/series';
 	import { formatNumber } from '$lib/number-format';
@@ -193,7 +195,7 @@
 						x={box.left}
 						y={strip.y - 10}
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-verdict-strip-label={strip.name}
 					>
 						{strip.at === null
@@ -236,10 +238,10 @@
 				{#each xAxis.ticks as tick (tick)}
 					<text
 						x={xAxis.scale(tick)}
-						y={box.bottom + 12}
+						y={box.bottom + box.labels.leading}
 						text-anchor="middle"
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-tick="x"
 					>
 						{reads(tick)}

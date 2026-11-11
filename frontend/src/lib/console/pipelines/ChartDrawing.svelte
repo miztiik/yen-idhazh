@@ -7,7 +7,8 @@
 	import { flow as placeFlow } from '$lib/charts/d3/flow';
 	import Flow from '$lib/charts/d3/Flow.svelte';
 	import { emptyState } from '$lib/charts/d3/empty';
-	import { frame, MARGIN, observeWidth } from '$lib/charts/frame';
+	import { MARGIN, observeWidth } from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import { dailyFiguresSummary, dailyFiguresRows } from '$lib/console/daily-figures';
 	import type { ChartDay } from '$lib/server/chart-days';
 	import type { ConsoleConfig } from '$lib/server/config';
@@ -15,6 +16,7 @@
 	import { useNumberFormat } from '$lib/number-format-context';
 	let { days, windowDays, knobs }: { days: ChartDay[]; windowDays: number; knobs: ConsoleConfig } = $props();
 	const numberFormat = useNumberFormat();
+	const frame = useChartFrame();
 	let measured = $state<number | null>(null);
 	const thresholds = $derived({ ruleDays: knobs.chart_rule_days, minutesTarget: knobs.chart_minutes_target, coveragePct: knobs.chart_coverage_pct });
 	const rule = $derived(chartRule(days, thresholds, windowDays, numberFormat));

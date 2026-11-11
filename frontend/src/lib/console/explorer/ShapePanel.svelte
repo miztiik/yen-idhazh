@@ -15,7 +15,7 @@
 	import { untrack, type Snippet } from 'svelte';
 	import type { Column, DateStamp, Row } from '$lib/data/ledger';
 	import { tooFewSentence } from '$lib/console/waiting';
-	import { frame } from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import { distribution } from '$lib/charts/d3/distribution';
@@ -75,6 +75,7 @@
 		placeholder?: Snippet | null;
 	} = $props();
 	const numberFormat = useNumberFormat();
+	const frame = useChartFrame();
 
 	let box = $state<HTMLDivElement | null>(null);
 	let stack = $state<HTMLDivElement | null>(null);

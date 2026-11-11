@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
+	import { useWindowChoice } from '$lib/console/window-slot';
 	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
 	import { rangeFor, routeReach, sliceOnce, retryAsks, type PanelQuery, type Range, type RouteReach } from '$lib/console/queries/window';
 	import { pipelinesRecord, publishedShareFor, retryReach } from '$lib/console/pipelines/record-window';
@@ -53,8 +54,8 @@
 		[queries.articleAgeQuery.name]: (range) => sliceOnce(queries.articleAgeQuery, range)
 	};
 	type Answer = SliceResult | LedgerReach | 'pending';
-	const WINDOW_KEY = 'idhazh:console-window';
-	let windowDays = $state(knobs.default_window_days);
+	const choice = useWindowChoice();
+	const windowDays = $derived(choice.days);
 	let mounted = $state(false);
 	let reach = $state<RouteReach | null>(null);
 	let answers = $state<Record<string, Answer>>(Object.fromEntries(asks.map((query) => [query.name, 'pending'])));
@@ -75,10 +76,9 @@
 		?? { measuredDays: 0, unused: 0, chartablePublished: 0, unusedPct: null });
 	const record = $derived(recordReady ? pipelinesRecord(reach, windowDays) : null);
 
-	async function ask(selected: readonly PanelQuery[], retryWindow = false) {
+	async function ask(selected: readonly PanelQuery[], retryWindow = false, days = windowDays) {
 		if (selected.length === 0) return;
 		const ticket = ++revision;
-		const days = windowDays;
 		const previous = retryWindow ? reach : null;
 		answers = { ...answers, ...Object.fromEntries(selected.map((query) => [query.name, 'pending'])) };
 		ranges = Object.fromEntries(Object.entries(ranges).filter(([name]) => !selected.some((query) => query.name === name)));
@@ -98,26 +98,14 @@
 	}
 	onMount(() => {
 		mounted = true;
-		const stored = Number(preference());
-		if (knobs.window_presets.includes(stored)) windowDays = stored;
-		void ask(asks);
 		return () => { revision += 1; };
 	});
+	$effect(() => {
+		const days = windowDays;
+		if (mounted) untrack(() => { void ask(asks, false, days); });
+	});
 	function show(days: number) {
-		if (!knobs.window_presets.includes(days)) throw new Error('The window must be a configured preset.');
-		windowDays = days;
-		preference(String(days));
-		void ask(asks);
-	}
-	function preference(value?: string): string | null {
-		try {
-			if (value !== undefined) localStorage.setItem(WINDOW_KEY, value);
-			return localStorage.getItem(WINDOW_KEY);
-		} catch (error) {
-			if (!(error instanceof DOMException) || (error.name !== 'SecurityError' && error.name !== 'QuotaExceededError')) throw error;
-			console.warn('[console] The window preference could not be read or saved; the selected window remains usable for this page.');
-			return null;
-		}
+		choice.select(days);
 	}
 	function retry() {
 		if (busy) return;
@@ -193,7 +181,7 @@
 						windowPending={mounted && reach === null}
 						height={knobs.chart_height} width={knobs.chart_width} tickDensity={data.chart.tick_density} readoutMaxShare={data.chart.readout_max_share} />
 				{:else}
-					<Panel {id} title={titles[id]} wide verdict={id === 'at-a-glance'}>
+					<Panel {id} title={titles[id]} wide={['at-a-glance', 'run-timeline', 'chart-drawing'].includes(id)} verdict={id === 'at-a-glance'}>
 						<div data-windowed={id === 'run-timeline' || id === 'chart-drawing' ? undefined : id} data-window-days={id === 'run-timeline' || id === 'chart-drawing' ? undefined : windowDays}
 							aria-label={id === 'run-timeline' || id === 'chart-drawing' ? undefined : `${titles[id]}, selected window ${countDays(windowDays)}`}
 							data-readout-fetched={id !== 'extraction' && (panelQueries[id] !== undefined || id === 'run-timeline') ? '' : undefined}

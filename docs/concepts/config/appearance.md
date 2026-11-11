@@ -18,6 +18,7 @@ Its blocks:
 | --- | --- |
 | `digest` | The day page. Formerly `idhazh.json`'s `ui` block, unchanged in shape. |
 | `console` | The operator viewport. Formerly `idhazh.json`'s `console` block. |
+| `console_style` | Console-only colors, type, rail, controls, panel spacing, elevation and chart strokes. |
 | `assist` | On-device archive search. Formerly `idhazh.json`'s `assist` block. |
 | `frame` | The frame maximums, the reading measure, the gutter range, and the three breakpoints. |
 | `theme` | Whether gradients, elevation and the display face are drawn, and how strongly a panel takes a tint. |
@@ -94,6 +95,31 @@ relying on colour alone. The native contract bounds each setting, and the typed
 build-time UI projection passes only these values to the reader.
 
 ## Console surface
+
+`console_style` is owned only by `AppearanceConfig`, not by `AppConfig` or
+`ConsoleConfig`. Its native model is
+`backend/idhazh/contracts/knobs/console_style.py`; the small frontend copy is
+`frontend/src/lib/console/console-style.ts`. Binding tests hold fields, defaults
+and font/line-cap vocabularies together.
+
+Missing blocks and leaves use their role's native defaults, including old
+appearance documents with no style block. Arrays replace whole. Explicit null
+is valid only for `chart.grid_dash_px`. Unknown keys, non-finite numbers,
+numeric strings and booleans in numeric fields are refused.
+
+Colors are lowercase six-digit hex. Each theme has eight distinct categorical
+entries, separate from confidence and movement colors. Font choices use the
+existing `inter`, `system-sans` and `system-mono` stacks; no new font is fetched.
+Type size, leading, weight and tracking are validated together. Layout, radii,
+shadow and stroke bounds are declared by the native fields. Primary controls
+retain their touch-target floor.
+
+`frontend/scripts/build-frame-css.mjs` validates the appearance document through
+the existing Python environment, then emits `frame.generated.css`. Its callable
+renderer also accepts validated in-memory inputs. The operator selector covers
+the root canvas and shared header before paint, and rebinds dependent series
+aliases inside that scope. Reader/base token values are unchanged. Display-face,
+elevation and motion switches retain their existing fallbacks.
 
 Shared console knobs stay in `config/appearance.json`. Each route owns its panel
 order, judged ids and route-only numeric knobs in `config/console/<route>.json`.
@@ -226,7 +252,7 @@ is what a morning before the first run looks like, and one from the day before
 that means a whole day passed with nothing recorded. It decides only when the
 count is said, never what it counts - the count is the whole days between the
 record's day and today, so zero is refused
-([../../architecture/publishing/what-sits-above-every-console-route.md](../../architecture/publishing/what-sits-above-every-console-route.md#the-sentence-under-the-strip-dates-the-record)).
+([../../architecture/publishing/what-sits-above-every-console-route.md](../../architecture/publishing/what-sits-above-every-console-route.md#run-completion-and-record-reach-are-different-dates)).
 
 Keep a shared knob when a real reader computes with it, not because a deleted
 engine or a test object declares it. `min_window_days` still bounds the backend
@@ -458,6 +484,15 @@ disagree. None of them reaches the prerendered `/archive/` document.
  where our origin gzips them to 16.22 MB (measured 2026-09-08 on a laptop
  against CloudFront AMS58-P3, n=3, spread 0), about 18 seconds on a 10 Mbit line
  and about 100 on a 2 Mbit one.
+
+## Design rationale
+
+Console styling is a separate defaulted appearance family because the operator
+needs a complete visual system without changing reader themes or the shared
+viewport contract. Native validation precedes CSS production; a configuration
+edit cannot become unbounded CSS. Mounted charts measure the generated type in
+CSS pixels and use it for margins, gutters and tick clearance, rather than
+enlarging labels over fixed geometry.
 
 ## See also
 

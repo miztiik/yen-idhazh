@@ -41,14 +41,13 @@
 	 */
 	import {
 		AXIS_LABEL_GAP_PX,
-		AXIS_LABEL_PX,
 		chartWidth,
-		frame,
 		linearAxis,
 		observeWidth,
 		thinLabels,
 		type Margin
 	} from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import ChartReadout from './ChartReadout.svelte';
 	import { plural } from '$lib/format';
@@ -94,6 +93,7 @@
 	} = $props();
 
 	/** Room for the count axis, the percent axis and the two rule labels. */
+	const frame = useChartFrame();
 	const MARGIN: Margin = { top: 26, right: 44, bottom: 44, left: 40 };
 
 	let measured = $state<number | null>(null);
@@ -218,7 +218,7 @@
 	 * on this console. `thinLabels` owns it, so an eleven-edge axis at 390 can
 	 * be checked without a ledger that happens to span eleven doublings.
 	 */
-	const shownEdges = $derived(thinLabels(edges, AXIS_LABEL_PX, AXIS_LABEL_GAP_PX));
+	const shownEdges = $derived(thinLabels(edges, box.labels, AXIS_LABEL_GAP_PX));
 
 	/** One band's sentence, kept on its bar as its name. Every word of it is in the
 	 * strip at that band: the heading names the band, the bar's entry the count,
@@ -321,7 +321,7 @@
 					y={round(yBars.scale(tick)) + 3}
 					text-anchor="end"
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-tick="y"
 				>
 					{tick}
@@ -336,7 +336,7 @@
 					y={round(yPct(tick)) + 3}
 					text-anchor="start"
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-tick="pct"
 				>
 					{tick}%
@@ -369,7 +369,7 @@
 					y={box.bottom + 14}
 					text-anchor="middle"
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-tick="x"
 				>
 					{edge.text}
@@ -415,7 +415,7 @@
 					y={rule.key === 'median' ? box.top - 14 : box.top - 2}
 					text-anchor={x(rule.seconds) > box.right - 90 ? 'end' : 'middle'}
 					fill="var(--color-text-secondary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-hist-rule-label={rule.key}
 				>
 					{rule.label}
@@ -428,7 +428,7 @@
 				x={box.left}
 				y={box.bottom + 32}
 				fill="var(--color-text-tertiary)"
-				font-size="10"
+				font-size={box.labels.fontSize}
 				data-axis-title
 			>
 				{subject}, seconds
@@ -438,7 +438,7 @@
 				y={box.bottom + 32}
 				text-anchor="end"
 				fill="var(--color-text-tertiary)"
-				font-size="10"
+				font-size={box.labels.fontSize}
 				data-axis-title="cumulative"
 			>
 				{nouns.charAt(0).toUpperCase()}{nouns.slice(1)} done by then, percent

@@ -2,7 +2,8 @@
 	import DateSeries from '../../charts/d3/DateSeries.svelte';
 	import { dateSeries, type SeriesInput } from '../../charts/d3/dateSeries';
 	import { emptyState } from '../../charts/d3/empty';
-	import { chartWidth, frame, observeWidth } from '../../charts/frame';
+	import { chartWidth, observeWidth } from '../../charts/frame';
+	import { useChartFrame } from '../../charts/label-context';
 	import type { ModelRule } from '../../charts/d3/model-rule';
 	import type { ChartConfig } from '../../server/config';
 	import { completeModelRule } from './model-rule';
@@ -13,6 +14,7 @@
 		stacked?: boolean; rules?: readonly { at: number; label: string }[];
 		domain?: [number, number]; note?: string;
 	} = $props();
+	const frame = useChartFrame(() => chart);
 	let measured = $state<number | null>(null);
 	const box = $derived(frame(chartWidth(measured, chart.width_px), chart.height_px));
 	const fullRule = $derived(completeModelRule(rule, series.flatMap((one) => one.points.map((point) => point.date))));

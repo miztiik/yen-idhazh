@@ -22,6 +22,7 @@ for (const [id, name] of PANELS) {
 			['../span-words', lib('console/span-words')], ['../../format', lib('format')],
 			['../../charts/d3/dateSeries', lib('charts/d3/dateSeries')],
 			['../../charts/d3/empty', lib('charts/d3/empty')], ['../../charts/frame', lib('charts/frame')],
+			['../../charts/label-context', lib('charts/label-context')],
 			['../../components/KpiCard.svelte', './KpiCard.server.mjs'],
 			['../../components/Sparkline.svelte', './Sparkline.server.mjs'],
 			['./Series.svelte', './Series.server.mjs'], ['../../charts/d3/DateSeries.svelte', './DateSeries.server.mjs'],

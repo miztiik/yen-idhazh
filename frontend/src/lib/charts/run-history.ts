@@ -182,6 +182,7 @@ export interface StripAxisOptions {
 	/** One column's pitch in pixels: `cell + gap` from `cellFor` or
 	 * `denseCellFor`. The room a grid-placed label actually has. */
 	pitch: number;
+	labels?: import('./frame').ChartLabels;
 }
 
 /** Where each date label sits, for a strip of `dates` in chronological order.
@@ -200,7 +201,8 @@ export function axisLabels(dates: string[], options: StripAxisOptions): AxisLabe
 	}
 	return dayTicks(dates, {
 		density: options.density,
-		columns: dates.map((_, index) => index * options.pitch)
+		columns: dates.map((_, index) => index * options.pitch),
+		labels: options.labels
 	})
 		.filter((tick) => tick.text !== '')
 		.map((tick) => ({

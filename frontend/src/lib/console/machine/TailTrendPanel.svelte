@@ -18,7 +18,6 @@
 	import {
 		chartWidth,
 		dayColumns,
-		frame,
 		linearAxis,
 		modelRuleRow,
 		modelRuleTitle,
@@ -29,6 +28,7 @@
 		observeWidth,
 		type Frame
 	} from '$lib/charts/frame';
+	import { useChartFrame, useChartLabels } from '$lib/charts/label-context';
 	import { pointerReadout, readoutMarks } from '$lib/charts/readout';
 	import { shortDate } from '$lib/format';
 	import {
@@ -76,6 +76,8 @@
 	/** One sub-plot, and the air between two of them. Five stacked rather than
 	 * five side by side: they share the day axis at the foot, so a reader
 	 * comparing p50 with p99 on one run reads straight down one column. */
+	const frame = useChartFrame(() => chart);
+	const labels = useChartLabels();
 	const TAIL_CELL_PX = 96;
 	const TAIL_GAP_PX = 12;
 	const TAIL_MARGIN = { top: 16, right: 12, bottom: 8, left: 52 };
@@ -116,7 +118,7 @@
 	 * them that the p99 is twenty times the p50. The scale is built in the first
 	 * cell's pixels and every other cell is the same box moved down. */
 	const tailY = $derived(
-		linearAxis(tailExtent, [TAIL_CELL_PX - TAIL_MARGIN.bottom, TAIL_MARGIN.top])
+		linearAxis(tailExtent, [tailBox(0).bottom, tailBox(0).top])
 	);
 	function tailAtY(at: number, value: number): number {
 		return Math.round((tailY.scale(value) + at * (TAIL_CELL_PX + TAIL_GAP_PX)) * 10) / 10;
@@ -128,7 +130,8 @@
 		runTicks(
 			tailRuns.map((run) => run.date),
 			tailX,
-			chart.tick_density
+			chart.tick_density,
+			tailBox(0).labels
 		)
 	);
 	const tailRules = $derived(modelRules(modelChanges, tailDates, tailX));
@@ -213,7 +216,7 @@
 					{#each PERCENTILES as percentile, at (percentile)}
 						{@const box = tailBox(at)}
 						<line x1={box.left} x2={box.right} y1={box.bottom} y2={box.bottom} stroke="var(--chart-axis)" />
-						<text x={box.left} y={box.top} fill="var(--chart-label)" font-size="11">p{percentile}, not measured</text>
+						<text x={box.left} y={box.top} fill="var(--chart-label)" font-size={box.labels.fontSize}>p{percentile}, not measured</text>
 					{/each}
 				</svg>
 			</div>
@@ -258,7 +261,7 @@
 								y={box.bottom + 3}
 								text-anchor="end"
 								fill="var(--color-text-tertiary)"
-								font-size="10"
+								font-size={box.labels.fontSize}
 							>
 								0
 							</text>
@@ -267,7 +270,7 @@
 								y={box.top + 8}
 								text-anchor="end"
 								fill="var(--color-text-tertiary)"
-								font-size="10"
+								font-size={box.labels.fontSize}
 								data-latency-top={tailY.domain[1]}
 							>
 								{formatNumber(tailY.domain[1], chart.number_format, { exact: true, si: false })}s
@@ -276,7 +279,7 @@
 								x={box.left}
 								y={box.top - 4}
 								fill="var(--color-text-secondary)"
-								font-size="11"
+								font-size={box.labels.fontSize}
 								data-latency-plot={`p${percentile}`}
 							>
 								p{percentile}
@@ -322,7 +325,7 @@
 								x={rule.x + 3}
 								y={tailBox(0).top + 9}
 								fill="var(--chart-change)"
-								font-size="10"
+								font-size={labels().fontSize}
 								data-model-rule-label={rule.date}
 							>
 								{MODEL_RULE_LABEL}
@@ -357,7 +360,7 @@
 									y={foot + 16}
 									text-anchor={label.anchor}
 									fill="var(--color-text-tertiary)"
-									font-size="10"
+									font-size={labels().fontSize}
 									data-day-axis
 								>
 									{label.text}

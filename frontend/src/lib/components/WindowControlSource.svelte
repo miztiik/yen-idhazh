@@ -1,11 +1,5 @@
 <script lang="ts">
-	/** The route's half of the days control: it draws nothing, and hands the
-	 * route's window up to the console layout, which draws the control.
-	 *
-	 * A route renders this where it rendered the control, with the same props,
-	 * so the window and everything that follows from it stay in the route that
-	 * owns them. The layout is what puts the control on the strip.
-	 */
+	/** Hand the active route's window, record reach and fetch state to the layout. */
 	import { fillWindowSlot } from '$lib/console/window-slot';
 	import type { RecordWindow } from '$lib/console/waiting';
 

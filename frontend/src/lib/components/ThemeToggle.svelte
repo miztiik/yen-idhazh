@@ -37,4 +37,21 @@
 	data-theme-toggle
 >
 	<Icon id="theme-dark" />
+	<span class="theme-word">{choice === 'dark' ? 'Light theme' : 'Dark theme'}</span>
 </button>
+
+<style>
+	.theme-word { display: none; }
+	:global(.frame:has([data-surface='operator'])) button {
+		gap: var(--console-control-gap);
+		min-block-size: var(--console-control-min-height);
+		padding: var(--console-control-padding-block) var(--console-control-padding-inline);
+		border-radius: var(--console-control-radius);
+		background: var(--color-surface);
+		color: var(--color-text-secondary);
+		font-size: var(--console-control-size);
+		line-height: var(--console-control-leading);
+		font-weight: var(--console-control-weight);
+	}
+	:global(.frame:has([data-surface='operator'])) .theme-word { display: inline; }
+</style>
