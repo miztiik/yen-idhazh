@@ -216,6 +216,9 @@ def test_projection_preserves_native_shape_and_request_budget() -> None:
         }
         assert list(branch["properties"]) == list(expected["properties"])
         for field, leaf in branch["properties"].items():
+            if field == "speaker":
+                assert leaf == {"$ref": "#/$defs/LabelRangeSpeaker"}
+                leaf = schema["$defs"]["LabelRangeSpeaker"]
             if field in {"sentence_start_id", "sentence_end_id"}:
                 assert {key: value for key, value in leaf.items() if key != "enum"} == expected[
                     "properties"

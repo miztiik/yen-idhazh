@@ -57,10 +57,12 @@ def bind_label_reference_choices(
                     | {
                         "sentence_start_id": properties["sentence_start_id"] | {"enum": [first]},
                         "sentence_end_id": properties["sentence_end_id"] | {"enum": ends},
+                        "speaker": {"$ref": "#/$defs/LabelRangeSpeaker"},
                     }
                 }
             )
     if branches:
+        definitions["LabelRangeSpeaker"] = properties["speaker"].copy()
         definitions["SentenceRange"] = {"anyOf": branches}
     else:
         for name in ("quotes", "claims"):

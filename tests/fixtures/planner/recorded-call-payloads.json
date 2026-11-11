@@ -194,9 +194,7 @@
                   ]
                 },
                 "speaker": {
-                  "maxLength": 60,
-                  "title": "Speaker",
-                  "type": "string"
+                  "$ref": "#/$defs/LabelRangeSpeaker"
                 },
                 "attribution": {
                   "enum": [
@@ -246,9 +244,7 @@
                   ]
                 },
                 "speaker": {
-                  "maxLength": 60,
-                  "title": "Speaker",
-                  "type": "string"
+                  "$ref": "#/$defs/LabelRangeSpeaker"
                 },
                 "attribution": {
                   "enum": [
@@ -276,6 +272,11 @@
               "type": "object"
             }
           ]
+        },
+        "LabelRangeSpeaker": {
+          "maxLength": 60,
+          "title": "Speaker",
+          "type": "string"
         }
       },
       "additionalProperties": false,

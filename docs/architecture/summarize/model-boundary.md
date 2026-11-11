@@ -343,7 +343,10 @@ can select only printed references and source ranges its existing anchoring
 can use. Complete native-derived range branches keep correlated endpoints
 together; independent enums or constraints beside a union can admit unusable
 pairs when converted to a grammar. Historical reply readers retain the native
-shape. Schema/grammar size, native conversion/initialization and peak memory
+shape. A request-local definition shares the unchanged speaker leaf instead
+of recompiling its bounded string in every range branch; expanding that one
+reference reproduces the direct schema, including field and alternative order.
+Schema/grammar size, native conversion/initialization and peak memory
 are separate costs from prompt-token capacity; measure the dense source-cap
 case before choosing an equivalent factoring.
 
