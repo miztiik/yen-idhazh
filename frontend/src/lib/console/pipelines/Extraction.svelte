@@ -35,10 +35,11 @@
 </script>
 <div data-eval-panel="extraction" use:observeWidth={(next) => measured = next}>
 	<p data-comparison="Chartable articles against narrative and unclassified ones.">Chartable articles against narrative and unclassified ones, beside recorded extraction flags.</p>
+	<p data-extraction-published-window>Published-day evidence: {viewport.start} through {viewport.end} UTC.</p>
 	{#if publishedShare.measuredDays === 0}
 		<p data-extraction="none" data-lede class="unmeasured-lede">The build-time published chart-share record is unavailable in this window.</p>
 	{:else}
-		<KpiCard label="Of those, published without one" rule={noRule} lede
+		<KpiCard label="Published without a chart" rule={noRule} lede
 			value={publishedShare.unusedPct === null ? 'Not measured' : `${publishedShare.unusedPct}%`}
 			note="{publishedShare.unused} of {publishedShare.chartablePublished} chartable published articles" />
 	{/if}

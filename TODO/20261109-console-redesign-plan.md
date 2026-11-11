@@ -42,7 +42,7 @@ Table C
 | C2 | 2 | Diagnose compact-data publication lag | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Replace the full console visual system and share window behavior | 1 | C | DONE | `vigilant-funicular` | - | App session `758b5e38-010f-4ba5-9945-399a21883402`; branch `console-visual-rebuild` |
 | C4 | 4 | Remove the duplicate refusal view and redraw run token volume | 1 | D | DONE | `cuddly-doodle` | - | App session `68c70212-4ac7-4a55-883e-f76bf3f4945c`; branch `settled-console-charts` |
-| C5 | 5 | Correct retained chart readings and evidence windows | 4 | E | PENDING | - | - | - |
+| C5 | 5 | Correct retained chart readings and evidence windows | 4 | E | DONE | `redesigned-system` | - | App session `1981e1da-00bf-456b-a4db-13554ac3fb87`; branch `chart-readings-and-windows` |
 | C6 | 6 | Restore collection needed by retained hardware diagnostics | 4 | F | PENDING | - | - | - |
 | C7 | 7 | Make retained explorer answers directly reachable and drawable | 1 | G | DONE | `ubiquitous-doodle` | - | App session `735f58fd-23bf-4189-9efb-d08402988c46`; branch `explorer-reliability` |
 | C8 | 8 | Settle remaining permanent cuts, page moves and token anomaly rules | 1 | H | BLOCKED | - | - | Individual dispositions and anomaly/baseline definitions remain unresolved. |
@@ -519,20 +519,29 @@ Table U
 - **Scope:** Fix retained unit/window errors and demonstrated unresolved loading.
 - **Files touched:**
   - `frontend/src/lib/charts/d3/Distribution.svelte`
+  - `frontend/src/lib/charts/d3/distribution.ts`
+  - `frontend/src/lib/components/RouteStatus.svelte`
   - `frontend/src/routes/console/+page.svelte`
   - `frontend/src/routes/console/model/+page.svelte`
+  - `frontend/src/routes/console/model/+page.server.ts`
+  - `frontend/src/lib/console/model/Cards.svelte`
+  - `frontend/src/lib/console/model/cards.ts`
   - `frontend/src/lib/console/model/Query.svelte`
-  - `frontend/src/routes/console/voices/+page.svelte`
+  - `frontend/src/lib/console/pipelines/Extraction.svelte`
   - `frontend/src/lib/console/pipelines/ArticleAge.svelte`
+  - `frontend/src/lib/console/pipelines/article-age.ts`
   - `frontend/tests/console-readout-data.spec.ts`
-  - `frontend/tests/console-pipelines-window.spec.ts`
-  - `frontend/tests/console-pipelines-native.spec.ts`
   - `frontend/tests/console-pipelines-window-page.spec.ts`
+  - `frontend/tests/console-pipelines-reserved.spec.ts`
   - `frontend/tests/console-model-nothings.spec.ts`
-  - `frontend/tests/console-panel-queries.spec.ts`
+  - `frontend/tests/console-model-builder.spec.ts`
+  - `frontend/tests/console-model-ledgers.spec.ts`
+  - `frontend/tests/support/console-expect/console-built-page/model.ts`
   - `docs/architecture/publishing/console-charts.md`
   - `docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md`
+  - `docs/architecture/publishing/what-the-pipelines-route-draws.md`
   - `TODO/20261109-console-redesign-plan.md`
+- **Inventory check:** The current native consumers remain ArticleAge, MachineCharts and explorer ShapePanel. Private card availability needs the existing typed read metadata carried through the Summaries load. Voices and the native query door retain their typed failure paths; no unexpected rejection has been demonstrated.
 - **Acceptance gates:** Local: lint/types and focused readout/window/query specs. CI: merge-candidate gates. Browser: retained distribution readout and window/date behavior.
 - **Oracle:** Geometry, readout and ARIA agree on 0-100 shares; panels select and label their actual evidence window. This cannot supply uncollected or unpacked data.
 
@@ -542,7 +551,7 @@ Table V
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| V1 | Fix O1 in `Distribution.svelte` readout and mark ARIA, not correct 0-100 geometry. Its native consumers are ArticleAge, MachineCharts and explorer ShapePanel. | Geometry/component and consumer inspection. |
+| V1 | Fix O1 in `Distribution.svelte` readout and mark ARIA without rescaling 0-100 shares. Reserve share-axis label room once for ArticleAge, MachineCharts and explorer ShapePanel. | Geometry/component and consumer inspection. |
 | V2 | Native comparisons keep their declared endpoint groups; build-time evidence keeps its published-day anchor. Preserve moved-panel provenance and label differing scope. | Window contract; O4. |
 | V3 | Missing is not zero. Do not backshift empty build-time windows or invent endpoints from the browser clock. | Window/missing-data contract. |
 | V4 | Fix O10 only on a demonstrated retained path. Preserve explicit failures and usable siblings; do not swallow programmer errors. | Query failure contract. |

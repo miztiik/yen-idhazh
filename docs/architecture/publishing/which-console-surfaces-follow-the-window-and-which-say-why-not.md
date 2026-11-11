@@ -65,6 +65,31 @@ which that preset fills. A first frame with no record yet prints no data date.
 Build-time evidence keeps the published-day behavior above. This does not
 reinterpret the recorded judging and holdout evidence on Judgement.
 
+**Mixed routes name both scopes.** Pipelines keeps its run health, published
+counts, site cost, chart counts, visual attempts and extraction yield on the
+published-day window, even while native reads are pending or lag behind it.
+Extraction's published chart share uses that same anchor. Its native extraction
+counts and recorded flags retain their declared query ranges, not the private
+window's population. Settings markers follow the evidence they annotate.
+
+Summaries keeps its private cards, daily figures and published doubt reasons
+on the published-day window. Native panels retain the common record endpoint,
+their own first-day clamp and any declared widest-span comparison. Both routes
+print the private bounds and the native panels' actual bounds in UTC. Neither
+an empty private window nor an unavailable native read moves either clock.
+Their standing names the native record window rather than claiming that every
+panel ends there; quiet, missing and failed standings also name their native
+scope. Per-panel bounds replace repeated query-name scope notices; lost-day
+and unread-file notes remain.
+
+The Summaries load carries the article and score readers' existing typed
+coverage into the private cards. Empty cards are quiet only when both records
+cover the complete selected window without lost days or unread files; otherwise
+the evidence is unavailable. A missing reading never establishes no model work.
+Older route payloads without this additive coverage metadata also leave an
+empty card window unavailable; they do not supply a fabricated record read.
+This route metadata is not another persisted telemetry payload or data export.
+
 After browser readiness, the status slot reserves the largest sentence for
 the configured presets, using the actual record reach and current typography.
 Hidden, aria-hidden copies share one grid cell; no fixed line count assumes a font or width.

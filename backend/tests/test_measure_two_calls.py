@@ -380,6 +380,47 @@ def test_the_title_and_the_body_come_back_out_of_a_user_turn() -> None:
     assert body == article.text
 
 
+def test_current_label_presentation_recovers_the_original_text_and_offsets() -> None:
+    text = 'Mira Sen may chair\nthe review if funded. A literal "\\n" stays literal.'
+    article = Article.read(ARTICLE).model_copy(update={"text": text})
+    table = element_table(article, config=config.load(CONFIG_DIR).app.elements)
+
+    title, body = article_from_user_turn(calls.label_user_turn(article, table))
+
+    assert title == article.title
+    assert body == text
+    assert calls.sentence_spans(body) == calls.sentence_spans(text)
+    assert table.span_drift(body) is None
+
+
+def test_historical_label_presentation_keeps_raw_continuations_and_literal_escapes() -> None:
+    displayed = '[s0] A literal "\\n" stays literal,\nincluding this continuation.\n[s1] Next.'
+    turn = (
+        "Title:\n" + untrusted_block("Historical headline.") + "\n\n"
+        "The item, one sentence per line:\n" + untrusted_block(displayed) + "\n\n"
+        "Quantities and dates already found in it:\n" + untrusted_block("(none)")
+    )
+
+    title, body = article_from_user_turn(turn)
+
+    assert title == "Historical headline."
+    assert body == 'A literal "\\n" stays literal,\nincluding this continuation.\nNext.'
+
+
+@pytest.mark.parametrize(
+    "displayed",
+    ['[s0] 42', '[s0] "unterminated', '[s1] "Missing first."', '[s0] "One."\n[s0] "Duplicate."'],
+)
+def test_invalid_current_presentation_never_falls_back_to_historical_reading(displayed: str) -> None:
+    turn = (
+        "Title:\n" + untrusted_block("Headline.") + "\n\n"
+        "The item, one JSON string per addressed sentence:\n" + untrusted_block(displayed)
+    )
+
+    with pytest.raises(ValueError):
+        article_from_user_turn(turn)
+
+
 def test_a_turn_whose_first_line_is_not_a_title_keeps_its_first_paragraph() -> None:
     """The guard that stops the parser eating a paragraph it mistook for a title.
 

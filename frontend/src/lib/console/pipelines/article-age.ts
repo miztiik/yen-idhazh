@@ -28,6 +28,6 @@ export function articleAge(rows: readonly Row[]) {
 		median: nearestRank(hours, 0.5), overDay: hours.filter((hour) => hour > 24).length,
 		lede: `${hours.length} source-stated publication times are measured. ` +
 			`${inferred} of ${published.length} successful items have inferred times and are not drawn. ` +
-			`${unknown} have no usable source time; ${future} have a publication time after our run.`
+			`${unknown} have no usable source time; ${future} have a publication time after work started.`
 	};
 }

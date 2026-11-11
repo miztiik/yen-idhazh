@@ -25,14 +25,14 @@
 </script>
 <div use:observeWidth={(next) => measured = next}>
 <p data-lede class="lede" data-article-age-inferred={age.inferred}>{age.lede}</p>
-<p data-comparison="Articles over a day old against newer ones.">Articles over a day old against newer ones, from the source's stated publication to our recorded item start.</p>
+<p data-comparison="Source age at work start: articles over a day old against newer ones.">Source age at work start: articles over a day old against newer ones, measured from the source's stated publication time.</p>
 <div data-model-rule="no" data-model-rule-name="article-age" data-model-rule-none="one distribution of the window, not a date axis">
 	<Distribution {geometry} empty={emptyState('quiet', distributionShortfall(positive, options) ?? 'No positive source-stated age was measured.')}
-		name="article-age" label="Article age in hours, on a ten-times axis; inferred times excluded"
+		name="article-age" label="Source age at work start in hours, logarithmic scale; inferred and future times excluded"
 		{width} height={knobs.chart_height} />
 </div>
 {#if age.hours.some((hour) => hour === 0)}
 	<p data-article-age-zero>{age.hours.filter((hour) => hour === 0).length} items started at their stated publication time: zero hours has no position on a logarithmic axis{age.median === 0 ? '; the median is zero hours' : ''}.</p>
 {/if}
 </div>
-<style>.lede { font-size: var(--text-2xl); font-variant-numeric: tabular-nums; }</style>
+<style>.lede { font-size: var(--text-2xl); line-height: var(--leading-2xl); font-variant-numeric: tabular-nums; }</style>

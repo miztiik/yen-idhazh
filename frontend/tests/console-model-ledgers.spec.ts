@@ -55,6 +55,7 @@ for (const state of ['quiet', 'missing', 'unreachable'] as const) {
 
 		await page.goto('/console/model/');
 		await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', state);
+		await expect(page.locator('[data-console-standing]')).toContainText('Native record:');
 		for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {
 			await expect(page.locator(`[data-console-panel-id="${id}"] [data-empty-state]`))
 				.toHaveText(state === 'quiet' ? 'Nothing recorded.' : state === 'missing' ? 'Not published yet.' : 'Did not arrive.');
