@@ -43,10 +43,9 @@ for (const [id, name] of PANELS) {
 		const read: RecordRead = { state: 'read', first: '2030-06-01', through: '2030-06-14',
 			lastRows: null, lostDays: [], setAside: {} };
 		const common = { start: '2030-06-01', end: '2030-06-14', instruments: [], windowDays: 14,
-			reads: { article: read, score: read },
 			rule: { declined: 'No dated settings record is available in this fixture.' },
 			checkerRule: { declined: 'No dated checker record is available in this fixture.' }, chart: appearance.chart };
-		const markup = (days: null | []) => render(component, { props: { ...common, days } }).body;
+		const markup = (days: null | []) => render(component, { props: { ...common, days, reads: { article: read, score: read } } }).body;
 		const quiet = markup([]);
 		const missing = markup(null);
 		expect(quiet).toContain(`data-${id === 'model-cards' ? 'model-cards' : 'doubt-reasons'}-empty="quiet"`);
@@ -61,6 +60,11 @@ for (const [id, name] of PANELS) {
 		expect(judgeNothings(id, { quiet: reading(quiet), missing: reading(missing) } as Record<Nothing, PanelReading>,
 			['quiet', 'missing']).pass).toBe(true);
 		if (id === 'model-cards') {
+			const previous = render(component, { props: { ...common, days: [] } }).body;
+			expect(previous).toContain('data-model-cards-empty="missing"');
+			expect(words(previous)).toContain('unavailable in this window');
+			expect(previous).not.toContain('data-kpi=');
+			expect(previous).not.toContain('data-chart-type=');
 			for (const absent of [
 				{ state: 'not-packed' },
 				{ state: 'unreadable', at: null, fault: null },

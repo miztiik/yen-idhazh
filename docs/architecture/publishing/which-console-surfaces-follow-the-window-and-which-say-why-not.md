@@ -86,6 +86,8 @@ The Summaries load carries the article and score readers' existing typed
 coverage into the private cards. Empty cards are quiet only when both records
 cover the complete selected window without lost days or unread files; otherwise
 the evidence is unavailable. A missing reading never establishes no model work.
+Older route payloads without this additive coverage metadata also leave an
+empty card window unavailable; they do not supply a fabricated record read.
 This route metadata is not another persisted telemetry payload or data export.
 
 After browser readiness, the status slot reserves the largest sentence for

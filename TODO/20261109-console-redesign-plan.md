@@ -532,6 +532,7 @@ Table U
   - `frontend/src/lib/console/pipelines/article-age.ts`
   - `frontend/tests/console-readout-data.spec.ts`
   - `frontend/tests/console-pipelines-window-page.spec.ts`
+  - `frontend/tests/console-pipelines-reserved.spec.ts`
   - `frontend/tests/console-model-nothings.spec.ts`
   - `frontend/tests/console-model-builder.spec.ts`
   - `frontend/tests/console-model-ledgers.spec.ts`
