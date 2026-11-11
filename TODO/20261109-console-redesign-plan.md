@@ -582,6 +582,7 @@ Table W
   - `backend/tests/test_server_argv.py`
   - `backend/tests/test_summarize.py`
   - `backend/tests/contracts/test_model_registry.py`
+  - `backend/tests/council/_imports.py` (name the shared adapter in the bounded import inventory)
   - `backend/tests/test_host_readings.py`
   - `backend/tests/test_item_records.py`
   - `backend/tests/pipeline/test_work_health_payload.py`
