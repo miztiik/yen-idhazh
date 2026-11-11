@@ -66,11 +66,10 @@ Build-time evidence keeps the published-day behavior above. This does not
 reinterpret the recorded judging and holdout evidence on Judgement.
 
 **Mixed routes name both scopes.** Pipelines keeps its run health, published
-counts, site cost, chart counts, visual attempts and extraction yield on the
+counts, site cost, chart counts and visual attempts on the
 published-day window, even while native reads are pending or lag behind it.
-Extraction's published chart share uses that same anchor. Its native extraction
-counts and recorded flags retain their declared query ranges, not the private
-window's population. Settings markers follow the evidence they annotate.
+The removed extraction panel supplies neither a private share nor native
+extraction or flag queries. Settings markers follow the evidence they annotate.
 
 Summaries keeps its private cards, daily figures and published doubt reasons
 on the published-day window. Native panels retain the common record endpoint,

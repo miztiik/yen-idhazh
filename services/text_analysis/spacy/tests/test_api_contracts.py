@@ -193,7 +193,7 @@ class FeatureExecutionTests(unittest.TestCase):
         settings = _settings()
         nlp = spacy.blank("en")
         nlp.add_pipe("sentencizer")
-        source = "River\nmapping improves flood planning. River\nmapping improves flood planning."
+        source = "River's mapping improves flood planning. River's mapping improves flood planning."
         doc = nlp(source)
         command = AnalysisCommand(
             text=source,

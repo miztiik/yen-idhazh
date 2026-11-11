@@ -4,7 +4,7 @@
 	import { useWindowChoice } from '$lib/console/window-slot';
 	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
 	import { rangeFor, routeReach, sliceOnce, retryAsks, windowRange, type PanelQuery, type Range, type RouteReach } from '$lib/console/queries/window';
-	import { pipelinesRecord, publishedShareFor, retryReach } from '$lib/console/pipelines/record-window';
+	import { pipelinesRecord, retryReach } from '$lib/console/pipelines/record-window';
 	import * as queries from '$lib/console/queries/pipelines';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { daysInWindow, windowOfDays } from '$lib/charts/viewport';
@@ -27,10 +27,9 @@
 	import ItemCost from '$lib/console/pipelines/ItemCost.svelte';
 	import RunTimeline from '$lib/console/pipelines/RunTimeline.svelte';
 	import ChartDrawing from '$lib/console/pipelines/ChartDrawing.svelte';
-	import Extraction from '$lib/console/pipelines/Extraction.svelte';
 	import ArticleAge from '$lib/console/pipelines/ArticleAge.svelte';
-	import VisualFunnels from '$lib/console/pipelines/VisualFunnels.svelte';
 	import VisualAttempts from '$lib/console/pipelines/VisualAttempts.svelte';
+	import VisualRefusals from '$lib/console/pipelines/VisualRefusals.svelte';
 	import { attemptNotes } from '$lib/console/pipelines/attempt-notes';
 
 	let { data } = $props();
@@ -38,8 +37,7 @@
 	const configured = routeConsole('pipelines');
 	const asks: readonly PanelQuery[] = [
 		queries.failureMixQuery, queries.failedRuleQuery, queries.itemTimeSplitQuery, queries.slowerOnSameWorkQuery,
-		queries.stageTimingsQuery, queries.itemCostQuery, queries.runTimelineQuery, queries.extractionQuery,
-		queries.extractionScoresQuery, queries.articleAgeQuery
+		queries.stageTimingsQuery, queries.itemCostQuery, queries.runTimelineQuery, queries.articleAgeQuery
 	];
 	const readers: Record<string, (range: Range) => Promise<SliceResult>> = {
 		[queries.failureMixQuery.name]: (range) => sliceOnce(queries.failureMixQuery, range),
@@ -49,8 +47,6 @@
 		[queries.stageTimingsQuery.name]: (range) => sliceOnce(queries.stageTimingsQuery, range),
 		[queries.itemCostQuery.name]: (range) => sliceOnce(queries.itemCostQuery, range),
 		[queries.runTimelineQuery.name]: (range) => sliceOnce(queries.runTimelineQuery, range),
-		[queries.extractionQuery.name]: (range) => sliceOnce(queries.extractionQuery, range),
-		[queries.extractionScoresQuery.name]: (range) => sliceOnce(queries.extractionScoresQuery, range),
 		[queries.articleAgeQuery.name]: (range) => sliceOnce(queries.articleAgeQuery, range)
 	};
 	type Answer = SliceResult | LedgerReach | 'pending';
@@ -67,12 +63,8 @@
 	const viewport = $derived(windowOfDays(data.windowDay, windowDays, knobs.today_anchor));
 	const settings = $derived(settingsRules(data, { from: viewport.start, to: viewport.end }, 'none'));
 	const charts = $derived(data.charts.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
-	const attempts = $derived(data.visualAttempts.counts.filter((count) => count.date >= viewport.start && count.date <= viewport.end));
 	const attemptDays = $derived(data.visualAttempts.days.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
 	const attemptRead = $derived(attemptNotes(data.visualAttempts.read, viewport));
-	const yieldDays = $derived(data.extractionDays.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
-	const publishedShare = $derived(publishedShareFor(data.extractionPublishedByWindow, data.windowDay, windowDays)
-		?? { measuredDays: 0, unused: 0, chartablePublished: 0, unusedPct: null });
 	const record = $derived(recordReady ? pipelinesRecord(reach, windowDays) : null);
 	const nativeWindow = $derived(record?.first != null && record.through !== null
 		? windowRange(windowDays, record.through, record.first) : null);
@@ -151,16 +143,14 @@
 		'slower-on-same-work': 'Whether a run is getting slower on the same work', 'stage-timings': 'Time per item by stage',
 		'item-cost': 'What one item cost the model', 'run-timeline': "Where the run's time went, on the run's own clock",
 		'chart-drawing': 'Visuals drawn for articles',
-		'pipeline-funnel': 'Where visual attempts stopped, by potential class',
 		'visual-refusals': 'Recorded refusal reasons over time',
 		'visual-written-types': 'Planned and successfully written visual types',
-		'downgrade-funnel': 'How drafted visual plans ended, by potential class', 'extraction': 'What the extractor found',
 		'article-age': 'Source age at work start'
 	};
 	const panelQueries: Record<string, PanelQuery> = {
 		'failure-mix': queries.failureMixQuery, 'item-time-split': queries.itemTimeSplitQuery,
 		'slower-on-same-work': queries.slowerOnSameWorkQuery, 'stage-timings': queries.stageTimingsQuery,
-		'item-cost': queries.itemCostQuery, extraction: queries.extractionQuery, 'article-age': queries.articleAgeQuery
+		'item-cost': queries.itemCostQuery, 'article-age': queries.articleAgeQuery
 	};
 </script>
 
@@ -181,28 +171,22 @@
 					<RunHealth yieldDays={data.runYieldDays} grid={data.grid} window={viewport} days={windowDays} floorPct={data.floorPct}
 						height={knobs.chart_height} width={knobs.chart_width} tickDensity={data.chart.tick_density} readoutMaxShare={data.chart.readout_max_share} />
 				{:else}
-					<Panel {id} title={titles[id]} wide={['at-a-glance', 'run-timeline', 'chart-drawing'].includes(id)} verdict={id === 'at-a-glance'}>
+					<Panel {id} title={titles[id]} wide={['at-a-glance', 'run-timeline', 'chart-drawing', 'visual-refusals'].includes(id)} verdict={id === 'at-a-glance'}>
 						<div data-windowed={id === 'run-timeline' || id === 'chart-drawing' ? undefined : id} data-window-days={id === 'run-timeline' || id === 'chart-drawing' ? undefined : windowDays}
 							aria-label={id === 'run-timeline' || id === 'chart-drawing' ? undefined : `${titles[id]}, selected window ${countDays(windowDays)}`}
-							data-readout-fetched={id !== 'extraction' && (panelQueries[id] !== undefined || id === 'run-timeline') ? '' : undefined}>
+							data-readout-fetched={panelQueries[id] !== undefined || id === 'run-timeline' ? '' : undefined}>
 						{#if id === 'at-a-glance'}
 							<AtAGlance days={data.charts} window={viewport} {knobs} chart={data.chart} />
 						{:else if id === 'site-cost-per-item'}
 							<SiteCostPerItem manifests={data.manifests} publishedItems={data.publishedItems} window={viewport} {knobs} chart={data.chart} rule={settings} />
 						{:else if id === 'chart-drawing'}
 							<ChartDrawing days={charts} {windowDays} {knobs} />
-						{:else if id === 'pipeline-funnel' || id === 'downgrade-funnel'}
-							<VisualFunnels counts={attempts} read={attemptRead.state} notes={attemptRead.notes} kind={id === 'pipeline-funnel' ? 'pipeline' : 'downgrade'} />
-						{:else if id === 'visual-refusals' || id === 'visual-written-types'}
-							<VisualAttempts days={attemptDays} read={attemptRead.state} notes={attemptRead.notes} kind={id === 'visual-refusals' ? 'refusals' : 'written'} />
+						{:else if id === 'visual-refusals'}
+							<VisualRefusals days={attemptDays} read={data.visualAttempts.read} window={viewport} {knobs} chart={data.chart} />
+						{:else if id === 'visual-written-types'}
+							<VisualAttempts days={attemptDays} read={attemptRead.state} notes={attemptRead.notes} />
 						{:else if id === 'run-timeline'}
 							<RunTimeline {knobs} chart={data.chart} answer={answers[queries.runTimelineQuery.name]} />
-						{:else if id === 'extraction'}
-							<Extraction rows={rows(queries.extractionQuery)} nativeState={panelState(queries.extractionQuery)}
-								evaluations={panelState(queries.extractionScoresQuery) === 'ready' ? rows(queries.extractionScoresQuery) : null}
-								evaluationsState={panelState(queries.extractionScoresQuery)}
-								nativeWindow={ranges[queries.extractionQuery.name]} evaluationsWindow={ranges[queries.extractionScoresQuery.name]}
-								{knobs} chart={data.chart} rule={settings} {viewport} {yieldDays} {publishedShare} />
 						{:else if id === 'failure-mix'}
 							<FailureMix rows={rows(queries.failureMixQuery)} ruleRows={rows(queries.failedRuleQuery)}
 								nativeState={panelState(queries.failureMixQuery)} rulesState={panelState(queries.failedRuleQuery)}
@@ -225,7 +209,7 @@
 								{/if}
 							</Reserved>
 						{/if}
-						{#if panelQueries[id] !== undefined && id !== 'extraction' && ranges[panelQueries[id].name] !== undefined}
+						{#if panelQueries[id] !== undefined && ranges[panelQueries[id].name] !== undefined}
 							{@const range = ranges[panelQueries[id].name]}
 							<p data-native-window data-range-from={range.from} data-range-to={range.to}>Native record: {range.from} through {range.to} UTC.</p>
 						{/if}

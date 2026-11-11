@@ -64,6 +64,7 @@ from typing import Annotated, Any, Final, Literal, NamedTuple, get_args
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model
 
 from idhazh import summarize
+from idhazh.classify.label_request import bind_label_reference_choices
 from idhazh.classify.plan_visual_request import (
     bind_reference_choices,
     planning_menu,
@@ -552,6 +553,22 @@ def label_user_turn(article: Article, table: ElementTable) -> str:
     return "\n\n".join(parts)
 
 
+def label_request_schema(article: Article, table: ElementTable) -> dict[str, Any]:
+    """Restrict the request to its printed addresses and native-eligible ranges."""
+    text = article.text or ""
+    schema = label_schema()
+    bind_label_reference_choices(
+        schema,
+        table,
+        text,
+        [
+            (sentence_id(index), start, end)
+            for index, (start, end) in enumerate(sentence_spans(text))
+        ],
+    )
+    return schema
+
+
 def build_label_request(
     article: Article,
     table: ElementTable,
@@ -569,7 +586,8 @@ def build_label_request(
 
     The prompt bytes are rendered here rather than by the model's chat
     template, which is what lets the summarize-and-plan call open with them unchanged. The output
-    budget is derived from this call's own grammar, as the summarize-and-plan call's is from both
+    budget is derived from the compatible native reply shape, not the narrower
+    article-specific choices, as the summarize-and-plan call's is from both
     replies' bounds together. There is no role-level budget behind either: the
     settings block carried one until 2026-09-21 and it sized neither shape.
 
@@ -586,7 +604,7 @@ def build_label_request(
             prompt_config, visuals=visuals, prompt_files=prompt_files, config_dir=config_dir
         ),
         user=label_user_turn(article, table),
-        output_schema=label_schema(),
+        output_schema=label_request_schema(article, table),
         server=server,
         sampling=sampling,
         markers=markers,

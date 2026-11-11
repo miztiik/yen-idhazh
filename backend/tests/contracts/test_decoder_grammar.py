@@ -16,7 +16,10 @@ import pytest
 from support.paths import FIXTURES_DIR
 
 from idhazh.classify import calls
+from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementTable
+from idhazh.contracts.knobs.extract import ElementsConfig
+from idhazh.elements import element_table
 
 pytestmark = pytest.mark.contract
 
@@ -78,8 +81,16 @@ def _decoder_schemas() -> dict[str, dict[str, Any]]:
     """Every schema this pipeline sends a decoder, built the way the run builds it."""
     table = ElementTable.read(FIXTURES_DIR / "visual-validator" / "tables" / "wind.json")
     empty = ElementTable.model_validate(table.model_dump() | {"elements": []})
+    article = Article.read(FIXTURES_DIR / "contracts" / "article" / "ok.json")
+    bare = Article.model_validate(article.model_dump() | {"text": " \t"})
     return {
         "label": calls.label_schema(),
+        "label_request": calls.label_request_schema(
+            article, element_table(article, config=ElementsConfig())
+        ),
+        "empty_label_request": calls.label_request_schema(
+            bare, element_table(bare, config=ElementsConfig())
+        ),
         "summarize_and_plan": calls.summarize_and_plan_schema(plan=True),
         "summarize_only": calls.summarize_and_plan_schema(plan=False),
         "summarize_and_plan_brief": calls.summarize_and_plan_schema(plan=True, brief=True),
@@ -120,7 +131,7 @@ def test_no_schema_builder_escapes_this_check() -> None:
         and callable(value)
         and getattr(value, "__module__", None) == calls.__name__
     }
-    covered = {"label_schema", "summarize_and_plan_schema"}
+    covered = {"label_schema", "label_request_schema", "summarize_and_plan_schema"}
     assert built == covered, (
         f"{built - covered} builds a schema for the decoder and no check above sends it "
         "through unbounded_quantifier"

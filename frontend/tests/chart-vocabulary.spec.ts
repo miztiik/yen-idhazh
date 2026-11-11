@@ -960,5 +960,23 @@ test.describe('drawn by Svelte, rendered on the server', () => {
 		const narrow = draw.Flow({ ...sized, geometry: flow(stages, { narrow: true, frame: box, nodeWidth: 10, nodeGap: 8 }), empty });
 		expect(narrow).toContain('data-flow-shape="stepped"');
 		expect(narrow).toContain('Out early: 4 (40%)');
+		expect(narrow).not.toContain('stage-swatch');
+	});
+
+	test('optional flow colours paint source-stage ribbons and decorative list swatches', () => {
+		const stages: FlowStageInput[] = [
+			{ label: 'In', token: '--chart-2', arrived: 10, left: 6, drops: [{ label: 'Out early', count: 4 }] },
+			{ label: 'Done', token: '--chart-4', arrived: 6, left: 6, drops: [] }
+		];
+		const empty = emptyState('quiet', 'Nothing.');
+		const wide = draw.Flow({ ...sized, geometry: flow(stages, { narrow: false, frame: box, nodeWidth: 10, nodeGap: 8 }), empty });
+		expect(wide.match(/<path[^>]*fill="var\(--chart-2\)"/g)).toHaveLength(2);
+		expect(wide).toMatch(/<rect[^>]*fill="var\(--chart-2\)"[^>]*fill-opacity="0.28"/);
+		expect(wide).toMatch(/<rect[^>]*fill="var\(--chart-4\)"[^>]*fill-opacity="1"/);
+		const narrow = draw.Flow({ ...sized, geometry: flow(stages, { narrow: true, frame: box, nodeWidth: 10, nodeGap: 8 }), empty });
+		expect(narrow.match(/class="stage-swatch/g)).toHaveLength(3);
+		expect(narrow).toContain('background: var(--chart-4)');
+		expect(narrow).toContain('opacity: 0.28');
+		expect(narrow).toContain('Out early: 4 (40%)');
 	});
 });

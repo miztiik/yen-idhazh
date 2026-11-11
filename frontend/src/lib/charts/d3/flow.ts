@@ -34,6 +34,7 @@ import { area, curveBumpX } from 'd3-shape';
 import type { Frame } from '../frame';
 import { grouped } from '../series';
 import type { NumberFormatConfig } from '../../number-format';
+import type { ChartToken } from '../theme';
 
 export interface FlowDrop {
 	label: string;
@@ -42,6 +43,7 @@ export interface FlowDrop {
 
 export interface FlowStageInput {
 	label: string;
+	token?: ChartToken;
 	arrived: number;
 	/** What carried on to the next stage - or, at the last stage, what came
 	 * out of the far end. */
@@ -64,6 +66,7 @@ export interface FlowOptions {
 
 export interface FlowNode {
 	label: string;
+	token?: ChartToken;
 	value: number;
 	/** 0-based, left to right. A drop sits in the column after its stage. */
 	column: number;
@@ -77,6 +80,7 @@ export interface FlowNode {
 export interface FlowRibbon {
 	from: string;
 	to: string;
+	token?: ChartToken;
 	value: number;
 	drop: boolean;
 	/** A filled shape, as an SVG path. */
@@ -92,12 +96,14 @@ export interface FlowGeometry {
 }
 
 export interface SteppedDrop extends FlowDrop {
+	token?: ChartToken;
 	/** Whole percent of everything that arrived at the first stage. */
 	share: number;
 }
 
 export interface SteppedStage {
 	label: string;
+	token?: ChartToken;
 	arrived: number;
 	left: number;
 	share: number;
@@ -151,12 +157,13 @@ function stepped(stages: readonly FlowStageInput[], note: string | null): Steppe
 		note,
 		stages: stages.map((stage) => ({
 			label: stage.label,
+			token: stage.token,
 			arrived: stage.arrived,
 			left: stage.left,
 			share: share(stage.arrived),
 			drops: stage.drops
 				.filter((drop) => drop.count > 0)
-				.map((drop) => ({ label: drop.label, count: drop.count, share: share(drop.count) }))
+				.map((drop) => ({ label: drop.label, count: drop.count, share: share(drop.count), token: stage.token }))
 		}))
 	};
 }
@@ -175,7 +182,7 @@ const ribbon = area<Edge>()
 
 /** A stage or a drop, as the layout sees it. `layer` is the column the library
  * drew it in, which the library writes and its type definitions leave out. */
-type Stop = { id: string; label: string; drop: boolean; layer?: number };
+type Stop = { id: string; label: string; token?: ChartToken; drop: boolean; layer?: number };
 
 /** What carries on to the next stage, or what one stage lost. */
 type Carry = { drop: boolean };
@@ -206,6 +213,7 @@ function diagram(stages: readonly FlowStageInput[], opts: FlowOptions): FlowGeom
 		const only = stages[0];
 		const bar: FlowNode = {
 			label: only.label,
+			token: only.token,
 			value: only.arrived,
 			column: 0,
 			x: box.left,
@@ -221,6 +229,7 @@ function diagram(stages: readonly FlowStageInput[], opts: FlowOptions): FlowGeom
 	const stops: SankeyNode<Stop, Carry>[] = stages.map((stage, index) => ({
 		id: `stage-${index}`,
 		label: stage.label,
+		token: stage.token,
 		drop: false,
 		fixedValue: stage.arrived
 	}));
@@ -230,7 +239,7 @@ function diagram(stages: readonly FlowStageInput[], opts: FlowOptions): FlowGeom
 		if (index < last) carries.push({ source: `stage-${index}`, target: `stage-${index + 1}`, value: stage.left, drop: false });
 		lostAt(index).forEach((drop, order) => {
 			const id = `drop-${index}-${order}`;
-			stops.push({ id, label: drop.label, drop: true });
+			stops.push({ id, label: drop.label, token: stage.token, drop: true });
 			carries.push({ source: `stage-${index}`, target: id, value: drop.count, drop: true });
 		});
 	});
@@ -260,6 +269,7 @@ function diagram(stages: readonly FlowStageInput[], opts: FlowOptions): FlowGeom
 
 	const nodes: FlowNode[] = graph.nodes.map((node) => ({
 		label: node.label,
+		token: node.token,
 		value: node.value ?? 0,
 		column: node.layer ?? 0,
 		x: node.x0 ?? 0,
@@ -279,6 +289,7 @@ function diagram(stages: readonly FlowStageInput[], opts: FlowOptions): FlowGeom
 			return {
 				from: from.label,
 				to: to.label,
+				token: from.token,
 				value: link.value,
 				drop: link.drop,
 				path:

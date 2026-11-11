@@ -43,7 +43,7 @@ Table C - Repair increments and the restored-generation roll-up
 | C5 | 5 | Correct literal sentence addressing and claim coverage | 1, 2 | D | DONE | cautious-tribble | - | e7392204-404e-484d-9cf5-5811294c4553 |
 | C6 | 6 | Show complete source-backed claims to the reader | 1, 2 | E | DONE | effective-guide | - | 96eb1442-fd7b-4734-b9a4-98d815cf9919 |
 | C7 | 7 | Install native Pages build validation prerequisites | - | F | DONE | fuzzy-succotash | - | 68150591-c6fc-4b82-864c-3aee606bc27e |
-| C8 | 8 | Restrict requested labels to usable native references and ranges | 1, 5, 7 | G | IN-FLIGHT | shiny-happiness | - | aeb6859c-ce2e-40c6-8afb-a7c83e841531 |
+| C8 | 8 | Restrict requested labels to usable native references and ranges | 1, 5, 7 | G | DONE | shiny-happiness | - | aeb6859c-ce2e-40c6-8afb-a7c83e841531 |
 
 ## 2. Row #1 - Give the visual planner usable source evidence
 

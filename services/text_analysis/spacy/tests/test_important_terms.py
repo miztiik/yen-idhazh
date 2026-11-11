@@ -107,7 +107,7 @@ class ImportantTermsTests(unittest.TestCase):
                 )
 
     def test_matching_deduplicates_before_limit_and_breaks_score_ties_by_source(self) -> None:
-        source = "\U0001f4f0 RIVER mapping. River mapping. Lake survey."
+        source = "\U0001f4f0 RIVER  mapping. River\nmapping. Lake survey."
         nlp, doc, indexes = _document(source)
         result = anchor_ranked_terms(
             doc,
@@ -124,11 +124,11 @@ class ImportantTermsTests(unittest.TestCase):
         )
         self.assertEqual(
             [(item.text, item.score) for item in result.terms],
-            [("RIVER mapping", 0.2), ("Lake survey", 0.2), ("mapping", 0.4)],
+            [("RIVER  mapping", 0.2), ("Lake survey", 0.2), ("mapping", 0.4)],
         )
         self.assertEqual(
             [item.text for item in result.terms[0].occurrences],
-            ["RIVER mapping", "River mapping"],
+            ["RIVER  mapping", "River\nmapping"],
         )
         self.assertEqual(
             [item.start_char for item in result.terms[0].occurrences],
@@ -150,7 +150,7 @@ class ImportantTermsTests(unittest.TestCase):
         )
 
     def test_selected_unanchored_candidate_fails_without_first_substring_repair(self) -> None:
-        source = "River\nmapping."
+        source = "River blue mapping."
         nlp, doc, indexes = _document(source)
         with self.assertRaises(ValueError):
             anchor_ranked_terms(

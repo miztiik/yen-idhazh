@@ -16,6 +16,7 @@ function nativeFlow(days: readonly FlowDay[], narrow = false) {
 	const drawing = chartFlow(days);
 	return flow(drawing.steps.map((step, index) => ({
 		label: step.label,
+		token: step.token,
 		arrived: step.value,
 		left: drawing.steps[index + 1]?.value ?? step.value,
 		drops: step.lost === null ? [] : [{ label: step.lost.label, count: step.lost.value }]
@@ -68,6 +69,21 @@ test('a loss sits beside the stage it left on the same count scale', () => {
 	}
 	const perItem = node('Reached').height / TOTAL.reached;
 	for (const entry of nodes) expect(entry.height).toBeCloseTo(entry.value * perItem, 10);
+});
+
+test('stage colours survive layout and every loss keeps the colour of the stage it left', () => {
+	const tokens = ['--chart-1', '--chart-2', '--chart-3', '--chart-4'];
+	const wide = diagram(DAYS);
+	expect(wide.nodes.filter((node) => !node.drop).map((node) => node.token)).toEqual(tokens);
+	for (const ribbon of wide.ribbons) {
+		const source = wide.nodes.find((node) => node.label === ribbon.from)!;
+		expect(ribbon.token).toBe(source.token);
+		if (ribbon.drop) expect(wide.nodes.find((node) => node.label === ribbon.to)?.token).toBe(source.token);
+	}
+	const narrow = nativeFlow(DAYS, true);
+	if (narrow?.kind !== 'stepped') throw new Error('Expected the same coloured flow as a list.');
+	expect(narrow.stages.map((stage) => stage.token)).toEqual(tokens);
+	for (const stage of narrow.stages) for (const drop of stage.drops) expect(drop.token).toBe(stage.token);
 });
 
 test('the narrow list carries the same counts and independently expected shares', () => {

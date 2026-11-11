@@ -38,18 +38,6 @@ export const runTimelineQuery = {
 	span: 'newest-day'
 } as const satisfies PanelQuery;
 
-export const extractionQuery = {
-	name: 'extractionQuery', ledger: 'item-health',
-	columns: ['date', 'stage', 'outcome', 'code', 'url_key', 'element_class', 'span_integrity', 'elements_found'],
-	span: 'window'
-} as const satisfies PanelQuery;
-
-export const extractionScoresQuery = {
-	name: 'extractionScoresQuery', ledger: 'summary-quality-evals',
-	columns: ['date', 'url_key', 'extraction_suspect'],
-	span: 'window'
-} as const satisfies PanelQuery;
-
 export const articleAgeQuery = {
 	name: 'articleAgeQuery', ledger: 'item-health',
 	columns: ['published_at', 'time_source', 'item_started_at', 'outcome'],
