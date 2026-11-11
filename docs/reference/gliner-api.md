@@ -1,6 +1,6 @@
 # Native GLiNER2 API reference
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 The exact routes, payloads, settings and safe diagnostic vocabulary of the
 independent local GLiNER2 provider.
@@ -214,6 +214,32 @@ No event contains source text, mentions, labels/definitions, URLs, headers,
 PIDs, paths or raw exceptions. The
 [native architecture](../architecture/text-analysis/gliner-api.md#fail-closed-diagnostics)
 owns conservative model-warning refusal and operation isolation.
+
+## Design rationale
+
+The selected GLiNER2.5 base checkpoint supports native linked records. Its
+[checkpoint configuration](https://huggingface.co/fastino/gliner2.5-base-v1/blob/07d99c0ba5d15cb3b24e0a236fa99bdd4ef87a5c/config.json)
+enables records on the boundary architecture. The pinned `gliner2==2.1.0`
+[record head](https://github.com/fastino-ai/GLiNER2/blob/b86d35c02f2c1a4d9840ea50197bd1b6d13b031e/gliner2/models/boundary/records.py#L715-L725)
+uses the declared anchor to form linked instances.
+
+The legacy large checkpoint is not a complete replacement for action-anchored
+events. Its
+[configuration](https://huggingface.co/fastino/gliner2-large-v1/blob/d7aa8a2850d175a9227ff80358ea380723d03ad2/config.json)
+omits the architecture, which the
+[pinned SDK defaults to span](https://github.com/fastino-ai/GLiNER2/blob/b86d35c02f2c1a4d9840ea50197bd1b6d13b031e/gliner2/configuration.py#L635-L668).
+The [span preprocessing path](https://github.com/fastino-ai/GLiNER2/blob/b86d35c02f2c1a4d9840ea50197bd1b6d13b031e/gliner2/processor.py#L509-L550)
+bypasses record metadata. Ordinary structured extraction does not establish
+native natural-record capability; check that capability before downloading an
+alternative.
+
+The [public demo's entity path](https://huggingface.co/spaces/fastino/gliner2-official-demo/blob/a5ca4cd82b6e495207c9fa4c5e8eb6fc5200bb77/app.py)
+uses ordinary entity extraction with an unpinned checkpoint revision; its
+[SDK requirement](https://huggingface.co/spaces/fastino/gliner2-official-demo/blob/a5ca4cd82b6e495207c9fa4c5e8eb6fc5200bb77/requirements.txt)
+is also unpinned. It is not a matched comparison of this API's long-document
+settings. No extraction-quality, latency or memory advantage is established.
+Native record support is not an accuracy claim; follow the
+[event-candidate interpretation rule](../how-to/run-spacy-tests.md#inspect-the-results).
 
 ## See also
 
