@@ -4,6 +4,8 @@ import { clientCode, drawClient } from './support/console-window/client-render';
 import { numberFormat } from './support/number-format';
 import { failureRuleRows } from '../src/lib/console/failure-rules';
 import { SERIES_TOKENS } from '../src/lib/console/series-tokens';
+import { visualAttemptDays } from '../src/lib/console/pipelines/visual-attempts';
+import { chartConfig, consoleConfig } from '../src/lib/server/config';
 
 let code: string;
 test.beforeAll(async () => {
@@ -12,8 +14,56 @@ test.beforeAll(async () => {
 		['StageTimings', './src/lib/components/StageTimings.svelte'],
 		['TimeHistogram', './src/lib/components/TimeHistogram.svelte'],
 		['DurationStack', './tests/fixtures/panels/DurationStack.svelte'],
-		['KpiCard', './src/lib/components/KpiCard.svelte']
+		['KpiCard', './src/lib/components/KpiCard.svelte'],
+		['VisualRefusals', './src/lib/console/pipelines/VisualRefusals.svelte'],
+		['ChartDrawing', './src/lib/console/pipelines/ChartDrawing.svelte']
 	]);
+});
+
+test('the actual visual overview retains its stage colours in the diagram and narrow list', async ({ page }) => {
+	await page.setViewportSize({ width: 1200, height: 900 });
+	await drawClient(page, code, 'ChartDrawing', {
+		days: [{ date: '2030-06-01', reached: 100, asked: 70, drafted: 20, published: 10,
+			items: 100, plannerMinutes: 10, minutesPerChart: 1 }],
+		windowDays: 7, knobs: consoleConfig()
+	});
+	const expected = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-1', '--chart-2', '--chart-3'];
+	await expect(page.locator('[data-flow-shape="diagram"]')).toBeVisible();
+	expect(await page.locator('[data-flow-shape="diagram"] rect').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('fill'))))
+		.toEqual(expected.map((token) => `var(${token})`));
+	await page.setViewportSize({ width: 390, height: 900 });
+	await expect(page.locator('[data-flow-shape="stepped"]')).toBeVisible();
+	expect(await page.locator('.stage-swatch').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).style.background)))
+		.toEqual(['--chart-1', '--chart-1', '--chart-2', '--chart-2', '--chart-3', '--chart-3', '--chart-4'].map((token) => `var(${token})`));
+	await expect(page.locator('[data-flow-shape="stepped"]')).toContainText('Did not survive the checks: 10 (10%)');
+});
+
+test.describe('daily refusal inspection', () => {
+	test.use({ hasTouch: true });
+	test('a keyboard or tap reads exact daily counts, including a zero and an unknown day', async ({ page }) => {
+		await drawClient(page, code, 'VisualRefusals', {
+			days: visualAttemptDays([
+				{ date: '2030-06-01', rejection_reason: 'enough_data', rendered_type: 'bar' },
+				{ date: '2030-06-02' }, { date: '2030-06-04', rejection_reason: 'enough_data' }
+			]),
+			read: { state: 'read', first: '2030-06-01', through: '2030-06-04', lastRows: null, lostDays: [], setAside: {} },
+			window: { start: '2030-06-01', end: '2030-06-04' }, knobs: consoleConfig(), chart: chartConfig()
+		});
+		const plot = page.locator('[data-refusal-reason="enough_data"] svg');
+		const strip = page.locator('[data-readout="visual-refusals-0"]');
+		await plot.press('Home');
+		await expect(strip).toContainText('1 Jun 2030 UTC');
+		await expect(strip.locator('[data-readout-row="Failed checks"]')).toContainText('1 attempt');
+		await plot.press('ArrowRight');
+		await expect(strip.locator('[data-readout-row="Failed checks"]')).toContainText('0 attempts');
+		await plot.press('ArrowRight');
+		await expect(strip).toContainText('3 Jun 2030 UTC');
+		await expect(strip).toContainText('No visual attempt is recorded');
+		await plot.locator('circle').tap();
+		await expect(strip).toContainText('4 Jun 2030 UTC');
+		await expect(strip.locator('[data-readout-row="Failed checks"]')).toContainText('1 attempt');
+		await expect(strip.locator('[data-readout-row="Recorded attempts"]')).toContainText('1 attempt');
+	});
 });
 
 test('every card names its rule and a caller may name its range', async ({ page }) => {

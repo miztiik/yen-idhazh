@@ -1,6 +1,6 @@
 /** Deterministic model instruments rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
-import { DRAWN_BY, EVAL_PANELS, RECORDED, FLAGS, evalDays, flagReadings, recordedReadings, recordedText, type EvalInput } from '../src/lib/console/eval-instruments';
+import { DRAWN_BY, UNDRAWN, EVAL_PANELS, RECORDED, FLAGS, evalDays, flagReadings, recordedReadings, recordedText, type EvalInput } from '../src/lib/console/eval-instruments';
 import { numberFormat } from './support/number-format';
 const FIXTURE: EvalInput[] = [
     { date: '2026-04-02', hhem: '0.90', hhem_delta: '0', compression: '0.20', coherence: '0.10' },
@@ -24,12 +24,14 @@ test('recorded instruments retain their approved receivers without inventing a c
     const receivers: Readonly<Record<string, string>> = {
         compression: 'summary-length', self_repetition: 'daily-figures', coherence: 'daily-figures',
         semantic_coverage: 'daily-figures', evidential_density: 'source-doubts',
-        speculative_density: 'source-doubts', extraction_suspect: 'extraction',
+        speculative_density: 'source-doubts',
         determinism_violation: 'daily-figures'
     };
-    expect([...RECORDED, ...FLAGS].map((instrument) => instrument.id).sort()).toEqual(Object.keys(receivers).sort());
-    for (const instrument of [...RECORDED, ...FLAGS]) expect(DRAWN_BY[instrument.id]).toBe(receivers[instrument.id]);
-    expect(EVAL_PANELS.find((panel) => panel.id === 'extraction')?.route).toBe('/console/');
+    expect([...RECORDED, ...FLAGS].map((instrument) => instrument.id).sort()).toEqual([...Object.keys(receivers), ...Object.keys(UNDRAWN)].sort());
+    for (const id of Object.keys(receivers)) expect(DRAWN_BY[id]).toBe(receivers[id]);
+    expect(DRAWN_BY.extraction_suspect).toBeUndefined();
+    expect(UNDRAWN.extraction_suspect).toContain('remains recorded');
+    expect(EVAL_PANELS.find((panel) => panel.id === 'extraction')).toBeUndefined();
 });
 test.describe('the arithmetic', () => {
     test('a day is reduced by position, and a missing reading never enters as a zero', () => {

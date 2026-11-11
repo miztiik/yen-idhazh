@@ -211,14 +211,11 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "item_ended_at",
             "queue_wait_ms",
             "robots_ms",
-            "url_key",
-            "element_class",
-            "span_integrity",
-            "elements_found",
             "published_at",
             "time_source",
         ),
         "frontend/src/lib/console/queries/model.ts": (
+            "url_key",
             "model_id",
             "summary_finish_reason",
             "label_finish_reason",
@@ -306,6 +303,11 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
 #: non-zero naming it.
 UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
     {
+        "which extraction classes, spans and facts the removed diagnostic compared": (
+            "element_class",
+            "span_integrity",
+            "elements_found",
+        ),
         "what the ranker was thinking when it chose this item": (
             "carried_by",
         ),

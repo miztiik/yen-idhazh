@@ -5,11 +5,8 @@ export const EXPECT: RouteExpect | null = {
 	windowed: [
 		'at-a-glance',
 		'chart-drawing',
-		'extraction',
 		'failure-mix',
 		'article-age',
-		'pipeline-funnel',
-		'downgrade-funnel',
 		'visual-refusals',
 		'visual-written-types',
 		'item-cost',

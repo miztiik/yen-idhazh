@@ -7,8 +7,8 @@
  * looked like it did nothing.
  *
  * **The map below is the point of this module, not the charts.** `DRAWN_BY`
- * assigns every measured column of the ledger to exactly one panel, and
- * `NOT_A_MEASUREMENT` says of every remaining column why it is not one. The two
+ * assigns each drawn measurement to exactly one panel, `UNDRAWN` names an
+ * intentionally omitted diagnostic, and `NOT_A_MEASUREMENT` names identities. The three
  * together must cover the contract exactly - `frontend/tests/console-model-instruments.spec.ts`
  * reads `EvalRow` and fails on a column that is in neither,
  * in both, or in a map and not in the contract. So a column added to `EvalRow`
@@ -56,7 +56,6 @@ export const EVAL_PANELS: readonly EvalPanel[] = [
 		route: '/console/model/'
 	},
 	{ id: 'source-doubts', title: 'Which sources the checker doubts', route: '/console/model/' },
-	{ id: 'extraction', title: 'What the extractor found', route: '/console/' },
 	{ id: 'summary-length', title: 'How long summaries came out', route: '/console/model/' },
 	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' }
 ];
@@ -93,13 +92,17 @@ export const DRAWN_BY: Readonly<Record<string, string>> = {
 	speculative_density: 'source-doubts',
 	coherence: 'daily-figures',
 	semantic_coverage: 'daily-figures',
-	extraction_suspect: 'extraction',
 	determinism_violation: 'daily-figures',
 	// Already drawn, now declared.
 	summary_words: 'summary-length',
 	source_words_before_cap: 'summary-length',
 	source_words: 'summary-length',
 	score_ms: 'score-cost'
+};
+
+/** Recorded measurements deliberately omitted from the console, not replaced by another panel. */
+export const UNDRAWN: Readonly<Record<string, string>> = {
+	extraction_suspect: 'The extraction class, flag and yield diagnostic is removed; the flag remains recorded.'
 };
 
 /** Every remaining column, and why no panel owes it a number.

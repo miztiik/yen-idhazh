@@ -1,6 +1,6 @@
 # How chart drawing is reported, and the rule it is judged against
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-11-11
 
 `Visuals drawn for articles` is a Pipelines section in three parts: a flow of
 where items go, the two figures the retirement rule names, and a daily table
@@ -66,12 +66,20 @@ table below it still holds the numbers. Zero reached is the other empty state an
 keeps its own sentence, so the two nothings are never one blank panel.
 
 **Colour is the categorical ramp, and a loss keeps the hue of the stage it
-left.** Every fill comes from `PALETTE` through the sentinel bridge, so both
-themes resolve with no JavaScript at all; a loss branch is the same hue at 0.28
-opacity against the flow's 0.55. A second hue would say a loss is a different
-kind of thing, and it is the same items going a different way. Both opacities are
-low because a label to the right of a node sits over the links leaving it, which
-is unavoidable in a flow this shape - the label has to stay readable across them.
+left.** Reached, Asked the model, Drafted and Published use their already assigned
+`--chart-1` through `--chart-4` tokens. The typed token travels with its stage
+through shared flow geometry; it is not assigned again by column in the renderer.
+Stage nodes use full opacity. A carried ribbon uses its source stage's hue at
+the existing 0.55 opacity; a loss ribbon and its terminal node both keep the
+stage they left at the existing 0.28 opacity, even in the next column.
+Text retains its normal colour and opacity. There are no gradients, new palette
+values or semantic verdict colours.
+
+The narrow ordered list keeps its counts, shares and nested losses. Decorative
+solid square swatches use `--space-2` before stage labels and source-stage loss
+labels; loss swatches retain the loss opacity. Words, position and exact counts
+carry the meaning without hue. Tokenless shared-flow callers retain their
+monochrome diagram and unmarked list.
 
 **Every label sits outside its node, on two lines, carrying the count and the
 share of everything reached.** The narrowest node on the committed ledger is
@@ -255,6 +263,14 @@ The Summaries table declares `data-windowed="daily-figures"`, so the window
 oracle holds it to the control like every other windowed surface. The Pipelines
 one declares nothing of its own: it sits inside `chart-drawing`, which already
 declares the span and prints it in words.
+
+## Design rationale
+
+The overview already assigns a category colour to each stage. Carrying that
+metadata through geometry fixes its loss at the drawing boundary without
+recolouring other callers. A loss is the same items leaving a stage, not a
+new category, so its branch and terminal keep the source hue. This changes
+neither cohorts, denominators, target bars, sparklines nor daily detail.
 
 ## See also
 

@@ -74,29 +74,22 @@ test('a late wide response cannot replace a short request or fabricate a short r
 	await expect(page.locator('[data-window-status]')).toHaveText('Showing 90 days, to 15 Jun 2030.');
 });
 
-test('an evaluator still in flight does not hide the loaded extractor or invent a quiet check', async ({ page }) => {
+test('removed visual diagnostics neither mount nor ask for evaluator data', async ({ page }) => {
 	await servePipelines(page, root);
-	let release!: () => void;
-	const held = new Promise<void>((resolve) => release = resolve);
-	await page.route((url) => url.pathname.endsWith(`/state/compact/summary-quality-evals/daily/${THROUGH.replaceAll('-', '/')}.parquet`), async (route) => {
-		await held;
-		await route.fallback();
+	const evaluatorRequests: string[] = [];
+	page.on('request', (request) => {
+		if (request.url().includes('/state/compact/summary-quality-evals/')) evaluatorRequests.push(request.url());
 	});
-	const panel = page.locator('[data-eval-panel="extraction"]');
-	try {
-		await page.goto('/console/');
-		await expect(panel.locator('[data-extraction-source="native"]')).toHaveAttribute('data-panel-state', 'ready');
-		await expect(panel.locator('[data-reserved="extraction-suspect"]')).toHaveAttribute('data-panel-state', 'loading');
-		await expect(panel.locator('[data-nothing-fired]')).toHaveCount(0);
-		await expect(panel).toContainText('narrative');
-	} finally {
-		release();
-	}
+	await page.goto('/console/');
+	await hydrated(page);
 	await settled(page);
-	await expect(panel.locator('[data-extraction-source="flags"]')).toHaveAttribute('data-panel-state', 'ready');
-	await expect(panel.locator('[data-nothing-fired]')).toHaveText(
-		'No recorded extraction flag is true in these days. This does not establish that the extraction checker ran.');
-	await expect(panel).toContainText('of 8 distinct recorded articles; 0 have no boolean flag');
+	for (const id of ['pipeline-funnel', 'downgrade-funnel', 'extraction']) {
+		await expect(page.locator(`[data-console-panel-id="${id}"]`)).toHaveCount(0);
+	}
+	for (const id of ['chart-drawing', 'visual-refusals', 'visual-written-types']) {
+		await expect(page.locator(`[data-console-panel-id="${id}"]`)).toHaveCount(1);
+	}
+	expect(evaluatorRequests).toEqual([]);
 });
 
 test('integrated actual canary smoke: narrow viewport, with cross-page navigation', async ({ page }) => {
