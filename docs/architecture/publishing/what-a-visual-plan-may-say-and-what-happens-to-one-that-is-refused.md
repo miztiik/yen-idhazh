@@ -1,6 +1,6 @@
 # What a visual plan may say, and what happens to one that is refused
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 The shape the model decodes into, the four things it may not carry, the ten
 deterministic checks a plan has to clear, and the ladder a refused plan may step

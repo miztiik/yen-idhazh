@@ -1,6 +1,6 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 What the model is asked to produce, how the two calls share context, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
 

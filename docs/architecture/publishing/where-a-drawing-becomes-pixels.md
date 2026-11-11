@@ -1,6 +1,6 @@
 # Where a drawing becomes pixels
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 The reader's browser renders charts and lays out the whowhat grid; the pipeline
 never draws a chart. This page holds that ruling, what it cost and what it

@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 How an item gets a chart, a whowhat grid or - most of the time - nothing at
 all: which pass decides, which gate refuses, and what every refusal is called.
