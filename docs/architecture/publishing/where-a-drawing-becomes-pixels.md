@@ -34,8 +34,12 @@ The compiler creates a rectangular row for each selected actor. It fills both ce
 exactly one selected entity and one selected claim come from that same sentence; ambiguous or
 unmatched rows have both cells empty. It re-slices each source span against the article before
 writing, keeps the full bounded excerpt (at most 500 characters), and uses Row 1's
-`fit_source_span()` helper for both displayed labels. The browser's `WhowhatVisual` reader
+`fit_source_span()` helper for both fitted label fields. The browser's `WhowhatVisual` reader
 validates the grid payload and its item/path identity before rendering the two-column table.
+It shows the full claim excerpt by default and keeps the fitted actor label, with native
+disclosure only for a clipped actor, as the
+[grid design contract](../../concepts/design-system.md#the-whowhat-grid-keeps-each-actor-beside-its-claim)
+defines. Neither the compiler's fit policy nor the persisted grid changes.
 
 `DigestVisual.kind` selects the family. The projection preserves an explicit `whowhat` kind for
 the new reader. An older served visual with no kind retains the established chart route, so the
