@@ -34,10 +34,10 @@
 		coverage,
 		coverageRegions,
 		dayTicks,
-		frame,
 		linearAxis,
 		observeWidth
 	} from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import { pointerReadout } from '$lib/charts/readout';
 	import {
 		placeOnYieldAxis,
@@ -82,6 +82,7 @@
 		below?: Snippet<[DaySlots, boolean]>;
 	} = $props();
 	const numberFormat = useNumberFormat();
+	const frame = useChartFrame();
 	const grouped = (value: number) => formatGrouped(value, numberFormat);
 
 	/** Room on the right for the yield axis, on the left for an article count
@@ -109,7 +110,7 @@
 	const box = $derived(frame(chartWidth(measured, width), height, CHART_MARGIN));
 	/** Every day's slot, computed once and used by every mark on this chart and by
 	 * whatever stands under it. */
-	const slots = $derived(daySlots(box.width, load.columns.length, CHART_MARGIN));
+	const slots = $derived(daySlots(box.width, load.columns.length, box.margin));
 	const volume = $derived(linearAxis([0, load.peak], [box.bottom, box.top]));
 	// A count of items has no half. A domain of two draws ticks at 0.5, and a
 	// console cell never prints a decimal.
@@ -164,7 +165,7 @@
 	const dateAxis = $derived(
 		dayTicks(
 			load.columns.map((column) => column.date),
-			{ density: tickDensity, columns: slots.centres }
+			{ density: tickDensity, columns: slots.centres, labels: box.labels }
 		)
 	);
 
@@ -270,11 +271,11 @@
 					data-run-yield-chart="guide"
 				/>
 			{/if}
-			<text x="0" y="11" fill="var(--color-text-tertiary)" font-size="11">Articles</text>
+			<text x="0" y={box.labels.fontSize} fill="var(--color-text-tertiary)" font-size={box.labels.fontSize}>Articles</text>
 			<!-- Not `Share` on its own. The eye is on this axis at the moment it asks
 			     "75 percent of what?", so the answer has to be here rather than in the
 			     readout below. -->
-			<text x={box.width} y="11" text-anchor="end" fill="var(--color-text-tertiary)" font-size="11"
+			<text x={box.width} y={box.labels.fontSize} text-anchor="end" fill="var(--color-text-tertiary)" font-size={box.labels.fontSize}
 				>Published, % of planned</text
 			>
 
@@ -291,7 +292,7 @@
 					y={volume.scale(tick) + 3.5}
 					text-anchor="end"
 					fill="var(--color-text-tertiary)"
-					font-size="10">{grouped(tick)}</text
+					font-size={box.labels.fontSize}>{grouped(tick)}</text
 				>
 			{/each}
 
@@ -301,7 +302,7 @@
 					y={rateY(tick) + 3.5}
 					text-anchor="start"
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-yield-tick={tick}>{Math.round(tick * 100)}%</text
 				>
 			{/each}
@@ -345,7 +346,7 @@
 						y={box.bottom + 16}
 						text-anchor={tick.anchor}
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-day-axis>{tick.text}</text
 					>
 				{/if}

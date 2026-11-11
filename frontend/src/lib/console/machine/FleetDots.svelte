@@ -13,7 +13,6 @@
 	 * the plot is one tab stop, and a pointer, a key or a tap picks a day. A click
 	 * or Enter holds the day open, outlined, for the list under the plot.
 	 */
-	import { AXIS_LABEL_PX } from '$lib/charts/frame';
 	import type { FleetDots } from '$lib/charts/fleet';
 	import { columnPick, pointerReadout, readoutMarks, type Readout } from '$lib/charts/readout';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
@@ -91,10 +90,10 @@
 			{#if tick.text}
 				<text
 					x={geometry.columns[tick.index]}
-					y={box.bottom + TICK + AXIS_LABEL_PX}
+					y={box.bottom + TICK + box.labels.fontSize}
 					text-anchor={tick.anchor}
 					fill="var(--color-text-tertiary)"
-					font-size={AXIS_LABEL_PX}>{tick.text}</text
+					font-size={box.labels.fontSize}>{tick.text}</text
 				>
 			{/if}
 		{/each}

@@ -1,13 +1,13 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-11-10
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
 which is the question asked far more often than how the control is drawn.
 
-Which panel sits on which route is [console.md](console.md). The control stands on
-the strip beside the route tabs, and sticks with it from the wide breakpoint up;
+Which panel sits on which route is [console.md](console.md). The control stands beside the active route heading, with record reach directly
+below it. Labelled route navigation occupies a separate left rail or narrow menu;
 the shell it stands in is
 [what-sits-above-every-console-route.md](what-sits-above-every-console-route.md).
 
@@ -79,17 +79,23 @@ or downloads the retired telemetry mirror. The control shows a busy state while
 its answer is pending. Private build-time values already in the page are selected
 without a fetch.
 
-**The choice is kept in `localStorage` and read on mount, never during
-prerender.** The first frame uses the configured choice. Native panels do not
-claim a data date before their record arrives.
+**The mounted layout owns one in-memory choice.** It reads the optional
+`idhazh:console-window` value once on mount, never during prerender, and writes
+the same numeric preset encoding on selection. A stored value must be one of
+the configured presets. Read/write failures warn locally; neither can block
+queries or discard the selected in-memory window. The first frame uses the
+configured choice, and native panels claim no data date before their reach
+arrives.
 
-**Every route hands the layout the same window choice.** Published-ledger
-routes also hand over typed record reach. All read the same
-`idhazh:console-window` key, so a span picked on Pipelines is the span Hardware
-opens on and the other way round. The representative console journey checks
-shared navigation; deterministic window and query rules use lower-tier tests.
+**Every route uses the layout's shared choice.** Published-ledger routes hand
+back typed record reach, readiness and fetch state through the existing window
+slot. Routes do not each read storage. A span selected on Pipelines remains
+selected on Hardware even when storage is denied. Explorer presets share the
+choice; explicit linked or custom UTC spans retain their existing precedence.
+The representative console journey checks shared navigation; deterministic
+window and query rules use lower-tier tests.
 
-**A tab click carries the span too, with no page load.** The router mounts the
+**A route click carries the span with no page load.** The router mounts the
 next route under the same layout and tears the last one down in the same
 update, and the control then holds the span the next route draws.
 [window-slot.ts](../../../frontend/src/lib/console/window-slot.ts) now keeps which

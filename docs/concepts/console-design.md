@@ -1,13 +1,19 @@
 # Console Design
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-11-10
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
 the operator half of [design-system.md](design-system.md), which keeps the
 vocabulary the whole site resolves - the tokens, the colour ramps, the motion set
-and the sufficiency gate. This page adds no token and defines no colour; it says
-what the console may do with them.
+and the sufficiency gate. Console-only values live in
+[`console_style`](config/appearance.md#console-surface); this page defines their
+meaning, not a second set of values.
+
+Panels group evidence on neutral surfaces. Status words use the confidence
+roles, movements use their own pair, and plotted series use the categorical
+palette. Type and spacing distinguish route identity, panel questions and data.
+Readouts remain below plots, with exact counts and the existing number format.
 
 | Page | The question it answers |
 | --- | --- |
@@ -89,21 +95,18 @@ minimum counts needed. A count that has passed its minimum is not a share:
 never `49 of 30 pairs`.
 
 **A count that leaves a run out says so, and says what still counts the run.**
-On Hardware, a run whose rows cannot be made into one run is left out of the
-first line's run count - for example, a run where one shard filed two machine
-records that disagree. A box under that line names each such run, its row count
-and the reason, under this head: `1 run has records that do not fit together.
-The run count above does not include it. Figures that pick articles by date
-still include the articles of this run.` The head claims no more than that:
-every figure built from the window's article rows picks them by date, so each
-one counts the refused run's articles. The box stays directly under the run
-count, because its words point up at it. Reader chose the words, and kept the
-place, on 2026-10-07. Where the window holds no run the count takes but one the
-box names, the first line is a count of 0 - `0 runs in these 7 days.`, or `This
-one day had 0 runs.` - and never `No run in these 7 days is on record.`, which
-would deny the run the box names. Reader chose those words on 2026-10-08. Only
-the box explains a refused run: a line that leaves the run out, or that counts
-or names its day, adds no words about it (Reader, 2026-10-08).
+On Hardware, inconsistent run records are excluded from the count. A native
+disclosure immediately below that count keeps the recording notes and run
+exclusions together. Its closed summary flags missing recording or measurement
+being off, names the excluded-run count and states that their articles still
+count. It is not a hidden healthy verdict.
+
+The body retains every recording date, missing-record count, refused-run ID,
+row count and reason. Article-based figures still include the refused runs'
+articles; the run count does not. Where no run qualifies, print the count as
+zero, never claim that no run was recorded. A disclosure keeps those
+qualifications beside the count without displacing the first useful comparison
+on a phone.
 
 **A fixed benchmark figure never appears on the console.** It was taken on
 another machine against another workload, so a gap between it and a run reads as
@@ -133,10 +136,11 @@ did not read. Only the dates and counts inside them are computed, and every one
 is derived from the ledger that is missing - **a date that is not true is worse
 than no date**. None is apologetic, none is styled as an error, and none is a
 banner across the page: three panels can be in three different states on one
-day. On Hardware and Summaries the first six sit after the record notes and
-before the first section, in one order - off, sampled, started, then the days
-one instrument covered alone - so a page whose sections have nothing to draw
-still says what the recording was doing; Jony chose the place on 2026-10-07.
+day. Summaries keeps the first six after the record notes and before the first
+section. Hardware keeps the same ordered evidence inside its recording
+disclosure, immediately below the run count. Measurement being off remains
+explicit in its summary. The order is off, sampled, started, then the days one
+instrument covered alone, so even empty panels retain their recording context.
 The seventh sits on the two charts it is about. Susan chose the words of the
 first five on 2026-08-30. On 2026-10-07 Reader and Jony chose new words for the
 measurement-off line and for the two lines about days one instrument covered
@@ -416,6 +420,12 @@ facts - two sections both explaining that they follow the window rather than a
 pan, or a date span printed under the heading that already printed it.
 
 ## Design rationale
+
+The console needs evidence in its first viewport, not a second header above
+every route. Labelled rail navigation and a compact factual band leave room for
+the route's first comparison. A narrow native menu keeps the same links and
+group anchors without shrinking chart text. These are visual changes, not chart
+cuts, page moves or changes to what a reading means.
 
 The console and digest drawing share one number formatter, so the same quantity
 does not acquire different separators or precision on different pages. The

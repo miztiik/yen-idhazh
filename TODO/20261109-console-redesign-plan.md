@@ -40,7 +40,7 @@ Table C
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Define console redesign and chart changes | - | A | DONE | `reimagined-bassoon` | - | App session `5a68b1fe-c1ab-4f8d-b706-ef758cc38288`; branch `console-design-contract` |
 | C2 | 2 | Diagnose compact-data publication lag | 1 | B | PENDING | - | - | - |
-| C3 | 3 | Replace the full console visual system and share window behavior | 1 | C | PENDING | - | - | - |
+| C3 | 3 | Replace the full console visual system and share window behavior | 1 | C | DONE | `vigilant-funicular` | - | App session `758b5e38-010f-4ba5-9945-399a21883402`; branch `console-visual-rebuild` |
 | C4 | 4 | Apply permanent cuts, page moves and the token-chart redesign | 1 | D | PENDING | - | - | - |
 | C5 | 5 | Correct retained chart readings and evidence windows | 4 | E | PENDING | - | - | - |
 | C6 | 6 | Restore collection needed by retained hardware diagnostics | 4 | F | PENDING | - | - | - |
@@ -67,7 +67,7 @@ Table D
 | D5 | Use the existing flat route rosters for presence and order. A cut deletes the chart, not hides it; a move mounts it on its destination page, not behind a link on its old page. No presentation metadata, stamped roster format or generic composition framework. | Permanent-removal and relocation scope. |
 | D6 | Table O is selective defect triage, not a mandatory fix bundle. | Plan scope. |
 | D7 | The inspected Hardware viewport contains chrome and repeated status before chart evidence. Put a useful comparison in the first viewport; do not shrink chart text. | Browser/source inspection; Susan. |
-| D8 | Proposed `AppearanceConfig.console_style` owns the replacement's colors, type and spacing. The existing CSS generator emits them before paint over the entire operator page, including its canvas and header; no runtime theme fetch or new assets. The JSON below declares design defaults, not measured findings. | Fowler contract ruling; Susan visual defaults. |
+| D8 | `AppearanceConfig.console_style` owns the replacement's colors, type and spacing. The existing CSS generator emits them before paint over the entire operator page, including its canvas and header; no runtime theme fetch or new assets. The JSON below declares design defaults, not measured findings. | Fowler contract ruling; Susan visual defaults. |
 | D9 | The style model is defaulted and rejects unknown fields. Colors are lowercase six-digit hex; categorical arrays have eight distinct entries and remain separate from confidence/movement roles. Fonts are `inter`, `system-sans` or `system-mono`. Missing blocks/leaves use native defaults; arrays replace whole; explicit null is legal only for `grid_dash_px`. | Native contract before consumption; additive read compatibility. |
 | D10 | Finite strict style numbers: type size 0.75-4 rem, leading from size to twice size, weight integer 100-900, tracking -0.1 to 0.2 em; gaps/padding 0-4 rem, rail 8-18 rem, header 3-5 rem, primary targets 2.75-4 rem, radii 0-2 rem, wide columns integer 1-2. Shadows: y 0-16 px, blur 0-32 px, alpha 0-0.2. Axis/grid strokes 0.5-2 px, series 0.5-4 px, grid opacity >0 to 1, dash null or two 0.5-16 px values, caps `butt`, `round` or `square`. Reject booleans/strings as numbers and invalid values rather than emitting CSS. | Bounded style construction; existing primary-control floor. |
 | D11 | Version/changelog only the appearance contract, current appearance file and its existing fixture when Row 3 implements the block. AppConfig and ConsoleConfig remain unchanged. Bind the small frontend copy/defaults and vocabularies to the native model; use the existing generated CSS file, not a new theme framework. | Fowler; one native appearance authority. |
@@ -183,14 +183,14 @@ Table L
 
 | ID | Decision | Construction | State / boundary |
 | --- | --- | --- | --- |
-| L1 | Full visual replacement | Row 3 uses the complete console-only style proposal below: palette, type, rail, controls, status, panels and drawings. No reader recoloring. | Row 3 Level-5 gate: settle the additive appearance contract before consumption. No dependency on L3 or L6. |
+| L1 | Full visual replacement | Row 3 uses the complete console-only style family below: palette, type, rail, controls, status, panels and drawings. No reader recoloring. | Defaulted additive appearance family; native validation precedes CSS production. Missing blocks/leaves use role defaults, arrays replace whole, and only the chart dash accepts null. No dependency on L3 or L6. |
 | L2 | Closed-day eligibility/cadence | Keep `compact_after_days = 1` for item-health, summary-quality-evals, host-fingerprint and run-shards; retain validator >=1, cadence and retention. | RESOLVED: the extra whole-day wait remains. Row 2 diagnoses publication only; no freshness gain is assumed. |
 | L3 | Permanent cuts and page moves | Row 4 permanently removes G4. Other Table M cuts and Table N moves remain individual proposals; existing flat rosters determine presence/order. | Row 4 only: settle the chosen IDs, losses and consumer inventory. No presentation schema or blanket disclosure strategy. Does not hold Row 3. |
 | L4 | Automatic explorer chart choice | Count valid readings through existing role/shape validation and floors; a small named grouped result can rank instead of selecting an undrawable scatter. | Row 7 construction settled; preserve manual choices, typed-date refusals and reporting floors. Independent of L1/L3/L6. |
 | L5 | SQL aggregation | Keep existing named column/date queries and reducers for these changes. No new aggregate API is required. | RESOLVED: placement, units, window labels and publication diagnosis do not require a query-contract migration. No transfer-saving claim. |
 | L6 | Hardware run read/write comparison | Retain H14 and its data. Options are adjacent read/write bars per run, stacked read/write segments per run, or lines of an explicitly named per-run measure. | Row 4 only: settle native row/group keys, token semantics, aggregation, units and representation before drawing. Grouped volumes, rates and ratios are not substitutes. Does not hold Row 3. |
 
-#### L1 - Proposed appearance settings for Row 3
+#### L1 - Console-only appearance settings for Row 3
 
 ```json
 {

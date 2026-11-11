@@ -56,6 +56,7 @@ def test_explorer_file_limit_defaults_and_bounds() -> None:
         with pytest.raises(ValidationError, match="explorer_max_files"):
             ConsoleConfig.model_validate({"explorer_max_files": value})
 
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APPEARANCE_PATH = REPO_ROOT / "config" / "appearance.json"
 
@@ -143,6 +144,131 @@ def test_defaults_alone_are_a_valid_document() -> None:
     resolved = AppearanceConfig.model_validate({})
     assert resolved.frame.reading_max_px >= FRAME_READING_MIN_PX
     assert resolved.version == AppearanceConfig.schema_version()
+
+
+def test_console_style_defaults_preserve_old_inputs_and_partial_leaves() -> None:
+    old = AppearanceConfig.model_validate({"version": "2026-10-04"})
+    assert old.console_style.typography.small.size_rem == 0.75
+    assert old.console_style.colors.light.canvas == "#f2f1ed"
+    assert old.console_style.colors.dark.canvas == "#191917"
+    changed = AppearanceConfig.model_validate(
+        {
+            "console_style": {
+                "colors": {"light": {"accent": "#145a55"}},
+                "typography": {"small": {"weight": 500}},
+                "elevation": {"light": {"panel": {"y_px": 2}}},
+            },
+        }
+    ).console_style
+    assert changed.colors.light.accent == "#145a55"
+    assert changed.colors.light.canvas == old.console_style.colors.light.canvas
+    assert changed.colors.dark == old.console_style.colors.dark
+    assert changed.typography.small.leading_rem == 1
+    assert changed.typography.small.weight == 500
+    assert changed.elevation.light.panel.alpha == 0.06
+    assert changed.elevation.dark.panel.alpha == 0
+
+
+@pytest.mark.parametrize(
+    "style",
+    [
+        {"surprise": 1},
+        {"colors": {"light": {"accent": "#AABBCC"}}},
+        {"colors": {"dark": {"canvas": "#fff"}}},
+        {"colors": {"light": {"categorical": ["#112233"] * 8}}},
+        {"colors": {"light": {"categorical": ["#112233"]}}},
+        {"typography": {"ui_face": "downloaded-font"}},
+        {"typography": {"small": {"size_rem": 0.74}}},
+        {"typography": {"small": {"size_rem": True}}},
+        {"typography": {"small": {"size_rem": "0.75"}}},
+        {"typography": {"small": {"size_rem": float("nan")}}},
+        {"typography": {"small": {"leading_rem": 1.51}}},
+        {"typography": {"body": {"leading_rem": 0.8}}},
+        {"typography": {"value": {"weight": 500.0}}},
+        {"typography": {"value": {"weight": 901}}},
+        {"typography": {"body": {"tracking_em": 0.21}}},
+        {"layout": {"rail_width_rem": 7.99}},
+        {"layout": {"header_min_height_rem": 5.01}},
+        {"layout": {"control_min_height_rem": 2.74}},
+        {"layout": {"panel_padding_rem": 4.01}},
+        {"layout": {"columns_wide": True}},
+        {"layout": {"columns_wide": 3}},
+        {"radii": {"panel_rem": -0.01}},
+        {"elevation": {"dark": {"panel": {"alpha": 0.21}}}},
+        {"elevation": {"light": {"floating": {"y_px": 16.01}}}},
+        {"elevation": {"light": {"floating": {"blur_px": 32.01}}}},
+        {"chart": {"axis_width_px": 0.49}},
+        {"chart": {"line_width_px": 4.01}},
+        {"chart": {"grid_opacity": 0}},
+        {"chart": {"grid_width_px": float("inf")}},
+        {"chart": {"grid_dash_px": [1]}},
+        {"chart": {"grid_dash_px": [0, 2]}},
+        {"chart": {"linecap": "triangle"}},
+        {"layout": None},
+        {"typography": {"small": None}},
+        {"colors": {"light": {"canvas": None}}},
+        {"chart": {"grid_opacity": None}},
+    ],
+)
+def test_console_style_refuses_unsafe_or_ambiguous_values(style: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        AppearanceConfig.model_validate({"console_style": style})
+
+
+def test_console_style_accepts_bounded_numbers_and_replaces_arrays_whole() -> None:
+    palette = [
+        "#112231",
+        "#112232",
+        "#112233",
+        "#112234",
+        "#112235",
+        "#112236",
+        "#112237",
+        "#112238",
+    ]
+    style = AppearanceConfig.model_validate(
+        {
+            "console_style": {
+                "colors": {"light": {"categorical": palette}},
+                "typography": {
+                    "small": {"size_rem": 4, "leading_rem": 8, "weight": 100, "tracking_em": -0.1}
+                },
+                "layout": {
+                    "rail_width_rem": 18,
+                    "header_min_height_rem": 5,
+                    "control_min_height_rem": 4,
+                    "panel_gap_rem": 0,
+                    "columns_wide": 1,
+                },
+                "radii": {"control_rem": 0, "panel_rem": 2},
+                "chart": {
+                    "axis_width_px": 2,
+                    "line_width_px": 0.5,
+                    "grid_dash_px": [0.5, 16],
+                    "linecap": "butt",
+                },
+            }
+        }
+    ).console_style
+    assert style.colors.light.categorical == palette
+    assert style.colors.dark.categorical != palette
+    assert style.chart.grid_dash_px == [0.5, 16]
+    assert (
+        AppearanceConfig.model_validate(
+            {"console_style": {"chart": {"grid_dash_px": None}}}
+        ).console_style.chart.grid_dash_px
+        is None
+    )
+
+
+@pytest.mark.parametrize("color", ["#1a7f4b", "#2f6f5e"])
+def test_console_categories_stay_separate_from_confidence_and_movement(color: str) -> None:
+    palette = AppearanceConfig().console_style.colors.light.categorical
+    palette[0] = color
+    with pytest.raises(ValidationError, match="separate from confidence and movement"):
+        AppearanceConfig.model_validate(
+            {"console_style": {"colors": {"light": {"categorical": palette}}}}
+        )
 
 
 @pytest.mark.parametrize("width", [0, 320, FRAME_READING_MIN_PX - 1, FRAME_READING_MAX_PX + 1])
@@ -434,9 +560,7 @@ def test_the_default_theme_is_the_one_root_carries() -> None:
     The config field does not drive first paint. This checks agreement, not
     runtime configurability or the reader's stored choice.
     """
-    tokens = (REPO_ROOT / "frontend" / "src" / "styles" / "tokens.css").read_text(
-        encoding="utf-8"
-    )
+    tokens = (REPO_ROOT / "frontend" / "src" / "styles" / "tokens.css").read_text(encoding="utf-8")
     base = re.search(r"^:root\s*,\s*\[data-theme=['\"](\w+)['\"]\]\s*\{", tokens, re.MULTILINE)
     assert base is not None, "tokens.css no longer names the theme sharing the :root group"
     theme = ThemeChoice(base.group(1))

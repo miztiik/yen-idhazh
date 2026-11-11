@@ -24,7 +24,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/charts': [
 		'cost.ts', 'day-slots.ts', 'fleet.ts', 'frame.ts', 'glance.ts', 'indexed-runs.ts',
 		'machine-cards.ts', 'machine-colour.ts', 'machine-name.ts',
-		'machine.ts', 'rank.ts', 'readout.ts', 'run-history.ts', 'run-yield.ts', 'series.ts',
+		'label-context.ts', 'machine.ts', 'rank.ts', 'readout.ts', 'run-history.ts', 'run-yield.ts', 'series.ts',
 		'skeleton.ts', 'sparkline.ts', 'stack-types.ts', 'targetbar.ts',
 		'theme.ts', 'viewport.ts'
 	],
@@ -51,11 +51,11 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'WindowControl.svelte', 'WindowControlSource.svelte', 'WindowStatus.svelte'
 	],
 	'src/lib/console': [
-		'applied-line.ts', 'band.ts', 'chrome.ts', 'completeness.ts', 'daily-figures.ts',
+		'applied-line.ts', 'band.ts', 'chrome.ts', 'completeness.ts', 'console-style.ts', 'daily-figures.ts',
 		'doubt-reasons.ts', 'duration-cohort.ts', 'eval-instruments.ts', 'extraction.ts', 'failure-rules.ts',
 		'holdout.ts', 'judgement-evidence.ts', 'merge-line.ts', 'model-cards.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
-		'settings-moved.ts', 'span-words.ts', 'strip.ts', 'verdict-split.ts', 'waiting.ts', 'window-slot.ts'
+		'settings-moved.ts', 'span-words.ts', 'verdict-split.ts', 'waiting.ts', 'window-preference.ts', 'window-slot.ts'
 	],
 	'src/lib/console/queries': ['machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
 	'src/lib/console/pipelines': [

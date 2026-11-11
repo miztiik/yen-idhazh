@@ -25,6 +25,8 @@ import { join } from 'node:path';
 import { routeConsolesFrom, type RouteConsoles } from '../console/route-console';
 import { REPO_ROOT } from './payload';
 import type { NumberFormatConfig } from '../number-format';
+import { resolveConsoleStyle, type ConsoleStyleInput } from '../console/console-style';
+export type { ConsoleStyleConfig, ConsoleType } from '../console/console-style';
 
 export { routeConsolesFrom } from '../console/route-console';
 export type { ConsoleDefine } from '../console/route-console';
@@ -474,6 +476,8 @@ export interface ChartConfig {
 	tick_density: number;
 	sparkline_height_px: number;
 	number_format: NumberFormatConfig;
+	/** Console-only fallback; mounted charts use computed CSS-pixel metrics. */
+	label_style?: import('../console/console-style').ConsoleType;
 }
 
 /** Bounded geometry for browser-drawn story charts, separate from console sizing. */
@@ -889,6 +893,7 @@ type LedgerBlock = {
 interface RawAppearance {
 	digest?: DigestBlock;
 	console?: ConsoleBlock;
+	console_style?: ConsoleStyleInput;
 	assist?: Partial<AssistConfig>;
 	frame?: Partial<FrameConfig>;
 	theme?: Partial<ThemeConfig>;
@@ -1274,10 +1279,17 @@ export function themeConfig(): ThemeConfig {
 	return { ...THEME_DEFAULTS, ...(appearance().theme ?? {}) };
 }
 
+export function consoleStyleConfig() {
+	return resolveConsoleStyle(appearance().console_style);
+}
+
 export function chartConfig(): ChartConfig {
 	const chart = { ...(appearance().chart ?? {}) };
 	delete chart.story_geometry;
-	return { ...CHART_DEFAULTS, ...chart, number_format: numberFormatConfig() };
+	return {
+		...CHART_DEFAULTS, ...chart, number_format: numberFormatConfig(),
+		label_style: consoleStyleConfig().typography.small
+	};
 }
 
 export function iconsConfig(): IconsConfig {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { useWindowChoice } from '$lib/console/window-slot';
 	import { base } from '$app/paths';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
@@ -12,6 +13,7 @@
 	import { PANEL_QUERIES, countersFrom, fingerprints, processors, shardCounts, textRows } from '$lib/console/machine/records';
 	import { describeRefusedRuns } from '$lib/console/machine/refused-runs';
 	import { finiteCell } from '$lib/console/rates';
+	import { formatNumber } from '$lib/number-format';
 	import { measurementOff, recordingNotes, type RecordRead } from '$lib/console/recording';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { machineKeys, machineRamp } from '$lib/charts/machine-colour';
@@ -42,7 +44,8 @@
 	const knobs = { ...configured, fleet_top_kinds: shared.fleet_top_kinds };
 	const cfg = $derived(data.machineConfig);
 	const presets = shared.window_presets;
-	let windowDays = $state(shared.default_window_days);
+	const choice = useWindowChoice();
+	const windowDays = $derived(choice.days);
 	let ready = $state(false);
 	let generation = $state(0);
 	let reach = $state<RouteReach | null>(null);
@@ -51,15 +54,10 @@
 	const asked = [...new Map([...Object.values(PANEL_QUERIES).flat(), queries.platformMixQuery, queries.articleCostQuery]
 		.map((query) => [query.name, query])).values()];
 	onMount(() => {
-		try {
-			const stored = Number(localStorage.getItem('idhazh:console-window'));
-			if (presets.includes(stored)) windowDays = stored;
-		} catch { /* Storage is optional; the configured window still works. */ }
 		ready = true;
 	});
 	function show(days: number) {
-		windowDays = days;
-		if (ready) try { localStorage.setItem('idhazh:console-window', String(days)); } catch { /* Storage is optional. */ }
+		choice.select(days);
 	}
 	function retry() {
 		retryAsks(asked.filter((query) => answers[query.name]?.state === 'unreachable'));
@@ -137,6 +135,7 @@
 	const counterReady = $derived(complete(['platformMixQuery', 'articleCostQuery', 'runShardsQuery']));
 	const counters = $derived(countersFrom(counterReady ? rows('platformMixQuery') : [], counterReady ? rows('articleCostQuery') : [], counterReady ? rows('runShardsQuery') : [],
 		{ contextWindow: cfg.contextWindow, jobTimeoutSeconds: cfg.jobTimeoutSeconds }));
+	const countedRuns = $derived(counters.runs.filter((run) => run.date >= start && run.date <= end).length);
 	const latestRunId = $derived([...new Set([...rows('platformMixQuery').filter((row) => row.date === end),
 		...rows('twoClocksQuery'), ...rows('machineCardsItemsQuery')].map((row) => String(row.run_id)))].sort(compareRuns).at(-1) ?? null);
 	const newest = $derived(counters.runs.find((run) => run.runId === latestRunId) ?? null);
@@ -181,13 +180,16 @@
 		window: healthDates, reads: [hostRead], from: through === null ? '' : windowRange(Math.max(...presets), through, '0001-01-01').from,
 		open, figures: 'server figures', coveredElsewhere: healthDates, missing: 'server-counters' }));
 	const lostSentence = $derived(lost.length ? `${lost.reduce((n, day) => n + day.articles, 0)} dated article records have no machine record on ${lost.map((day) => day.date).join(', ')}. The article work was recorded; no machine measurement can be inferred.` : null);
+	const recordingGaps = $derived(Boolean((ready && off) || recordNotes.startedMidWindow ||
+		serverNotes.startedMidWindow || serverNotes.coveredElsewhere || lostSentence));
+	const evidence = $derived(recordingGaps || countFault !== null || refused !== null);
 	const lostThresholds = { marked: shared.processor_lost_pct_marked, named: shared.processor_lost_pct_named };
 	const latency = $derived(percentileHistory(textRows(rows('tailTrendQuery')), shared.min_attempts_for_rate));
 	const settings = $derived(settingsRules(data, { from: start, to: end }, 'none'));
 	const changes = $derived('changes' in settings ? settings.changes : []);
 	const changeNote = $derived('note' in settings ? settings.note : settings.declined);
 	const titles: Readonly<Record<string, string>> = {
-		'two-clocks': 'Whether the speed numbers can be trusted', 'processor-lost': 'How much of the processor went to somebody else',
+		'two-clocks': 'Clock agreement', 'processor-lost': 'How much of the processor went to somebody else',
 		'disk-reads': "Whether the machine took the model's memory back", 'machine-cards': 'Which machines this run was given',
 		'slower-machines': 'Which machines do the same work slower', 'platform-mix': 'Which machines ran our jobs, day by day',
 		'slowest-articles': 'Which articles took longest in the last run', 'tail-trend': 'Whether the slowest articles are getting slower',
@@ -200,11 +202,19 @@
 
 <svelte:head><title>Hardware &mdash; Console &mdash; {data.ui.site_title}</title><meta name="robots" content="noindex" /></svelte:head>
 <RouteStatus route="machine" answers={panelAnswers} days={windowDays} {through} shimmerAfterMs={shared.shimmer_after_ms} onRetry={retry}
-	settledSuffix={counterReady ? `${counters.runs.filter((run) => run.date >= start && run.date <= end).length} recorded runs in this window.` : ''}>
-<div data-machine-start={start} data-machine-end={end} data-machine-run-count={counterReady ? counters.runs.filter((run) => run.date >= start && run.date <= end).length : undefined}>
-	<WindowControlSource days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
-	<p class="console-carry" data-console-carry="pipelines">{data.carries.machine} <a href="{base}/console/">Pipelines &rarr;</a></p>
-	<p data-machine="intro">The shard is the unit on this page. Read from the published record when you open this page.</p>
+	settledSuffix={counterReady ? `${formatNumber(countedRuns, cfg.chart.number_format, { exact: true })} ${countedRuns === 1 ? 'run' : 'runs'} counted.` : ''}>
+<div data-machine-start={start} data-machine-end={end} data-machine-run-count={counterReady ? countedRuns : undefined}>
+	<WindowControlSource days={windowDays} {presets} {monthsFor} {ready} onChange={show}
+		busy={panelAnswers.includes('pending')}
+		record={{ asked: windowDays, first: reach?.ledgers['item-health']?.state === 'ok' ? reach.ledgers['item-health'].first : null, through }} />
+	{#if evidence}
+	<details class="machine-evidence" data-machine-evidence>
+		<summary>
+			{#if recordingGaps}{ready && off ? 'Measurement is off' : 'Recording gaps'}{refused || countFault ? '; ' : '.'}{/if}
+			{#if refused}{formatNumber(refused.runs.length, cfg.chart.number_format, { exact: true })} {refused.runs.length === 1 ? 'run excluded' : 'runs excluded'} from run count. {refused.runs.length === 1 ? 'Its' : 'Their'} articles still count.{/if}
+			{#if countFault} Run count unavailable.{/if}
+		</summary>
+		<div class="machine-evidence-body">
 	{#if countFault}<p data-machine-count-refusal>{countFault} No planned count can be used until this record is corrected.</p>{/if}
 	{#if ready && off}<p data-recording="machine-off">{off}</p>{/if}
 	{#if recordNotes.startedMidWindow}<p data-recording="machine-started">{recordNotes.startedMidWindow}</p>{/if}
@@ -216,6 +226,10 @@
 			{#each refused.runs as run (run.runId)}<p data-refused-run={run.runId}>{run.runId}: {run.says}</p>{/each}
 		</div>
 	{/if}
+		</div>
+	</details>
+	{/if}
+	<p class="console-carry" data-console-carry="pipelines">{data.carries.machine} <a href="{base}/console/">Pipelines &rarr;</a></p>
 	{#each groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
@@ -256,3 +270,23 @@
 	{/each}
 </div>
 </RouteStatus>
+
+<style>
+	.machine-evidence {
+		margin-block: var(--console-control-gap);
+		border: 1px solid var(--color-rule);
+		border-radius: var(--console-control-radius);
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
+	}
+	summary {
+		min-block-size: var(--console-control-min-height);
+		padding: var(--console-control-padding-block) var(--console-control-padding-inline);
+		align-content: center;
+		color: var(--color-accent);
+		cursor: pointer;
+	}
+	.machine-evidence-body { display: grid; gap: var(--console-control-padding-block); padding: var(--console-panel-padding); border-block-start: 1px solid var(--color-rule); }
+	.machine-evidence-body p { margin: 0; }
+	.console-carry { margin-block-start: var(--console-control-gap); }
+</style>

@@ -37,7 +37,7 @@
 <style>
 	.editor { display: grid; gap: var(--space-2); }
 	/* Not `.frame`: that is the site frame's class, whose width cap and gutter would land here. `lines` is the fewest lines shown: the box fills the room its region gives it, and a longer question scrolls inside. */
-	.editor-frame { position: relative; display: grid; grid-template-columns: calc(3ch + var(--space-3)) 1fr; min-block-size: calc(var(--lines) * var(--workbench-field-leading) + 2 * var(--space-3)); contain: size; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; border: 1px solid var(--color-rule-strong); border-radius: var(--radius-md); background: var(--code-ground); font-family: var(--font-data); font-size: var(--workbench-field-text); line-height: var(--workbench-field-leading); }
+	.editor-frame { position: relative; display: grid; grid-template-columns: calc(3ch + var(--space-3)) 1fr; min-block-size: calc(var(--lines) * var(--workbench-field-leading) + 2 * var(--space-3)); contain: size; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; border: 1px solid var(--color-rule-strong); border-radius: var(--console-control-radius); background: var(--code-ground); font-family: var(--console-code-face); font-size: var(--workbench-field-text); line-height: var(--workbench-field-leading); }
 	.editor-frame:focus-within { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 	.numbers { display: grid; align-content: start; padding: var(--space-3) var(--space-2); color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; text-align: end; user-select: none; }
 	.numbers { border-inline-end: 1px solid var(--color-rule); }

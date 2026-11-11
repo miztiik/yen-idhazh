@@ -1,5 +1,4 @@
-/* Generated from config/appearance.json by scripts/build-frame-css.mjs.
-   Do not hand-edit: the build regenerates it and a diff fails the gate. */
+/* Generated from config/appearance.json by scripts/build-frame-css.mjs. */
 :root {
 	--frame-reading: 1280px;
 	--frame-console: 1600px;
@@ -14,10 +13,6 @@
 	--font-display: 'InterVariable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* The movement pair, one value per theme, in the order tokens.css declares
-   them: dark is the base, light is the override, and source order is what makes
-   a chosen light theme win. Imported after tokens.css, so these beat the
-   committed defaults there at the same specificity. */
 :root,
 [data-theme='dark'] {
 	--movement-good: #7fc9ae;
@@ -27,4 +22,201 @@
 [data-theme='light'] {
 	--movement-good: #2f6f5e;
 	--movement-bad: #96453a;
+}
+
+/* The selector includes the outer canvas and header, never a reading route. */
+:root:has([data-surface='operator']) {
+	--font-reading: 'InterVariable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-display: 'InterVariable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-data: 'InterVariable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--console-code-face: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	--console-small-size: 0.75rem;
+	--console-small-leading: 1rem;
+	--console-small-weight: 400;
+	--console-small-tracking: 0em;
+	--console-body-size: 0.875rem;
+	--console-body-leading: 1.25rem;
+	--console-body-weight: 400;
+	--console-body-tracking: 0em;
+	--console-control-size: 0.875rem;
+	--console-control-leading: 1.25rem;
+	--console-control-weight: 500;
+	--console-control-tracking: 0em;
+	--console-panel-title-size: 1rem;
+	--console-panel-title-leading: 1.5rem;
+	--console-panel-title-weight: 600;
+	--console-panel-title-tracking: -0.01em;
+	--console-page-title-size: 1.5rem;
+	--console-page-title-leading: 2rem;
+	--console-page-title-weight: 600;
+	--console-page-title-tracking: -0.02em;
+	--console-value-size: 1.75rem;
+	--console-value-leading: 2rem;
+	--console-value-weight: 600;
+	--console-value-tracking: -0.02em;
+	--console-rail-width: 12rem;
+	--console-header-min-height: 3.5rem;
+	--console-rail-padding: 1rem;
+	--console-rail-gap: 0.5rem;
+	--console-content-gap: 1.5rem;
+	--console-control-min-height: 2.75rem;
+	--console-control-padding-inline: 0.75rem;
+	--console-control-padding-block: 0.25rem;
+	--console-control-gap: 0.5rem;
+	--console-panel-padding: 1rem;
+	--console-panel-gap: 1rem;
+	--console-group-gap: 1.5rem;
+	--console-columns-wide: 2;
+	--console-control-radius: 0.25rem;
+	--console-panel-radius: 0.5rem;
+	--console-chart-axis-width: 1px;
+	--console-chart-grid-width: 1px;
+	--console-chart-line-width: 2px;
+	--console-chart-grid-opacity: 1;
+	--console-chart-grid-dash: none;
+	--console-chart-linecap: round;
+	--text-xs: var(--console-small-size);
+	--leading-xs: var(--console-small-leading);
+	--text-sm: var(--console-body-size);
+	--leading-sm: var(--console-body-leading);
+	--text-base: var(--console-body-size);
+	--leading-base: var(--console-body-leading);
+	--text-lg: var(--console-panel-title-size);
+	--leading-lg: var(--console-panel-title-leading);
+	--text-xl: var(--console-page-title-size);
+	--leading-xl: var(--console-page-title-leading);
+	--text-2xl: var(--console-value-size);
+	--leading-2xl: var(--console-value-leading);
+	--text-3xl: var(--console-value-size);
+	--leading-3xl: var(--console-value-leading);
+	--radius-sm: var(--console-control-radius);
+	--radius-md: var(--console-control-radius);
+	--radius-lg: var(--console-panel-radius);
+	--radius-xl: var(--console-panel-radius);
+	--workbench-control: var(--console-control-min-height);
+	--workbench-field-text: var(--console-body-size);
+	--workbench-field-leading: var(--console-body-leading);
+	--workbench-row: calc(var(--console-small-leading) + 2 * var(--console-control-padding-block));
+	--tracking-label: var(--console-small-tracking);
+	--color-bg: #191917;
+	--color-surface-sunken: #151513;
+	--color-surface: #22221f;
+	--color-surface-raised: #2b2b27;
+	--color-text: #f0ede5;
+	--color-text-secondary: #c1bcb1;
+	--color-text-tertiary: #a39c8f;
+	--color-rule: #393932;
+	--color-rule-strong: #565348;
+	--color-accent: #6bc7be;
+	--color-accent-strong: #94d9d0;
+	--color-on-accent: #122722;
+	--color-focus: #6bc7be;
+	--color-mark: #263d38;
+	--console-selected: #263d38;
+	--chart-axis: #565348;
+	--chart-grid: #393932;
+	--chart-label: #c1bcb1;
+	--chart-marker: #c1bcb1;
+	--chart-readout-bg: #151513;
+	--chart-readout-text: #f0ede5;
+	--item-edge: #393932;
+	--shadow-sm: none;
+	--shadow-panel: none;
+	--shadow-md: none;
+	--shadow-lg: none;
+	--shadow-focus: 0 0 0 var(--console-chart-line-width) #6bc7be;
+	--tint-accent: #263d38;
+	--color-tint-accent: #263d38;
+	--tint-neutral: #151513;
+	--code-ground: #151513;
+	--code-text: #f0ede5;
+	--code-keyword: #94d9d0;
+	--code-comment: #a39c8f;
+	--code-string: #72c6d9;
+	--code-number: #e6a1c9;
+	--type-text: var(--code-string);
+	--type-number: var(--code-number);
+	--type-time: #8bbce5;
+	--type-truth: #bea2df;
+	--gradient-panel: none;
+	--gradient-wash: none;
+	--shimmer-band: color-mix(in srgb, #f0ede5 7.000000000000001%, transparent);
+	--chart-1: #8bbce5;
+	--chart-2: #bea2df;
+	--chart-3: #72c6d9;
+	--chart-4: #e6a1c9;
+	--chart-5: #a4b1e8;
+	--chart-6: #83bfdc;
+	--chart-7: #cea4e0;
+	--chart-8: #b0aa9e;
+	--series-1: var(--chart-1);
+	--series-2: var(--chart-2);
+	--series-3: var(--chart-3);
+	--series-4: var(--chart-4);
+	--tint-good: color-mix(in srgb, var(--band-high) 7.000000000000001%, #22221f);
+	--tint-warn: color-mix(in srgb, var(--band-medium) 7.000000000000001%, #22221f);
+	--tint-bad: color-mix(in srgb, var(--band-low) 7.000000000000001%, #22221f);
+	--tint-info: color-mix(in srgb, var(--chart-1) 7.000000000000001%, #22221f);
+}
+
+:root:has([data-surface='operator'])[data-theme='light'] {
+	--color-bg: #f2f1ed;
+	--color-surface-sunken: #e9e7e1;
+	--color-surface: #fffefa;
+	--color-surface-raised: #ffffff;
+	--color-text: #25251f;
+	--color-text-secondary: #625e55;
+	--color-text-tertiary: #746f64;
+	--color-rule: #dad6cb;
+	--color-rule-strong: #b6afa0;
+	--color-accent: #0b746e;
+	--color-accent-strong: #085d58;
+	--color-on-accent: #ffffff;
+	--color-focus: #0b746e;
+	--color-mark: #dcedea;
+	--console-selected: #dcedea;
+	--chart-axis: #b6afa0;
+	--chart-grid: #dad6cb;
+	--chart-label: #625e55;
+	--chart-marker: #625e55;
+	--chart-readout-bg: #e9e7e1;
+	--chart-readout-text: #25251f;
+	--item-edge: #dad6cb;
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+	--shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.06);
+	--shadow-md: 0 6px 16px rgba(0, 0, 0, 0.12);
+	--shadow-lg: 0 6px 16px rgba(0, 0, 0, 0.12);
+	--shadow-focus: 0 0 0 var(--console-chart-line-width) #0b746e;
+	--tint-accent: #dcedea;
+	--color-tint-accent: #dcedea;
+	--tint-neutral: #e9e7e1;
+	--code-ground: #e9e7e1;
+	--code-text: #25251f;
+	--code-keyword: #085d58;
+	--code-comment: #746f64;
+	--code-string: #167f99;
+	--code-number: #a3427c;
+	--type-text: var(--code-string);
+	--type-number: var(--code-number);
+	--type-time: #356a9a;
+	--type-truth: #7d53a0;
+	--gradient-panel: none;
+	--gradient-wash: none;
+	--shimmer-band: color-mix(in srgb, #25251f 7.000000000000001%, transparent);
+	--chart-1: #356a9a;
+	--chart-2: #7d53a0;
+	--chart-3: #167f99;
+	--chart-4: #a3427c;
+	--chart-5: #5968af;
+	--chart-6: #29739e;
+	--chart-7: #995aab;
+	--chart-8: #777268;
+	--series-1: var(--chart-1);
+	--series-2: var(--chart-2);
+	--series-3: var(--chart-3);
+	--series-4: var(--chart-4);
+	--tint-good: color-mix(in srgb, var(--band-high) 7.000000000000001%, #fffefa);
+	--tint-warn: color-mix(in srgb, var(--band-medium) 7.000000000000001%, #fffefa);
+	--tint-bad: color-mix(in srgb, var(--band-low) 7.000000000000001%, #fffefa);
+	--tint-info: color-mix(in srgb, var(--chart-1) 7.000000000000001%, #fffefa);
 }

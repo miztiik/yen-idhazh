@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-11-10
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -23,6 +23,13 @@ Inline styles are for genuinely dynamic values such as coordinates or computed w
 ## Design tokens
 
 [tokens.css](../../frontend/src/styles/tokens.css) and `config/appearance.json` own colours, type, leading, spacing, radius, elevation, frame widths and motion. Name tokens by purpose. Keep non-colour scales outside theme blocks; tune both themes explicitly.
+
+The console's `console_style` family is generated over the entire operator page,
+including its canvas and header, before paint. It supplies neutral light/dark
+surfaces, teal actions, six paired type roles, compact controls and panel
+spacing. Reader tokens remain unchanged. Semantic confidence and movement
+retain their meanings; categorical aliases are rebound inside the console
+scope rather than inheriting resolved reader colors.
 
 | Token family | Meaning |
 | --- | --- |
@@ -88,7 +95,10 @@ remain in the payload.
 
 ### A control only sticks where it is one band
 
-A sticky control occupies one band at the width where it sticks. Below that breakpoint, wrapped controls flow with the page. The console's route strip may scroll internally to stay one row; this does not permit sideways scrolling on reading pages.
+A sticky control occupies one band at the width where it sticks. Wrapped
+controls flow with the page. Console navigation uses a persistent labelled
+left rail, or a labelled native menu below its breakpoint, not a wrapped sticky
+header. This does not permit sideways scrolling on reading pages.
 
 ### The reading page spends its width in four named zones
 
@@ -223,6 +233,12 @@ One token system and payload-driven states keep meaning consistent across pages 
 The digest drawing and console use one TypeScript number formatter. Its locale, SI prefix threshold and significant digits come only from `visuals.number_format` in `config/idhazh.json`, never from a reader's browser. Where a shortened figure differs from the article's text, the accessible description keeps the original characters. Maintainer ruling: 2026-10-24.
 
 Measured values, axes and dated readouts share the configured precision and SI prefixes. Exact event counts retain every digit with the same locale's grouping. Standalone component tests provide the real page's number settings through the shared server-render helper or browser component mount; a missing page context still fails rather than choosing another locale.
+
+Operator and reading surfaces have different visual jobs. A console-only scope
+allows a full replacement of navigation, controls and evidence hierarchy
+without recoloring published stories. Console chart geometry consumes the
+computed label size, leading, tracking and measured text width; changing type
+must change the space reserved for it.
 
 Histogram bars, range labels and the accessible name all use the same recorded
 bin edges and counts, so a reader sees one distribution rather than two

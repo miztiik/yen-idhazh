@@ -7,7 +7,8 @@
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import { emptyState } from '$lib/charts/d3/empty';
-	import { frame, MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import type { RunSummary } from '$lib/server/payload';
 	import type { TimeWindow } from '$lib/charts/viewport';
 	import type { ModelRule } from '$lib/charts/d3/model-rule';
@@ -17,6 +18,7 @@
 		manifests: RunSummary[]; publishedItems: Record<string, number>; window: TimeWindow;
 		knobs: ConsoleConfig; chart: ChartConfig; rule: ModelRule; sizeBytes?: number | null;
 	} = $props();
+	const frame = useChartFrame(() => chart);
 	let measured = $state<number | null>(null);
 	const width = $derived(chartWidth(measured, knobs.chart_width));
 	const articles = $derived(new Map(Object.entries(publishedItems)));

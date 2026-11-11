@@ -22,10 +22,11 @@
 		chartWidth,
 		dayColumns,
 		dayTicks,
-		frame,
 		linearAxis,
 		observeWidth
 	} from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
+	const frame = useChartFrame();
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
@@ -112,7 +113,7 @@
 	const ticks = $derived(
 		dayTicks(
 			drawn.map((day) => day.date),
-			{ density: tickDensity, columns: columnsX }
+			{ density: tickDensity, columns: columnsX, labels: box.labels }
 		)
 	);
 
@@ -253,7 +254,7 @@
 						dy="0.32em"
 						text-anchor="end"
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-tick="y"
 					>
 						{tick}
@@ -275,7 +276,7 @@
 						x={box.left + 8}
 						y={(box.top + box.bottom) / 2 - 8}
 						fill="var(--color-text-secondary)"
-						font-size="12"
+						font-size={box.labels.fontSize}
 					>
 						No published day in this window
 					</text>
@@ -327,10 +328,10 @@
 					{#if tick.text}
 						<text
 							x={px(columnsX[tick.index])}
-							y={box.bottom + 16}
+							y={box.bottom + box.labels.leading}
 							text-anchor={tick.anchor}
 							fill="var(--color-text-tertiary)"
-							font-size="10"
+							font-size={box.labels.fontSize}
 							data-day-axis
 							data-day-label={tick.date}
 						>
@@ -345,7 +346,7 @@
 					transform={`rotate(-90 ${Y_TITLE_X} ${(box.top + box.bottom) / 2})`}
 					text-anchor="middle"
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-axis="y"
 				>
 					Stories

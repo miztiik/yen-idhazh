@@ -34,6 +34,7 @@
 		presets,
 		busy = false,
 		ready = false,
+		statusId = 'window-control-status',
 		onChange
 	}: {
 		days: number | null;
@@ -42,6 +43,7 @@
 		/** False until a browser has run. The control does nothing before that,
 		 * so it says so instead of accepting a click it cannot honour. */
 		ready?: boolean;
+		statusId?: string | null;
 		onChange: (days: number) => void;
 	} = $props();
 
@@ -60,7 +62,7 @@
 	data-window-days={days ?? undefined}
 	data-window-busy={busy ? 'true' : 'false'}
 	aria-busy={busy}
-	aria-describedby="window-control-status"
+	aria-describedby={statusId ?? undefined}
 >
 	<legend class="sr-only">Days shown</legend>
 	<ChoiceTiles

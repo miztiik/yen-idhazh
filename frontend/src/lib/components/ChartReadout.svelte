@@ -200,7 +200,7 @@
 	     width. The strip already takes its plot's width rather than its
 	     contents', so being one changes nothing it draws. -->
 	<dl
-		class="@container mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[0.75rem] text-text-tertiary"
+		class="chart-readout @container mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-text-tertiary"
 		style={readoutCapStyle(maxShare)}
 		data-readout={name}
 		data-readout-shape={view.shape}
@@ -237,12 +237,12 @@
 		{/each}
 	</dl>
 	{#if said !== ''}
-		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-readout-hint={name}>{said}</p>
+		<p class="readout-hint mt-2 text-text-tertiary" data-readout-hint={name}>{said}</p>
 	{:else if view.one && hint !== ''}
 		<!-- The room the keys took, kept blank and unread, so the panel is the
 		     same height at one column as at seven. -->
 		<p
-			class="held mt-2 text-[0.75rem] text-text-tertiary"
+			class="held readout-hint mt-2 text-text-tertiary"
 			aria-hidden="true"
 			data-readout-hint-held={name}
 		>
@@ -252,6 +252,14 @@
 {/if}
 
 <style>
+	.chart-readout, .readout-hint {
+		font-size: var(--console-small-size, var(--text-xs));
+		line-height: var(--console-small-leading, var(--leading-xs));
+		font-weight: var(--console-small-weight, 400);
+		letter-spacing: var(--console-small-tracking, normal);
+	}
+	.chart-readout { padding-block-start: var(--console-control-gap, var(--space-2)); border-block-start: 1px solid var(--color-rule); }
+	.readout-value { font-family: var(--font-data); color: var(--color-text); }
 	.readout-entry {
 		overflow-wrap: anywhere;
 	}

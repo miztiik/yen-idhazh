@@ -79,11 +79,11 @@
 		   i7-1265U: seven panels moved by one line for a sentence changing. Three
 		   lines on a phone: the longest price, 111 characters, took three lines at
 		   320px and two from 360px (measured 2026-10-02, Chromium on Windows). */
-		min-block-size: calc(3 * var(--leading-xs));
-		margin: var(--space-3) 0 0;
-		font-size: var(--text-xs);
-		line-height: var(--leading-xs);
-		color: var(--color-text-tertiary);
+		min-block-size: var(--console-small-leading);
+		margin: 0;
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
+		color: var(--color-text-secondary);
 	}
 
 	/* The value matches `frame.breakpoints_px[0]` in `config/appearance.json`; a
@@ -91,7 +91,7 @@
 	   sentence takes two lines. */
 	@media (min-width: 640px) {
 		.window-status {
-			min-block-size: calc(2 * var(--leading-xs));
+			min-block-size: var(--console-small-leading);
 		}
 	}
 </style>

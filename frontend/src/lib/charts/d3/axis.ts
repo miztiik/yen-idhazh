@@ -11,7 +11,7 @@
  * no zero worth showing: a bar that does not start at zero is a lie, and an
  * axis of change centred on no change is not a bar.
  */
-import { AXIS_LABEL_GAP_PX, AXIS_LABEL_PX, thinLabels, type Frame } from '../frame';
+import { AXIS_LABEL_GAP_PX, DEFAULT_CHART_LABELS, thinLabels, tickAnchor, type ChartLabels, type Frame } from '../frame';
 import { formatNumber, type NumberFormatConfig } from '../../number-format';
 import { linearScale, type Along } from './scale';
 
@@ -54,8 +54,8 @@ function tickText(value: number, numberFormat: NumberFormatConfig): string {
  * The lowest is always kept: it is the zero or the floor the whole axis is read
  * from. A dropped label keeps its tick.
  */
-function spacedUpright(ticks: readonly ValueTick[]): ValueTick[] {
-	const room = AXIS_LABEL_PX + AXIS_LABEL_GAP_PX;
+function spacedUpright(ticks: readonly ValueTick[], labels: ChartLabels): ValueTick[] {
+	const room = labels.leading + AXIS_LABEL_GAP_PX;
 	let last = Number.NaN;
 	return ticks.map((tick) => {
 		if (!Number.isNaN(last) && Math.abs(tick.at - last) < room) return { ...tick, text: '' };
@@ -66,11 +66,18 @@ function spacedUpright(ticks: readonly ValueTick[]): ValueTick[] {
 
 /** The labels a level axis can carry, by the measured rule every console axis
  * uses (`thinLabels`). */
-function spacedLevel(ticks: readonly ValueTick[]): ValueTick[] {
+function spacedLevel(ticks: readonly ValueTick[], labels: ChartLabels): ValueTick[] {
 	const kept = new Set(
-		thinLabels(ticks.map((tick) => ({ x: tick.at, text: tick.text }))).map((label) => label.x)
+		thinLabels(ticks.map((tick, index) => ({
+			x: tick.at, text: tick.text,
+			anchor: labels === DEFAULT_CHART_LABELS ? undefined : tickAnchor(index, ticks.length)
+		})), labels).map((label) => label.x)
 	);
 	return ticks.map((tick) => (kept.has(tick.at) ? tick : { ...tick, text: '' }));
+}
+
+export function spaceValueTicks(ticks: readonly ValueTick[], box: Frame, along: Along): ValueTick[] {
+	return along === 'y' ? spacedUpright(ticks, box.labels) : spacedLevel(ticks, box.labels);
 }
 
 /** A value axis over the values a chart will draw.
@@ -104,6 +111,6 @@ export function valueAxis(
 		domain,
 		along,
 		scale: (value: number) => scale(value),
-		ticks: along === 'y' ? spacedUpright(raw) : spacedLevel(raw)
+		ticks: spaceValueTicks(raw, box, along)
 	};
 }

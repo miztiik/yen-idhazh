@@ -8,7 +8,8 @@
 	import { failureRuleRows } from '../failure-rules';
 	import type { TimeWindow } from '$lib/charts/viewport';
 	import { emptyState } from '$lib/charts/d3/empty';
-	import { frame, MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import { shortDate } from '$lib/format';
 	import type { Row } from '$lib/data/ledger';
 	import type { ModelRule } from '$lib/charts/d3/model-rule';
@@ -22,6 +23,7 @@
 		rulesWindow: TimeWindow;
 	} = $props();
 	const numberFormat = useNumberFormat();
+	const frame = useChartFrame(() => chart);
 	let measured = $state<number | null>(null);
 	const width = $derived(chartWidth(measured, knobs.chart_width));
 	const mix = $derived(nativeFailureMix(rows, calendar));

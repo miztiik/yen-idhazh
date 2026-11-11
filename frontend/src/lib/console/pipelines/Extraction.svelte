@@ -6,7 +6,8 @@
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import { emptyState } from '$lib/charts/d3/empty';
-	import { frame, MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import Reserved from '$lib/components/Reserved.svelte';
 	import type { PanelState } from '../waiting';
 	import type { Range } from '../queries/window';
@@ -23,6 +24,7 @@
 		nativeState: PanelState; evaluationsState: PanelState;
 		nativeWindow?: Range; evaluationsWindow?: Range;
 	} = $props();
+	const frame = useChartFrame(() => chart);
 	let measured = $state<number | null>(null);
 	const width = $derived(chartWidth(measured, knobs.chart_width));
 	const extraction = $derived(nativeExtraction(rows, evaluations));

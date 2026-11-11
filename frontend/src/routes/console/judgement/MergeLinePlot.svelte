@@ -34,10 +34,11 @@
 		chartWidth,
 		dayColumns,
 		dayTicks,
-		frame,
 		linearAxis,
 		observeWidth
 	} from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
+	const frame = useChartFrame();
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import { indexedRuns } from '$lib/charts/indexed-runs';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
@@ -126,7 +127,7 @@
 	const ticks = $derived(
 		dayTicks(
 			drawn.map((day) => day.date),
-			{ density: tickDensity, columns: columnsX }
+			{ density: tickDensity, columns: columnsX, labels: box.labels }
 		)
 	);
 
@@ -294,7 +295,7 @@
 						x={box.left + 4}
 						y={px(yAxis.scale(holdoutZone.high)) - 4}
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-line-holdout-label
 					>
 						the pairs marked two stories
@@ -315,7 +316,7 @@
 						dy="0.32em"
 						text-anchor="end"
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-tick="y"
 					>
 						{reads(tick)}
@@ -338,7 +339,7 @@
 						x={box.left + 8}
 						y={yAxis.scale(builtWith) - 8}
 						fill="var(--color-text-tertiary)"
-						font-size="12"
+						font-size={box.labels.fontSize}
 						data-line-rule-label
 					>
 						The line {ruleDay} was built with
@@ -416,10 +417,10 @@
 					/>
 					<text
 						x={px(columnsX[tick.index])}
-						y={box.bottom + 16}
+						y={box.bottom + box.labels.leading}
 						text-anchor={tick.anchor}
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 					>
 						{dayMonth(tick.date)}
 					</text>

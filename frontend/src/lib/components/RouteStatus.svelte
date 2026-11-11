@@ -45,8 +45,7 @@
 
 <div data-console-panels={route} data-route-state={tally.state} data-shimmer={shimmer ? 'on' : 'off'}>
 	<p class="route-standing" data-console-standing>
-		{standing}
-		{#if tally.state === 'ok' && settledSuffix} {settledSuffix}{/if}
+		{tally.state === 'ok' && settledSuffix ? settledSuffix : standing}
 		{#if tally.state === 'unreachable'}
 			<button type="button" data-console-retry onclick={onRetry}>Fetch the record again</button>
 		{/if}
@@ -56,11 +55,11 @@
 
 <style>
 	.route-standing {
-		min-block-size: calc(var(--route-line-reserve) * var(--leading-sm));
-		margin: var(--space-3) 0;
+		min-block-size: var(--console-small-leading);
+		margin: var(--console-control-gap) 0;
 		color: var(--color-text-secondary);
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
 	}
 
 	button {

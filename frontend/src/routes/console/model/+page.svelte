@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { useWindowChoice } from '$lib/console/window-slot';
 	import { base } from '$app/paths';
 	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
 	import { routeReach, retryAsks, tallyAsks, type RouteReach } from '$lib/console/queries/window';
@@ -20,8 +21,8 @@
 	let { data } = $props();
 	const knobs = consoleKnobs();
 	const configured = routeConsole('model');
-	const WINDOW_KEY = 'idhazh:console-window';
-	let windowDays = $state(knobs.default_window_days);
+	const choice = useWindowChoice();
+	const windowDays = $derived(choice.days);
 	let reach = $state<RouteReach | null>(null);
 	let ready = $state(false);
 	let retry = $state(0);
@@ -39,8 +40,6 @@
 	const measurementOff = $derived(data.measurementOff[String(windowDays)]);
 	onMount(() => {
 		ready = true;
-		const saved = Number(localStorage.getItem(WINDOW_KEY));
-		if (knobs.window_presets.includes(saved)) windowDays = saved;
 		void refresh();
 	});
 	async function refresh() {
@@ -53,8 +52,7 @@
 		void refresh().then(() => { retry += 1; });
 	}
 	function show(days: number) {
-		windowDays = days;
-		localStorage.setItem(WINDOW_KEY, String(days));
+		choice.select(days);
 	}
 </script>
 

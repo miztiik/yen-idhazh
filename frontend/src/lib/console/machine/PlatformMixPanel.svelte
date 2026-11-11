@@ -27,7 +27,8 @@
 		fleetView,
 		foldSentences
 	} from '$lib/charts/fleet';
-	import { chartWidth, frame, observeWidth } from '$lib/charts/frame';
+	import { chartWidth, observeWidth } from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import { rateWords, type MachineRamp } from '$lib/charts/machine-colour';
 	import FleetDots from '$lib/console/machine/FleetDots.svelte';
 	import type { LostDay } from '$lib/console/recording';
@@ -69,6 +70,7 @@
 
 	/** How many value ticks the count axis aims for. */
 	const VALUE_TICKS = 4;
+	const frame = useChartFrame(() => chart);
 	/** The share of a day's column left empty beside its bar. */
 	const PADDING = 0.2;
 	/** The ground between two squares, and a hatch's stripe and gap, in CSS px. */

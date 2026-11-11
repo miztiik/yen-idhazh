@@ -183,6 +183,71 @@ body {
 	max-width: var(--frame-console);
 }
 
+/* Operator tokens are generated on the root, so chrome and drawings agree. */
+[data-surface='operator'] :is(button, select, input[type='date'], input[type='text'], input[type='number']) {
+	font-family: var(--font-reading);
+	font-size: var(--console-control-size);
+	line-height: var(--console-control-leading);
+	font-weight: var(--console-control-weight);
+	letter-spacing: var(--console-control-tracking);
+}
+[data-surface='operator'] :is(button, select):not([data-run-square]) {
+	border-radius: var(--console-control-radius);
+}
+[data-surface='operator'] button:hover:not(:disabled) {
+	color: var(--color-accent-strong);
+	border-color: var(--color-accent);
+}
+[data-surface='operator'] :is(button, input, select):focus-visible {
+	outline-color: var(--color-focus);
+}
+[data-surface='operator'] :is(button, input, select):disabled {
+	color: var(--color-text-tertiary);
+	cursor: default;
+}
+[data-surface='operator'] :is([data-recording], [data-machine-refused], [data-machine-count-refusal]) {
+	font-size: var(--console-small-size);
+	line-height: var(--console-small-leading);
+}
+[data-surface='operator'] :is([data-console-panel-group], [data-console-panels='judgement']) {
+	min-inline-size: 0;
+}
+@media (min-width: 1400px) {
+	[data-surface='operator'] :is([data-console-panel-group], [data-console-panels='judgement']) {
+		display: grid;
+		grid-template-columns: repeat(var(--console-columns-wide), minmax(0, 1fr));
+		gap: var(--console-panel-gap);
+	}
+	[data-surface='operator'] [data-console-panel-group] > .panel-block,
+	[data-surface='operator'] [data-console-panels='judgement'] > .panel-block {
+		margin-top: 0;
+	}
+	[data-surface='operator'] [data-console-panels='judgement'] > :not(.panel-block) {
+		grid-column: 1 / -1;
+	}
+}
+[data-surface='operator'] svg text {
+	font-family: var(--font-data);
+	font-weight: var(--console-small-weight);
+	letter-spacing: var(--console-small-tracking);
+}
+[data-surface='operator'] :is(.tabular-nums, [data-ranked-cell='value'], [data-kpi-value], td[data-kind='number']) {
+	font-family: var(--font-data);
+	font-variant-numeric: tabular-nums;
+}
+[data-surface='operator'] svg [stroke='var(--chart-axis)'] {
+	stroke-width: var(--console-chart-axis-width);
+}
+[data-surface='operator'] svg [stroke='var(--chart-grid)'] {
+	stroke-width: var(--console-chart-grid-width);
+	stroke-opacity: var(--console-chart-grid-opacity);
+	stroke-dasharray: var(--console-chart-grid-dash);
+}
+[data-surface='operator'] svg :is(path, polyline)[fill='none'] {
+	stroke-width: var(--console-chart-line-width);
+	stroke-linecap: var(--console-chart-linecap);
+}
+
 /* A workbench is a tool rather than a page of panels, so it is allowed the
    whole window, at any width. Its route asks for workbench chrome
    (`console.explorer_chrome`) and CSS reads that from the frame, as the rule

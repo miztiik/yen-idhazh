@@ -5,6 +5,49 @@ import { BY_ROUTE } from './support/console-expect/console-window';
 import { monthsInWindow, monthsToFetch, stepPreset, windowOfDays } from '../src/lib/charts/viewport';
 import { minus, presets } from './support/console-window/controls';
 import { config, telemetry } from './support/console-window/controls';
+import { createWindowPreference, WINDOW_PREFERENCE_KEY, type WindowStorage } from '../src/lib/console/window-preference';
+
+test('window storage keeps its existing encoding and refuses an unconfigured preference', () => {
+	const saved = new Map<string, string>([[WINDOW_PREFERENCE_KEY, '7']]);
+	const warnings: string[] = [];
+	const changed: number[] = [];
+	const storage: WindowStorage = {
+		getItem: (key) => saved.get(key) ?? null,
+		setItem: (key, value) => { saved.set(key, value); }
+	};
+	const choice = createWindowPreference(14, [1, 7, 14, 30, 90], (days) => changed.push(days), (message) => warnings.push(message));
+	choice.mount(() => storage);
+	expect(choice.days).toBe(7);
+	choice.select(30);
+	expect(saved.get(WINDOW_PREFERENCE_KEY)).toBe('30');
+	expect(changed).toEqual([7, 30]);
+	expect(() => choice.select(5)).toThrow('configured preset');
+	saved.set(WINDOW_PREFERENCE_KEY, '30 days');
+	const next = createWindowPreference(14, [1, 7, 14, 30, 90], () => {}, (message) => warnings.push(message));
+	next.mount(() => storage);
+	expect(next.days).toBe(14);
+	expect(warnings).toHaveLength(1);
+});
+
+test('throwing storage warns without losing the mounted in-memory choice', () => {
+	const warnings: string[] = [];
+	const changed: number[] = [];
+	const denied: WindowStorage = {
+		getItem() { throw new Error('Reading storage is denied.'); },
+		setItem() { throw new Error('Writing storage is denied.'); }
+	};
+	const choice = createWindowPreference(14, [1, 7, 14, 30, 90], (days) => changed.push(days), (message) => warnings.push(message));
+	choice.mount(() => denied);
+	choice.select(7);
+	expect(choice.days).toBe(7);
+	choice.select(30);
+	expect(choice.days).toBe(30);
+	expect(changed).toEqual([7, 30]);
+	expect(warnings).toHaveLength(3);
+	expect(warnings[0]).toContain('could not be read');
+	expect(warnings.slice(1).every((message) => message.includes('could not be saved'))).toBe(true);
+});
+
 function monthsKept(today: string, months: number): string[] {
     const [year, month] = today.split('-').map(Number);
     const newest = year * 12 + (month - 1);
