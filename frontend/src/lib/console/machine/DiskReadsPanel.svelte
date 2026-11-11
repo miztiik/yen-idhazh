@@ -21,7 +21,7 @@
 	import { useNumberFormat } from '$lib/number-format-context';
 	import type { DiskReadDay, DiskReads } from '$lib/console/machine/disk-reads';
 	import { countDays, nameSpan } from '$lib/console/span-words';
-	import { shortDate } from '$lib/format';
+	import { plural, shortDate } from '$lib/format';
 
 	let {
 		reads,
@@ -95,7 +95,7 @@
 			: `Over the ${reads.recorded} of ${countDays(days)} that counted, the model never once had to wait on the disk for memory it already had.`;
 	});
 
-	/** What the runs themselves recorded about holding the model's memory down.
+	/** What the runs recorded about requesting locked weights.
 	 * Read off the rows, never written here: a panel that printed the setting it
 	 * expected would keep saying it after somebody changed it. */
 	const pinning = $derived(
@@ -111,15 +111,15 @@
 	const pinningSays = $derived.by(() => {
 		const { held, loose } = reads.pinning;
 		if (pinning === 'silent') {
-			return `No run in ${nameSpan(days)} recorded whether the model's memory was held down, so whether the machine was even allowed to take it back is unknown.`;
+			return `No run in ${nameSpan(days)} recorded a locking request. Applied locking is unmeasured.`;
 		}
 		if (pinning === 'held') {
-			return `All ${held} runs that recorded it held the model's memory down, so the machine was not allowed to take it back.`;
+			return `All ${held} recorded runs requested locked weights. Applied locking is unmeasured.`;
 		}
 		if (pinning === 'loose') {
-			return `None of the ${loose} runs that recorded it held the model's memory down, so the machine was free to take it back at any moment.`;
+			return `${plural(loose, 'run', 'runs')} included a recorded non-locking setting. Applied locking is unmeasured.`;
 		}
-		return `${held} of the ${held + loose} runs that recorded it held the model's memory down and ${loose} did not.`;
+		return `${held} of ${held + loose} runs recorded only locking requests; ${plural(loose, 'run', 'runs')} included a non-locking setting. Applied locking is unmeasured.`;
 	});
 
 	/** Rows that counted but sat first on their shard. A server that has just

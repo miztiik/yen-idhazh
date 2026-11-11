@@ -1,6 +1,6 @@
 # The model on a runner
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-11-11
 
 How a job gets the inference runtime and the weights, and how it proves it got
 the ones it asked for. Every value here is exact: a pin, a cache key, a digest,
@@ -150,12 +150,16 @@ quietly: the server starts and the job spends its hour before anybody reads the
 flag back.
 
 So the answer is committed rather than dispatched.
-`tests/fixtures/runtime/b10598-llama-server-help.txt` is what the pinned build
-printed for `--help` on 2026-09-15. The fixture is named for the build, so a pin
-that moves without a re-recording fails on a missing file rather than passing
-against a binary nobody runs. Re-recording it is one command against the
-installed build - `llama-server --help`, redirected into a file named for the
-new pin.
+`backend/idhazh/llm/b10598-llama-server-help.txt` is the pinned build's recorded
+`--help`, packaged with the shared flag reader rather than read from test
+fixtures. `server_flags.py` reads that one named resource. A contract test binds
+its filename to the pin and checks every consumed spelling.
+Re-record a changed pin with `llama-server --help` from the installed build.
+
+Value-taking declarations supply aliases. Bare opposing switches remain
+separate recorded keys; a group whose polarity cannot be resolved is refused.
+Repeated or overlapping consumed declarations are refused instead of guessed.
+No live help process, alias table or extra parser dependency is needed.
 
 ## Every download fails loudly, and every weight is checked
 

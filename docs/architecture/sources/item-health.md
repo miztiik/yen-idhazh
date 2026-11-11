@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-11-11
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -379,8 +379,8 @@ which: `llama_rss_bytes` and `llama_rss_peak_bytes` are the model server's
 resident set now and over its whole life, `python_rss_bytes` is the worker's,
 and `llama_rss_anon_bytes` and `python_rss_anon_bytes` are the part of each that
 is not file-backed. **None of them can
-say what was left.** llama.cpp maps the weights with no `-lm`, so their resident
-pages are file-backed and evictable and count in every RSS figure, and a page
+say what was left.** File-backed weight pages count in the resident set and
+the page cache, and a page
 two processes share is counted twice. Adding the marks up and subtracting from
 16 GB is a number this project has already withdrawn
 ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)).
@@ -450,9 +450,24 @@ the item opens and once as it closes, and recorded as the difference. A major
 fault is a page the process had to wait for off disk. The weight pages are
 file-backed, so a kernel reclaiming them leaves an RSS figure and touches no
 swap counter - this count and the page-cache column beside it are the only two
-cells that would say it happened. `weights_pinned` says whether the server was
-told to lock them down, so a surface can state the setting from the row rather
-than from a literal.
+cells that would say it happened. `weights_pinned` records a request to lock
+weights through `mlock` or `mmap+mlock`, not proof the OS honored it. An omitted
+load mode stays unknown.
+
+The work invocation passes the model controller's `llama-server.pid` through
+`--server-pid` when memory collection is enabled and that controller completed.
+The existing process watch checks the PID's kernel start tick around each
+status read and across the item's fault counters. An exited or reused process
+leaves those cells unknown. Empty shards return before collection; host-off and
+memory-off paths require no PID and leave disabled readings null. An active
+collector without a supplied PID warns and records no server readings.
+
+Historical rows can lack server readings or parallel counts, and the former
+alias mismatch can leave a false locking request on rows configured with the
+long load-mode spelling. Those rows remain readable and unchanged. Today's
+config cannot recover yesterday's settings. The shared interpretation and
+fingerprint limitation are defined in
+[the model file](../../concepts/config/model-file.md#runtime-settings).
 
 ## Stages and outcomes
 
