@@ -89,10 +89,17 @@
 						{#each current.rows as row, index (`${index}-${row.actor?.element_id ?? 'empty'}`)}
 							<tr class="border-t border-rule">
 								<td class="break-words px-3 py-2 align-top text-text">
-									{row.actor?.display_text ?? ''}
+									{#if row.actor && row.actor.display_text !== row.actor.span_excerpt}
+										<details>
+											<summary class="cursor-pointer">{row.actor.display_text}</summary>
+											<p class="mt-2">{row.actor.span_excerpt}</p>
+										</details>
+									{:else}
+										{row.actor?.display_text ?? ''}
+									{/if}
 								</td>
 								<td class="break-words px-3 py-2 align-top text-text-secondary">
-									{row.claim?.display_text ?? ''}
+									{row.claim?.span_excerpt ?? ''}
 								</td>
 							</tr>
 						{/each}

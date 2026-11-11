@@ -180,8 +180,60 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 		);
 		await expect(gridStory.getByRole('columnheader')).toHaveText(['Who', 'What']);
 		await expect(gridStory.locator('tbody td')).toHaveText(
-			gridData.rows.flatMap((row) => [row.actor?.display_text ?? '', row.claim?.display_text ?? ''])
+			gridData.rows.flatMap((row) => [row.actor?.display_text ?? '', row.claim?.span_excerpt ?? ''])
 		);
+		const shortRow = gridData.rows.find((row) =>
+			row.actor && row.actor.display_text === row.actor.span_excerpt
+		);
+		if (!shortRow?.actor) throw new Error('the canary grid must carry an unclipped actor');
+		const fullActor = 'The regional transport committee for the northern district';
+		const fullClaim = `${fullActor} said services will resume only after the independent safety review is complete.`;
+		const fittedPrefix = 'The regional transport committee...';
+		const longGrid: WhowhatGridData = {
+			...gridData,
+			rows: [{
+				actor: {
+					kind: 'entity', element_id: `entity-0-${fullActor.length}`,
+					sentence_index: 0, span_start: 0, span_end: fullActor.length,
+					span_excerpt: fullActor, display_text: fittedPrefix
+				},
+				claim: {
+					kind: 'claim', element_id: `claim-0-${fullClaim.length}`,
+					sentence_index: 0, span_start: 0, span_end: fullClaim.length,
+					span_excerpt: fullClaim, display_text: fittedPrefix
+				}
+			}, shortRow, { actor: null, claim: null }]
+		};
+		expect(isWhowhatGridData(longGrid, grid.item_id)).toBe(true);
+		const assetUrl = new URL(`/${grid.visual.data_path}`, page.url()).href;
+		await page.route(assetUrl, (route) => route.fulfill({
+			contentType: 'application/json', body: JSON.stringify(longGrid)
+		}));
+		await page.reload();
+		await dayReady(page);
+		await gridStory.scrollIntoViewIfNeeded();
+		const cells = gridStory.locator('tbody tr').first().getByRole('cell');
+		await expect(cells.nth(1)).toHaveText(fullClaim);
+		await expect(gridStory.getByText(fullClaim, { exact: true })).toBeVisible();
+		await expect(cells.nth(1).locator('details, summary, [title]')).toHaveCount(0);
+		await expect(cells.nth(1)).not.toHaveAttribute('title');
+		const actorDetails = cells.first().locator('details');
+		const actorSummary = actorDetails.locator('summary');
+		const actorExcerpt = actorDetails.getByText(fullActor, { exact: true });
+		await expect(actorSummary).toHaveText(fittedPrefix);
+		await expect(actorExcerpt).toBeHidden();
+		await actorSummary.focus();
+		await expect(actorSummary).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(actorDetails).toHaveAttribute('open', '');
+		await expect(actorExcerpt).toBeVisible();
+		await page.keyboard.press('Space');
+		await expect(actorExcerpt).toBeHidden();
+		const shortActor = gridStory.locator('tbody tr').nth(1).getByRole('cell').first();
+		await expect(shortActor).toHaveText(shortRow.actor.display_text);
+		await expect(shortActor.locator('details')).toHaveCount(0);
+		await expect(gridStory.locator('tbody tr').last().getByRole('cell')).toHaveText(['', '']);
+		await page.unroute(assetUrl);
 		const plainStory = page.locator(`article.item[id="${plain.item_id}"]`);
 		await expect(plainStory.locator('[data-item-summary]').first()).not.toBeEmpty();
 		await expect(plainStory.locator('figure, [data-whowhat-state], [role="status"]')).toHaveCount(0);

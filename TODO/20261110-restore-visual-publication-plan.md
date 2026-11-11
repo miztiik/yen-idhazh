@@ -38,9 +38,10 @@ Table C - Repair increments and the restored-generation roll-up
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Give the visual planner usable source evidence | - | A | DONE | fantastic-garbanzo | - | 0b1cac34-83e8-494c-99fc-6539f5299bdc |
 | C2 | 2 | Preserve the exact reason a visual was refused | 1 | B | DONE | shiny-spoon | - | ef9d68ad-ccf4-417d-9a05-fe0305ef21c7 |
-| C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2, 4, 5 | C | PENDING | fuzzy-bassoon | - | 094b8d19-fd66-47ce-b6ff-72d8af8f39d7 |
+| C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2, 4, 5, 6 | C | PENDING | fuzzy-bassoon | - | 094b8d19-fd66-47ce-b6ff-72d8af8f39d7 |
 | C4 | 4 | Replay retained articles on the controlled test runtime | 1, 2 | D | IN-FLIGHT | miniature-giggle | - | 98c0f7b2-33d5-487f-b893-37ef59cbb8c9 |
 | C5 | 5 | Correct literal sentence addressing and claim coverage | 1, 2 | D | DONE | cautious-tribble | - | e7392204-404e-484d-9cf5-5811294c4553 |
+| C6 | 6 | Show complete source-backed claims to the reader | 1, 2 | E | DONE | effective-guide | - | 96eb1442-fd7b-4734-b9a4-98d815cf9919 |
 
 ## 2. Row #1 - Give the visual planner usable source evidence
 
@@ -246,3 +247,33 @@ Table N - Rejected producer shortcuts
 | N1 | Immediately add precise claim citations and capture metadata | Existing ranges can represent the currently audited whole sentences, so that format expansion is not yet a demonstrated prerequisite | Versioned raw/capture models, legacy reading and a Level 5 design decision | Focused Fowler format ruling; newer source audit |
 | N2 | Rescue a wrong address by searching neighbouring sentences or the whole article | It turns an invalid model reference into an apparently valid source claim | A changed grounding/safety policy and weaker provenance | Existing exact within-sentence locator |
 | N3 | Declare restoration from successful summaries or authored visual replies | It repeats the failure that left normal production without visuals | Missing actual positive generation and public-delivery evidence | Table J |
+
+## 7. Row #6 - Show complete source-backed claims to the reader
+
+- **Scope:** Correct the independent reader defect where a fitted claim prefix hides its action or qualification, using the full validated excerpt already in the grid payload. Keep the existing table, actor labels, paired empty cells and loading/failure/retry behavior.
+- **Files touched:**
+  - `TODO/20261110-restore-visual-publication-plan.md`
+  - `frontend/src/lib/visual/WhowhatVisual.svelte`
+  - `frontend/tests/whowhat-visual.spec.ts`
+  - `frontend/tests/reading-page.spec.ts`
+  - `docs/concepts/design-system.md`
+  - `docs/architecture/publishing/where-a-drawing-becomes-pixels.md`
+- **Acceptance gates:** Inspect the shared selector, run the smallest existing grid-reader and reading-page selections plus applicable Svelte/type and whitespace checks, and leave the full suite to exact-head CI. Confirm the changed oracle fails against an isolated copy of the base component before changing its rendering. Perform an integrated-browser smoke of one representative view: full claim and trailing qualification, keyboard disclosure of a clipped actor, an ordinary actor without disclosure, missing and empty grid data with recovery, and one cross-page smoke. Separate deliberately missing responses from new errors/404s. Complete one bounded Susan readiness check on the finished surface using synthetic content only. Stop private preview helpers after the checks.
+- **Oracle:** For a valid grid whose fitted claim ends before the action and final qualification, the What cell shows the exact complete `claim.span_excerpt` by default, wraps without clipping or horizontal overflow, and has no disclosure or tooltip. Who keeps `actor.display_text`; only an actor whose display differs from its full excerpt has native keyboard-operable `details`/`summary` revealing that exact excerpt. Short actors remain plain text and paired empty rows remain empty. Missing/empty grid data leaves story text and the existing retry usable. This proves reader correctness only, not actual model generation or restored publication; C3 and Table J remain incomplete.
+
+Table O - Reader correction decisions
+
+| ID | Decision | Authority |
+| --- | --- | --- |
+| O1 | Render the bounded full claim excerpt directly in What, preserving every literal word, attribution and qualification | [Reader design contract](../docs/concepts/design-system.md#the-whowhat-grid-keeps-each-actor-beside-its-claim) |
+| O2 | Keep the fitted actor label in Who; disclose the full actor excerpt through native details/summary only when the two strings differ | [Native disclosure contract](../docs/concepts/design-system.md#content-on-demand-is-a-details-not-a-button) |
+| O3 | Reuse the current two-column layout, wrapping and design tokens. Add no column, claim disclosure, tooltip, style redesign, dependency, tooling or fixture file | Existing reader surface and bounded repair scope |
+| O4 | Change no persisted shape, compiler/fit bound, prompt, source range, model, cap, admission rule, fallback or publication policy. Row #4 inference is not a prerequisite for this independent reader repair | Tables A, B and J |
+
+Table P - Rejected reader shortcuts
+
+| ID | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| P1 | Keep claims fitted and hide the rest behind disclosure or a tooltip | The action and qualification would still be absent from the default reading surface | Continued loss of the claim's meaning without an extra interaction | Table O1 |
+| P2 | Increase fit limits or alter the producer to repair the reader | Full bounded source excerpts already reach the reader | Unnecessary producer changes and coupled acceptance behavior | Table O4 |
+| P3 | Treat a synthetic or fixture grid as actual generation evidence | It proves only the renderer's behavior | The unclosed fresh-generation and ordinary-publication gap in Table J | Table J |

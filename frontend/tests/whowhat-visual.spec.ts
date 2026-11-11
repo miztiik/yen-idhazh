@@ -146,6 +146,4 @@ test('the grid component exposes the failed state with a keyboard-accessible ret
 	expect(source).toContain('onclick={retry}');
 	expect(source).toContain('focus-visible:outline');
 	expect(source).toContain('Try again');
-	expect(source).toContain("{row.actor?.display_text ?? ''}");
-	expect(source).toContain("{row.claim?.display_text ?? ''}");
 });
