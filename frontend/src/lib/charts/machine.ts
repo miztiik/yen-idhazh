@@ -43,14 +43,15 @@ export function quantile(sorted: readonly number[], fraction: number): number {
 }
 
 /** Seconds as a clock a person reads, or the honest absence of one. */
-export function seconds(value: number | null, numberFormat: NumberFormatConfig): string {
+export function seconds(value: number | null, numberFormat: NumberFormatConfig, includeSeconds = false): string {
 	if (value === null) return '-';
 	if (value < 60) return `${formatNumber(value, numberFormat, { si: false })} s`;
-	const minutes = Math.floor(value / 60);
-	const rest = Math.round(value - minutes * 60);
+	const rounded = Math.round(value);
+	const minutes = Math.floor(rounded / 60);
+	const rest = rounded % 60;
 	return minutes < 60
 		? `${formatNumber(minutes, numberFormat, { exact: true, si: false })} m ${formatNumber(rest, numberFormat, { exact: true, si: false })} s`
-		: `${formatNumber(Math.floor(minutes / 60), numberFormat, { exact: true, si: false })} h ${formatNumber(minutes % 60, numberFormat, { exact: true, si: false })} m`;
+		: `${formatNumber(Math.floor(minutes / 60), numberFormat, { exact: true, si: false })} h ${formatNumber(minutes % 60, numberFormat, { exact: true, si: false })} m${includeSeconds ? ` ${formatNumber(rest, numberFormat, { exact: true, si: false })} s` : ''}`;
 }
 
 /** Bytes as gibibytes, which is the unit the runner's own limit is quoted in. */

@@ -34,7 +34,7 @@ export const itemCostQuery = {
 
 export const runTimelineQuery = {
 	name: 'runTimelineQuery', ledger: 'item-health',
-	columns: ['run_id', 'item_id', 'source_id', 'machine_shard', 'item_index', 'item_started_at', 'item_ended_at', 'queue_wait_ms', 'fetch_ms', 'robots_ms', 'extract_ms', 'label_ms', 'summary_ms', 'visual_plan_ms', 'faithfulness_ms', 'stage_gap_ms', 'item_total_ms'],
+	columns: ['run_id', 'item_id', 'source_id', 'machine_shard', 'item_index', 'item_started_at', 'item_ended_at', 'queue_wait_ms', 'fetch_ms', 'robots_ms', 'extract_ms', 'summarize_ms', 'label_ms', 'summary_ms', 'visual_plan_ms', 'visual_plan_ms_is_estimate', 'faithfulness_ms', 'stage_gap_ms', 'item_total_ms', 'outcome', 'stage', 'code'],
 	span: 'newest-day'
 } as const satisfies PanelQuery;
 

@@ -13,7 +13,7 @@ export function nativeRow(date: string, over: Record<string, BuiltCell> = {}): R
 		stage: 'publish', outcome: 'ok', code: '', failed_rule: null, url_key: 'fixture-url',
 		machine_shard: null, item_index: null, item_started_at: null, item_ended_at: null,
 		queue_wait_ms: null, robots_ms: null, fetch_ms: null, extract_ms: null, summarize_ms: null,
-		label_ms: null, summary_ms: null, visual_plan_ms: null, faithfulness_ms: null,
+		label_ms: null, summary_ms: null, visual_plan_ms: null, visual_plan_ms_is_estimate: null, faithfulness_ms: null,
 		stage_gap_ms: null, item_total_ms: null, cpu_model: null, prefill_ms: null, decode_ms: null,
 		input_tokens: null, output_tokens: null, cached_tokens: null,
 		label_input_tokens: null, label_cached_tokens: null,
