@@ -1,11 +1,11 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-11-11
 
 Moved plots use the shared width observer and redraw in the CSS-pixel frame
 their panel actually occupies. Private date axes retain missing days as null,
 not zero, so a settings change on a day without a reading still has its place.
-The route resolves its record window before calling the private panels settled.
+Private panels keep their published-day window while native reads are pending.
 Native reads start independently; request epochs prevent late windows replacing
 the current one, and the extractor and recorded flags retain separate states.
 Native record limitations sit after the failure plot, not above the private
@@ -56,12 +56,19 @@ named `scores`. Neither route load nor the browser reads telemetry CSV,
 `at-a-glance`, `run-health`, `site-cost-per-item`, `chart-drawing`, and extraction's
 published-chart share and yield remain private BUILD_TIME readings of manifests,
 published-chart counts and day metrics. They are not newly published datasets
-and are not reconstructed from native queries. Extraction's private share is
-prepared for each permitted window and recorded endpoint, so a native endpoint
-earlier than the built day does not reuse the wrong day's share.
+and are not reconstructed from native queries. Their window is anchored on
+`windowDay`, the newest published day, never on a native ledger's endpoint.
+Extraction's private share is selected by that published-day anchor and preset;
+its native counts and recorded flags keep their own declared query populations.
 `ChartDrawing.svelte` retains its private `chartFlow` diagram or stepped list,
 target cards and sparklines. Those use published-day records, not inferred
 item failure populations.
+
+**Source age at work start** measures the source's feed-stated publication time
+to the successful item's recorded work start, not to publication by this site.
+Inferred, unusable and future source times stay excluded. Measured zero ages
+remain in the counts and median, with a note explaining why the logarithmic
+drawing cannot place them.
 
 Before native answers arrive their frames reserve space, without bars, dates or
 numbers posing as readings. Failure-rule and evaluator states are independent

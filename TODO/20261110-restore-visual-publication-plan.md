@@ -40,7 +40,7 @@ Table C - Repair increments and the restored-generation roll-up
 | C2 | 2 | Preserve the exact reason a visual was refused | 1 | B | DONE | shiny-spoon | - | ef9d68ad-ccf4-417d-9a05-fe0305ef21c7 |
 | C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2, 4, 5 | C | PENDING | fuzzy-bassoon | - | 094b8d19-fd66-47ce-b6ff-72d8af8f39d7 |
 | C4 | 4 | Replay retained articles on the controlled test runtime | 1, 2 | D | IN-FLIGHT | miniature-giggle | - | 98c0f7b2-33d5-487f-b893-37ef59cbb8c9 |
-| C5 | 5 | Correct literal sentence addressing and claim coverage | 1, 2 | D | IN-FLIGHT | - | - | - |
+| C5 | 5 | Correct literal sentence addressing and claim coverage | 1, 2 | D | DONE | cautious-tribble | - | e7392204-404e-484d-9cf5-5811294c4553 |
 
 ## 2. Row #1 - Give the visual planner usable source evidence
 
@@ -212,16 +212,18 @@ Table L - Rejected verification shortcuts
 - **Scope:** Fix the demonstrated first-call address-presentation/coverage defect while preserving existing label/capture formats, source text and claim meanings.
 - **Files touched:**
   - `backend/idhazh/classify/calls.py`
+  - `backend/idhazh/classify/plan_visual_request.py`
   - `config/prompts/generate-labels.txt`
+  - `config/prompts/plan-visual.txt`
   - `backend/utilities/measure_two_calls.py`
   - `backend/tests/test_classify.py`
   - `backend/tests/test_measure_two_calls.py`
-  - `backend/tests/test_prompt_files.py`
   - `tests/fixtures/planner/recorded-call-payloads.json`
   - `tests/fixtures/prompts/label.txt`
   - `tests/fixtures/prompts/summarize-and-plan.txt`
   - `docs/architecture/summarize/prompt.md`
   - `docs/architecture/extraction/elements.md`
+  - `docs/architecture/publishing/visuals.md`
 - **Acceptance gates:** Use the shared selector for applicable lint/types and the smallest presentation, anchoring, prompt, legacy-reading and budget cases; CI owns the complete suite. After rows #4 and #5 are available, execute fresh fixed retained-input verification on their exact code/model revision. Do not equate unit/fixture success with corrected live label coverage.
 - **Oracle:** Each original source sentence has exactly one visible physical addressed line in a reversible presentation; native anchoring still uses the original text/offsets, correct literal references retain valid siblings, and wrong-sentence/missing/duplicate matches remain rejected. This proves presentation/provenance invariants, not that the model will copy every address correctly.
 

@@ -1,6 +1,6 @@
 # Console Charts
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-11-11
 
 What console charts must share: sizing, interaction, loading states and honest
 marks for missing measurements. Panel placement and the private build-time
@@ -159,6 +159,13 @@ It must work with mouse, touch and keyboard. Each drawing declares exactly one:
 
 Do not add a competing legend or a second strip for the same declaration.
 Use the shared actions in [readout.ts](../../../frontend/src/lib/charts/readout.ts).
+
+Distribution shares arrive as percentages from 0 to 100. The shared component
+formats that value once for the axis, visible readout and mark's accessible
+name; a full cumulative share is 100%. Consumers do not rescale the geometry.
+The distribution frame reserves room for the formatted full-share label on
+the right, using the shared label metrics and existing margin gap.
+This changes axis clearance, not counts, bin values or percentage units.
 
 - Select a column by the nearest x position. Record charts select their own marks.
 - Use one keyboard stop per chart. Arrow keys step through its layout; Home and End jump; Escape closes. Do not put every point in the tab order.

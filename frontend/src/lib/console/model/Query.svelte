@@ -27,6 +27,7 @@
 		let current = true;
 		panelState = 'loading';
 		rows = [];
+		range = null;
 		notes = [];
 		onAnswer(name, 'pending');
 		void Promise.all(asked.map(async (query) => {
@@ -66,6 +67,9 @@
 		{/if}
 	{:else}
 		<EmptyState drawing={recordEmptyState(panelState)} {height} {width} {name} label={name} />
+	{/if}
+	{#if range !== null}
+		<p data-native-window data-range-from={range.from} data-range-to={range.to}>Native record: {range.from} through {range.to} UTC.</p>
 	{/if}
 	{#each notes as note}<p data-record-note>{note}</p>{/each}
 </div>

@@ -12,6 +12,7 @@
 		days,
 		through = null,
 		settledSuffix = '',
+		recordScope = '',
 		shimmerAfterMs,
 		onRetry,
 		children
@@ -21,6 +22,7 @@
 		days: number;
 		through?: string | null;
 		settledSuffix?: string;
+		recordScope?: string;
 		shimmerAfterMs: number;
 		onRetry: () => void;
 		children: Snippet;
@@ -45,6 +47,7 @@
 
 <div data-console-panels={route} data-route-state={tally.state} data-shimmer={shimmer ? 'on' : 'off'}>
 	<p class="route-standing" data-console-standing>
+		{#if recordScope && (tally.state === 'quiet' || tally.state === 'missing' || tally.state === 'unreachable')}{recordScope}: {/if}
 		{tally.state === 'ok' && settledSuffix ? settledSuffix : standing}
 		{#if tally.state === 'unreachable'}
 			<button type="button" data-console-retry onclick={onRetry}>Fetch the record again</button>
