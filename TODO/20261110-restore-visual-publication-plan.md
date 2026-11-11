@@ -38,10 +38,11 @@ Table C - Repair increments and the restored-generation roll-up
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Give the visual planner usable source evidence | - | A | DONE | fantastic-garbanzo | - | 0b1cac34-83e8-494c-99fc-6539f5299bdc |
 | C2 | 2 | Preserve the exact reason a visual was refused | 1 | B | DONE | shiny-spoon | - | ef9d68ad-ccf4-417d-9a05-fe0305ef21c7 |
-| C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2, 4, 5, 6 | C | PENDING | fuzzy-bassoon | - | 094b8d19-fd66-47ce-b6ff-72d8af8f39d7 |
+| C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2, 4, 5, 6, 7 | C | PENDING | fuzzy-bassoon | - | 094b8d19-fd66-47ce-b6ff-72d8af8f39d7 |
 | C4 | 4 | Replay retained articles on the controlled test runtime | 1, 2 | D | IN-FLIGHT | miniature-giggle | - | 98c0f7b2-33d5-487f-b893-37ef59cbb8c9 |
 | C5 | 5 | Correct literal sentence addressing and claim coverage | 1, 2 | D | DONE | cautious-tribble | - | e7392204-404e-484d-9cf5-5811294c4553 |
 | C6 | 6 | Show complete source-backed claims to the reader | 1, 2 | E | DONE | effective-guide | - | 96eb1442-fd7b-4734-b9a4-98d815cf9919 |
+| C7 | 7 | Install native Pages build validation prerequisites | - | F | DONE | fuzzy-succotash | - | 68150591-c6fc-4b82-864c-3aee606bc27e |
 
 ## 2. Row #1 - Give the visual planner usable source evidence
 
@@ -277,3 +278,15 @@ Table P - Rejected reader shortcuts
 | P1 | Keep claims fitted and hide the rest behind disclosure or a tooltip | The action and qualification would still be absent from the default reading surface | Continued loss of the claim's meaning without an extra interaction | Table O1 |
 | P2 | Increase fit limits or alter the producer to repair the reader | Full bounded source excerpts already reach the reader | Unnecessary producer changes and coupled acceptance behavior | Table O4 |
 | P3 | Treat a synthetic or fixture grid as actual generation evidence | It proves only the renderer's behavior | The unclosed fresh-generation and ordinary-publication gap in Table J | Table J |
+
+## 8. Row #7 - Install native Pages build validation prerequisites
+
+- **Scope:** Repair the demonstrated Pages build prerequisite failure by preparing the supported Python environment and installing the declared backend package before native frontend build validation. Keep publication static-only and preserve the existing triggers, decision/evidence rules, concurrency, permissions, native appearance validation and build/deploy flow.
+- **Files touched:**
+  - `.github/workflows/pages.yml`
+  - `docs/reference/github-actions.md`
+  - `TODO/20261110-restore-visual-publication-plan.md`
+- **Acceptance gates:** Inspect the shared `test:changed -- --list` selection, run applicable existing lint and whitespace checks, and leave the full suite to exact-head PR CI. Use an isolated Python environment and the declared package install to verify the native appearance/build prerequisites without relying on preinstalled local packages. Do not add workflow-text tests, fixtures, mocks or dependencies. The implementation worker opens one PR and follows CI without merging or dispatching workflows.
+- **Oracle:** Pages run `42990317413` on `2ed07ebc0f4f39f254d0a84fd7a0a58991fd6770` passed `decide`, failed build job `130421503658` at `build-frame-css.mjs` with `ModuleNotFoundError: No module named 'pydantic'`, and skipped deployment. After the declared package install, the real native appearance validation and static build must pass, with exact-head CI confirming the candidate. Local setup and PR CI do not prove a Pages deployment; C3 and Table J remain incomplete until the separate static deployment and served-site inspection.
+- **Decisions:** Reuse Python 3.12 and `pip install -e .` from the existing publishing workflows rather than copying a dependency subset into YAML. The beneficiary is native build-time validation of committed appearance configuration; no producer, source-page fetch or model execution is added. Document the prerequisite in the existing Pages section because it answers that section's current workflow question. Preserve all earlier complete row sections and unresolved generation/publication outcomes.
+- **Rejected alternatives:** Bypassing Pydantic or native validation would hide invalid configuration. Expanding the shared publication runtime without a demonstrated dependency boundary would widen this repair. Prompt/model/cap changes and manufactured visual outputs cannot prove this build prerequisite or close generation.
