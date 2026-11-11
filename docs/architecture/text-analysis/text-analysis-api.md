@@ -1,6 +1,6 @@
 # How multilingual text analysis runs
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-11
 
 How one independently started local service turns validated English or Chinese
 text into selected linguistic evidence without persisting source text or
@@ -97,12 +97,13 @@ source-ordered occurrence; labels outside the mapping remain available in raw
 entities. These presentation types are not a classification taxonomy.
 
 Important Terms runs YAKE's native candidate generation, statistical feature
-calculations and configured deduplication metric. `PhraseMatcher` anchors the
-ranked token patterns in the original spaCy document, with pattern documents
-made by the tokenizer rather than another model invocation. Matching phrases
-are deduplicated before the final configured limit; ties use first source
-position. An unanchored selected phrase fails only Important Terms. Empty
-candidates and a zero maximum produce successful empty lists.
+calculations and configured deduplication metric. `PhraseMatcher` compares
+tokens with whitespace tokens removed, then maps each match back to the
+original document and offsets. Pattern documents are made by the tokenizer
+rather than another model invocation. Matching phrases are deduplicated before
+the final configured limit; ties use first source position. An unanchored
+selected phrase fails only Important Terms. Empty candidates and a zero maximum
+produce successful empty lists.
 
 The executor passes the freshly validated feature settings into extraction;
 they do not live in the spaCy model cache. English's optional default override

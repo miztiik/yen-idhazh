@@ -37,15 +37,19 @@ def anchor_ranked_terms(
         raise ValueError("Important Terms require the original source document")
 
     from spacy.matcher import PhraseMatcher
+    from spacy.tokens import Doc
 
     patterns: dict[tuple[int, ...], tuple[str, float, Doc]] = {}
     for phrase, score in candidates:
         if isinstance(score, bool) or not math.isfinite(score) or score < 0:
             raise ValueError("Important term ranks must be finite and nonnegative")
         pattern = nlp.make_doc(phrase)
-        key = tuple(token.lower for token in pattern)
+        tokens = tuple(token for token in pattern if not token.is_space)
+        key = tuple(token.lower for token in tokens)
         if not key:
             raise ValueError("Important term candidates must contain tokens")
+        if len(tokens) != len(pattern):
+            pattern = Doc(doc.vocab, words=[token.text for token in tokens])
         previous = patterns.get(key)
         if previous is None or score < previous[1]:
             patterns[key] = (phrase, score, pattern)
@@ -53,20 +57,22 @@ def anchor_ranked_terms(
     if not patterns:
         return ImportantTermsData(terms=())
 
-    # YAKE normalizes case; matching must not change the returned source spelling.
+    original_indexes = tuple(token.i for token in doc if not token.is_space)
+    matching_doc = Doc(doc.vocab, words=[doc[index].text for index in original_indexes])
     matcher = PhraseMatcher(doc.vocab, attr=PHRASE_MATCH_ATTRIBUTE)
     occurrences: dict[int, list[EvidenceSpan]] = {}
     for phrase, _score, pattern in patterns.values():
         matcher.add(phrase, [pattern])
         occurrences[doc.vocab.strings[phrase]] = []
-    for match_id, start, end in matcher(doc):
-        span = doc[start:end]
+    for match_id, start, end in matcher(matching_doc):
+        original_start = original_indexes[start]
+        span = doc[original_start:original_indexes[end - 1] + 1]
         occurrences[match_id].append(
             EvidenceSpan(
                 text=source[span.start_char:span.end_char],
                 start_char=span.start_char,
                 end_char=span.end_char,
-                sentence_index=sentence_indexes[start],
+                sentence_index=sentence_indexes[original_start],
             )
         )
     for matches in occurrences.values():
