@@ -80,6 +80,8 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	expect(Number(await fleet.getAttribute('data-fleet-placements'))).toBeGreaterThan(0);
 	const locking = page.locator('[data-disk-read-pinning]');
 	await expect(locking).toContainText('recorded');
+	await expect(locking).toContainText('included a recorded non-locking setting');
+	await expect(locking).not.toContainText('no locking request');
 	await expect(locking).toContainText('Applied locking is unmeasured.');
 	const tokens = page.locator('[data-console-panel-id="read-against-written"]');
 	const plot = tokens.locator('[data-chart-type="runSeries"]');

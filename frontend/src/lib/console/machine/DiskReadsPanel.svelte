@@ -21,7 +21,7 @@
 	import { useNumberFormat } from '$lib/number-format-context';
 	import type { DiskReadDay, DiskReads } from '$lib/console/machine/disk-reads';
 	import { countDays, nameSpan } from '$lib/console/span-words';
-	import { shortDate } from '$lib/format';
+	import { plural, shortDate } from '$lib/format';
 
 	let {
 		reads,
@@ -117,9 +117,9 @@
 			return `All ${held} recorded runs requested locked weights. Applied locking is unmeasured.`;
 		}
 		if (pinning === 'loose') {
-			return `${loose} runs recorded no locking request. Applied locking is unmeasured.`;
+			return `${plural(loose, 'run', 'runs')} included a recorded non-locking setting. Applied locking is unmeasured.`;
 		}
-		return `${held} of ${held + loose} recorded runs requested locked weights; ${loose} did not. Applied locking is unmeasured.`;
+		return `${held} of ${held + loose} runs recorded only locking requests; ${plural(loose, 'run', 'runs')} included a non-locking setting. Applied locking is unmeasured.`;
 	});
 
 	/** Rows that counted but sat first on their shard. A server that has just

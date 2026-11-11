@@ -237,6 +237,8 @@ below the separate naming threshold remains marked; it is never described as
 a quiet machine. The original recording and threshold detail remains beside it.
 
 Disk-read captions describe recorded locking requests, never applied locking.
+A run with both recorded values belongs to the non-locking group because it
+includes a non-locking setting, not because it recorded no locking request.
 The process watch supplies disk faults and model memory only when the work
 invocation has the controller's process identity and collection is enabled.
 Missing readings stay unknown. Historical recording limits are described with

@@ -57,7 +57,7 @@ export interface DiskReadDay {
 export interface Pinning {
 	/** Runs whose recorded rows all requested locking, not proof it was applied. */
 	held: number;
-	/** Runs with a recorded request that did not ask for locking. */
+	/** Runs with at least one recorded non-locking setting. */
 	loose: number;
 	/** Runs that recorded nothing either way. */
 	silent: number;
@@ -105,7 +105,7 @@ function emptyTally(): DayTally {
 	return { reads: 0, counted: 0, excluded: 0, copiesHigh: null, copiesLow: null };
 }
 
-/** A run with both settings did not request locking on every recorded shard. */
+/** A run with both values includes a recorded non-locking setting. */
 function pinningOf(recorded: Set<string>): 'held' | 'loose' | 'silent' {
 	if (recorded.size === 0) return 'silent';
 	return recorded.has('False') ? 'loose' : 'held';

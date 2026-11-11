@@ -588,6 +588,7 @@ Table W
   - `backend/tests/pipeline/test_work_health_payload.py`
   - `frontend/src/lib/console/machine/DiskReadsPanel.svelte` (requested-locking caption only)
   - `frontend/src/lib/console/machine/disk-reads.ts` (requested-setting comments only)
+  - `frontend/tests/console-readout-data.spec.ts` (same-run mixed-setting helper/render regression)
   - `frontend/tests/console-machine-journey.spec.ts`
   - `docs/architecture/sources/item-health.md`
   - `docs/architecture/publishing/console-machine.md`
