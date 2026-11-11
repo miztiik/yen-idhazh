@@ -77,6 +77,7 @@ from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual import (
     CODE_STAMPED_FIELDS,
+    TITLE_MAX_LENGTH,
     EncodingRole,
     VisualPlan,
     VisualType,
@@ -96,7 +97,7 @@ from idhazh.llm.server import (
 )
 from idhazh.llm.server import window as ctx_size
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
-from idhazh.stages.two_calls import two_calls_one_item
+from idhazh.stages.two_calls import _shape_cells, two_calls_one_item
 from idhazh.visual_planner import plan_lost_to_the_budget, plan_lost_to_the_window
 
 RECORDED_PAYLOADS = FIXTURES_DIR / "planner" / "recorded-call-payloads.json"
@@ -1818,6 +1819,64 @@ class TestTheSummarizeAndPlanShape:
 
         with pytest.raises(ValidationError):
             parse_summarize_and_plan(json.dumps(decoded), source_words=1320)
+
+
+def declining_reply(**changed: object) -> str:
+    """A complete in-memory reply, with one optional contradiction in its decline."""
+    return json.dumps({
+        "summary": {
+            "title": "Reservoir repairs remain under review",
+            "summary": (
+                "The council is reviewing a repair proposal. The report names no comparable "
+                "measures and leaves the schedule and scope of the work unresolved."
+            ),
+        },
+        "visual": {
+            "decision": "none",
+            "purpose": None,
+            "type": None,
+            "declared_whole_element_id": None,
+            "encodings": {role.value: [] for role in EncodingRole},
+            "element_ids": [],
+            "labels": [],
+            "annotations": [],
+            "why": "The source supports no useful visual.",
+            "title": None,
+            "caption": None,
+            "confidence": 0.0,
+            **changed,
+        },
+    })
+
+
+@pytest.mark.parametrize(
+    ("changed", "field", "rule"),
+    (
+        ({"title": "model-only words"}, "title", "visual_plan_decline_empty"),
+        ({"title": "model-only words" * TITLE_MAX_LENGTH}, "visual.title", "string_too_long"),
+        ({"confidence": "model-only words"}, "visual.confidence", "float_parsing"),
+        ({"model-only words": "model-only words"}, "visual", "extra_forbidden"),
+    ),
+)
+def test_shape_diagnostics_keep_native_fields_and_rules_without_reply_text(
+    changed: dict[str, object], field: str, rule: str,
+) -> None:
+    with pytest.raises(ValidationError) as caught:
+        parse_summarize_and_plan(declining_reply(**changed))
+
+    cells = _shape_cells(caught.value)
+
+    assert cells["failed_field"] == field
+    assert cells["failed_rule"] == rule
+    assert field in cells["detail"] and rule in cells["detail"]
+    assert "model-only words" not in repr(cells)
+    assert "input_value" not in cells["detail"]
+    assert "\n" not in cells["detail"]
+
+
+def test_an_unstructured_shape_failure_does_not_copy_its_input() -> None:
+    cells = _shape_cells(ValueError("model-only words"))
+    assert cells == {"detail": "ValueError", "failed_field": None, "failed_rule": None}
 
 
 class TestTheDerivedBudget:

@@ -19,11 +19,19 @@ from pathlib import Path
 from typing import Any, Final
 
 from pytest import LogCaptureFixture, MonkeyPatch
-from support.paths import FIXTURES_DIR
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR
+from test_classify import declining_reply
 
+from idhazh import config, elements
+from idhazh.contracts.article import Article
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.fetch import FetchResult, FetchTimings
+from idhazh.llm.server import Completion
+from idhazh.stages.two_calls import _decide_the_visual, _silent_recorder
+from idhazh.telemetry.record import persist
 
 from ._builders import _work_stage, captured_article_fetch, plan
 
@@ -222,6 +230,41 @@ def test_a_passing_item_carries_no_failure_detail(
     for record in named(caplog, "item.done"):
         if record["outcome"] == "ok":
             assert record["detail"] is None
+
+
+def test_a_malformed_visual_decline_keeps_shape_diagnostics_off_the_success_detail(
+    tmp_path: Path, caplog: LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING, logger="idhazh")
+    settings = config.load(CONFIG_DIR)
+    article = Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json")
+    summary = Summary.read(CONTRACT_FIXTURES_DIR / "summary" / "ok.json")
+    recorder = _silent_recorder()
+    recorder.note(**ItemHealthRow.read(
+        CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json"
+    ).model_dump(mode="json"))
+
+    decision = _decide_the_visual(
+        summary, article,
+        Completion(content=declining_reply(title="model-only words"), finish_reason="stop"),
+        elements.element_table(article, config=settings.app.elements),
+        settings=settings, date="2026-08-21",
+        stamp={
+            "version": VisualDecision.schema_version(), "model_id": "fixture-model",
+            "decided_at": "2026-08-21T12:00:00Z",
+        },
+        wants_a_plan=True, run_id="2026-08-21-1", recorder=recorder,
+    )
+    row = ItemHealthRow.read(persist(tmp_path, recorder.close()))
+
+    assert summary.status is SummaryStatus.OK and summary.summary
+    assert row.outcome.value == "ok" and row.detail is None
+    assert row.failed_field == "title"
+    assert row.failed_rule == "visual_plan_decline_empty"
+    assert decision.rationale and row.failed_field in decision.rationale
+    assert row.failed_rule in decision.rationale
+    assert "model-only words" not in caplog.text
+    assert "input_value" not in caplog.text
 
 
 def test_the_fetch_split_the_socket_measured_reaches_the_record(

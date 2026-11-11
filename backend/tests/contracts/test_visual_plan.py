@@ -217,26 +217,62 @@ def test_confidence_decodes_after_the_type() -> None:
     assert order.index("purpose") < order.index("type"), "the form is chosen for a reason"
 
 
-def test_a_plan_that_declines_draws_nothing() -> None:
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("purpose", "comparison"),
+        ("type", "bar"),
+        ("title", "A contradictory title"),
+        ("caption", "A contradictory caption"),
+        ("encodings", {"quantity": ["quantity-9001-9008"]}),
+        ("element_ids", ["quantity-9001-9008"]),
+        ("labels", ["quantity-9001-9008"]),
+        ("annotations", ["quantity-9001-9008"]),
+    ),
+)
+def test_a_plan_that_declines_draws_nothing(field: str, value: object) -> None:
     """`none` is the common and correct answer, and it is a decision rather than
     an absence - a refusal that carries half a chart is two answers to one
     question."""
     declined = VisualPlan.model_validate(_plan_payload("declined"))
     assert declined.decision is PlanDecision.NONE
     assert declined.why, "a refusal still says why"
-    with pytest.raises(ValidationError, match="declines carries no type"):
-        VisualPlan.model_validate(_plan_payload("declined") | {"type": "bar"})
-    with pytest.raises(ValidationError, match="proposes a visual states its title"):
-        VisualPlan.model_validate(_plan_payload() | {"title": None})
+    payload = _plan_payload("declined")
+    changed = payload["encodings"] | value if isinstance(value, dict) else value
+    with pytest.raises(ValidationError) as caught:
+        VisualPlan.model_validate(payload | {field: changed})
+    error = caught.value.errors(include_input=False)[0]
+    assert error["type"] == "visual_plan_decline_empty"
+    assert error["ctx"] == {"field": "encodings.quantity" if field == "encodings" else field}
 
 
-def test_a_plan_may_not_draw_an_element_it_never_declared() -> None:
+@pytest.mark.parametrize("field", ("purpose", "type", "title", "element_ids"))
+def test_a_visual_plan_still_requires_its_picture_fields(field: str) -> None:
+    with pytest.raises(ValidationError) as caught:
+        VisualPlan.model_validate(_plan_payload() | {field: [] if field == "element_ids" else None})
+    error = caught.value.errors(include_input=False)[0]
+    assert error["type"] == "visual_plan_field_required"
+    assert error["ctx"] == {"field": field}
+
+
+@pytest.mark.parametrize(
+    "field", ("labels", "annotations", "encodings.quantity", "declared_whole_element_id")
+)
+def test_a_plan_may_not_draw_an_element_it_never_declared(field: str) -> None:
     """The cheap half of "every element exists", asked of the payload alone: a
     role citing an id the plan did not list is the plan disagreeing with itself.
     Whether the id names a real element is the validator's question."""
     payload = _plan_payload()
-    with pytest.raises(ValidationError, match="did not declare"):
-        VisualPlan.model_validate(payload | {"labels": ["quantity-9001-9008"]})
+    unknown = "quantity-9001-9008"
+    if field == "encodings.quantity":
+        payload["encodings"]["quantity"] = [unknown]
+    else:
+        payload[field] = unknown if field == "declared_whole_element_id" else [unknown]
+    with pytest.raises(ValidationError, match="did not declare") as caught:
+        VisualPlan.model_validate(payload)
+    error = caught.value.errors(include_input=False)[0]
+    assert error["type"] == "visual_plan_reference_declared"
+    assert error["ctx"] == {"field": field}
 
 
 def test_the_worst_case_reply_length_is_arithmetic_and_the_fixtures_are_a_fraction_of_it() -> None:

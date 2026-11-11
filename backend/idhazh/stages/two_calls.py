@@ -429,28 +429,28 @@ def _silent_recorder() -> ItemRecorder:
 
 
 def _shape_cells(error: Exception) -> dict[str, Any]:
-    """Which field of a reply broke which rule, out of the exception that says so.
-
-    Pydantic already knows both and puts them in `errors()`; until now the stage
-    threw that away and logged the class name. `ValidationError` on twenty-two
-    items is a count, not a diagnosis, and the reply that would have explained it
-    has been discarded by the time anybody reads the row.
-
-    The first error rather than all of them, because the columns are singular and
-    a reply that broke five rules broke the first one first. A plain `ValueError`
-    carries no structure, so the field and the rule stay empty and `detail`
-    carries the message - which is still the whole of what is knowable.
-    """
-    detail = telemetry.detail_cell(str(error))
+    """The first native field/rule refusal, without rejected values or unknown keys."""
+    detail = type(error).__name__
     if not isinstance(error, ValidationError):
         return {"detail": detail, "failed_field": None, "failed_rule": None}
-    first = next(iter(error.errors()), None)
+    first = next(iter(error.errors(include_input=False, include_url=False)), None)
     if first is None:
         return {"detail": detail, "failed_field": None, "failed_rule": None}
+    rule = first["type"]
+    location = first["loc"]
+    field = first.get("ctx", {}).get("field")
+    if isinstance(field, str):
+        location = (*location, field)
+    elif rule == "extra_forbidden":
+        location = location[:-1]
+    failed_field = ".".join(str(part) for part in location) or None
+    detail = f"{failed_field or 'reply'}: {rule}"
+    if isinstance(field, str):
+        detail += f"; {first['msg']}"
     return {
-        "detail": detail,
-        "failed_field": ".".join(str(part) for part in first.get("loc", ())) or None,
-        "failed_rule": str(first.get("type") or "") or None,
+        "detail": telemetry.detail_cell(detail),
+        "failed_field": failed_field,
+        "failed_rule": rule,
     }
 
 
@@ -720,18 +720,14 @@ def two_calls_one_item(
                     entity_slugs=_watchlist_slugs(settings),
                 )
             except (ValidationError, ValueError, json.JSONDecodeError) as error:
-                # The exception's own message, and the field and the rule it
-                # names. Until 2026-09-15 this printed the class name alone -
-                # `ValidationError` on 22 items with 22 different causes, which
-                # is a count rather than a diagnosis, and the reply that would
-                # have explained it was already gone.
+                shape = _shape_cells(error)
                 LOG.warning(
                     "the labelling reply did not hold its shape id=%s reason=%s detail=%s",
                     article.item_id,
                     type(error).__name__,
-                    telemetry.detail_cell(str(error)),
+                    shape["detail"],
                 )
-                kept.note(**_shape_cells(error))
+                kept.note(**shape)
                 return failed(FailureCode.BAD_SHAPE, one)
             return None
 
@@ -941,20 +937,20 @@ def _decide_the_visual(
             brief=article.brief,
         )
     except (ValidationError, ValueError, json.JSONDecodeError) as error:
-        # The message, the field and the rule, for the reason written over the
-        # labelling reply's own shape failure: a class name is a count and not a
-        # diagnosis, and the reply it came from is already gone.
+        shape = _shape_cells(error)
         LOG.warning(
             "the plan half did not hold its shape id=%s reason=%s detail=%s",
             summary.item_id,
             type(error).__name__,
-            telemetry.detail_cell(str(error)),
+            shape["detail"],
         )
         if recorder is not None:
-            recorder.note(**_shape_cells(error))
+            recorder.note(
+                failed_field=shape["failed_field"], failed_rule=shape["failed_rule"]
+            )
         return visual_planner.not_drawable_here(
             summary,
-            why="the plan half of the reply did not hold the shape a plan has to hold",
+            why=f"the plan half did not hold its shape: {shape['detail']}",
             **stamp,
         )
     plan = reply.visual

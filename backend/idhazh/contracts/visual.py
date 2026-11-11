@@ -148,6 +148,7 @@ from enum import StrEnum
 from typing import Annotated, Any, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
 
 from idhazh.contracts.base import ChangelogEntry, Contract, Model, SchemaVersion
 from idhazh.contracts.element import (
@@ -456,21 +457,40 @@ class VisualPlan(Contract):
             }
             for name, value in empty.items():
                 if value is not None:
-                    raise ValueError(f"a plan that declines carries no {name}")
+                    raise PydanticCustomError(
+                        "visual_plan_decline_empty",
+                        "a plan that declines carries no {field}",
+                        {"field": name},
+                    )
             for name, cited in (
-                ("encodings", self.encodings.filled()),
+                *(
+                    (f"encodings.{role.value}", ids)
+                    for role, ids in self.encodings.filled().items()
+                ),
                 ("element_ids", self.element_ids),
                 ("labels", self.labels),
                 ("annotations", self.annotations),
             ):
                 if cited:
-                    raise ValueError(f"a plan that declines cites no {name}")
+                    raise PydanticCustomError(
+                        "visual_plan_decline_empty",
+                        "a plan that declines cites no {field}",
+                        {"field": name},
+                    )
             return self
         for name, stated in (("purpose", self.purpose), ("type", self.type), ("title", self.title)):
             if stated is None:
-                raise ValueError(f"a plan that proposes a visual states its {name}")
+                raise PydanticCustomError(
+                    "visual_plan_field_required",
+                    "a plan that proposes a visual states its {field}",
+                    {"field": name},
+                )
         if not self.element_ids:
-            raise ValueError("a plan that proposes a visual cites the elements it draws from")
+            raise PydanticCustomError(
+                "visual_plan_field_required",
+                "a plan that proposes a visual cites the elements it draws from",
+                {"field": "element_ids"},
+            )
         return self
 
     @model_validator(mode="after")
@@ -492,9 +512,12 @@ class VisualPlan(Contract):
         if self.declared_whole_element_id is not None:
             cited["declared_whole_element_id"] = {self.declared_whole_element_id}
         for where, ids in cited.items():
-            unknown = sorted(ids - declared)
-            if unknown:
-                raise ValueError(f"{where} cites an element the plan did not declare: {unknown[0]}")
+            if ids - declared:
+                raise PydanticCustomError(
+                    "visual_plan_reference_declared",
+                    "{field} cites an element the plan did not declare",
+                    {"field": where},
+                )
         return self
 
 

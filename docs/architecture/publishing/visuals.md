@@ -269,6 +269,14 @@ the original request passed validation. A shape, configuration or compiler
 refusal does not create a rejection, but does not erase one already recorded
 for the original request.
 
+An invalid plan keeps its first native field and rule in the bounded,
+sanitized `rationale` and the item-health `failed_field` and `failed_rule`
+cells. The [plan's cross-field rules](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#the-plan-a-compiler-draws-from-and-the-four-things-it-may-not-carry)
+supply those details directly; recording never parses an English message.
+Rejected values, unknown input keys and article text are not diagnostics.
+A successful item-health row keeps `detail` null: its visual refusal does not
+make the summary a failure.
+
 The final `VisualDecision` records the original `planned_type` and the
 successfully written `rendered_type` separately. `downgrade_depth` is zero
 without a selected replacement and positive after one is selected, even if its
@@ -281,6 +289,9 @@ none, and null if no numeric floor was compared. `marks` counts delivered
 marks, not the flat mark pool. Without successful delivery, the delivered type
 and mark count are null. Untyped requests and older unmeasured outcomes leave
 the new evidence fields null; never infer an old request from its final drawing.
+Only a valid native plan establishes the requested type. A contradictory
+decline or malformed JSON cannot establish it, even if its raw bytes name a
+type.
 
 The worker projects the requested type, delivered type, selected depth, marks
 and identity into its sealed item record before either completion path. The
