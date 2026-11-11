@@ -83,9 +83,18 @@ jobs:
 
       - uses: ./.github/actions/publication-runtime
 
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
       - name: Install
         working-directory: frontend
         run: npm ci
+
+      - name: Install the backend for native build validation
+        run: pip install -e .
 
       - name: Build
         working-directory: frontend

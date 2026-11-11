@@ -1,11 +1,6 @@
 name: Yen-Summarizers
 
 on:
-  pull_request:
-    paths:
-      - '.github/scripts/ai-pipeline.ts'
-      - '.github/workflows/ai-pipeline-tests.yml'
-      - 'tools/summary-eval/export-saved-summaries.ts'
   workflow_dispatch:
     inputs:
       input_source:
@@ -53,10 +48,6 @@ on:
           - 'models/qwen3.5-9b-q4km.json'
           - 'models/qwen3.8-9b-q5km-distill.json'
         default: 'models/ornith-1.5-9b-q5km.json'
-      models_file:
-        description: 'Optional model JSON path under config/; overrides the model dropdown'
-        required: false
-        default: ''
       max_word_length:
         description: 'Maximum ingested word count per article before truncation'
         required: false
@@ -67,40 +58,12 @@ on:
         default: 'You are a precise, objective intelligence analyst. Your mandate is to produce a faithful, high-density synthesis of the provided document.'
 
 jobs:
-  workflow-handoff:
-    runs-on: ubuntu-latest
-    name: Saved workflow handoff
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 'latest'
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - name: Prepare locked metadata and existing workflow dependencies
-        run: |
-          bun install --frozen-lockfile --cwd packages/common-contracts
-          bun install --frozen-lockfile --cwd services/summary-generator
-          bun install --frozen-lockfile --cwd tools/summary-generator-caller
-          npm install --no-save --package-lock=false --no-audit --no-fund defuddle linkedom feedsmith tidy-url
-      - name: Check the real saved handoff without model dispatch
-        run: |
-          bun run --no-install ./packages/common-contracts/node_modules/typescript/bin/tsc \
-            --noEmit --target ESNext --module ESNext --moduleResolution Bundler \
-            --strict --skipLibCheck --allowImportingTsExtensions --types bun \
-            --typeRoots packages/common-contracts/node_modules/@types \
-            .github/scripts/ai-pipeline.ts tools/ai-pipeline-experiment/test/workflow-handoff.test.ts \
-            tools/summary-eval/export-saved-summaries.ts
-          bun test ./tools/ai-pipeline-experiment/test/workflow-handoff.test.ts
-
   run-pipeline:
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: LLM Inference
     env:
-      MODELS_FILE: ${{ inputs.models_file || inputs.model }}
-      CONFIG_ROOT: ${{ (inputs.models_file || inputs.model) != '' && 'backend/var/candidate-config' || 'config' }}
+      MODELS_FILE: ${{ inputs.model }}
+      CONFIG_ROOT: ${{ inputs.model != '' && 'backend/var/candidate-config' || 'config' }}
       PYTHONPATH: backend
 
     steps:

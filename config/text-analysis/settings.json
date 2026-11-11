@@ -39,7 +39,7 @@
   "languages": {
     "en": {
       "enabled": true,
-      "default_profile": "md",
+      "default_profile": "lg",
       "default_features": [
         "named_entities",
         "important_terms",
@@ -75,7 +75,7 @@
     },
     "zh": {
       "enabled": true,
-      "default_profile": "md",
+      "default_profile": "lg",
       "supported_features": [
         "entities",
         "sentences",

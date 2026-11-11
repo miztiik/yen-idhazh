@@ -1,6 +1,6 @@
 # Run text analysis and inspect results
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 How to dispatch `ner-tests.yml` for one source and inspect the native spaCy
 and GLiNER results. This procedure is project-specific because it uses the
@@ -18,15 +18,10 @@ default is in the workflow dispatch definition. The platform retains dispatch
 inputs, and the source is visible in the summary and saved requests to anyone
 who can view the run. Do not submit secrets or private material.
 
-spaCy runs in English. `profile` defaults to `md`, with `sm` and `lg` also
+spaCy runs in English. `profile` defaults to `lg`, with `sm` and `md` also
 available. `feature_mode` defaults to `default`; `all` selects all supported
-English features, and `custom` uses `custom_features`. Default mode omits
-`features` from the request so the API selects its configured defaults.
-Custom mode requires a nonempty comma-separated list from `entities`,
-`sentences`, `relations`, `noun_phrases`, `linguistic_tokens`,
-`document_metrics`, `named_entities` and `important_terms`. Names are
-case-sensitive; duplicates are refused, surrounding whitespace is ignored,
-and order is preserved. Leave `custom_features` blank for other modes.
+English features. Default mode omits `features` from the request so the API
+selects its configured defaults.
 
 GLiNER uses distinct presentation types from `named_entities.label_map` in
 `config/text-analysis/settings.json`, in configuration order. An empty label
@@ -71,9 +66,8 @@ Send the JSON form through standard input so text is not a shell argument:
 
 ```powershell
 $inputs = @{
-  profile = 'md'
+  profile = 'lg'
   feature_mode = 'default'
-  custom_features = ''
   text = Get-Content -Raw .\text-analysis-input.txt
 } | ConvertTo-Json -Compress
 
