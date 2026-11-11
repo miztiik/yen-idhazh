@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -55,6 +55,15 @@ flags can select tests from different groups.
 A real-build run requires `--spec reading-page.spec.ts`, so
 canary-dependent console assertions cannot accidentally run against real data.
 Keep the section 12 browser smoke for a published-site change.
+
+For a producer-to-reader claim, separate deterministic coverage from live
+generation evidence. Carry only the producer's serialized outputs into a fresh
+publisher tree, run ordinary assembly and check the named asset, payload and
+inventory together. Feed that exact asset to the native reader; a separately
+authored successful page cannot prove the handoff. Extend the existing reader
+journey for the affected artifact and its distinct recovery boundary rather
+than adding presentation matrices. Deliberately missing responses are named
+expected failures; unrelated console errors and missing files still fail.
 
 The launcher checks the dependencies the selection needs before waiting for a
 test slot. A logic-only run does not probe Python packages or run pytest. It

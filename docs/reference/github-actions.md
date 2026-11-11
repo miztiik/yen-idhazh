@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-11
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -255,6 +255,21 @@ named UTC day from each declared ledger, not a trial root's accumulated history.
 Every runner names the checked-out commit in its ledger identity, so the commit
 job rejects a result made from a different code version.
 Never write reader-facing payloads.
+
+A successful summary proves execution, not visual generation. The random draw
+need not contain a warranted chart or actor/claim comparison. To establish a
+generation repair, inspect both actual calls for named warranted positive
+examples and a legitimate no-visual example, retaining their source inputs,
+code revision, committed model, runner conditions, decisions and named assets.
+Old or authored replies and forced request types are not current generation
+evidence. The [visual publication contract](../architecture/publishing/visuals.md)
+separates this observation from deterministic worker-to-reader coverage.
+
+Normal publication is a different observation: inspect the next scheduled
+Content refresh run and the day Pages actually serves, including the asset's
+digest and inventory references. A pipeline-test artifact is not a published
+asset, and a cron expression is not an observed run. Do not repeatedly dispatch
+the production writer as a merge gate.
 
 ## Vector backfill
 

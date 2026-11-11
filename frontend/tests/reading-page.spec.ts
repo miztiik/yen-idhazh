@@ -1,11 +1,35 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { BuildRecord } from '../scripts/build-state';
+import { isVisualData } from '../src/lib/payload/drawing';
+import { isWhowhatGridData } from '../src/lib/payload/whowhat-grid';
+import type { DigestDay, WhowhatGridData } from '../src/lib/payload/types';
 import { dayReady } from './support/day-ready';
+import { CANARY, newestDate } from './support/published';
 import { uiConfig } from '../src/lib/server/config';
 
 /** One reading journey covers the shared shell; never expand it into route or presentation matrices. */
 test('a reader can load stories, filter the day and keep the layout usable on a phone', async ({ page }) => {
 	const errors: string[] = [];
+	const expectedMissing = new Set<string>();
+	const missingResponses: string[] = [];
 	page.on('pageerror', (error) => errors.push(String(error)));
+	page.on('console', (message) => {
+		if (message.type() === 'error' && !expectedMissing.has(message.location().url)) {
+			errors.push(message.text());
+		}
+	});
+	page.on('response', (response) => {
+		if (response.status() !== 404) return;
+		if (expectedMissing.has(response.url())) missingResponses.push(response.url());
+		else errors.push(`404 ${response.url()}`);
+	});
+	await page.addInitScript(() => {
+		window.addEventListener('error', (event) => {
+			console.error(`[reader] ${event.message}`);
+		});
+	});
 	await page.setViewportSize({ width: 1920, height: 1080 });
 	await page.goto('/');
 	await dayReady(page);
@@ -112,6 +136,61 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	await expect(searchOtherDays).toHaveCSS('clip-path', 'inset(50%)');
 	await expect(page.locator('[data-filter-note]')).toHaveCount(0);
 
+	const build: BuildRecord = JSON.parse(readFileSync(
+		join(process.cwd(), '..', 'backend', 'var', 'checks', 'build.json'), 'utf8'
+	));
+	let gridCase: {
+		date: string; itemId: string; path: string; data: WhowhatGridData; plainItemId: string
+	} | null = null;
+	if (build.mode === 'canary') {
+		const date = newestDate();
+		const [year, month, day] = date.split('-');
+		const response = await page.request.get(`/digest/${year}/${month}/${day}/digest.json`);
+		expect(response.ok()).toBe(true);
+		const published: DigestDay = await response.json();
+		const chart = published.items.find((item) =>
+			item.visual?.kind === 'chart' && item.visual.state === 'rendered'
+		);
+		const grid = published.items.find((item) =>
+			item.visual?.kind === 'whowhat' && item.visual.state === 'rendered'
+		);
+		const plain = published.items.find((item) => item.visual === null);
+		if (!chart?.visual?.data_path || !grid?.visual?.data_path || !plain) {
+			throw new Error('the reader canary must carry a published chart, grid and no-visual story');
+		}
+		const chartResponse = await page.request.get(`/${chart.visual.data_path}`);
+		expect(chartResponse.ok()).toBe(true);
+		expect(isVisualData(await chartResponse.json())).toBe(true);
+		const chartStory = page.locator(`article.item[id="${chart.item_id}"]`);
+		await chartStory.scrollIntoViewIfNeeded();
+		await expect(chartStory.getByRole('img')).toBeVisible();
+		const gridResponse = await page.request.get(`/${grid.visual.data_path}`);
+		expect(gridResponse.ok()).toBe(true);
+		expect(await gridResponse.body()).toEqual(
+			readFileSync(join(CANARY, '..', grid.visual.data_path))
+		);
+		const gridData: unknown = await gridResponse.json();
+		if (!isWhowhatGridData(gridData, grid.item_id)) {
+			throw new Error('the published canary grid was refused by the real reader');
+		}
+		const gridStory = page.locator(`article.item[id="${grid.item_id}"]`);
+		await gridStory.scrollIntoViewIfNeeded();
+		await expect(gridStory.locator('[data-whowhat-state]')).toHaveAttribute(
+			'data-whowhat-state', 'ready'
+		);
+		await expect(gridStory.getByRole('columnheader')).toHaveText(['Who', 'What']);
+		await expect(gridStory.locator('tbody td')).toHaveText(
+			gridData.rows.flatMap((row) => [row.actor?.display_text ?? '', row.claim?.display_text ?? ''])
+		);
+		const plainStory = page.locator(`article.item[id="${plain.item_id}"]`);
+		await expect(plainStory.locator('[data-item-summary]').first()).not.toBeEmpty();
+		await expect(plainStory.locator('figure, [data-whowhat-state], [role="status"]')).toHaveCount(0);
+		gridCase = {
+			date, itemId: grid.item_id, path: grid.visual.data_path, data: gridData,
+			plainItemId: plain.item_id
+		};
+	}
+
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(page.locator('#page-filter')).toBeVisible();
 	await expect.poll(() => page.evaluate(
@@ -127,5 +206,40 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	expect(await archiveProse.evaluate((node) =>
 		node.getBoundingClientRect().width <= Number.parseFloat(getComputedStyle(node).maxWidth) + 1
 	)).toBe(true);
+	if (gridCase) {
+		const { date, itemId, path, data, plainItemId } = gridCase;
+		const assetUrl = new URL(`/${path}`, page.url()).href;
+		for (const missing of [true, false]) {
+			if (missing) expectedMissing.add(assetUrl);
+			await page.route(assetUrl, (route) => route.fulfill(missing
+				? { status: 404, body: '' }
+				: { contentType: 'application/json', body: JSON.stringify({ ...data, rows: [] }) }
+			));
+			await page.goto('/archive/');
+			await page.locator(`a[href="/${date}/#${itemId}"]`).click();
+			await dayReady(page);
+			const gridStory = page.locator(`article.item[id="${itemId}"]`);
+			await gridStory.scrollIntoViewIfNeeded();
+			await expect(gridStory.locator('[data-item-summary]').first()).not.toBeEmpty();
+			await expect(gridStory.locator('[data-whowhat-state]')).toHaveAttribute(
+				'data-whowhat-state', 'failed'
+			);
+			await expect(gridStory.getByRole('status')).toContainText('could not be loaded');
+			await expect(gridStory.getByRole('table')).toHaveCount(0);
+			const plain = page.locator(`article.item[id="${plainItemId}"]`);
+			await expect(plain.locator('[data-item-summary]').first()).not.toBeEmpty();
+			await expect(plain.locator('figure, [role="status"]')).toHaveCount(0);
+			await page.unroute(assetUrl);
+			const retry = gridStory.getByRole('button', { name: 'Try again' });
+			await retry.focus();
+			await expect(retry).toBeFocused();
+			await page.keyboard.press('Enter');
+			await expect(gridStory.locator('[data-whowhat-state]')).toHaveAttribute(
+				'data-whowhat-state', 'ready'
+			);
+			await expect(gridStory.getByRole('table')).toBeVisible();
+		}
+		expect(missingResponses).toEqual([assetUrl]);
+	}
 	expect(errors).toEqual([]);
 });

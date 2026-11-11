@@ -79,19 +79,28 @@ could not be read. No job hands a file under `frontend/public/` to another job n
 the small model, this stage and its job together. Until then the flag off leaves the pipeline
 exactly where it was.
 
-**The chart path has a test for each job, and the grid has a fixture-backed handoff test.** For
-charts, the question a reader cares about is whether a file lands - not whether a decision does.
-Every route to no picture writes a decision too, so a test that reads `asked_the_model` off the
-payload passes on a day the digest drew nothing. `test_a_decided_item_leaves_a_drawn_chart_on_disk`
-reads the SVG back from the path the payload names and checks the bars carry the article's own entity names.
-`test_assemble_publishes_a_chart_from_its_decision_alone` runs `work` and `assemble` in two trees,
-hands across only the items directory, and checks that the published day names the chart, that
-its bytes are the shard's, and that the inventory counts it.
+**Charts and grids each cross the actual worker and assembly boundary in tests.**
+`test_assemble_publishes_a_chart_from_its_decision_alone` and
+`test_publisher_writes_the_grid_from_the_item_decision_alone` run both production
+calls against local boundary replies. Real extraction and anchoring finalize
+the evidence; the actual second request must show and admit the ids the
+compiler uses. Only named serialized article, summary, decision and item-health
+outputs, plus their input fingerprint, cross into a fresh publisher tree.
+Neither the worker's public directory nor its captures cross.
 
-`test_publisher_writes_the_grid_from_the_item_decision_alone` uses the real local whowhat article,
-element-table and plan fixtures. It derives the decision in a worker tree, transfers only the
-serialized item decision, and checks the dedicated writer's file and inventory in the publisher
-tree.
+Ordinary `stage_assemble` must recreate the named asset from those outputs.
+Each test checks its exact worker bytes, the digest reference and the
+publication inventory, then feeds those published bytes to the actual
+TypeScript reader guard. A legitimate declining boundary answer separately
+keeps its summary publishable, records `model_declined` and publishes no visual.
+Removing either assembly writer or rejecting the compiler's payload in the
+reader breaks this coverage.
+
+The existing reader journey uses compiler-produced chart and grid canaries,
+with a plain item beside them. It checks served asset bytes and displayed grid
+cells, then exercises missing and empty grid responses and keyboard retry
+without losing the story. These are deterministic transport and rendering
+checks, not evidence that the current model generates useful plans.
 
 It needs an article a bar can legally be drawn from, which is rarer than it sounds.
 `tests/fixtures/pages/article.html` states three figures in three units - dollars, megawatts and
@@ -101,6 +110,23 @@ the shape `tests/fixtures/visual-validator/` already keeps as the plan that pass
 pair is `label/wind-labelled.json` and `summarize-and-plan/wind-summary-and-plan.json`, and the element
 ids in the second are the ones this pipeline mints from the first - so an extractor change that
 moves a span turns the test red rather than quietly turning the picture off.
+
+**Generation and normal publication require separate observations.** Retain
+both actual calls for named warranted chart and actor/claim examples and a
+legitimate no-visual example, using the committed model and production path.
+Record the code revision, model identity, source inputs and runner conditions
+beside the captured requests, replies, decisions and resulting named assets.
+Recorded or authored replies, an old capture, a forced type and a successful
+summary cannot establish present-day generation. A warranted example that
+still declines or malforms remains an unresolved defect, not a restored
+capability.
+
+After producer delivery, inspect a normal scheduled Content refresh run's
+actual source revision, decisions, assets, digest, inventory and served day.
+The [Pipeline tests workflow](../../reference/github-actions.md#pipeline-tests)
+can show production execution but publishes no reader-facing day. Do not
+repeatedly dispatch a production writer to turn this observation into a merge
+gate.
 
 ## The model never writes a number
 

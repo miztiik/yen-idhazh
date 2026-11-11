@@ -22,6 +22,11 @@ test('reader labels clear the text floor without scaling, and every mark survive
 	page.on('response', (response) => {
 		if (response.status() === 404) errors.push(response.url());
 	});
+	await page.addInitScript(() => {
+		window.addEventListener('error', (event) => {
+			console.error(`[reader] ${event.message}`);
+		});
+	});
 	const date = newestDate();
 	const day = payloadOf(date) as unknown as DigestDay;
 	const visuals = day.items.flatMap((item) =>
