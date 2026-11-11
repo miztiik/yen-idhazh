@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -64,6 +64,13 @@ than the requested preset, it also names its first day and the UTC day on
 which that preset fills. A first frame with no record yet prints no data date.
 Build-time evidence keeps the published-day behavior above. This does not
 reinterpret the recorded judging and holdout evidence on Judgement.
+
+The status slot reserves the largest sentence for the configured presets,
+using the actual record reach and current typography. Hidden, aria-hidden
+copies share one grid cell; no fixed line count assumes a font or width.
+During a fetch, the previous reach is retained only for sizing. The visible
+line claims no date until the current answer arrives, and switching presets
+does not move the evidence and panels below it.
 
 ### Build-time window space and control behavior
 

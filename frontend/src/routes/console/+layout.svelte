@@ -137,7 +137,10 @@
 	}
 	@media (max-width: 1023px) {
 		.console-shell { gap: var(--console-control-gap); padding-block-start: var(--console-control-gap); }
-		.console-evidence { margin-block-end: var(--console-control-gap); }
+		.console-evidence {
+			gap: 0;
+			margin-block: var(--console-control-padding-block);
+		}
 	}
 	@media (min-width: 1024px) {
 		.console-shell { grid-template-columns: var(--console-rail-width) minmax(0, 1fr); align-items: start; }

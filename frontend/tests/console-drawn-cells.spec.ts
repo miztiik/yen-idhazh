@@ -62,7 +62,7 @@ const ADDRESS_ALLOWED: readonly ReviewedSink[] = [
 		origin: 'Legacy Model measurementsReference, authored repo_url plus fixed documentation path.' },
 	{ file: 'src/lib/console/explorer/RunStatus.svelte', attribute: 'href', value: 'href={href}',
 		origin: 'Explorer answerLink, only the fixed #data-explorer-rows fragment or empty string.' },
-	{ file: 'src/routes/console/+layout.svelte', attribute: 'href', value: 'href="#{group.id}"',
+	{ file: 'src/lib/components/ConsoleNav.svelte', attribute: 'href', value: 'href="#{group.id}"',
 		origin: 'Authored console panel group id, internal fragment only.' },
 	{ file: 'src/routes/console/+layout.svelte', attribute: 'band', value: 'band={data.band}',
 		origin: 'readBand reconstructs the worst link from a validated route id and BAND_UNREAD, not a fetched source URL.' },

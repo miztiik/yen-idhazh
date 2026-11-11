@@ -263,7 +263,7 @@ def test_console_style_accepts_bounded_numbers_and_replaces_arrays_whole() -> No
 
 @pytest.mark.parametrize("color", ["#1a7f4b", "#2f6f5e"])
 def test_console_categories_stay_separate_from_confidence_and_movement(color: str) -> None:
-    palette = AppearanceConfig().console_style.colors.light.categorical
+    palette = AppearanceConfig.model_validate({}).console_style.colors.light.categorical
     palette[0] = color
     with pytest.raises(ValidationError, match="separate from confidence and movement"):
         AppearanceConfig.model_validate(

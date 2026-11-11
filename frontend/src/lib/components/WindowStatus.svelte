@@ -1,20 +1,5 @@
 <script lang="ts">
-	/** What the days control is holding, and what a wider span would fetch, said
-	 * as one sentence under the band.
-	 *
-	 * It was the control's own line until the control moved onto the strip. A
-	 * sentence is not a control, so it did not go with it: it stays under the
-	 * band and over the panels it describes, and the strip stays one row.
-	 *
-	 * **The price of a wider span lives here, not on the tiles.** A price that
-	 * appeared and disappeared on a tile moved seven panels by 15 px when it
-	 * landed or cleared (measured 2026-09-09), so the tiles once kept a second
-	 * line for it whether or not one was due. This sentence is always drawn and
-	 * keeps room for its longest form, so the price holds still and the tiles
-	 * hold one line. What it costs: on a phone the price stands a band's height
-	 * below the control, and while the strip is stuck to the top of a wide
-	 * screen it is off screen.
-	 */
+	/** Say which record the window holds without moving the content on selection. */
 	import { plural } from '$lib/format';
 	import { recordWindowSentence, type RecordWindow } from '$lib/console/waiting';
 
@@ -39,6 +24,11 @@
 	} = $props();
 
 	const pending = $derived(monthsFor(days));
+	let previousRecord = $state.raw<RecordWindow | null>(null);
+	$effect(() => { if (record !== null) previousRecord = record; });
+	const sizingRecord = $derived(record ?? previousRecord);
+	const recordSizes = $derived(sizingRecord === null ? [] :
+		presets.map((asked) => recordWindowSentence({ ...sizingRecord, asked })));
 
 	/** Each wider preset that would fetch something, narrowest first. */
 	const priced = $derived(
@@ -67,31 +57,28 @@
 	});
 </script>
 
-<p id="window-control-status" class="window-status" data-window-status>{status}</p>
+<div class="window-status">
+	<p id="window-control-status" data-window-status>{status}</p>
+	{#each recordSizes as sentence}
+		<span class="window-status-measure" aria-hidden="true">{sentence}</span>
+	{/each}
+</div>
 
 <style>
 	.window-status {
-		/* Room for the longest sentence this slot holds, always. The sentences are
-		   different lengths - the no-script one, and the price with every wider
-		   preset named, are the longest - so without a floor the slot would lose a
-		   line the moment a browser hydrates or a price clears, and every panel
-		   below it would jump. Measured 2026-09-09 at 1280 CSS px on an Intel Core
-		   i7-1265U: seven panels moved by one line for a sentence changing. Three
-		   lines on a phone: the longest price, 111 characters, took three lines at
-		   320px and two from 360px (measured 2026-10-02, Chromium on Windows). */
+		display: grid;
 		min-block-size: var(--console-small-leading);
 		margin: 0;
 		font-size: var(--console-small-size);
 		line-height: var(--console-small-leading);
+		font-weight: var(--console-small-weight);
+		letter-spacing: var(--console-small-tracking);
 		color: var(--color-text-secondary);
 	}
-
-	/* The value matches `frame.breakpoints_px[0]` in `config/appearance.json`; a
-	   media query cannot read a custom property. From there up the longest
-	   sentence takes two lines. */
-	@media (min-width: 640px) {
-		.window-status {
-			min-block-size: var(--console-small-leading);
-		}
+	p, .window-status-measure {
+		grid-area: 1 / 1;
+		margin: 0;
 	}
+	/* Intrinsic copies reserve the largest configured preset at the current type. */
+	.window-status-measure { visibility: hidden; pointer-events: none; }
 </style>
