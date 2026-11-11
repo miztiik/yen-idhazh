@@ -72,7 +72,6 @@
 		return point < 0 ? [] : [{ ...change, point }];
 	}));
 	const readout = $derived.by(() => {
-		if (own === null) return null;
 		const result = sparklineReadout(marks, series, effectiveRules);
 		if (modelRule === undefined) return result;
 		return { ...result, events: ruleEvents(fullRule!, marks.dates).lines.map((lines) => [...lines]) };
@@ -108,7 +107,7 @@
 		role="img"
 		aria-label={label}
 		tabindex={own === null ? undefined : 0}
-		use:pointerReadout={{ marks: columns, width, onSelect: select, selected: at }}
+		use:pointerReadout={{ marks: columns, width, hover: { name: own?.name ?? series.label, readout }, onSelect: select, selected: at }}
 	>
 		<!-- Under the line, never over it: the rule is the context and the line is
 		     the answer. Its sentence stays on it as its name, and the strip prints

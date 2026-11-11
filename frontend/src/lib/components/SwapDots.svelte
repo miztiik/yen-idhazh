@@ -297,6 +297,7 @@
 			use:markReadout={{
 				count: drawn.length,
 				walk: 'list',
+				hover: { name: 'model-swap', readout: records },
 				onSelect: (index) => (picked = index),
 				selected: picked
 			}}

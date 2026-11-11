@@ -75,7 +75,7 @@
 		data-chart-type="dateSeries"
 		data-chart-name={name}
 		data-fleet-square-size={geometry.size}
-		use:pointerReadout={{ marks, width: box.width, onSelect: (index) => (selected = index) }}
+		use:pointerReadout={{ marks, width: box.width, hover: { name, readout }, onSelect: (index) => (selected = index) }}
 		use:columnPick={{ marks, width: box.width, showing, onPick }}
 	>
 		<line x1={box.left} x2={box.right} y1={box.bottom} y2={box.bottom} stroke="var(--chart-axis)" />

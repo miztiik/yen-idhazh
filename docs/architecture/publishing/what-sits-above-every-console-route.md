@@ -1,6 +1,6 @@
 # What sits above every console route
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 How the console keeps navigation, the selected window and dated evidence in reach
 without putting a screen of repeated status ahead of the first useful reading.
@@ -9,26 +9,46 @@ without putting a screen of repeated status ahead of the first useful reading.
 ## One labelled navigation, not top tabs
 
 From `frame.breakpoints_px[1]`, a persistent left rail lists every route and the
-active route's named group anchors. The active route has a selected surface and
-an outline; a route's worst state remains words, never a health-colored label.
-Descriptions remain each link's `title`. All destinations are real anchors with
-their existing URLs.
+active route's named group anchors. Links pair existing glyphs with readable
+route labels, not metadata prose or health colors. The selected route has an
+outline and tinted surface; the same glyph appears larger beside its page
+title. Descriptions remain each link's `title`. All destinations are real
+anchors with their existing URLs. Each route's issue stays beside its dated
+page evidence; the standing band retains the worst issue across routes.
 
 Below that breakpoint, the same links sit in a native `Console menu` disclosure.
 It closes after navigation. Without JavaScript it starts open, so every route
 and group remains reachable. There is one navigation tree, not duplicate hidden
-menus. Group headings retain their `Top` links to `#console-top`.
+menus. Group headings retain their `Top` links to a normal-flow `#console-top`
+anchor before the sticky title, so a link still returns to the route's start
+after the title sticks.
 
-The shared site header is compact on operator routes: plain identity linking to
-the digest, the Console label and the existing theme control. Reading routes
-keep their existing header. No font or icon asset is added.
+The shared site header uses the homepage's actual wordmark, linking to the
+digest, without a second Console label. It scrolls away in normal page flow:
+there is no animated shrink or compensating spacer. Reading routes keep their
+existing header. No font or icon asset is added.
+
+The existing theme control sits at the right of the shared footer beside
+Archive, Console and Source code. It wraps to a right-aligned second line when
+needed. Workbench routes keep this compact footer too. Theme storage and the
+before-paint theme resolution are unchanged.
 
 ## Route identity and the window lead the evidence
 
 The content column starts with the active route's visible heading and the days
-control. Its window/evidence sentence follows immediately, then the latest-run
-sentence and the compact standing band. Wrapped controls stay in normal flow.
-There is no shrinking sticky top strip or compensating spacer.
+control. The title, window control and window/evidence sentence form one sticky
+band; the latest-run sentence and standing band continue in normal flow. Below
+the first breakpoint, a labelled native days select replaces the radio tiles,
+keeping the frozen band compact. Its measured height supplies the document's
+scroll padding so anchors and focused controls are not covered. The explorer's
+title stays in flow because its window and Run controls belong to the editor.
+
+A back-to-top button appears once the brand has scrolled away. On wide screens
+it floats at the foot of the navigation rail, outside chart readings, and lifts
+above the measured footer when that enters view. On narrower screens it uses a
+reserved corner of the sticky title band instead of covering charts. It focuses
+the page heading and scrolls the document itself, with no smooth movement when
+motion is disabled or reduced motion is requested.
 
 Hardware places its recording disclosure immediately below the run count. The
 closed summary flags gaps or measurement being off, names excluded runs and
@@ -111,16 +131,24 @@ rail, route heading and visual tokens, but keeps its days and Run controls
 inside the editor. It has no duplicate band, completeness line or window
 sentence. Editor and result regions retain their existing behavior.
 
-Workbench chrome retains its full-window frame and omitted site footer. Ordinary
-routes retain the configured console maximum and gutters. Neither path adds a
-server load; direct explorer loading still uses the static fallback document.
+Every console route fills the available window with configured gutters by
+default. `frame.console_max_px: null` removes the centered cap; an existing
+numeric value still selects a bounded frame. Drawings measure their actual
+containers rather than stretching an old SVG coordinate frame. Neither path
+adds a server load; direct explorer loading still uses the static fallback
+document.
 
 ## Design rationale
 
 The rail keeps labelled destinations reachable without a wide top strip.
 Putting window reach beside its control distinguishes available evidence from
-run completion. Neutral surfaces separate grouping from status; typography and
-below-plot readouts carry the comparison. The operator-only generated style
+run completion. Keeping this small band in reach avoids repeated trips to the
+top; letting the brand scroll away avoids a second fixed header and layout
+jumps. The native phone select trades simultaneous preset visibility for more
+space for the page title and evidence.
+
+Neutral surfaces separate grouping from status; typography, shared hover
+tooltips and non-hover readings carry the comparison. The operator-only generated style
 scope includes the outer canvas and header before paint without recoloring the
 reader. [Appearance configuration](../../concepts/config/appearance.md) owns its
 validated values.

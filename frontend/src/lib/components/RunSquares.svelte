@@ -17,7 +17,7 @@
 	 * is the column a reader most needs to see picked.
 	 */
 	import type { DaySlots } from '$lib/charts/day-slots';
-	import { pointerReadout, type ReadoutMark } from '$lib/charts/readout';
+	import { pointerReadout, type Readout, type ReadoutMark } from '$lib/charts/readout';
 	import {
 		axisLabels,
 		cellFor,
@@ -35,6 +35,7 @@
 		slots,
 		narrow,
 		tickDensity,
+		readout = null,
 		selected = $bindable(null)
 	}: {
 		/** One entry per day of the window, oldest first. */
@@ -45,6 +46,7 @@
 		narrow: boolean;
 		/** `chart.tick_density`, for the strip's own date row. */
 		tickDensity: number;
+		readout?: Readout | null;
 		/** The day both figures are showing, or null for the newest. */
 		selected?: number | null;
 	} = $props();
@@ -154,6 +156,7 @@
 		use:pointerReadout={{
 			marks: underMarks,
 			width: slots.width,
+			hover: { name: 'run-health', readout },
 			onSelect: (index) => (selected = index),
 			selected,
 			onPick: reveal
@@ -205,6 +208,7 @@
 			use:pointerReadout={{
 				marks: stripMarks,
 				width: strip_.width,
+				hover: { name: 'run-health', readout },
 				onSelect: (index) => (selected = index),
 				selected,
 				onPick: reveal

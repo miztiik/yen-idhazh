@@ -38,7 +38,7 @@
 		observeWidth
 	} from '$lib/charts/frame';
 	import { useChartFrame } from '$lib/charts/label-context';
-	import { pointerReadout } from '$lib/charts/readout';
+	import { pointerReadout, type Readout } from '$lib/charts/readout';
 	import {
 		placeOnYieldAxis,
 		plannedDays,
@@ -61,6 +61,7 @@
 		height,
 		width,
 		tickDensity,
+		readout = null,
 		selected = $bindable(null),
 		onPick,
 		below
@@ -73,6 +74,7 @@
 		width: number;
 		/** The most date labels the day axis may carry - `chart.tick_density`. */
 		tickDensity: number;
+		readout?: Readout | null;
 		/** The day picked on this chart or on a figure beside it, or null for none. */
 		selected?: number | null;
 		/** A deliberate pick on this chart - a step key or a tap, never a hover. */
@@ -240,6 +242,7 @@
 			use:pointerReadout={{
 				marks,
 				width: box.width,
+				hover: { name: 'run-health', readout },
 				onSelect: (index) => (selected = index),
 				selected,
 				onPick

@@ -18,6 +18,7 @@ export type RouteConsoles = Readonly<Record<RouteId, RouteConsole>>;
 export interface ConsoleDefine {
 	readonly shared: ConsoleConfig;
 	readonly routes: RouteConsoles;
+	readonly hover_readout: boolean;
 }
 
 export type ReadWriteMetric = 'total' | 'median';
@@ -118,6 +119,10 @@ export function routeConsole(route: RouteId): RouteConsole {
 
 export function consoleKnobs(): ConsoleConfig {
 	return __CONSOLE__.shared;
+}
+
+export function consoleHoverReadout(): boolean {
+	return __CONSOLE__.hover_readout;
 }
 
 export function routeKnobs<K extends string>(route: RouteId, wanted: readonly K[]): Readonly<Record<K, number>> {

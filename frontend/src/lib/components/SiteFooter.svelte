@@ -9,11 +9,13 @@
 	 */
 	import Icon from '$lib/icons/Icon.svelte';
 	import { base } from '$app/paths';
+	import ThemeToggle from './ThemeToggle.svelte';
 
-	let { repoUrl }: { repoUrl: string } = $props();
+	let { repoUrl, showTheme = false }: { repoUrl: string; showTheme?: boolean } = $props();
 </script>
 
-<footer class="mt-16 border-t border-rule pt-8 pb-12 text-sm text-text-tertiary">
+<footer class="site-footer mt-16 border-t border-rule pt-8 pb-12 text-sm text-text-tertiary" data-site-footer>
+	<div class="footer-row">
 	<nav class="flex flex-wrap gap-4" aria-label="Site">
 		<a href="{base}/archive/" class="inline-flex items-center gap-1.5 text-accent hover:underline">
 			<Icon id="archive" size={14} />Archive
@@ -25,4 +27,16 @@
 			Source code
 		</a>
 	</nav>
+	{#if showTheme}<div class="footer-theme"><ThemeToggle /></div>{/if}
+	</div>
 </footer>
+
+<style>
+	.footer-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
+	.footer-theme { margin-inline-start: auto; }
+	:global(.frame:has([data-surface='operator'])) .site-footer {
+		flex: none;
+		margin-block-start: var(--console-group-gap);
+		padding-block: var(--console-panel-gap) var(--console-group-gap);
+	}
+</style>

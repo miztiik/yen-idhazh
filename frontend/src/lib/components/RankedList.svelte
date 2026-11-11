@@ -35,6 +35,8 @@
 	import type { Snippet } from 'svelte';
 	import type { RankedDisplay, RankedRow } from '../charts/rank';
 	import type { RankedGeometry } from '../charts/d3/rankedList';
+	import { factsOf } from '$lib/charts/readout';
+	import { hoverReadout } from '$lib/charts/readout-hover';
 
 	let {
 		caption,
@@ -44,6 +46,7 @@
 		unmeasuredNote,
 		emptyNote,
 		fitRuleLabels = false,
+		hover = true,
 		tail = null,
 		selectedKey = null,
 		onSelect = null,
@@ -64,6 +67,8 @@
 		emptyNote: string;
 		/** Keep rule names within the track, including a rule at either endpoint. */
 		fitRuleLabels?: boolean;
+		/** A containing record chart may provide the fuller shared reading instead. */
+		hover?: boolean;
 		/** What the cap left out, in one sentence. */
 		tail?: string | null;
 		selectedKey?: string | null;
@@ -75,6 +80,14 @@
 		trend?: Snippet<[RankedRow<RankedDisplay>]> | null;
 	} = $props();
 	const ranked = $derived(geometry ?? { rows: [], max: 0, rules: [] });
+	const readings = $derived(ranked.rows.map((row) => factsOf(row.row.label, [
+		{ label: 'Value', value: row.row.value },
+		...(row.row.context ? [{ label: 'Context', value: row.row.context }] : []),
+		...(row.row.status ? [{ label: 'Status', value: row.row.status }] : []),
+		...(row.refused ? [{ label: 'Evidence', value: row.refused }] : []),
+		...row.segments.map((part) => ({ label: part.label, value: part.value, format: String, swatch: `var(${part.token})` })),
+		{ label: 'A full bar', value: maxText }
+	], unmeasuredNote)));
 </script>
 
 <div class="ranked" data-ranked-list={caption} data-chart-type="rankedList" data-readout-none="Each ranked row prints its name and value; agreed with Susan">
@@ -85,11 +98,13 @@
 	{:else}
 		<p class="ranked-scale" data-ranked-max={ranked.max}>A full bar is {maxText}.</p>
 
-		<ol class="ranked-rows" data-ranked="rows" aria-label={caption}>
-			{#each ranked.rows as row (row.key)}
+		<ol class="ranked-rows" data-ranked="rows" aria-label={caption}
+			use:hoverReadout={{ name: caption, readout: hover ? readings : null }}>
+			{#each ranked.rows as row, index (row.key)}
 				<li
 					class="ranked-row"
 					data-ranked-row={row.key}
+					data-readout-at={index}
 					data-ranked-selected={selectedKey === row.key ? 'yes' : null}
 				>
 					{#if onSelect}
@@ -117,6 +132,14 @@
 
 					<span class="ranked-value tabular-nums" data-ranked-cell="value">{row.row.value}</span>
 
+					<span class="ranked-drawing">
+						{#if fitRuleLabels && !row.refused && ranked.rules.length > 0}
+							<span class="ranked-rule-labels">
+								{#each ranked.rules as rule (rule.label)}
+									<span class="ranked-rule-label" style="inset-inline-start: {rule.percent}; transform: translateX(-{rule.percent})">{rule.label}</span>
+								{/each}
+							</span>
+						{/if}
 					<span class="ranked-track" data-ranked-cell="track" data-ranked-track={track || row.range || row.ends || row.refused ? 'own' : 'bar'}>
 						{#if row.refused}
 							<span class="ranked-context" data-ranked-too-few>{row.refused}</span>
@@ -142,11 +165,9 @@
 								<span class="ranked-rule" style="inset-inline-start: {rule.percent}" aria-label="{rule.label}: {rule.at}">
 									{#if !fitRuleLabels}<span>{rule.label}</span>{/if}
 								</span>
-								{#if fitRuleLabels}
-									<span class="ranked-rule-label" style="inset-inline-start: {rule.percent}; transform: translateX(-{rule.percent})">{rule.label}</span>
-								{/if}
 							{/each}
 						{/if}
+					</span>
 					</span>
 
 					{#if trend}
@@ -174,7 +195,17 @@
 	.ranked-part { position: absolute; inset-block: 0; }
 	.ranked-rule { position: absolute; inset-block: -4px; border-inline-start: 1px dashed var(--chart-marker); }
 	.ranked-rule span { position: absolute; inset-block-end: 100%; font-size: var(--text-xs); color: var(--color-text-secondary); white-space: nowrap; }
-	.ranked-rule-label { position: absolute; inset-block-end: calc(100% + 4px); inline-size: max-content; max-inline-size: 100%; overflow-wrap: anywhere; font-size: var(--text-xs); color: var(--color-text-secondary); }
+	.ranked-rule-labels { display: grid; min-inline-size: 0; }
+	.ranked-rule-label {
+		position: relative;
+		display: block;
+		inline-size: max-content;
+		max-inline-size: 100%;
+		overflow-wrap: anywhere;
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
+		color: var(--color-text-secondary);
+	}
 	.ranked {
 		display: flex;
 		flex-direction: column;
@@ -303,8 +334,14 @@
 		color: var(--color-text);
 	}
 
-	.ranked-track {
+	.ranked-drawing {
 		grid-area: track;
+		display: grid;
+		gap: var(--space-1);
+		min-inline-size: 0;
+	}
+
+	.ranked-track {
 		position: relative;
 		display: block;
 		min-inline-size: 0;
@@ -341,11 +378,11 @@
 		}
 
 		.ranked-row {
-			grid-template-areas: 'name value' 'context value' 'track track' 'trend trend';
+			grid-template-areas: 'name value' 'context context' 'track track' 'trend trend';
 			row-gap: var(--space-1);
 		}
 
-		.ranked-track {
+		.ranked-drawing {
 			margin-block-start: var(--space-1);
 		}
 	}

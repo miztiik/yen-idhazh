@@ -350,6 +350,7 @@
 				use:pointerReadout={{
 					marks,
 					width: box.width,
+					hover: { name: 'throughput', readout },
 					onSelect: (index) => (selected = index)
 				}}
 			>

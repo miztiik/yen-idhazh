@@ -3,6 +3,7 @@
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { chartWidth, observeWidth } from '$lib/charts/frame';
 	import { shortDate } from '$lib/format';
 	import type { ChartDay } from '$lib/server/chart-days';
 	import type { TimeWindow } from '$lib/charts/viewport';
@@ -11,6 +12,7 @@
 	const counts = $derived(atAGlance(days, window));
 	const noRule = { declined: 'counts of what published, not how it was written' };
 	let selected = $state<Record<string, number | null>>({ articles: null, visuals: null });
+	let widths = $state<Record<string, number>>({});
 	const cards = $derived([
 		{ label: 'Articles published', name: 'articles', strip: counts.articles },
 		{ label: 'Visuals published', name: 'visuals', strip: counts.visuals }
@@ -24,19 +26,22 @@
 		{#each cards as card, index (card.name)}
 			{#snippet trend()}
 				{@const strip = card.strip}
+				{@const width = chartWidth(widths[card.name] ?? null, knobs.chart_width)}
+				{@const height = chart.sparkline_height_px}
 				{@const readout = readoutOf({ type: 'dateSeries', columns: strip.bars.map((bar) => shortDate(bar.date)),
 					series: [{ label: card.label, swatch: 'var(--chart-3)', values: strip.bars.map((bar) => bar.published), format: String }],
 					notMeasured: 'No published day was measured.', resting: 'newest' })}
-				<div data-readout-columns={readout.columns.length}>
+				<div data-readout-columns={readout.columns.length} use:observeWidth={(width) => widths = { ...widths, [card.name]: width }}>
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-					<svg width="220" height="34" viewBox="0 0 220 34" role="img" tabindex="0" aria-label={card.label}
+					<svg {width} {height} viewBox="0 0 {width} {height}" role="img" tabindex="0" aria-label={card.label}
 						data-chart="published-counts" data-chart-name="published-{card.name}"
 						data-published-measure={card.name} data-published-total={strip.total} data-published-days={strip.bars.length}
-						use:pointerReadout={{ marks: readoutMarks(strip.bars.map((bar) => (bar.x + bar.width / 2) * 220)), width: 220,
+						use:pointerReadout={{ marks: readoutMarks(strip.bars.map((bar) => (bar.x + bar.width / 2) * width)), width,
+							hover: { name: `published-${card.name}`, readout },
 							onSelect: (at) => selected[card.name] = at }}>
 						{#each strip.bars as bar (bar.date)}
-							{@const height = bar.published === 0 ? 0 : Math.max(1, bar.height * 34)}
-							<rect x={bar.x * 220} width={bar.width * 220} y={34 - height} {height} fill="var(--chart-3)"
+							{@const barHeight = bar.published === 0 ? 0 : Math.max(1, bar.height * height)}
+							<rect x={bar.x * width} width={bar.width * width} y={height - barHeight} height={barHeight} fill="var(--chart-3)"
 								data-published-bar={bar.date} data-published={bar.published} />
 						{/each}
 					</svg>

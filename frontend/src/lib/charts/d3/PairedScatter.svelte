@@ -58,7 +58,7 @@
 		data-chart-name={name}
 		data-readout-records={geometry.marks.length}
 		tabindex="0"
-		use:markReadout={{ count: records.length, walk: 'row', onSelect: (index) => selected = index }}
+		use:markReadout={{ count: records.length, walk: 'row', hover: { name, readout: records }, onSelect: (index) => selected = index }}
 	>
 		{#each geometry.y.ticks as tick (tick.value)}
 			<line x1={box.left} x2={box.right} y1={tick.at} y2={tick.at} stroke="var(--chart-grid)" />
@@ -101,6 +101,7 @@
 {/if}
 
 <style>
+	.paired-scatter circle { pointer-events: all; }
 	.record-readout {
 		display: flex;
 		flex-wrap: wrap;

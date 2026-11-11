@@ -434,7 +434,7 @@ export interface AssistConfig {
  */
 export interface FrameConfig {
 	reading_max_px: number;
-	console_max_px: number;
+	console_max_px: number | null;
 	measure_ch: number;
 	gutter_min_px: number;
 	gutter_max_px: number;
@@ -761,7 +761,7 @@ const ASSIST_DEFAULTS: AssistConfig = {
 };
 const FRAME_DEFAULTS: FrameConfig = {
 	reading_max_px: 1280,
-	console_max_px: 1600,
+	console_max_px: null,
 	measure_ch: 68,
 	gutter_min_px: 16,
 	gutter_max_px: 32,

@@ -278,7 +278,7 @@
       1024,
       1400
     ],
-    "console_max_px": 1600,
+    "console_max_px": null,
     "gutter_max_px": 32,
     "gutter_min_px": 16,
     "measure_ch": 68,
@@ -308,5 +308,5 @@
     "movement_good_light": "#2f6f5e",
     "surface_tint_alpha": 0.07
   },
-  "version": "2026-11-10"
+  "version": "2026-11-11"
 }

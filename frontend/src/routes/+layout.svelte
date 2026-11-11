@@ -12,6 +12,7 @@
 	import { onMount } from 'svelte';
 
 	let { data, children } = $props();
+	const operator = $derived(page.route.id?.startsWith('/console') === true);
 
 	// The one place this site names `serviceWorker`. It starts the offline
 	// reader, which is what lets a day already opened be read again with no
@@ -53,12 +54,12 @@
 	     three of them). The guard is on `data.ui` rather than on `data`, because
 	     the object arrives and only its contents are missing. -->
 	{#if data?.ui}
-		<SiteHeader title={data.ui.site_title} />
+		<SiteHeader title={data.ui.site_title} showTheme={!operator} />
 	{/if}
 	<main>
 		{@render children()}
 	</main>
 	{#if data?.ui && page.route.id !== '/archive'}
-		<SiteFooter repoUrl={data.ui.repo_url} />
+		<SiteFooter repoUrl={data.ui.repo_url} showTheme={operator} />
 	{/if}
 </div>

@@ -287,16 +287,18 @@ test.describe('the committed appearance file', () => {
 		expect(css).toContain('--font-display: var(--font-reading);');
 	});
 
-	test('the frame is wide enough to be a frame, and the console is wider', () => {
+	test('a numeric console cap remains wider than the reading frame', () => {
 		// The bounds live in the Pydantic contract and are enforced at build
 		// time. This asserts the COMMITTED values sit inside them, so a hand
 		// edit that skipped the contract still fails a gate.
 		const parsed = JSON.parse(
 			readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')
-		) as { frame: { reading_max_px: number; console_max_px: number; measure_ch: number } };
+		) as { frame: { reading_max_px: number; console_max_px: number | null; measure_ch: number } };
 
 		expect(parsed.frame.reading_max_px).toBeGreaterThanOrEqual(960);
-		expect(parsed.frame.console_max_px).toBeGreaterThanOrEqual(parsed.frame.reading_max_px);
+		if (parsed.frame.console_max_px !== null) {
+			expect(parsed.frame.console_max_px).toBeGreaterThanOrEqual(parsed.frame.reading_max_px);
+		}
 		expect(parsed.frame.measure_ch).toBeGreaterThanOrEqual(52);
 		expect(parsed.frame.measure_ch).toBeLessThanOrEqual(80);
 	});
@@ -307,9 +309,19 @@ test.describe('the committed appearance file', () => {
 		// moment a static site is supposed to be already finished.
 		const parsed = JSON.parse(
 			readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')
-		) as { frame: { console_max_px: number }; chart: { width_px: number } };
+		) as { frame: { console_max_px: number | null }; chart: { width_px: number } };
 
-		expect(parsed.chart.width_px).toBeLessThanOrEqual(parsed.frame.console_max_px);
+		if (parsed.frame.console_max_px !== null) {
+			expect(parsed.chart.width_px).toBeLessThanOrEqual(parsed.frame.console_max_px);
+		}
+	});
+
+	test('the frame producer preserves explicit numeric caps and emits no cap for the full window', () => {
+		const capped = renderFrameCss({ frame: { console_max_px: 1600 } });
+		const fluid = renderFrameCss({ frame: { console_max_px: null } });
+		expect(capped).toContain('--frame-console: 1600px;');
+		expect(fluid).toBe(capped.replace('--frame-console: 1600px;', '--frame-console: none;'));
+		expect(renderFrameCss()).toBe(fluid);
 	});
 });
 

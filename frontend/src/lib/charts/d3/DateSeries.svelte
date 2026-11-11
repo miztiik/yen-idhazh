@@ -8,10 +8,9 @@
 	 * read as a missing day. Where there is no geometry it draws the empty
 	 * state it was handed, at the chart's own height.
 	 *
-	 * **Its hover data is the readout strip under the plot, never a tooltip.**
-	 * The plot is one tab stop; a pointer, a key or a tap picks a day and the
-	 * strip prints every series on it. A mark carries no `<title>`: a native
-	 * tooltip needs a hover, and a hover is not a thing a thumb or a key can do.
+	 * Pointer hover and the standing strip share every series of the selected
+	 * day. The plot is one tab stop; keys and taps keep the exact strip usable
+	 * without hover. Marks need no native `<title>`.
 	 * Where the chart opens something on a day - a list of what the day holds -
 	 * a click or Enter picks the day, and the day held open is outlined.
 	 *
@@ -85,7 +84,7 @@
 	let selected = $state<number | null>(null);
 	const supplied = $derived.by(() => {
 		if (readout === null) {
-			return geometry !== null && (geometry.boundaries.length > 0 || geometry.reconciliation !== undefined) ? geometry.readout : null;
+			return geometry?.readout ?? null;
 		}
 		if (geometry?.reconciliation === undefined) return readout;
 		if (readout.columns.length !== geometry.dates.length) {
@@ -134,7 +133,7 @@
 			tabindex={supplied === null ? undefined : 0}
 			data-chart-type="dateSeries"
 			data-chart-name={name}
-			use:pointerReadout={{ marks, width: box.width, onSelect: (index) => (selected = index) }}
+			use:pointerReadout={{ marks, width: box.width, hover: { name, readout: withEvents }, onSelect: (index) => (selected = index) }}
 			use:columnPick={{ marks, width: box.width, showing, onPick: (index) => onPick?.(index) }}
 		>
 			{#if hatch !== null && geometry.bars.some((bar) => bar.hatched)}

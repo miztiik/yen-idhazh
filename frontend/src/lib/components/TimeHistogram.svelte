@@ -303,6 +303,7 @@
 			use:pointerReadout={{
 				marks,
 				width: box.width,
+				hover: { name, readout },
 				onSelect: (index) => (selected = index)
 			}}
 		>

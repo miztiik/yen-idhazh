@@ -133,6 +133,7 @@
 		{height}
 		{width}
 		{tickDensity}
+		{readout}
 		bind:selected
 		onPick={(index) => squares?.reveal(index)}
 	>
@@ -148,7 +149,7 @@
 					No run is on record in {nameSpan(windowDays)}. Widen the window to look further back.
 				</p>
 			{:else}
-				<RunSquares bind:this={squares} {days} {slots} {narrow} {tickDensity} bind:selected />
+				<RunSquares bind:this={squares} {days} {slots} {narrow} {tickDensity} {readout} bind:selected />
 			{/if}
 		{/snippet}
 	</RunYield>

@@ -13,6 +13,8 @@
 	 * where the marker sits or what counts as near.
 	 */
 	import type { TargetMarks } from '../charts/targetbar';
+	import { factsOf } from '$lib/charts/readout';
+	import { hoverReadout } from '$lib/charts/readout-hover';
 
 	let {
 		marks,
@@ -44,6 +46,8 @@
 	data-target-band={marks.band}
 	data-target-tone={tone}
 	data-readout-none="one value against one threshold, and both are already in words; agreed with Susan"
+	use:hoverReadout={{ name: label, readout: marks.empty ? null : factsOf(label,
+		[{ label: 'Value', value: valueText }, { label: 'Threshold', value: targetText }], emptyNote) }}
 >
 	<p class="target-head">
 		<span class="target-label">{label}</span>

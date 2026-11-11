@@ -266,6 +266,7 @@
 			use:markReadout={{
 				count: drawn.length,
 				walk: 'list',
+				hover: { name: 'run-timeline', readout: records },
 				onSelect: (index) => (picked = index),
 				selected: picked
 			}}

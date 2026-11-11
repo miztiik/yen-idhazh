@@ -264,8 +264,9 @@ body {
 	max-width: none;
 }
 
-.frame:has([data-console-chrome='workbench']) > footer {
-	display: none;
+html:has([data-surface='operator']) { scroll-padding-block-start: var(--console-toolbar-height, 0px); }
+[data-surface='operator'] :is([id], [tabindex], a, button, input, select) {
+	scroll-margin-block-start: var(--console-control-gap);
 }
 
 /* From the wide breakpoint the frame is exactly the window's height, and the

@@ -33,7 +33,7 @@
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<svg class="run-series" viewBox="0 0 {box.width} {box.height}" width={box.width} height={box.height}
 			role="img" aria-label={label} tabindex="0" data-chart-type="runSeries" data-chart-name={name}
-			use:pointerReadout={{ marks, width: box.width, selected: showing, onSelect: (index) => (selected = index) }}>
+			use:pointerReadout={{ marks, width: box.width, selected: showing, hover: { name, readout: geometry.readout }, onSelect: (index) => (selected = index) }}>
 			{#each geometry.axis.ticks as tick (tick.value)}
 				<line x1={box.left} x2={box.right} y1={tick.at} y2={tick.at} stroke="var(--chart-grid)" />
 				{#if tick.text}

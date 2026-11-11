@@ -30,8 +30,8 @@
 		<div class="evidence">
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<div tabindex={view.records.length ? 0 : undefined} role="group" aria-label="Fetch time by source" data-readout-records={view.records.length || undefined}
-				use:markReadout={{ count: view.records.length, walk: 'list', selected, onSelect: (index) => selected = index }}>
-				<RankedList caption="Mean fetch time" geometry={view.geometry} maxText={view.maxText} unmeasuredNote="The fetch clocks were not recorded." emptyNote="No fetch has the whole and robots clocks this comparison needs." tail={view.tail}
+				use:markReadout={{ count: view.records.length, walk: 'list', selected, hover: { name: 'fetch-time', readout: view.records }, onSelect: (index) => selected = index }}>
+				<RankedList caption="Mean fetch time" geometry={view.geometry} maxText={view.maxText} unmeasuredNote="The fetch clocks were not recorded." emptyNote="No fetch has the whole and robots clocks this comparison needs." tail={view.tail} hover={false}
 					track={timingTrack}
 					selectedKey={selected === null ? null : view.summaries[selected]?.id ?? null}
 					onSelect={(key) => selected = view.summaries.findIndex((row) => row.id === key)}/>

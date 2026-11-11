@@ -434,7 +434,7 @@
 	   measured 2026-08-28, one max-w-2xl on the root layout capped every page
 	   at 624px and left 912px of a 1536px screen empty. */
 	--frame-reading: 1280px;
-	--frame-console: 1600px;
+	--frame-console: none;
 	--measure: 68ch;
 	--gutter-min: 16px;
 	--gutter-max: 32px;

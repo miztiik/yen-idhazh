@@ -263,6 +263,7 @@
 				use:pointerReadout={{
 					marks: readoutMarks(marks.map((mark) => mark.x)),
 					width: box.width,
+					hover: { name: 'merge-line', readout },
 					onSelect: (index) => (selected = index)
 				}}
 			>
