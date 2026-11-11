@@ -1,6 +1,6 @@
 # Pipeline summary evaluation
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-11
 
 How `Yen-Summarizers` and `Yen-AI-Pipeline` score their saved summaries and
 report native results without changing generation or either evaluator API.
@@ -54,7 +54,10 @@ supply no independent reference; the native relevance skip reason is retained.
 
 ## Actions output
 
-The caller appends a short native score/status table to `GITHUB_STEP_SUMMARY`.
+The caller groups saved scores by item in `GITHUB_STEP_SUMMARY`, with separate
+HHEM and UniEval tables. Metrics are rows and each evaluator has its own score
+column and native overall status. UniEval's consistency row includes its
+effective consistency mode; relevance retains its explicit skip reason.
 It reports HHEM faithfulness and the applicable UniEval dimensions directly,
 without a custom aggregate, threshold, coverage score or publication gate.
 Missing values remain unavailable; measured zeroes remain numeric zeroes.

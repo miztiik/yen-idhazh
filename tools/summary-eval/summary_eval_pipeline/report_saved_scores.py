@@ -16,43 +16,50 @@ def render_saved_scores(
     lines = [
         "## Native summary evaluation",
         "",
-        "Scores use each evaluator's native 0 to 1 scale; "
-        "no quality threshold or aggregate is applied.",
+        "### Saved summary scores",
         "",
-        "**Table B - Saved summary scores**",
-        "",
-        "| Id | Item | HHEM faithfulness | UniEval fluency | Coherence "
-        "| Consistency | Relevance | Status |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for index, summary in enumerate(summaries, 1):
         hhem, unieval = summary.outcomes.hhem, summary.outcomes.unieval
         scores = unieval.scores if unieval is not None else None
-        relevance = (
-            f"Skipped: {unieval.relevance_skip_reason}"
-            if unieval is not None and unieval.relevance_skip_reason is not None
-            else describe_score(scores.relevance if scores is not None else None)
+        consistency_mode = (
+            f"`{unieval.effective_settings.consistency_source_mode}`"
+            if unieval is not None and unieval.effective_settings is not None
+            else "Not available"
         )
-        values = (
-            f"B{index}",
-            str(index),
-            describe_score(hhem.hhem if hhem is not None else None),
-            describe_score(scores.fluency if scores is not None else None),
-            describe_score(scores.coherence if scores is not None else None),
-            describe_score(scores.consistency if scores is not None else None),
-            relevance,
-            f"HHEM: {hhem.status if hhem is not None else 'not available'}; "
-            f"UniEval: {unieval.status if unieval is not None else 'not available'}",
-        )
-        lines.append("| " + " | ".join(values) + " |")
+        lines.extend([
+            f"#### Item {index}",
+            "",
+            f"**Table B{index} - HHEM**",
+            "",
+            "| Id | Metric | HHEM | Evaluator status |",
+            "| --- | --- | --- | --- |",
+            f"| B{index}.1 | Faithfulness | "
+            f"{describe_score(hhem.hhem if hhem is not None else None)} | "
+            f"{hhem.status if hhem is not None else 'not available'} |",
+            "",
+            f"**Table C{index} - UniEval**",
+            "",
+            "| Id | Metric | UniEval | Evaluator status | Consistency mode |",
+            "| --- | --- | --- | --- | --- |",
+        ])
+        for row, dimension in enumerate(("fluency", "coherence", "consistency", "relevance"), 1):
+            status = unieval.status if unieval is not None else "not available"
+            if (
+                dimension == "relevance"
+                and unieval is not None
+                and unieval.relevance_skip_reason is not None
+            ):
+                status = f"Skipped: {unieval.relevance_skip_reason}"
+            lines.append(
+                f"| C{index}.{row} | {dimension.capitalize()} | "
+                f"{describe_score(getattr(scores, dimension) if scores is not None else None)} | "
+                f"{status} | {consistency_mode if dimension == 'consistency' else '-'} |"
+            )
+        lines.append("")
     lines.append("")
     for index, summary in enumerate(summaries, 1):
         unieval = summary.outcomes.unieval
-        if unieval is not None and unieval.effective_settings is not None:
-            lines.append(
-                f"Item {index} UniEval consistency mode: "
-                f"`{unieval.effective_settings.consistency_source_mode}`."
-            )
         if summary.outcomes.hhem is not None:
             for hhem_error in summary.outcomes.hhem.errors:
                 lines.append(f"- Item {index} HHEM: `{hhem_error.code}`.")
