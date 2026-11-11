@@ -743,10 +743,9 @@ config, and a knob that nothing reads is a knob whose substitution test cannot
 pass, so `console.absent_hatch_degrees` is minted by the change that first draws
 the hatch, beside its reader, and `absentHatch` takes the angle and the stripe
 spacing as arguments. The hatch means "a known thing with no reading" and nothing
-else. **The retained run timeline draws overclaimed time as a solid 2 px
-tertiary rule**, not a hatch: two steps counted time already on the bar.
-Its hollow segment means unclaimed time. Both have written legends and neither
-is an unknown-reading texture. The absent-reading stripes sit on the
+else. Signed timing gaps are not unknown readings; the
+[run timeline](../../architecture/publishing/run-timeline.md) reports them in
+article detail, not as regions on its elapsed axis. The absent-reading stripes sit on the
 page surface and never over a grey fill, because flat grey already means "not
 recorded" and a hatch on grey would read the same. Authority: Fowler, Susan and
 Carmack, 2026-09-27.
