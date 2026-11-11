@@ -1,6 +1,6 @@
 # Elements: every fact in an article, with the characters that prove it
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-11
 
 The extraction subsystem's fact table. This page owns the element shape - the
 six kinds, the two tiers, and the span that makes a drawn figure checkable - the
@@ -308,12 +308,14 @@ lives in
 One sentence governs it: **code finds and cuts every character a reader will
 see, and the model points at where to cut and says what the cut means.**
 
-The model is given the item's title, the whole article one addressed sentence
-per line, and the candidate table addressed by `element_id` - the article rather
+The model is given the item's title, the whole article one addressed JSON
+sentence string per physical line, and the candidate table addressed by `element_id` - the article rather
 than a summary of it, because a compression cannot carry a series it dropped and
 judging what an item is about against text that lost the figures is judging the
 wrong document. Both blocks are fenced as untrusted data (Guardrail #11). The
 addresses are ours; the sentences are a stranger's web page.
+[Sentence presentation](../summarize/prompt.md#sentence-addresses-identify-source-sentences-not-physical-line-counts)
+is reversible and does not change the original source spans.
 
 **No field of the reply accepts a number.** Not a value, not a unit, not a
 count, not a span and not a character offset. Every position the model may name
@@ -340,7 +342,7 @@ from run 34943695821 shard 3, 20 articles, 2026-09-15.
 | `entity_mentions[]` | organisations and people, and where each is named | groups "OpenAI", "ChatGPT", "the company" into one thing | **the chart's category axis** - `mention_elements` is the only producer of `ENTITY` | 87 |
 | `place_mentions[]` | the same, for locations | same | **the chart's category axis** - the only producer of `PLACE` | 15 |
 | `quotes[]` | two sentence addresses, no text | indices only: an exact search rejects a real quote over one changed word, silently | **nobody** - no renderer compiles a quote | 24 |
-| `claims[]` | the same, for the article's own assertions | same | **nobody** | 73 |
+| `claims[]` | the same, for the article's own assertions | preserves the complete source assertion and its qualifications | **Who/What grid**, paired with a same-sentence actor | 73 |
 | `keyphrases[]` | up to 8 phrases copied from the article | "the only search surface that needs no embedding model" | **nobody** - search uses the embedding vector | 138 |
 | `lede_sentence_ids[]` | the 1-2 sentences carrying the main point | nothing reads it since the lead-coverage metric was retired on 2026-09-24 | **nobody** | 20 |
 
@@ -365,12 +367,12 @@ exist only because these two lists produce them. Over the published archive on
 category a `DATE` cannot supply, so a model-found mention filled it. Deleting
 the two lists takes the picture off four charts in five.
 
-**`quotes` and `claims` are unbuilt, not barred.** Section 0a bars republishing
-article bodies **to a reader**; a `SentenceRange` carries two addresses, a
-speaker, an enum and a boolean, and no text. What is true of them is narrower
-and still fatal: nothing renders a quote or a claim, and `timeline` sits in
-`TYPE_RULES` rather than `UNRULED_TYPES`, so an item with a date and a claim can
-be judged reachable, decode a plan, and be refused at render.
+**Claims support the Who/What grid; quotes have no standalone visual.**
+Both retain the existing `SentenceRange`: two addresses, a speaker, attribution
+and a hedge marker, with no authored source text. Historical visual names remain
+readable, not additional production choices. The
+[active publication formats](../publishing/where-a-drawing-becomes-pixels.md#declared-types-are-not-delivery-promises)
+define what can actually reach the reader.
 
 **The two mention lists are named for what code takes from them, and that was a
 ruling rather than a preference.** A prompt in this repository may not ask a
@@ -467,6 +469,13 @@ searching for it would reject the thing it was meant to find. Resolving a name t
 its mentions is what a semantic model is good at and string matching is bad at,
 which is why the model does that half and code does the cutting.
 
+**Coverage must preserve what a mention means.** Distinct people do not become
+one group merely because their surnames match. Geographic markets and countries
+are place mentions; an age or life-stage phrase cannot stand in for a market.
+A repeated bare surface needs a different exact unique occurrence or a minimal
+exact qualifying noun phrase within the existing bound, otherwise it is omitted.
+The locator still searches only the sentence actually named.
+
 **The mention draws; the name never does.** `drawn_label(group)` answers with the
 longest mention that anchored, and a page has nothing else to show: the name is
 model-authored words with no span, and a mention is the item's own characters at
@@ -480,12 +489,21 @@ one we do not track yet, and minting a slug for it would put two spellings of on
 organisation in two groups for ever. Grouping the rest is the alias ledger's job
 and it is separate work.
 
-**A quote is addresses, never text.** An exact search for a long quotation
+**A quote or claim is addresses, never authored text.** An exact search for a long quotation
 rejects a real one over a single changed word, and it does so silently, which is
 worse than no check at all. A run wider than the 500 characters the shape holds
 is **dropped rather than cut down** - a truncated excerpt stops being the
 characters its span names, and that is the one property every one of these kinds
 exists to keep.
+
+Claims include assertions narrated in the article's own voice, including
+reported actions or positions. A short quoted term inside such narration does
+not turn the whole reported action into direct quotation; actual direct
+quotations belong in quotes. Keep the complete reporting frame, attribution,
+modality and qualifications. Fitting a whole sentence within the native bound
+does not prove its displayed grid label is useful: the
+[grid compiler and reader](../publishing/where-a-drawing-becomes-pixels.md#the-whowhat-grid-is-a-separate-format-and-reader)
+must still preserve a meaningful, source-supported reading.
 
 **A rejection is per element, never per article.** A mention that will not anchor
 drops itself; a group that anchored none of its mentions drops itself; a range
@@ -499,18 +517,19 @@ it, and both have to survive. So `anchored` runs the settle rule over the patter
 candidates first and merges the model-pointed kinds after it, and two of them
 claiming one address is settled by keeping the first.
 
-### A quote's excerpt is article text, and it stops at the element table
+### Source ranges are evidence, not permission to republish an article
 
 An article body is never republished to a reader. A
 `quote` or a `claim` element carries a run of the item's own sentences, so it is
 the one element kind whose excerpt is a paragraph of somebody's page rather than
 a figure or a name.
 
-It may go where the table goes: into the labelled table the summarize-and-plan call reads, into an
-eval row, into a log line, into a fixture. **It may not reach a reader-facing
-page**, and neither may a fragment of it. What publishes is the link and our own
-summary. A later row that wants to show a quotation is proposing a change to
-that rule and has to take it to the maintainer, not to this page.
+It may go where the table goes: into the labelled table the summarize-and-plan
+call reads, into an eval row, into a log line, into a fixture. The existing
+[Who/What projection](../publishing/where-a-drawing-becomes-pixels.md#the-whowhat-grid-is-a-separate-format-and-reader)
+owns the bounded source-backed claim cells it publishes. That does not introduce
+a quote visual or permit arbitrary article excerpts on a reader-facing page.
+Source ranges remain untrusted data in every format.
 
 ### Two failures no anchoring check can see, recorded rather than papered over
 

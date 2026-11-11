@@ -7,7 +7,9 @@ The plan, when the question below asks for one.
 
   Decide whether this item wants a picture at all. Nothing is a valid answer:
   a picture must make a supported comparison or relationship quicker to grasp
-  than the prose alone, not decorate or repeat it.
+  than the prose alone, not merely decorate it. Facts already in the summary
+  can support a useful picture; no new fact is required. Numeric density alone
+  does not establish a useful comparison.
 
   "decision" - "visual" or "none". If "none", leave "purpose", "type", "title"
   and "caption" null, "declared_whole_element_id" null and every list empty,

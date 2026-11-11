@@ -42,9 +42,9 @@ every item for ever, because the article in front of it differs and a prefix
 cache cannot reach past it - 69.7 s an item at the measured 9.85 tokens a second
 (`docs/reference/benchmarks/instructions-in-front.md`).
 
-The picture they lead to is `idhazh.visual_planner`, which decides whether an
-item gets a chart. It stays there: it is a different subject that happened to
-share a file.
+The visual decision belongs to `idhazh.visual_planner`: a supported chart,
+Who/What grid or no visual. It stays there: it is a different subject that
+happened to share a file.
 """
 
 from __future__ import annotations
@@ -186,6 +186,12 @@ Address = Annotated[str, StringConstraints(min_length=1, max_length=ADDRESS_MAX)
 Phrase = Annotated[str, StringConstraints(min_length=1, max_length=PHRASE_MAX)]
 
 _SENTENCE_PREFIX: Final = "s"
+#: These identify the prompt's text encoding, not a configurable output format.
+SENTENCE_PRESENTATION: Final = "The item, one JSON string per addressed sentence:"
+#: JSON already escapes ASCII controls; these also split physical lines.
+_SENTENCE_LINE_CONTROLS: Final = str.maketrans(
+    {"\x85": r"\u0085", "\u2028": r"\u2028", "\u2029": r"\u2029"}
+)
 _SLUG_SEPARATORS: Final = re.compile(r"[^a-z0-9]+")
 
 if set(SALIENCE_SCORE) != set(get_args(Salience)):
@@ -475,16 +481,21 @@ def sentence_spans(text: str) -> list[tuple[int, int]]:
 
 
 def numbered_sentences(text: str) -> str:
-    """The article itself, one addressed sentence per line.
+    """Each original sentence slice as one reversibly escaped, addressed line.
 
     The whole article rather than a lead excerpt, and the article rather than
     the summary: a compression cannot carry a fact it dropped, and judging what
     an item is about against text that lost the series is judging the wrong
     document. It is fenced as data by its caller - the addresses are ours, the
     sentences are a stranger's web page (Guardrail #11).
+
+    JSON preserves internal newlines, literal backslashes and boundary whitespace
+    without making unaddressed continuation lines. Non-ASCII text stays literal
+    so the caller's sanitizer still sees forged turn markers.
     """
     return "\n".join(
-        f"[{sentence_id(index)}] {text[start:end].strip()}"
+        f"[{sentence_id(index)}] "
+        + json.dumps(text[start:end], ensure_ascii=False).translate(_SENTENCE_LINE_CONTROLS)
         for index, (start, end) in enumerate(sentence_spans(text))
     )
 
@@ -534,7 +545,7 @@ def label_user_turn(article: Article, table: ElementTable) -> str:
             f"{article.item_id}: the candidate table indexes a different string than this article"
         )
     parts = ["Title:\n" + untrusted_block(article.title or "(untitled)")]
-    parts.append("The item, one sentence per line:\n" + untrusted_block(numbered_sentences(text)))
+    parts.append(SENTENCE_PRESENTATION + "\n" + untrusted_block(numbered_sentences(text)))
     parts.append(
         "Quantities and dates already found in it:\n" + untrusted_block(candidate_menu(table))
     )
