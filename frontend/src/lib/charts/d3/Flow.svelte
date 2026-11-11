@@ -5,8 +5,8 @@
 	 * diagram the flow that carried on takes its stage's hue and a loss takes
 	 * the same hue fainter - it is the same items going a different way, not a
 	 * different kind of thing - and every node is named beside itself with its
-	 * count. The list is words and numbers only; where the counts are not one
-	 * flow it says so above them.
+	 * count. Optional stage colours add decorative swatches to the list;
+	 * tokenless callers keep their unmarked list and monochrome diagram.
 	 */
 	import { grouped as formatGrouped } from '$lib/charts/series';
 	import { useNumberFormat } from '$lib/number-format-context';
@@ -59,12 +59,12 @@
 		<ol class="stepped-stages" aria-label={label} tabindex={readout === null ? undefined : 0} use:markReadout={{ count: records.length, walk: 'list', onSelect: (index) => selected = index }}>
 			{#each geometry.stages as stage, index (stage.label)}
 				<li data-readout-at={readout === null ? undefined : index}>
-					<span class="stepped-name">{stage.label}</span>
+					<span class="stepped-name">{#if stage.token}<span class="stage-swatch" style:background="var({stage.token})" aria-hidden="true"></span>{/if}{stage.label}</span>
 					<span class="stepped-count">{grouped(stage.arrived)} ({stage.share}%)</span>
 					{#if stage.drops.length > 0}
 						<ul class="stepped-drops">
 							{#each stage.drops as drop (drop.label)}
-								<li>{drop.label}: {grouped(drop.count)} ({drop.share}%)</li>
+								<li>{#if drop.token}<span class="stage-swatch" style:background="var({drop.token})" style:opacity={LOST} aria-hidden="true"></span>{/if}{drop.label}: {grouped(drop.count)} ({drop.share}%)</li>
 							{/each}
 						</ul>
 					{/if}
@@ -91,7 +91,7 @@
 		use:markReadout={{ count: records.length, walk: 'row', onSelect: (index) => selected = index }}
 	>
 		{#each geometry.ribbons as ribbon, index (index)}
-			<path data-readout-at={readout === null ? undefined : records.findIndex((record) => record.subject === ribbon.from)} d={ribbon.path} fill="var(--chart-1)" fill-opacity={ribbon.drop ? LOST : CARRIED} aria-label={`${ribbon.from} to ${ribbon.to}: ${grouped(ribbon.value)}`}>
+			<path data-readout-at={readout === null ? undefined : records.findIndex((record) => record.subject === ribbon.from)} d={ribbon.path} fill="var({ribbon.token ?? '--chart-1'})" fill-opacity={ribbon.drop ? LOST : CARRIED} aria-label={`${ribbon.from} to ${ribbon.to}: ${grouped(ribbon.value)}`}>
 			</path>
 		{/each}
 		{#each geometry.nodes as node, index (index)}
@@ -101,7 +101,7 @@
 				y={node.y}
 				width={node.width}
 				height={node.height}
-				fill="var(--chart-1)"
+				fill="var({node.token ?? '--chart-1'})"
 				fill-opacity={node.drop ? LOST : 1}
 			/>
 			<text
@@ -142,6 +142,13 @@
 
 	.stepped-name {
 		font-weight: 600;
+	}
+
+	.stage-swatch {
+		display: inline-block;
+		inline-size: var(--space-2);
+		block-size: var(--space-2);
+		margin-inline-end: var(--space-2);
 	}
 
 	.stepped-count {

@@ -22,7 +22,7 @@
 	const rule = $derived(chartRule(days, thresholds, windowDays, numberFormat));
 	const flow = $derived(chartFlow(days));
 	const geometry = $derived(placeFlow(flow.steps.map((step, index) => ({
-		label: step.label, arrived: step.value, left: flow.steps[index + 1]?.value ?? step.value,
+		label: step.label, token: step.token, arrived: step.value, left: flow.steps[index + 1]?.value ?? step.value,
 		drops: step.lost === null ? [] : [{ label: step.lost.label, count: step.lost.value }]
 	})), { narrow: measured !== null && measured < 700, frame: frame(measured ?? knobs.chart_width, 260, { ...MARGIN, right: 170 }), nodeWidth: 12, nodeGap: 34, number_format: numberFormat }));
 	const minutes = (value: number | null) => value === null ? '-' : formatNumber(value, numberFormat, { si: false });

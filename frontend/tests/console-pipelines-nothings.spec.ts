@@ -12,9 +12,8 @@ const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DAY = { date: '2030-06-01', reached: 0, asked: 0, drafted: 0, published: 0, items: 0, plannerMinutes: null, minutesPerChart: null };
 const PANELS = [
 	['at-a-glance', 'AtAGlance'], ['run-health', 'RunHealth'], ['site-cost-per-item', 'SiteCostPerItem'],
-	['chart-drawing', 'ChartDrawing'], ['pipeline-funnel', 'VisualFunnels'], ['downgrade-funnel', 'VisualFunnels'],
-	['visual-refusals', 'VisualAttempts'], ['visual-written-types', 'VisualAttempts'],
-	['extraction', 'Extraction']
+	['chart-drawing', 'ChartDrawing'],
+	['visual-refusals', 'VisualRefusals'], ['visual-written-types', 'VisualAttempts']
 ] as const;
 
 function words(html: string) {
@@ -31,7 +30,7 @@ for (const [id, name] of PANELS) {
 			'charts/d3/model-rule', 'charts/d3/flow', 'charts/d3/rankedList',
 			'console/daily-figures', 'console/run-square', 'console/span-words', 'format'
 		].map((file) => [`$lib/${file}`, lib(file)] as const);
-		for (const pure of ['at-a-glance', 'site-cost-per-item', 'chart-drawing', 'visual-funnels', 'extraction']) {
+		for (const pure of ['at-a-glance', 'site-cost-per-item', 'chart-drawing']) {
 			rewrite.push([`./${pure}`, lib(`console/pipelines/${pure}`)]);
 		}
 		for (const [file, child] of [
@@ -66,14 +65,6 @@ for (const [id, name] of PANELS) {
 			floorPct: 70, height: appearance.console.chart_height, width: appearance.console.chart_width,
 			tickDensity: appearance.chart.tick_density, readoutMaxShare: appearance.chart.readout_max_share
 		};
-		const funnel = (kind: string) => ({
-			quiet: { counts: [], read: 'read', notes: [], kind },
-			absent: { counts: [], read: 'not-packed', notes: ['The visual-attempt record is unavailable.'], kind }
-		});
-		const attempts = (kind: 'refusals' | 'written') => ({
-			quiet: { days: [], read: 'read', notes: [], kind },
-			absent: { days: [], read: 'not-packed', notes: ['The visual-attempt record is unavailable.'], kind }
-		});
 		const inputs: Record<string, { quiet: Record<string, unknown>; absent: Record<string, unknown> }> = {
 			'at-a-glance': { quiet: { days: [DAY] }, absent: { days: [] } },
 			'run-health': {
@@ -85,22 +76,20 @@ for (const [id, name] of PANELS) {
 				absent: { manifests: [], publishedItems: {}, sizeBytes: null }
 			},
 			'chart-drawing': { quiet: { days: [DAY] }, absent: { days: [] } },
-			'pipeline-funnel': funnel('pipeline'),
-			'downgrade-funnel': funnel('downgrade'),
-			'visual-refusals': attempts('refusals'),
-			'visual-written-types': attempts('written'),
-			extraction: {
-				quiet: { rows: [], evaluations: [], nativeState: 'quiet', evaluationsState: 'quiet', yieldDays: [{ date: DAY.date, chartable: 0, charted: 0 }],
-					publishedShare: { measuredDays: 1, unused: 0, chartablePublished: 0, unusedPct: null } },
-				absent: { rows: [], evaluations: null, nativeState: 'missing', evaluationsState: 'missing', yieldDays: [],
-					publishedShare: { measuredDays: 0, unused: 0, chartablePublished: 0, unusedPct: null } }
+			'visual-refusals': {
+				quiet: { days: [], read: { state: 'read', first: DAY.date, through: DAY.date, lastRows: null, lostDays: [], setAside: {} } },
+				absent: { days: [], read: { state: 'not-packed' } }
+			},
+			'visual-written-types': {
+				quiet: { days: [], read: 'read', notes: [] },
+				absent: { days: [], read: 'not-packed', notes: ['The visual-attempt record is unavailable.'] }
 			}
 		};
 		const quiet = render(component, { props: { ...common, ...inputs[id].quiet } }).body;
 		const absent = render(component, { props: { ...common, ...inputs[id].absent } }).body;
 		expect(words(quiet)).not.toBe(words(absent));
 		expect(words(absent)).toContain('unavailable');
-		if (name === 'VisualAttempts') {
+		if (name === 'VisualAttempts' || name === 'VisualRefusals') {
 			expect(quiet).toContain('data-empty="quiet"');
 			expect(quiet).not.toContain('data-record-incomplete');
 			expect(absent).toContain('data-record-incomplete');

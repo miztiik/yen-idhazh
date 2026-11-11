@@ -190,7 +190,7 @@ test('a late wide-window completion cannot replace a newer short request or its 
 	await expect(page.locator('[data-window-status]')).toHaveText('Showing 1 day, to 15 Jun 2030.');
 });
 
-test('lagging native endpoints do not move private published-day evidence or mix extraction populations', async ({ page }, info) => {
+test('lagging native endpoints do not move private published-day evidence', async ({ page }, info) => {
 	const document = await (await page.request.get(routeHref('pipelines'))).text();
 	const publishedDay = document.match(/data-pipelines-window-to="([^"]+)"/)?.[1];
 	if (publishedDay === undefined) throw new Error('The prerendered route must name its published-day window.');
@@ -201,7 +201,7 @@ test('lagging native endpoints do not move private published-day evidence or mix
 	const item = Object.fromEntries(ITEM_HEALTH_COLUMNS.map((column) => [column, null]));
 	const score = Object.fromEntries(SCORE_COLUMNS.map((column) => [column, null]));
 	const root = await packedPipelines(info.outputPath('lagging-native'),
-		dates.filter((date) => date < publishedDay).map((date) => ({
+		dates.filter((date) => date <= nativeThrough).map((date) => ({
 			covers: date, rows: Array.from({ length: date === nativeThrough ? consoleConfig().fleet_min_rows : 1 }, (_, index) => ({
 				...item, ...timedRow(date, { item_id: `${date}-${index}`, element_class: 'chartable', elements_found: 2, span_integrity: true,
 					time_source: 'feed', item_started_at: `${date}T12:00:00Z`,
@@ -221,11 +221,7 @@ test('lagging native endpoints do not move private published-day evidence or mix
 	await expect(page.locator('[data-private-window]')).toContainText(`${privateWeek.start} through ${privateWeek.end} UTC`);
 	await expect(page.locator('[data-windowed="item-time-split"] [data-native-window]'))
 		.toContainText(`${nativeWeek.start} through ${nativeWeek.end} UTC`);
-	await expect(page.locator('[data-extraction-record]')).toContainText(`${nativeWeek.start} through ${nativeWeek.end}`);
-	await expect(page.locator('[data-extraction-evaluator-record]')).toContainText(`${nativeWeek.start} through ${nativeWeek.end}`);
-	await expect(page.locator('[data-extraction-published-window]')).toContainText(`${privateWeek.start} through ${privateWeek.end} UTC`);
 	await expect(page.locator(`[data-published-bar="${publishedDay}"]`).first()).toBeVisible();
-	await expect(page.locator('[data-empty="extraction-yield"]')).toContainText('No build-time day carries both yield counts.');
 	await page.locator('[data-console-panel-id="article-age"]').scrollIntoViewIfNeeded();
 	const age = page.locator('[data-chart-name="article-age"]');
 	await expect(age).toBeVisible();

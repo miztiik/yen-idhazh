@@ -7,7 +7,7 @@ their panel actually occupies. Private date axes retain missing days as null,
 not zero, so a settings change on a day without a reading still has its place.
 Private panels keep their published-day window while native reads are pending.
 Native reads start independently; request epochs prevent late windows replacing
-the current one, and the extractor and recorded flags retain separate states.
+the current one.
 Native record limitations sit after the failure plot, not above the private
 carry line: receiving the ledger must not move the window controls or chrome.
 The retained run-square cut wording is tested on that actual component with
@@ -20,9 +20,7 @@ compression and identity-list oracles mount the actual retained components,
 not retired route UI. There is no restored cross-route panels/capture matrix.
 
 The retained timing and histogram plots name their actual drawing elements for
-the shared chart checks. Timeline rows name their actual bar frames. An absent
-private chart-share record still has a headline, stating its absence rather
-than inventing a percentage. The first published-count card is the route verdict;
+the shared chart checks. Timeline rows name their actual bar frames. The first published-count card is the route verdict;
 its count note names the same calendar that its bars draw.
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
@@ -39,27 +37,24 @@ surfaces follow the window control is
 
 ## Plan52: native readings and private published-day facts
 
-The route now has fourteen addressed panels, in this order: `at-a-glance`,
+The route has thirteen addressed panels, in this order: `at-a-glance`,
 `run-health`, `site-cost-per-item`, `failure-mix`, `item-time-split`,
 `slower-on-same-work`, `stage-timings`, `item-cost`, `run-timeline`,
-`chart-drawing`, `extraction`, `article-age`. Configuration comes from
+`chart-drawing`, `visual-refusals`, `visual-written-types`, `article-age`. Configuration comes from
 `consoleKnobs()` and `routeConsole('pipelines')`, not from page data.
 
 The browser uses the declared queries in `console/queries/pipelines.ts` and the
 shared `routeReach`, four-argument `rangeFor` and `sliceOnce` lifecycle. Failure
 mix, failed rules, item time split, fixed-reference work, stage timings, model
-cost, newest-run timeline and stated article ages read `item-health`. The
-recorded extraction flags separately read `summary-quality-evals`. It is not a ledger
-named `scores`. Neither route load nor the browser reads telemetry CSV,
+cost, newest-run timeline and stated article ages read `item-health`. The removed
+extraction panel no longer asks `summary-quality-evals`. Neither route load nor the browser reads telemetry CSV,
 `run-timeline`, `span-rollup` or a month inventory for these panels.
 
-`at-a-glance`, `run-health`, `site-cost-per-item`, `chart-drawing`, and extraction's
-published-chart share and yield remain private BUILD_TIME readings of manifests,
+`at-a-glance`, `run-health`, `site-cost-per-item` and `chart-drawing`
+remain private BUILD_TIME readings of manifests,
 published-chart counts and day metrics. They are not newly published datasets
 and are not reconstructed from native queries. Their window is anchored on
 `windowDay`, the newest published day, never on a native ledger's endpoint.
-Extraction's private share is selected by that published-day anchor and preset;
-its native counts and recorded flags keep their own declared query populations.
 `ChartDrawing.svelte` retains its private `chartFlow` diagram or stepped list,
 target cards and sparklines. Those use published-day records, not inferred
 item failure populations.
@@ -71,8 +66,8 @@ remain in the counts and median, with a note explaining why the logarithmic
 drawing cannot place them.
 
 Before native answers arrive their frames reserve space, without bars, dates or
-numbers posing as readings. Failure-rule and evaluator states are independent
-of the item sections. Retry re-asks only failed queries; successful returned
+numbers posing as readings. Failure-rule states are independent
+of the other item sections. Retry re-asks only failed queries; successful returned
 answers keep their own ranges. A retry keeps the original common endpoint; only
 a new preset starts a new window. The record notice uses the ledger's actual
 first day, not the first plotted day. Lost days, set-aside files, unknown cells,
@@ -108,17 +103,6 @@ their retained real components, while the route's waiting and retry tests hold
 its declared native index. A clipped native calendar is not widened with
 invented pre-record days to satisfy a legacy telemetry oracle.
 
-The flag count keeps the newest recorded boolean for each distinct article;
-null cells cannot replace a flag, and conflicting booleans on its latest
-recorded day stay unknown in any row order. Counts remain exactly the recorded
-counts, not claims that a checker ran. The panel states that checker identity
-and version are unavailable. The declared query has only date, article key and
-the flag. `EvalRow` defaults the flag to false, and `work.py`'s `to_eval_row`
-does not pass an extraction measurement. No contract guarantees that other
-evaluators leave null. A zero count therefore says only that no recorded flag
-is true. Proving instrument selection needs a maintainer-designed provenance
-producer and declared query contract; this route invents neither.
-Each native half states its returned dates beside the private published figures.
 Private payload-size rates require the immediately preceding manifest and the
 current manifest to both record a finite size; a missing size is not zero.
 
@@ -427,14 +411,14 @@ query's returned range and request epoch govern this panel just as they govern
 the other native windowed answers. There is no server-reduced ItemCost seed or
 telemetry-month fallback.
 
-Private published-count cards, run health, site cost, chart drawing and
-extraction's published-day facts remain build-time inputs. Their own window and
+Private published-count cards, run health, site cost and chart drawing
+remain build-time inputs. Their own window and
 snapshot rules do not become ItemCost's rules; the prerendered private marks
 remain available without scripts.
 
 ## Visual-attempt views read the unpublished record at build time
 
-pipeline-funnel and downgrade-funnel count the rows in
+`visual-refusals` and `visual-written-types` count the rows in
 `visual-design-attempts` (one row per settled visual attempt). That record is
 not published to the Data explorer, so the browser cannot ask for it. The route
 load reads it through `visualAttemptRows` over the widest window, groups the
@@ -442,32 +426,23 @@ rows into small per-day counts, and the page filters those counts to the
 selected window. Only the columns the views use are read, and a backend test
 holds that list to `VisualAttemptRow`. No ledger, column or producer is added.
 
-Every share is of its own potential class (`chartable`, `narrative`,
-`unclassified`). An attempt with no recorded class sits in an `unmeasured`
-group and is never pooled into another class. A class with no attempts is not
-drawn.
-
-- **Where visual attempts stopped:** Attempted, Plan drafted, Passed the checks,
-  Written. Share is of that class's attempts. Attempts not written are listed by
-  the reason recorded (`none_reason`, else `render_failed`, else "no reason
-  recorded").
-- **How drafted visual plans ended:** Planned, Refused as drafted, then one
-  `Searched depth N` step for each depth seen in the data, so a changed ladder
-  needs no edit. Share is of that class's drafted plans. The ends are Rendered,
-  None and Render failed; plans they do not account for are printed as
-  unaccounted, never hidden. With the ladder off only Planned and Refused
-  appear. `downgrade_depth` is the deepest rung searched, not the one chosen.
-
-Stage counts need not fall. A stage larger than the one before is drawn at its
-true size and marked "more than the stage before", as the chart-drawing flow
-does, rather than clamped. A record that is not packed, did not load, or lost
-days says so in a note; those days are never drawn as zero.
-
 `visual-refusals` shows each recorded first validator refusal
-(`rejection_reason`) by UTC date, including requests that were later written.
+(`rejection_reason`) as a daily line, including requests that were later written.
 It does not count all reasons for omitting a visual or treat a recorded refusal
-as a final failure. Days with recorded attempts but no validator refusal say
-so; missing days are not inserted as zero counts.
+as a failed article. Every reason recorded inside the selected window gets its
+own named line. All lines share the selected UTC calendar and one count scale;
+no reason is capped, combined or selected by frequency. Shared `DateSeries`
+geometry preserves singleton dots, null gaps and exact pointer, tap and keyboard
+readouts, including the day's recorded attempt count.
+
+A complete day with recorded attempts and no occurrence of that reason measures
+zero. A date with no attempt row, a lost date, an unreadable period or a date
+outside packed coverage does not supply a zero. Positive surviving counts remain
+visible on partial dates, with the readout naming the incomplete record.
+Missing dates break the line. When no reason fired, complete recorded days
+can still draw the zero failed-check line. If only incomplete attempt counts
+are available, the panel states that no complete check count is available and
+prints those known attempts rather than drawing zeros.
 
 `visual-written-types` compares `planned_type` with successfully written
 `rendered_type` over the selected window. Each pair shows its attempt count.
@@ -477,52 +452,30 @@ the comparison explicitly incomplete; their type is never inferred from the
 request. Both views keep the attempt reader's missing-day and set-aside-file
 notes beside the counts. A packed record that starts late or stops before the
 selected UTC window states its coverage and marks the views incomplete. Notes
-follow the selected window in all four attempt views. No new measurement, ledger field, producer, keep
+follow the selected window in both attempt views. The line adapter reads the
+typed `RecordRead` coverage and loss metadata, never its explanatory prose.
+No new measurement, ledger field, producer, keep
 rate, repetition measure or single-type-day alarm is added.
 
 These views extend the existing private record section because they use the
 same bounded reader and its evidence rules, not another delivery path.
-## Extraction answers both questions, and labels which half is which
-
-`Extraction` is a Pipelines panel in two halves, and it is the console's worked
-example of a panel that serves *is it working* and *what is broken* at once
-rather than choosing.
-
-The **verdict half** counts distinct articles, found facts, non-prose articles
-and contaminated articles from the native extraction slice. A ranked list
-counts element classes and rows that would not re-slice. Separately, the
-published-chart share comes from private day records. Recorded boolean flags
-have their own source state and date range; neither a flag nor its false
-default establishes which checker ran.
-
-The **break half** is one private chart, `Whether the yield is falling`.
-The panel plots one
-point a day: articles the reading found enough figures in, against published
-articles carrying a chart. That pair is the discrimination the panel exists for -
-the planner stopping and the extractor stopping look identical in the published
-chart count alone, and they have different fixes
-([../../concepts/evaluation.md](../../concepts/evaluation.md)).
-
-**Both series count articles, so they share one value domain**, and the panel
-prints the ratio it measured. Measured 2026-09-17 over the nine committed day
-records that carry an extraction block: `chartable` peaks at 225 and
-`chartable_charted` at 20, which is **11.3 times** and inside the 20 a shared
-axis holds. The domain is taken from the days drawn rather than fixed - there is
-no ceiling here to measure distance from, so a fixed maximum would only waste the
-plot on a quiet day.
-
-**A window with one measured day draws that day as a point, not an empty plot**,
-and says in words that a single day has a level and no direction. A window with
-no measured day draws no axis at all and says so: an axis over nothing is a claim
-the data does not support.
-
-The four rules this panel is built to - a panel names which of the two questions
-it serves, a title that asks a trend question draws a time axis, two series share
-one axis under twenty times with the ratio printed, and a value domain is fixed
-only where a ceiling is the comparison - are in
-[../../concepts/console-design/the-rules-every-console-chart-obeys.md](../../concepts/console-design/the-rules-every-console-chart-obeys.md#thirteen-rules-hold-for-every-chart-on-this-console).
 
 ## Design rationale
+
+### Selected visual diagnostics are removed, not hidden
+
+`pipeline-funnel`, `downgrade-funnel` and `extraction` have no roster entries,
+mounts, local reducers or queries. Their removal gives up stage-by-class
+attrition, draft outcomes and replacement depth, and the extraction class,
+flag and yield diagnostic. The retained visual overview does not replace those
+questions. Producer records and persisted contracts remain unchanged; unread
+item extraction cells and the intentionally undrawn evaluator flag say so in
+their existing ownership declarations.
+
+Daily refusal lines retain a different question: the first failed plan check,
+even on an attempt later written. Separate named lines keep every recorded
+reason comparable without an arbitrary series limit or a crowded colour key.
+They replace the long per-day list, not the evidence it carried.
 
 ### The per-day chart and the run squares became one panel (2026-09-27)
 

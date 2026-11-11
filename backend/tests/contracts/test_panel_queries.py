@@ -30,8 +30,7 @@ EXPECTED_NAMES: Final = {
     "shared": ("failedRuleQuery",),
     "pipelines": (
         "failureMixQuery", "itemTimeSplitQuery", "slowerOnSameWorkQuery",
-        "stageTimingsQuery", "itemCostQuery", "runTimelineQuery", "extractionQuery",
-        "extractionScoresQuery", "articleAgeQuery",
+        "stageTimingsQuery", "itemCostQuery", "runTimelineQuery", "articleAgeQuery",
     ),
     "model": (
         "modelThroughputQuery", "callEndingQuery", "faithfulnessQuery",
@@ -60,8 +59,6 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "stageTimingsQuery": ("date", "fetch_ms", "extract_ms", "summarize_ms"),
     "itemCostQuery": ("date", "prefill_ms", "decode_ms", "input_tokens", "output_tokens", "cached_tokens", "label_input_tokens", "label_cached_tokens"),
     "runTimelineQuery": ("run_id", "item_id", "source_id", "machine_shard", "item_index", "item_started_at", "item_ended_at", "queue_wait_ms", "fetch_ms", "robots_ms", "extract_ms", "label_ms", "summary_ms", "visual_plan_ms", "faithfulness_ms", "stage_gap_ms", "item_total_ms"),
-    "extractionQuery": ("date", "stage", "outcome", "code", "url_key", "element_class", "span_integrity", "elements_found"),
-    "extractionScoresQuery": ("date", "url_key", "extraction_suspect"),
     "articleAgeQuery": ("published_at", "time_source", "item_started_at", "outcome"),
     "modelThroughputQuery": ("date", "run_id", "model_id", "prefill_ms", "decode_ms", "input_tokens", "cached_tokens", "output_tokens"),
     "callEndingQuery": ("date", "summary_finish_reason", "label_finish_reason"),

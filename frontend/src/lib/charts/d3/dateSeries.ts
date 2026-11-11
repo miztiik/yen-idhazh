@@ -1,4 +1,4 @@
-/** What is changing: one to five series over dated points, as lines or as stacked bars.
+/** What is changing: named series over dated points, as lines or as stacked bars.
  *
  * Lines are for reading each series on its own; stacked bars are for the mix
  * of one total, one bar a day. Both shapes come out of this one call over the

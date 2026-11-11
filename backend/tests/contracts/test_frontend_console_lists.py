@@ -224,22 +224,25 @@ def test_the_holdout_marks_ask_for_every_column_but_the_stamp_in_the_contract_or
     )
 
 
-def test_every_eval_column_is_drawn_on_a_panel_or_declared_not_a_measurement() -> None:
-    """A column the checker writes that reaches no panel is a column nobody reads."""
+def test_every_eval_column_declares_a_panel_or_why_it_is_not_drawn() -> None:
+    """A deliberately removed diagnostic remains distinct from row identity."""
     text = read_text(CONSOLE / "eval-instruments.ts")
     drawn = object_keys(text, "DRAWN_BY")
     excluded = object_keys(text, "NOT_A_MEASUREMENT")
+    undrawn = object_keys(text, "UNDRAWN")
     declared = set(EvalRow.model_fields)
 
     assert not set(drawn) & set(excluded), "a column is both drawn and declared not a measurement"
-    assert not declared - set(drawn) - set(excluded), (
-        "a column the checker writes reaches no console panel and is not declared as "
-        "identity. Give it a panel in DRAWN_BY, or a one-line reason in NOT_A_MEASUREMENT: "
-        f"{sorted(declared - set(drawn) - set(excluded))}"
+    assert not set(undrawn) & (set(drawn) | set(excluded)), "an omitted measurement is also drawn or identity"
+    accounted = set(drawn) | set(excluded) | set(undrawn)
+    assert not declared - accounted, (
+        "a column the checker writes needs a panel in DRAWN_BY, an intentional omission in "
+        "UNDRAWN, or an identity reason in NOT_A_MEASUREMENT: "
+        f"{sorted(declared - accounted)}"
     )
-    assert not (set(drawn) | set(excluded)) - declared, (
+    assert not accounted - declared, (
         "a map names a column EvalRow does not have: "
-        f"{sorted((set(drawn) | set(excluded)) - declared)}"
+        f"{sorted(accounted - declared)}"
     )
 
 

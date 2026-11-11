@@ -12,16 +12,14 @@ import { backendPython } from './support/backend-python';
 import { runTimeline } from '../src/lib/console/pipelines/run-timeline';
 import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
 import { failureRuleRows } from '../src/lib/console/failure-rules';
-import { nativeExtraction, extractionYield } from '../src/lib/console/pipelines/extraction';
 import { siteCostPoints } from '../src/lib/console/pipelines/site-cost-per-item';
 import { articleAge } from '../src/lib/console/pipelines/article-age';
 import { slowerOnSameWork } from '../src/lib/console/pipelines/slower-on-same-work';
 import { nativeStageTimings } from '../src/lib/console/pipelines/stage-timings';
 import { nativeItemCost } from '../src/lib/console/pipelines/item-cost';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
-import { pipelinesRecord, publishedShareFor, retryReach } from '../src/lib/console/pipelines/record-window';
+import { pipelinesRecord, retryReach } from '../src/lib/console/pipelines/record-window';
 import { chartFlow, visualsPublished } from '../src/lib/console/pipelines/chart-drawing';
-import { windowOfDays } from '../src/lib/charts/viewport';
 import type { Row, SliceResult } from '../src/lib/data/ledger';
 import { numberFormat } from './support/number-format';
 
@@ -81,11 +79,6 @@ test('the identity-free ranking accepts the native nullable codes without changi
 
 test('private date axes retain missing days without inventing zero readings', () => {
 	const window = { start: '2030-06-01', end: '2030-06-03' };
-	const yieldSeries = extractionYield([{ date: '2030-06-02', chartable: 4, charted: 0 }], window);
-	expect(yieldSeries.map((series) => series.points)).toEqual([
-		[{ date: '2030-06-01', value: null }, { date: '2030-06-02', value: 4 }, { date: '2030-06-03', value: null }],
-		[{ date: '2030-06-01', value: null }, { date: '2030-06-02', value: 0 }, { date: '2030-06-03', value: null }]
-	]);
 	expect(siteCostPoints({ days: [
 		{ date: '2030-06-02', bytesPerItem: -4 },
 		{ date: '2030-06-03', bytesPerItem: 0 }
@@ -191,25 +184,6 @@ test('source-stated ages exclude inferred, invalid and future instants without l
 	expect(result.lede).not.toContain('Every publication time');
 });
 
-test('extraction retains useful partial readings and counts distinct evaluator articles', () => {
-	const extraction = nativeExtraction(rows(queries.extractionQuery), rows(queries.extractionScoresQuery));
-	expect(extraction.wouldNotReslice).toBeGreaterThan(0);
-	const partial = nativeExtraction([
-		{ date: '2030-06-01', url_key: 'a', code: 'not_prose', element_class: 'narrative', elements_found: 0, span_integrity: true },
-		{ date: '2030-06-02', url_key: 'a', code: 'contaminated', element_class: null, elements_found: null, span_integrity: false }
-	], [{ date: '2030-06-01', url_key: 'a', extraction_suspect: true }, { date: '2030-06-02', url_key: 'a', extraction_suspect: false },
-		{ date: '2030-06-02', url_key: 'b', extraction_suspect: null }]);
-	expect([partial.articles, partial.notProse, partial.contaminated, partial.checked, partial.suspect]).toEqual([1, 1, 1, 2, 0]);
-	expect(partial.elementsFound).toBe(0);
-	expect(partial.classes).toContainEqual({ label: 'narrative', count: 1 });
-	expect(partial.suspectShare).toBeNull();
-	expect(nativeExtraction([], null).suspect).toBeNull();
-	const conflict = [{ date: '2030-06-02', url_key: 'a', extraction_suspect: true },
-		{ date: '2030-06-02', url_key: 'a', extraction_suspect: false }];
-	expect(nativeExtraction([], conflict).suspectShare).toBeNull();
-	expect(nativeExtraction([], [...conflict].reverse()).suspectShare).toBeNull();
-});
-
 test('stage clocks, signed gaps and independent cost pairs never fill unknown cells with zero', () => {
 	expect(nativeStageTimings(rows(queries.stageTimingsQuery)).length).toBeGreaterThan(0);
 	expect(nativeTimeSplit(rows(queries.itemTimeSplitQuery)).days.some((day) => day.overlapping > 0)).toBe(true);
@@ -272,18 +246,4 @@ test('an undrawable flow retains the recorded published visual count', () => {
 	expect(chartFlow(days).steps).toEqual([]);
 	expect(visualsPublished(days)).toBe(2);
 	expect(visualsPublished([...days, { reached: 2, asked: 2, drafted: 2, published: 3 }])).toBe(5);
-});
-
-test('centred windows select private totals by the same anchor that shaped them', () => {
-	const anchor = '2030-06-15';
-	const window = windowOfDays(anchor, 7, 'centre');
-	expect(window).toEqual({ start: '2030-06-12', end: '2030-06-18' });
-	const spans = [
-		{ through: anchor, days: 7, measuredDays: 7, unused: 2 },
-		{ through: window.end, days: 7, measuredDays: 7, unused: 9 },
-		{ through: anchor, days: 1, measuredDays: 1, unused: 0 }
-	];
-	expect(publishedShareFor(spans, anchor, 7)?.unused).toBe(2);
-	expect(publishedShareFor(spans, anchor, 1)?.unused).toBe(0);
-	expect(publishedShareFor(spans, '2030-06-16', 7)).toBeUndefined();
 });
