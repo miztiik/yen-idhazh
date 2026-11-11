@@ -1,0 +1,32 @@
+{
+  "completed_at": "2026-11-11T00:26:06Z",
+  "date": "2026-11-10",
+  "embeddings": {
+    "dimensions": 384,
+    "dtype": "int8",
+    "model_id": "all-minilm-l6-v2-quantized",
+    "vectors": {
+      "ai-8ensbzfw4yvgmf9k": "+AADBQL/BwME/f4EAwD7Agb38/v39QP5//0C+wH9AggEBgb8A/n/9wgAAgYEAAQBAQD3/wT+/Af+9AQHC/4JAwsEBPj/Agz89/v0/wP/CfcFAwUFAgAGBQb5+v0KCPwE/gb5AQMI/v76BQAJAwb3A/cCAv77Bv39AwL5+/4E9gAE/AAA/QYJBQAH+Af5Af7//AMAAw0DAv4BAPX9DQL9/QH9BgX+BgQO/RD98fT/9vf7AfYEBP0B/AIABwb4/fQG9ggNCewD/wP++gD18/wCAgP/D/33BQQC/QD0AAQAAwD1///8/PgEA/4BAAcICfb8B/798v8A+QMBDQv6Bv79Av8PCAL/+v72BgUBB/0J9wIH//0A+Qj1BQoGB/X+CPgC+wMFBATvAvr59fgM9/YABQfvCvoFAgf2/f/y8vj8+gAB+AUJBPf4CQkHB/fyCPf/AQgGAfQGA/r8BP/+Bv/5+wkCAvwLBAsA/gEAAgb39vQE/v/5/AT6//gC9f//7wIF",
+      "ai-fb94y4kfgwv0h4w5": "9Pj4/gbz8wT++AD97v8FARAD+PsC9gUCBv78+gH9AfYCBf4E///39wQE/wL/+AP+/Pv+//f+9gcH/AMF//39BgEECfoK9gX/9f/5BwEB/voH+QAFDgICCgL/BPn7CvsHB/v2Cf8ABgH3AAcR//8KAQT/AgD6AA4I+gsBCgX8+QAE/AXyBQT/AAX7/QEABwD69wcJCwsA9wP6DvYE+gkA++8E+QH/9wX78wX7+vL0+wMB/P0DBAT/+QwGDgkDEPYG+P77AfgL9QQG/QcA/vj1AfUE/AAABvr9AwYB/P0F/QD6AQAPBP/8/fv6//8DBAr9/PcE+QME/wUH+/37/vgABvv+AAkB/wQLDgL+BgMO9QQFAQcIAPoC8///9v8D8vr6+v77B/4NBvj/Df8FCPoB+gQIDfYOAPkGBAP7BgQG+QAGBAMI9/sE/wb6C/j8BAYNBgIC9voC/P39/wIFAAD8AAAACwb2BQT++Pn5/AMC9vX9BwD8/wT+Cf32/foKAQX9"
+    }
+  },
+  "failed_item_ids": [
+    "ai-mxnhkcdd4t7ec36s"
+  ],
+  "items": [
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "high","band_reason": null,"carried_by": 1,"desk": null,"entities": ["alibaba","nvidia"],"events": ["acquisition","incident"],"introduced_by_run": 1,"item_id": "ai-8ensbzfw4yvgmf9k","lenses": ["china","chips"],"on_front_page": false,"published_at": "2026-11-10T21:21:50Z","rank_score": 2.002325,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "straitstimes-business","source_kind": "reporting","source_name": "The Straits Times","source_url": "https://straitstimes.com/business/companies-markets/nvidia-heads-for-us470-billion-two-day-wipeout-as-ceo-affair-fallout-deepens","summary": "Nvidia is on track to shed more than US$470 billion (S$600 billion) in market value over two sessions as losses extended Nov 10 amid fallout from chief executive Jensen Huang\u2019s affair with a Chinese businesswoman alleged to be a spy for Beijing. The Information reported that the relationship helped facilitate at least US$7.5 billion worth of Nvidia chips reaching Chinese firms, and about 240,000 H100, H200 and A100 chips moving into China. Nvidia\u2019s board launched an internal investigation on Nov 8, retaining Joon Kim and Wachtell Lipton Rosen Katz to lead it, while the FBI separately examines whether Huang was targeted by a foreign intelligence operation. Shares fell more than 6% after a 4.3% drop on Nov 9, letting Microsoft briefly overtake Nvidia as the world\u2019s second-most valuable company for the first time since June 2025. Reuters could not independently verify the reports.","time_source": "feed","title": "Nvidia Faces $470 Billion Wipeout Over CEO Affair Fallout","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "ai","visual": null,"watchlist_hit": true},
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "high","band_reason": null,"carried_by": 1,"desk": null,"entities": [],"events": [],"introduced_by_run": 1,"item_id": "ai-fb94y4kfgwv0h4w5","lenses": [],"on_front_page": false,"published_at": "2026-11-10T22:15:07Z","rank_score": 1.82154,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "pytorch-blog","source_kind": "announcement","source_name": "PyTorch","source_url": "https://pytorch.org/blog/executorch-webgpu-pytorch-models-on-the-gpu-in-the-browser","summary": "Meta\u2019s ExecuTorch adds a new WebGPU backend so PyTorch models run directly on the browser GPU without conversion to another framework format. Models export once to a .pte file and run locally, keeping prompts and outputs on device. The team benchmarks it against its own CPU path in Chrome on an Apple M1 Pro: 4\u20137\u00d7 faster on prefill and 2\u201310\u00d7 faster on decode.","time_source": "feed","title": "ExecuTorch Adds GPU-Powered PyTorch Inference in WebGPU Browsers","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "ai","visual": null,"watchlist_hit": false}
+  ],
+  "items_planned": 3,
+  "run_id": "2026-11-10-42923824945",
+  "version": "2026-10-20",
+  "verticals": [
+    {"below_feed_floor": false,"considered": 6875,"eligible_feeds": 53,"feed_floor": 35,"id": "ai","planned": 3,"too_old": 6801},
+    {"below_feed_floor": false,"considered": 759,"eligible_feeds": 23,"feed_floor": 21,"id": "energy","planned": 0,"too_old": 657},
+    {"below_feed_floor": false,"considered": 720,"eligible_feeds": 27,"feed_floor": 21,"id": "business-economy","planned": 0,"too_old": 529},
+    {"below_feed_floor": false,"considered": 631,"eligible_feeds": 27,"feed_floor": 21,"id": "world","planned": 0,"too_old": 351},
+    {"below_feed_floor": false,"considered": 1207,"eligible_feeds": 22,"feed_floor": 21,"id": "india","planned": 0,"too_old": 524},
+    {"below_feed_floor": false,"considered": 0,"eligible_feeds": 0,"feed_floor": null,"id": "science","planned": 0,"too_old": 0},
+    {"below_feed_floor": false,"considered": 0,"eligible_feeds": 0,"feed_floor": null,"id": "climate","planned": 0,"too_old": 0}
+  ]
+}

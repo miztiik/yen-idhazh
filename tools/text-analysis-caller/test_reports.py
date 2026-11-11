@@ -13,7 +13,11 @@ from urllib.parse import urljoin
 import test_capture_stream
 from collect_operations import Outcome, collect_gliner_operations
 from prepare_default_tasks import default_classification_tasks
-from project_gliner_analysis import project_classification_request
+from project_gliner_analysis import (
+    EVENT_FIELDS,
+    project_classification_request,
+    project_entity_result,
+)
 from render_classifications import (
     read_classification_selections,
     read_classification_tasks,
@@ -28,7 +32,7 @@ from render_report import (
     render_source,
     render_spacy_results,
 )
-from render_tables import read_object
+from render_tables import read_list, read_object
 from write_reports import SUMMARY_MAX_BYTES, NativeFiles, render_saved_reports, select_summary
 
 
@@ -658,6 +662,261 @@ class ReportTests(unittest.TestCase):
         self.assertFalse({"text_analysis", "gliner_api", "spacy", "gliner2"} & set(sys.modules))
 
 
+class EventReportTests(unittest.TestCase):
+    @staticmethod
+    def request(source: str, confidence: bool, spans: bool) -> dict[str, object]:
+        return {
+            "text": source,
+            "include_confidence": confidence,
+            "include_spans": spans,
+            "schema": {
+                "entities": {"person": {"description": "Specific named people."}},
+                "structures": {
+                    "events": {
+                        "mode": "natural",
+                        "anchor": "action",
+                        "fields": [
+                            {
+                                "name": name,
+                                "dtype": "str" if index == 0 else "list",
+                                "cardinality": "required_one" if index == 0 else "zero_or_more",
+                                "exclusive": False,
+                            }
+                            for index, name in enumerate(EVENT_FIELDS)
+                        ],
+                    }
+                },
+            },
+        }
+
+    @staticmethod
+    def response(source: str, confidence: bool, spans: bool) -> dict[str, object]:
+        def leaf(text: str) -> object:
+            value: dict[str, object] = {"text": text}
+            if confidence:
+                value["confidence"] = 0.6
+            if spans:
+                start = source.index(text)
+                value |= {"start": start, "end": start + len(text)}
+            return value if confidence or spans else text
+
+        return {
+            "result": {
+                "entities": {"person": [leaf("A"), leaf("C")]},
+                "events": [
+                    {
+                        "action": leaf(action),
+                        "actors": [leaf(actor)],
+                        "objects": [leaf(affected)],
+                        "times": [],
+                        "places": [],
+                        "confidence": score,
+                    }
+                    for action, actor, affected, score in (
+                        ("bought", "A", "B", 0.7), ("sold", "C", "D", 0.8),
+                    )
+                ],
+            }
+        }
+
+    def test_native_profiles_preserve_bindings_order_and_optional_metadata(self) -> None:
+        source = "A bought B. C sold D."
+        for confidence in (False, True):
+            for spans in (False, True):
+                request = self.request(source, confidence, spans)
+                response = self.response(source, confidence, spans)
+                before = json.dumps((request, response))
+                with self.subTest(confidence=confidence, spans=spans):
+                    projected = project_entity_result(response, request)
+                    records = read_list(read_object(response["result"])["events"])
+                    self.assertEqual(len(read_list(projected["events"])), len(records))
+                    report = html.unescape(
+                        render_gliner_results(source, response, gliner_request=request)
+                    )
+                    self.assertIn("| M1 | bought", report)
+                    self.assertIn("| M2 | sold", report)
+                    self.assertIn(
+                        "Matching source spans does not prove that their links to the action "
+                        "are correct.", report,
+                    )
+                    self.assertIn("|  |  | 0.7 |", report)
+                    self.assertIn("| Record score |", report)
+                    self.assertEqual("score 0.6" in report, confidence)
+                    self.assertEqual("[2, 8)" in report, spans)
+                    self.assertNotIn("sentence 0", report)
+                    self.assertEqual(json.dumps((request, response)), before)
+
+    def test_flagless_profiles_require_complete_shapes_and_never_retry_invalid_current_data(
+        self,
+    ) -> None:
+        source = "A bought B. C sold D."
+        for rich in (False, True):
+            request = self.request(source, rich, rich)
+            del request["include_confidence"]
+            del request["include_spans"]
+            report = render_gliner_results(
+                source, self.response(source, rich, rich), gliner_request=request
+            )
+            self.assertIn("| M1 |", report)
+            self.assertIn("| M2 |", report)
+        compact = self.request(source, False, False)
+        rich_response = self.response(source, True, True)
+        with self.assertRaises(ValueError):
+            render_gliner_results(source, rich_response, gliner_request=compact)
+        del compact["include_confidence"]
+        del compact["include_spans"]
+        mixed = self.response(source, True, True)
+        read_object(mixed["result"])["entities"] = {"person": ["A"]}
+        with self.assertRaises(ValueError):
+            render_gliner_results(source, mixed, gliner_request=compact)
+        with self.assertRaises(ValueError):
+            render_gliner_results(
+                source, self.response(source, True, False), gliner_request=compact
+            )
+
+    def test_compact_repetitions_are_not_deduplicated_or_given_offsets(self) -> None:
+        source = "A A"
+        request = self.request(source, False, False)
+        record = {"action": "A", "actors": ["A", "A"], "objects": [], "times": [], "places": []}
+        response: dict[str, object] = {
+            "result": {"entities": {"person": ["A", "A"]}, "events": [record, record]}
+        }
+        report = html.unescape(render_gliner_results(source, response, gliner_request=request))
+        self.assertIn("| KA1 | A | 2 |", report)
+        self.assertIn("| M1 | A | A<br>A |", report)
+        self.assertIn("| M2 | A | A<br>A |", report)
+        self.assertNotIn("| Record score |", report)
+        self.assertNotIn("| Native evidence |", report)
+        self.assertNotIn("[0, 1)", report)
+        self.assertEqual(response["result"], {
+            "entities": {"person": ["A", "A"]}, "events": [record, record],
+        })
+
+    def test_empty_omitted_unrequested_failed_and_malformed_events_are_distinct(self) -> None:
+        source = "A"
+        request = self.request(source, False, False)
+        empty = render_gliner_results(
+            source, {"result": {"entities": {}, "events": []}}, gliner_request=request
+        )
+        self.assertIn("No candidates were returned for the requested event structure.", empty)
+        omitted = render_gliner_results(
+            source, {"result": {"entities": {}}}, gliner_request=request
+        )
+        self.assertIn("successful native result omitted empty records", omitted)
+        unrequested = copy.deepcopy(request)
+        del read_object(unrequested["schema"])["structures"]
+        report = render_gliner_results(
+            source, {"result": {"entities": {}}}, gliner_request=unrequested
+        )
+        self.assertIn("Not requested: the saved extraction schema", report)
+        failed = render_gliner_results(source, None, gliner_request=request)
+        self.assertIn("Failed: no successful event evidence", failed)
+        unknown = render_gliner_results(source, None)
+        self.assertIn("event selection is unknown", unknown)
+        self.assertNotIn("Not requested: the saved extraction schema", unknown)
+        malformed: dict[str, object] = {
+            "result": {
+                "entities": {},
+                "events": [{
+                    "action": None, "actors": [], "objects": [], "times": [], "places": [],
+                }],
+            }
+        }
+        reports = render_saved_reports(
+            source,
+            NativeFiles(response=spacy_result([feature("sentences", {"sentences": []})])),
+            NativeFiles(request=request, response=malformed),
+        )
+        self.assertTrue(reports.failed)
+        self.assertIn("evidence is invalid", reports.gliner)
+        self.assertIn("Failed: no successful event evidence", reports.gliner)
+        self.assertIn("Status: complete.", reports.spacy)
+        invalid_results: list[dict[str, object]] = [
+            {"result": {}},
+            {"result": {"entities": {}, "other": []}},
+            {"result": {"entities": {}, "events": [{"action": "A"}]}},
+        ]
+        for invalid in invalid_results:
+            with self.assertRaises(ValueError):
+                render_gliner_results(source, invalid, gliner_request=request)
+
+    def test_spans_scores_and_exclusive_bindings_are_validated_without_repair(self) -> None:
+        source = "A bought B. C sold D."
+        for confidence in (False, True):
+            compact_request = self.request(source, confidence, False)
+            for role in ("entity", "action"):
+                compact = self.response(source, confidence, False)
+                absent: object = (
+                    {"text": "absent", "confidence": 0.6} if confidence else "absent"
+                )
+                native_compact = read_object(compact["result"])
+                if role == "entity":
+                    native_compact["entities"] = {"person": [absent]}
+                else:
+                    read_object(read_list(native_compact["events"])[0])["action"] = absent
+                with self.subTest(confidence=confidence, role=role), self.assertRaises(ValueError):
+                    project_entity_result(compact, compact_request)
+        request = self.request(source, True, True)
+        response = self.response(source, True, True)
+        native = read_object(response["result"])
+        for invalid_score in (True, "0.5", float("nan"), -0.1, 1.1):
+            invalid = copy.deepcopy(response)
+            records = read_object(invalid["result"])["events"]
+            read_object(read_list(records)[0])["confidence"] = invalid_score
+            with self.assertRaises(ValueError):
+                project_entity_result(invalid, request)
+        invalid = copy.deepcopy(response)
+        read_object(invalid["result"])["entities"] = {
+            "person": [{"text": "D.", "start": len(source) - 2, "end": len(source) + 1,
+                        "confidence": 0.9}],
+        }
+        with self.assertRaises(ValueError):
+            project_entity_result(invalid, request)
+        duplicate = copy.deepcopy(response)
+        first = read_list(read_object(duplicate["result"])["events"])[0]
+        read_object(duplicate["result"])["events"] = [first, first]
+        with self.assertRaises(ValueError):
+            project_entity_result(duplicate, request)
+        exclusive = copy.deepcopy(request)
+        structures = read_object(read_object(exclusive["schema"])["structures"])
+        structure = read_object(structures["events"])
+        read_object(read_list(structure["fields"])[1])["exclusive"] = True
+        rebound = copy.deepcopy(response)
+        records = read_list(read_object(rebound["result"])["events"])
+        read_object(records[1])["actors"] = read_object(records[0])["actors"]
+        with self.assertRaises(ValueError):
+            project_entity_result(rebound, exclusive)
+        self.assertIn("events", native)
+
+    def test_event_sections_are_identical_in_standalone_and_combined_reports(self) -> None:
+        source = "A bought B. C sold D."
+        request = self.request(source, True, True)
+        response = self.response(source, True, True)
+        spacy = NativeFiles(response=spacy_result([feature("sentences", {"sentences": []})]))
+        gliner = NativeFiles(request=request, response=response)
+        reports = render_saved_reports(source, spacy, gliner)
+        section = render_gliner_results(source, response, gliner_request=request)
+        self.assertFalse(reports.failed)
+        self.assertEqual(reports.gliner, compose_report(source, section))
+        self.assertIn(section, reports.combined)
+        identifiers = re.findall(r"^\| ([A-Z]+\d+) \|", reports.combined, re.MULTILINE)
+        self.assertEqual(len(identifiers), len(set(identifiers)))
+        self.assertIn("M1", identifiers)
+        self.assertIn("M2", identifiers)
+        markup_request = self.request("<act>", False, False)
+        markup: dict[str, object] = {
+            "result": {
+                "entities": {},
+                "events": [{
+                    "action": "<act>", "actors": [], "objects": [], "times": [], "places": [],
+                }],
+            }
+        }
+        escaped = render_gliner_results("<act>", markup, gliner_request=markup_request)
+        self.assertNotIn("<act>", escaped)
+        self.assertIn("<act>", html.unescape(escaped))
+
+
 class ClassificationTests(unittest.TestCase):
     def test_default_request_uses_active_configured_labels_and_native_modes(self) -> None:
         taxonomy = classification_taxonomy()
@@ -767,6 +1026,38 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(json.dumps((request, response)), before)
         with self.assertRaises(ValueError):
             render_classifications("X\n", response, request=request)
+
+    def test_native_output_flags_preserve_label_only_and_scored_classification(self) -> None:
+        for confidence in (False, True):
+            for spans in (False, True):
+                request: dict[str, object] = {
+                    "text": "A",
+                    "include_confidence": confidence,
+                    "include_spans": spans,
+                    "schema": {
+                        "classifications": [{
+                            "task": "task", "labels": {"id": "Offered label"}, "multi_label": False,
+                        }],
+                    },
+                }
+                selected: object = {"label": "id", "confidence": 0.6} if confidence else "id"
+                response: dict[str, object] = {"result": {"task": selected}}
+                report = html.unescape(
+                    render_classifications("A", response, request=request).content
+                )
+                self.assertIn("| L1 | task | id | Offered label", report)
+                self.assertEqual("| Native score |" in report, confidence)
+                self.assertEqual("0.6" in report, confidence)
+        flagless = copy.deepcopy(request)
+        del flagless["include_confidence"]
+        del flagless["include_spans"]
+        self.assertIn("id", render_classifications("A", {"result": {"task": "id"}},
+                                                 request=flagless).content)
+        invalid = copy.deepcopy(request)
+        invalid["include_confidence"] = False
+        with self.assertRaises(ValueError):
+            render_classifications("A", {"result": {"task": {"label": "id", "confidence": 0.6}}},
+                                   request=invalid)
 
     def test_classification_refuses_missing_tasks_wrong_ids_cardinality_and_invalid_scores(
         self,

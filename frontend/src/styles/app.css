@@ -170,6 +170,12 @@ body {
 	max-width: var(--frame-reading);
 }
 
+/* Home and archive fill the window with the configured gutters. */
+.frame:has([data-surface='home']),
+.frame:has([data-surface='archive']) {
+	max-width: none;
+}
+
 /* An instrument has tables and charts where a digest has sentences, so it is
    allowed the screen it is on - measured 2026-08-28, the console rendered a
    ten-column table at 627px with 582px empty beside it.
@@ -300,8 +306,9 @@ body {
 }
 
 /* --- The reading page's columns -----------------------------------------
-   A day is a stream, and from the wide breakpoint it is a stream with an aside
-   beside it. What goes in the aside is the day's leading stories: they are five
+   A day is a stream. On dated pages, the wide breakpoint puts an aside beside
+   it; the home page keeps the leading block above the full-width stream. What
+   goes in the aside is the day's leading stories: they are five
    anchors into the stream, so they are furniture rather than reading, and above
    the stream they took the whole first screen.
 
@@ -313,10 +320,8 @@ body {
    570 px - so the item gives its rail back at the same width
    (DigestItem.svelte).
 
-   The aside stands beside the STREAM and never beside the day's controls. The
-   filter panel sticks only where it is one band, and one band needs the whole
-   content box: at 896 px its pills wrap under its field and a two-band panel
-   then follows the reader down the page.
+   The aside stands beside the STREAM and never beside the day's controls, so
+   the wrapping topics and search field can use the whole content box.
 
    Below the breakpoint these are plain blocks, so the parts stack in
    `digest.sections` order and the leads are exactly where config put them. */
@@ -359,6 +364,16 @@ body {
 		   reader-facing surface scrolls sideways. */
 		max-block-size: calc(100dvh - var(--space-8));
 		overflow-y: auto;
+	}
+
+	[data-surface='home'] .day:has(> .day-aside) {
+		display: block;
+	}
+
+	[data-surface='home'] .day:has(> .day-aside) > .day-aside {
+		position: static;
+		max-block-size: none;
+		overflow: visible;
 	}
 }
 

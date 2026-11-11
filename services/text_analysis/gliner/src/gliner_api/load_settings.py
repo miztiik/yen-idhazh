@@ -5,14 +5,15 @@ from pathlib import Path
 from typing import Final, Literal, Self
 from urllib.parse import urlsplit
 
-from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic import ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from gliner_api.configure_native_diagnostics import (
     NativeDiagnosticError,
     require_safe_import_controls,
 )
-from gliner_api.declare_api_contracts import API_VERSION, ApiContract
+from gliner_api.declare_api_contracts import API_VERSION, ApiContract, Confidence
 
+SETTINGS_VERSION: Final = "2026-11-10"
 SETTINGS_PATH: Final = Path("config") / "text-analysis" / "gliner" / "settings.json"
 MODEL_CACHE_PATH: Final = Path("services") / "text_analysis" / "gliner" / "var" / "models"
 
@@ -91,8 +92,8 @@ class LoggingSettings(ApiContract):
     max_event_bytes: int = Field(default=4096, gt=0)
 
 
-class GlinerSettings(ApiContract):
-    """Read model identity independently of listener or taxonomy configuration."""
+class _PreviousSettings(ApiContract):
+    """Read exactly the first settings shape before applying its native defaults."""
 
     version: str = Field(json_schema_extra={"const": API_VERSION})
     changelog: list[SettingsChange] = Field(min_length=1, max_length=5)
@@ -101,7 +102,7 @@ class GlinerSettings(ApiContract):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
 
     @model_validator(mode="after")
-    def require_current_settings_shape(self) -> Self:
+    def require_previous_settings_shape(self) -> Self:
         versions = [entry.version for entry in self.changelog]
         if (
             self.version != API_VERSION
@@ -109,6 +110,52 @@ class GlinerSettings(ApiContract):
             or versions != sorted(set(versions), reverse=True)
         ):
             raise ValueError("Settings require the current dated shape and ordered changelog")
+        return self
+
+
+class GlinerSettings(ApiContract):
+    """Read current controls or the exact historical configuration with native defaults."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "version": SETTINGS_VERSION,
+            "changelog": [
+                {"version": SETTINGS_VERSION, "change": "Add native entity extraction controls."},
+                {"version": API_VERSION, "change": "Declare local model and diagnostic settings."},
+            ],
+        }
+    )
+
+    version: str = Field(json_schema_extra={"enum": [SETTINGS_VERSION, API_VERSION]})
+    changelog: list[SettingsChange] = Field(min_length=1, max_length=5)
+    enabled: bool = True
+    model: ModelSettings
+    logging: LoggingSettings = Field(default_factory=LoggingSettings)
+    entity_confidence_threshold: Confidence = 0.8
+    overlap_policy: Literal["disallow", "flat", "allow"] | None = "disallow"
+
+    @model_validator(mode="before")
+    @classmethod
+    def read_previous_defaults(cls, value: object) -> object:
+        if isinstance(value, dict) and value.get("version") == API_VERSION:
+            previous = _PreviousSettings.model_validate(value)
+            # None preserves the loaded architecture's former native overlap default.
+            return previous.model_dump() | {
+                "entity_confidence_threshold": 0.5,
+                "overlap_policy": None,
+            }
+        return value
+
+    @model_validator(mode="after")
+    def require_supported_settings_shape(self) -> Self:
+        versions = [entry.version for entry in self.changelog]
+        if (
+            self.version not in {SETTINGS_VERSION, API_VERSION}
+            or versions[0] != self.version
+            or versions != sorted(set(versions), reverse=True)
+            or (self.version == SETTINGS_VERSION and self.overlap_policy is None)
+        ):
+            raise ValueError("Settings require a supported dated shape and ordered changelog")
         return self
 
 

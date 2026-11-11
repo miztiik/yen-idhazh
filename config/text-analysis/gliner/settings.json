@@ -1,12 +1,18 @@
 {
-  "version": "2026-11-08",
+  "version": "2026-11-10",
   "changelog": [
+    {
+      "version": "2026-11-10",
+      "change": "Configure native entity confidence and overlap selection."
+    },
     {
       "version": "2026-11-08",
       "change": "Declare local GLiNER2 model selection and diagnostic bounds."
     }
   ],
   "enabled": true,
+  "entity_confidence_threshold": 0.8,
+  "overlap_policy": "disallow",
   "model": {
     "repo": "fastino/gliner2.5-base-v1",
     "base_url": "https://huggingface.co"

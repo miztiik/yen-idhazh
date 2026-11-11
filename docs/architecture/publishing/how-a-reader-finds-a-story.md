@@ -1,6 +1,6 @@
 # How a reader finds a story
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 How the archive answers a submitted question, and how a day page filters its own
 stories. Both use the same published vectors and on-device encoder; their
@@ -11,7 +11,12 @@ interaction and date coverage are deliberately different.
 The archive has one heading, "Search our archives", one form and one answer
 list. On a wide screen the field, Dates disclosure and Search button share a
 row. On a phone the field and Search stay together and Dates follows below.
-Clear is attached to the field, not to the result heading.
+Dates and Search pair their visible labels with shared calendar and search
+glyphs. The field's X control is labelled "Clear search" for assistive
+technology and is attached to the field, not to the result heading.
+
+The archive uses the home's full-width frame and configured gutters. Story text
+keeps the shared prose measure rather than stretching with the search controls.
 
 Typing edits a draft. Search or Enter applies the question and both UTC date
 bounds together. Editing a draft does not discard the current answer or replace
@@ -73,10 +78,12 @@ The field remains mounted while loading, failing and presenting an answer.
 Search does not run on keystrokes. Query and date edits do not move focus,
 remount the control or replace the answer before submission.
 
-The long introductory, privacy and coverage paragraphs are not standing
-content above the list. A compact on-device download disclosure opens the
-existing privacy information on demand. The encoder loader and its verified
-fallback remain unchanged; the
+Keyboard focus on the query outlines the complete field, including its reserved
+X space, not the nested text input. The X action retains its own visible focus
+indicator. Neither focus nor typing changes the controls' geometry.
+
+The archive does not render download, privacy or date-instruction disclosures.
+The encoder loader and its verified fallback remain unchanged; the
 [encoder contract](the-on-device-encoder-and-its-vectors.md) owns their origin
 and integrity requirements.
 
@@ -84,27 +91,36 @@ Loading exposes Stop, and a failed download exposes Try again. Stopping or
 starting a later attempt makes late results ineligible to update the page.
 A canceled archive scan does not request the next month.
 
-The applied question and date range accompany the result count. A successful
-zero-match answer is an empty result list, never a fallback to unrelated
+The answer heading, applied question, result count and date range form one
+compact group directly below the controls. A capped answer names its count
+as closest matches, not a total, and limited coverage remains explicit. A
+successful zero-match answer is an empty result list, never a fallback to unrelated
 recent stories. Missing or incompatible month files are reported as incomplete
 coverage. If no eligible vectors can be read because requested files failed,
 search fails with retry rather than claiming no matches. A valid date with no
 indexed stories is an empty answer without a model download. A missing browsing file has retry;
 an empty publication inventory renders an empty page rather than throwing.
 
-## The filter bar: topics and a field in one panel
+## The filter bar: topics and a field in one strip
 
 The shared filter bar remains on day pages, not on the archive. Its topic
 links are published routes and work without JavaScript. Auto-created overflow
 topics use a native disclosure; configured topics remain visible.
-The band sticks only at the wide breakpoint where it fits on one line.
+The unboxed strip separates itself from the edition information with a rule.
+Wide screens give topics two shares of the width and the field one; narrow
+screens wrap topics above the field. The selected topic has an accent tint and
+outline. The strip scrolls with the page so wrapped controls cannot obscure
+stories.
 
 ## The day page: one field, two tiers
 
 Typing on a day page filters its loaded title, summary and key points without
-fetching index files, vectors or an encoder. Enter requests semantic search
-over the configured month scope. The field's caption distinguishes these
-gestures and discloses the first-use download before Enter can spend it.
+fetching index files, vectors or an encoder. Enter or `Search other days`
+requests semantic search over the configured month scope. The action appears
+for a non-empty query, without moving the field. A first-use download disclosure
+appears as soon as the reader can submit that query. At rest there is no
+instruction or status sentence; a filtered count or search state appears when
+there is something to report.
 
 An answer replaces the day's story list. The next keystroke restores local
 filtering, and a return control restores the day directly. A failed or canceled
@@ -124,6 +140,14 @@ and its scope together while retaining a bounded recent list before the first
 query. Existing monthly projections already contain the required vectors;
 another index would introduce a second publication and freshness obligation
 without being necessary for exact cosine search.
+
+Finding a story uses the page's full width; reading its text still needs a
+bounded measure. A field-level query outline keeps the text and its clear
+action visually connected without drawing competing focus rings.
+
+On day pages the controls already have individual outlines, so another enclosing
+card adds no meaning. Removing it keeps the edition compact without shrinking
+tap targets. Query feedback and download disclosures remain below the strip.
 
 ## See also
 

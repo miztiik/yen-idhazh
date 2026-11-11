@@ -277,13 +277,11 @@
 			? costNote(COST)
 			: stateSentence({ phase, held, cached, cost: COST })
 	);
-	// Shown while there is something to say: a download in flight, a refusal, or a
-	// price the reader has not paid and is one key away from spending. Never
-	// without the field, because every sentence it prints is about a key there is
-	// nowhere to press.
+	// Show the download cost as soon as a query can be submitted, even before it
+	// is long enough to filter the day.
 	const searchShown = $derived(
 		ui.show_filter &&
-			(phase.name !== 'offer' || (typed !== null && !held && cached !== 'present'))
+			(phase.name !== 'offer' || (query.trim() !== '' && !held && cached !== 'present'))
 	);
 	const answered = $derived(found !== null);
 
@@ -295,11 +293,8 @@
 				? `No stories match. ${searched}`
 				: `${plural(found.hits.length, 'story', 'stories')} found. ${searched}`;
 		}
-		if (!filtering) return 'Typing filters this page. Press Enter to search other days.';
-		return (
-			`${settledCount} of ${plural(total, 'story', 'stories')} on this page. ` +
-			'Press Enter to search other days.'
-		);
+		if (!filtering) return '';
+		return `${settledCount} of ${plural(total, 'story', 'stories')} on this page.`;
 	});
 
 	// The count settles behind the list rather than with it. `visible.length` is
@@ -476,7 +471,7 @@
 			placeholder="Filter this page"
 			showField={ui.show_filter}
 			submitLabel="Search other days"
-			submitVisible={false}
+			submitVisible={query.trim().length > 0}
 			onSubmit={() => void ask()}
 			{onType}
 			deskThinMax={ui.desk_thin_max}
@@ -535,14 +530,6 @@
 					You have read everything here today.
 				</p>
 			{:else}
-				<!-- The zone, once, above the stream it explains. Not a suffix on 627
-				     stamps: every clock on this page is in the same zone, so it is a fact
-				     about the page and it is drawn where the page's own facts are. It
-				     hung above the time rail until 2026-09-12 and it outlived it - the
-				     rail was the duplicate; this sentence is what makes a bare clock
-				     readable. -->
-				<p class="zone-note" data-time-note>Times shown in UTC.</p>
-
 				{#each paged as item (item.item_id)}
 					<DigestItemView
 						{item}
@@ -642,15 +629,3 @@
 		</div>
 	{/if}
 </div>
-
-<style>
-	/* The zone, once, in the day's own chrome type. The rail that used to carry
-	   this sentence is gone; the sentence is not, because it is the fact that
-	   makes every bare clock on the page readable. */
-	.zone-note {
-		margin-block-start: var(--space-5);
-		color: var(--color-text-tertiary);
-		font-size: var(--text-xs);
-		line-height: var(--leading-xs);
-	}
-</style>
