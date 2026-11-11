@@ -83,10 +83,13 @@ test('removed visual diagnostics neither mount nor ask for evaluator data', asyn
 	await page.goto('/console/');
 	await hydrated(page);
 	await settled(page);
-	for (const id of ['pipeline-funnel', 'downgrade-funnel', 'extraction']) {
+	for (const id of ['pipeline-funnel', 'downgrade-funnel', 'extraction', 'visual-written-types']) {
 		await expect(page.locator(`[data-console-panel-id="${id}"]`)).toHaveCount(0);
+		await expect(page.locator(`[id="${id}"], a[href$="#${id}"]`)).toHaveCount(0);
 	}
-	for (const id of ['chart-drawing', 'visual-refusals', 'visual-written-types']) {
+	await expect(page.getByRole('heading', { name: 'Planned and successfully written visual types', exact: true })).toHaveCount(0);
+	await expect(page.locator('[data-visual-attempt-view="written"]')).toHaveCount(0);
+	for (const id of ['chart-drawing', 'visual-refusals']) {
 		await expect(page.locator(`[data-console-panel-id="${id}"]`)).toHaveCount(1);
 	}
 	expect(evaluatorRequests).toEqual([]);

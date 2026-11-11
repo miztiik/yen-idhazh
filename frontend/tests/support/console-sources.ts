@@ -62,7 +62,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'ArticleAge.svelte', 'AtAGlance.svelte', 'ChartDrawing.svelte',
 		'FailureMix.svelte', 'ItemCost.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
 		'RunTimeline.svelte', 'SiteCostPerItem.svelte', 'SlowerOnSameWork.svelte', 'StageTimings.svelte',
-		'VisualAttempts.svelte', 'VisualRefusals.svelte',
+		'VisualRefusals.svelte',
 		'article-age.ts', 'at-a-glance.ts', 'attempt-notes.ts', 'chart-drawing.ts', 'drawing-flow.ts', 'failure-mix.ts',
 		'item-cost.ts', 'item-time-split.ts', 'record-window.ts', 'run-health.ts',
 		'run-timeline.ts', 'site-cost-per-item.ts', 'slower-on-same-work.ts', 'stage-timings.ts', 'visual-attempts.ts', 'visual-refusals.ts'

@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-11
 
 What a build writes, what a reader's browser fetches, and where each part of the
 reader's surface is written up. This page holds the shell: the documents a build
@@ -25,9 +25,9 @@ Six pages, one question each. Arrive at the one holding your question and stop.
 | [the-on-device-encoder-and-its-vectors.md](the-on-device-encoder-and-its-vectors.md) | Which encoder wrote these vectors, where does a browser get it, and what makes two vectors comparable |
 
 The operator's surface is a different reader with a different budget, and it is
-[console.md](console.md). Pipelines also compares recorded visual refusals and
-planned versus written types; [the attempt views](what-the-pipelines-route-draws.md#visual-attempt-views-read-the-unpublished-record-at-build-time)
-define their private input and incomplete-data rules.
+[console.md](console.md). Pipelines draws recorded visual refusals as
+[daily lines](what-the-pipelines-route-draws.md#visual-refusal-lines-read-the-unpublished-attempt-record-at-build-time);
+their private input and incomplete-data rules stay separate from publication counts.
 
 Planner table files have a separate [current-format publication admission
 rule](planner-publication.md). It changes only the generated planner copies and

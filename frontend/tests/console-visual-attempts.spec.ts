@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { visualAttemptDays, writtenTypeCounts } from '../src/lib/console/pipelines/visual-attempts';
+import { visualAttemptDays } from '../src/lib/console/pipelines/visual-attempts';
 import { refusalLines } from '../src/lib/console/pipelines/visual-refusals';
 import type { RecordRead } from '../src/lib/console/recording';
 import { frame } from '../src/lib/charts/frame';
@@ -8,20 +8,20 @@ import { dateSeries, numberFormat } from './support/number-format';
 import { visualAttemptRows } from '../src/lib/server/ledger-rows';
 import { attemptNotes } from '../src/lib/console/pipelines/attempt-notes';
 import { buildLedger, buildRows } from './support/ledger-lifecycle';
-import { serverCompiler, renderConfigured } from './support/server-render';
 import type { Row } from '../src/lib/data/ledger';
 
 function fixture(): Row[] {
 	return JSON.parse(readFileSync(new URL('../../tests/fixtures/visual-attempt-console.json', import.meta.url), 'utf8'));
 }
 
-test('UTC refusal counts and written type pairs match the named attempt fixture', async ({}, info) => {
+test('the private attempt read retains UTC refusal counts without fetching unused state or types', async ({}, info) => {
 	const rows = fixture();
 	const root = info.outputPath('attempts');
 	await buildRows(root, 'visual-design-attempts', ['2030-06-13', '2030-06-14', '2030-06-15'].map((date) => ({
 		covers: date, rows: rows.filter((row) => row.date === date).map((row) => ({ ...row, run_id: 'run' }))
 	})));
 	const table = await visualAttemptRows({ start: '2030-06-13', end: '2030-06-15' }, root);
+	expect(table.rows).toContainEqual({ date: '2030-06-13', run_id: 'run', rejection_reason: '' });
 	const days = visualAttemptDays(table.rows);
 	const expectedRefusals = rows.filter((row) => row.rejection_reason).reduce<Record<string, number>>((held, row) => {
 		const key = `${row.date}/${row.rejection_reason}`;
@@ -30,53 +30,27 @@ test('UTC refusal counts and written type pairs match the named attempt fixture'
 	}, {});
 	expect(Object.fromEntries(days.flatMap((day) => day.refusals.map((refusal) =>
 		[`${day.date}/${refusal.reason}`, refusal.count])))).toEqual(expectedRefusals);
-	const expectedWritten = rows.filter((row) => row.rendered_type).reduce<Record<string, number>>((held, row) => {
-		const key = `${row.planned_type}/${row.rendered_type}`;
-		held[key] = (held[key] ?? 0) + 1;
-		return held;
-	}, {});
-	expect(Object.fromEntries(writtenTypeCounts(days).map((pair) =>
-		[`${pair.planned}/${pair.rendered}`, pair.count]))).toEqual(expectedWritten);
 	expect(days.map((day) => day.date)).toEqual(['2030-06-13', '2030-06-14', '2030-06-15']);
+	expect(days.map((day) => day.attempts)).toEqual([3, 4, 1]);
 	expect(days.find((day) => day.date === '2030-06-15')?.refusals).toEqual([]);
-	expect(days.reduce((total, day) => total + day.untypedWritten, 0)).toBe(1);
-	expect(writtenTypeCounts(days.filter((day) => day.date === '2030-06-14'))).toEqual([
-		{ planned: 'bar', rendered: 'bar', count: 1 }
-	]);
-
-	const compile = serverCompiler(info.outputPath('compiled'));
-	const module = await compile('src/lib/console/pipelines/VisualAttempts.svelte', 'VisualAttempts', []);
-	const component = (await import(module)).default;
-	const evidence = attemptNotes(table.read);
 	const lines = refusalLines(days, table.read, { start: '2030-06-13', end: '2030-06-15' }, numberFormat);
 	for (const day of days) for (const refusal of day.refusals) {
 		expect(lines.find((line) => line.reason === refusal.reason)?.series.points.find((point) => point.date === day.date)?.value)
 			.toBe(refusal.count);
 	}
-	const writtenHtml = renderConfigured(component, { props: { days, read: evidence.state, notes: evidence.notes } }).body;
-	for (const pair of writtenTypeCounts(days)) {
-		expect(writtenHtml).toContain(`data-planned-type="${pair.planned}" data-rendered-type="${pair.rendered}" data-count="${pair.count}"`);
-	}
-	expect(writtenHtml).toContain('not necessarily published');
-	expect(writtenHtml).toContain('Written attempts with no recorded type: 1');
 });
 
 test('missing, lost and truncated evidence stays incomplete rather than quiet', async ({}, info) => {
-	const compile = serverCompiler(info.outputPath('compiled'));
-	const module = await compile('src/lib/console/pipelines/VisualAttempts.svelte', 'VisualAttempts', []);
-	const component = (await import(module)).default;
 	const missing = await visualAttemptRows({ start: '2030-06-13', end: '2030-06-15' }, info.outputPath('missing'));
 	const unread = attemptNotes(missing.read);
-	const html = renderConfigured(component, { props: { days: [], read: unread.state, notes: unread.notes } }).body;
-	expect(html).toContain('not packed');
-	expect(html).not.toContain('data-empty');
+	expect(unread.state).toBe('not-packed');
+	expect(unread.notes.join(' ')).toContain('not packed');
 	expect(refusalLines([], missing.read, { start: '2030-06-13', end: '2030-06-15' }, numberFormat)).toEqual([]);
 	const root = info.outputPath('incomplete');
-	const { date: _date, ...columns } = fixture()[0];
 	await buildLedger(root, {
 		ledger: 'visual-design-attempts', pinned: '2030-06-15',
 		days: [{ ago: 2, rows: 1, setAside: 2 }, { ago: 1, state: 'lost' }, { ago: 0, state: 'empty' }],
-		columns: { ...columns, run_id: 'run' }
+		columns: { run_id: 'run', rejection_reason: 'enough_data' }
 	});
 	const partial = await visualAttemptRows({ start: '2030-06-13', end: '2030-06-15' }, root);
 	const evidence = attemptNotes(partial.read);
@@ -89,10 +63,13 @@ test('missing, lost and truncated evidence stays incomplete rather than quiet', 
 	expect(wider.notes.join(' ')).toContain('incomplete');
 	expect(attemptNotes(partial.read, { start: '2030-06-15', end: '2030-06-15' }).notes).toEqual([]);
 	const days = visualAttemptDays(partial.rows);
-	const partialHtml = renderConfigured(component, { props: { days, read: evidence.state, notes: evidence.notes } }).body;
-	expect(partialHtml).toContain('data-record-note');
-	expect(partialHtml).toContain('data-record-incomplete');
-	for (const note of evidence.notes) expect(partialHtml).toContain(note);
+	expect(evidence.notes.join(' ')).toContain('not drawn as zero');
+	const lines = refusalLines(days, partial.read, { start: '2030-06-13', end: '2030-06-15' }, numberFormat);
+	expect(lines).toHaveLength(1);
+	expect(lines[0].series.points.map((point) => point.value)).toEqual([1, null, null]);
+	expect(lines[0].readout.series.find((series) => series.label === 'Recorded attempts')?.values)
+		.toEqual(['1 attempt', null, null]);
+	expect(lines[0].readout.events[0][0].value).toContain('incomplete');
 });
 
 const WINDOW = { start: '2030-06-01', end: '2030-06-07' };

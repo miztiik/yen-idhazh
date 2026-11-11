@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-11-11
 **Level**: 5 - resolve design gates before implementation.
-**Status**: Rows 1-7 are complete. Row 8a implements the selected Pipelines visual cuts, daily refusal lines and stage colours. Other cut/move dispositions and anomaly/baseline decisions remain blocked in Row 8.
+**Status**: Rows 1-7, Row 8a and Row 8b are complete. The selected written-type diagnostic is permanently removed. Other cut/move dispositions and anomaly/baseline decisions remain blocked in Row 8.
 
 ## 0. Operating contract
 
@@ -47,6 +47,7 @@ Table C
 | C7 | 7 | Make retained explorer answers directly reachable and drawable | 1 | G | DONE | `ubiquitous-doodle` | - | App session `735f58fd-23bf-4189-9efb-d08402988c46`; branch `explorer-reliability` |
 | C8 | 8 | Settle remaining permanent cuts, page moves and token anomaly rules | 1 | H | BLOCKED | - | - | Individual dispositions and anomaly/baseline definitions remain unresolved. |
 | C9 | 8a | Simplify selected Pipelines visual diagnostics | 1, 5 | I | DONE | `psychic-goggles` | - | App session `3932eb6c-014c-40e4-9e51-5617ff2c30f0`; branch `pipelines-visual-diagnostics` |
+| C10 | 8b | Remove the Pipelines written-type diagnostic | 8a | J | DONE | `legendary-garbanzo` | - | App session `da0bfe17-ef48-4e8f-93d2-7c92c1dd13ce`; branch `remove-written-type-diagnostic` |
 
 ## 2. Row #1 - Define console redesign and chart changes
 
@@ -107,7 +108,7 @@ Table F - Pipelines; source: `config/console/pipelines.json`
 | F11 | `pipeline-funnel` | Where visual attempts stop | REMOVE permanently in Row 8a; M1 names the lost stage-by-class diagnostic. |
 | F12 | `downgrade-funnel` | Replacement-search outcomes | REMOVE permanently in Row 8a; M2 names the lost draft outcomes and search depth. |
 | F13 | `visual-refusals` | First plan-check refusals | RETAIN on Pipelines as daily lines in Row 8a; M3. Preserve all reasons, including attempts later written. |
-| F14 | `visual-written-types` | Requested versus written types | PROPOSE CUT; M4 prices planned-to-written type substitutions. |
+| F14 | `visual-written-types` | Requested versus written types | REMOVE permanently in Row 8b; M4 names the lost planned-to-written type comparison. |
 | F15 | `extraction` | Extraction integrity and chartable yield | REMOVE permanently in Row 8a; M10 names the distinct extraction class/flag/yield diagnostic loss. |
 | F16 | `article-age` | Source age at work start | KEEP; Row 5 corrects the publication-age title, not the recorded clock. |
 
@@ -187,7 +188,7 @@ Table L
 | --- | --- | --- | --- |
 | L1 | Full visual replacement | Row 3 uses the complete console-only style family below: palette, type, rail, controls, status, panels and drawings. No reader recoloring. | Defaulted additive appearance family; native validation precedes CSS production. Missing blocks/leaves use role defaults, arrays replace whole, and only the chart dash accepts null. No dependency on L3 or L6. |
 | L2 | Closed-day eligibility/cadence | Keep `compact_after_days = 1` for item-health, summary-quality-evals, host-fingerprint and run-shards; retain validator >=1, cadence and retention. | RESOLVED: the extra whole-day wait remains. Row 2 diagnoses publication only; no freshness gain is assumed. |
-| L3 | Permanent cuts and page moves | Row 4 permanently removes G4. Row 8a removes F11/F12/F15 and retains F13 as daily lines. Other Table M cuts and every Table N move remain individual proposals in Row 8; existing flat rosters determine presence/order. | Selected inventories are closed in their rows. Row 8 remains blocked on other dispositions and losses. No presentation schema, hidden charts or blanket disclosure strategy. |
+| L3 | Permanent cuts and page moves | Row 4 permanently removes G4. Row 8a removes F11/F12/F15 and retains F13 as daily lines. Row 8b removes F14. Other Table M cuts and every Table N move remain individual proposals in Row 8; existing flat rosters determine presence/order. | Selected inventories are closed in their rows. Row 8 remains blocked on other dispositions and losses. No presentation schema, hidden charts or blanket disclosure strategy. |
 | L4 | Automatic explorer chart choice | Count valid readings through existing role/shape validation and floors; a small named grouped result can rank instead of selecting an undrawable scatter. | Row 7 construction settled; preserve manual choices, typed-date refusals and reporting floors. Independent of L1/L3/L6. |
 | L5 | SQL aggregation | Keep existing named column/date queries and reducers for these changes. No new aggregate API is required. | RESOLVED: placement, units, window labels and publication diagnosis do not require a query-contract migration. No transfer-saving claim. |
 | L6 | Hardware run read/write comparison | Compact item-health, settled by UTC date/run/item, supplies two per-run lines. Run total sums paired finite nonnegative input/output; Median per article takes each side's actual median over that identical cohort. Default totals; input includes cached prompts and recorded model calls. | Run-aware geometry, numeric run order, distinct same-day positions and known unmeasured gaps; no daily roll-up, fake timestamps or refetch on metric switch. Actual-run pointer/tap/keyboard readout includes full ID, UTC date and measured/recorded articles. Anomaly/baseline rules stay unresolved in Row 8. |
@@ -250,7 +251,7 @@ Table M
 | M1 | Where visual attempts stopped, by potential class / `pipeline-funnel` | Pipelines `/console/` -> removed | SETTLED permanent cut in Row 8a: loses stage-by-stage attempt attrition by potential class. Published visual coverage is not equivalent. |
 | M2 | How drafted visual plans ended, by potential class / `downgrade-funnel` | Pipelines `/console/` -> removed | SETTLED permanent cut in Row 8a: loses draft-only outcomes and replacement-search depth. |
 | M3 | Recorded refusal reasons over time / `visual-refusals` | Pipelines `/console/` -> retained daily lines | SETTLED retention in Row 8a: replaces the long per-day list, not first failed checks or any recorded reason. Includes attempts later written; unknown days are not zero. |
-| M4 | Planned and successfully written visual types / `visual-written-types` | Pipelines `/console/` -> removed | OPEN proposal: loses planned-to-written substitutions; written is not published. |
+| M4 | Planned and successfully written visual types / `visual-written-types` | Pipelines `/console/` -> removed | SETTLED permanent cut in Row 8b: loses the visible planned-to-written type comparison and substitutions; written is not published, and the retained overview does not replace it. |
 | M5 | Which rule refused a reply / `refusing-rule` | Summaries `/console/model/` -> removed | SETTLED permanent cut: same failed-rule query/ranking and model-stage readings remain on Pipelines. Loses the Summaries shortcut/default summarize selection, not a unique metric. |
 | M6 | What the model change moved / `model-change` | Summaries `/console/model/` -> removed | OPEN proposal: loses before/after comparison across different article cohorts. Setting-change markers do not replace it. |
 | M7 | Which machines ran our jobs, day by day / `platform-mix` | Hardware `/console/machine/` -> removed | OPEN proposal: loses historical machine-placement mix. Its native query still serves other Hardware readings. |
@@ -737,7 +738,7 @@ Table AA
 
 ## 9. Row #8 - Settle remaining permanent cuts, page moves and token anomaly rules
 
-- **Scope:** Complete the existing page-by-page disposition review for M4, M6-M9 and N1-N5. M1-M3 and M10 are settled in Row 8a. Preserve every other title, loss and source/endpoint requirement in Tables F-K, M and N until each fate is settled. Separately define whether H14 needs an anomaly/baseline comparison and what it would mean; the complete baseline chart in Row 4 does not choose one.
+- **Scope:** Complete the existing page-by-page disposition review for M6-M9 and N1-N5. M1-M3 and M10 are settled in Row 8a; M4 is settled in Row 8b. Preserve every other title, loss and source/endpoint requirement in Tables F-K, M and N until each fate is settled. Separately define whether H14 needs an anomaly/baseline comparison and what it would mean; the complete baseline chart in Row 4 does not choose one.
 - **Status:** BLOCKED on individual dispositions and the anomaly/baseline definition. No remaining proposal is an implementation instruction.
 - **Candidate files:** Filter to the selected IDs before implementation; do not bulk-apply this inventory:
   - `config/console/pipelines.json`, `config/console/model.json`, `config/console/machine.json`, `config/console/voices.json`
@@ -747,7 +748,6 @@ Table AA
   - `frontend/src/lib/console/model/panels.ts`, `frontend/src/lib/console/model/Panels.svelte`, `frontend/src/lib/console/model/model-change.ts`, `frontend/src/lib/console/model/slice.ts`, `frontend/src/lib/console/eval-instruments.ts`
   - `frontend/src/lib/console/pipelines/ItemCost.svelte`, `frontend/src/lib/console/pipelines/SlowerOnSameWork.svelte`
   - `frontend/src/lib/console/pipelines/WriteCost.svelte` (N2 extraction), `frontend/src/lib/console/pipelines/SlowestArticles.svelte` (N3 extraction)
-  - `frontend/src/lib/console/pipelines/VisualAttempts.svelte`, `frontend/src/lib/console/pipelines/visual-attempts.ts`, `frontend/src/lib/console/pipelines/attempt-notes.ts`
   - `frontend/src/lib/console/machine/MachineCharts.svelte`, `frontend/src/lib/console/machine/records.ts`, `frontend/src/lib/console/machine/TailTrendPanel.svelte`, `frontend/src/lib/console/machine/PlatformMixPanel.svelte`
   - `frontend/src/lib/console/voices/WatchlistPanel.svelte`, `frontend/src/lib/console/voices/watchlist.ts`
   - `frontend/src/lib/server/ledger-rows.ts`, `frontend/src/lib/charts/machine.ts`, `frontend/src/lib/charts/cost.ts`, `frontend/src/lib/components/RateControl.svelte`
@@ -807,3 +807,32 @@ Table AA
   files/semantics, actual check outcomes, smoke, design findings and remaining
   decisions. Follow required exact-head CI to its final result; parent review
   and merge remain separate. Keep worktree/artifacts and stop helpers.
+
+## 11. Row #8b - Remove the Pipelines written-type diagnostic
+
+- **Scope:** Permanently remove F14/M4 from the roster, judged list, title,
+  mount and page anchors, without a hidden or relocated replacement. The
+  capability loss is the visible planned-to-written type comparison and
+  substitutions, not a publication reading; the retained overview is not
+  equivalent.
+- **Surviving consumers:** `VisualRefusals.svelte` and `visual-refusals.ts`
+  still consume `visualAttemptDays` and `attemptNotes`. Preserve daily attempt
+  counts, all first refusal reasons, UTC calendars, exact readouts, shared
+  hover, typed coverage/loss/set-aside metadata and missing/empty/partial states.
+  Remove only the written component, type-pair fields/reducers and the private
+  reader's unconsumed state/type columns. The producer, `VisualAttemptRow`,
+  compact contracts and stored records stay unchanged.
+- **Files:** `config/console/pipelines.json`; both Pipelines route files;
+  `console/pipelines/VisualAttempts.svelte` (delete) and `visual-attempts.ts`;
+  `server/ledger-rows.ts`; the existing visual-attempt, lifecycle and nothing
+  specs; their named build-time, source and window inventories; the native
+  read-binding test; the Pipelines owning page and frontend routing link.
+- **Acceptance:** Shared selector, smallest relevant local specs and applicable
+  lint/types. Integrated Browser smoke covers Pipelines, one cross-route
+  journey, console/HTTP failures and representative absent/empty data. One
+  retained visual surface supplies Susan's rendered sufficiency review;
+  fixture/canary evidence is labelled separately from production.
+- **Delivery:** One focused PR, exact-head CI followed to its final outcome,
+  with parent review and merge separate. Preserve the recovery report,
+  worktree and browser evidence; stop helpers when no longer needed. M6-M9,
+  N1-N5 and token anomaly/baseline rules remain blocked in Row 8.
