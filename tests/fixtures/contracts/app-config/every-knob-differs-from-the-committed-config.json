@@ -496,6 +496,6 @@
       "significant_digits": 5
     },
     "request_timeout_minutes": 1.5,
-    "type_selection_enabled": true
+    "type_selection_enabled": false
   }
 }

@@ -16,7 +16,7 @@ import pytest
 from pydantic import ValidationError
 from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, label_payload
+from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, a_table, label_payload
 
 from idhazh import config
 from idhazh.classify.calls import (
@@ -308,11 +308,13 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         reply = read_text(FIXTURES_DIR / "completions" / "label" / "labelled.json")
         markers = a_markers()
         whole = build_summarize_and_plan_request(
-            first, reply, markers=markers, source_words=article_ok.band_source_words
+            first, reply, a_table(article_ok),
+            markers=markers, source_words=article_ok.band_source_words
         )
         suppressed = build_summarize_and_plan_request(
             first,
             reply,
+            a_table(article_ok),
             markers=markers,
             source_words=article_ok.band_source_words,
             plan=False,

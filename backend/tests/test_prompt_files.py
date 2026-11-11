@@ -15,6 +15,7 @@ from support.paths import CONFIG_DIR
 
 from idhazh import config, summarize
 from idhazh.classify import calls
+from idhazh.classify.plan_visual_request import type_role_guide
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_text_digest, derive_url_key
@@ -195,22 +196,31 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(text, encoding="utf-8", newline="\n")
         options: PromptLocation = {"prompt_files": settings.app.prompt_files, "config_dir": root}
-        source = article()
+        source = Article.model_validate(
+            article().model_dump() | {"text": "The library bought 12 desks."}
+        )
+        table = element_table(source, config=settings.app.elements)
         first = calls.build_label_request(
             source,
-            element_table(source, config=settings.app.elements),
+            table,
             model_id=settings.models.summarizer.id,
             server=settings.models.summarizer.server,
             sampling=settings.models.summarizer.sampling,
             markers=a_markers(),
+            visuals=settings.app.visuals,
             **options,
         )
         for plan in (True, False):
             second = calls.build_summarize_and_plan_request(
-                first, '{"labels":[]}', markers=a_markers(), plan=plan, **options
+                first, '{"labels":[]}', table,
+                markers=a_markers(), plan=plan, **options
             )
             assert str(second["prompt"]).startswith(str(first["prompt"]) + '{"labels":[]}')
             assert label in str(second["prompt"])
+            assert type_role_guide(settings.app.visuals) in str(first["prompt"])
+            if plan:
+                assert table.elements
+                assert all(element.element_id in str(second["prompt"]) for element in table.elements)
         summary = summarize.build_request(
             source,
             model_id=settings.models.summarizer.id,

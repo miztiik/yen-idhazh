@@ -13,8 +13,10 @@ import re
 from typing import Any
 
 import pytest
+from support.paths import FIXTURES_DIR
 
 from idhazh.classify import calls
+from idhazh.contracts.element import ElementTable
 
 pytestmark = pytest.mark.contract
 
@@ -74,11 +76,15 @@ def _patterns(node: Any, path: str = "") -> list[tuple[str, str]]:
 
 def _decoder_schemas() -> dict[str, dict[str, Any]]:
     """Every schema this pipeline sends a decoder, built the way the run builds it."""
+    table = ElementTable.read(FIXTURES_DIR / "visual-validator" / "tables" / "wind.json")
+    empty = ElementTable.model_validate(table.model_dump() | {"elements": []})
     return {
         "label": calls.label_schema(),
         "summarize_and_plan": calls.summarize_and_plan_schema(plan=True),
         "summarize_only": calls.summarize_and_plan_schema(plan=False),
         "summarize_and_plan_brief": calls.summarize_and_plan_schema(plan=True, brief=True),
+        "article_references": calls.summarize_and_plan_schema(table=table),
+        "empty_references": calls.summarize_and_plan_schema(table=empty),
     }
 
 

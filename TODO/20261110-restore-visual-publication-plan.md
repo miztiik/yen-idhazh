@@ -35,7 +35,7 @@ Table C - One row per repair PR
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Give the visual planner usable source evidence | - | A | PENDING | - | - | - |
+| C1 | 1 | Give the visual planner usable source evidence | - | A | DONE | fantastic-garbanzo | - | 0b1cac34-83e8-494c-99fc-6539f5299bdc |
 | C2 | 2 | Preserve the exact reason a visual was refused | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2 | C | PENDING | - | - | - |
 

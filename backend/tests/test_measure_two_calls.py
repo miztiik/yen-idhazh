@@ -16,22 +16,29 @@ collection a run appends to (Guardrail #12).
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR
+from support.prompts import LABEL_REPLIES, SUMMARIZE_AND_PLAN_REPLIES
+from support.server import RecordedEndpoint
 
 from idhazh import config, summarize
+from idhazh.classify import calls
 from idhazh.contracts.article import Article
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.extract import TOKENS_PER_WORD
+from idhazh.elements import element_table
+from idhazh.extract import TOKENS_PER_WORD, approx_tokens
 from idhazh.llm.server import Completion
 from idhazh.sanitize import untrusted_block
 from utilities.measure_two_calls import (
     Break,
     Sample,
+    Tokenizer,
     WrongWeightsError,
     article_from_user_turn,
     check,
@@ -39,6 +46,7 @@ from utilities.measure_two_calls import (
     decompose,
     prefilled,
     refuse_undeclared_weights,
+    run_item,
     sample_at_the_cap,
 )
 
@@ -58,6 +66,62 @@ RECORDED_TWO: Final = Completion(
 
 def loaded_models() -> ModelsConfig:
     return config.load(CONFIG_DIR).models
+
+
+@pytest.mark.parametrize("summary_cap", [0, 16])
+def test_measurement_continuation_carries_the_real_anchored_table(summary_cap: int) -> None:
+    settings = config.load(CONFIG_DIR)
+    text = (
+        "Denmark added 1400 MW. Germany added 2800 MW and Poland 900 MW. "
+        "Ireland added 700 MW."
+    )
+    article = Article.model_validate(
+        Article.read(ARTICLE).model_dump()
+        | {
+            "text": text,
+            "word_count": len(text.split()),
+            "source_word_count": len(text.split()),
+            "token_count": approx_tokens(len(text.split())),
+        }
+    )
+    label = (LABEL_REPLIES / "wind-labelled.json").read_bytes()
+    answer = (SUMMARIZE_AND_PLAN_REPLIES / "wind-summary-and-plan.json").read_bytes()
+    content = json.loads(label)["choices"][0]["message"]["content"]
+    initial = element_table(article, config=settings.app.elements)
+    finalized = calls.anchored(
+        initial, article.text or "", calls.parse_label(content),
+        config=settings.app.elements, label_source=settings.models.summarizer.id,
+    )
+    with RecordedEndpoint(200, label, answer) as server:
+        reading = run_item(
+            Sample(url_key=str(article.url_key), article=article),
+            label="recorded",
+            app=settings.app,
+            models=settings.models,
+            endpoint=server.endpoint,
+            tokenizer=Tokenizer(base="unavailable://tokenizer", timeout=1),
+            timeout=10,
+            label_cap=0,
+            summarize_and_plan_cap=summary_cap,
+            question_tokens=None,
+            markers=a_markers(),
+        )
+    assert reading.question_tokens is None
+    assert len(server.sent) == 2
+    request = server.sent[1]
+    assert ("max_tokens" in request) != ("n_predict" in request)
+    assert request.get("max_tokens", request.get("n_predict")) == (
+        summary_cap or settings.models.summarizer.sampling.get(
+            "max_tokens", calls.summarize_and_plan_budget_tokens(settings.app.summarize)
+        )
+    )
+    ids = [element.element_id for element in finalized.elements]
+    fresh = set(ids) - {element.element_id for element in initial.elements}
+    assert fresh and all(element_id in request["prompt"] for element_id in fresh)
+    assert request["json_schema"]["$defs"]["VisualPlanDraft"]["properties"]["element_ids"]["items"]["enum"] == ids
+    assert request["json_schema"]["$defs"]["VisualType"]["enum"] == [
+        kind.value for kind in settings.app.visuals.select_types()
+    ]
 
 
 @pytest.mark.parametrize(
