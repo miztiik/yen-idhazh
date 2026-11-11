@@ -5,15 +5,15 @@
  * hands this module its columns and series and gets back the one shape
  * `ChartReadout.svelte` prints; it never builds a strip of its own.
  *
- * **Every chart on the console says what it hovers, in markup.** A chart that
+ * **Every chart declares its non-hover reading, in markup.** A chart that
  * shares a column between its marks carries `data-readout-columns` on the
  * element holding both the plot and the strip, and the strip is the only key it
- * draws. A chart whose hover describes one thing at a time - a row, a tile, an
+ * draws. A chart whose strip describes one thing at a time - a row, a tile, an
  * item - carries `data-readout-records`. A chart with nothing to show beyond
- * what it already prints carries `data-readout-none` with the reason in words
- * and who agreed it. "This chart has no hover" is a decision somebody took, and
- * an undeclared chart looks exactly like one where the strip was forgotten, so
- * every chart declares which reading it offers.
+ * what it already prints carries `data-readout-none` with the reason in words.
+ * That declares no duplicate standing strip, never an exception to visible
+ * hover. Every measured console renderer supplies its same typed readings to
+ * the additive tooltip; keyboard and touch still reach the strip or printed facts.
  */
 import { createHoverReadout, type HoverReadout } from './readout-hover';
 

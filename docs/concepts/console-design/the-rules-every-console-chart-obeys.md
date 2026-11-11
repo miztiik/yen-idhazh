@@ -379,14 +379,13 @@ print what the reader is already looking at. Such a chart carries
 strip is needed, never an exception to the shared hover standard. Its tooltip
 uses the same typed values and formatted words as the printed track.
 
-The three declarations exist because of what the absence looks like otherwise. A
-chart somebody decided needs no hover and a chart where the readout was forgotten
-are the same chart on screen.
+The three declarations distinguish intentionally printed facts from a forgotten
+standing reading. None exempts measured marks from visible hover.
 Every drawn chart must declare one of the three. A chart that declares a strip
 must draw it, without an in-chart swatch or native tooltip. The strip must
 include the named mark's words and figures and print a day as `27 Sep 2026`,
-not `2026-09-27`. A `none` reason must have at least five words and Susan's
-agreement; an attribute alone tells a reader nothing.
+not `2026-09-27`. A `none` reason names where the full facts are printed; an
+attribute alone tells a reader nothing.
 
 ## The holdout margin is drawn at the scale of the margin, not of the score
 

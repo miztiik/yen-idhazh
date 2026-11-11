@@ -1,12 +1,5 @@
 <script lang="ts">
-	/** Where to go, and nothing else.
-	 *
-	 * It printed six blocks in August and three until this row. What went is
-	 * everything a later build or a later day could change: the commit and the
-	 * build date, and the promise about what is deleted, which was read off the
-	 * newest day. The footer is on every page, so each of those rewrote the bytes
-	 * of every page on the site whenever anything published.
-	 */
+	/** Which shared destinations and local display control finish a page? */
 	import Icon from '$lib/icons/Icon.svelte';
 	import { base } from '$app/paths';
 	import ThemeToggle from './ThemeToggle.svelte';
