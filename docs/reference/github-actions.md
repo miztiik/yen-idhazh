@@ -239,7 +239,7 @@ for the reason and its check.
 
 ## Pipeline tests
 
-Draw one replayable article plan for all enabled cases in `config/pipeline-tests.json`.
+By default, draw one replayable article plan for all enabled cases in `config/pipeline-tests.json`.
 Run the real production stages with a separate model server per runner. Let sibling
 runners finish after a failure. The report must fail for an enabled case with no
 summary or with an item outside the plan. This tests execution, not model quality
@@ -255,6 +255,14 @@ named UTC day from each declared ledger, not a trial root's accumulated history.
 Every runner names the checked-out commit in its ledger identity, so the commit
 job rejects a result made from a different code version.
 Never write reader-facing payloads.
+
+Optional `retained_source_run` and `retained_item_ids` inputs instead select
+bounded native Articles from one completed Content refresh attempt. This mode
+uses the committed production model and both real calls, with fresh private
+assets and captures. It runs no experimental case, report, ledger commit or
+publication. The [retained-input reference](retained-article-verification.md)
+defines validation, native outputs and the distinction between source and replay
+provenance. Both inputs empty preserve the random mode.
 
 A successful summary proves execution, not visual generation. The random draw
 need not contain a warranted chart or actor/claim comparison. To establish a
