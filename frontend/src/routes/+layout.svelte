@@ -51,7 +51,7 @@
 	     three of them). The guard is on `data.ui` rather than on `data`, because
 	     the object arrives and only its contents are missing. -->
 	{#if data?.ui}
-		<SiteHeader title={data.ui.site_title} tagline={data.ui.tagline} />
+		<SiteHeader title={data.ui.site_title} />
 	{/if}
 	<main>
 		{@render children()}

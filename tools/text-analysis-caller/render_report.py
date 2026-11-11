@@ -23,6 +23,7 @@ from render_entities import (
     render_entity_tables,
 )
 from render_features import render_feature, render_missing_feature
+from render_gliner_events import render_gliner_events
 from render_tables import (
     escape_text,
 )
@@ -253,8 +254,11 @@ def render_gliner_results(
             "### Results",
             "Native GLiNER confidence is between 0 and 1: higher means stronger model "
             "confidence, not calibrated correctness. It is not comparable to YAKE scores. "
-            "Every occurrence retains its own score; GLiNER returns no sentence indexes.",
+            "Scores and positions appear only when returned. Repeated text without offsets "
+            "remains separate evidence; no positions or scores are reconstructed. "
+            "GLiNER returns no sentence indexes.",
             render_entity_tables(groups, labels, prefix="K", state=state, gliner=True),
+            render_gliner_events(gliner_request, result),
             *([classification.content] if classification is not None else []),
         ]
     )

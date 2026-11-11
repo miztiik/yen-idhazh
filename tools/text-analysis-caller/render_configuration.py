@@ -3,9 +3,9 @@
 import json
 import re
 
-from project_gliner_analysis import project_classification_request
+from project_gliner_analysis import OUTPUT_CONTROLS, event_structure, project_classification_request
 from render_classifications import ClassificationReport
-from render_tables import read_list, read_object, read_text, render_cell, render_table
+from render_tables import read_list, read_object, read_score, read_text, render_cell, render_table
 
 
 def render_settings_link(repository: str | None, *, gliner: bool = False) -> str:
@@ -142,7 +142,7 @@ def render_gliner_configuration(
 ) -> str:
     rows = [
         _row(
-            "NER operation",
+            "Extraction operation",
             _render_operation(
                 "analyze-text-gliner" if request is not None and "schema" in request
                 else "run-ner-gliner",
@@ -191,10 +191,42 @@ def render_gliner_configuration(
                     mode + "; " + _native(task["labels"]) + " (classification/request.json)",
                 )
             )
+    if settings is not None and "entity_confidence_threshold" in settings:
+        threshold = read_score(settings["entity_confidence_threshold"], confidence=True)
+        rows.append(_row("Entity confidence default", threshold))
+    if settings is not None and "overlap_policy" in settings:
+        rows.append(_row("Native overlap policy (per entity type)", settings["overlap_policy"]))
+    if request is not None and "schema" in request:
+        schema = read_object(request["schema"])
+        if isinstance(schema["entities"], dict):
+            rows.append(_row("Entity definitions (ordered)", _native(schema["entities"])))
+        controls = {name: request[name] for name in OUTPUT_CONTROLS if name in request}
+        rows.append(
+            _row("Extraction output controls", _native(controls) if controls else "Not recorded")
+        )
+        structure = event_structure(request)
+        rows.append(
+            _row(
+                "Event structure", _native(structure) if structure is not None else "Not requested"
+            )
+        )
+    if classification is not None and classification.request is not None:
+        controls = {
+            name: classification.request[name]
+            for name in OUTPUT_CONTROLS if name in classification.request
+        }
+        rows.append(
+            _row(
+                "Classification output controls", _native(controls) if controls else "Not recorded"
+            )
+        )
     return render_table(
         "J",
         "GLiNER configuration",
         ["Setting", "Effective value"],
         rows,
-        "Model identity comes from the saved configuration, not NER response metadata.",
+        "Model identity comes from the saved configuration, not NER response metadata. "
+        "Output controls apply to leaf evidence; native aggregate record scores can remain. "
+        "Explicit per-label cutoffs override the saved entity default, including zero. "
+        "The overlap policy applies within each entity type, not across types.",
     )

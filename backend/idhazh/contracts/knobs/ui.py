@@ -321,7 +321,7 @@ class UiConfig(Model):
     repo_url: str = Field(default="https://github.com/miztiik/yen-idhazh", min_length=1)
     site_title: str = Field(default="yen-idhazh", min_length=1)
     tagline: str = Field(
-        default="A daily digest that checks its own work.",
+        default="Daily news summaries, with links to their sources.",
         min_length=1,
     )
     read_mark_days: int = Field(

@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { render } from 'svelte/server';
+import { serverCompiler } from './support/server-render';
 const ROOT = resolve(process.cwd(), '..');
 test('the root empty state offers a way out that no later run can move', () => {
     const page = readFileSync(resolve(ROOT, 'frontend', 'src', 'routes', '+page.svelte'), 'utf8');
@@ -29,12 +32,36 @@ test('the root load does not read the build clock', () => {
 });
 test('reader source limits are sentences in the page text', () => {
     const item = readFileSync(resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'DigestItem.svelte'), 'utf8');
-    // The sentence moved to the day notice, which is where the day is. The
-    // footer stated it on every route, including the ones that show no day.
-    const notice = readFileSync(resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'DayNotice.svelte'), 'utf8');
     expect(item).toContain('item.reader_note');
     expect(item).not.toContain('Brief');
-    expect(notice).toContain('day.items_failed');
-    expect(notice).toContain('did not finish.');
-    expect(notice).not.toContain('could not read enough of the page');
+});
+
+test('the edition identifies published stories without reporting pipeline progress', async ({}, testInfo) => {
+    const compile = serverCompiler(testInfo.outputPath('components'));
+    const module = await compile('src/lib/components/DayNotice.svelte', 'DayNotice', [
+        ['$lib/format', pathToFileURL(resolve('src', 'lib', 'format.ts')).href]
+    ]);
+    const component = (await import(pathToFileURL(module).href)).default;
+    const day = {
+        date: '2026-11-10',
+        generated_at: '2026-11-10T16:55:00Z',
+        items: [],
+        partial: true,
+        items_failed: 80,
+        runs: [{ n: 2, at: '2026-11-10T15:00:00Z', items_added: 265 }]
+    };
+    const published = render(component, { props: { day, count: 327 } }).body;
+    expect(published).toContain('10 November 2026');
+    expect(published).toContain('327 stories');
+    expect(published).toContain('Updated 16:55 UTC');
+    expect(published).not.toContain('15:00');
+    expect(published).not.toContain('did not finish');
+    expect(published).not.toContain('added after');
+    const empty = render(component, { props: { day: { ...day, generated_at: null }, count: 0 } }).body;
+    expect(empty).toContain('No stories today');
+    expect(empty).not.toContain('Updated');
+    expect(empty).not.toContain('class="separator');
+    const single = render(component, { props: { day, count: 1 } }).body;
+    expect(single).toContain('1 story');
+    expect(single).not.toContain('1 stories');
 });

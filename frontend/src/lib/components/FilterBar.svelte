@@ -1,40 +1,5 @@
 <script lang="ts">
-	/** One panel: the topic pills, and the field that narrows the list below them.
-	 *
-	 * It replaced `TopicPills.svelte` on 2026-09-01 and serves both the day page
-	 * and the archive. A field and a pill row each claiming their own band of
-	 * vertical space is why the top of a reading page was tall, and the archive
-	 * had its search at the very bottom - the control behind the answer.
-	 *
-	 * **The pills are visible at rest.** Never behind the field, never collapsed
-	 * as a set. The row leads with the desk holding most of the day, and the only
-	 * thing the disclosure holds is an auto-created topic past `pillsMax` - a desk
-	 * a person put in `config/taxonomy.json` is never folded away. Its summary
-	 * says how many are inside.
-	 *
-	 * **Sticky at 1024px and up, and nowhere else.** There the pills and the
-	 * field share one band. Below it the panel can run to four wrapped lines
-	 * plus a field, and a control holding a third of a phone screen for the
-	 * whole scroll is screen the reader paid for.
-	 *
-	 * **Two kinds of pill, and the difference is what happens with no script.**
-	 * On a day page each pill is a link to a prerendered route, so it works with
-	 * no script at all. On the archive there is no per-topic route, so the pills
-	 * are buttons over the list already fetched. Everything that needs a script
-	 * carries `data-filter-scripted`, the `<noscript>` rule below hides all of
-	 * it, and one sentence takes its place: a dead input that swallows typing is
-	 * worse than no input.
-	 *
-	 * The query is untrusted reader text matched against untrusted payload text.
-	 * It is compared as a lowercased substring by the caller and is never
-	 * interpolated into a selector, a URL or markup (Guardrail #11).
-	 *
-	 * **The thin-desk sentence sits OUTSIDE the panel, not inside it.** At 1024px
-	 * and up the panel is one nowrap band so that it is cheap enough to stick, and
-	 * a third child would be squeezed into that band beside the pills. It belongs
-	 * under the panel anyway: it is a fact about the desk rather than a control,
-	 * so it is read once and then scrolls away.
-	 */
+	/** Choose a topic or narrow the list, retaining topic links without JavaScript. */
 	import { base } from '$app/paths';
 	import { deskCount, deskShortfall, splitPills } from '$lib/day-shape';
 	import Icon from '$lib/icons/Icon.svelte';
@@ -89,30 +54,13 @@
 		/** Set it and the field becomes a form with that button. The archive's
 		 * search costs a 43 MB download, so it is named before it is paid for. */
 		submitLabel?: string | null;
-		/** False keeps the button in the document and off the screen.
-		 *
-		 * A reading page carries this field to filter the day, and the second tier
-		 * is the Enter key. At 1024px and up the field is one 18rem column of a
-		 * sticky band, and a button eats about a third of it - and a field placed
-		 * "Filter today's stories" beside a button reading "Search" is two verbs on
-		 * one control (Susan, 2026-09-24). The form and its named button stay,
-		 * because Enter submitting a form is the browser's own behaviour and a
-		 * keydown handler in its place would drop the control's name; focus brings
-		 * it back on screen for a reader moving by keyboard. */
+		/** A hidden submit remains keyboard reachable and preserves native Enter submission. */
 		submitVisible?: boolean;
 		/** Broader search may be unavailable while local filtering still works. */
 		submitDisabled?: boolean;
 		onSubmit?: (() => void) | null;
 		onType?: (() => void) | null;
-		/** What the field has narrowed to, drawn UNDER the panel rather than in it.
-		 * Never a sentence shared with a pill count: they count different things.
-		 *
-		 * Under it, because at 1024px and up the field is an 18rem column of a
-		 * sticky band - about 39 characters a line - so a caption that also has to
-		 * name what the next key costs would wrap to several lines and glue them to
-		 * the top of the screen for the whole scroll. It also re-wrapped as the
-		 * count changed, which moved the band under the reader's own hand. In the
-		 * content column it is one line in normal flow (Susan, 2026-09-24). */
+		/** Result feedback follows the controls; topic totals describe a different scope. */
 		matchNote?: string;
 		noscriptNote: string;
 		/** The story count at or under which the topic being read explains itself.
@@ -289,20 +237,18 @@
 	.filter-bar {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: center;
+		align-items: flex-start;
 		gap: var(--space-3);
-		margin-block: var(--space-4);
-		padding: var(--space-3);
-		border: 1px solid var(--color-rule);
-		border-radius: var(--radius-lg);
-		background: var(--color-surface);
+		margin-block-end: var(--space-5);
+		padding-block-start: var(--space-3);
+		border-block-start: 1px solid var(--color-rule);
 	}
 
 	/* No `display` on either group that carries `data-filter-scripted`: the
 	   `<noscript>` rule above hides them by attribute, and a scoped class rule
 	   would outrank it. The flex lives on the row inside each one. */
 	.pills {
-		flex: 1 1 auto;
+		flex: 1 1 100%;
 		min-inline-size: 0;
 	}
 
@@ -318,7 +264,7 @@
 		align-items: center;
 		gap: var(--space-1);
 		min-block-size: 2.75rem;
-		padding-inline: 0.875rem;
+		padding-inline: var(--space-3);
 		border: 1px solid var(--color-rule);
 		border-radius: var(--radius-full);
 		font-size: var(--text-sm);
@@ -337,7 +283,9 @@
 
 	.pill.on {
 		border-color: var(--color-accent);
+		background: var(--tint-accent);
 		color: var(--color-accent);
+		font-weight: 600;
 	}
 
 	.more {
@@ -372,18 +320,19 @@
 	}
 	.field-row {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--space-2);
 	}
 
 	.input {
-		flex: 1 1 auto;
+		flex: 1 1 100%;
 		min-inline-size: 0;
 		min-block-size: 2.75rem;
 		padding-inline: var(--space-3);
 		border: 1px solid var(--color-rule);
 		border-radius: var(--radius-md);
-		background: var(--color-bg);
+		background: var(--color-surface);
 		font-size: var(--text-base);
 		color: var(--color-text);
 	}
@@ -397,6 +346,7 @@
 		flex-shrink: 0;
 		align-items: center;
 		gap: var(--space-1);
+		margin-inline-start: auto;
 		min-block-size: 2.75rem;
 		padding-inline: var(--space-3);
 		border: 1px solid var(--color-rule);
@@ -419,10 +369,6 @@
 		cursor: not-allowed;
 	}
 
-	/* Outside `.filter-bar`, in the content column, for the reason the prop's own
-	   note gives: the panel's field is 18rem at the wide breakpoint and this line
-	   has to hold a sentence. Spaced like `.shortfall` below, because they are the
-	   same kind of thing - one line under the panel, read once. */
 	.note {
 		margin-block-end: var(--space-4);
 		font-size: var(--text-sm);
@@ -436,9 +382,6 @@
 		color: var(--color-text-tertiary);
 	}
 
-	/* Outside `.filter-bar`, so the sticky one-band panel above is untouched. A
-	   fact about the desk rather than a control: it is read once and scrolls
-	   away with the stories it is about. */
 	.shortfall {
 		margin-block-end: var(--space-4);
 		font-size: var(--text-sm);
@@ -457,20 +400,14 @@
 		display: none;
 	}
 
-	/* The value matches `frame.breakpoints_px[1]` in `config/appearance.json`; a
-	   media query cannot read a custom property, which is the one place this
-	   duplication is unavoidable. Above it the panel is one band - pills on the
-	   left, field on the right - which is what makes it cheap enough to stick. */
+	/* Matches frame.breakpoints_px[1]; custom properties cannot set media queries. */
 	@media (min-width: 1024px) {
-		.filter-bar {
-			position: sticky;
-			top: 0;
-			z-index: 10;
-			flex-wrap: nowrap;
+		.pills {
+			flex: 2 1 0;
 		}
 
 		.field {
-			flex: 0 0 18rem;
+			flex: 1 1 0;
 		}
 	}
 </style>

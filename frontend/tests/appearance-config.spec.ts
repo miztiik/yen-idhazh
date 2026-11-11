@@ -175,7 +175,7 @@ const DEFAULTS: Knobs = {
 	sections: ['notice', 'topics', 'leads', 'items'],
 	archive_page_size: 25,
 	show_filter: true,
-	tagline: 'A daily digest that checks its own work.'
+	tagline: 'Daily news summaries, with links to their sources.'
 };
 
 /** Nothing here equals a default. That is what stops a stub from passing. */

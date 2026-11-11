@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-10
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -486,8 +486,10 @@ it prepares both providers, sends one spaCy analysis request and concurrent
 GLiNER NER/classification requests for the same source, and reports their
 independent native results. Native GLiNER operations still share one model
 and execute serially. The report does not claim recognition quality.
-Ordinary required CI and existing independent model-free tests remain separate;
-ordinary CI does not test the workflow declaration or execute the service.
+Ordinary required CI remains separate from that native observation. Its
+GLiNER contract job exercises model-free schemas, application refusals and
+shared-host construction on Linux; it does not fetch models, perform
+inference or test workflow declarations.
 
 ### Independent GLiNER2 API
 
@@ -495,8 +497,11 @@ The provider has its own CPython 3.12 manifest and frozen lock under
 `services/text_analysis/gliner/`. Its production dependencies do not import
 spaCy model/feature logic. The development group consumes the existing
 text-analysis settings loader and resolves compatible dependencies.
-The pinned torch-free GLiNER2 core validates caller-defined native analysis
-schemas in the base environment; model extras remain optional.
+Executable validation of the pinned SDK's native schemas requires the
+existing model extra; the
+[dependency reference](../architecture/text-analysis/gliner-api.md#dependency-cost)
+explains its tensor-runtime import. This does not require prepared weights
+or inference.
 
 Verify the named lock without installing a provider:
 
@@ -511,6 +516,39 @@ manual result collection. The reporting workflow does not run provider or
 host regression suites, and does not produce JUnit evidence. Inspect the
 shared changed-test selection and follow applicable ordinary CI gates
 independently. A result observation is not a test pass.
+
+The existing `ci.yml` runs `gliner-contracts` on Linux for code candidates.
+It syncs the frozen development group with the existing model extra for SDK
+imports, then runs
+the provider/caller lint and type checks and the existing model-free tests.
+The job supplies the named hosting/caller source roots and the schema-only
+backend source root. From the provider directory, on allowed Linux only:
+
+```bash
+uv sync --frozen --extra model --group dev
+uv run --no-sync ruff check --config pyproject.toml src tests
+uv run --no-sync mypy --config-file pyproject.toml src tests
+uv run --no-sync mypy --config-file pyproject.toml --ignore-missing-imports --follow-imports=skip --platform linux --python-version 3.12 --strict ../../../tools/text-analysis-caller
+uv run --no-sync pytest -c pyproject.toml tests
+```
+
+Run caller lint from the repository root so first-party import discovery
+matches the documented host-safe caller check:
+
+```bash
+uv run --project services/text_analysis/gliner --no-sync ruff check --config services/text_analysis/gliner/pyproject.toml tools/text-analysis-caller
+```
+
+These are real SDK schema/validation and model-free application checks,
+without weights, inference or internal extraction mocks. They include
+current and exact previous settings, independent output controls, native
+record metadata/capability refusals, empty-root handling and caller
+configuration. The pure saved-report checks remain standard-library-only.
+Use the existing reporting workflow separately on the exact candidate
+after applicable CI passes to observe real native entity/event extraction
+and independent classification. That observation does not establish
+recognition accuracy or replace the contract suite.
+
 The [API reference](../reference/gliner-api.md) owns payload and configuration
 details; the [architecture](../architecture/text-analysis/gliner-api.md) owns
 native lifecycle and diagnostic safety.

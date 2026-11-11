@@ -3,7 +3,7 @@
 from typing import Annotated, Self
 
 from gliner2.inference.schema import Schema
-from gliner2.inference.schema_model import ClassificationInput, SchemaInput
+from gliner2.inference.schema_model import ClassificationInput, EntityInput, SchemaInput
 from pydantic import ConfigDict, Field, JsonValue, ValidateAs, model_validator
 
 from gliner_api.declare_api_contracts import (
@@ -34,7 +34,8 @@ _ClassificationInput = Annotated[
 _ANALYSIS_METADATA: dict[str, JsonValue] = {
     "version": ANALYSIS_CONTRACT_VERSION,
     "changelog": [
-        {"version": ANALYSIS_CONTRACT_VERSION, "change": "Declare native schema-driven analysis."},
+        {"version": ANALYSIS_CONTRACT_VERSION, "change": "Add optional native metadata controls."},
+        {"version": "2026-11-09", "change": "Declare native schema-driven analysis."},
         {"version": API_VERSION, "change": "Keep earlier inference payloads readable as evidence."},
     ],
 }
@@ -72,6 +73,8 @@ class AnalysisSchema(SchemaInput):
             fields = [field.name for field in structure.fields]
             if len(fields) != len(set(fields)):
                 raise ValueError("Structure fields must be distinct")
+            if structure.mode is not None and set(fields) & {"confidence", "label", "text"}:
+                raise ValueError("Record fields must not collide with native metadata")
             for field in structure.fields:
                 require_nonblank_utf8(field.name)
                 if field.choices is not None:
@@ -84,9 +87,22 @@ class AnalysisSchema(SchemaInput):
         self.to_native_schema()
         return self
 
-    def to_native_schema(self) -> Schema:
+    def to_native_schema(self, entity_confidence_threshold: float | None = None) -> Schema:
         """Parse non-classification sections, then append tasks through the public builder."""
         sections = self.model_dump(exclude={"classifications"}, exclude_none=True)
+        if self.entities is not None and entity_confidence_threshold is not None:
+            entities = {}
+            for name in self.entities:
+                value = self.entities[name] if isinstance(self.entities, dict) else None
+                configuration: dict[str, object] = (
+                    value.model_dump(exclude_none=True)
+                    if isinstance(value, EntityInput)
+                    else ({"description": value} if value is not None else {})
+                )
+                if configuration.get("threshold") is None:
+                    configuration["threshold"] = entity_confidence_threshold
+                entities[name] = configuration
+            sections["entities"] = entities
         # The SDK's public empty-schema constructor has no type annotation.
         native = Schema.from_dict(sections) if sections else Schema()  # type: ignore[no-untyped-call]
         for task in self.classifications or []:
@@ -101,6 +117,8 @@ class AnalyzeTextRequest(ApiContract):
 
     text: ExactText
     analysis_schema: AnalysisSchema = Field(alias="schema")
+    include_confidence: bool = False
+    include_spans: bool = False
 
 
 class AnalyzeTextResult(ApiContract):
@@ -118,15 +136,26 @@ class NativeSelection(ApiContract):
     confidence: Confidence
 
 
-class NativeTextScore(ApiContract):
-    """Describe a native choice selection that need not occur in the source."""
+class NativeText(ApiContract):
+    """Describe one verbatim native value without invented metadata."""
 
     text: ExactText
+
+
+class NativeTextScore(NativeText):
+    """Describe a native choice selection that need not occur in the source."""
+
     confidence: Confidence
 
 
-class NativeMention(NativeTextScore):
-    """Locate a native scored mention in the unchanged Unicode source."""
+class NativeSpan(NativeText):
+    """Locate a native mention in the unchanged Unicode source."""
 
     start: int = Field(ge=0)
     end: int = Field(gt=0)
+
+
+class NativeMention(NativeSpan):
+    """Locate a native scored mention in the unchanged Unicode source."""
+
+    confidence: Confidence

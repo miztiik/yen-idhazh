@@ -200,7 +200,7 @@ def create_app(
         return await process(
             request,
             lambda body: AnalyzeTextRequest.model_validate_json(body, strict=True),
-            analyze_text,
+            lambda model, parsed: analyze_text(model, parsed, settings),
         )
 
     async def refuse(request: Request, code: HostRefusalCode) -> Response:

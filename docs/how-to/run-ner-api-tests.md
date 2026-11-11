@@ -1,6 +1,6 @@
 # Run the shared text-analysis APIs
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-10
 
 How the manual reporting workflow collects results from both independent
 providers on their existing shared listener. This procedure is project-specific
@@ -30,7 +30,8 @@ GLiNER snapshot. The providers retain independent production manifests.
 The caller under `tools/text-analysis-caller/` starts the existing
 `services/text_analysis/hosting/serve_apis.py` assembly as a child. It uses
 bounded readiness checks and the existing listener settings, sends one spaCy
-analysis POST, then dispatches one GLiNER NER POST and one classification POST
+analysis POST, then dispatches one combined GLiNER entity/event extraction
+POST and one classification POST
 concurrently to `analyze-text-gliner`, using independent native schemas.
 Both GLiNER outcomes are awaited before it stops its owned
 process group in a `finally` path. The caller drains native stderr before
@@ -52,7 +53,7 @@ definitions are retained in the classification request, not reconstructed
 from later configuration. It uploads two
 independent provider artifacts even after failure. Each has a complete
 standalone report with its source and the same provider section used in the
-combined Summary. GLiNER NER and classification keep independent outcomes:
+combined Summary. GLiNER extraction and classification keep independent outcomes:
 failure of either does not hide the other's successful evidence. Missing
 native output is not manufactured. The
 [dispatch guide](run-spacy-tests.md#inspect-the-results) describes partial,
@@ -63,6 +64,16 @@ runtime. The report does not establish recognition quality, parallel native
 inference, throughput or news-pipeline integration. The
 [dispatch guide](run-spacy-tests.md#select-the-ref-and-inputs) owns task
 selection from the active taxonomy and the schema-only backend source-root setup.
+
+The [caller configuration](run-spacy-tests.md#select-the-ref-and-inputs)
+owns the ordered entity descriptions, optional native event structure and
+explicit output flags. Its SDK-backed configuration is validated before
+the GLiNER requests, with no second entity vocabulary or extra inference
+operation. The committed reporting profile requests detailed evidence;
+provider defaults remain compact. Inspect candidate bindings and present
+metadata, not just row counts. A successful empty/omitted record root is
+different from not requested, failed or malformed evidence. Regeneration
+uses only saved native requests/results and never loads this configuration.
 
 ## Start the same application
 
