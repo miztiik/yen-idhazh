@@ -3,10 +3,10 @@
 **Last Updated**: 2026-11-09
 
 A day page from top to bottom: the header that states each publication fact
-once, the controls, the leading block, the two-column arrangement that gives
-the leads a column of their own on a wide screen, and the footer that is its
-links and nothing else. Every ruling here is about the page rather than the
-story on it - what one item shows is
+once, the controls, the leading block, the story stream and the footer that is
+its links and nothing else. Wide dated pages put the leading block beside the
+stream; the home page keeps it above. Every ruling here is about the page rather
+than the story on it - what one item shows is
 [what-a-story-shows-and-where-each-fact-sits.md](what-a-story-shows-and-where-each-fact-sits.md).
 
 ## The all-topics page leads with the day's chosen stories, and nothing is dropped to do it
@@ -55,14 +55,14 @@ the run strip's axis does, so the rules can be tested without a browser.
 
 ## The day is a stream with an aside, and the aside is a zone rather than a width
 
-The home page uses the full window width with the configured gutters. Dated and
-topic pages keep `frame.reading_max_px`; story prose keeps `frame.measure_ch`
-on every route, so the wider home page does not lengthen lines of text.
+The home page uses the full window width with the configured gutters. Its
+leading stories sit above the stream and story prose fills each card's content
+width. Dated and topic pages keep `frame.reading_max_px` and
+`frame.measure_ch`.
 
-From `frame.breakpoints_px[2]` (1400px) the day page is two columns: the story
-stream at `minmax(0, 1fr)` and an `18rem` sticky column carrying the leading
-stories. Below that width nothing changes - the block draws above the stream
-exactly where `digest.sections` puts it.
+On other day pages, from `frame.breakpoints_px[2]` (1400px), the story stream
+and an `18rem` sticky leading-stories column sit side by side. Below that width
+the block draws above the stream exactly where `digest.sections` puts it.
 
 **Why it happens there and not sooner.** The aside uses width left over after
 the prose and source mark fit. It must not narrow the reading column. Check the
@@ -70,21 +70,22 @@ used widths at the configured breakpoint and with larger text; the
 [shared prose measure](../../concepts/design-system.md#the-measure-is-one-block-not-one-class-per-line)
 is the constraint, not a pixel reading from one build.
 
-**One trailing column at a time.** The item's own footer rail wants the same
-slot, and keeping both leaves the summary 570px against a measure of 659.81. So
-the item retires its rail at the same breakpoint and its footer returns under
+**One trailing column at a time.** On other reading routes, the item's footer
+rail wants the same slot, and keeping both leaves the summary 570px against a
+measure of 659.81. So the item retires its rail at the same breakpoint and its footer returns under
 the summary - which is where the item's own split puts it anyway, because the
 confidence sentence is a claim about the summary and the rail painted it level
-with the title.
+with the title. On the home page the footer always stays below the summary.
 
-**The aside stands beside the stream, never beside the day's controls.** The day
-is rendered in four parts - the sections before the leads, the leads, the
+**On dated pages, the aside stands beside the stream, never beside the day's
+controls.** The day is rendered in four parts - the sections before the leads, the leads, the
 sections between the leads and the stream, and the stream - and the two control
 parts span both columns, leaving room for wrapped topic controls and the search
 field without narrowing either beside the aside. Each part renders its own sections in `digest.sections` order
 and the parts are in that order too, so the document order a narrow screen and a
 reader with no script see is exactly what config asked for, and reordering the
 page is still a config edit.
+The home page keeps those same parts in document order without a side column.
 
 The controls precede the leads in `digest.sections`. Filtering can hide the
 leading block without moving the field above it. Section ownership follows the

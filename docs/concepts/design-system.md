@@ -8,7 +8,7 @@ New designs, charts and visuals render in the browser. Do not add prerendered da
 
 ## Typography is the interface
 
-- The home page fills the window with configured gutters; other reading routes retain the configured frame maximum. Constrain prose independently to a comfortable measure.
+- The home page fills the window with configured gutters, and its story prose fills the card's content width. Other reading routes retain the configured frame maximum and prose measure.
 - Keep an item's hierarchy to title, summary and provenance. Use the configured display face for titles and the reading face for prose; data uses tabular numerals.
 - Keep article type readable on phones. Reduce columns before reducing prose size. Pair each size token with its leading token.
 - Edition headers, topic controls and the leading-story index are unboxed. Story cards retain their surfaces and edges.
@@ -96,11 +96,11 @@ scrolling on reading pages.
 
 ### The reading page spends its width in four named zones
 
-Use the source mark, measured prose, optional item footer rail and optional day aside. Zone widths are configured relative units, not pixel substitutes. At a width where the day aside appears, return the item footer beneath the prose rather than squeezing both trailing columns beside it.
+Use the source mark, prose, optional item footer rail and optional day aside. Zone widths are configured relative units, not pixel substitutes. The home page places the leading stories above the stream and the item footer beneath the prose, leaving the full card width for stories. On other reading routes, return the item footer beneath the prose when the day aside appears.
 
 ### The measure is one block, not one class per line
 
-Apply `--measure` once to the block holding title and summary, at the prose size. A `ch` width applied separately to different fonts or sizes produces different edges. Keep figures outside that prose cap. Verify zone widths also scale when the root font size changes.
+On reading routes other than the home page, apply `--measure` once to the block holding title and summary, at the prose size. A `ch` width applied separately to different fonts or sizes produces different edges. Keep figures outside that prose cap. Verify zone widths also scale when the root font size changes.
 
 ### A chart's column is set by what the chart was drawn at
 
@@ -222,7 +222,7 @@ Do not introduce an engine that prerenders charts or requires a runtime server. 
 
 ## Design rationale
 
-One token system and payload-driven states keep meaning consistent across pages and themes. A measured prose block preserves reading comfort without wasting dashboard width. Browser-drawn charts adapt to the actual device. Shared drawing data keeps marks, descriptions and narrow layouts consistent.
+One token system and payload-driven states keep meaning consistent across pages and themes. The home page uses the available story width; other reading routes retain a measured prose block. Browser-drawn charts adapt to the actual device. Shared drawing data keeps marks, descriptions and narrow layouts consistent.
 
 The digest drawing and console use one TypeScript number formatter. Its locale, SI prefix threshold and significant digits come only from `visuals.number_format` in `config/idhazh.json`, never from a reader's browser. Where a shortened figure differs from the article's text, the accessible description keeps the original characters. Maintainer ruling: 2026-10-24.
 
