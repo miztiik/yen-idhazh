@@ -32,7 +32,6 @@ class Inputs:
     text: str
     profile: str
     feature_mode: str
-    custom_features: str
     classification_tasks: str
 
 
@@ -43,21 +42,17 @@ def read_inputs(event: object, environment: dict[str, str]) -> Inputs:
     text = event["inputs"].get("text")
     profile = environment.get("TEXT_ANALYSIS_PROFILE", "")
     mode = environment.get("TEXT_ANALYSIS_FEATURE_MODE", "")
-    custom = environment.get("TEXT_ANALYSIS_CUSTOM_FEATURES", "")
     tasks = event["inputs"].get("classification_tasks", "")
     if not isinstance(text, str) or not text.strip():
         raise ValueError("The source text must not be empty.")
-    if profile not in ("sm", "md", "lg") or mode not in ("default", "all", "custom"):
+    if profile not in ("sm", "md", "lg") or mode not in ("default", "all"):
         raise ValueError("The selected profile or feature mode is invalid.")
-    if (mode == "custom") != bool(custom.strip()):
-        raise ValueError("Custom features are required only in custom mode.")
     if not isinstance(tasks, str):
         raise ValueError("Classification tasks must be native tasks JSON text.")
     return Inputs(
         text=text,
         profile=profile,
         feature_mode=mode,
-        custom_features=custom,
         classification_tasks=tasks,
     )
 
@@ -91,8 +86,6 @@ def spacy_request(inputs: Inputs, health: TextAnalysisHealth) -> AnalyzeTextRequ
     }
     if inputs.feature_mode == "all":
         payload["features"] = list(capability.supported_features)
-    elif inputs.feature_mode == "custom":
-        payload["features"] = [part.strip() for part in inputs.custom_features.split(",")]
     request: AnalyzeTextRequest = AnalyzeTextRequest.model_validate_json(json.dumps(payload))
     if request.features is not None and not set(request.features).issubset(
         capability.supported_features

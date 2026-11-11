@@ -6,25 +6,20 @@ on:
       profile:
         description: "spaCy: model profile"
         required: false
-        default: md
+        default: lg
         type: choice
         options:
           - sm
           - md
           - lg
       feature_mode:
-        description: "spaCy: default = configured English defaults; all = every supported feature; custom = custom_features CSV"
+        description: "spaCy: default = configured English defaults; all = every supported feature"
         required: false
         default: default
         type: choice
         options:
           - default
           - all
-          - custom
-      custom_features:
-        description: "spaCy: custom CSV, for example: entities, sentences, document_metrics"
-        required: false
-        type: string
       text:
         description: "Text analyzed by both providers; visible in dispatch, artifacts, and run summary"
         required: true
@@ -109,7 +104,6 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/backend
           TEXT_ANALYSIS_PROFILE: ${{ inputs.profile }}
           TEXT_ANALYSIS_FEATURE_MODE: ${{ inputs.feature_mode }}
-          TEXT_ANALYSIS_CUSTOM_FEATURES: ${{ inputs.custom_features }}
           TEXT_ANALYSIS_OUTPUT_DIRECTORY: ${{ runner.temp }}/text-analysis-results
           TEXT_ANALYSIS_SPACY_ARTIFACT: ${{ steps.artifacts.outputs.spacy }}
           TEXT_ANALYSIS_GLINER_ARTIFACT: ${{ steps.artifacts.outputs.gliner }}
