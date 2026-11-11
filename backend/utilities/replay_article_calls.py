@@ -255,7 +255,11 @@ def run_calls(
             capture_root=item_root / "captures",
             render_root=item_root / "assets",
         )
-        summary, decision = result.summary, result.decision
+        summarize_ms = int((time.monotonic() - started) * 1000)
+        summary = result.summary.model_copy(
+            update={"duration_ms": summarize_ms, "summarize_ms": summarize_ms}
+        )
+        decision = result.decision
         atomic_write.write_atomic(items / f"{article.item_id}.summary.json", summary.to_json())
         if decision is not None:
             atomic_write.write_atomic(
@@ -265,7 +269,7 @@ def run_calls(
         ok = summary.status is SummaryStatus.OK
         spent = [reply for reply in (result.label_reply, result.answer_reply) if reply is not None]
         recorder.note(
-            summarize_ms=int((time.monotonic() - started) * 1000),
+            summarize_ms=summarize_ms,
             stage=ItemStage.SUMMARIZE.value,
             outcome=(ItemOutcome.OK if ok else ItemOutcome.FAILED).value,
             code=None if ok else (summary.failure_code or FailureCode.UNKNOWN).value,
@@ -360,7 +364,12 @@ def main(argv: list[str] | None = None) -> int:
         run_calls(root, plan=plan, articles=articles, settings=settings, identity=identity)
         return 0
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
-        LOG.error("retained replay failed: %s", error)
+        detail = (
+            error.strerror or type(error).__name__
+            if isinstance(error, OSError)
+            else str(error)
+        )
+        LOG.error("retained replay failed: %s", detail)
         return 1
 
 

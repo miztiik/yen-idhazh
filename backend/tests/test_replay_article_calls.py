@@ -166,7 +166,7 @@ def test_real_item_major_calls_keep_native_assets_captures_and_provenance_privat
     )
     caplog.set_level(logging.INFO, logger="idhazh")
     identity = replay_identity(saved)
-    with RecordedEndpoint(200, *positive, *declining_replies()) as server:
+    with RecordedEndpoint(200, *positive, *declining_replies(), hold_s=0.01) as server:
         replay.run_calls(
             root, plan=saved, articles=articles, settings=settings_at(server), identity=identity,
         )
@@ -190,6 +190,9 @@ def test_real_item_major_calls_keep_native_assets_captures_and_provenance_privat
         health = ItemHealthRow.read(items / f"{article.item_id}{HEALTH_SUFFIX}")
         assert health.run_id == identity.run_id
         assert health.model_calls == 2
+        assert fresh.duration_ms == fresh.summarize_ms == health.summarize_ms
+        assert fresh.summarize_ms > 0
+        assert fresh.fetch_ms == fresh.extract_ms == 0
         provenance = PipelineInputs.model_validate_json((items / common.INPUTS_PAYLOAD).read_bytes())
         assert provenance.model_sha256 == config.load(CONFIG_DIR).models.summarizer.sha256
         assert provenance.extractor_version == article.extractor_version

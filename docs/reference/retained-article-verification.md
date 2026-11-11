@@ -15,7 +15,7 @@ Table A - Retained mode inputs
 
 | ID | Input | Rule |
 | --- | --- | --- |
-| A1 | `retained_source_run` | Positive Content refresh run ID; its latest attempt must be complete |
+| A1 | `retained_source_run` | Positive Content refresh run ID; latest attempt complete with success or failure, as required by native recovery |
 | A2 | `retained_item_ids` | Explicit comma-separated, unique native item IDs; at least one and no more than `config/pipeline-tests.json`'s `articles_a_dispatch` |
 | A3 | `candidate_models_file` | Must be empty in retained mode; the committed production pointer, model, settings and destination are used unchanged |
 
@@ -90,8 +90,10 @@ become an error merely because the operator hoped for a visual. Additional
 quality postconditions are observations over these saved outputs; they cannot
 force the producer to draw or weaken native validation.
 Native reachability may instead record `not_reachable` while both calls ran.
-`asked_the_model` describes the visual request; actual captures establish which
-summary calls occurred.
+Preserve native `asked_the_model`: it stays true for the shared summary request
+even when visual fields were omitted. Use `run_visual_decision` and the actual
+second request to distinguish visual admission, and captures to establish which
+calls occurred.
 
 Only the read-only plan and replay jobs run in retained mode. Experimental
 cases, their report and the ledger-commit job are skipped. No production ledger,
