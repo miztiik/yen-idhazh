@@ -52,7 +52,7 @@ test.describe('route-owned console configuration', () => {
 		]);
 		expect(routes.judgement.judged).toEqual(judgementPanels);
 		const modelPanels = [
-			'model-cards', 'model-throughput', 'call-ending', 'refusing-rule',
+			'model-cards', 'model-throughput', 'call-ending',
 			'doubt-reasons', 'faithfulness', 'source-doubts', 'write-cost',
 			'score-cost', 'summary-length', 'model-change'
 		];
@@ -74,6 +74,13 @@ test.describe('route-owned console configuration', () => {
 	test('parses independently supplied files without changing their values', () => {
 		const files = routeFiles();
 		expect(routeConsolesFrom(files)).toEqual(files);
+	});
+
+	test('keeps Run total as the shipped token metric and refuses unsupported configured modes', () => {
+		expect(routeConsoles().machine.knobs.read_write_default_metric).toBe(0);
+		const files = routeFiles();
+		files.machine.knobs.read_write_default_metric = 2;
+		expect(() => routeConsolesFrom(files)).toThrow('knobs.read_write_default_metric must be 0 (Run total) or 1 (Median per article)');
 	});
 
 	test('refuses a missing route file', () => {

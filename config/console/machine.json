@@ -62,6 +62,7 @@
     "slower_machines_min_articles": 10,
     "slowest_articles_rows": 20,
     "closest_to_memory_rows": 20,
-    "context_min_values": 2
+    "context_min_values": 2,
+    "read_write_default_metric": 0
   }
 }

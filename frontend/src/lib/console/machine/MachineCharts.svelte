@@ -10,7 +10,7 @@
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { AXIS_LABEL_GAP_PX, chartWidth, labelWidth, MARGIN, observeWidth } from '$lib/charts/frame';
 	import { useChartFrame, useChartLabels } from '$lib/charts/label-context';
-	import { clockAgreement, clocksChart, readAgainstWritten, workSeries, money, type CostRate } from '$lib/charts/machine';
+	import { clockAgreement, clocksChart, readAgainstWritten, money, type CostRate } from '$lib/charts/machine';
 	import { formatNumber } from '$lib/number-format';
 	import { costOverDays } from '$lib/charts/cost';
 	import { settingsRules } from '$lib/console/settings-moved';
@@ -36,7 +36,7 @@
 		{ ...MARGIN, right: Math.ceil(labelWidth('100%', labels()) + AXIS_LABEL_GAP_PX) }));
 	const declined = { declined: 'This compares records within one run or kind, not a change over days.' };
 	const rule = $derived(settingsRules(shell, { from: start, to: end }, 'none'));
-	const work = $derived(readAgainstWritten(textRows(rows)));
+	const work = $derived(id === 'counterfactual-cost' ? readAgainstWritten(textRows(rows)) : null);
 	const slower = $derived(slowerMachines(rows));
 	const comparableKinds = $derived(new Set([...slower.reading, ...slower.writing]
 		.filter((row) => (row.range?.count ?? 0) >= knobs.slower_machines_min_articles).map((row) => row.label)));
@@ -56,8 +56,7 @@
 		: id === 'slowest-articles' ? "Each article's longest stage against its other stages"
 		: id === 'closest-to-memory' ? "Memory held at each article's lowest point against the machine's total"
 		: id === 'context-headroom' ? 'Each prompt against the reading limit'
-		: id === 'prompt-reuse' ? 'Text held for the label call against text the summary call reads fresh'
-		: 'Tokens read against tokens written');
+		: 'Text held for the label call against text the summary call reads fresh');
 	const clockRows = $derived(clocksChart(clocks.pairs, knobs.clocks_agree_within_pct, numberFormat));
 	const context = $derived(contextReadings(rows));
 	const contextDomain = $derived([
@@ -71,7 +70,7 @@
 	let outputPrice = $state(rate.outputPerMillion);
 	let rateSource = $state<'configured' | 'yours'>('configured');
 	const prices = $derived({ ...rate, inputPerMillion: inputPrice, outputPerMillion: outputPrice });
-	const cost = $derived(costOverDays(work.runs, prices));
+	const cost = $derived(costOverDays(work?.runs ?? [], prices));
 	const priced = $derived({
 		input: cost.days.reduce((sum, day) => sum + day.read, 0),
 		output: cost.days.reduce((sum, day) => sum + day.written, 0),
@@ -79,9 +78,8 @@
 	});
 	const series = $derived.by((): SeriesInput[] => {
 		if (id === 'prompt-reuse') return reuseSeries(rows);
-		if (id === 'counterfactual-cost') return [{ label: `Running counterfactual total, ${rate.currency}`, token: '--chart-1',
+		return [{ label: `Running counterfactual total, ${rate.currency}`, token: '--chart-1',
 			points: cost.days.map((day) => ({ date: day.date, value: day.running })) }];
-		return workSeries(work.runs, 'tokens');
 	});
 	const drawing = $derived(dateSeries(series, {
 		frame: box,
@@ -103,7 +101,7 @@
 </script>
 
 <div data-windowed={{ 'context-headroom': 'machine-context', 'prompt-reuse': 'machine-prompt-reuse',
-	'read-against-written': 'machine-tokens', 'counterfactual-cost': 'machine-cost' }[id]}
+	'counterfactual-cost': 'machine-cost' }[id]}
 	data-window-days={windowDays}
 	data-cost-running-total={id === 'counterfactual-cost' ? cost.runningTotal : undefined}>
 <Panel {id} {title} heading="h3" verdict={id === 'two-clocks'} note={id === 'slowest-articles'
@@ -111,9 +109,9 @@
 	: id === 'two-clocks' ? `Newest run ${newestRunId ?? newest?.runId ?? 'not recorded'}, by shard.`
 	: `Read from the published record when you open this page - over ${nameSpan(windowDays)}.`}>
 	<div data-panel-question="is it working"
-		data-model-rule-name={['prompt-reuse', 'read-against-written', 'counterfactual-cost'].includes(id) ? undefined : id}
-		data-model-rule={['prompt-reuse', 'read-against-written', 'counterfactual-cost'].includes(id) ? undefined : 'no'}
-		data-model-rule-none={['prompt-reuse', 'read-against-written', 'counterfactual-cost'].includes(id) ? undefined : declined.declined}>
+		data-model-rule-name={['prompt-reuse', 'counterfactual-cost'].includes(id) ? undefined : id}
+		data-model-rule={['prompt-reuse', 'counterfactual-cost'].includes(id) ? undefined : 'no'}
+		data-model-rule-none={['prompt-reuse', 'counterfactual-cost'].includes(id) ? undefined : declined.declined}>
 		{#if id !== 'two-clocks'}<p data-comparison={comparison}>{comparison}.</p>{/if}
 		{#if id === 'two-clocks'}
 			<p class="lede" data-lede data-comparison={comparison}>{widestGap === null ? 'Neither instrument recorded a comparison.'
@@ -176,10 +174,7 @@
 		{:else}
 			<p class="lede" data-lede>{id === 'counterfactual-cost'
 				? `${money(cost.runningTotal, rate.currency, numberFormat)}, counterfactual, never a bill.`
-				: id === 'prompt-reuse' ? reuseMedian === null ? 'No label request recorded held text.' : `${formatNumber(reuseMedian, numberFormat)} tokens held for the middle label request.`
-					: work.runs.length && work.runs.reduce((sum, run) => sum + run.output, 0) > 0
-						? `${formatNumber(work.runs.reduce((sum, run) => sum + run.input, 0) / work.runs.reduce((sum, run) => sum + run.output, 0), numberFormat, { si: false })} tokens read for each token written.`
-						: 'No run recorded both token counts.'}</p>
+				: reuseMedian === null ? 'No label request recorded held text.' : `${formatNumber(reuseMedian, numberFormat)} tokens held for the middle label request.`}</p>
 			{#if id === 'counterfactual-cost'}
 				<RateControl configured={rate} bind:inputRate={inputPrice} bind:outputRate={outputPrice} bind:source={rateSource} />
 				<dl class="costs" data-cost-figures data-cost-source={rateSource}>

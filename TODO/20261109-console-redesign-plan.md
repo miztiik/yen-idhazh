@@ -1,8 +1,8 @@
 # Compact-ledger console recovery and redesign
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 **Level**: 5 - resolve design gates before implementation.
-**Status**: Design handoff complete. Row 3 has its own appearance-contract gate. Row 4 removes the duplicate Summaries refusal chart; other cuts, moves and the token-chart representation remain open.
+**Status**: Row 4 delivers the duplicate Summaries refusal removal and the run-token comparison. Remaining cut/move dispositions and anomaly/baseline decisions stay open in Row 8.
 
 ## 0. Operating contract
 
@@ -11,11 +11,11 @@ Table A
 | ID | Field | Value |
 | --- | --- | --- |
 | A1 | Goal | Reduce clutter, fix retained charts and diagnose compact-data publication lag. |
-| A2 | In scope | - Permanently remove charts and actually move retained charts between pages once their individual dispositions are settled.<br>- Replace the full console palette, typography, navigation, controls, status hierarchy and chart styling.<br>- Reimagine the retained run read/write-token comparison after its representation is settled.<br>- Retain compact Parquet, DuckDB-Wasm and D3.<br>- Diagnose publication lag without changing compaction eligibility, cadence or retention. |
+| A2 | In scope | - Permanently remove charts and actually move retained charts between pages once their individual dispositions are settled.<br>- Replace the full console palette, typography, navigation, controls, status hierarchy and chart styling.<br>- Reimagine the retained read/write-token comparison as per-run lines with Run total / Median per article.<br>- Retain compact Parquet, DuckDB-Wasm and D3.<br>- Diagnose publication lag without changing compaction eligibility, cadence or retention. |
 | A3 | Out of scope | Table B. |
 | A4 | Governing pages | [Console delivery](../docs/architecture/publishing/console.md), [chart data](../docs/concepts/console-design/how-a-console-chart-gets-its-data.md), [window rules](../docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md), [compaction](../docs/architecture/publishing/ledger-compaction.md), [design system](../docs/concepts/design-system.md). |
 | A5 | Architecture | Compact Parquet -> shared DuckDB-Wasm reader -> typed result -> presentation adapter -> D3. No chart exports. Fowler supports retaining this path. |
-| A6 | ESCALATE | 1. Unsettled persisted shape, publication permission or protected-contract change.<br>2. An unchosen permanent cut, move, diagnostic loss or token-chart representation.<br>3. Current-day or uncommitted data required.<br>4. New source, engine, component framework or arbitrary SQL network access.<br>5. An unresolved gate or file inventory for the affected row, not unrelated rows.<br>6. Publication fix without an established root cause. |
+| A6 | ESCALATE | 1. Unsettled persisted shape, publication permission or protected-contract change.<br>2. An unchosen permanent cut, move, diagnostic loss or token anomaly/baseline rule.<br>3. Current-day or uncommitted data required.<br>4. New source, engine, component framework or arbitrary SQL network access.<br>5. An unresolved gate or file inventory for the affected row, not unrelated rows.<br>6. Publication fix without an established root cause. |
 | A7 | Execution | One nested session per PR; parallel N = 1 because shell, roster, window and config edits overlap. Row 1 defines the handoff; Table L assigns each remaining gate to its implementation row. |
 
 Execute per docs/how-to/execute-a-plan.md: one nested session per PR; parallel N = 1; merge after required CI passes; pause only the row whose design gate is unresolved.
@@ -41,10 +41,11 @@ Table C
 | C1 | 1 | Define console redesign and chart changes | - | A | DONE | `reimagined-bassoon` | - | App session `5a68b1fe-c1ab-4f8d-b706-ef758cc38288`; branch `console-design-contract` |
 | C2 | 2 | Diagnose compact-data publication lag | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Replace the full console visual system and share window behavior | 1 | C | DONE | `vigilant-funicular` | - | App session `758b5e38-010f-4ba5-9945-399a21883402`; branch `console-visual-rebuild` |
-| C4 | 4 | Apply permanent cuts, page moves and the token-chart redesign | 1 | D | PENDING | - | - | - |
+| C4 | 4 | Remove the duplicate refusal view and redraw run token volume | 1 | D | DONE | `cuddly-doodle` | - | App session `68c70212-4ac7-4a55-883e-f76bf3f4945c`; branch `settled-console-charts` |
 | C5 | 5 | Correct retained chart readings and evidence windows | 4 | E | PENDING | - | - | - |
 | C6 | 6 | Restore collection needed by retained hardware diagnostics | 4 | F | PENDING | - | - | - |
 | C7 | 7 | Make retained explorer answers directly reachable and drawable | 1 | G | DONE | `ubiquitous-doodle` | - | App session `735f58fd-23bf-4189-9efb-d08402988c46`; branch `explorer-reliability` |
+| C8 | 8 | Settle remaining permanent cuts, page moves and token anomaly rules | 1 | H | BLOCKED | - | - | Individual dispositions and anomaly/baseline definitions remain unresolved. |
 
 ## 2. Row #1 - Define console redesign and chart changes
 
@@ -142,7 +143,7 @@ Table H - Hardware; source: `config/console/machine.json`
 | H11 | `context-headroom` | Prompt size versus slot limit | KEEP; repair O3 rather than invent a limit. |
 | H12 | `article-cost` | Per-article resource use | KEEP; distinguish CPU seconds, model time and incremental memory. |
 | H13 | `prompt-reuse` | Cache reuse versus prompt growth | KEEP; per-call held/fresh counts differ from token totals. |
-| H14 | `read-against-written` | Input/output token mix | RETAIN AND REIMAGINE on Hardware; L6. Adjacent bars, stacked bars and a line of a named per-run measure remain options, not a selected representation. |
+| H14 | `read-against-written` | Input/output token volume per run | RETAIN AND REIMAGINE on Hardware; L6. Two per-run lines; Run total / Median per article radios, default totals; exact actual-run readout and measured/recorded article coverage. |
 | H15 | `counterfactual-cost` | Token-price scenario | PROPOSE CUT; M8 prices editable hypothetical totals. Do not remove the shared token query while H14 consumes it. |
 
 Table I - Judgement; source: `config/console/judgement.json`
@@ -185,10 +186,10 @@ Table L
 | --- | --- | --- | --- |
 | L1 | Full visual replacement | Row 3 uses the complete console-only style family below: palette, type, rail, controls, status, panels and drawings. No reader recoloring. | Defaulted additive appearance family; native validation precedes CSS production. Missing blocks/leaves use role defaults, arrays replace whole, and only the chart dash accepts null. No dependency on L3 or L6. |
 | L2 | Closed-day eligibility/cadence | Keep `compact_after_days = 1` for item-health, summary-quality-evals, host-fingerprint and run-shards; retain validator >=1, cadence and retention. | RESOLVED: the extra whole-day wait remains. Row 2 diagnoses publication only; no freshness gain is assumed. |
-| L3 | Permanent cuts and page moves | Row 4 permanently removes G4. Other Table M cuts and Table N moves remain individual proposals; existing flat rosters determine presence/order. | Row 4 only: settle the chosen IDs, losses and consumer inventory. No presentation schema or blanket disclosure strategy. Does not hold Row 3. |
+| L3 | Permanent cuts and page moves | Row 4 permanently removes G4 only. Other Table M cuts and every Table N move remain individual proposals in Row 8; existing flat rosters determine presence/order. | G4's inventory is closed below. Row 8 is blocked on remaining dispositions and losses. No presentation schema, hidden charts or blanket disclosure strategy. |
 | L4 | Automatic explorer chart choice | Count valid readings through existing role/shape validation and floors; a small named grouped result can rank instead of selecting an undrawable scatter. | Row 7 construction settled; preserve manual choices, typed-date refusals and reporting floors. Independent of L1/L3/L6. |
 | L5 | SQL aggregation | Keep existing named column/date queries and reducers for these changes. No new aggregate API is required. | RESOLVED: placement, units, window labels and publication diagnosis do not require a query-contract migration. No transfer-saving claim. |
-| L6 | Hardware run read/write comparison | Retain H14 and its data. Options are adjacent read/write bars per run, stacked read/write segments per run, or lines of an explicitly named per-run measure. | Row 4 only: settle native row/group keys, token semantics, aggregation, units and representation before drawing. Grouped volumes, rates and ratios are not substitutes. Does not hold Row 3. |
+| L6 | Hardware run read/write comparison | Compact item-health, settled by UTC date/run/item, supplies two per-run lines. Run total sums paired finite nonnegative input/output; Median per article takes each side's actual median over that identical cohort. Default totals; input includes cached prompts and recorded model calls. | Run-aware geometry, numeric run order, distinct same-day positions and known unmeasured gaps; no daily roll-up, fake timestamps or refetch on metric switch. Actual-run pointer/tap/keyboard readout includes full ID, UTC date and measured/recorded articles. Anomaly/baseline rules stay unresolved in Row 8. |
 
 #### L1 - Console-only appearance settings for Row 3
 
@@ -446,88 +447,45 @@ Table S
 | S2 | Text rail or recoloring on the old skin | Omits the requested type, controls, status and chart replacement. | Accept an incomplete visual result; not this scope. | Full replacement scope. |
 | S3 | CSS-only chart font growth | Leaves old axis arithmetic and can collide labels. | Update measured geometry with the style, preserving reader defaults. | D12. |
 
-## 5. Row #4 - Apply permanent cuts, page moves and the token-chart redesign
+## 5. Row #4 - Remove the duplicate refusal view and redraw run token volume
 
-- **Scope:** Permanently remove G4, apply only individually settled Table M/N changes, and reimagine retained H14 after L6 is settled.
+- **Scope:** Permanently remove G4/M5 and implement L6/H14 only. No other cut, page move, source change, collector or anomaly/baseline rule belongs to this delivery.
 - **Files touched:**
-  - `config/console/pipelines.json`
   - `config/console/model.json`
-  - `config/console/machine.json`
-  - `config/console/voices.json`
-  - `frontend/src/routes/console/+page.server.ts`
-  - `frontend/src/routes/console/+page.svelte`
-  - `frontend/src/routes/console/model/+page.svelte`
+  - `config/console/machine.json` (initial token metric in the existing numeric knobs)
+  - `frontend/src/lib/console/route-console.ts` (validate and project that metric)
   - `frontend/src/routes/console/machine/+page.svelte`
-  - `frontend/src/routes/console/machine/+page.server.ts`
-  - `frontend/src/routes/console/voices/+page.svelte`
-  - `frontend/src/lib/console/queries/pipelines.ts`
   - `frontend/src/lib/console/queries/model.ts`
   - `frontend/src/lib/console/queries/machine.ts`
-  - `frontend/src/lib/console/queries/voices.ts`
   - `frontend/src/lib/console/model/panels.ts`
   - `frontend/src/lib/console/model/Panels.svelte`
-  - `frontend/src/lib/console/model/refusing-rule.ts` (delete if no surviving application consumer)
-  - `frontend/src/lib/console/model/model-change.ts` (conditional on M6)
+  - `frontend/src/lib/console/model/refusing-rule.ts` (delete; its only application consumer is removed)
   - `frontend/src/lib/console/model/slice.ts`
-  - `frontend/src/lib/console/eval-instruments.ts`
-  - `frontend/src/lib/console/pipelines/ItemCost.svelte`
-  - `frontend/src/lib/console/pipelines/SlowerOnSameWork.svelte`
-  - `frontend/src/lib/console/pipelines/WriteCost.svelte` (new extraction if N2 is chosen)
-  - `frontend/src/lib/console/pipelines/SlowestArticles.svelte` (new extraction if N3 is chosen)
-  - `frontend/src/lib/console/pipelines/VisualFunnels.svelte` (conditional on M1/M2)
-  - `frontend/src/lib/console/pipelines/visual-funnels.ts` (conditional on M1/M2)
-  - `frontend/src/lib/console/pipelines/VisualAttempts.svelte` (conditional on M3/M4)
-  - `frontend/src/lib/console/pipelines/visual-attempts.ts` (conditional on M3/M4)
-  - `frontend/src/lib/console/pipelines/attempt-notes.ts`
   - `frontend/src/lib/console/machine/MachineCharts.svelte`
-  - `frontend/src/lib/console/machine/records.ts`
-  - `frontend/src/lib/console/machine/TailTrendPanel.svelte`
-  - `frontend/src/lib/console/machine/PlatformMixPanel.svelte` (conditional on M7)
-  - `frontend/src/lib/console/voices/WatchlistPanel.svelte` (conditional on M9)
-  - `frontend/src/lib/console/voices/watchlist.ts` (conditional on M9)
-  - `frontend/src/lib/server/ledger-rows.ts`
+  - `frontend/src/lib/console/machine/ReadWritePanel.svelte` (new native H14 consumer)
+  - `frontend/src/lib/console/machine/run-axis.ts` (thin repeated dates by UTC identity, not formatted text)
   - `frontend/src/lib/charts/machine.ts`
-  - `frontend/src/lib/charts/cost.ts` (conditional on M8)
-  - `frontend/src/lib/components/RateControl.svelte` (conditional on M8)
+  - `frontend/src/lib/charts/d3/runSeries.ts` (new typed run-sequence geometry)
+  - `frontend/src/lib/charts/d3/RunSeries.svelte` (new shared drawing/readout consumer)
+  - `frontend/src/lib/charts/readout.ts` (truthful runSeries type literal)
   - `backend/tests/contracts/test_panel_queries.py`
-  - `frontend/tests/console-model-instruments.spec.ts`
-  - `frontend/tests/console-model-panels.spec.ts`
-  - `frontend/tests/console-model-reductions.spec.ts`
+  - `tests/fixtures/console/machine/readAgainstWrittenQuery.json` (regenerate the existing native answer with article identity)
+  - `frontend/tests/appearance-config.spec.ts`
   - `frontend/tests/console-model-ledgers.spec.ts`
   - `frontend/tests/console-panel-queries.spec.ts`
-  - `frontend/tests/console-item-cost.spec.ts`
-  - `frontend/tests/console-pipelines-native.spec.ts`
-  - `frontend/tests/console-pipelines-nothings.spec.ts`
-  - `frontend/tests/console-pipelines-retained-item-cost.spec.ts`
-  - `frontend/tests/console-canary-host-halves.spec.ts`
-  - `frontend/tests/recorded-slices.spec.ts`
-  - `frontend/tests/ledger-rows.spec.ts`
+  - `frontend/tests/console-machine.spec.ts`
   - `frontend/tests/chart-vocabulary.spec.ts`
-  - `frontend/tests/platform-mix.spec.ts` (conditional on M7)
-  - `frontend/tests/console-visual-funnels.spec.ts` (conditional on M1/M2)
-  - `frontend/tests/console-visual-attempts.spec.ts` (conditional on M3/M4)
   - `frontend/tests/console-machine-journey.spec.ts`
-  - `frontend/tests/console-pipelines-lifecycle.spec.ts`
-  - `frontend/tests/console-voices-journey.spec.ts`
-  - `frontend/scripts/test-groups.ts` (if a retired spec is removed)
-  - `frontend/tests/support/panel-tab.ts`
   - `frontend/tests/support/console-sources.ts`
   - `frontend/tests/support/console-expect/console-built-page/model.ts`
-  - `frontend/tests/support/console-expect/console-built-page/pipelines.ts`
-  - `frontend/tests/support/console-expect/console-built-page/machine.ts`
-  - `frontend/tests/support/console-expect/console-built-page/voices.ts`
-  - `frontend/tests/support/console-window/server-panels.ts`
-  - `docs/architecture/publishing/console.md`
-  - `docs/architecture/publishing/what-the-pipelines-route-draws.md`
+  - `frontend/tests/support/console-expect/console-chrome/machine.ts`
   - `docs/architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md`
   - `docs/architecture/publishing/console-machine.md`
-  - `docs/architecture/publishing/who-supplied-the-day-and-which-feeds-failed.md`
-  - `docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md`
-  - `docs/concepts/console-design/what-the-quality-and-source-panels-draw.md`
+  - `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md`
   - `docs/concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md`
   - `TODO/20261109-console-redesign-plan.md`
-- **Acceptance gates:** L3/L6 gate only their affected changes. G4 is settled; other cuts/moves stay proposals until exact IDs/losses are named. Filter this candidate-consumer inventory to the chosen changes and close any H14 renderer additions before dispatch. Local: selector, lint/types, roster/query/consumer and existing instrument tests. CI: merge-candidate gates. Browser: one retained journey proves a permanent absence or actual destination and model-stage access; no chart matrix.
-- **Oracle:** The removed chart/query is absent, each chosen move is mounted once on its destination, and frozen native answers retain their original scope, cohort and values. This cannot select a diagnostic loss or a token-chart representation.
+- **Acceptance gates:** Local: selector, lint/types, native query binding, permanent G4 absence with Pipelines model-stage access, same-day/numeric run ordering, totals versus actual medians, identical cohorts, missing/zero/partial readings and run-aware geometry/vocabulary binding. Extend the representative Hardware/Summaries-to-Pipelines journeys for metric switching without fetch and actual-run pointer/keyboard readout. CI owns the full merge candidate. Integrated browser: real dense-run chart in the merged visual system, both metrics, run selection, missing/empty data and cross-route smoke; Susan reviews the rendered chart.
+- **Oracle:** G4 has no roster/judged entry, renderer or Summaries query; Pipelines still ranks model-stage refusals. H14 draws every recorded run at a distinct numeric-ordered position, takes both metrics from one paired cohort and reads exact actual-run values without another fetch. Other charts and endpoint groups retain their semantics.
 
 ### Decisions
 
@@ -540,7 +498,10 @@ Table T
 | T3 | Apply D14 for every move. Hardware latency cannot adopt the Pipelines endpoint, and the fixed-work comparison cannot adopt the Hardware endpoint. Show distinct evidence dates instead of manufacturing one date. | Native reach/query contracts. |
 | T4 | Delete only truly unused UI readers/helpers. Keep `platformMixQuery` for retained cards/clocks/colors and the shared token query for H14. Cut no native ledger fields, producers, historical rows or persisted config keys as a chart side effect. | Direct surviving-consumer search. |
 | T5 | Keep `DRAWN_BY` ownership truthful, including `score_ms -> score-cost`. Retire obsolete chart cases with their invariant preserved in the retained query/component or representative journey; update the named test inventory if a spec is deleted. | Instrument contract; test policy. |
-| T6 | H14 stays on Hardware and is not a removal candidate. Settle L6 before changing marks or aggregation; preserve volume/rate/ratio distinctions and native run keys. Shell styling and other independent rows do not wait for this choice. | Retained token-comparison scope. |
+| T6 | H14 stays on Hardware. One builder returns Run total and actual Median per article over the same paired finite nonnegative item cohort, plus recorded/measured counts. Read includes cached prompt tokens and totals all recorded model calls; neither metric is a rate, words or uncached compute. Preserve cost helpers' dated semantics. | L6; native item-health grain. |
+| T7 | Use native runSeries geometry, not duplicate dates or fake IDs in dateSeries. Numeric run sequence has one position per known run; thin repeated UTC labels, never run points. Known unmeasured runs break paths; do not invent scheduled runs. | Shared run-axis and compareRuns contracts. |
+| T8 | Read is solid and Written dashed on one token scale. Monotone-X interpolation passes through actual readings without invented extrema; it is not statistical smoothing. Mark only selected/isolated values. Existing ChartReadout snaps to actual runs and shows exact values, full ID, UTC date and measured/recorded coverage; rest and Escape use the last known run, even if unmeasured. | Shared chart vocabulary and readout; Susan drawing ruling. |
+| T9 | Metric radios redraw the same in-memory answer. The existing numeric route knob `read_write_default_metric` selects the initial mode: 0 = Run total (shipped default), 1 = Median per article; reject other values at the config boundary. Runtime selection remains in memory. No anomaly threshold, baseline, moving average or failure-color verdict is part of this chart. | Settled baseline feature; unresolved work retained in Row 8. |
 
 ### Rejected alternatives
 
@@ -673,3 +634,32 @@ Table AA
 | AA1 | Lower shared floors for the example | Changes unrelated reporting behavior. | Separate reporting-floor decision. | L4. |
 | AA2 | Migrate the ledger date type | Archive migration for a query mistake. | Schema versioning and historical reader changes. | O8. |
 | AA3 | Add explorer exports or a server endpoint | Duplicates data delivery. | New persisted/publication contract or hosting change. | A5/B3. |
+
+## 9. Row #8 - Settle remaining permanent cuts, page moves and token anomaly rules
+
+- **Scope:** Complete the existing page-by-page disposition review for M1-M4, M6-M9 and N1-N5. Preserve every title, loss and source/endpoint requirement in Tables F-K, M and N until each fate is settled. Separately define whether H14 needs an anomaly/baseline comparison and what it would mean; the complete baseline chart in Row 4 does not choose one.
+- **Status:** BLOCKED on individual dispositions and the anomaly/baseline definition. No remaining proposal is an implementation instruction.
+- **Candidate files:** Filter to the selected IDs before implementation; do not bulk-apply this inventory:
+  - `config/console/pipelines.json`, `config/console/model.json`, `config/console/machine.json`, `config/console/voices.json`
+  - `frontend/src/routes/console/+page.server.ts`, `frontend/src/routes/console/+page.svelte`
+  - `frontend/src/routes/console/model/+page.svelte`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/src/routes/console/machine/+page.server.ts`, `frontend/src/routes/console/voices/+page.svelte`
+  - `frontend/src/lib/console/queries/pipelines.ts`, `frontend/src/lib/console/queries/model.ts`, `frontend/src/lib/console/queries/machine.ts`, `frontend/src/lib/console/queries/voices.ts`
+  - `frontend/src/lib/console/model/panels.ts`, `frontend/src/lib/console/model/Panels.svelte`, `frontend/src/lib/console/model/model-change.ts`, `frontend/src/lib/console/model/slice.ts`, `frontend/src/lib/console/eval-instruments.ts`
+  - `frontend/src/lib/console/pipelines/ItemCost.svelte`, `frontend/src/lib/console/pipelines/SlowerOnSameWork.svelte`
+  - `frontend/src/lib/console/pipelines/WriteCost.svelte` (N2 extraction), `frontend/src/lib/console/pipelines/SlowestArticles.svelte` (N3 extraction)
+  - `frontend/src/lib/console/pipelines/VisualFunnels.svelte`, `frontend/src/lib/console/pipelines/visual-funnels.ts`, `frontend/src/lib/console/pipelines/VisualAttempts.svelte`, `frontend/src/lib/console/pipelines/visual-attempts.ts`, `frontend/src/lib/console/pipelines/attempt-notes.ts`
+  - `frontend/src/lib/console/machine/MachineCharts.svelte`, `frontend/src/lib/console/machine/records.ts`, `frontend/src/lib/console/machine/TailTrendPanel.svelte`, `frontend/src/lib/console/machine/PlatformMixPanel.svelte`
+  - `frontend/src/lib/console/voices/WatchlistPanel.svelte`, `frontend/src/lib/console/voices/watchlist.ts`
+  - `frontend/src/lib/server/ledger-rows.ts`, `frontend/src/lib/charts/machine.ts`, `frontend/src/lib/charts/cost.ts`, `frontend/src/lib/components/RateControl.svelte`
+  - `backend/tests/contracts/test_panel_queries.py`
+  - `frontend/tests/console-model-instruments.spec.ts`, `frontend/tests/console-model-panels.spec.ts`, `frontend/tests/console-model-reductions.spec.ts`, `frontend/tests/console-model-ledgers.spec.ts`, `frontend/tests/console-panel-queries.spec.ts`
+  - `frontend/tests/console-item-cost.spec.ts`, `frontend/tests/console-pipelines-native.spec.ts`, `frontend/tests/console-pipelines-nothings.spec.ts`, `frontend/tests/console-pipelines-retained-item-cost.spec.ts`
+  - `frontend/tests/console-canary-host-halves.spec.ts`, `frontend/tests/recorded-slices.spec.ts`, `frontend/tests/ledger-rows.spec.ts`, `frontend/tests/chart-vocabulary.spec.ts`, `frontend/tests/platform-mix.spec.ts`
+  - `frontend/tests/console-visual-funnels.spec.ts`, `frontend/tests/console-visual-attempts.spec.ts`, `frontend/tests/console-machine-journey.spec.ts`, `frontend/tests/console-pipelines-lifecycle.spec.ts`, `frontend/tests/console-voices-journey.spec.ts`
+  - `frontend/scripts/test-groups.ts`, `frontend/tests/support/panel-tab.ts`, `frontend/tests/support/console-sources.ts`, `frontend/tests/support/console-window/server-panels.ts`
+  - `frontend/tests/support/console-expect/console-built-page/model.ts`, `frontend/tests/support/console-expect/console-built-page/pipelines.ts`, `frontend/tests/support/console-expect/console-built-page/machine.ts`, `frontend/tests/support/console-expect/console-built-page/voices.ts`
+  - `docs/architecture/publishing/console.md`, `docs/architecture/publishing/what-the-pipelines-route-draws.md`, `docs/architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md`, `docs/architecture/publishing/console-machine.md`, `docs/architecture/publishing/who-supplied-the-day-and-which-feeds-failed.md`
+  - `docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md`, `docs/concepts/console-design/what-the-quality-and-source-panels-draw.md`, `docs/concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md`
+  - `TODO/20261109-console-redesign-plan.md`
+- **Acceptance gates:** Settle exact IDs and diagnostic losses, close the surviving-consumer inventory, and preserve D14/T2-T5. Any anomaly rule needs its own defined baseline, population and interpretation before implementation.
+- **Oracle:** Every remaining proposal has an explicit fate without treating visual similarity as metric parity. Chosen removals are permanent, moves mount once at their actual destination, and retained native answers keep their original cohorts and endpoint groups.

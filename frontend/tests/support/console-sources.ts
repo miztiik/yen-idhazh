@@ -32,7 +32,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'axis.ts', 'DateSeries.svelte', 'dateSeries.ts', 'Distribution.svelte', 'distribution.ts',
 		'empty.ts', 'EmptyState.svelte', 'Flow.svelte', 'flow.ts', 'model-rule.ts', 'motion.ts', 'ordered-colour.ts',
 		'overlapTimeline.ts', 'paired.ts', 'PairedScatter.svelte', 'pairedScatter.ts',
-		'PartsOfOne.svelte', 'partsOfOne.ts', 'rankedList.ts', 'scale.ts', 'TileStrip.svelte', 'tileStrip.ts'
+		'PartsOfOne.svelte', 'partsOfOne.ts', 'rankedList.ts', 'RunSeries.svelte', 'runSeries.ts', 'scale.ts', 'TileStrip.svelte', 'tileStrip.ts'
 	],
 	'src/lib/components': [
 		'ArchiveSearch.svelte', 'ChartReadout.svelte', 'ChoiceTiles.svelte',
@@ -68,7 +68,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/lib/console/model': [
 		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'source-doubts.ts', 'summary-length.ts',
-		'model-change.ts', 'model-throughput.ts', 'model-rule.ts', 'refusing-rule.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
+		'model-change.ts', 'model-throughput.ts', 'model-rule.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
 		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'Reasons.svelte', 'doubt-reasons.ts', 'slice.ts', 'work.ts'
 	],
 	'src/lib/console/voices': [
@@ -91,7 +91,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'MachineCardsPanel.svelte', 'MachineCharts.svelte', 'RecordFrame.svelte', 'counters.ts', 'host-types.ts', 'records.ts', 'memory-held.ts',
 		'MemoryHeldPanel.svelte', 'PlatformMixPanel.svelte',
 		'processor-lost.ts', 'ProcessorLostPanel.svelte',
-		'refused-runs.ts', 'run-axis.ts', 'TailTrendPanel.svelte'
+		'refused-runs.ts', 'run-axis.ts', 'ReadWritePanel.svelte', 'TailTrendPanel.svelte'
 	],
 	'src/lib/data': [
 		'ask-reader.ts', 'compact-index.ts', 'configured-catalog.ts', 'engine.ts', 'fetched-bytes.ts', 'host-fingerprint.ts', 'ledger-catalog.ts', 'ledger-columns.ts',

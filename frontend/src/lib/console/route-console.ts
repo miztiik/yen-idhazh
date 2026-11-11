@@ -20,6 +20,15 @@ export interface ConsoleDefine {
 	readonly routes: RouteConsoles;
 }
 
+export type ReadWriteMetric = 'total' | 'median';
+
+/** Project the existing numeric route knob onto the token chart's named modes. */
+export function readWriteMetricDefault(value: number): ReadWriteMetric {
+	if (value === 0) return 'total';
+	if (value === 1) return 'median';
+	throw new Error('config/console/machine.json knobs.read_write_default_metric must be 0 (Run total) or 1 (Median per article)');
+}
+
 function object(value: unknown, path: string): Record<string, unknown> {
 	if (value === null || typeof value !== 'object' || Array.isArray(value)) {
 		throw new Error(`${path} must be an object`);
@@ -94,6 +103,9 @@ export function routeConsolesFrom(files: Readonly<Record<string, unknown>>): Rou
 				throw new Error(`${path} knobs.${key} must be a finite number`);
 			}
 			Object.defineProperty(finite, key, { value: knob, enumerable: true });
+		}
+		if (route === 'machine' && Object.hasOwn(finite, 'read_write_default_metric')) {
+			readWriteMetricDefault(finite.read_write_default_metric);
 		}
 		result[route] = { panel_groups: groups, judged, knobs: finite };
 	}

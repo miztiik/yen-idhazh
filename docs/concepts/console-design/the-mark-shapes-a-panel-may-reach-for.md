@@ -1,8 +1,8 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
-Nine chart types, the house style they draw with, five named mark shapes and
+Ten chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
 shape is drawn inside a type** - a range mark is a row of a ranked list, a tile
 strip is what the `tileStrip` type lays out. Each shape is here because a reader
@@ -44,6 +44,7 @@ a listed type with no module both fail the build.
 | 7 | `overlapTimeline` | what was happening at the same time | the reader wants totals - a timeline is the worst shape there is for a sum | Susan, 2026-09-26 | `frontend/src/routes/console/RunTimelinePanel.svelte` |
 | 8 | `flow` | where did they go, and where did they leave | never - where the panel is narrow the same call returns the stepped list | Susan, 2026-09-26 | `Flow.svelte` |
 | 9 | `pairedScatter` | do these two move together | it has fewer readings or fewer subjects than its two floors - and it never draws a trend line | Susan, 2026-09-26 | `PairedScatter.svelte` |
+| 10 | `runSeries` | what changes from one run to the next | runs have no known chronological order, or horizontal distance must represent elapsed time rather than run sequence | Susan, 2026-11-11 | `RunSeries.svelte` |
 
 Five rules hold every type.
 
