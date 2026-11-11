@@ -59,7 +59,10 @@ def test_real_decisions_keep_refusals_replacements_floor_evidence_and_render_fai
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     for history, expected_floor, rendered in ((4, False, VisualType.BAR), (8, True, None)):
         decision = draw(
-            settings(downgrade_enabled=True, downgrade_floor_percentiles=[50]),
+            settings(
+                type_selection_enabled=False,
+                downgrade_enabled=True, downgrade_floor_percentiles=[50],
+            ),
             population={VisualType.BAR: (history,)}, type="comparison",
         )
         row = stored(tmp_path / str(history), decision)

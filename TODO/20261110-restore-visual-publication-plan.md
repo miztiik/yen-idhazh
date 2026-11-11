@@ -54,6 +54,7 @@ Table C - One row per repair PR
   - `config/prompts/continue-summary.txt`
   - `backend/tests/test_classify.py`
   - `backend/tests/test_visual_planner.py`
+  - `backend/tests/test_visual_attempts.py`
   - `backend/tests/test_chart_vocabulary.py`
   - `backend/tests/test_prompt_files.py`
   - `backend/tests/test_measure_two_calls.py`
