@@ -39,7 +39,7 @@ Table C
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Define console redesign and chart changes | - | A | DONE | `reimagined-bassoon` | - | App session `5a68b1fe-c1ab-4f8d-b706-ef758cc38288`; branch `console-design-contract` |
-| C2 | 2 | Diagnose compact-data publication lag | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Diagnose compact-data publication lag | 1 | B | DONE | `urban-couscous` | - | App session `8605dbb5-0bdf-4a83-8948-d7c58ff90891`; branch `diagnose-compact-publication-lag` |
 | C3 | 3 | Replace the full console visual system and share window behavior | 1 | C | DONE | `vigilant-funicular` | - | App session `758b5e38-010f-4ba5-9945-399a21883402`; branch `console-visual-rebuild` |
 | C4 | 4 | Remove the duplicate refusal view and redraw run token volume | 1 | D | DONE | `cuddly-doodle` | - | App session `68c70212-4ac7-4a55-883e-f76bf3f4945c`; branch `settled-console-charts` |
 | C5 | 5 | Correct retained chart readings and evidence windows | 4 | E | DONE | `redesigned-system` | - | App session `1981e1da-00bf-456b-a4db-13554ac3fb87`; branch `chart-readings-and-windows` |
@@ -317,6 +317,82 @@ Table Q
 | Q1 | Change eligibility or cadence | Not part of publication diagnosis and does not establish a cause for the observed failure. | A separate config/schedule decision; the current extra-day wait otherwise remains. | L2; diagnosis scope. |
 | Q2 | Another packer or raw index | Adds ownership, coverage and cleanup complexity. | Separate B1/B2 design. | B1/B2. |
 | Q3 | Move ordinary panels to another origin | Changes source policy, not existing publication. | Source/permission design and protected-contract changes. | B4. |
+
+### Current publication finding
+
+The deployed source predates the latest packing: the live console is one
+coverage day behind the newest eligible, committed compact day. This establishes
+a deployment/source gap. It does not establish a workflow-code defect or a
+rendering failure.
+
+The single current reading is `2026-11-11T08:50:01Z` UTC, against canonical
+commit `bc38fe090be48f60561fc64a2adef16faa3d1bd6`. Each source is the named
+`state/compact/<ledger>/index/daily.json`, produced by the gardener:
+
+- `item-health`: committed endpoint `2026-11-09`; live endpoint `2026-11-08`.
+- `summary-quality-evals`: committed endpoint `2026-11-09`; live endpoint `2026-11-08`.
+- `host-fingerprint`: committed endpoint `2026-11-09`; live endpoint `2026-11-08`.
+- `run-shards`: committed endpoint `2026-11-09`; live endpoint `2026-11-08`.
+
+All four live index requests returned HTTP 200. Their complete parsed contents
+match the indexes at the last listed Pages source,
+`84a90776e191c45642f1cc76db67b43ce2b8b76d`, not the newer canonical indexes.
+The oldest required endpoint therefore remains `2026-11-08` on the live site;
+changing a chart or its window cannot supply the missing compact day.
+
+**Eligibility:** With the retained `compact_after_days = 1`, Nov 9 ends at
+`2026-11-10T00:00:00Z` and becomes eligible at `2026-11-11T00:00:00Z`.
+Nov 10 remains ineligible until `2026-11-12T00:00:00Z`. This is the expected
+whole-day wait, separate from whether an eligible day has been packed or deployed.
+The four L2 configs still use 1, and
+`backend/idhazh/contracts/knobs/gardener.py:492-499` still requires >=1.
+
+**Normal deployment:** Scheduled Pages run `42944055275` started at
+`2026-11-11T02:09:37Z` with source `84a90776e191c45642f1cc76db67b43ce2b8b76d`.
+Its `decide` job `130272467984` accepted CI evidence for that code; `build`
+job `130272897083` checked out that exact source and completed staging.
+Its `deploy` job `130273519490` succeeded at `2026-11-11T02:12:38Z`;
+the run completed at `2026-11-11T02:12:40Z`. That committed input ended on
+Nov 8 for every required ledger. The deployment could not include Nov 9's
+later packing, and the live indexes reproduce its input rather than showing
+an additional staging loss.
+
+**Normal packing:** Scheduled gardener run `42976505486` used source
+`28540ca58328188d4e74c591a94a53a5991b1e39`, started at
+`2026-11-11T07:01:41Z` and completed successfully at `2026-11-11T07:05:58Z`.
+Its task events selected Nov 9 as the newest eligible day, finished all four
+live compactions and recorded successful shard landings:
+
+- Quality job `130376780018` produced commit
+  `034101e8dd7124243bcacc5d0446fcd4ec26b832` at `2026-11-11T07:02:59Z`.
+- Item-health job `130376779837` produced commit
+  `05a658df4a81231f30382c00849c30b6041c7643` at `2026-11-11T07:03:55Z`.
+- Host/run-shards job `130376779846` produced commit
+  `8a2362f660b7bb761a2faff8c3d45d2bf80e4366` at `2026-11-11T07:04:38Z`.
+
+Those commits are in the canonical source and advance all required endpoints
+to Nov 9. The declared gardener wake is 00:40 UTC daily; this run's observed
+start was later. The metadata does not explain that difference.
+
+**Publication boundary and uncertainty:** `pages.yml` schedules publication
+every 30 minutes or accepts a dispatch; a gardener commit itself does not
+deploy. `publish_decision.py` checks code evidence but selects the scheduled
+commit, and `stage-publication.mjs` stages that committed compact input rather
+than packing raw data. These named inputs, both workflows, the four configs
+and the validator are unchanged between the selected run sources and the
+canonical commit. The bounded default-branch run list contains no later Pages run, so
+there is no post-packing decision or deployment to diagnose. That absence
+does not establish a scheduler, permission, CI-gate or workflow-code cause.
+Historical Pages run `42673624810` still has no established cause for its
+failure before jobs started; this successful chain does not explain it.
+
+**Bounded next observation:** Read only the newest normal Pages run after
+the packing above: its source commit, `decide` reason, `build` and `deploy`
+results, then the same four live indexes once. Compare its committed indexes
+with the deployed result. If no such run or job evidence is available, retain
+that precise gap rather than dispatching a test or prescribing a workflow fix.
+Eligibility, cadence, retention, writers and compact contracts remain unchanged;
+this finding promises neither a freshness gain nor a deployment deadline.
 
 ## 4. Row #3 - Replace the full console visual system and share window behavior
 
