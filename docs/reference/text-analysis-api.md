@@ -1,6 +1,6 @@
 # Text-analysis API reference
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-11
 
 The exact routes, settings, request/result fields, errors and diagnostic
 vocabularies exposed by the local multilingual text-analysis service.
@@ -108,7 +108,7 @@ nonempty `occurrences`. YAKE supplies statistical phrase scores; lower scores
 rank first, with first source position breaking ties. Scores are not confidence
 or model-quality claims.
 
-spaCy's `PhraseMatcher` anchors candidate tokens in the original document.
+Candidate tokens match the original document across whitespace tokens.
 Pattern tokenization does not rerun the model. Matching phrases are deduplicated
 and ordered by score/source before native similarity filtering. Filtering stops
 as soon as the configured maximum of distinct selected patterns is filled;
