@@ -99,6 +99,8 @@ test('the grid reader refuses row objects with a missing cell key', () => {
 
 test('the grid reader refuses unknown versions, bad offsets and grids without a pair', () => {
 	const valid = gridFixture();
+	expect(refusedWhowhatGridData({ ...valid, rows: [] }, itemId)).toContain('rectangular');
+	expect(refusedWhowhatGridData(null, itemId)).toContain('not a whowhat-grid');
 	const unknownVersion = structuredClone(valid);
 	unknownVersion.version = '2099-01-01';
 	expect(refusedWhowhatGridData(unknownVersion, itemId)).toContain('unknown grid contract');

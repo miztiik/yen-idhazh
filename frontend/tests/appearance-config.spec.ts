@@ -15,6 +15,8 @@ import { assistConfig, consoleConfig, explorerConfig, mergeLayers, routeConsoles
 import ts from 'typescript';
 import { runInNewContext } from 'node:vm';
 import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
+import { resolveConsoleStyle, type ConsoleStyleConfig } from '../src/lib/console/console-style';
+import { renderFrameCss } from '../scripts/build-frame-css.mjs';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -50,7 +52,7 @@ test.describe('route-owned console configuration', () => {
 		]);
 		expect(routes.judgement.judged).toEqual(judgementPanels);
 		const modelPanels = [
-			'model-cards', 'model-throughput', 'call-ending', 'refusing-rule',
+			'model-cards', 'model-throughput', 'call-ending',
 			'doubt-reasons', 'faithfulness', 'source-doubts', 'write-cost',
 			'score-cost', 'summary-length', 'model-change'
 		];
@@ -72,6 +74,13 @@ test.describe('route-owned console configuration', () => {
 	test('parses independently supplied files without changing their values', () => {
 		const files = routeFiles();
 		expect(routeConsolesFrom(files)).toEqual(files);
+	});
+
+	test('keeps Run total as the shipped token metric and refuses unsupported configured modes', () => {
+		expect(routeConsoles().machine.knobs.read_write_default_metric).toBe(0);
+		const files = routeFiles();
+		files.machine.knobs.read_write_default_metric = 2;
+		expect(() => routeConsolesFrom(files)).toThrow('knobs.read_write_default_metric must be 0 (Run total) or 1 (Median per article)');
 	});
 
 	test('refuses a missing route file', () => {
@@ -175,7 +184,7 @@ const DEFAULTS: Knobs = {
 	sections: ['notice', 'topics', 'leads', 'items'],
 	archive_page_size: 25,
 	show_filter: true,
-	tagline: 'A daily digest that checks its own work.'
+	tagline: 'Daily news summaries, with links to their sources.'
 };
 
 /** Nothing here equals a default. That is what stops a stub from passing. */
@@ -227,6 +236,7 @@ test.describe('the committed appearance file', () => {
 		for (const block of [
 			'digest',
 			'console',
+			'console_style',
 			'assist',
 			'frame',
 			'theme',
@@ -237,6 +247,44 @@ test.describe('the committed appearance file', () => {
 		]) {
 			expect(parsed, `config/appearance.json is missing ${block}`).toHaveProperty(block);
 		}
+	});
+
+	test('a partial console style keeps per-role defaults and replaces a palette whole', () => {
+		const defaults = resolveConsoleStyle();
+		const categorical = ['#112231', '#112232', '#112233', '#112234', '#112235', '#112236', '#112237', '#112238'];
+		const changed = resolveConsoleStyle({
+			colors: { light: { accent: '#145a55', categorical } },
+			typography: { small: { weight: 500 } },
+			elevation: { light: { panel: { y_px: 2 } } }
+		});
+		expect(changed.colors.light.categorical).toEqual(categorical);
+		expect(changed.colors.dark).toEqual(defaults.colors.dark);
+		expect(changed.typography.small).toEqual({ ...defaults.typography.small, weight: 500 });
+		expect(changed.elevation.light.panel).toEqual({ ...defaults.elevation.light.panel, y_px: 2 });
+	});
+
+	test('the real CSS renderer substitutes a legal nondefault style and is deterministic', () => {
+		const fixture: { console_style: ConsoleStyleConfig } = JSON.parse(readFileSync(
+			join(REPO, 'tests', 'fixtures', 'contracts', 'appearance-config', 'knobs-set-away-from-the-defaults.json'), 'utf8'
+		));
+		const generated = renderFrameCss({ console_style: fixture.console_style });
+		expect(generated).toBe(renderFrameCss({ console_style: fixture.console_style }));
+		const [reader, operator] = generated.split('/* The selector includes the outer canvas');
+		expect(reader).not.toContain('--color-bg:');
+		expect(reader).not.toContain('--console-');
+		expect(operator).toContain('--console-small-size: 0.875rem;');
+		expect(operator).toContain('--console-rail-width: 13rem;');
+		expect(operator).toContain('--console-chart-grid-dash: 2 4;');
+		expect(operator).toContain('--color-bg: #1a1a18;');
+	});
+
+	test('console font and elevation switches use existing fallbacks without new assets', () => {
+		const css = renderFrameCss({ theme: { display_face_enabled: false, elevation_enabled: false } });
+		const operator = css.split('/* The selector includes the outer canvas')[1];
+		expect(operator).not.toContain('InterVariable');
+		expect(operator).not.toContain('rgba(0, 0, 0,');
+		expect(operator).toContain('--shadow-sm: none;');
+		expect(css).toContain('--font-display: var(--font-reading);');
 	});
 
 	test('the frame is wide enough to be a frame, and the console is wider', () => {
@@ -281,7 +329,7 @@ test.describe('the committed appearance file', () => {
  * question asked of the block beside it, and the answer had never been checked.
  */
 test.describe('the assist block a reader is handed', () => {
-const DECLARED = ['result_limit', 'search_min_days', 'search_months', 'similarity_floor'];
+const DECLARED = ['archive_search_months', 'result_limit', 'search_min_days', 'search_months', 'similarity_floor'];
 
 function blockOnDisk(file: string): Record<string, unknown> {
 const path = join(REPO, 'config', file);

@@ -2,6 +2,7 @@
 	/** Which stories the day merged, and what the judge and hand marks can tell us. */
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
+	import { useWindowChoice } from '$lib/console/window-slot';
 	import { windowOfDays } from '$lib/charts/viewport';
 	import { consoleKnobs } from '$lib/console/route-console';
 	import { markedApart, scoreRange } from '$lib/console/holdout';
@@ -17,30 +18,19 @@
 	let { data } = $props();
 	const console = consoleKnobs();
 
-	/** The same key the other four console routes read, so the operator's choice
-	 * of span follows him between them rather than resetting on every click. */
-	const WINDOW_KEY = 'idhazh:console-window';
-
 	const presets = console.window_presets;
-
-	// svelte-ignore state_referenced_locally
-	let windowDays = $state(console.default_window_days);
+	const choice = useWindowChoice();
+	const windowDays = $derived(choice.days);
 	/** False until a browser has run this page. The control cannot do anything
 	 * before that, so it says so rather than pretending. */
 	let ready = $state(false);
 
 	onMount(() => {
 		ready = true;
-		if (typeof localStorage === 'undefined') return;
-		const stored = Number(localStorage.getItem(WINDOW_KEY));
-		if (presets.includes(stored) && stored !== windowDays) show(stored);
 	});
 
-	function show(days: number, remember = true) {
-		windowDays = days;
-		if (remember && typeof localStorage !== 'undefined') {
-			localStorage.setItem(WINDOW_KEY, String(days));
-		}
+	function show(days: number) {
+		choice.select(days);
 	}
 
 	/** Nothing on this route is fetched. Every span it can draw is already

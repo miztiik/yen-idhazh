@@ -53,7 +53,6 @@
 		dayColumns,
 		dayColumnX,
 		dayTicks,
-		frame,
 		logAxis,
 		MARGIN,
 		MODEL_RULE_ROW,
@@ -64,6 +63,7 @@
 		noModelRuleNote,
 		observeWidth
 	} from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import { indexedRuns } from '$lib/charts/indexed-runs';
 	import ChartReadout from './ChartReadout.svelte';
@@ -136,6 +136,7 @@
 	let measured = $state<number | null>(null);
 	/** Which column the pointer or the arrow keys are on, or null for none. */
 	let selected = $state<number | null>(null);
+	const frame = useChartFrame();
 	const box = $derived(frame(chartWidth(measured, width), height, PLOT_MARGIN));
 
 	/** The columns are the window the operator set, not the days that happen to
@@ -181,7 +182,7 @@
 	/** One array of column pixels, so the ticks, the marks and the model rules
 	 * cannot disagree about where a day sits. */
 	const columnsX = $derived(dayColumns(calendar.length, box));
-	const axis = $derived(dayTicks(calendar, { density: tickDensity, columns: columnsX }));
+	const axis = $derived(dayTicks(calendar, { density: tickDensity, columns: columnsX, labels: box.labels }));
 	/** The days the pipeline changed, of the days this chart drew. */
 	const rules = $derived(modelRules(modelChanges, calendar, columnsX));
 	const changedOn = $derived(new Set(rules.map((rule) => rule.date)));
@@ -490,7 +491,7 @@
 						class="tabular-nums"
 						text-anchor="end"
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-decade={tick}
 					>
 						{decade(tick)}
@@ -543,7 +544,7 @@
 						x={rule.x + 3}
 						y={box.top + 9}
 						fill="var(--chart-change)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-model-rule-label={rule.date}
 					>
 						{MODEL_RULE_LABEL}
@@ -614,7 +615,7 @@
 							y={box.bottom + 16}
 							text-anchor={label.anchor}
 							fill="var(--color-text-tertiary)"
-							font-size="10"
+							font-size={box.labels.fontSize}
 							data-day-axis
 							data-timing-label={label.date}
 						>

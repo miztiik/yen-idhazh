@@ -8,8 +8,9 @@
 	import { dateSeries, type SeriesInput } from '$lib/charts/d3/dateSeries';
 	import { distribution } from '$lib/charts/d3/distribution';
 	import { emptyState } from '$lib/charts/d3/empty';
-	import { AXIS_LABEL_GAP_PX, chartWidth, frame, labelWidth, MARGIN, observeWidth } from '$lib/charts/frame';
-	import { clockAgreement, clocksChart, readAgainstWritten, workSeries, money, type CostRate } from '$lib/charts/machine';
+	import { AXIS_LABEL_GAP_PX, chartWidth, labelWidth, MARGIN, observeWidth } from '$lib/charts/frame';
+	import { useChartFrame, useChartLabels } from '$lib/charts/label-context';
+	import { clockAgreement, clocksChart, readAgainstWritten, money, type CostRate } from '$lib/charts/machine';
 	import { formatNumber } from '$lib/number-format';
 	import { costOverDays } from '$lib/charts/cost';
 	import { settingsRules } from '$lib/console/settings-moved';
@@ -27,13 +28,15 @@
 		start: string; end: string; knobs: Readonly<Record<string, number>>; rate: CostRate; windowDays: number;
 	} = $props();
 	const numberFormat = $derived(chart.number_format);
+	const frame = useChartFrame(() => chart);
+	const labels = useChartLabels();
 	let width = $state<number | null>(null);
 	const box = $derived(frame(chartWidth(width, chart.width_px), chart.height_px));
 	const contextBox = $derived(frame(chartWidth(width, chart.width_px), chart.height_px,
-		{ ...MARGIN, right: Math.ceil(labelWidth('100%') + AXIS_LABEL_GAP_PX) }));
+		{ ...MARGIN, right: Math.ceil(labelWidth('100%', labels()) + AXIS_LABEL_GAP_PX) }));
 	const declined = { declined: 'This compares records within one run or kind, not a change over days.' };
 	const rule = $derived(settingsRules(shell, { from: start, to: end }, 'none'));
-	const work = $derived(readAgainstWritten(textRows(rows)));
+	const work = $derived(id === 'counterfactual-cost' ? readAgainstWritten(textRows(rows)) : null);
 	const slower = $derived(slowerMachines(rows));
 	const comparableKinds = $derived(new Set([...slower.reading, ...slower.writing]
 		.filter((row) => (row.range?.count ?? 0) >= knobs.slower_machines_min_articles).map((row) => row.label)));
@@ -53,8 +56,7 @@
 		: id === 'slowest-articles' ? "Each article's longest stage against its other stages"
 		: id === 'closest-to-memory' ? "Memory held at each article's lowest point against the machine's total"
 		: id === 'context-headroom' ? 'Each prompt against the reading limit'
-		: id === 'prompt-reuse' ? 'Text held for the label call against text the summary call reads fresh'
-		: 'Tokens read against tokens written');
+		: 'Text held for the label call against text the summary call reads fresh');
 	const clockRows = $derived(clocksChart(clocks.pairs, knobs.clocks_agree_within_pct, numberFormat));
 	const context = $derived(contextReadings(rows));
 	const contextDomain = $derived([
@@ -68,7 +70,7 @@
 	let outputPrice = $state(rate.outputPerMillion);
 	let rateSource = $state<'configured' | 'yours'>('configured');
 	const prices = $derived({ ...rate, inputPerMillion: inputPrice, outputPerMillion: outputPrice });
-	const cost = $derived(costOverDays(work.runs, prices));
+	const cost = $derived(costOverDays(work?.runs ?? [], prices));
 	const priced = $derived({
 		input: cost.days.reduce((sum, day) => sum + day.read, 0),
 		output: cost.days.reduce((sum, day) => sum + day.written, 0),
@@ -76,9 +78,8 @@
 	});
 	const series = $derived.by((): SeriesInput[] => {
 		if (id === 'prompt-reuse') return reuseSeries(rows);
-		if (id === 'counterfactual-cost') return [{ label: `Running counterfactual total, ${rate.currency}`, token: '--chart-1',
+		return [{ label: `Running counterfactual total, ${rate.currency}`, token: '--chart-1',
 			points: cost.days.map((day) => ({ date: day.date, value: day.running })) }];
-		return workSeries(work.runs, 'tokens');
 	});
 	const drawing = $derived(dateSeries(series, {
 		frame: box,
@@ -100,24 +101,21 @@
 </script>
 
 <div data-windowed={{ 'context-headroom': 'machine-context', 'prompt-reuse': 'machine-prompt-reuse',
-	'read-against-written': 'machine-tokens', 'counterfactual-cost': 'machine-cost' }[id]}
+	'counterfactual-cost': 'machine-cost' }[id]}
 	data-window-days={windowDays}
 	data-cost-running-total={id === 'counterfactual-cost' ? cost.runningTotal : undefined}>
 <Panel {id} {title} heading="h3" verdict={id === 'two-clocks'} note={id === 'slowest-articles'
 	? `Queue wait sits outside elapsed time - one article of the newest run ${slowest.run ?? 'not recorded'}.`
-	: id === 'two-clocks' ? `Two independent instruments, never two copies of one counter - one shard of the newest run ${newestRunId ?? newest?.runId ?? 'not recorded'}.`
+	: id === 'two-clocks' ? `Newest run ${newestRunId ?? newest?.runId ?? 'not recorded'}, by shard.`
 	: `Read from the published record when you open this page - over ${nameSpan(windowDays)}.`}>
 	<div data-panel-question="is it working"
-		data-model-rule-name={['prompt-reuse', 'read-against-written', 'counterfactual-cost'].includes(id) ? undefined : id}
-		data-model-rule={['prompt-reuse', 'read-against-written', 'counterfactual-cost'].includes(id) ? undefined : 'no'}
-		data-model-rule-none={['prompt-reuse', 'read-against-written', 'counterfactual-cost'].includes(id) ? undefined : declined.declined}>
-		<p data-comparison={comparison}>{comparison}.</p>
+		data-model-rule-name={['prompt-reuse', 'counterfactual-cost'].includes(id) ? undefined : id}
+		data-model-rule={['prompt-reuse', 'counterfactual-cost'].includes(id) ? undefined : 'no'}
+		data-model-rule-none={['prompt-reuse', 'counterfactual-cost'].includes(id) ? undefined : declined.declined}>
+		{#if id !== 'two-clocks'}<p data-comparison={comparison}>{comparison}.</p>{/if}
 		{#if id === 'two-clocks'}
-			<p class="lede" data-lede>{widestGap === null ? 'Neither instrument recorded a comparison.'
-				: clocks.disagreeing === 0 && gaps.length === clocks.pairs.length &&
-					newest?.shards !== null && newest?.reported.length === newest?.shards
-					? `Every shard's two clocks agreed within ${knobs.clocks_agree_within_pct} percent in the newest run.`
-						: `${formatNumber(widestGap, numberFormat, { si: false })} percent was the widest gap between the two clocks.`}</p>
+			<p class="lede" data-lede data-comparison={comparison}>{widestGap === null ? 'Neither instrument recorded a comparison.'
+				: `${formatNumber(widestGap, numberFormat, { si: false })}% max gap; ${formatNumber(knobs.clocks_agree_within_pct, numberFormat, { si: false })}% allowed.`}</p>
 				<RankedList geometry={clockRows} caption="The two clocks" maxText={`${clockRows === null ? '0' : formatNumber(clockRows.max, numberFormat, { si: false })}% apart`} fitRuleLabels
 				unmeasuredNote="One instrument recorded nothing." emptyNote="One instrument recorded nothing." />
 			{#each clocks.pairs as pair (pair.label)}
@@ -134,7 +132,7 @@
 				: readingLeader && slower.typical.read !== null && slower.typical.read > 0
 					? `${readingLeader.label} took ${formatNumber(readingLeader.value / slower.typical.read, numberFormat, { si: false })} times ${slower.reference.cpuModel}'s typical reading time.`
 					: 'No machine recorded enough comparable reading work.'}</p>
-			<div class="halves">
+			<div class="halves auto-grid">
 				{#each ['reading', 'writing'] as kind}
 					{@const readings = kind === 'reading' ? slower.reading : slower.writing}
 					{@const target = kind === 'reading' ? slower.typical.read : slower.typical.write}
@@ -162,7 +160,7 @@
 				? `${formatNumber(100 * Math.max(0, ...context.label, ...context.summary) / context.limits[0], numberFormat, { si: false })} percent of the smallest reading limit for the largest prompt.`
 				: 'No request-slot limit was recorded.'}</p>
 			{#if context.limits.length}<p>{context.limits[0]} tokens per request slot, at the smallest recorded limit.</p>{/if}
-			<div class="halves">
+			<div class="halves auto-grid">
 				{#each ['label', 'summary'] as call}
 					<div use:observeWidth={(px) => (width = px)}><Distribution geometry={distribution(call === 'label' ? context.label : context.summary, {
 						frame: contextBox, minValues: knobs.context_min_values, valueTicks: 4, scale: 'log', domain: contextDomain, rules: context.rules,
@@ -176,10 +174,7 @@
 		{:else}
 			<p class="lede" data-lede>{id === 'counterfactual-cost'
 				? `${money(cost.runningTotal, rate.currency, numberFormat)}, counterfactual, never a bill.`
-				: id === 'prompt-reuse' ? reuseMedian === null ? 'No label request recorded held text.' : `${formatNumber(reuseMedian, numberFormat)} tokens held for the middle label request.`
-					: work.runs.length && work.runs.reduce((sum, run) => sum + run.output, 0) > 0
-						? `${formatNumber(work.runs.reduce((sum, run) => sum + run.input, 0) / work.runs.reduce((sum, run) => sum + run.output, 0), numberFormat, { si: false })} tokens read for each token written.`
-						: 'No run recorded both token counts.'}</p>
+				: reuseMedian === null ? 'No label request recorded held text.' : `${formatNumber(reuseMedian, numberFormat)} tokens held for the middle label request.`}</p>
 			{#if id === 'counterfactual-cost'}
 				<RateControl configured={rate} bind:inputRate={inputPrice} bind:outputRate={outputPrice} bind:source={rateSource} />
 				<dl class="costs" data-cost-figures data-cost-source={rateSource}>
@@ -202,10 +197,8 @@
 </div>
 
 <style>
-	.lede { font-size: var(--text-xl); line-height: var(--leading-tight); font-weight: 600; }
-	.halves { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+	.lede { font-size: var(--console-page-title-size); line-height: var(--console-page-title-leading); font-weight: var(--console-page-title-weight); }
 	.halves > div { min-width: 0; }
 	.costs { display: flex; flex-wrap: wrap; gap: var(--space-4); }
 	.costs dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
-	@media (max-width: 48rem) { .halves { grid-template-columns: minmax(0, 1fr); } }
 </style>

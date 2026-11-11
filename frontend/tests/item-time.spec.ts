@@ -78,13 +78,13 @@ test.describe('the day runs newest first, and every time it prints is attributed
             form: TimeForm;
             label: string;
         }[] = [
-            { at: `${day}T14:05:00Z`, source: 'feed', form: 'clock', label: '14:05' },
-            { at: `${day}T14:05:00Z`, source: null, form: 'clock', label: '14:05' },
-            { at: '2026-08-19T23:40:00Z', source: 'feed', form: 'dated', label: '08-19 23:40' },
-            { at: '2026-08-19T23:40:00Z', source: null, form: 'dated', label: '08-19 23:40' },
-            { at: '2026-06-11T08:15:00Z', source: null, form: 'dated', label: '06-11 08:15' },
-            { at: '2019-06-11T08:15:00Z', source: null, form: 'dated', label: '2019-06-11 08:15' },
-            { at: `${day}T06:20:00Z`, source: 'first_seen', form: 'first-seen', label: '06:20' },
+            { at: `${day}T14:05:00Z`, source: 'feed', form: 'clock', label: '14:05 UTC' },
+            { at: `${day}T14:05:00Z`, source: null, form: 'clock', label: '14:05 UTC' },
+            { at: '2026-08-19T23:40:00Z', source: 'feed', form: 'dated', label: '08-19 23:40 UTC' },
+            { at: '2026-08-19T23:40:00Z', source: null, form: 'dated', label: '08-19 23:40 UTC' },
+            { at: '2026-06-11T08:15:00Z', source: null, form: 'dated', label: '06-11 08:15 UTC' },
+            { at: '2019-06-11T08:15:00Z', source: null, form: 'dated', label: '2019-06-11 08:15 UTC' },
+            { at: `${day}T06:20:00Z`, source: 'first_seen', form: 'first-seen', label: '06:20 UTC' },
             { at: null, source: 'unknown', form: 'none', label: '' }
         ];
         for (const one of cases) {
@@ -93,7 +93,7 @@ test.describe('the day runs newest first, and every time it prints is attributed
             expect(time.label, named).toBe(one.label);
             expect(time.form, named).toBe(one.form);
             refuseRelative(time.label, named);
-            expect(/[A-Za-z]/.test(time.label), `${named} prints a word`).toBe(false);
+            expect(time.label.endsWith(' UTC'), `${named} identifies its timezone`).toBe(Boolean(one.at));
             expect(time.form === 'first-seen', named).toBe(one.source === 'first_seen');
             expect(time.form === 'none', named).toBe(!one.at);
             expect(time.label === '', named).toBe(!one.at);

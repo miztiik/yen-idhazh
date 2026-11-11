@@ -1,6 +1,6 @@
 # How a story chart is drawn, and what refuses one
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-11-11
 
 A story that carries a chart carries a pointer at its marks, and the reader's
 browser is what turns those marks into a picture. This page holds that path: who
@@ -117,6 +117,14 @@ These are layout measurements, not a marks-per-height threshold or a claim
 that readability has a measured numerical limit. Fixed line/scatter heights
 are not the responsive minimum. Measurements change with viewport size,
 wrapping and font loading, not the figure's position during scrolling.
+The first measurement remains synchronous. Later observer, viewport and font
+notifications share one owned animation-frame pass: it reads every watched
+figure before applying any geometry callback. A plot and its radius-dependent
+key can resize each other while fitting; writing geometry during observer
+delivery instead feeds those changes back into that delivery and raises native
+browser errors. The last unmount cancels the queued pass, disconnects the
+observer and removes its subscriptions. Native error events remain visible to
+the reader checks; they are not filtered.
 The requested axis tick count is capped by measured plot span and text
 clearance, within the existing configured maximum. This reduces grid guides
 as well as labels on short plots; it never removes source marks.

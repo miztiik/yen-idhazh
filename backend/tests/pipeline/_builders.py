@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -12,22 +13,25 @@ from pathlib import Path
 from typing import Any, Final
 
 from pytest import MonkeyPatch
-from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from support.server import RecordedEndpoint, render_template_response
 
 from idhazh import assemble, config
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import canonical_json
+from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary
+from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX
 from idhazh.evals.score import to_eval_row
 from idhazh.fetch import FetchResult
 from idhazh.stages import common
 from idhazh.stages.assemble import stage_assemble
 from idhazh.stages.work import stage_work
+from idhazh.telemetry.record import HEALTH_SUFFIX
 
 FULL_TEXT = (
     "Example Lab released a smaller model on Friday, claiming a 34 percent lower cost per "
@@ -87,6 +91,123 @@ DRAWS_LABEL: Final = FIXTURES_DIR / "completions" / "label" / "wind-labelled.jso
 DRAWS_SUMMARIZE_AND_PLAN: Final = (
     FIXTURES_DIR / "completions" / "summarize-and-plan" / "wind-summary-and-plan.json"
 )
+
+
+def whowhat_replies() -> tuple[bytes, bytes]:
+    """Source-backed boundary inputs, not evidence that a live model chose a grid."""
+    first = json.loads(DRAWS_LABEL.read_bytes())
+    labels = json.loads(first["choices"][0]["message"]["content"])
+    labels["claims"] = [
+        {
+            "sentence_start_id": sentence,
+            "sentence_end_id": sentence,
+            "speaker": "",
+            "attribution": "unattributed",
+            "hedge": False,
+        }
+        for sentence in ("s0", "s2")
+    ]
+    first["choices"][0]["message"]["content"] = json.dumps(labels)
+
+    second = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
+    answer = json.loads(second["choices"][0]["message"]["content"])
+    actors = ["entity-55-62", "entity-224-231"]
+    claims = ["claim-0-154", "claim-224-270"]
+    answer["visual"].update(
+        type="whowhat",
+        encodings={
+            **{role: [] for role in answer["visual"]["encodings"]},
+            "entity": actors,
+            "event_label": claims,
+        },
+        element_ids=actors + claims,
+        labels=actors,
+        annotations=[],
+        title="Who approved offshore wind",
+        caption=None,
+        why="The source names each country beside its own approval.",
+    )
+    second["choices"][0]["message"]["content"] = json.dumps(answer)
+    return json.dumps(first).encode("utf-8"), json.dumps(second).encode("utf-8")
+
+
+def declining_replies() -> tuple[bytes, bytes]:
+    """Keep the source-backed summary while the boundary answer declines decoration."""
+    answer = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
+    content = json.loads(answer["choices"][0]["message"]["content"])
+    content["visual"].update(
+        decision="none",
+        purpose=None,
+        type=None,
+        encodings={role: [] for role in content["visual"]["encodings"]},
+        element_ids=[],
+        labels=[],
+        annotations=[],
+        title=None,
+        caption=None,
+        why="The summary already gives the approvals; another display would repeat it.",
+    )
+    answer["choices"][0]["message"]["content"] = json.dumps(content)
+    return DRAWS_LABEL.read_bytes(), json.dumps(answer).encode("utf-8")
+
+
+def assert_planning_references(server: RecordedEndpoint, references: set[str]) -> None:
+    """The actual second request must expose and admit the compiled source ids."""
+    assert server.served == 2, "one item must run both production calls"
+    request = server.sent[1]
+    menu = str(request["prompt"]).split("Finalized source elements.", maxsplit=1)[1]
+    offered = request["json_schema"]["$defs"]["PlanEncodings"]["properties"]["entity"][
+        "items"
+    ]["enum"]
+    assert references <= set(offered)
+    assert all(f'"{reference}"' in menu for reference in references)
+
+
+def assert_reader_accepts(path: Path, *, item_id: str) -> None:
+    """Feed the publisher's exact bytes to the actual TypeScript reader guards."""
+    result = subprocess.run(
+        [
+            "bun", "--eval",
+            """
+import { refusedVisualData } from './frontend/src/lib/payload/drawing.ts';
+import { refusedWhowhatGridData } from './frontend/src/lib/payload/whowhat-grid.ts';
+const data = await Bun.stdin.json();
+if (data.item_id !== process.argv[1]) throw new Error('published item identity changed');
+const reason = data.rows === undefined
+    ? refusedVisualData(data) : refusedWhowhatGridData(data, process.argv[1]);
+if (reason !== null) throw new Error(reason);
+""",
+            item_id,
+        ],
+        input=path.read_bytes(),
+        capture_output=True,
+        cwd=REPO_ROOT,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr.decode("utf-8")
+
+
+def publish_worker_items(
+    run_plan: RunPlan,
+    items: Path,
+    publisher: Path,
+    monkeypatch: MonkeyPatch,
+) -> DigestDay:
+    """Only named serialized worker outputs cross into ordinary assembly."""
+    assert not (publisher / "public").exists()
+    isolate_ledgers(publisher, monkeypatch)
+    destination = publisher / "run" / run_plan.date / "items"
+    destination.mkdir(parents=True)
+    for item in run_plan.items:
+        for suffix in (".article.json", ".summary.json", PAYLOAD_SUFFIX, HEALTH_SUFFIX):
+            source = items / f"{item.item_id}{suffix}"
+            shutil.copyfile(source, destination / source.name)
+    inputs = items / common.INPUTS_PAYLOAD
+    if inputs.is_file():
+        shutil.copyfile(inputs, destination / inputs.name)
+    return stage_assemble(
+        run_plan, settings=config.load(CONFIG_DIR), commit_sha="a" * 40, runner="fixture"
+    )
 
 
 @contextmanager

@@ -95,17 +95,19 @@
 	<meta name="description" content={data.ui.tagline} />
 </svelte:head>
 
-{#if day}
-	<DigestList {day} datePrefix="{day.date}/" settled={reported === 'ready'} ui={data.ui} />
-	<PayloadState
-		status={reported}
-		holding={true}
-		{shortfall}
-		day={longDate(day.date)}
-		onRetry={() => fetchDay(day.date, true)}
-	/>
-	<MoreDays days={data.recent} current={day.date} />
-{:else}
-	<EmptyDay date={data.today} />
-	<MoreDays days={data.recent} current={data.today} />
-{/if}
+<div data-surface="home">
+	{#if day}
+		<DigestList {day} datePrefix="{day.date}/" settled={reported === 'ready'} ui={data.ui} />
+		<PayloadState
+			status={reported}
+			holding={true}
+			{shortfall}
+			day={longDate(day.date)}
+			onRetry={() => fetchDay(day.date, true)}
+		/>
+		<MoreDays days={data.recent} current={day.date} />
+	{:else}
+		<EmptyDay date={data.today} />
+		<MoreDays days={data.recent} current={data.today} />
+	{/if}
+</div>

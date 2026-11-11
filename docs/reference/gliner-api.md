@@ -1,6 +1,6 @@
 # Native GLiNER2 API reference
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-11
 
 The exact routes, payloads, settings and safe diagnostic vocabulary of the
 independent local GLiNER2 provider.
@@ -30,7 +30,9 @@ host's W3C carrier rather than trace fields in its JSON body.
 All live objects reject undeclared fields and coercion. Text is nonblank valid
 UTF-8 and is preserved exactly.
 
-Analysis requests have exactly `text` and `schema`. `schema` uses the pinned
+Analysis requests require `text` and `schema`, with independent optional
+`include_confidence` and `include_spans` booleans. Both default to false and
+reject coercion. `schema` uses the pinned
 GLiNER2 `SchemaInput` object grammar, not JSON Schema, chat messages or a field
 string shorthand. Its optional sections are `entities`, `classifications`,
 `structures`, `relations` and `entity_attributes`; at least one extraction or
@@ -39,6 +41,8 @@ classification section is required. The native schema owns their options.
 ```json
 {
   "text": "Mira bought a bicycle in Paris.",
+  "include_confidence": true,
+  "include_spans": true,
   "schema": {
     "entities": ["person", "location"],
     "classifications": [
@@ -65,6 +69,11 @@ offering is valid, using the SDK's public classification builder rather than
 its stricter JSON label minimum. Classification task names, structure names
 and relation names cannot overlap or use the reserved native output keys
 `entities` and `relation_extraction`. Record field names cannot repeat.
+Structures using a native record mode also reject `confidence`, `label` and
+`text` as field names: native formatting treats these as metadata and could
+overwrite or discard a record. Ordinary structures keep their existing field
+grammar. Record-mode requests require the loaded model's native record
+capability; accepting a schema alone does not establish that capability.
 Event roles are caller-defined record fields, not a service vocabulary.
 
 Successful responses have exactly `result`, containing the native JSON
@@ -73,15 +82,29 @@ classifications use their task names at the root and native
 `{label, confidence}` selections or lists; structures use root record lists;
 relations group native `head`/`tail` span pairs under `relation_extraction`.
 Native scalar, list and nullable fields retain their representation.
-Choice fields contain offered selections, which need not occur in the source.
+Choice fields contain distinct offered selections, which need not occur in the source.
 
-Confidence and spans are mandatory native output controls. Every confidence
-must be finite in `[0, 1]`. Span `start` and `end` are zero-based, half-open
+With both controls false, native leaves are text; confidence alone adds a
+score object, spans alone adds source positions, and both retain rich leaves.
+Classification follows its native label/string or scored-label representation.
+Entity attributes remain attached, including their native selection metadata.
+Record-level and boundary-relation aggregate `confidence` can remain even
+when leaf confidence is disabled. The API preserves these scores separately;
+`include_confidence=false` does not mean every score is removed.
+Every present confidence must be finite in `[0, 1]`.
+Span `start` and `end` are zero-based, half-open
 Python Unicode code-point offsets whose original source slice equals `text`.
+Without offsets, source-backed text must still occur verbatim in the input;
+this membership check does not assign a position or constrain offered choices.
 Returned task names, label IDs, record fields, choices, entity attributes and
-relations must belong to the request. Missing tasks, invalid cardinality,
-duplicate selections and damaged spans fail explicitly; the API does not
-repair or manufacture evidence. Valid empty native collections remain empty.
+relations must belong to the request. Missing required tasks, invalid
+cardinality, duplicate selections and damaged spans fail explicitly.
+Successful native record-mode decoding may omit an empty structure root;
+it stays omitted, without an inserted array. Other task roots remain required.
+Duplicate and exclusive occurrence checks use native offsets when present.
+Repeated compact text remains separate evidence when positions are absent.
+The API does not repair or manufacture evidence. Valid empty native
+collections remain empty.
 
 The direct SDK `extract_long` operation owns overlapping chunks, global
 offsets and confidence merging. Single-label classification has at most one
@@ -90,10 +113,11 @@ the native threshold. Scores are not calibrated document probabilities or
 an abstention guarantee. No extra source, label-count or token cap is added
 beyond the existing body bound and native input refusals.
 
-The new analysis payload metadata is `2026-11-09`; the route family, settings
-and unchanged payload families keep their own dates. Saved reporting evidence
-is read by its declared old or new request fields, never rewritten or retried
-as an older shape after current validation fails.
+Analysis payload metadata and the current settings shape are `2026-11-10`;
+the route family and unchanged payload families retain their dates. No
+wire-version field is added. Saved reporting evidence is read by its declared
+request fields and complete leaf shape, never rewritten or retried as an
+older shape after current validation fails.
 
 ## Errors
 
@@ -141,9 +165,12 @@ model and expose direct long-text analysis.
 ## Settings
 
 `config/text-analysis/gliner/settings.json` is declared by `GlinerSettings`.
-Its first shape uses the API creation date and a newest-first dated changelog.
-This new family has no historical payload to migrate; current readers reject
-unknown shape versions instead of trying a permissive previous reader.
+The settings-shape date is independent of the route date. The exact
+`2026-11-08` shape remains readable with its former native entity cutoff
+of `0.5` and loaded-architecture overlap default. It cannot contain current
+control fields. Current files use the new dated shape; unknown dates,
+unknown keys and malformed current values fail without a previous-reader
+fallback. Saved settings bytes are never rewritten.
 
 Table C - Configuration ownership
 
@@ -155,6 +182,14 @@ Table C - Configuration ownership
 | C4 | `model.base_url` | Required HTTPS download endpoint without credentials, query or fragment |
 | C5 | `logging.level` | `INFO`, `WARNING` or `ERROR`; default `INFO` |
 | C6 | `logging.max_event_bytes` | Positive event byte limit; default `4096` |
+| C7 | `entity_confidence_threshold` | Strict finite number in inclusive `[0, 1]`; default `0.8`, applied only through native per-entity configuration |
+| C8 | `overlap_policy` | `disallow` by default; `flat` aliases it and `allow` retains overlaps |
+
+Absent or null per-label entity thresholds use the configured default.
+Explicit thresholds override it, including zero. Descriptions, dtype and
+offering order are retained; the shared native extraction threshold and
+classification settings are unchanged. There is no cleanup pass. Native
+overlap selection operates within each entity type, not across types.
 
 Prepare the selected assets before a fresh start. Downloads use the configured
 endpoint; inference uses only local assets. There are no model revisions,
@@ -179,6 +214,32 @@ No event contains source text, mentions, labels/definitions, URLs, headers,
 PIDs, paths or raw exceptions. The
 [native architecture](../architecture/text-analysis/gliner-api.md#fail-closed-diagnostics)
 owns conservative model-warning refusal and operation isolation.
+
+## Design rationale
+
+The selected GLiNER2.5 base checkpoint supports native linked records. Its
+[checkpoint configuration](https://huggingface.co/fastino/gliner2.5-base-v1/blob/07d99c0ba5d15cb3b24e0a236fa99bdd4ef87a5c/config.json)
+enables records on the boundary architecture. The pinned `gliner2==2.1.0`
+[record head](https://github.com/fastino-ai/GLiNER2/blob/b86d35c02f2c1a4d9840ea50197bd1b6d13b031e/gliner2/models/boundary/records.py#L715-L725)
+uses the declared anchor to form linked instances.
+
+The legacy large checkpoint is not a complete replacement for action-anchored
+events. Its
+[configuration](https://huggingface.co/fastino/gliner2-large-v1/blob/d7aa8a2850d175a9227ff80358ea380723d03ad2/config.json)
+omits the architecture, which the
+[pinned SDK defaults to span](https://github.com/fastino-ai/GLiNER2/blob/b86d35c02f2c1a4d9840ea50197bd1b6d13b031e/gliner2/configuration.py#L635-L668).
+The [span preprocessing path](https://github.com/fastino-ai/GLiNER2/blob/b86d35c02f2c1a4d9840ea50197bd1b6d13b031e/gliner2/processor.py#L509-L550)
+bypasses record metadata. Ordinary structured extraction does not establish
+native natural-record capability; check that capability before downloading an
+alternative.
+
+The [public demo's entity path](https://huggingface.co/spaces/fastino/gliner2-official-demo/blob/a5ca4cd82b6e495207c9fa4c5e8eb6fc5200bb77/app.py)
+uses ordinary entity extraction with an unpinned checkpoint revision; its
+[SDK requirement](https://huggingface.co/spaces/fastino/gliner2-official-demo/blob/a5ca4cd82b6e495207c9fa4c5e8eb6fc5200bb77/requirements.txt)
+is also unpinned. It is not a matched comparison of this API's long-document
+settings. No extraction-quality, latency or memory advantage is established.
+Native record support is not an accuracy claim; follow the
+[event-candidate interpretation rule](../how-to/run-spacy-tests.md#inspect-the-results).
 
 ## See also
 

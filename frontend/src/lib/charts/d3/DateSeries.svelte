@@ -19,7 +19,6 @@
 	 * over where they meet, so two segments of one colour still read as two and
 	 * neither loses height to the line.
 	 */
-	import { AXIS_LABEL_PX } from '$lib/charts/frame';
 	import { columnPick, pointerReadout, readoutMarks, type Readout } from '$lib/charts/readout';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import EmptyState from './EmptyState.svelte';
@@ -160,7 +159,7 @@
 						dy="0.32em"
 						text-anchor="end"
 						fill="var(--color-text-tertiary)"
-						font-size={AXIS_LABEL_PX}>{tick.text}</text
+						font-size={box.labels.fontSize}>{tick.text}</text
 					>
 				{/if}
 			{/each}
@@ -176,11 +175,11 @@
 				{#if tick.text}
 					<text
 						x={geometry.columns[tick.index]}
-						y={box.bottom + TICK + AXIS_LABEL_PX}
+						y={box.bottom + TICK + box.labels.fontSize}
 						data-day-axis
 						text-anchor={tick.anchor}
 						fill="var(--color-text-tertiary)"
-						font-size={AXIS_LABEL_PX}>{tick.text}</text
+						font-size={box.labels.fontSize}>{tick.text}</text
 					>
 				{/if}
 			{/each}
@@ -239,7 +238,7 @@
 
 			{#each geometry.rules as rule (rule.label)}
 				<line x1={box.left} x2={box.right} y1={rule.y} y2={rule.y} stroke="var(--chart-marker)" stroke-dasharray="3 3" />
-				<text x={box.right} y={rule.y} dy="-0.3em" text-anchor="end" fill="var(--color-text-secondary)" font-size={AXIS_LABEL_PX}>{rule.label}</text>
+				<text x={box.right} y={rule.y} dy="-0.3em" text-anchor="end" fill="var(--color-text-secondary)" font-size={box.labels.fontSize}>{rule.label}</text>
 			{/each}
 			{#each geometry.boundaries as boundary (boundary.date)}
 				<line x1={boundary.x} x2={boundary.x} y1={box.top} y2={box.bottom}

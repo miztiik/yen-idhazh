@@ -55,7 +55,7 @@ export type TimeForm = 'clock' | 'dated' | 'first-seen' | 'none';
 
 /** One story's time, as the item prints it beside its heading. */
 export interface ItemTime {
-	/** What the reader reads. Digits and separators, never a word. */
+	/** The reader-facing absolute time, including its timezone. */
 	label: string;
 	form: TimeForm;
 }
@@ -68,22 +68,16 @@ function dayOffset(stamp: string, onDate: string): number {
 	return Math.round((day - anchor) / 86_400_000);
 }
 
-/** A story's own time, in one vocabulary: digits.
+/** A story's own absolute time, labelled in UTC.
  *
- * **No words, and no relative form.** The item prints a clock, and a date in
- * front of it when the stamp is not from the day being read. `Yesterday`,
- * `First seen` and `No time given` are gone - the day says `Times shown in UTC`
- * once, above its stream, so a reader who can read a clock can read every stamp
- * on the page without being told anything twice. A relative form would be worse
- * than a word: the page is prerendered once and read for the next 24 hours with
- * script optionally off, so `3 hours ago` baked in at 06:20 is wrong by 18:20
- * and wrong for ever on an archived day.
+ * A date precedes the clock when it differs from the day being read. Relative
+ * time would become stale in a prerendered document.
  *
  * **The clock is still only ever attributed where the payload attributes it.**
  * `time_source: first_seen` means the feed's date was absent or rejected as
  * impossible and the stamp is our own first sight of the address. That keeps
- * its own form, and `DigestItem.svelte` draws a mark beside it - a mark rather
- * than a sentence, so the stamp stays numbers.
+ * its own form, and `DigestItem.svelte` draws a mark beside it without claiming
+ * the source supplied that time.
  *
  * A story with no stamp at all has no number to print and gets an empty label,
  * which is the one case the item draws nothing for.
@@ -94,7 +88,7 @@ export function itemTime(
 	onDate: string
 ): ItemTime {
 	if (!publishedAt) return { label: '', form: 'none' };
-	const clock = publishedAt.slice(11, 16);
+	const clock = clockUtc(publishedAt);
 	const offset = dayOffset(publishedAt, onDate);
 	const date = publishedAt.slice(0, 10);
 	const sameYear = date.slice(0, 4) === onDate.slice(0, 4);

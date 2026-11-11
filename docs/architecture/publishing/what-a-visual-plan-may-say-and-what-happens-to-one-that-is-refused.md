@@ -1,6 +1,6 @@
 # What a visual plan may say, and what happens to one that is refused
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-11-11
 
 The shape the model decodes into, the four things it may not carry, the ten
 deterministic checks a plan has to clear, and the ladder a refused plan may step
@@ -20,6 +20,17 @@ sentence of reasoning, a title, a caption, a confidence and the vocabulary date-
 was planned against. It lands ahead of its producers, so nothing writes one yet (Guardrail #3).
 
 What it may not carry is as much of the contract as what it holds.
+
+Cross-field failures identify both the field and the rule as native structured
+errors. A decline carrying content reports `visual_plan_decline_empty`; a
+visual missing a required field reports `visual_plan_field_required`; a
+reference outside the plan's declared elements reports
+`visual_plan_reference_declared`. Their `field` context names the offending
+field, including an encoding role when relevant. These errors preserve the
+same accepted plans and schema; they do not clear contradictory fields or
+turn an invalid decline into a valid answer. The
+[decision path](visuals.md#every-none-says-which-gate-refused-it) carries the
+safe diagnosis without copying the rejected payload.
 
 | Prohibition | What refuses it |
 | --- | --- |
@@ -155,13 +166,15 @@ Its native `VisualType` enum is declared once in
 empty list. An unruled or unbuilt type remains a valid selection; selection is
 not permission to render.
 
-`visuals.type_selection_enabled` defaults to false. Off preserves the full
-request grammar and existing reachability behavior. On limits the derived
+`visuals.type_selection_enabled` is on in the committed configuration. It limits the derived
 request grammar, the ruled reachability choices and parsed requests to the
-selected names. A selected unruled type remains reachable because absent
-rules cannot prove it impossible. The native plan schema stays complete.
-Effective selection enters the input fingerprint without changing the cached
-article/system prefix.
+selected implemented types. The
+[capability table](where-a-drawing-becomes-pixels.md#declared-types-are-not-delivery-promises)
+names the abandoned forms. They remain readable in the complete native plan
+schema, not available as new production requests. The schema default remains
+false for older authored configurations; off preserves generic vocabulary
+inspection. Effective selection enters the input fingerprint and the shared
+type guide. Neither changes the prefix between an item's adjacent calls.
 
 `visuals.min_chart_points`, `visuals.max_chart_points` and `visuals.histogram_bins` are knobs and
 are read from `config/` (Guardrail #6). The tables are not knobs, and since 2026-09-09 they are not the

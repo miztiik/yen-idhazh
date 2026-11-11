@@ -13,6 +13,7 @@ from gliner_api.declare_api_contracts import ErrorResult as GlinerError
 from gliner_api.load_settings import SETTINGS_PATH as GLINER_SETTINGS_PATH
 from gliner_api.load_settings import GlinerSettings
 from gliner_api.validate_analysis_results import validate_analysis_results
+from load_caller_settings import CallerAnalysisSettings
 from pydantic import ValidationError
 from text_analysis.declare_api_contracts import (
     ANALYZE_TEXT_PATH,
@@ -64,7 +65,7 @@ def read_inputs(event: object, environment: dict[str, str]) -> Inputs:
 def save_settings(root: Path, directory: Path) -> ServiceSettings:
     """Save exactly the native bytes validated for this run, before API startup."""
     spacy = (root / SPACY_SETTINGS_PATH).read_bytes()
-    settings = ServiceSettings.model_validate_json(spacy)
+    settings: ServiceSettings = ServiceSettings.model_validate_json(spacy)
     write_atomic(directory / "spacy" / "settings.json", spacy)
     gliner = (root / GLINER_SETTINGS_PATH).read_bytes()
     GlinerSettings.model_validate_json(gliner)
@@ -92,7 +93,7 @@ def spacy_request(inputs: Inputs, health: TextAnalysisHealth) -> AnalyzeTextRequ
         payload["features"] = list(capability.supported_features)
     elif inputs.feature_mode == "custom":
         payload["features"] = [part.strip() for part in inputs.custom_features.split(",")]
-    request = AnalyzeTextRequest.model_validate_json(json.dumps(payload))
+    request: AnalyzeTextRequest = AnalyzeTextRequest.model_validate_json(json.dumps(payload))
     if request.features is not None and not set(request.features).issubset(
         capability.supported_features
     ):
@@ -158,12 +159,19 @@ async def collect_spacy(
 
 
 async def collect_gliner(
-    client: httpx.AsyncClient, inputs: Inputs, settings: ServiceSettings, directory: Path
+    client: httpx.AsyncClient, inputs: Inputs, settings: CallerAnalysisSettings, directory: Path
 ) -> Outcome:
-    """Collect and validate exactly one GLiNER named-entity response."""
+    """Collect entities and linked candidates in exactly one native extraction response."""
     try:
         request = GlinerRequest.model_validate_json(
-            json.dumps({"text": inputs.text, "schema": {"entities": gliner_labels(settings)}}),
+            json.dumps(
+                {
+                    "text": inputs.text,
+                    "schema": settings.analysis_schema.model_dump(exclude_none=True),
+                    "include_confidence": settings.include_confidence,
+                    "include_spans": settings.include_spans,
+                }
+            ),
             strict=True,
         )
         response = await send_request(

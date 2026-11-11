@@ -23,7 +23,7 @@ from pipeline._builders import (
 from support.ledger import seed_item_health
 from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from support.prompts import label_payload
+from support.prompts import a_table, label_payload
 from support.server import RecordedEndpoint
 
 from idhazh import config, ledger
@@ -45,7 +45,7 @@ from idhazh.contracts.visual_decision import (
 )
 from idhazh.contracts.visual_telemetry import ValidatorCheck, VisualAttemptRow
 from idhazh.fetch import FetchResult
-from idhazh.render import asset_relpath
+from idhazh.render import asset_relpath, can_compile
 from idhazh.stages import common
 from idhazh.stages.record import stage_record
 from idhazh.stages.two_calls import _drawn
@@ -107,13 +107,13 @@ def record(decision: VisualDecision, number: int) -> ItemHealthRow:
 def test_selection_controls_the_actual_request_grammar_without_changing_its_prefix() -> None:
     article = Article.read(CONTRACT_FIXTURES_DIR / "article/ok.json")
     first = label_payload(article)
-    off = settings(enabled_types=["quotecard"]).app.visuals
+    off = settings(type_selection_enabled=False, enabled_types=["quotecard"]).app.visuals
     selected = settings(type_selection_enabled=True, enabled_types=["dot", "quotecard"]).app.visuals
     markers = a_markers()
     full = calls.summarize_and_plan_schema(visuals=off)
     recorded = json.loads(read_text(DRAWS_LABEL))["choices"][0]["message"]["content"]
     request = calls.build_summarize_and_plan_request(
-        first, recorded, markers=markers, visuals=selected
+        first, recorded, a_table(article), markers=markers, visuals=selected
     )
     assert request["json_schema"]["$defs"]["VisualType"]["enum"] == ["dot", "quotecard"]
     assert request["prompt"].startswith(first["prompt"])
@@ -127,6 +127,26 @@ def test_selection_controls_the_actual_request_grammar_without_changing_its_pref
     assert "VisualType" not in calls.summarize_and_plan_schema(plan=False, visuals=selected).get(
         "$defs", {}
     )
+
+
+def test_active_requests_offer_implemented_types_without_removing_historical_names() -> None:
+    active = config.load(CONFIG_DIR).app.visuals
+    selected = [
+        "bar", "dot", "line", "scatter", "bubble", "slope",
+        "stacked_bar", "pie", "histogram", "whowhat",
+    ]
+    assert active.type_selection_enabled
+    assert not active.downgrade_enabled
+    assert [kind.value for kind in active.enabled_types] == selected
+    assert calls.summarize_and_plan_schema(visuals=active)["$defs"]["VisualType"]["enum"] == selected
+    assert set(active.select_types()) == {
+        kind for kind in VisualType if kind is VisualType.WHOWHAT or can_compile(kind)
+    }
+    native = VisualPlan.json_schema()["$defs"]["VisualType"]["enum"]
+    assert native == [kind.value for kind in VisualType]
+    for historical in set(VisualType) - set(active.select_types()):
+        _, plan, _ = inputs(type=historical)
+        assert plan.type is historical
 
 
 def test_an_unruled_selection_is_not_erased_by_the_numeric_reachability_gate() -> None:
@@ -145,7 +165,7 @@ def test_mixed_requests_preserve_types_source_figures_and_metric_denominators(
 ) -> None:
     isolate_ledgers(tmp_path, monkeypatch)
     fixture = json.loads(read_text(FIXTURES_DIR / "chart-vocabulary/row1.json"))
-    knobs = settings(downgrade_enabled=True)
+    knobs = settings(downgrade_enabled=True, type_selection_enabled=False)
     population = {VisualType.BAR: tuple(fixture["history_marks"])}
     outcomes: list[ItemHealthRow] = []
     for number, case in enumerate(fixture["cases"], start=1):
@@ -217,7 +237,10 @@ def test_downgrade_records_floor_effect_separately_from_selected_depth(
 ) -> None:
     isolate_ledgers(tmp_path, monkeypatch)
     decision = draw(
-        settings(downgrade_enabled=True, downgrade_floor_percentiles=[50]),
+        settings(
+            downgrade_enabled=True, type_selection_enabled=False,
+            downgrade_floor_percentiles=[50],
+        ),
         population={VisualType.BAR: (history_marks,)},
         type="comparison",
     )
@@ -233,10 +256,10 @@ def test_enabled_fallback_requires_real_input_and_cold_start_records_refusal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     isolate_ledgers(tmp_path, monkeypatch)
-    off = draw(settings(), type="comparison")
+    off = draw(settings(type_selection_enabled=False), type="comparison")
     assert off.planned_type is VisualType.COMPARISON and off.rendered_type is None
     assert off.rationale and "switched off" in off.rationale
-    knobs = settings(downgrade_enabled=True)
+    knobs = settings(downgrade_enabled=True, type_selection_enabled=False)
     with pytest.raises(ValueError, match="population"):
         draw(knobs, type="comparison")
     population = load_visual_population(
@@ -258,7 +281,8 @@ def test_a_failed_write_keeps_the_request_and_selected_depth_without_claiming_de
     occupied = tmp_path / "public" / asset_relpath("2026-08-21", summary.item_id)
     occupied.mkdir(parents=True)
     decision = draw(
-        settings(downgrade_enabled=True), population={VisualType.BAR: (4,)}, type="comparison"
+        settings(downgrade_enabled=True, type_selection_enabled=False),
+        population={VisualType.BAR: (4,)}, type="comparison"
     )
     assert decision.visual_state is VisualState.RENDER_FAILED
     assert decision.planned_type is VisualType.COMPARISON

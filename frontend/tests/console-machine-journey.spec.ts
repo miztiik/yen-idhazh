@@ -1,5 +1,7 @@
 /** One shipped Hardware journey and its independent native transport/publication boundaries. */
 import { expect, test, type Page } from './support/browser';
+import { renderFrameCss } from '../scripts/build-frame-css.mjs';
+import { WINDOW_PREFERENCE_KEY } from '../src/lib/console/window-preference';
 
 const PANELS = [
 	'two-clocks', 'processor-lost', 'disk-reads', 'machine-cards', 'slower-machines',
@@ -16,15 +18,54 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	const arrived: string[] = [];
 	const privateRequests: string[] = [];
 	const errors: string[] = [];
+	const storageWarnings: string[] = [];
+	const nativeRequests: string[] = [];
+	page.on('console', (message) => {
+		if (message.type() === 'warning' && message.text().includes('Window preference could not')) storageWarnings.push(message.text());
+	});
+	await page.addInitScript((key) => {
+		const read = Storage.prototype.getItem;
+		const write = Storage.prototype.setItem;
+		Storage.prototype.getItem = function (name) {
+			if (name === key) throw new DOMException('Storage read denied.', 'SecurityError');
+			return read.call(this, name);
+		};
+		Storage.prototype.setItem = function (name, value) {
+			if (name === key) throw new DOMException('Storage write denied.', 'QuotaExceededError');
+			return write.call(this, name, value);
+		};
+	}, WINDOW_PREFERENCE_KEY);
 	page.on('response', (response) => {
 		if (NATIVE.test(response.url()) && response.status() === 200) arrived.push(response.url());
+		if (response.status() === 404) errors.push(`404: ${new URL(response.url()).pathname}`);
 	});
 	page.on('request', (request) => {
+		if (NATIVE.test(request.url())) nativeRequests.push(request.url());
 		if (/\/(?:run|plan)\.json|\/state\/.*(?:run-plan|prompt)/.test(request.url())) privateRequests.push(request.url());
 	});
 	page.on('pageerror', (error) => errors.push(error.message));
+	page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+	await page.setViewportSize({ width: 1440, height: 900 });
 	await page.goto('/console/machine/');
 	await settled(page);
+	await expect(page.locator('#console-top')).toHaveText('Hardware');
+	await expect(page.locator('[data-window-status]')).toContainText('20 Aug 2026');
+	await expect(page.locator('[data-console-rail]')).toHaveCSS('position', 'sticky');
+	await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#191917');
+	const firstComparison = page.locator('[data-console-panel-id="two-clocks"] [data-lede]');
+	await expect(firstComparison).toBeVisible();
+	await expect(firstComparison).toContainText('max gap;');
+	expect(await firstComparison.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(900);
+	await page.screenshot({ path: test.info().outputPath('hardware-wide-dark.png') });
+	const evidence = page.locator('[data-machine-evidence]');
+	await expect(evidence.locator('summary')).toContainText('3 runs excluded from run count. Their articles still count.');
+	await expect(page.locator('[data-machine-refused]')).not.toBeVisible();
+	await evidence.locator('summary').focus();
+	await page.keyboard.press('Enter');
+	await expect(page.locator('[data-machine-refused]')).toBeVisible();
+	await expect(page.locator('[data-refused-run]')).toHaveCount(3);
+	await page.keyboard.press('Enter');
+	await expect(page.locator('[data-machine-refused]')).not.toBeVisible();
 	expect(await page.locator('[data-console-panel-id]').evaluateAll((nodes) =>
 		nodes.map((node) => node.getAttribute('data-console-panel-id')))).toEqual(PANELS);
 	await expect(page.locator('[data-console-panel-id] > header > h3')).toHaveCount(15);
@@ -38,15 +79,59 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(fleet).toHaveCount(1);
 	expect(Number(await fleet.getAttribute('data-fleet-placements'))).toBeGreaterThan(0);
 	const tokens = page.locator('[data-console-panel-id="read-against-written"]');
-	const plot = tokens.locator('[data-chart-type="dateSeries"]');
+	const plot = tokens.locator('[data-chart-type="runSeries"]');
 	await expect(plot).toBeVisible();
+	const readout = tokens.locator('[data-readout]');
+	const heading = readout.locator('[data-readout-day]');
+	const newestRun = await heading.textContent();
+	const newestSelected = newestRun!.replace(/, the newest run$/, '');
 	await plot.focus();
+	expect(await plot.evaluate((node) => {
+		const caption = node.closest('[data-console-panel-id]')!.querySelector('[data-token-unit]')!;
+		const style = getComputedStyle(node);
+		return node.getBoundingClientRect().top - parseFloat(style.outlineWidth) -
+			parseFloat(style.outlineOffset) - caption.getBoundingClientRect().bottom;
+	}), 'the focused plot must not overlap its unit caption').toBeGreaterThanOrEqual(0);
+	await expect(heading).toHaveText(newestRun!);
+	await page.keyboard.press('Home');
+	const firstRun = await heading.textContent();
+	expect(firstRun).not.toBe(newestRun);
+	await page.keyboard.press('ArrowRight');
+	await expect(heading).not.toHaveText(firstRun!);
+	await page.keyboard.press('End');
+	await expect(heading).toHaveText(newestSelected);
 	await page.keyboard.press('ArrowLeft');
+	await expect(heading).not.toHaveText(newestSelected);
 	await page.keyboard.press('Escape');
-	await expect(tokens.locator('[data-readout]')).toContainText('Read tokens');
-	await expect(tokens.locator('[data-readout]')).toContainText('Written tokens');
-	await expect(tokens.locator('[data-readout]')).toContainText('20 Aug 2026');
-	await expect(tokens.locator('[data-readout]')).not.toContainText('Not recorded');
+	await expect(heading).toHaveText(newestRun!);
+	await page.keyboard.press('ArrowLeft');
+	await expect(heading).not.toHaveText(newestSelected);
+	await page.keyboard.press('Escape');
+	const axisStart = Number(await plot.locator('line[stroke="var(--chart-axis)"]').first().getAttribute('x1'));
+	await plot.hover({ position: { x: axisStart, y: 80 } });
+	await expect(heading).toHaveText(firstRun!);
+	await plot.click({ position: { x: axisStart, y: 80 } });
+	await expect(heading).toHaveText(firstRun!);
+	await page.keyboard.press('Escape');
+	await expect(heading).toHaveText(newestRun!);
+	await expect(readout).toContainText('Read (solid)');
+	await expect(readout).toContainText('Written (dashed)');
+	await expect(readout).toContainText('2026-08-20 UTC');
+	await expect(readout).toContainText('Measured articles');
+	await expect(readout).not.toContainText('Not recorded');
+	await expect(tokens.getByRole('radio', { name: 'Run total', exact: true })).toBeChecked();
+	const totals = await readout.textContent();
+	const beforeMetric = [...nativeRequests];
+	await tokens.locator('[data-token-measure="median"]').click();
+	await expect(tokens.getByRole('radio', { name: 'Median per article', exact: true })).toBeChecked();
+	await expect(tokens.locator('[data-token-unit]')).toContainText('Median tokens per article');
+	await expect(heading).toHaveText(newestRun!);
+	await expect(readout).not.toHaveText(totals!);
+	await tokens.locator('[data-token-measure="total"]').click();
+	await expect(tokens.getByRole('radio', { name: 'Run total', exact: true })).toBeChecked();
+	await expect(readout).toHaveText(totals!);
+	expect(nativeRequests).toEqual(beforeMetric);
+	await tokens.screenshot({ path: test.info().outputPath('run-token-lines-wide.png') });
 
 	const context = page.locator('[data-console-panel-id="context-headroom"]');
 	await expect(context.locator('svg[data-chart-type="distribution"]')).toHaveCount(2);
@@ -72,6 +157,17 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect.poll(clockRulesFit).toBe(true);
 	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 	await page.setViewportSize({ width: 390, height: 844 });
+	await page.evaluate(() => window.scrollTo(0, 0));
+	await expect(page.getByText('Console menu', { exact: true })).toBeVisible();
+	await expect(page.locator('[data-console-nav]')).not.toBeVisible();
+	await page.getByRole('button', { name: 'Switch to the light theme' }).click();
+	await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(242, 241, 237)');
+	await page.evaluate(() => Promise.allSettled(document.getAnimations().map((animation) => animation.finished)));
+	expect(await firstComparison.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(844);
+	expect(await page.locator('[data-console-panel-id="two-clocks"] [data-ranked-row]').first()
+		.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(844);
+	await page.screenshot({ path: test.info().outputPath('hardware-narrow-light.png') });
+	await tokens.screenshot({ path: test.info().outputPath('run-token-lines-narrow.png') });
 	await expect.poll(contextFits).toBe(true);
 	await expect.poll(clockRulesFit).toBe(true);
 	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -79,13 +175,38 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await page.locator('[data-window-preset="7"]').click();
 	await settled(page);
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
+	await page.getByText('Console menu', { exact: true }).click();
 	await page.locator('[data-console-tab="pipelines"]').click();
 	await expect(page.locator('[data-console-panels="pipelines"]')).toBeVisible();
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
+	await page.getByText('Console menu', { exact: true }).click();
 	await page.locator('[data-console-tab="machine"]').click();
 	await settled(page);
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
 	await expect(page).toHaveTitle(/Hardware/);
+	expect(storageWarnings.some((message) => message.includes('could not be read'))).toBe(true);
+	expect(storageWarnings.some((message) => message.includes('could not be saved'))).toBe(true);
+
+	const before = Number(await plot.locator('line[stroke="var(--chart-grid)"]').first().getAttribute('x1'));
+	const substitution = await page.addStyleTag({ content: renderFrameCss({
+		console_style: {
+			colors: { light: { canvas: '#eef2ef' }, dark: { canvas: '#202522' } },
+			typography: { small: { size_rem: 1, leading_rem: 1.25 } }
+		}
+	}) });
+	await substitution.evaluate((node) => {
+		if (!(node instanceof HTMLStyleElement)) throw new Error('The substituted stylesheet did not mount.');
+		node.setAttribute('data-console-style-substitution', '');
+	});
+	await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(238, 242, 239)');
+	await expect(plot.locator('text').first()).toHaveAttribute('font-size', '16');
+	await expect(plot.locator('text').first()).toHaveCSS('font-size', '16px');
+	await expect.poll(async () => Number(await plot.locator('line[stroke="var(--chart-grid)"]').first().getAttribute('x1'))).toBeGreaterThan(before);
+	await page.locator('.wordmark').click();
+	await expect(page.locator('[data-surface="operator"]')).toHaveCount(0);
+	await expect(page.locator('[data-console-style-substitution]')).toHaveCount(1);
+	await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(244, 246, 251)');
+	await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f4f6fb');
 	expect(privateRequests).toEqual([]);
 	expect(errors).toEqual([]);
 });

@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-11-10
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -117,6 +117,11 @@ this page rules how the drawing may read.
 
 ## Ranked by magnitude, in one shape
 
+Ranked rows and nested comparisons respond to their own container width, not
+the viewport. A half-width panel on a wide screen uses stacked rows when its
+columns would otherwise squeeze out the track. Every row still shares one
+column set and one scale; no reading is clipped or shortened to make it fit.
+
 The operator asks the same question of most of this console: which one is worst.
 A date sort cannot answer it - the source that cost the digest the most articles
 sits wherever it happens to fall, and the feed one run away from being rested
@@ -181,12 +186,13 @@ plot actually has and dropped in whole steps until no two touch. So the knob is 
 force one on. Measured 2026-08-31 on the built console at 390px, before this
 rule, four axes drew their dates 13.6, 7.4, 26.1 and 1.9px on top of each other.
 
-The width comes from the string rather than from the element, so the axis can be
-decided before browser text measurement is available. `LABEL_ADVANCE_EM`
-is 0.58, ten percent over the widest character measured at `font-size="10"` in
-Chromium on 2026-08-31 - `20 Aug 2026` is 55.83px over 11 characters. It is
-deliberately over: an estimate under the truth lets two labels touch, and an
-estimate over it only drops one label the axis could have carried.
+Mounted console drawings use the configured small type's computed CSS-pixel
+size, leading and tracking, plus browser-measured text widths. The same metrics
+reach frame margins, row-label gutters, date thinning, value-axis clearance and
+the SVG text. `ChartConfig.label_style` supplies the existing config projection
+where needed; optional frame metrics preserve the legacy and reader defaults.
+Before measurement, `LABEL_ADVANCE_EM` remains the conservative string estimate.
+A CSS-only font increase over unchanged geometry is not a valid substitution.
 
 **A dropped label keeps its tick mark.** A reader counting columns needs the grid
 even where the date is gone, so the marks come from the ceiling and only the

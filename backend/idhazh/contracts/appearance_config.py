@@ -26,12 +26,13 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import ClassVar, Final, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from idhazh.contracts.app_config import refuse_an_archive_window_no_preset_offers
 from idhazh.contracts.base import ChangelogEntry, Contract, Model
 from idhazh.contracts.knobs.assist import AssistConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.console_style import ConsoleStyleConfig
 from idhazh.contracts.knobs.ui import UiConfig
 
 #: The measure, in characters, outside which a line stops being comfortable to
@@ -327,8 +328,7 @@ class ThemeConfig(Model):
         default="#e3a396",
         pattern=HEX_COLOUR,
         description=(
-            "`--movement-bad` on the dark theme. 8.344:1 on the dark surface, "
-            "measured 2026-08-31."
+            "`--movement-bad` on the dark theme. 8.344:1 on the dark surface, measured 2026-08-31."
         ),
     )
 
@@ -579,7 +579,20 @@ class AppearanceConfig(Contract):
     """`config/appearance.json` - everything the published surface is drawn from."""
 
     __schema_stem__: ClassVar[str] = "appearance-config"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "readCompatibility": (
+                "additive; absent archive controls and console_style blocks/leaves use "
+                "declared defaults; style arrays replace whole"
+            )
+        }
+    )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-10",
+            change="Separate archive search controls and add defaulted console-only styling.",
+            why="Missing controls and style leaves use defaults without changing reader styling.",
+        ),
         ChangelogEntry(
             version="2026-10-25",
             change="Bounded browser geometry added for story charts.",
@@ -596,11 +609,6 @@ class AppearanceConfig(Contract):
             why="Each route's console file owns its panel order and judged list.",
         ),
         ChangelogEntry(
-            version="2026-10-04",
-            change="Data explorer fetch-ceiling reading and held-byte total recorded.",
-            why="A refused run still leaves fetched files in the page keeper.",
-        ),
-        ChangelogEntry(
             version="2026-09-30",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
@@ -615,6 +623,7 @@ class AppearanceConfig(Contract):
         default_factory=ConsoleConfig,
         description="The operator console's viewport. Formerly `AppConfig.console`.",
     )
+    console_style: ConsoleStyleConfig = Field(default_factory=ConsoleStyleConfig)
     assist: AssistConfig = Field(
         default_factory=AssistConfig,
         description="On-device archive search. Formerly `AppConfig.assist`.",
@@ -624,6 +633,28 @@ class AppearanceConfig(Contract):
     chart: ChartConfig = Field(default_factory=ChartConfig)
     icons: IconsConfig = Field(default_factory=IconsConfig)
     motion: MotionConfig = Field(default_factory=MotionConfig)
+
+    @model_validator(mode="after")
+    def _console_categories_do_not_claim_health_or_movement(self) -> Self:
+        for mode, confidence, movement in (
+            (
+                "light",
+                LIGHT_CONFIDENCE_RAMP,
+                (self.theme.movement_good_light, self.theme.movement_bad_light),
+            ),
+            (
+                "dark",
+                DARK_CONFIDENCE_RAMP,
+                (self.theme.movement_good_dark, self.theme.movement_bad_dark),
+            ),
+        ):
+            colors = getattr(self.console_style.colors, mode)
+            if set(colors.categorical) & (set(confidence.values()) | set(movement)):
+                raise ValueError(
+                    f"console_style.colors.{mode}.categorical must be separate "
+                    "from confidence and movement"
+                )
+        return self
 
     @model_validator(mode="after")
     def _a_chart_fits_the_frame_it_is_drawn_in(self) -> Self:

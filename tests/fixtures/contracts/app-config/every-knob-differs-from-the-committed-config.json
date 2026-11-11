@@ -31,6 +31,7 @@
     "same_story_window_hours": 18.0
   },
   "assist": {
+    "archive_search_months": 2,
     "max_tokens": 320,
     "min_readable_letter_share": 0.6,
     "model_base_url": "https://hf.example.test/other/encoder",
@@ -423,6 +424,7 @@
   "ui": {
     "archive_page_size": 40,
     "archive_recent_days": 14,
+    "archive_top_viewports": 2.5,
     "archive_window_days": 21,
     "desk_thin_max": 12,
     "draw_same_story": true,
@@ -494,6 +496,6 @@
       "significant_digits": 5
     },
     "request_timeout_minutes": 1.5,
-    "type_selection_enabled": true
+    "type_selection_enabled": false
   }
 }

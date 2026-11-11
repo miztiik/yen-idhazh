@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-11
 
 How an item gets a chart, a whowhat grid or - most of the time - nothing at
 all: which pass decides, which gate refuses, and what every refusal is called.
@@ -43,6 +43,16 @@ The shared system turn joins the separately configured
 turn reads its own file from the same selected config root. Their paths and
 rendering rules belong to [the prompt page](../summarize/prompt.md).
 
+Before that continuation is built, code finalizes the source element table.
+The request receives that same table as fenced item data, including newly
+anchored actor and claim ids, and its reference grammar admits only the ids
+the menu shows. A reusable guide reads the existing type/role vocabulary and
+configured floors, including the separate Who/What pairing rule. A valid
+decline remains available. Active configuration offers only the implemented
+chart forms and Who/What grid; safe replacement remains off. The
+[compiler capability table](where-a-drawing-becomes-pixels.md#declared-types-are-not-delivery-promises)
+names the abandoned forms retained only for historical reading.
+
 **It was two stages on two models until 2026-09-13.** `idhazh visuals` ran a Qwen3-4B after the
 summarizer had finished, decided a picture from the summary, and rendered it in a job of its own.
 Plan 11 row #6 deleted that stage, the job, the model and the flag that switched between the two
@@ -69,19 +79,28 @@ could not be read. No job hands a file under `frontend/public/` to another job n
 the small model, this stage and its job together. Until then the flag off leaves the pipeline
 exactly where it was.
 
-**The chart path has a test for each job, and the grid has a fixture-backed handoff test.** For
-charts, the question a reader cares about is whether a file lands - not whether a decision does.
-Every route to no picture writes a decision too, so a test that reads `asked_the_model` off the
-payload passes on a day the digest drew nothing. `test_a_decided_item_leaves_a_drawn_chart_on_disk`
-reads the SVG back from the path the payload names and checks the bars carry the article's own entity names.
-`test_assemble_publishes_a_chart_from_its_decision_alone` runs `work` and `assemble` in two trees,
-hands across only the items directory, and checks that the published day names the chart, that
-its bytes are the shard's, and that the inventory counts it.
+**Charts and grids each cross the actual worker and assembly boundary in tests.**
+`test_assemble_publishes_a_chart_from_its_decision_alone` and
+`test_publisher_writes_the_grid_from_the_item_decision_alone` run both production
+calls against local boundary replies. Real extraction and anchoring finalize
+the evidence; the actual second request must show and admit the ids the
+compiler uses. Only named serialized article, summary, decision and item-health
+outputs, plus their input fingerprint, cross into a fresh publisher tree.
+Neither the worker's public directory nor its captures cross.
 
-`test_publisher_writes_the_grid_from_the_item_decision_alone` uses the real local whowhat article,
-element-table and plan fixtures. It derives the decision in a worker tree, transfers only the
-serialized item decision, and checks the dedicated writer's file and inventory in the publisher
-tree.
+Ordinary `stage_assemble` must recreate the named asset from those outputs.
+Each test checks its exact worker bytes, the digest reference and the
+publication inventory, then feeds those published bytes to the actual
+TypeScript reader guard. A legitimate declining boundary answer separately
+keeps its summary publishable, records `model_declined` and publishes no visual.
+Removing either assembly writer or rejecting the compiler's payload in the
+reader breaks this coverage.
+
+The existing reader journey uses compiler-produced chart and grid canaries,
+with a plain item beside them. It checks served asset bytes and displayed grid
+cells, then exercises missing and empty grid responses and keyboard retry
+without losing the story. These are deterministic transport and rendering
+checks, not evidence that the current model generates useful plans.
 
 It needs an article a bar can legally be drawn from, which is rarer than it sounds.
 `tests/fixtures/pages/article.html` states three figures in three units - dollars, megawatts and
@@ -92,14 +111,32 @@ pair is `label/wind-labelled.json` and `summarize-and-plan/wind-summary-and-plan
 ids in the second are the ones this pipeline mints from the first - so an extractor change that
 moves a span turns the test red rather than quietly turning the picture off.
 
+**Generation and normal publication require separate observations.** Retain
+both actual calls for named warranted chart and actor/claim examples and a
+legitimate no-visual example, using the committed model and production path.
+Record the code revision, model identity, source inputs and runner conditions
+beside the captured requests, replies, decisions and resulting named assets.
+Recorded or authored replies, an old capture, a forced type and a successful
+summary cannot establish present-day generation. A warranted example that
+still declines or malforms remains an unresolved defect, not a restored
+capability.
+
+After producer delivery, inspect a normal scheduled Content refresh run's
+actual source revision, decisions, assets, digest, inventory and served day.
+The [Pipeline tests workflow](../../reference/github-actions.md#pipeline-tests)
+can show production execution but publishes no reader-facing day. Do not
+repeatedly dispatch a production writer to turn this observation into a merge
+gate.
+
 ## The model never writes a number
 
 This is the whole safety design, and it is structural rather than instructed.
 
-1. The extractor pulls every quantity out of the article text with a regex, and gives each one an
- index and a unit.
-2. The model is shown that indexed menu and asked to choose bars **by index**.
-3. The spec is built here in Python from the chosen indices. Any derived value
+1. Code cuts quantity and date spans, then anchors the label reply's additional
+   source elements against the same article text.
+2. The model receives the finalized menu and chooses elements **by their ids**,
+   with those choices enforced by the article-specific request grammar.
+3. The spec is built here in Python from the chosen ids. Any derived value
    is arithmetic over source-backed elements through the closed, provenance-
    carrying rules in [where every drawn figure came from](where-every-drawn-figure-came-from.md).
 
@@ -258,6 +295,14 @@ the original request passed validation. A shape, configuration or compiler
 refusal does not create a rejection, but does not erase one already recorded
 for the original request.
 
+An invalid plan keeps its first native field and rule in the bounded,
+sanitized `rationale` and the item-health `failed_field` and `failed_rule`
+cells. The [plan's cross-field rules](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#the-plan-a-compiler-draws-from-and-the-four-things-it-may-not-carry)
+supply those details directly; recording never parses an English message.
+Rejected values, unknown input keys and article text are not diagnostics.
+A successful item-health row keeps `detail` null: its visual refusal does not
+make the summary a failure.
+
 The final `VisualDecision` records the original `planned_type` and the
 successfully written `rendered_type` separately. `downgrade_depth` is zero
 without a selected replacement and positive after one is selected, even if its
@@ -270,6 +315,9 @@ none, and null if no numeric floor was compared. `marks` counts delivered
 marks, not the flat mark pool. Without successful delivery, the delivered type
 and mark count are null. Untyped requests and older unmeasured outcomes leave
 the new evidence fields null; never infer an old request from its final drawing.
+Only a valid native plan establishes the requested type. A contradictory
+decline or malformed JSON cannot establish it, even if its raw bytes name a
+type.
 
 The worker projects the requested type, delivered type, selected depth, marks
 and identity into its sealed item record before either completion path. The
@@ -433,13 +481,12 @@ flowchart TD
 
 ## Design rationale
 
-Type selection and safe replacement are separate default-off policies. Their
+Type selection is active; safe replacement remains a separate, inactive policy. Their
 configuration, production evidence and refusal rules are defined on the
 [plan validation page](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md).
 The existing item ledger carries terminal measurements so requested forms
 remain visible through both replacement and refusal. A failed file write is
 not delivery, and a useful replacement is still an unmet original request.
-Maintainer approval: 2026-10-25 UTC.
 
 **Why attempt evidence stays separate from delivery.** Selected depth says
 which replacement was chosen; deepest depth and first rejection explain the
@@ -522,11 +569,13 @@ Authority: Fowler.
 
 ### Diagrams deferred
 
-The whole diagram plan is deferred, not delivered. This includes sequence and
-contrast word lists, the `comparative` and `processual` reporting classes,
-`flow`, force layout, `hierarchy`, `state`, `mindmap`, and the expanded whole-day
-check. Existing chart selection is unchanged: the summarize-and-plan call
-chooses from the defined visual types, and code validates its choice.
+`flow` is abandoned and excluded from active requests; retaining its historical
+name does not defer a delivery. The other diagram families and their supporting
+work remain deferred, not delivered: sequence and contrast word lists, the
+`comparative` and `processual` reporting classes, force layout, `hierarchy`,
+`state`, `mindmap`, and the expanded whole-day check. The summarize-and-plan
+call chooses from the configured active visual types, and code validates its
+choice.
 
 The intended reader benefit is a diagram that explains a process or relationship
 better than the summary alone. No reader-facing diagram has yet demonstrated

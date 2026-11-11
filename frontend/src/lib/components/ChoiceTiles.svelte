@@ -76,7 +76,7 @@
 	.choice-tiles {
 		display: flex;
 		flex-wrap: wrap;
-		gap: var(--space-1);
+		gap: var(--console-control-gap, var(--space-1));
 	}
 
 	/* The side padding is the small step, so a three-character word still fits
@@ -86,13 +86,13 @@
 	.choice-tile {
 		position: relative;
 		display: flex;
-		min-block-size: 2.75rem;
-		min-inline-size: 2.75rem;
+		min-block-size: var(--console-control-min-height, 2.75rem);
+		min-inline-size: var(--console-control-min-height, 2.75rem);
 		align-items: center;
 		justify-content: center;
-		padding: var(--space-1);
+		padding: var(--console-control-padding-block, var(--space-1)) var(--console-control-padding-inline, var(--space-1));
 		border: 1px solid var(--color-rule);
-		border-radius: var(--radius-md);
+		border-radius: var(--console-control-radius, var(--radius-md));
 		background: var(--color-surface);
 		text-align: center;
 		cursor: pointer;
@@ -102,7 +102,7 @@
 	   them is the tint alone. */
 	.choice-tile[data-selected='true'] {
 		border-color: var(--color-accent);
-		background: var(--color-tint-accent);
+		background: var(--console-selected, var(--tint-accent));
 	}
 
 	.choice-tile:has(.choice-input:disabled) {
@@ -128,8 +128,9 @@
 	.choice-word {
 		display: grid;
 		place-items: center start;
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
+		font-size: var(--console-control-size, var(--text-sm));
+		line-height: var(--console-control-leading, var(--leading-sm));
+		letter-spacing: var(--console-control-tracking, normal);
 		font-variant-numeric: tabular-nums;
 		color: var(--color-text);
 		white-space: nowrap;
@@ -146,14 +147,14 @@
 	.choice-word::before {
 		content: attr(data-shown);
 		visibility: hidden;
-		font-weight: 600;
+		font-weight: var(--console-panel-title-weight, 600);
 	}
 
 	.choice-shown {
-		font-weight: 400;
+		font-weight: var(--console-control-weight, 400);
 	}
 
 	.choice-tile[data-selected='true'] .choice-shown {
-		font-weight: 600;
+		font-weight: var(--console-panel-title-weight, 600);
 	}
 </style>

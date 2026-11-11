@@ -52,7 +52,14 @@ class NativeModel(Protocol):
         *,
         include_confidence: bool,
         include_spans: bool,
+        overlap_policy: str | None,
     ) -> object: ...
+
+
+def require_record_capability(model: object) -> None:
+    """Refuse record schemas before a model without the native record head can run."""
+    if getattr(model, "enable_records", False) is not True:
+        raise ValueError("The loaded native model does not support records.")
 
 
 def _has_asset(path: Path) -> bool:

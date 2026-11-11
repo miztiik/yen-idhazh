@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 **Known noncompliance:** Existing prerendering does not meet [Telemetry Intent](telemetry-intent.md) and will be removed as existing pages migrate. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -48,16 +48,26 @@ for panel titles and "the visual planner" for that actor.
 
 ## What the shell provides, once
 
-- **Page frame:** shared header, navigation, footer and spacing.
+- **Page frame:** shared header, navigation, footer and spacing. The archive omits the footer so the single search surface ends with its stories.
 - **Data loading:** validate fetched and cached payloads at the same boundary. A malformed payload must not leave a blank page. Publication checks still run before publishing; a successful static build is not proof that every day is valid.
 - **Page states:** shared loading, empty, missing and degraded behavior.
 - **Local logging:** the browser console records which payload failed and why. No remote log collector or reader tracking.
 - **Reader preferences:** read marks and theme choice use `localStorage`, never cookies. Bound reading history and tolerate unavailable or full storage.
 
+The operator layout keeps the window choice in memory across console routes.
+Only that mounted boundary reads or writes its optional stored preset; a
+storage failure warns locally but cannot delay queries or leave controls and
+charts on different windows. The
+[console shell](../architecture/publishing/what-sits-above-every-console-route.md)
+owns its labelled rail, compact header and evidence order.
+
 A storage permission or quota refusal must not stop page hydration or the
 theme control. Keep the current theme usable for this page, and report the
 unsaved preference in the local browser console. Other unexpected errors are
 not storage refusals and must remain visible.
+
+Browser chrome follows the resolved page background after client navigation as
+well as a theme change. The console palette must not remain on a reading route.
 
 ## Every page handles five states
 
@@ -83,9 +93,9 @@ when needed. Mark first-sighting time as such; never present it as the feed's ti
 If `time_source` is unknown, show no time. If an older record has no attribution,
 do not invent one. A relative time may supplement, never replace, the absolute one.
 
-Use the same type as the other item metadata. On a dated page the stamp replaces
-the day link; search results keep the day link instead. State `Times shown in UTC.`
-once above the stream. These rules apply to browser-rendered content too.
+Use the same type as the other item metadata and label each clock `UTC`. On a
+dated page the stamp replaces the day link; search results keep the day link
+instead. These rules apply to browser-rendered content too.
 
 ## What the shell must never do
 

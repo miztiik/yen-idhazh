@@ -1,18 +1,18 @@
 # Why a summary was doubted, and what the checker measures
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-11-11
 
 `/console/model/` answers what the model wrote, how long it took, and what it got
-wrong. Its eleven panels are the measure cards, throughput, call endings, refusing
-rules, doubt reasons, faithfulness, source doubts, writing cost, checking cost,
-summary length and the newest model change. The eleven original card labels stay
+wrong. Its ten panels are the measure cards, throughput, call endings, doubt
+reasons, faithfulness, source doubts, writing cost, checking cost, summary length
+and the newest model change. The eleven original card labels stay
 verbatim; determinism is the twelfth card. The cards and distributions are drawn to
 the rules in
 [../../concepts/console-design/what-the-quality-and-source-panels-draw.md](../../concepts/console-design/what-the-quality-and-source-panels-draw.md).
 
 Which panel sits on which route is [console.md](console.md).
 
-The nine eligible panels read the declarations in
+The eight eligible panels read the declarations in
 `frontend/src/lib/console/queries/model.ts` through `sliceOnce`, at view time.
 The cards and their daily disclosure remain private build-time inputs; their
 published-summary and determinism counts come from distinct day metrics, not
@@ -238,8 +238,10 @@ model rule; callers that omit it retain their legacy behavior. `completeModelRul
 rather than moving their boundary to another measured day. Throughput keeps its
 candles and adds the window-median rule; call endings skip empty cells and put
 length endings at the bottom. Writing and checking keep `TimeHistogram` and its
-domains. Refusing rules use the same identity-free `failedRuleQuery`,
-`failureRuleRows` and `FailureList.ranking` as Pipelines, restricted to model stages.
+domains. Failed-rule readings live only on Pipelines, through the shared
+identity-free `failedRuleQuery`, `failureRuleRows` and `FailureList.ranking`.
+Its stage control retains the model-stage readings in the native record. Summaries
+mounts no refusal chart and starts no second failed-rule query.
 
 The newest model change compares dated model-ID sets over the widest declared
 span, splitting independent score and timing populations at the change date.

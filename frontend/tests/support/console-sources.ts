@@ -24,7 +24,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/charts': [
 		'cost.ts', 'day-slots.ts', 'fleet.ts', 'frame.ts', 'glance.ts', 'indexed-runs.ts',
 		'machine-cards.ts', 'machine-colour.ts', 'machine-name.ts',
-		'machine.ts', 'rank.ts', 'readout.ts', 'run-history.ts', 'run-yield.ts', 'series.ts',
+		'label-context.ts', 'machine.ts', 'rank.ts', 'readout.ts', 'run-history.ts', 'run-yield.ts', 'series.ts',
 		'skeleton.ts', 'sparkline.ts', 'stack-types.ts', 'targetbar.ts',
 		'theme.ts', 'viewport.ts'
 	],
@@ -32,7 +32,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'axis.ts', 'DateSeries.svelte', 'dateSeries.ts', 'Distribution.svelte', 'distribution.ts',
 		'empty.ts', 'EmptyState.svelte', 'Flow.svelte', 'flow.ts', 'model-rule.ts', 'motion.ts', 'ordered-colour.ts',
 		'overlapTimeline.ts', 'paired.ts', 'PairedScatter.svelte', 'pairedScatter.ts',
-		'PartsOfOne.svelte', 'partsOfOne.ts', 'rankedList.ts', 'scale.ts', 'TileStrip.svelte', 'tileStrip.ts'
+		'PartsOfOne.svelte', 'partsOfOne.ts', 'rankedList.ts', 'RunSeries.svelte', 'runSeries.ts', 'scale.ts', 'TileStrip.svelte', 'tileStrip.ts'
 	],
 	'src/lib/components': [
 		'ArchiveSearch.svelte', 'ChartReadout.svelte', 'ChoiceTiles.svelte',
@@ -51,11 +51,11 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'WindowControl.svelte', 'WindowControlSource.svelte', 'WindowStatus.svelte'
 	],
 	'src/lib/console': [
-		'applied-line.ts', 'band.ts', 'chrome.ts', 'completeness.ts', 'daily-figures.ts',
+		'applied-line.ts', 'band.ts', 'chrome.ts', 'completeness.ts', 'console-style.ts', 'daily-figures.ts',
 		'doubt-reasons.ts', 'duration-cohort.ts', 'eval-instruments.ts', 'extraction.ts', 'failure-rules.ts',
 		'holdout.ts', 'judgement-evidence.ts', 'merge-line.ts', 'model-cards.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
-		'settings-moved.ts', 'span-words.ts', 'strip.ts', 'verdict-split.ts', 'waiting.ts', 'window-slot.ts'
+		'settings-moved.ts', 'span-words.ts', 'verdict-split.ts', 'waiting.ts', 'window-preference.ts', 'window-slot.ts'
 	],
 	'src/lib/console/queries': ['machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
 	'src/lib/console/pipelines': [
@@ -68,7 +68,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/lib/console/model': [
 		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'source-doubts.ts', 'summary-length.ts',
-		'model-change.ts', 'model-throughput.ts', 'model-rule.ts', 'refusing-rule.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
+		'model-change.ts', 'model-throughput.ts', 'model-rule.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
 		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'Reasons.svelte', 'doubt-reasons.ts', 'slice.ts', 'work.ts'
 	],
 	'src/lib/console/voices': [
@@ -91,7 +91,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'MachineCardsPanel.svelte', 'MachineCharts.svelte', 'RecordFrame.svelte', 'counters.ts', 'host-types.ts', 'records.ts', 'memory-held.ts',
 		'MemoryHeldPanel.svelte', 'PlatformMixPanel.svelte',
 		'processor-lost.ts', 'ProcessorLostPanel.svelte',
-		'refused-runs.ts', 'run-axis.ts', 'TailTrendPanel.svelte'
+		'refused-runs.ts', 'run-axis.ts', 'ReadWritePanel.svelte', 'TailTrendPanel.svelte'
 	],
 	'src/lib/data': [
 		'ask-reader.ts', 'compact-index.ts', 'configured-catalog.ts', 'engine.ts', 'fetched-bytes.ts', 'host-fingerprint.ts', 'ledger-catalog.ts', 'ledger-columns.ts',

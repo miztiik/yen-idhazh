@@ -3,10 +3,10 @@
 **Last Updated**: 2026-11-09
 
 A day page from top to bottom: the header that states each publication fact
-once, the controls, the leading block, the two-column arrangement that gives
-the leads a column of their own on a wide screen, and the footer that is its
-links and nothing else. Every ruling here is about the page rather than the
-story on it - what one item shows is
+once, the controls, the leading block, the story stream and the footer that is
+its links and nothing else. Wide dated pages put the leading block beside the
+stream; the home page keeps it above. Every ruling here is about the page rather
+than the story on it - what one item shows is
 [what-a-story-shows-and-where-each-fact-sits.md](what-a-story-shows-and-where-each-fact-sits.md).
 
 ## The all-topics page leads with the day's chosen stories, and nothing is dropped to do it
@@ -55,10 +55,14 @@ the run strip's axis does, so the rules can be tested without a browser.
 
 ## The day is a stream with an aside, and the aside is a zone rather than a width
 
-From `frame.breakpoints_px[2]` (1400px) the day page is two columns: the story
-stream at `minmax(0, 1fr)` and an `18rem` sticky column carrying the leading
-stories. Below that width nothing changes - the block draws above the stream
-exactly where `digest.sections` puts it.
+The home page uses the full window width with the configured gutters. Its
+leading stories sit above the stream and story prose fills each card's content
+width. Dated and topic pages keep `frame.reading_max_px` and
+`frame.measure_ch`.
+
+On other day pages, from `frame.breakpoints_px[2]` (1400px), the story stream
+and an `18rem` sticky leading-stories column sit side by side. Below that width
+the block draws above the stream exactly where `digest.sections` puts it.
 
 **Why it happens there and not sooner.** The aside uses width left over after
 the prose and source mark fit. It must not narrow the reading column. Check the
@@ -66,22 +70,22 @@ used widths at the configured breakpoint and with larger text; the
 [shared prose measure](../../concepts/design-system.md#the-measure-is-one-block-not-one-class-per-line)
 is the constraint, not a pixel reading from one build.
 
-**One trailing column at a time.** The item's own footer rail wants the same
-slot, and keeping both leaves the summary 570px against a measure of 659.81. So
-the item retires its rail at the same breakpoint and its footer returns under
+**One trailing column at a time.** On other reading routes, the item's footer
+rail wants the same slot, and keeping both leaves the summary 570px against a
+measure of 659.81. So the item retires its rail at the same breakpoint and its footer returns under
 the summary - which is where the item's own split puts it anyway, because the
 confidence sentence is a claim about the summary and the rail painted it level
-with the title.
+with the title. On the home page the footer always stays below the summary.
 
-**The aside stands beside the stream, never beside the day's controls.** The day
-is rendered in four parts - the sections before the leads, the leads, the
+**On dated pages, the aside stands beside the stream, never beside the day's
+controls.** The day is rendered in four parts - the sections before the leads, the leads, the
 sections between the leads and the stream, and the stream - and the two control
-parts span both columns. That is not a preference: the filter panel sticks only
-where it is one band, and at the 896px a two-column split leaves, its pills wrap
-under its field. Each part renders its own sections in `digest.sections` order
+parts span both columns, leaving room for wrapped topic controls and the search
+field without narrowing either beside the aside. Each part renders its own sections in `digest.sections` order
 and the parts are in that order too, so the document order a narrow screen and a
 reader with no script see is exactly what config asked for, and reordering the
 page is still a config edit.
+The home page keeps those same parts in document order without a side column.
 
 The controls precede the leads in `digest.sections`. Filtering can hide the
 leading block without moving the field above it. Section ownership follows the
@@ -111,17 +115,20 @@ font size changes from 16px to 22px.
 
 `DayNotice` starts with the edition date and the published count supplied by
 the caller. It never counts the seed or the currently visible items. The header
-is unboxed and wraps the count beside or below the date as space permits.
+is unboxed: date, count and `Updated HH:MM UTC` share a baseline when space
+permits; count and time move together below the date on a phone. An empty day
+says `No stories today`, and a single story uses the singular.
 
-An incomplete day carries the recorded failure count, with no invented cause.
-The old sentence attributed every failure to inadequate source text, although
-the payload carries no such shared reason. Unknown counts remain absent.
+The update time comes from `generated_at`, not a run-history entry or the site's
+deployment clock. A missing stamp omits the time and its separator.
 
-The last line uses `runs.at(-1)` for `Updated HH:MM UTC (update N).` Its time is
-the digest's recorded generation time, not the site's deployment time. The
-sum of `items_added` where `n > 1` states how many were added since the first
-update. Missing run history prints neither a time nor an assumed first run.
-These facts belong to the day header, never the shared site footer.
+### Design rationale
+
+The header identifies the edition rather than reporting pipeline progress.
+Failure counts, run numbers and additions since first publication remain in
+recorded payloads but do not render above the stories. The wordmark has no
+tagline; `digest.tagline` remains compatible configuration for the homepage's
+description metadata, not visible header copy.
 
 `introduced_by_run` is on every item and is drawn nowhere. It briefly was: from
 2026-08-31 a flat list carried one hairline divider - `Added later today` -
@@ -146,7 +153,7 @@ Asked for, and Reader ruled **no**, decisively:
 
 > Every other piece of text on that page has a link under it, so when a sentence smells wrong I can go check. A paragraph at the top summarising the day would be the only text on the page with nowhere to click.
 
-It would also be three removes from the source - a summary of summaries of articles - and every layer of compression is a layer of invention. What sits at the top instead is a line of facts with no voice: the date, the counts, and, when a run was partial, plainly how many did not finish. If four of five items failed and the page does not say so, a reader who works it out later has spent the trust the digest was saving.
+It would also be three removes from the source - a summary of summaries of articles - and every layer of compression is a layer of invention. The compact edition header instead identifies the date, published count and recorded update time.
 
 ## The footer is its links, and nothing else
 
@@ -162,7 +169,8 @@ many stories did not finish. The footer is on every page that has one, so both
 were printed under `/archive/` and `/console/`, which render no day at
 all, and printed a second time under `/`, where
 [the day notice](#the-day-header-states-each-publication-fact-once)
-was already saying them. Both live beside the day now.
+was already saying them. The current header keeps only the edition facts
+described above; pipeline failure counts no longer appear there.
 
 **Three more went on 2026-09-09, and those did not move anywhere.** They are the
 build line - the commit and the deploy date - and the promise about what is

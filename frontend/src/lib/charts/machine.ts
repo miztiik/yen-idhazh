@@ -200,12 +200,16 @@ export function clocksChart(
 	tolerancePct: number,
 	numberFormat: NumberFormatConfig
 ): RankedGeometry | null {
-	return rankedList(pairs.flatMap((pair) => pair.gapPct === null ? [] : [{
+	const ranked = rankedList(pairs.flatMap((pair) => pair.gapPct === null ? [] : [{
 		label: pair.label,
 		value: pair.gapPct,
 		context: `item ledger ${pair.ledger === null ? '-' : formatNumber(pair.ledger, numberFormat)}; server ${pair.server === null ? '-' : formatNumber(pair.server, numberFormat)} tokens a second`,
 		...(pair.agrees === false ? { status: 'disagrees' } : {})
 	}]), { rules: [{ at: tolerancePct, label: 'Allowed disagreement' }] });
+	for (const entry of ranked?.rows ?? []) {
+		entry.row.value = `${formatNumber(entry.value, numberFormat, { si: false })}%`;
+	}
+	return ranked;
 }
 
 // ---------------------------------------------------------------------------
@@ -344,6 +348,22 @@ export interface RunWork {
 
 export interface ReadWriteView {
 	runs: RunWork[];
+	tokenRuns: RunTokenWork[];
+}
+
+export interface TokenPair {
+	read: number | null;
+	written: number | null;
+}
+
+/** Token volume over one run's paired article cohort, including its coverage. */
+export interface RunTokenWork {
+	runId: string;
+	date: string;
+	total: TokenPair;
+	median: TokenPair;
+	measured: number;
+	recorded: number;
 }
 
 /** What a run read against what it wrote, counted twice over one row set.
@@ -358,31 +378,45 @@ export function readAgainstWritten(health: readonly Record<string, string>[]): R
 	const byRun = new Map<
 		string,
 		{
+			runId: string;
 			date: string;
 			input: number;
 			output: number;
+			inputs: number[];
+			outputs: number[];
 			prefillMs: number;
 			decodeMs: number;
 			items: number;
 			timed: number;
+			recorded: number;
 		}
 	>();
 	for (const row of health) {
-		const input = cell(row.input_tokens);
-		const output = cell(row.output_tokens);
-		if (input === null || output === null) continue;
 		const runId = row.run_id ?? '';
-		const bucket = byRun.get(runId) ?? {
-			date: row.date ?? '',
+		const date = row.date ?? '';
+		const key = `${date}/${runId}`;
+		const bucket = byRun.get(key) ?? {
+			runId,
+			date,
 			input: 0,
 			output: 0,
+			inputs: [],
+			outputs: [],
 			prefillMs: 0,
 			decodeMs: 0,
 			items: 0,
-			timed: 0
+			timed: 0,
+			recorded: 0
 		};
+		bucket.recorded += 1;
+		byRun.set(key, bucket);
+		const input = cell(row.input_tokens?.trim());
+		const output = cell(row.output_tokens?.trim());
+		if (input === null || output === null || input < 0 || output < 0) continue;
 		bucket.input += input;
 		bucket.output += output;
+		bucket.inputs.push(input);
+		bucket.outputs.push(output);
 		bucket.items += 1;
 		const prefill = cell(row.prefill_ms);
 		const decode = cell(row.decode_ms);
@@ -391,11 +425,12 @@ export function readAgainstWritten(health: readonly Record<string, string>[]): R
 			bucket.decodeMs += decode;
 			bucket.timed += 1;
 		}
-		byRun.set(runId, bucket);
 	}
-	const runs: RunWork[] = [...byRun.entries()]
-		.map(([runId, bucket]) => ({
-			runId,
+	const ordered = [...byRun.values()].sort((a, b) =>
+		a.date.localeCompare(b.date) || compareRuns(a.runId, b.runId));
+	const runs: RunWork[] = ordered.filter((bucket) => bucket.items > 0)
+		.map((bucket) => ({
+			runId: bucket.runId,
 			date: bucket.date,
 			input: bucket.input,
 			output: bucket.output,
@@ -403,11 +438,23 @@ export function readAgainstWritten(health: readonly Record<string, string>[]): R
 			decodeMs: bucket.timed === 0 ? null : bucket.decodeMs,
 			items: bucket.items,
 			timed: bucket.timed
-		}))
-		.filter((run) => run.items > 0)
-		.sort((a, b) => a.runId.localeCompare(b.runId));
+		}));
+	const tokenRuns = ordered.map((bucket): RunTokenWork => ({
+		runId: bucket.runId,
+		date: bucket.date,
+		total: {
+			read: bucket.items === 0 ? null : bucket.input,
+			written: bucket.items === 0 ? null : bucket.output
+		},
+		median: {
+			read: bucket.items === 0 ? null : quantile(bucket.inputs.sort((a, b) => a - b), 0.5),
+			written: bucket.items === 0 ? null : quantile(bucket.outputs.sort((a, b) => a - b), 0.5)
+		},
+		measured: bucket.items,
+		recorded: bucket.recorded
+	}));
 
-	return { runs };
+	return { runs, tokenRuns };
 }
 
 /** What one run's two sides measure in the open unit, or nothing.

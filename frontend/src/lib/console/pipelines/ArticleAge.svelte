@@ -3,12 +3,14 @@
 	import { distribution, distributionShortfall } from '$lib/charts/d3/distribution';
 	import Distribution from '$lib/charts/d3/Distribution.svelte';
 	import { emptyState } from '$lib/charts/d3/empty';
-	import { frame, MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import type { Row } from '$lib/data/ledger';
 	import type { ConsoleConfig } from '$lib/server/config';
 	import { useNumberFormat } from '$lib/number-format-context';
 	let { rows, knobs }: { rows: Row[]; knobs: ConsoleConfig } = $props();
 	const numberFormat = useNumberFormat();
+	const frame = useChartFrame();
 	let measured = $state<number | null>(null);
 	const width = $derived(chartWidth(measured, knobs.chart_width));
 	const age = $derived(articleAge(rows));

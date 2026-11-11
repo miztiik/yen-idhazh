@@ -40,13 +40,13 @@
 	 */
 	import {
 		chartWidth,
-		frame,
 		labelGutter,
 		observeWidth,
 		rowPitch,
 		ROW_PITCH_MIN,
 		type Margin
 	} from '$lib/charts/frame';
+	import { useChartFrame, useChartLabels } from '$lib/charts/label-context';
 	import { swapScale } from '$lib/charts/series';
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 	import { movementVerdict } from '$lib/charts/theme';
@@ -68,8 +68,10 @@
 	let picked = $state<number | null>(null);
 
 	/** The row label, and the two values on the line under it. */
-	const NAME_PX = 11;
-	const VALUE_PX = 10;
+	const frame = useChartFrame();
+	const labelsOfType = useChartLabels();
+	const NAME_PX = $derived(labelsOfType().fontSize);
+	const VALUE_PX = $derived(labelsOfType().fontSize);
 	/** Clear pixels between the label column and the plot. */
 	const GUTTER_GAP = 12;
 	/** A row carries two lines of type and a track. Below this the rows touch. */
@@ -118,15 +120,15 @@
 	 * it. `labelGutter` refuses a gutter past 30 percent of the frame, which is
 	 * the bound that stops a chart becoming a list with a plot in the margin. */
 	const gutter = $derived.by(() => {
-		const names = labelGutter(labels, NAME_PX, GUTTER_GAP, chartBox);
-		const values = labelGutter(valueLines, VALUE_PX, GUTTER_GAP, chartBox);
+		const names = labelGutter(labels, labelsOfType(), GUTTER_GAP, chartBox);
+		const values = labelGutter(valueLines, labelsOfType(), GUTTER_GAP, chartBox);
 		return names === null || values === null ? null : Math.max(names, values);
 	});
 	const stacked = $derived(gutter === null);
 	const leftRoom = $derived(gutter ?? RIGHT_ROOM);
 	const innerRoom = $derived(Math.max(1, chartBox - leftRoom - RIGHT_ROOM));
 	const pitch = $derived(
-		rowPitch(innerRoom, stacked ? PITCH_MIN_STACKED : PITCH_MIN, PITCH_MAX)
+		rowPitch(innerRoom, Math.max(stacked ? PITCH_MIN_STACKED : PITCH_MIN, labelsOfType().leading * 3), Math.max(PITCH_MAX, labelsOfType().leading * 4))
 	);
 
 	const box = $derived(
@@ -320,7 +322,7 @@
 					y={box.bottom + 14}
 					text-anchor="middle"
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-tick="x"
 				>
 					{tick}%
@@ -331,7 +333,7 @@
 				x={box.left}
 				y={box.bottom + 28}
 				fill="var(--color-text-tertiary)"
-				font-size="10"
+				font-size={box.labels.fontSize}
 				data-axis-title
 			>
 				Against the same measure on {swap.before.model}, percent

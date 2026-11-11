@@ -1,6 +1,5 @@
 /** What does each Summaries panel ask the published ledgers? */
 import type { PanelQuery } from './window';
-export { failedRuleQuery } from './shared';
 
 export const modelThroughputQuery = {
 	name: 'modelThroughputQuery', ledger: 'item-health',

@@ -39,6 +39,7 @@ MODULE_NAMES = (
     "idhazh.contracts.knobs.classification_encoding",
     "idhazh.contracts.knobs.collect",
     "idhazh.contracts.knobs.console",
+    "idhazh.contracts.knobs.console_style",
     "idhazh.contracts.knobs.council",
     "idhazh.contracts.knobs.evaluation",
     "idhazh.contracts.knobs.extract",

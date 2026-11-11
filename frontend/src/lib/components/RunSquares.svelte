@@ -26,6 +26,8 @@
 		type LabelAlign
 	} from '$lib/charts/run-history';
 	import { HEALTH_FILL, type DayColumn } from '$lib/console/run-square';
+	import { useChartLabels } from '$lib/charts/label-context';
+	const labels = useChartLabels();
 	import { countDays, nameSpan } from '$lib/console/span-words';
 
 	let {
@@ -91,7 +93,7 @@
 	const axis = $derived(
 		axisLabels(
 			days.map((day) => day.date),
-			{ density: tickDensity, pitch: strip_.cell + strip_.gap }
+			{ density: tickDensity, pitch: strip_.cell + strip_.gap, labels: labels() }
 		)
 	);
 	const stripMarks: ReadoutMark[] = $derived(

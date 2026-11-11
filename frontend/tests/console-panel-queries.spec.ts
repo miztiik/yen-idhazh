@@ -21,8 +21,28 @@ import type { LedgerReach } from '../src/lib/data/ledger-reach';
 import { reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { buildRows } from './support/ledger-lifecycle';
 import { readSession, renewReadSession } from '../src/lib/data/read-session';
+import { panelQueries as modelPanels } from '../src/lib/console/model/panels';
+import { failedRuleQuery as pipelinesFailedRuleQuery } from '../src/lib/console/queries/pipelines';
+import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
+import { failureRuleRows, failureRules } from '../src/lib/console/failure-rules';
 
 const PRESETS = [3, 7, 30] as const;
+
+test('only Pipelines asks the shared failed-rule question and retains every recorded model stage', () => {
+	expect(modelPanels).not.toHaveProperty('refusing-rule');
+	expect(Object.values(modelPanels).flat().map((query) => query.name)).not.toContain('failedRuleQuery');
+	expect(pipelinesFailedRuleQuery).toBe(failedRuleQuery);
+	const rows: Row[] = ['summarize', 'label', 'visual-plan'].map((stage) => ({
+		date: '2030-06-14', stage, outcome: 'failed', code: 'model_reply', failed_rule: `${stage}-shape`
+	}));
+	const mix = nativeFailureMix(rows);
+	expect(mix.stages).toEqual(['label', 'summarize', 'visual-plan']);
+	for (const stage of mix.stages) {
+		const ranking = failureRules(failureRuleRows(rows), { start: '2030-06-14', end: '2030-06-14' }, stage);
+		expect(ranking.failed).toBe(1);
+		expect(ranking.rules).toEqual([{ label: `${stage}-shape`, count: 1, daily: [1], last: '2030-06-14' }]);
+	}
+});
 
 test('native throughput uses the same nearest-rank readings for a day and its single run', () => {
 	const date = '2030-06-14';

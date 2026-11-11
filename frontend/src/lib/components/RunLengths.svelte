@@ -22,11 +22,11 @@
 	import {
 		chartWidth,
 		dayTicks,
-		frame,
 		linearAxis,
 		observeWidth,
 		type Margin
 	} from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import { shortDate } from '$lib/format';
 	import ChartReadout from './ChartReadout.svelte';
@@ -51,6 +51,7 @@
 		rule?: ModelRule;
 	} = $props();
 
+	const frame = useChartFrame();
 	const MARGIN: Margin = { top: 12, right: 12, bottom: 40, left: 38 };
 
 	let measured = $state<number | null>(null);
@@ -167,7 +168,7 @@
 	const labels = $derived(
 		dayTicks(
 			firsts.map(({ run }) => run.date),
-			{ density: tickDensity, columns: firsts.map(({ index }) => columnX(index)) }
+			{ density: tickDensity, columns: firsts.map(({ index }) => columnX(index)), labels: box.labels }
 		).map((tick) => ({
 			date: tick.date,
 			text: tick.text,
@@ -293,7 +294,7 @@
 					y={round(yAxis.scale(tick)) + 3}
 					text-anchor="end"
 					fill="var(--color-text-tertiary)"
-					font-size="10"
+					font-size={box.labels.fontSize}
 					data-tick="y"
 				>
 					{tick}
@@ -398,7 +399,7 @@
 						y={box.bottom + 16}
 						text-anchor={label.anchor}
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-day-axis
 						data-tick="x"
 					>
@@ -411,7 +412,7 @@
 				x={box.left}
 				y={box.bottom + 30}
 				fill="var(--color-text-tertiary)"
-				font-size="10"
+				font-size={box.labels.fontSize}
 				data-axis-title
 			>
 				Summary length, words

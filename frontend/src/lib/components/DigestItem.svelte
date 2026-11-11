@@ -194,11 +194,7 @@
 			{/if}
 		</p>
 
-		<!-- The measure is on this block, not on each line of text inside it. A
-		     `ch` resolves against the element that uses it, so a title carrying the
-		     same `68ch` as the summary got 68 characters of 28px type - 1057px,
-		     wider than the card, which is no cap at all. The figure stays outside,
-		     because a chart is drawn at a width rather than wrapped to one. -->
+		<!-- Title and summary share one measure where the reading route uses one. -->
 		<div class="prose">
 			<svelte:element
 				this={`h${level}`}
@@ -260,6 +256,10 @@
 		text-wrap: pretty;
 	}
 
+	:global([data-surface='home']) .prose {
+		max-width: none;
+	}
+
 	/* The display face, on the one line of this card that is a headline. It is
 	   already fetched and preloaded for the wordmark, so a title in it costs no
 	   byte the reader was not already paying. `balance` rather than `pretty`
@@ -271,6 +271,10 @@
 		line-height: var(--leading-2xl);
 		letter-spacing: 0;
 		text-wrap: balance;
+	}
+
+	:global([data-surface='home']) .title {
+		text-wrap: wrap;
 	}
 
 	.summary {
@@ -386,8 +390,7 @@
 		box-shadow: var(--shadow-md);
 	}
 
-	/* At this width the footer - the two sentences about our summary, and the two
-	   things you can do next - stops interrupting the read and moves beside it.
+	/* On reading routes other than home, the footer moves beside the summary.
 	   It is still after the summary in the document, which is what the split
 	   promises; what moves is where it is painted. The value matches
 	   frame.breakpoints_px[1] in config/appearance.json; a media query cannot
@@ -414,10 +417,27 @@
 			top: var(--space-4);
 			margin-inline-start: var(--space-3);
 		}
+
+		:global([data-surface='home']) .item {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		:global([data-surface='home']) .item.has-mark {
+			grid-template-columns: var(--zone-mark) minmax(0, 1fr);
+		}
+
+		:global([data-surface='home']) .item.has-mark > .item-rail {
+			grid-column: 2;
+		}
+
+		:global([data-surface='home']) .item-rail {
+			position: static;
+			margin-inline-start: 0;
+		}
 	}
 
-	/* And at this width it gives the column back - but only to a day that grew an
-	   aside (app.css). The frame's content box holds a 68-character measure plus
+	/* On other reading routes, at this width the footer gives the column back
+	   to a day that grew an aside (app.css). The frame's content box holds a 68-character measure plus
 	   exactly ONE trailing column: measured 2026-09-02, keeping both leaves the
 	   summary 570 CSS px against a measure of 659.81. So where the page has
 	   claimed the column, the footer returns to under the

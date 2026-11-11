@@ -19,13 +19,33 @@ from pathlib import Path
 from typing import Any, Final
 
 from pytest import LogCaptureFixture, MonkeyPatch
-from support.paths import FIXTURES_DIR
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR
+from test_classify import declining_reply
 
+from idhazh import config, elements
+from idhazh.contracts.article import Article
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.visual_decision import (
+    PAYLOAD_SUFFIX,
+    NoneReason,
+    VisualDecision,
+    VisualKind,
+)
 from idhazh.fetch import FetchResult, FetchTimings
+from idhazh.llm.server import Completion
+from idhazh.stages.two_calls import _decide_the_visual, _silent_recorder
+from idhazh.telemetry.record import persist, recorded_row
 
-from ._builders import _work_stage, captured_article_fetch, plan
+from ._builders import (
+    _work_stage,
+    captured_article_fetch,
+    declining_replies,
+    drawable_article_fetch,
+    plan,
+    publish_worker_items,
+)
 
 #: Two items prove ordering and totals across siblings.
 PLANNED_ITEMS: Final = 2
@@ -217,11 +237,66 @@ def test_a_passing_item_carries_no_failure_detail(
     """`detail_cell("")` is the string "unspecified failure", and a row that
     carried it while its outcome said `ok` read as a failure nobody had.
     """
-    run_a_shard(tmp_path, monkeypatch, caplog)
+    caplog.set_level(logging.INFO, logger="idhazh")
+    run_plan, items, server = _work_stage(
+        tmp_path / "worker", monkeypatch,
+        replies=declining_replies(),
+        fetcher=drawable_article_fetch,
+        run_plan=plan(item_count=1),
+    )
+    item_id = run_plan.items[0].item_id
+    decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
+    recorded = recorded_row(items, item_id)
+    assert server.served == 2
+    assert decision.kind is VisualKind.NONE
+    assert decision.none_reason is NoneReason.MODEL_DECLINED
+    assert decision.asked_the_model is True
+    assert decision.data_path is None
+    assert recorded is not None
+    assert recorded.outcome.value == "ok" and recorded.detail is None
+    assert recorded.failed_field is None and recorded.failed_rule is None
+    done = named(caplog, "item.done")
+    assert len(done) == 1
+    assert done[0]["outcome"] == "ok" and done[0]["detail"] is None
+    day = publish_worker_items(run_plan, items, tmp_path / "publisher", monkeypatch)
+    assert len(day.items) == 1
+    assert day.items[0].item_id == item_id
+    assert day.items[0].visual is None
 
-    for record in named(caplog, "item.done"):
-        if record["outcome"] == "ok":
-            assert record["detail"] is None
+
+def test_a_malformed_visual_decline_keeps_shape_diagnostics_off_the_success_detail(
+    tmp_path: Path, caplog: LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING, logger="idhazh")
+    settings = config.load(CONFIG_DIR)
+    article = Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json")
+    summary = Summary.read(CONTRACT_FIXTURES_DIR / "summary" / "ok.json")
+    recorder = _silent_recorder()
+    recorder.note(**ItemHealthRow.read(
+        CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json"
+    ).model_dump(mode="json"))
+
+    decision = _decide_the_visual(
+        summary, article,
+        Completion(content=declining_reply(title="model-only words"), finish_reason="stop"),
+        elements.element_table(article, config=settings.app.elements),
+        settings=settings, date="2026-08-21",
+        stamp={
+            "version": VisualDecision.schema_version(), "model_id": "fixture-model",
+            "decided_at": "2026-08-21T12:00:00Z",
+        },
+        wants_a_plan=True, run_id="2026-08-21-1", recorder=recorder,
+    )
+    row = ItemHealthRow.read(persist(tmp_path, recorder.close()))
+
+    assert summary.status is SummaryStatus.OK and summary.summary
+    assert row.outcome.value == "ok" and row.detail is None
+    assert row.failed_field == "title"
+    assert row.failed_rule == "visual_plan_decline_empty"
+    assert decision.rationale and row.failed_field in decision.rationale
+    assert row.failed_rule in decision.rationale
+    assert "model-only words" not in caplog.text
+    assert "input_value" not in caplog.text
 
 
 def test_the_fetch_split_the_socket_measured_reaches_the_record(

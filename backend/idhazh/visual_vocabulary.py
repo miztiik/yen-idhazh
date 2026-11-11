@@ -153,14 +153,10 @@ TYPE_RULES: Final[dict[VisualType, TypeRules]] = {
     _T.WHOWHAT: TypeRules(frozenset({_R.ENTITY, _R.EVENT_LABEL}), frozenset(), _R.ENTITY),
 }
 
-#: The six whose channels are a design decision rather than a reading of the
-#: role names, and the decision belongs to the plan that ships each family:
-#: `table` and `flow` to the composition and diagram vocabularies, and the four
-#: infographic forms to theirs. Naming them here rather than leaving them out is
-#: the whole point - a type in neither set would be waved through by the two
-#: per-type checks and drawn with nothing having ruled on it. Until those rules
-#: are written, a plan naming one is refused unless an explicit supported
-#: replacement preserves its purpose and facts and clears the measured floor.
+#: Historical names without role rules. They remain explicit so an older plan
+#: is refused by name rather than passing checks that do not know its type.
+#: Production selection excludes these abandoned forms; retaining them here is
+#: not a delivery queue. Configured replacement remains a separate policy.
 UNRULED_TYPES: Final[frozenset[VisualType]] = frozenset(
     {_T.TABLE, _T.FLOW, _T.COMPARISON, _T.CALLOUT, _T.QUOTECARD, _T.KEYFACTS}
 )

@@ -33,15 +33,15 @@
 	 * the set the axis nices from.
 	 */
 	import {
-		AXIS_LABEL_PX,
 		chartWidth,
 		dayColumns,
 		dayTicks,
-		frame,
 		labelWidth,
 		linearAxis,
 		observeWidth
 	} from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
+	const frame = useChartFrame();
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import { grouped as formatGrouped } from '$lib/charts/series';
 	import { useNumberFormat } from '$lib/number-format-context';
@@ -150,7 +150,7 @@
 		linearAxis(corridor, [box.bottom, box.top], { tickCount: 4, zero: false, nice: false })
 	);
 	const columnsX = $derived(dayColumns(dates.length, box, 2));
-	const ticks = $derived(dayTicks(dates, { density: tickDensity, columns: columnsX }));
+	const ticks = $derived(dayTicks(dates, { density: tickDensity, columns: columnsX, labels: box.labels }));
 
 	function px(value: number): number {
 		return Math.round(value * 10) / 10;
@@ -279,8 +279,8 @@
 	const markLabelBoxes = $derived(
 		limitRules.map(({ name, at }) => {
 			const baseline = yAxis.scale(at) - 4;
-			const width = labelWidth(markLabel(name, at));
-			return { top: baseline - AXIS_LABEL_PX, bottom: baseline, left: box.right - width, right: box.right };
+			const width = labelWidth(markLabel(name, at), box.labels);
+			return { top: baseline - box.labels.leading, bottom: baseline, left: box.right - width, right: box.right };
 		})
 	);
 
@@ -327,20 +327,20 @@
 						? disagreeY
 						: Math.min(disagreeY, unclearY);
 			if (topY === null) return [];
-			const width = labelWidth(dayMonth(mark.date));
+			const width = labelWidth(dayMonth(mark.date), box.labels);
 			const labelBox = (y: number) => ({
-				top: y - AXIS_LABEL_PX, bottom: y,
+				top: y - box.labels.leading, bottom: y,
 				left: mark.x - width / 2, right: mark.x + width / 2
 			});
 			const boxes = [...markLabelBoxes].sort((a, b) => a.top - b.top);
-			let y = Math.max(topY - 8, box.top + AXIS_LABEL_PX);
+			let y = Math.max(topY - 8, box.top + box.labels.leading);
 			for (const markBox of boxes.toReversed()) {
 				if (boxesOverlap(labelBox(y), markBox)) y = markBox.top - 2;
 			}
 			if (labelBox(y).top < box.top) {
-				y = topY + 8 + AXIS_LABEL_PX;
+				y = topY + 8 + box.labels.leading;
 				for (const markBox of boxes) {
-					if (boxesOverlap(labelBox(y), markBox)) y = markBox.bottom + 2 + AXIS_LABEL_PX;
+					if (boxesOverlap(labelBox(y), markBox)) y = markBox.bottom + 2 + box.labels.leading;
 				}
 			}
 			return [{ date: mark.date, x: mark.x, y }];
@@ -556,7 +556,7 @@
 						dy="0.32em"
 						text-anchor="end"
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-tick="y"
 					>
 						{percent(tick)}
@@ -582,7 +582,7 @@
 						y={yAxis.scale(rule.at) - 4}
 						text-anchor="end"
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						data-agreement-marker-label={rule.name}
 					>
 						{markLabel(rule.name, rule.at)}
@@ -628,10 +628,10 @@
 					{#if tick.text}
 						<text
 							x={px(columnsX[tick.index])}
-							y={box.bottom + 16}
+							y={box.bottom + box.labels.leading}
 							text-anchor={tick.anchor}
 							fill="var(--color-text-tertiary)"
-							font-size="10"
+							font-size={box.labels.fontSize}
 							data-day-tick={tick.date}
 						>
 							{tick.text}
@@ -649,7 +649,7 @@
 						y={label.y}
 						text-anchor="middle"
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={box.labels.fontSize}
 						aria-hidden="true"
 						data-agreement-stranded-label={label.date}
 					>

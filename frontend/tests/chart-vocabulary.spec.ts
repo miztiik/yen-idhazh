@@ -20,6 +20,7 @@ import { partsOfOne } from '../src/lib/charts/d3/partsOfOne';
 import { rankedList } from '../src/lib/charts/d3/rankedList';
 import { bandScale, linearScale, timeScale } from '../src/lib/charts/d3/scale';
 import { tileStrip } from '../src/lib/charts/d3/tileStrip';
+import { runSeries, type RunSeriesOptions } from '../src/lib/charts/d3/runSeries';
 import { PALETTE } from '../src/lib/charts/theme';
 import { CHART_VOCABULARY_PAGE } from '../scripts/doc-test-inputs';
 import { inZone } from './support/in-zone';
@@ -30,11 +31,15 @@ import {
 	flow,
 	pairedScatter,
 	pairedScatterShortfall,
+	numberFormat,
 	tooFewSentence,
 	valueAxis
 } from './support/number-format';
 import { serverCompiler } from './support/server-render';
 import { drawnSourceFiles, readSource, resolveSource, scriptTree } from './support/console-sources';
+import { chartConfig, routeConsoles, routeConsolesFrom } from '../src/lib/server/config';
+import { readWriteMetricDefault } from '../src/lib/console/route-console';
+import { BAND_UNREAD } from '../src/lib/console/band';
 
 /**
  * The behavior checks for the documented chart vocabulary.
@@ -695,6 +700,77 @@ test.describe('the nine types', () => {
 	});
 });
 
+test.describe('run sequence geometry', () => {
+	const options: RunSeriesOptions = {
+		frame: frame(400, 220), density: 6, valueTicks: 4, number_format: numberFormat,
+		rule: { declined: 'This reading compares recorded runs, not a settings change.' },
+		notMeasured: 'No paired token reading.'
+	};
+	const traces = (values: readonly (number | null)[]) => [
+		{ label: 'Read', token: '--chart-1' as const, dashed: false, values, format: (value: number) => `${value} tokens` }
+	];
+
+	test('numeric run order preserves same-day columns, null gaps, zero and the newest unmeasured rest', () => {
+		const geometry = runSeries([
+			{ date: '2026-09-01', runId: '2026-09-01-10', events: [{ label: 'Measured articles', value: '0 of 2 recorded; partial coverage', swatch: null }] },
+			{ date: '2026-09-01', runId: '2026-09-01-2' },
+			{ date: '2026-09-01', runId: '2026-09-01-1' }
+		], traces([null, 0, 12344.5]), options);
+		expect(geometry?.runs.map((run) => run.runId)).toEqual(['2026-09-01-1', '2026-09-01-2', '2026-09-01-10']);
+		expect(new Set(geometry?.columns).size).toBe(3);
+		expect(geometry?.lines[0].points.map((point) => point.value)).toEqual([12344.5, 0]);
+		expect(geometry?.readout.series[0].values).toEqual(['12344.5 tokens', '0 tokens', null]);
+		expect(geometry?.readout.resting).toBe(2);
+		expect(geometry?.readout.columns[2]).toBe('2026-09-01-10 | 2026-09-01 UTC');
+		expect(geometry?.readout.events[2][0].value).toContain('0 of 2 recorded');
+		expect(geometry?.ticks.filter((tick) => tick.text)).toHaveLength(1);
+	});
+
+	test('dense runs retain every observation and monotone interpolation stays within each measured interval', () => {
+		const runs = Array.from({ length: 35 }, (_, index) => {
+			const date = `2026-09-${String(1 + Math.floor(index / 5)).padStart(2, '0')}`;
+			return { date, runId: `${date}-${[1, 2, 9, 10, 11][index % 5]}` };
+		});
+		const values = runs.map((_, index) => [7, 2, 10, 3, 5][index % 5]);
+		const geometry = runSeries([...runs].reverse(), traces([...values].reverse()), options);
+		if (geometry === null) throw new Error('Measured runs drew no geometry.');
+		expect(geometry.runs).toEqual(runs);
+		expect(new Set(geometry.columns).size).toBe(35);
+		expect(geometry.lines[0].points).toHaveLength(35);
+		expect(geometry.ticks.filter((tick) => tick.text).length).toBeLessThan(35);
+		const commands = [...geometry.lines[0].path.matchAll(/([MC])([^MC]+)/g)];
+		expect(commands.some((command) => command[1] === 'C')).toBe(true);
+		let previous = Number.NaN;
+		for (const command of commands) {
+			const coordinates = command[2].split(',').map(Number);
+			if (command[1] === 'M') {
+				previous = coordinates[1];
+				continue;
+			}
+			const end = coordinates[5];
+			// D3 serializes SVG coordinates to three decimal places.
+			for (const control of [coordinates[1], coordinates[3]]) {
+				expect(control).toBeGreaterThanOrEqual(Math.min(previous, end) - 0.001);
+				expect(control).toBeLessThanOrEqual(Math.max(previous, end) + 0.001);
+			}
+			previous = end;
+		}
+	});
+
+	test('known gaps break paths and retain isolated values while invalid geometry is refused', () => {
+		const runs = Array.from({ length: 7 }, (_, index) => ({ date: '2026-09-01', runId: `2026-09-01-${index + 1}` }));
+		const geometry = runSeries(runs, traces([1, 2, null, 0, null, 4, 5]), options);
+		expect(geometry?.lines[0].path.match(/M/g)).toHaveLength(2);
+		expect(geometry?.lines[0].points.filter((point) => point.alone).map((point) => point.value)).toEqual([0]);
+		expect(runSeries(runs, traces(runs.map(() => null)), options)).toBeNull();
+		expect(runSeries([runs[0]], traces([0]), options)?.lines[0].points[0].value).toBe(0);
+		expect(() => runSeries([runs[0], runs[0]], traces([1, 2]), options)).toThrow('repeats');
+		expect(() => runSeries([runs[0]], traces([1, 2]), options)).toThrow('one reading per run');
+		expect(() => runSeries([runs[0]], traces([Infinity]), options)).toThrow('finite');
+		expect(() => runSeries([{ date: '2026-09-01', runId: 'invented' }], traces([1]), options)).toThrow('dated run number');
+	});
+});
+
 test.describe('drawn by Svelte, rendered on the server', () => {
 	const built = path.join(frontend, 'test-results', 'chart-vocabulary');
 	const box = frame(400, 200);
@@ -711,7 +787,14 @@ test.describe('drawn by Svelte, rendered on the server', () => {
 			['$lib/components/Reserved.svelte', './Reserved.server.mjs']
 		]);
 		await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', []);
-		for (const name of ['EmptyState', 'DateSeries', 'Distribution', 'PartsOfOne', 'TileStrip', 'Flow', 'PairedScatter']) {
+		await compiled('src/lib/components/Panel.svelte', 'Panel', []);
+		await compiled('src/lib/icons/Icon.svelte', 'Icon', [
+			['./generated', '$lib/icons/generated']
+		]);
+		await compiled('src/lib/components/ChoiceTiles.svelte', 'ChoiceTiles', [
+			['$lib/icons/Icon.svelte', './Icon.server.mjs']
+		]);
+		for (const name of ['EmptyState', 'DateSeries', 'RunSeries', 'Distribution', 'PartsOfOne', 'TileStrip', 'Flow', 'PairedScatter']) {
 			const module =
 				name === 'EmptyState'
 					? path.join(built, 'EmptyState.server.mjs')
@@ -722,9 +805,39 @@ test.describe('drawn by Svelte, rendered on the server', () => {
 			const loaded = await import(pathToFileURL(module).href);
 			draw[name] = (props) => render(loaded.default, { props }).body;
 		}
+		const panel = await compiled('src/lib/console/machine/ReadWritePanel.svelte', 'ReadWritePanel', [
+			['$lib/components/Panel.svelte', './Panel.server.mjs'],
+			['$lib/components/ChoiceTiles.svelte', './ChoiceTiles.server.mjs'],
+			['$lib/charts/d3/RunSeries.svelte', './RunSeries.server.mjs']
+		]);
+		const loaded = await import(pathToFileURL(panel).href);
+		draw.ReadWritePanel = (props) => render(loaded.default, { props }).body;
 	});
 
 	const sized = { name: 'test-chart', label: 'A chart under test', width: 400, height: 220 };
+
+	test('a substituted route knob changes the token panel initial mode without changing its cohort', () => {
+		const configured = routeConsoles();
+		for (const [knob, metric, read, written] of [
+			[0, 'total', 103, 204], [1, 'median', 2, 3]
+		] as const) {
+			const routes = routeConsolesFrom({ ...configured, machine: {
+				...configured.machine, knobs: { ...configured.machine.knobs, read_write_default_metric: knob }
+			} });
+			const body = draw.ReadWritePanel({
+				rows: [[1, 1], [2, 3], [100, 200]].map(([input_tokens, output_tokens], index) => ({
+					date: '2026-09-01', run_id: '2026-09-01-1', item_id: `article-${index}`, input_tokens, output_tokens
+				})),
+				chart: chartConfig(), shell: BAND_UNREAD, start: '2026-09-01', end: '2026-09-01',
+				windowDays: 1, initialMetric: readWriteMetricDefault(routes.machine.knobs.read_write_default_metric)
+			});
+			expect(body).toContain(`data-token-metric="${metric}"`);
+			expect(body).toContain(`data-token-measure="${metric}" data-selected="true"`);
+			expect(body).toMatch(new RegExp(`data-run-marker="Read"[^>]*data-run-value="${read}"`));
+			expect(body).toMatch(new RegExp(`data-run-marker="Written"[^>]*data-run-value="${written}"`));
+			expect(body).toContain('3 of 3 recorded');
+		}
+	});
 
 	test('the empty state keeps the chart height, and a wait is the only one with no words', () => {
 		const waiting = draw.EmptyState({ ...sized, drawing: emptyState('loading') });
@@ -741,11 +854,33 @@ test.describe('drawn by Svelte, rendered on the server', () => {
 
 	test('every type with no geometry draws the empty state it was handed', () => {
 		const empty = emptyState('quiet', 'Nothing was recorded in these 30 days.');
-		for (const name of ['DateSeries', 'Distribution', 'PartsOfOne', 'TileStrip', 'Flow', 'PairedScatter']) {
+		for (const name of ['DateSeries', 'RunSeries', 'Distribution', 'PartsOfOne', 'TileStrip', 'Flow', 'PairedScatter']) {
 			const body = draw[name]({ ...sized, geometry: null, empty });
 			expect(body, name).toContain('data-empty-state="quiet"');
 			expect(body, name).toContain('Nothing was recorded in these 30 days.');
 		}
+	});
+
+	test('a run plot draws two traces, only isolated or selected markers, and the actual newest run readout', () => {
+		const geometry = runSeries(
+			[1, 2, 10].map((run) => ({ date: '2026-09-01', runId: `2026-09-01-${run}` })),
+			[
+				{ label: 'Read', token: '--chart-1', dashed: false, values: [5, 7, 9], format: (value) => `${value} tokens` },
+				{ label: 'Written', token: '--chart-2', dashed: true, values: [1, 2, 3], format: (value) => `${value} tokens` }
+			],
+			{ frame: box, density: 6, valueTicks: 4, number_format: numberFormat,
+				rule: { declined: 'This reading compares recorded runs, not a settings change.' }, notMeasured: 'No paired reading.' }
+		);
+		const body = draw.RunSeries({ ...sized, geometry, empty: emptyState('quiet', 'Nothing.'), readoutMaxShare: 1 });
+		expect(body).toContain('data-chart-type="runSeries"');
+		expect(body).toContain('data-readout-columns="3"');
+		expect(body.match(/data-run-trace=/g)).toHaveLength(2);
+		expect(body.match(/<circle/g)).toHaveLength(2);
+		expect(body).toContain('2026-09-01-10 | 2026-09-01 UTC');
+		expect(body).toContain('9 tokens');
+		expect(body).toContain('3 tokens');
+		expect(body).toContain('dashed');
+		expect(body).not.toContain('<title');
 	});
 
 	test('the drawn marks are the geometry, one for one', () => {

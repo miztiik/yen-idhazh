@@ -42,7 +42,8 @@ def read_classification_tasks(value: object) -> dict[str, dict[str, object]]:
 
 
 def read_classification_selections(
-    result: dict[str, object], tasks: dict[str, dict[str, object]]
+    result: dict[str, object], tasks: dict[str, dict[str, object]], *,
+    optional_scores: bool = False,
 ) -> dict[str, list[dict[str, object]]]:
     """Validate request membership and cardinality as well as native score shape."""
     native = read_object(read_object(result, {"classifications"})["classifications"])
@@ -51,14 +52,19 @@ def read_classification_selections(
     selections = {}
     for name, task in tasks.items():
         labels = read_object(task["labels"])
-        selected = [read_object(value, {"id", "score"}) for value in read_list(native[name])]
+        selected = []
+        for value in read_list(native[name]):
+            item = read_object(value)
+            keys = {"id"} if optional_scores and "score" not in item else {"id", "score"}
+            selected.append(read_object(item, keys))
         if not task["multi_label"] and len(selected) > 1:
             raise ValueError("A single-label task returned multiple selections.")
         ids = [read_text(value["id"], nonblank=True) for value in selected]
         if len(set(ids)) != len(ids) or any(label not in labels for label in ids):
             raise ValueError("Classification selections must be unique requested IDs.")
         for value in selected:
-            read_score(value["score"], confidence=True)
+            if "score" in value:
+                read_score(value["score"], confidence=True)
         selections[name] = selected
     return selections
 
@@ -91,10 +97,12 @@ def render_classifications(
         if not tasks or request is None:
             raise ValueError("Classification results require their saved request.")
         selections = read_classification_selections(
-            project_classification_result(response, request), tasks
+            project_classification_result(response, request), tasks,
+            optional_scores="schema" in request,
         )
         result = response
         outcome = "Classification status: complete."
+    scores = any("score" in selection for selected in selections.values() for selection in selected)
     rows = []
     for name in tasks:
         for selection in selections.get(name, []):
@@ -104,7 +112,7 @@ def render_classifications(
                     render_cell(name),
                     render_cell(label),
                     render_cell(read_object(tasks[name]["labels"])[label]),
-                    render_cell(selection["score"]),
+                    *([render_cell(selection["score"])] if scores else []),
                 ]
             )
         if not selections.get(name):
@@ -112,17 +120,18 @@ def render_classifications(
                 [
                     render_cell(name),
                     "No label selected" if result is not None else "Unavailable",
-                    "-",
+                    *(["-"] if scores else []),
                     "-",
                 ]
             )
     content = render_table(
         "L",
         "Article classification",
-        ["Task", "Selected label ID", "Label text", "Native score"],
+        ["Task", "Selected label ID", "Label text"] + (["Native score"] if scores else []),
         rows,
         outcome + "\n\nGLiNER native scores range from zero to one; higher means stronger model "
-        "confidence, not calibrated correctness percentages. Long-text classifier scores "
+        "confidence, not calibrated correctness percentages. Scores appear only when returned. "
+        "Long-text classifier scores "
         "can aggregate chunks. Task order follows classification/request.json; each task "
         "keeps returned selection order. Empty native selections remain empty, not errors "
         "or invented labels. The native multi-label policy can retain its strongest label "

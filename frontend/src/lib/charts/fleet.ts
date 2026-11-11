@@ -625,7 +625,7 @@ export function fleetDots(
 		frame: box,
 		columns,
 		bandwidth: width,
-		ticks: dayTicks(view.days, { density: opts.density, columns, bounds: [box.left, box.right] }),
+		ticks: dayTicks(view.days, { density: opts.density, columns, bounds: [box.left, box.right], labels: box.labels }),
 		size,
 		squares,
 		blocks

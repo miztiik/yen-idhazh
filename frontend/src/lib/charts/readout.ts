@@ -58,7 +58,7 @@ export type ReadoutResting = 'newest' | 'first' | 'last' | number;
 /** What a column chart hands the builder. Only the column types call this;
  * a chart whose hover is one record at a time calls `factsOf`. */
 export interface ReadoutInput {
-	type: 'dateSeries' | 'distribution' | 'tileStrip';
+	type: 'dateSeries' | 'runSeries' | 'distribution' | 'tileStrip';
 	/** The label of each hoverable column, in draw order and reader spelling. */
 	columns: readonly string[];
 	series: readonly ReadoutInputSeries[];
@@ -497,7 +497,7 @@ export function pointerReadout(
 	};
 
 	const enter = () => {
-		if (at === null && current.marks.length > 0) select(0);
+		if (at === null && current.marks.length > 0) select(current.selected ?? 0);
 	};
 
 	const away = () => select(null);
@@ -515,7 +515,7 @@ export function pointerReadout(
 	const step = (event: KeyboardEvent) => {
 		const last = current.marks.length - 1;
 		if (last < 0) return;
-		const from = at ?? 0;
+		const from = at ?? current.selected ?? 0;
 		if (event.key === 'ArrowLeft') select(Math.max(0, from - 1));
 		else if (event.key === 'ArrowRight') select(Math.min(last, from + 1));
 		else if (event.key === 'Home') select(0);

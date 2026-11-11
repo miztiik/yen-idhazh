@@ -1,15 +1,5 @@
 <script lang="ts">
-	/** A section of the console, in the one shape they all take.
-	 *
-	 * The console used to be headings and tables on bare background, which meant
-	 * an operator's eye had nothing to group by and every section had the same
-	 * weight as every other. A panel gives a section an edge, so "this belongs
-	 * together" is drawn rather than inferred from proximity.
-	 *
-	 * Tint and elevation only. No display face, no gradient, no illustration -
-	 * the operator surface is instrumentation, and a chart that looks like a
-	 * poster is harder to read, not easier.
-	 */
+	/** Group one console question and its evidence on a neutral surface. */
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -76,47 +66,38 @@
 
 <style>
 	.panel-block {
-		margin-top: var(--space-6);
-		padding: var(--space-5);
+		min-inline-size: 0;
+		margin-top: var(--console-panel-gap);
+		padding: var(--console-panel-padding);
 		border: 1px solid var(--color-rule);
-		border-radius: var(--radius-lg);
+		border-radius: var(--console-panel-radius);
 		background: var(--color-surface);
 		box-shadow: var(--shadow-sm);
-	}
-
-	.panel-block[data-tone='info'] {
-		background: var(--tint-info);
-	}
-	.panel-block[data-tone='good'] {
-		background: var(--tint-good);
-	}
-	.panel-block[data-tone='warn'] {
-		background: var(--tint-warn);
-	}
-	.panel-block[data-tone='bad'] {
-		background: var(--tint-bad);
 	}
 
 	.panel-head {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: start;
-		gap: var(--space-2) var(--space-3);
-		margin-bottom: var(--space-3);
+		gap: var(--console-control-gap) var(--console-panel-gap);
+		margin-bottom: var(--console-panel-gap);
 	}
 
 	.panel-title {
 		margin: 0;
-		font-size: var(--text-lg);
-		font-weight: 600;
+		font-family: var(--font-display);
+		font-size: var(--console-panel-title-size);
+		line-height: var(--console-panel-title-leading);
+		font-weight: var(--console-panel-title-weight);
+		letter-spacing: var(--console-panel-title-tracking);
 		color: var(--color-text);
 	}
 
 	.panel-note {
-		margin: var(--space-1) 0 0;
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-		color: var(--color-text-tertiary);
+		margin: 0;
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
+		color: var(--color-text-secondary);
 		grid-column: 1 / -1;
 	}
 
@@ -137,15 +118,7 @@
 		}
 	}
 
-	/* A wide panel still has an edge; it just does not pad its content away from
-	   it, so a table can use the frame the row-4 work gave the page. */
-	.panel-block.wide .panel-body {
-		margin-inline: calc(var(--space-5) * -1);
-	}
-
-	.panel-block.wide .panel-body > :global(*) {
-		padding-inline: var(--space-5);
-	}
+	.panel-block.wide, .panel-block[data-panel-verdict='route'] { grid-column: 1 / -1; }
 
 	/* Under workbench chrome a panel is a region of one tool: no card of its
 	   own, and its body fills whatever share of the window the page gives it. */

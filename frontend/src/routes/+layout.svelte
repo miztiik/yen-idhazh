@@ -2,9 +2,11 @@
 	import '../styles/app.css';
 	import { afterNavigate } from '$app/navigation';
 	import { base } from '$app/paths';
+	import { page } from '$app/state';
 	import { restoreAnchor } from '$lib/assist/day';
 	import { startOfflineReader } from '$lib/offline';
 	import { OFFLINE_VERSION } from '$lib/offline.generated';
+	import { syncBrowserChrome } from '$lib/theme';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import SiteHeader from '$lib/components/SiteHeader.svelte';
 	import { onMount } from 'svelte';
@@ -36,6 +38,7 @@
 	// rendered, because the element does not exist yet when this runs.
 	afterNavigate(() => {
 		restoreAnchor();
+		syncBrowserChrome();
 	});
 </script>
 
@@ -50,12 +53,12 @@
 	     three of them). The guard is on `data.ui` rather than on `data`, because
 	     the object arrives and only its contents are missing. -->
 	{#if data?.ui}
-		<SiteHeader title={data.ui.site_title} tagline={data.ui.tagline} />
+		<SiteHeader title={data.ui.site_title} />
 	{/if}
 	<main>
 		{@render children()}
 	</main>
-	{#if data?.ui}
+	{#if data?.ui && page.route.id !== '/archive'}
 		<SiteFooter repoUrl={data.ui.repo_url} />
 	{/if}
 </div>

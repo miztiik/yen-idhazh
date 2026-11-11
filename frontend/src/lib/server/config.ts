@@ -25,6 +25,8 @@ import { join } from 'node:path';
 import { routeConsolesFrom, type RouteConsoles } from '../console/route-console';
 import { REPO_ROOT } from './payload';
 import type { NumberFormatConfig } from '../number-format';
+import { resolveConsoleStyle, type ConsoleStyleInput } from '../console/console-style';
+export type { ConsoleStyleConfig, ConsoleType } from '../console/console-style';
 
 export { routeConsolesFrom } from '../console/route-console';
 export type { ConsoleDefine } from '../console/route-console';
@@ -416,6 +418,7 @@ export interface ExplorerConfig {
  * anybody having to remember to drop them.
  */
 export interface AssistConfig {
+	archive_search_months: number;
 	similarity_floor: number;
 	result_limit: number;
 	search_months: number;
@@ -473,6 +476,8 @@ export interface ChartConfig {
 	tick_density: number;
 	sparkline_height_px: number;
 	number_format: NumberFormatConfig;
+	/** Console-only fallback; mounted charts use computed CSS-pixel metrics. */
+	label_style?: import('../console/console-style').ConsoleType;
 }
 
 /** Bounded geometry for browser-drawn story charts, separate from console sizing. */
@@ -536,7 +541,7 @@ const DEFAULTS: UiConfig = {
 	payload_slow_ms: 1200,
 	repo_url: 'https://github.com/miztiik/yen-idhazh',
 	site_title: 'yen-idhazh',
-	tagline: 'A daily digest that checks its own work.',
+	tagline: 'Daily news summaries, with links to their sources.',
 	read_mark_days: 14,
 	archive_page_size: 25,
 	number_format: NUMBER_FORMAT_DEFAULTS,
@@ -748,6 +753,7 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 };
 
 const ASSIST_DEFAULTS: AssistConfig = {
+	archive_search_months: -1,
 	similarity_floor: 0.35,
 	result_limit: 10,
 	search_months: 1,
@@ -858,6 +864,7 @@ const BUILD_ONLY_KEYS = [
 	'shell_seed_items',
 	'archive_recent_days',
 	'archive_window_days',
+	'archive_top_viewports',
 	'items_per_topic',
 	'leading_stories',
 	'leading_per_desk',
@@ -886,6 +893,7 @@ type LedgerBlock = {
 interface RawAppearance {
 	digest?: DigestBlock;
 	console?: ConsoleBlock;
+	console_style?: ConsoleStyleInput;
 	assist?: Partial<AssistConfig>;
 	frame?: Partial<FrameConfig>;
 	theme?: Partial<ThemeConfig>;
@@ -1047,31 +1055,10 @@ export function leadingStories(): number {
 	return appearance().digest?.leading_stories ?? raw().ui?.leading_stories ?? LEADING_STORIES;
 }
 
-/** How many of the newest published days the archive lists as rows of their own.
- *
- * Read on its own for the same reason `shell_seed_items` is: the archive's
- * `load` decides the day list at build time and hands the page the answer, so
- * a browser is never told the number. Every other day is inside its month.
- *
- * The fallback is the same number `UiConfig.archive_recent_days` defaults to,
- * and `backend/tests/contracts/` fails if the two copies drift.
- */
-const ARCHIVE_RECENT_DAYS = 14;
-
-export function archiveRecentDays(): number {
-	return (
-		appearance().digest?.archive_recent_days ??
-		raw().ui?.archive_recent_days ??
-		ARCHIVE_RECENT_DAYS
-	);
-}
-
 /** How many days back the archive's browse list opens on.
  *
- * The window the reader can widen or narrow over `console.window_presets`.
- * Read on its own like `archive_recent_days`, so a browser is never told the
- * number on a page that has no window control - only the archive's `load`
- * reads it, and only the archive draws the control.
+ * The initial story list, not the submitted semantic search scope. Only the
+ * archive's load reads it; other routes do not carry the value.
  *
  * The fallback is the same number `UiConfig.archive_window_days` defaults to,
  * and the contract refuses a value that is not one of `console.window_presets`.
@@ -1083,6 +1070,17 @@ export function archiveWindowDays(): number {
 		appearance().digest?.archive_window_days ??
 		raw().ui?.archive_window_days ??
 		ARCHIVE_WINDOW_DAYS
+	);
+}
+
+/** Viewport heights scrolled before the archive offers its Top control. */
+const ARCHIVE_TOP_VIEWPORTS = 1;
+
+export function archiveTopViewports(): number {
+	return (
+		appearance().digest?.archive_top_viewports ??
+		raw().ui?.archive_top_viewports ??
+		ARCHIVE_TOP_VIEWPORTS
 	);
 }
 
@@ -1281,10 +1279,17 @@ export function themeConfig(): ThemeConfig {
 	return { ...THEME_DEFAULTS, ...(appearance().theme ?? {}) };
 }
 
+export function consoleStyleConfig() {
+	return resolveConsoleStyle(appearance().console_style);
+}
+
 export function chartConfig(): ChartConfig {
 	const chart = { ...(appearance().chart ?? {}) };
 	delete chart.story_geometry;
-	return { ...CHART_DEFAULTS, ...chart, number_format: numberFormatConfig() };
+	return {
+		...CHART_DEFAULTS, ...chart, number_format: numberFormatConfig(),
+		label_style: consoleStyleConfig().typography.small
+	};
 }
 
 export function iconsConfig(): IconsConfig {

@@ -50,8 +50,6 @@ first part of a page was available, or when the source was a paper's abstract
 rather than the full paper. A summary without a warning is not a guarantee that
 every important detail is included.
 
-If some articles did not finish, the day says so rather than appearing complete.
-
 ## Read on your terms
 
 - **Keep your place.** Read marks help you avoid going through the same stories
@@ -79,8 +77,8 @@ to read.
 
 ## Follow a day as it develops
 
-New stories are added through the day. The header shows the latest update and
-how much was added; the stream puts newer stories first. Dates and times use
+New stories are added through the day. The compact header combines the edition
+date, published story count and latest update time; the stream puts newer stories first. Dates and times use
 **UTC**, so a day's address means the same day wherever you read it.
 
 Open the archive to revisit an earlier day or follow a subject across several

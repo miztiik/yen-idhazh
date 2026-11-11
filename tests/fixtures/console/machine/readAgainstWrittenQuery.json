@@ -4,6 +4,7 @@
     {
       "date": "2026-08-10",
       "run_id": "2026-08-10-1",
+      "item_id": "old-cut-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -12,6 +13,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-a-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -20,6 +22,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-a-01",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -28,6 +31,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-a-02",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -36,6 +40,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-a-03",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -44,6 +49,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-a-04",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -52,6 +58,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-a-05",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -60,6 +67,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-a-06",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -68,6 +76,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-b-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -76,6 +85,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-b-01",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -84,6 +94,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-b-02",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -92,6 +103,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-b-03",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -100,6 +112,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-b-04",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -108,6 +121,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-b-05",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -116,6 +130,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-c-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -124,6 +139,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-c-01",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -132,6 +148,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-c-02",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -140,6 +157,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-c-03",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -148,6 +166,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-d-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -156,6 +175,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-d-01",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -164,6 +184,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-d-02",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -172,6 +193,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-d-03",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -180,6 +202,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-d-04",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -188,6 +211,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-e-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -196,6 +220,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-e-01",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -204,6 +229,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-e-02",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -212,6 +238,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-e-03",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -220,6 +247,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-e-04",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -228,6 +256,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-f-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -236,6 +265,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-f-01",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -244,6 +274,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-f-02",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -252,6 +283,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-f-03",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -260,6 +292,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-f-04",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -268,6 +301,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-g-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -276,6 +310,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-g-01",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -284,6 +319,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-g-02",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -292,6 +328,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-g-03",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -300,6 +337,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-g-04",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -308,6 +346,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-h-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -316,6 +355,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-h-01",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -324,6 +364,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-h-02",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -332,6 +373,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-h-03",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -340,6 +382,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-h-04",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -348,6 +391,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-i-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -356,6 +400,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-i-01",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -364,6 +409,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-i-02",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -372,6 +418,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-i-03",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -380,6 +427,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-i-04",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -388,6 +436,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-j-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -396,6 +445,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-j-01",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -404,6 +454,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-j-02",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -412,6 +463,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-j-03",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -420,6 +472,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-j-04",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -428,6 +481,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-k-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -436,6 +490,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-k-01",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -444,6 +499,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-k-02",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -452,6 +508,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-k-03",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -460,6 +517,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "cut-k-04",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -468,6 +526,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "no-length-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -476,6 +535,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "no-length-01",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -484,6 +544,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "no-length-02",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -492,6 +553,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "no-length-03",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -500,6 +562,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "item_id": "no-length-04",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -508,6 +571,7 @@
     {
       "date": "2026-08-17",
       "run_id": "2026-08-17-2",
+      "item_id": "cut-a-00",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -516,6 +580,7 @@
     {
       "date": "2026-08-18",
       "run_id": "2026-08-18-1",
+      "item_id": "ai-06",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -524,6 +589,7 @@
     {
       "date": "2026-08-18",
       "run_id": "2026-08-18-1",
+      "item_id": "ai-07",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -532,6 +598,7 @@
     {
       "date": "2026-08-18",
       "run_id": "2026-08-18-1",
+      "item_id": "ai-08",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
@@ -540,6 +607,7 @@
     {
       "date": "2026-08-19",
       "run_id": "2026-08-19-1",
+      "item_id": "ai-01",
       "input_tokens": 1497,
       "output_tokens": 215,
       "prefill_ms": 53309,
@@ -548,22 +616,25 @@
     {
       "date": "2026-08-19",
       "run_id": "2026-08-19-1",
-      "input_tokens": 1608,
-      "output_tokens": 270,
-      "prefill_ms": 63586,
-      "decode_ms": 50753
-    },
-    {
-      "date": "2026-08-19",
-      "run_id": "2026-08-19-1",
+      "item_id": "ai-02",
       "input_tokens": 1765,
       "output_tokens": 230,
       "prefill_ms": 77778,
       "decode_ms": 43436
     },
     {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "item_id": "ai-03",
+      "input_tokens": 1608,
+      "output_tokens": 270,
+      "prefill_ms": 63586,
+      "decode_ms": 50753
+    },
+    {
       "date": "2026-08-20",
       "run_id": "2026-08-20-1",
+      "item_id": "ai-01",
       "input_tokens": 942,
       "output_tokens": 170,
       "prefill_ms": 79100,
@@ -572,6 +643,7 @@
     {
       "date": "2026-08-20",
       "run_id": "2026-08-20-1",
+      "item_id": "ai-02",
       "input_tokens": 975,
       "output_tokens": 167,
       "prefill_ms": 7120,
@@ -580,22 +652,7 @@
     {
       "date": "2026-08-20",
       "run_id": "2026-08-20-2",
-      "input_tokens": 1337,
-      "output_tokens": 189,
-      "prefill_ms": 82146,
-      "decode_ms": 33203
-    },
-    {
-      "date": "2026-08-20",
-      "run_id": "2026-08-20-2",
-      "input_tokens": 1700,
-      "output_tokens": 60,
-      "prefill_ms": 64000,
-      "decode_ms": 10300
-    },
-    {
-      "date": "2026-08-20",
-      "run_id": "2026-08-20-2",
+      "item_id": "ai-03",
       "input_tokens": 999,
       "output_tokens": 129,
       "prefill_ms": 8883,
@@ -604,10 +661,29 @@
     {
       "date": "2026-08-20",
       "run_id": "2026-08-20-2",
+      "item_id": "ai-04",
+      "input_tokens": 1337,
+      "output_tokens": 189,
+      "prefill_ms": 82146,
+      "decode_ms": 33203
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "item_id": "ai-05",
       "input_tokens": null,
       "output_tokens": null,
       "prefill_ms": null,
       "decode_ms": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "item_id": "ai-09",
+      "input_tokens": 1700,
+      "output_tokens": 60,
+      "prefill_ms": 64000,
+      "decode_ms": 10300
     }
   ],
   "first": "2026-08-07",

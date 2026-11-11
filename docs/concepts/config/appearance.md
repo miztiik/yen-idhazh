@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-11-10
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -18,6 +18,7 @@ Its blocks:
 | --- | --- |
 | `digest` | The day page. Formerly `idhazh.json`'s `ui` block, unchanged in shape. |
 | `console` | The operator viewport. Formerly `idhazh.json`'s `console` block. |
+| `console_style` | Console-only colors, type, rail, controls, panel spacing, elevation and chart strokes. |
 | `assist` | On-device archive search. Formerly `idhazh.json`'s `assist` block. |
 | `frame` | The frame maximums, the reading measure, the gutter range, and the three breakpoints. |
 | `theme` | Whether gradients, elevation and the display face are drawn, and how strongly a panel takes a tint. |
@@ -45,7 +46,12 @@ Six keys were settled that way, and the rule is the same each time: **the file t
 
 Two contract defaults moved with them: `console.chart_height` 180 -> 220 and `console.chart_width` 600 -> 760. Those are the numbers `chart.height_px` and `chart.width_px` already carried - the pair was raised when the frame widened - so a fresh clone with no `config/` had been drawing a console chart at a size no console page uses. Every value legal before is legal now, so no read-side migration is owed, and a `config/idhazh.json` written before today still declares the two sizes and still wins over the new defaults through the middle merge layer.
 
-`assist` went the other way because the block holds two kinds of knob. Four of them - `similarity_floor`, `result_limit`, `search_months`, `search_min_days` - are read in the browser, and the appearance file declares those. Two - `recall_min` and `eval_corpus_through` - were the retrieval gate's inputs, drawn by nothing, so the pipeline file declared them and the appearance file declared neither. Both were deleted on 2026-10-03 with the gate itself ([../search-quality.md](../search-quality.md)).
+The appearance file declares the browser's assist controls: `similarity_floor`,
+`result_limit`, `archive_search_months`, `search_months` and `search_min_days`.
+Encoder inputs and asset settings remain in the pipeline configuration.
+`archive_search_months` defaults to `-1`, covering all registered months inside
+the requested UTC dates. A positive value selects that many newest eligible
+months. Day-page coverage remains separate.
 
 **Two more of the block are the pipeline's, and only the pipeline file declares them now.** `max_tokens` and `min_readable_letter_share` are the encoder's, read by `backend/idhazh/embed.py`. They sat in the appearance file as well as the pipeline one, with the same values, which the gate below tolerates - and the tolerance was correct while the page received them, because the appearance file was the last merge layer. It stopped being correct the moment the keep-list landed: from then on the browser was handed neither, so the appearance copies were read by nothing, which is where `assist.recall_min` had been an hour earlier. Both were deleted on 2026-09-05 for that reason. Until that keep-list all four of the pipeline's knobs were merged straight into the prerendered `/archive/` document, because `assistConfig` returned the raw merge. It now keeps exactly what `AssistConfig` declares. A keep-list rather than a strip-list: a strip-list has to be extended every time a knob lands in the block and ships it to readers in silence when somebody forgets, while a keep-list's own failure - a browser knob added to the file and not to the interface - is refused by the compiler at the component that reads it. Measured on a real build, 2026-09-05: `frontend/build/archive/index.html` went from 18,659 to 18,567 bytes, so the four knobs were 92 bytes on every load of that page.
 
@@ -89,6 +95,31 @@ relying on colour alone. The native contract bounds each setting, and the typed
 build-time UI projection passes only these values to the reader.
 
 ## Console surface
+
+`console_style` is owned only by `AppearanceConfig`, not by `AppConfig` or
+`ConsoleConfig`. Its native model is
+`backend/idhazh/contracts/knobs/console_style.py`; the small frontend copy is
+`frontend/src/lib/console/console-style.ts`. Binding tests hold fields, defaults
+and font/line-cap vocabularies together.
+
+Missing blocks and leaves use their role's native defaults, including old
+appearance documents with no style block. Arrays replace whole. Explicit null
+is valid only for `chart.grid_dash_px`. Unknown keys, non-finite numbers,
+numeric strings and booleans in numeric fields are refused.
+
+Colors are lowercase six-digit hex. Each theme has eight distinct categorical
+entries, separate from confidence and movement colors. Font choices use the
+existing `inter`, `system-sans` and `system-mono` stacks; no new font is fetched.
+Type size, leading, weight and tracking are validated together. Layout, radii,
+shadow and stroke bounds are declared by the native fields. Primary controls
+retain their touch-target floor.
+
+`frontend/scripts/build-frame-css.mjs` validates the appearance document through
+the existing Python environment, then emits `frame.generated.css`. Its callable
+renderer also accepts validated in-memory inputs. The operator selector covers
+the root canvas and shared header before paint, and rebinds dependent series
+aliases inside that scope. Reader/base token values are unchanged. Display-face,
+elevation and motion switches retain their existing fallbacks.
 
 Shared console knobs stay in `config/appearance.json`. Each route owns its panel
 order, judged ids and route-only numeric knobs in `config/console/<route>.json`.
@@ -221,7 +252,7 @@ is what a morning before the first run looks like, and one from the day before
 that means a whole day passed with nothing recorded. It decides only when the
 count is said, never what it counts - the count is the whole days between the
 record's day and today, so zero is refused
-([../../architecture/publishing/what-sits-above-every-console-route.md](../../architecture/publishing/what-sits-above-every-console-route.md#the-sentence-under-the-strip-dates-the-record)).
+([../../architecture/publishing/what-sits-above-every-console-route.md](../../architecture/publishing/what-sits-above-every-console-route.md#run-completion-and-record-reach-are-different-dates)).
 
 Keep a shared knob when a real reader computes with it, not because a deleted
 engine or a test object declares it. `min_window_days` still bounds the backend
@@ -274,35 +305,14 @@ to find one, so it opens on the same twenty-five the console's failure list
 does. It hides nothing - every story is one more click away, and the order is
 the published one.
 
-`ui.archive_recent_days` (14) is how many of the newest published days the
-archive lists as rows of their own, each carrying the long date, the story count
-and whether every story finished. Every other day sits inside a disclosure for
-its month, and every month older than the newest published year sits inside a
-disclosure for that year - so the list a reader meets grows by twelve rows a
-year rather than by 365. Fourteen because a row here invites a reader back to a
-day, so it has to be a day whose read marks are still there: `ui.read_mark_days`
-keeps a mark for the same fourteen days, and the two move together or the block
-starts offering days that come back looking unread. It was seven on both counts
-until 2026-09-06. The ceiling is 31, and the bound is the point:
-above a month the block is the wall of dates it replaced, and a month row
-already reaches any date in two clicks. It is one of three knobs in this block a
-browser is never told - the archive's `load` decides the list at build time and
-the page draws what it is handed.
+`ui.archive_recent_days` is retained for configuration compatibility; the archive
+no longer renders date rows or a calendar.
 
-`ui.archive_window_days` (30) is the span the archive's window control opens on,
-and it is the third. **It names one of `console.window_presets` rather than
-declaring a second list of day counts**, and both config documents refuse a file
-where it does not - the same rule `console.default_window_days` has had since
-2026-08-29. So the contract holds exactly one list of spans, and the archive and
-the console cannot end up offering different day counts for the same idea. The
-cost of that is real and is the price of one list: a config that narrows the
-presets has to name the archive's span inside the narrowed list. Thirty is about
-the reach `assist.search_months` already gives a search, so the control ships
-opening on what the archive costs today; it was also what the console opened on
-until the console moved to fourteen on 2026-10-02. The archive server supplies
-this default to its browse control. The browser fetches only months inside the
-selected window, measured from the newest published UTC day. A sparse topic
-does not make it read older months to fill a page. Search has its own window;
+`ui.archive_window_days` bounds the initial recent-story list, measured from the
+newest published UTC day. Existing validation against `console.window_presets`
+remains compatible. Dates are now selected with native From and To inputs,
+not a second window strip. `ui.archive_top_viewports` controls when the Top
+button appears, defaulting to one viewport of scrolling. Search has its own scope;
 [the archive behaviour](../../architecture/publishing/how-a-reader-finds-a-story.md#the-archive-lists-stories-and-fetches-them-a-month-at-a-time)
 defines both scopes.
 
@@ -474,6 +484,15 @@ disagree. None of them reaches the prerendered `/archive/` document.
  where our origin gzips them to 16.22 MB (measured 2026-09-08 on a laptop
  against CloudFront AMS58-P3, n=3, spread 0), about 18 seconds on a 10 Mbit line
  and about 100 on a 2 Mbit one.
+
+## Design rationale
+
+Console styling is a separate defaulted appearance family because the operator
+needs a complete visual system without changing reader themes or the shared
+viewport contract. Native validation precedes CSS production; a configuration
+edit cannot become unbounded CSS. Mounted charts measure the generated type in
+CSS pixels and use it for margins, gutters and tick clearance, rather than
+enlarging labels over fixed geometry.
 
 ## See also
 

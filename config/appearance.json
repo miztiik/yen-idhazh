@@ -1,5 +1,6 @@
 {
   "assist": {
+    "archive_search_months": -1,
     "result_limit": 10,
     "search_min_days": 7,
     "search_months": 1,
@@ -167,7 +168,7 @@
           "summary-quality-evals"
         ],
         "days": 14,
-        "sql": "SELECT date, count(*) AS scored FROM \"summary-quality-evals\" GROUP BY date ORDER BY date"
+        "sql": "SELECT CAST(date AS DATE) AS date, count(*) AS scored FROM \"summary-quality-evals\" GROUP BY date ORDER BY date"
       }
     ],
     "explorer_max_files": 128,
@@ -188,8 +189,51 @@
     "explorer_save_name_max_chars": 40,
     "explorer_series_floor_share": 0.05
   },
+  "console_style": {
+    "colors": {
+      "light": {
+        "canvas": "#f2f1ed", "inset": "#e9e7e1", "surface": "#fffefa", "raised": "#ffffff",
+        "text": "#25251f", "text_secondary": "#625e55", "text_tertiary": "#746f64",
+        "rule": "#dad6cb", "rule_strong": "#b6afa0", "accent": "#0b746e",
+        "accent_hover": "#085d58", "on_accent": "#ffffff", "focus": "#0b746e",
+        "selected": "#dcedea", "chart_axis": "#b6afa0", "chart_grid": "#dad6cb",
+        "categorical": ["#356a9a", "#7d53a0", "#167f99", "#a3427c", "#5968af", "#29739e", "#995aab", "#777268"]
+      },
+      "dark": {
+        "canvas": "#191917", "inset": "#151513", "surface": "#22221f", "raised": "#2b2b27",
+        "text": "#f0ede5", "text_secondary": "#c1bcb1", "text_tertiary": "#a39c8f",
+        "rule": "#393932", "rule_strong": "#565348", "accent": "#6bc7be",
+        "accent_hover": "#94d9d0", "on_accent": "#122722", "focus": "#6bc7be",
+        "selected": "#263d38", "chart_axis": "#565348", "chart_grid": "#393932",
+        "categorical": ["#8bbce5", "#bea2df", "#72c6d9", "#e6a1c9", "#a4b1e8", "#83bfdc", "#cea4e0", "#b0aa9e"]
+      }
+    },
+    "typography": {
+      "ui_face": "inter", "heading_face": "inter", "data_face": "inter",
+      "small": {"size_rem": 0.75, "leading_rem": 1, "weight": 400, "tracking_em": 0},
+      "body": {"size_rem": 0.875, "leading_rem": 1.25, "weight": 400, "tracking_em": 0},
+      "control": {"size_rem": 0.875, "leading_rem": 1.25, "weight": 500, "tracking_em": 0},
+      "panel_title": {"size_rem": 1, "leading_rem": 1.5, "weight": 600, "tracking_em": -0.01},
+      "page_title": {"size_rem": 1.5, "leading_rem": 2, "weight": 600, "tracking_em": -0.02},
+      "value": {"size_rem": 1.75, "leading_rem": 2, "weight": 600, "tracking_em": -0.02}
+    },
+    "layout": {
+      "rail_width_rem": 12, "header_min_height_rem": 3.5,
+      "rail_padding_rem": 1, "rail_gap_rem": 0.5, "content_gap_rem": 1.5,
+      "control_min_height_rem": 2.75, "control_padding_inline_rem": 0.75,
+      "control_padding_block_rem": 0.25, "control_gap_rem": 0.5,
+      "panel_padding_rem": 1, "panel_gap_rem": 1, "group_gap_rem": 1.5, "columns_wide": 2
+    },
+    "radii": {"control_rem": 0.25, "panel_rem": 0.5},
+    "elevation": {
+      "light": {"panel": {"y_px": 1, "blur_px": 2, "alpha": 0.06}, "floating": {"y_px": 6, "blur_px": 16, "alpha": 0.12}},
+      "dark": {"panel": {"y_px": 0, "blur_px": 0, "alpha": 0}, "floating": {"y_px": 0, "blur_px": 0, "alpha": 0}}
+    },
+    "chart": {"axis_width_px": 1, "grid_width_px": 1, "line_width_px": 2, "grid_opacity": 1, "grid_dash_px": null, "linecap": "round"}
+  },
   "digest": {
     "archive_page_size": 25,
+    "archive_top_viewports": 1,
     "archive_recent_days": 14,
     "archive_window_days": 30,
     "desk_thin_max": 12,
@@ -223,7 +267,7 @@
     "show_filter": true,
     "site_title": "Yen Idhazh",
     "source_mark": true,
-    "tagline": "A daily digest that checks its own work.",
+    "tagline": "Daily news summaries, with links to their sources.",
     "theme_default": "dark",
     "topic_pills_max": 5,
     "visual_side": "trailing"
@@ -264,5 +308,5 @@
     "movement_good_light": "#2f6f5e",
     "surface_tint_alpha": 0.07
   },
-  "version": "2026-10-25"
+  "version": "2026-11-10"
 }

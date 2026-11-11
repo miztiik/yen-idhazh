@@ -16,7 +16,7 @@ import pytest
 from pydantic import ValidationError
 from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, label_payload
+from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, a_table, label_payload
 
 from idhazh import config
 from idhazh.classify.calls import (
@@ -308,11 +308,13 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         reply = read_text(FIXTURES_DIR / "completions" / "label" / "labelled.json")
         markers = a_markers()
         whole = build_summarize_and_plan_request(
-            first, reply, markers=markers, source_words=article_ok.band_source_words
+            first, reply, a_table(article_ok),
+            markers=markers, source_words=article_ok.band_source_words
         )
         suppressed = build_summarize_and_plan_request(
             first,
             reply,
+            a_table(article_ok),
             markers=markers,
             source_words=article_ok.band_source_words,
             plan=False,
@@ -487,7 +489,7 @@ class TestTheDowngradeLadder:
     """The four invariance rules, one test each, plus the floor that cannot be read."""
 
     def unruled_comparison(self) -> VisualPlan:
-        """A comparison request the validator refuses until its type has a rule."""
+        """A historical comparison request with no role rule."""
         return wind_plan(type=VisualType.COMPARISON.value)
 
     def test_the_case_this_class_is_built_on_really_is_refused(self) -> None:
@@ -499,7 +501,10 @@ class TestTheDowngradeLadder:
         made = downgrade(
             self.unruled_comparison(),
             wind_table(*WHOLE),
-            visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
+            visuals=committed_visuals(
+                type_selection_enabled=False,
+                downgrade_enabled=True, downgrade_floor_percentiles=[50, 75],
+            ),
             published_marks={VisualType.BAR: [3, 4, 5, 8]},
         )
 
@@ -515,7 +520,10 @@ class TestTheDowngradeLadder:
         made = downgrade(
             plan,
             wind_table(*WHOLE),
-            visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
+            visuals=committed_visuals(
+                type_selection_enabled=False,
+                downgrade_enabled=True, downgrade_floor_percentiles=[50, 75],
+            ),
             published_marks={VisualType.BAR: [3, 4, 5, 8]},
         )
 
@@ -571,6 +579,7 @@ class TestTheDowngradeLadder:
                 self.unruled_comparison(),
                 wind_table(*WHOLE),
                 visuals=committed_visuals(
+                    type_selection_enabled=False,
                     downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]
                 ),
                 published_marks={},
@@ -582,7 +591,10 @@ class TestTheDowngradeLadder:
         made = downgrade(
             self.unruled_comparison(),
             wind_table(*WHOLE),
-            visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
+            visuals=committed_visuals(
+                type_selection_enabled=False,
+                downgrade_enabled=True, downgrade_floor_percentiles=[50, 75],
+            ),
             published_marks={VisualType.BAR: [5, 6, 7, 8]},
         )
 
@@ -592,7 +604,10 @@ class TestTheDowngradeLadder:
         made = downgrade(
             self.unruled_comparison(),
             wind_table(*WHOLE),
-            visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
+            visuals=committed_visuals(
+                type_selection_enabled=False,
+                downgrade_enabled=True, downgrade_floor_percentiles=[50, 75],
+            ),
             published_marks={VisualType.BAR: [3, 4, 5, 8]},
         )
 
@@ -607,6 +622,7 @@ class TestTheDowngradeLadder:
                 wind_plan(type=VisualType.COMPARISON.value, annotations=[]),
                 wind_table(*WHOLE),
                 visuals=committed_visuals(
+                    type_selection_enabled=False,
                     downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]
                 ),
                 published_marks={VisualType.BAR: [3, 4, 5, 8]},
@@ -626,7 +642,9 @@ class TestTheDowngradeLadder:
             downgrade(
                 self.unruled_comparison(),
                 ElementTable.model_validate(table),
-                visuals=committed_visuals(downgrade_enabled=True),
+                visuals=committed_visuals(
+                    type_selection_enabled=False, downgrade_enabled=True
+                ),
                 published_marks={VisualType.BAR: [3, 4, 5, 8]},
             )
             is None
@@ -638,6 +656,7 @@ class TestTheDowngradeLadder:
                 self.unruled_comparison(),
                 wind_table(*WHOLE),
                 visuals=committed_visuals(
+                    type_selection_enabled=False,
                     downgrade_enabled=False, downgrade_floor_percentiles=[50, 75]
                 ),
                 published_marks={VisualType.BAR: [3, 4, 5, 8]},
@@ -650,7 +669,10 @@ class TestTheDowngradeLadder:
         made = downgrade(
             self.unruled_comparison(),
             wind_table(*WHOLE),
-            visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=rungs),
+            visuals=committed_visuals(
+                type_selection_enabled=False,
+                downgrade_enabled=True, downgrade_floor_percentiles=rungs,
+            ),
             published_marks={VisualType.BAR: [3, 4, 5, 8]},
         )
 

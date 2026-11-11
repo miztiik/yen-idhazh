@@ -5,6 +5,7 @@ import { buildFeedLedgers, FEED_LEDGERS } from './support/feed-ledgers';
 import { buildLedger } from './support/ledger-lifecycle';
 import { ledgerArchiveBaseUrl } from '../src/lib/server/config';
 import { parseLedgerCatalog } from '../src/lib/data/ledger-catalog';
+import { explorerAddress } from '../src/lib/console/explorer/address';
 import {
 	chooseExplorerQuestion,
 	expectAnswer,
@@ -14,6 +15,51 @@ import {
 } from './support/explorer-answer';
 
 const PINNED = '2026-10-23';
+
+test('the static fallback opens a bookmarked question and reloads without server layout data', async ({ page, context }) => {
+	const origin = ledgerArchiveBaseUrl();
+	await context.route(`${origin}/**`, (route) => route.fulfill({
+		status: 200, contentType: 'application/json', body: JSON.stringify({ families: [] })
+	}));
+	const serverData: string[] = [];
+	const errors: string[] = [];
+	page.on('pageerror', (error) => errors.push(error.message));
+	await context.route('**/console/data-explorer/**', (route) => {
+		if (route.request().isNavigationRequest()) {
+			return route.fulfill({ status: 200, contentType: 'text/html', path: resolve('build', '404.html') });
+		}
+		if (new URL(route.request().url()).pathname.endsWith('/__data.json')) {
+			serverData.push(route.request().url());
+			return route.fulfill({ status: 404 });
+		}
+		return route.continue();
+	});
+	const statement = "SELECT * FROM (VALUES ('a', 20, 3), ('b', 10, 5)) AS grouped(name, ms, jobs)";
+	const address = await explorerAddress({ basePath: '/console/data-explorer/', ledgers: [], days: 14, statement });
+	await page.clock.setFixedTime(`${PINNED}T12:00:00Z`);
+	await page.goto(address.href);
+	await expect(page.locator('#explorer-sql')).toHaveValue(statement);
+	await expect(page.locator('[data-explorer-answer]')).toHaveCount(0);
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['a', '20', '3'], ['b', '10', '5']]);
+	await page.getByRole('tab', { name: 'Chart', exact: true }).click();
+	await expect(page.locator('[data-shape-choice="rankedList"] input')).toBeChecked();
+	await expect(page.locator('[data-ranked-list="Ranked by ms"]')).toBeVisible();
+	await page.locator('[data-shape-choice="pairedScatter"]').click();
+	await expect(page.locator('[data-state="too-few"]')).toContainText('readings this chart needs');
+	await page.getByRole('tab', { name: 'Table', exact: true }).click();
+	expect(await tableRows(page)).toEqual([['a', '20', '3'], ['b', '10', '5']]);
+	await context.route('**/console/band.json', (route) => route.fulfill({ status: 404 }));
+	await page.reload();
+	await expect(page.locator('#explorer-sql')).toHaveValue(statement);
+	await expect(page.locator('[data-explorer-answer]')).toHaveCount(0);
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['a', '20', '3'], ['b', '10', '5']]);
+	expect(serverData).toEqual([]);
+	expect(errors).toEqual([]);
+});
 
 /** One real query and chart interaction cover the workbench, not every chart transition. */
 test('a reader loads real ledgers, queries them, and draws the answer', async ({ page, context }) => {

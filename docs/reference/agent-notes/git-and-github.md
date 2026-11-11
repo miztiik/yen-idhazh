@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-11
 
 Checks for agents using Git and GitHub. Follow the
 [PR workflow](../../how-to/ship-a-pr.md) and [git rules](../../../CLAUDE.md#7-git-hygiene).
@@ -87,6 +87,10 @@ Confirm the keyring account first; do not change shared global authentication.
 
 - Match checks to the candidate commit and inspect individual jobs. Skipped jobs are not passes, even when the run summary is green.
 - Check job status, log availability and verbosity before treating missing output as proof that something did not run.
+- `gh run view --job <job-id> --log-failed` can refuse a completed job while
+  sibling jobs still run. Confirm completion through the jobs API, then retrieve
+  that job's log through its logs endpoint. Strip terminal-control sequences
+  before displaying the downloaded log.
 - A GitHub Actions re-run keeps the original commit and ref. Start a new run on the target branch to verify a merged fix, then check its `headSha`. Passing PR checks alone do not verify the next production run.
 - **One CI run of the browser step reads as a speed change; it is noise.** On
   2026-10-03, three `ubuntu-latest` runs of nearly the same suite (1,425 to

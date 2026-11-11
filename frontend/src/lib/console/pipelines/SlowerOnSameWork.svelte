@@ -3,7 +3,8 @@
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import { emptyState } from '$lib/charts/d3/empty';
-	import { frame, MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import { shortDate } from '$lib/format';
 	import type { Row } from '$lib/data/ledger';
 	import type { ModelRule } from '$lib/charts/d3/model-rule';
@@ -11,6 +12,7 @@
 	import { formatNumber } from '$lib/number-format';
 	import { useNumberFormat } from '$lib/number-format-context';
 	let { rows, knobs, chart, rule, calendar }: { rows: Row[]; knobs: ConsoleConfig; chart: ChartConfig; rule: ModelRule; calendar?: readonly string[] } = $props();
+	const frame = useChartFrame(() => chart);
 	let measured = $state<number | null>(null);
 	const numberFormat = useNumberFormat();
 	const width = $derived(chartWidth(measured, knobs.chart_width));

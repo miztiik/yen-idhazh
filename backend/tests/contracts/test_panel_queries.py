@@ -106,7 +106,7 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
         *LEGACY_HOST_INPUT_COLUMNS,
     ),
     "promptReuseQuery": ("date", "label_input_tokens", "label_cached_tokens", "label_cache_pct", "label_prefill_tokens_per_s", "summary_input_tokens", "summary_cached_tokens", "summary_cache_pct", "summary_prefill_tokens_per_s"),
-    "readAgainstWrittenQuery": ("date", "run_id", "input_tokens", "output_tokens", "prefill_ms", "decode_ms"),
+    "readAgainstWrittenQuery": ("date", "run_id", "item_id", "input_tokens", "output_tokens", "prefill_ms", "decode_ms"),
     "feedsFailedQuery": ("date", "source_id", "stage", "outcome", "code", "http_status", "source_form", "tier"),
     "fetchTimeQuery": ("source_id", "fetch_ms", "fetch_connect_ms", "fetch_ttfb_ms", "robots_ms", "retry_total_ms", "retry_count"),
     "sourceCutsQuery": ("date", "source_id", "url_key", "source_words_before_cap", "source_words"),
@@ -310,12 +310,11 @@ def test_query_span_and_fetch_predicate_match_the_panel_contracts() -> None:
     assert "where: [{ column: 'stage', op: '=', value: 'fetch' }]" in text
 
 
-def test_failed_rule_has_one_owner_and_both_drawing_routes_reexport_it() -> None:
+def test_failed_rule_is_shared_but_only_pipelines_draws_it() -> None:
     queries = load_queries()
     assert len([query for query in queries if query.name == "failedRuleQuery"]) == 1
-    for module in ("pipelines", "model"):
-        text = read_text(REPO_ROOT / QUERY_ROOT / f"{module}.ts")
-        assert "export { failedRuleQuery } from './shared';" in text
+    assert "export { failedRuleQuery } from './shared';" in read_text(REPO_ROOT / QUERY_ROOT / "pipelines.ts")
+    assert "failedRuleQuery" not in read_text(REPO_ROOT / QUERY_ROOT / "model.ts")
 
 
 def test_real_unread_map_still_refuses_failed_field_without_rejecting_failed_rule() -> None:

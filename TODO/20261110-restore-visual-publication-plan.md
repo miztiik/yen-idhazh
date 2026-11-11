@@ -35,8 +35,8 @@ Table C - One row per repair PR
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Give the visual planner usable source evidence | - | A | PENDING | - | - | - |
-| C2 | 2 | Preserve the exact reason a visual was refused | 1 | B | PENDING | - | - | - |
+| C1 | 1 | Give the visual planner usable source evidence | - | A | DONE | fantastic-garbanzo | - | 0b1cac34-83e8-494c-99fc-6539f5299bdc |
+| C2 | 2 | Preserve the exact reason a visual was refused | 1 | B | DONE | shiny-spoon | - | ef9d68ad-ccf4-417d-9a05-fe0305ef21c7 |
 | C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2 | C | PENDING | - | - | - |
 
 ## 2. Row #1 - Give the visual planner usable source evidence
@@ -54,6 +54,7 @@ Table C - One row per repair PR
   - `config/prompts/continue-summary.txt`
   - `backend/tests/test_classify.py`
   - `backend/tests/test_visual_planner.py`
+  - `backend/tests/test_visual_attempts.py`
   - `backend/tests/test_chart_vocabulary.py`
   - `backend/tests/test_prompt_files.py`
   - `backend/tests/test_measure_two_calls.py`
@@ -129,11 +130,14 @@ Table G - Rejected refusal shortcuts
   - `backend/tests/pipeline/test_published_whowhat_grids.py`
   - `backend/tests/pipeline/test_work_records.py`
   - `backend/utilities/build_canary_day.py`
+  - `frontend/src/lib/visual/viewport.ts`
   - `frontend/tests/reading-page.spec.ts`
+  - `frontend/tests/visual-legibility.spec.ts`
   - `frontend/tests/whowhat-visual.spec.ts`
   - `docs/reference/github-actions.md`
   - `docs/how-to/run-the-gates.md`
   - `docs/architecture/publishing/visuals.md`
+  - `docs/architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md`
 - **Acceptance gates:** Use the shared selector for the named backend publication cases and one representative reader journey. Extend existing tests instead of adding duplicate journeys. CI owns the complete suite. The manual real-model observation below is required evidence before claiming generation is restored, not a test that writes production data.
 - **Oracle:** With only serialized worker outputs crossing into an isolated publisher tree, normal assembly creates the named chart/grid asset, the digest and inventory reference it, and the reader accepts that same artifact. This proves transport and rendering; authored or recorded model replies alone do not prove present-day model generation.
 

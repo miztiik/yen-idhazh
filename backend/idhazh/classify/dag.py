@@ -141,7 +141,7 @@ if tuple(node.name for node in NODES) != (CallName.LABEL, CallName.SUMMARIZE_AND
 
 
 def output_tokens(prompt_config: SummarizeConfig | None = None) -> int:
-    """Every node's decode budget, added up.
+    """Every node's shape-derived decode budget, added up.
 
     Not the window's answer on its own: the budgets are what the sequence
     DECODES, and `sequence_tokens` is what it has to HOLD. They differ by the
@@ -149,6 +149,24 @@ def output_tokens(prompt_config: SummarizeConfig | None = None) -> int:
     """
     ask = prompt_config or SummarizeConfig()
     return sum(node.output_tokens(ask) for node in NODES)
+
+
+def response_tokens(request: Mapping[str, object]) -> int:
+    """Read the effective response limit from an actual native completion request."""
+    keys = [name for name in ("max_tokens", "n_predict") if name in request]
+    if len(keys) != 1:
+        raise ValueError("a completion request has exactly one response-token limit")
+    limit = request[keys[0]]
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+        raise ValueError("a completion request's response-token limit is a positive integer")
+    return limit
+
+
+def request_tokens(request: Mapping[str, object], *, prompt_tokens: int) -> int:
+    """The complete tokenized prompt, including replay and evidence, plus its response."""
+    if prompt_tokens < 0:
+        raise ValueError("a tokenized prompt count cannot be negative")
+    return prompt_tokens + response_tokens(request)
 
 
 def first_prompt_tokens(article_tokens: int, *, menu_rows: int) -> int:
@@ -182,7 +200,7 @@ def sequence_tokens(
     menu_rows: int,
     prompt_config: SummarizeConfig | None = None,
 ) -> int:
-    """Everything the window has to hold at once, over the whole sequence.
+    """The existing pre-label estimate, using measured rates and derived reply budgets.
 
     **The peak is the last node's request, not the sum of two independent
     calls.** The summarize-and-plan call opens with the label prompt and replays the
@@ -192,6 +210,12 @@ def sequence_tokens(
     makes that true of the sequence rather than of the two statements somebody
     wrote - add a node and this number grows by that node's budget and a seam,
     here, without anybody editing this line.
+
+    This estimate does not certify the complete continuation: the finalized
+    evidence is not known before labelling, and an explicit sampling limit may
+    replace the derived budgets. Use `request_tokens` with the configured
+    tokenizer's complete prompt count to diagnose the actual request, including
+    the guide, replay, finalized menu and effective response limit.
 
     It is a sizing rather than a guarantee, and the reason is stated where each
     term is: both decode budgets are ceilings over reply shapes whose prose
@@ -215,11 +239,11 @@ def fits_the_window(
     menu_rows: int,
     prompt_config: SummarizeConfig | None = None,
 ) -> bool:
-    """Whether this article's whole sequence fits, asked before the label call is sent.
+    """Whether the existing early estimate admits this article before labelling.
 
-    This is the budget for the two-call path used by the digest. It includes
+    This is the unchanged early gate for the two-call path. It includes
     both derived reply budgets, because the label reply is paid twice and the
-    candidate menu is paid once.
+    candidate menu once. It is not a measured complete-request capacity check.
 
     **Refusing here costs the item and admitting it costs the picture.** An
     article that does not fit is not clipped or degraded: it lands as

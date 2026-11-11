@@ -1,6 +1,6 @@
 # Where a drawing becomes pixels
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 The reader's browser renders charts and lays out the whowhat grid; the pipeline
 never draws a chart. This page holds that ruling, what it cost and what it
@@ -294,13 +294,31 @@ other declared chart type raises `CompileError` naming it rather than publishing
 a picture nobody planned. The Who/What grid uses its separate compiler and
 reader described above.
 
-Declaring a type is not delivering it. `area` and `timeline` have role rules
-but no compiler. `table`, `flow`, `comparison`, `callout`, `quotecard` and
-`keyfacts` have neither role rules nor a compiler. Keep these gaps distinct
-from the [missing planner-input handoff](../summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once):
+### Declared types are not delivery promises
+
+These types are abandoned, not deferred work or a delivery queue. Their names
+remain in native contracts so historical plans and decisions stay readable;
+the active production selection excludes them.
+
+Table A - Declared types without a direct compiler
+
+| ID | Type | Current capability and status |
+| --- | --- | --- |
+| A1 | `area` | Abandoned; historical role rules exist, no compiler. |
+| A2 | `timeline` | Abandoned; historical role rules exist, no compiler. |
+| A3 | `table` | Abandoned; no role rules or compiler. |
+| A4 | `callout` | Abandoned; no role rules or compiler. |
+| A5 | `keyfacts` | Abandoned; no role rules or compiler. |
+| A6 | `flow` | Abandoned; no role rules or compiler. |
+| A7 | `quotecard` | Abandoned; no role rules or compiler. |
+| A8 | `comparison` | Abandoned; no role rules or compiler. |
+
+The [text-only proposal rationale](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#design-rationale)
+and [diagram boundary](visuals.md#diagrams-deferred) remain relevant: the
+separate Who/What grid revives neither. Abandonment is distinct from the
+[finalized planner-evidence handoff](../summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once):
 adding a compiler cannot recover a request that was suppressed, declined or
-failed to parse before reaching it. Diagram delivery remains
-[deferred](visuals.md#diagrams-deferred).
+failed to parse before reaching it.
 
 **A pie needs a separately stated whole.** `pie_exhaustive` checks that its parts
 use one measure and unit and exactly make that independent source quantity.

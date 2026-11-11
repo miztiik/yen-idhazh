@@ -8,7 +8,6 @@
 	 * count. The list is words and numbers only; where the counts are not one
 	 * flow it says so above them.
 	 */
-	import { AXIS_LABEL_PX } from '$lib/charts/frame';
 	import { grouped as formatGrouped } from '$lib/charts/series';
 	import { useNumberFormat } from '$lib/number-format-context';
 	import EmptyState from './EmptyState.svelte';
@@ -111,7 +110,7 @@
 				text-anchor={readout !== null && geometry.columns > 1 && node.column === geometry.columns - 1 ? 'end' : undefined}
 				dy="0.32em"
 				fill="var(--color-text)"
-				font-size={AXIS_LABEL_PX}>{node.label} {grouped(node.value)}</text
+				font-size={box.labels.fontSize}>{node.label} {grouped(node.value)}</text
 			>
 		{/each}
 	</svg>

@@ -29,10 +29,10 @@
 		dayColumns,
 		dayColumnX,
 		dayTicks,
-		frame,
 		linearAxis,
 		observeWidth
 	} from '$lib/charts/frame';
+	import { useChartFrame } from '$lib/charts/label-context';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import ChartReadout from './ChartReadout.svelte';
 	import type { ThroughputDay } from '$lib/charts/series';
@@ -66,6 +66,7 @@
 		rule?: ModelRule;
 	} = $props();
 	const numberFormat = useNumberFormat();
+	const frame = useChartFrame();
 
 	const SERIES = $derived([
 		{ key: 'read', label: 'read', colour: rule === undefined ? 'var(--color-accent)' : `var(${SERIES_TOKENS['reading-prompt']})` },
@@ -160,7 +161,7 @@
 	/** Which columns carry a date. The pad is part of it, so the fit is measured
 	 * against the room the labels actually have rather than the whole plot. */
 	const axis = $derived(
-		dayTicks(calendar, { density: tickDensity, columns: dayColumns(calendar.length, box, pad) })
+		dayTicks(calendar, { density: tickDensity, columns: dayColumns(calendar.length, box, pad), labels: box.labels })
 	);
 
 	function x(index: number): number {
@@ -367,7 +368,7 @@
 							y={y.scale(tick) + 3}
 							text-anchor="end"
 							fill="var(--color-text-tertiary)"
-							font-size="10"
+							font-size={box.labels.fontSize}
 							data-throughput-tick={tick}
 						>
 							{tick}
@@ -478,7 +479,7 @@
 							y={box.bottom + 16}
 							text-anchor={label.anchor}
 							fill="var(--color-text-tertiary)"
-							font-size="10"
+							font-size={box.labels.fontSize}
 							data-day-axis
 							data-throughput-label={label.date}
 						>

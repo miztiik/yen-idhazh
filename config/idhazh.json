@@ -435,10 +435,10 @@
     "show_filter": true,
     "site_title": "Yen Idhazh",
     "source_mark": true,
-    "tagline": "A daily digest that checks its own work.",
+    "tagline": "Daily news summaries, with links to their sources.",
     "theme_default": "dark"
   },
-  "version": "2026-11-07",
+  "version": "2026-11-10",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,
@@ -456,21 +456,13 @@
       "bar",
       "dot",
       "line",
-      "area",
       "scatter",
       "bubble",
       "slope",
       "stacked_bar",
       "pie",
       "histogram",
-      "timeline",
-      "table",
-      "flow",
-      "comparison",
-      "callout",
-      "quotecard",
-      "whowhat",
-      "keyfacts"
+      "whowhat"
     ],
     "histogram_bins": 3,
     "lead_words": 150,
@@ -488,6 +480,6 @@
       "significant_digits": 3
     },
     "request_timeout_minutes": 2.0,
-    "type_selection_enabled": false
+    "type_selection_enabled": true
   }
 }

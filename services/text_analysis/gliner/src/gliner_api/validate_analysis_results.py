@@ -3,7 +3,7 @@
 from collections.abc import Container
 
 from gliner2.inference.schema_model import EntityInput, FieldInput, StructureInput
-from pydantic import JsonValue, ValidationError
+from pydantic import JsonValue, TypeAdapter, ValidationError
 
 from gliner_api.declare_analysis_contracts import (
     AnalysisSchema,
@@ -11,9 +11,13 @@ from gliner_api.declare_analysis_contracts import (
     AnalyzeTextResult,
     NativeMention,
     NativeSelection,
+    NativeSpan,
+    NativeText,
     NativeTextScore,
 )
-from gliner_api.declare_api_contracts import ResultValidationError
+from gliner_api.declare_api_contracts import Confidence, ResultValidationError
+
+_CONFIDENCE = TypeAdapter(Confidence)
 
 
 def _object(value: JsonValue) -> dict[str, JsonValue]:
@@ -28,22 +32,46 @@ def _list(value: JsonValue) -> list[JsonValue]:
     return value
 
 
-def _mention(value: JsonValue, text: str) -> NativeMention:
-    mention = NativeMention.model_validate(value)
-    if (
-        mention.start >= mention.end
-        or mention.end > len(text)
-        or text[mention.start : mention.end] != mention.text
-    ):
-        raise ValueError("Native evidence must reproduce its global source span")
-    return mention
+def _leaf(
+    value: JsonValue, request: AnalyzeTextRequest, *, choice: bool = False
+) -> tuple[str, tuple[int, int] | None]:
+    spans = request.include_spans and (
+        not choice or (isinstance(value, dict) and ("start" in value or "end" in value))
+    )
+    if spans:
+        mention = (
+            NativeMention.model_validate(value)
+            if request.include_confidence
+            else NativeSpan.model_validate(value)
+        )
+        if (
+            mention.start >= mention.end
+            or mention.end > len(request.text)
+            or request.text[mention.start : mention.end] != mention.text
+        ):
+            raise ValueError("Native evidence must reproduce its global source span")
+        return mention.text, (mention.start, mention.end)
+    if request.include_confidence:
+        text = NativeTextScore.model_validate(value).text
+    else:
+        text = NativeText.model_validate({"text": value}).text
+    if not choice and text not in request.text:
+        raise ValueError("Native source-backed evidence must occur verbatim in the input")
+    return text, None
 
 
-def _selections(value: JsonValue, labels: Container[str], multi_label: bool) -> None:
-    values = value if isinstance(value, list) else [value]
+def _selections(
+    value: JsonValue, labels: Container[str], multi_label: bool, include_confidence: bool
+) -> None:
+    values = [] if value is None else (value if isinstance(value, list) else [value])
     if not multi_label and len(values) > 1:
         raise ValueError("Single-label tasks cannot return multiple selections")
-    selected = [NativeSelection.model_validate(item).label for item in values]
+    selected = [
+        NativeSelection.model_validate(item).label
+        if include_confidence
+        else NativeText.model_validate({"text": item}).text
+        for item in values
+    ]
     if len(selected) != len(set(selected)) or any(label not in labels for label in selected):
         raise ValueError("Native selections must be distinct offered labels")
 
@@ -57,7 +85,10 @@ def _entities(value: JsonValue, request: AnalyzeTextRequest) -> None:
     for label, prediction in entities.items():
         config = offered[label] if isinstance(offered, dict) else None
         scalar = isinstance(config, EntityInput) and config.dtype == "str"
-        values = ([] if prediction is None else [prediction]) if scalar else _list(prediction)
+        values = (
+            ([] if prediction is None or prediction == "" else [prediction])
+            if scalar else _list(prediction)
+        )
         attributes = {
             name: group
             for name, group in (schema.entity_attributes or {}).items()
@@ -65,18 +96,24 @@ def _entities(value: JsonValue, request: AnalyzeTextRequest) -> None:
         }
         seen = set()
         for value in values:
-            item = _object(value)
-            if item.keys() != {"text", "confidence", "start", "end"} | attributes.keys():
-                raise ValueError("Native mentions must retain exactly their declared attributes")
-            mention = _mention(
-                {key: part for key, part in item.items() if key not in attributes}, request.text
-            )
-            identity = (mention.start, mention.end)
-            if identity in seen:
-                raise ValueError("Native entity occurrences must be distinct")
-            seen.add(identity)
-            for name, group in attributes.items():
-                _selections(item[name], group.labels, group.multi_label)
+            if attributes:
+                item = _object(value)
+                keys = {"text"} | ({"confidence"} if request.include_confidence else set())
+                keys |= {"start", "end"} if request.include_spans else set()
+                if item.keys() != keys | attributes.keys():
+                    raise ValueError("Native mentions must retain their declared attributes")
+                leaf: JsonValue = {key: part for key, part in item.items() if key in keys}
+                if not request.include_confidence and not request.include_spans:
+                    leaf = item["text"]
+                for name, group in attributes.items():
+                    _selections(item[name], group.labels, group.multi_label, True)
+            else:
+                leaf = value
+            _text, identity = _leaf(leaf, request)
+            if identity is not None:
+                if identity in seen:
+                    raise ValueError("Native entity occurrences must be distinct")
+                seen.add(identity)
 
 
 def _field_cardinality(field: FieldInput, structure: StructureInput) -> tuple[bool, bool]:
@@ -93,51 +130,65 @@ def _field_cardinality(field: FieldInput, structure: StructureInput) -> tuple[bo
     return scalar, required
 
 
-def _structures(value: JsonValue, structure: StructureInput, text: str) -> None:
+def _structures(
+    value: JsonValue, structure: StructureInput, request: AnalyzeTextRequest
+) -> None:
     fields = {field.name: field for field in structure.fields}
     seen_records = set()
     exclusive_spans: set[tuple[int, int]] = set()
     bound_spans: set[tuple[int, int]] = set()
     for raw_record in _list(value):
         record = _object(raw_record)
-        if record.keys() != fields.keys():
+        metadata = (
+            {"confidence"} if structure.mode is not None and "confidence" in record else set()
+        )
+        if record.keys() != fields.keys() | metadata:
             raise ValueError("Native records must retain exactly the requested fields")
+        if metadata:
+            _CONFIDENCE.validate_python(record["confidence"], strict=True)
         record_identity = []
+        has_spans = False
         for name, field in fields.items():
             scalar, required = _field_cardinality(field, structure)
             prediction = record[name]
-            values = ([] if prediction is None else [prediction]) if scalar else _list(prediction)
+            values = (
+                ([] if prediction is None or prediction == "" else [prediction])
+                if scalar else _list(prediction)
+            )
             if required and not values:
                 raise ValueError("Required native record fields cannot be absent")
             seen = set()
             for item in values:
-                if field.choices is not None:
-                    choice = NativeTextScore.model_validate(item)
-                    if choice.text not in field.choices:
-                        raise ValueError("Native choices must belong to the requested field")
-                    identity: str | tuple[int, int] = choice.text
-                else:
-                    mention = _mention(item, text)
-                    identity = (mention.start, mention.end)
-                    if structure.mode is not None:
-                        if identity in exclusive_spans or (
-                            field.exclusive and identity in bound_spans
+                text, span = _leaf(item, request, choice=field.choices is not None)
+                if field.choices is not None and text not in field.choices:
+                    raise ValueError("Native choices must belong to the requested field")
+                identity: str | tuple[int, int] = (
+                    span if span is not None and field.choices is None else text
+                )
+                if field.choices is not None and identity in seen:
+                    raise ValueError("Native choice selections must be distinct")
+                if span is not None:
+                    has_spans = True
+                    if structure.mode is not None and field.choices is None:
+                        if span in exclusive_spans or (
+                            field.exclusive and span in bound_spans
                         ):
                             raise ValueError("Exclusive native spans cannot bind more than once")
-                        bound_spans.add(identity)
+                        bound_spans.add(span)
                         if field.exclusive:
-                            exclusive_spans.add(identity)
-                if identity in seen:
-                    raise ValueError("Native field selections must be distinct")
+                            exclusive_spans.add(span)
+                    if identity in seen:
+                        raise ValueError("Native field occurrences must be distinct")
                 seen.add(identity)
             record_identity.append((name, frozenset(seen)))
         identity_record = tuple(record_identity)
-        if identity_record in seen_records:
+        if has_spans and identity_record in seen_records:
             raise ValueError("Native records must be distinct")
-        seen_records.add(identity_record)
+        if has_spans:
+            seen_records.add(identity_record)
 
 
-def _relations(value: JsonValue, schema: AnalysisSchema, text: str) -> None:
+def _relations(value: JsonValue, schema: AnalysisSchema, request: AnalyzeTextRequest) -> None:
     relations = _object(value)
     if relations.keys() != set(schema.relations or []):
         raise ValueError("Native relations must retain the requested relation types")
@@ -145,14 +196,18 @@ def _relations(value: JsonValue, schema: AnalysisSchema, text: str) -> None:
         seen = set()
         for value in _list(predictions):
             relation = _object(value)
-            if relation.keys() != {"head", "tail"}:
+            metadata = {"confidence"} if "confidence" in relation else set()
+            if relation.keys() != {"head", "tail"} | metadata:
                 raise ValueError("Native relations require exactly head and tail")
-            head = _mention(relation["head"], text)
-            tail = _mention(relation["tail"], text)
-            identity = (head.start, head.end, tail.start, tail.end)
-            if identity in seen:
-                raise ValueError("Native relations must be distinct")
-            seen.add(identity)
+            if metadata:
+                _CONFIDENCE.validate_python(relation["confidence"], strict=True)
+            _head, head_span = _leaf(relation["head"], request)
+            _tail, tail_span = _leaf(relation["tail"], request)
+            if head_span is not None and tail_span is not None:
+                identity = (head_span, tail_span)
+                if identity in seen:
+                    raise ValueError("Native relations must be distinct")
+                seen.add(identity)
 
 
 def validate_analysis_results(raw: object, request: AnalyzeTextRequest) -> AnalyzeTextResult:
@@ -168,16 +223,23 @@ def validate_analysis_results(raw: object, request: AnalyzeTextRequest) -> Analy
             expected.add("entities")
         if schema.relations is not None:
             expected.add("relation_extraction")
-        if native.keys() != expected:
+        optional = {
+            name for name, structure in (schema.structures or {}).items()
+            if structure.mode is not None
+        }
+        if native.keys() - expected or expected - optional - native.keys():
             raise ValueError("Native results must retain exactly the requested tasks")
         if schema.entities is not None:
             _entities(native["entities"], request)
         for task in schema.classifications or []:
-            _selections(native[task.task], task.labels, task.multi_label)
+            _selections(
+                native[task.task], task.labels, task.multi_label, request.include_confidence
+            )
         for name, structure in (schema.structures or {}).items():
-            _structures(native[name], structure, request.text)
+            if name in native:
+                _structures(native[name], structure, request)
         if schema.relations is not None:
-            _relations(native["relation_extraction"], schema, request.text)
+            _relations(native["relation_extraction"], schema, request)
         return result
     except (ValidationError, ValueError):
         raise ResultValidationError("The native analysis result is invalid.") from None

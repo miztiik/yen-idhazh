@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { consoleConfig } from '../src/lib/server/config';
 import { buildLedger, buildRows, serveToPage } from './support/ledger-lifecycle';
 
-const panelIds = ['model-cards', 'model-throughput', 'call-ending', 'refusing-rule', 'doubt-reasons', 'faithfulness',
+const panelIds = ['model-cards', 'model-throughput', 'call-ending', 'doubt-reasons', 'faithfulness',
 	'source-doubts', 'write-cost', 'score-cost', 'summary-length', 'model-change'];
 
 test('the integrated Summaries route reads the native record and keeps all panels in declared order', async ({ page }) => {
@@ -14,6 +14,7 @@ test('the integrated Summaries route reads the native record and keeps all panel
 	expect(await page.locator('[data-console-panel-id]').evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-console-panel-id')))).toEqual(panelIds);
 	await expect(page.locator('[data-model-cards] [data-kpi]')).toHaveCount(12);
 	await expect(page.locator('[data-console-panel-id="recorded-only"]')).toHaveCount(0);
+	await expect(page.locator('[data-console-panel-id="refusing-rule"], [data-model-query="refusing-rule"], [data-failure-stages]')).toHaveCount(0);
 	await expect(page.locator('[data-candle]')).not.toHaveCount(0);
 	await expect(page.locator('[data-run-length]')).not.toHaveCount(0);
 	await expect(page.locator('[data-histogram="write-times"]')).toHaveCount(1);
@@ -27,7 +28,7 @@ test('the integrated Summaries route reads the native record and keeps all panel
 	await page.locator('[data-window-preset="7"]').click();
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
 	const queries = page.locator('[data-model-query]');
-	await expect(queries).toHaveCount(9);
+	await expect(queries).toHaveCount(8);
 	for (const query of await queries.all()) {
 		const id = await query.getAttribute('data-model-query');
 		const requested = id === 'model-change' ? Math.max(...consoleConfig().window_presets) : 7;

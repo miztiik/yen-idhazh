@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-11-11
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -351,6 +351,20 @@ behind it - `day-metrics.addresses_considered` - which is a different defect and
 a cheaper one. The `run-days` payload is clean.
 
 ## Design rationale
+
+**Read/write token volume keeps every recorded run.** Two categorical traces
+share one token scale: Read is solid and Written dashed. Monotone-X
+interpolation passes through the actual values without invented extrema; it
+does not average or smooth measurements. Only selected or isolated values need
+markers. Repeated UTC date labels thin through `runTicks`, never by dropping
+runs. The axis explicitly says run sequence, not elapsed time.
+
+The existing readout snaps to an actual run for pointer, tap and keyboard
+selection. It prints exact Read/Written values, full run ID, UTC date and
+measured versus recorded articles. Rest and Escape use the last known run,
+even when unmeasured. Run total and actual Median per article are radios over
+one in-memory answer. No anomaly threshold, baseline or failure-colour verdict
+is implied by either trace.
 
 **The two independent clocks open Hardware.** The item ledger and the server
 measurement can disagree. A ranked percentage gap, with its allowed-gap rule,
