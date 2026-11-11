@@ -41,12 +41,13 @@
 	 * line and still clear of the bars' edges. */
 	const CURVE = 1.5;
 	let selected = $state<number | null>(null);
+	const formatShare = (value: number) => `${formatNumber(value, numberFormat, { si: false })}%`;
 	const readout = $derived(geometry === null ? null : readoutOf({
 		type: 'distribution',
 		columns: geometry.bins.map((bin) => `${formatNumber(bin.x0, numberFormat)} to ${formatNumber(bin.x1, numberFormat)}`),
 		series: [
 			{ label: 'Rows', swatch: 'var(--chart-1)', values: geometry.bins.map((bin) => bin.count), format: (value) => formatNumber(value, numberFormat, { exact: true }) },
-			{ label: 'At or below', swatch: null, values: geometry.bins.map((bin) => bin.share), format: (value) => `${formatNumber(value * 100, numberFormat, { si: false })}%` }
+			{ label: 'At or below', swatch: null, values: geometry.bins.map((bin) => bin.share), format: formatShare }
 		],
 		notMeasured: 'No readings in this bin.',
 		resting: geometry.bins.reduce((best, bin, index, bins) => bin.count > bins[best].count ? index : best, 0)
@@ -93,13 +94,13 @@
 					dy="0.32em"
 					text-anchor="start"
 					fill="var(--color-text-tertiary)"
-					font-size={box.labels.fontSize}>{tick.text}%</text
+					font-size={box.labels.fontSize}>{formatShare(tick.value)}</text
 				>
 			{/if}
 		{/each}
 
 		{#each geometry.bins as bin (bin.x0)}
-			<rect x={bin.left} y={bin.top} width={bin.width} height={bin.height} fill="var(--chart-1)" aria-label={`${formatNumber(bin.x0, numberFormat)} to ${formatNumber(bin.x1, numberFormat)}: ${formatNumber(bin.count, numberFormat, { exact: true })} rows, ${formatNumber(bin.share * 100, numberFormat, { si: false })}% at or below`} />
+			<rect x={bin.left} y={bin.top} width={bin.width} height={bin.height} fill="var(--chart-1)" aria-label={`${formatNumber(bin.x0, numberFormat)} to ${formatNumber(bin.x1, numberFormat)}: ${formatNumber(bin.count, numberFormat, { exact: true })} rows, ${formatShare(bin.share)} at or below`} />
 		{/each}
 		<path d={geometry.cumulative} fill="none" stroke="var(--color-text)" stroke-width={CURVE} />
 

@@ -10,6 +10,8 @@ import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
 import { telemetryRow } from './support/telemetry-row';
 import { formatNumber, numberFormat } from './support/number-format';
+import { consoleConfig } from '../src/lib/server/config';
+import { ITEM_HEALTH_COLUMNS, SCORE_COLUMNS } from '../src/lib/server/ledger-rows';
 import { hydrated, setWindow, routeHref } from './support/console-window/controls';
 import { THROUGH, FIRST, dayBefore, nativeRow, timedRow, packedPipelines, servePipelines, settled } from './support/pipelines-ledgers';
 
@@ -186,4 +188,73 @@ test('a late wide-window completion cannot replace a newer short request or its 
 	await expect(page.locator('[data-duration-cohort]')).toContainText('1 of 3 recorded item clocks');
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '1');
 	await expect(page.locator('[data-window-status]')).toHaveText('Showing 1 day, to 15 Jun 2030.');
+});
+
+test('lagging native endpoints do not move private published-day evidence or mix extraction populations', async ({ page }, info) => {
+	const document = await (await page.request.get(routeHref('pipelines'))).text();
+	const publishedDay = document.match(/data-pipelines-window-to="([^"]+)"/)?.[1];
+	if (publishedDay === undefined) throw new Error('The prerendered route must name its published-day window.');
+	const nativeThrough = dayBefore(publishedDay, 2);
+	const privateWeek = windowOfDays(publishedDay, 7, 'right');
+	const nativeWeek = windowOfDays(nativeThrough, 7, 'right');
+	const dates = Array.from({ length: 10 }, (_, at) => dayBefore(publishedDay, 9 - at));
+	const item = Object.fromEntries(ITEM_HEALTH_COLUMNS.map((column) => [column, null]));
+	const score = Object.fromEntries(SCORE_COLUMNS.map((column) => [column, null]));
+	const root = await packedPipelines(info.outputPath('lagging-native'),
+		dates.filter((date) => date < publishedDay).map((date) => ({
+			covers: date, rows: Array.from({ length: date === nativeThrough ? consoleConfig().fleet_min_rows : 1 }, (_, index) => ({
+				...item, ...timedRow(date, { item_id: `${date}-${index}`, element_class: 'chartable', elements_found: 2, span_integrity: true,
+					time_source: 'feed', item_started_at: `${date}T12:00:00Z`,
+					published_at: new Date(Date.parse(`${date}T12:00:00Z`) - (index + 1) * 3_600_000).toISOString() })
+			}))
+		})),
+		dates.filter((date) => date <= nativeThrough).map((date) => ({
+			covers: date, rows: [{ ...score, date, url_key: 'fixture-url', extraction_suspect: false }]
+		})));
+	await servePipelines(page, root);
+	await page.goto(routeHref('pipelines'));
+	await hydrated(page);
+	await setWindow(page, 7);
+	await settled(page);
+	await expect(page.locator('[data-pipelines-window-to]')).toHaveAttribute('data-pipelines-window-to', publishedDay);
+	await expect(page.locator('[data-console-standing]')).toHaveText(`Native record window: ${nativeWeek.start} through ${nativeWeek.end} UTC.`);
+	await expect(page.locator('[data-private-window]')).toContainText(`${privateWeek.start} through ${privateWeek.end} UTC`);
+	await expect(page.locator('[data-windowed="item-time-split"] [data-native-window]'))
+		.toContainText(`${nativeWeek.start} through ${nativeWeek.end} UTC`);
+	await expect(page.locator('[data-extraction-record]')).toContainText(`${nativeWeek.start} through ${nativeWeek.end}`);
+	await expect(page.locator('[data-extraction-evaluator-record]')).toContainText(`${nativeWeek.start} through ${nativeWeek.end}`);
+	await expect(page.locator('[data-extraction-published-window]')).toContainText(`${privateWeek.start} through ${privateWeek.end} UTC`);
+	await expect(page.locator(`[data-published-bar="${publishedDay}"]`).first()).toBeVisible();
+	await expect(page.locator('[data-empty="extraction-yield"]')).toContainText('No build-time day carries both yield counts.');
+	await page.locator('[data-console-panel-id="article-age"]').scrollIntoViewIfNeeded();
+	const age = page.locator('[data-chart-name="article-age"]');
+	await expect(age).toBeVisible();
+	const clearance = await age.locator('text').filter({ hasText: /%$/ }).evaluateAll((labels) => labels.every((label) => {
+		const svg = label.closest('svg')!.getBoundingClientRect();
+		const text = label.getBoundingClientRect();
+		return text.left >= svg.left && text.right <= svg.right;
+	}));
+	expect(clearance).toBe(true);
+	const leading = await page.locator('[data-console-panel-id="article-age"] [data-lede]').evaluate((node) => {
+		const style = getComputedStyle(node);
+		return { font: parseFloat(style.fontSize), line: parseFloat(style.lineHeight) };
+	});
+	expect(leading.line).toBeGreaterThanOrEqual(leading.font);
+	await age.press('End');
+	await expect(page.locator('[data-readout="article-age"] [data-readout-row="share"]')).toHaveText('At or below100%');
+	await expect(age.locator('rect').last()).toHaveAttribute('aria-label', /100% at or below$/);
+	await setWindow(page, 1);
+	await settled(page);
+	await expect(page.locator('[data-private-window]')).toContainText(`${publishedDay} through ${publishedDay} UTC`);
+	await expect(page.locator('[data-console-standing]')).toHaveText(`Native record window: ${nativeThrough} through ${nativeThrough} UTC.`);
+	await expect(page.locator('[data-windowed="item-time-split"] [data-native-window]'))
+		.toContainText(`${nativeThrough} through ${nativeThrough} UTC`);
+	await expect(page.locator('[data-console-panel-id="article-age"] h2')).toHaveText('Source age at work start');
+	await page.locator('a[href*="/console/model/"]').first().click();
+	await expect(page.locator('[data-console-panels="model"]')).not.toHaveAttribute('data-route-state', 'loading');
+	await expect(page.locator('[data-private-window]')).toContainText(`${publishedDay} through ${publishedDay} UTC`);
+	await expect(page.locator('[data-model-query="model-throughput"] [data-native-window]'))
+		.toContainText(`${nativeThrough} through ${nativeThrough} UTC`);
+	await expect(page.locator('[data-model-cards]')).toHaveAttribute('data-model-cards-from', publishedDay);
+	await expect(page.locator('[data-model-cards]')).toHaveAttribute('data-model-cards-to', publishedDay);
 });

@@ -4,6 +4,77 @@ import { readoutOf } from '../src/lib/charts/readout';
 import { frame } from '../src/lib/charts/frame';
 import { dateSeries, formatNumber, numberFormat } from './support/number-format';
 import { clocksChart } from '../src/lib/charts/machine';
+import { pathToFileURL } from 'node:url';
+import { distribution } from '../src/lib/charts/d3/distribution';
+import { emptyState } from '../src/lib/charts/d3/empty';
+import { consoleConfig } from '../src/lib/server/config';
+import { renderConfigured, serverCompiler, type Rewrite } from './support/server-render';
+
+test.describe('rendered distribution readings', () => {
+	let drawDistribution: (props: Record<string, unknown>) => string;
+	let drawAge: (props: Record<string, unknown>) => string;
+	test.beforeAll(async ({}, info) => {
+		const compiled = serverCompiler(info.outputPath('distribution'));
+		const rewrite: Rewrite[] = [
+			['./EmptyState.svelte', './EmptyState.server.mjs'],
+			['$lib/components/Reserved.svelte', './Reserved.server.mjs'],
+			['$lib/charts/d3/Distribution.svelte', './Distribution.server.mjs'],
+			['./article-age', new URL('../src/lib/console/pipelines/article-age.ts', import.meta.url).href]
+		];
+		await compiled('src/lib/components/Reserved.svelte', 'Reserved', rewrite);
+		await compiled('src/lib/charts/d3/EmptyState.svelte', 'EmptyState', rewrite);
+		const distributionModule = await compiled('src/lib/charts/d3/Distribution.svelte', 'Distribution', rewrite);
+		const ageModule = await compiled('src/lib/console/pipelines/ArticleAge.svelte', 'ArticleAge', rewrite);
+		const distributionComponent = (await import(pathToFileURL(distributionModule).href)).default;
+		const ageComponent = (await import(pathToFileURL(ageModule).href)).default;
+		const markup = (html: string) => html.replace(/<!--[\s\S]*?-->/g, '');
+		drawDistribution = (props) => markup(renderConfigured(distributionComponent, { props }).body);
+		drawAge = (props) => markup(renderConfigured(ageComponent, { props }).body);
+	});
+
+	test('the cumulative curve, rendered share, axis and mark ARIA use the same percentage units', () => {
+		const geometry = distribution([1, 2, 2, 2], {
+			frame: frame(600, 240), minValues: 4, valueTicks: 4, scale: 'linear',
+			domain: [0, 2], number_format: numberFormat
+		});
+		if (geometry === null) throw new Error('Four measured readings must draw at the four-reading floor.');
+		const html = drawDistribution({
+			geometry, empty: emptyState('quiet', 'No readings.'), name: 'shares',
+			label: 'Measured values and cumulative share', width: 600, height: 240
+		});
+		for (const bin of geometry.bins) {
+			expect(html).toContain(`aria-label="${formatNumber(bin.x0)} to ${formatNumber(bin.x1)}: ${formatNumber(bin.count, { exact: true })} rows, ${formatNumber(bin.share, { si: false })}% at or below"`);
+		}
+		expect(html).toContain(`d="${geometry.cumulative}"`);
+		expect(html).toMatch(/data-readout-row="share"[^>]*><dd[^>]*>At or below<\/dd><dd[^>]*>100%<\/dd>/);
+		expect(html).toContain('>100%</text>');
+		expect(html).not.toContain('10,000%');
+	});
+
+	test('source age names work start and retains successful feed times, exclusions and the logarithmic-zero note', () => {
+		const knobs = consoleConfig();
+		const feedTime = { time_source: 'feed', published_at: '2030-06-15T00:00:00Z' };
+		const rows = [
+			...Array.from({ length: knobs.fleet_min_rows }, () => ({
+				...feedTime, outcome: 'ok', item_started_at: '2030-06-15T02:00:00Z'
+			})),
+			{ ...feedTime, outcome: 'ok', item_started_at: '2030-06-15T00:00:00Z' },
+			{ ...feedTime, outcome: 'ok', time_source: 'first_seen', item_started_at: '2030-06-15T03:00:00Z' },
+			{ ...feedTime, outcome: 'ok', item_started_at: '2030-06-14T23:00:00Z' },
+			{ ...feedTime, outcome: 'ok', item_started_at: null },
+			{ ...feedTime, outcome: 'failed', item_started_at: '2030-06-15T04:00:00Z' }
+		];
+		const html = drawAge({ rows, knobs });
+		expect(html).toContain('data-chart-type="distribution"');
+		expect(html).toContain('aria-label="Source age at work start in hours, logarithmic scale; inferred and future times excluded"');
+		expect(html).toContain('Source age at work start: articles over a day old against newer ones');
+		expect(html).toContain(`${knobs.fleet_min_rows + 1} source-stated publication times are measured.`);
+		expect(html).toContain(`1 of ${knobs.fleet_min_rows + 4} successful items have inferred times`);
+		expect(html).toContain('1 have no usable source time; 1 have a publication time after work started.');
+		expect(html).toContain('1 items started at their stated publication time: zero hours has no position on a logarithmic axis');
+		expect(html).not.toContain('when we published');
+	});
+});
 
 test.describe('the strip is the key', () => {
 	test('native dated marks build their key from the measured series', () => {

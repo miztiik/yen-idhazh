@@ -15,10 +15,13 @@ import { bin } from 'd3-array';
 import { line } from 'd3-shape';
 import { scaleLog } from 'd3-scale';
 
-import { DEFAULT_CHART_LABELS, type Frame } from '../frame';
+import { DEFAULT_CHART_LABELS, MARGIN, labelWidth, type Frame } from '../frame';
 import { tooFewSentence } from '../../console/waiting';
 import { spaceValueTicks, valueAxis, type ValueAxis } from './axis';
-import type { NumberFormatConfig } from '../../number-format';
+import { formatNumber, type NumberFormatConfig } from '../../number-format';
+
+/** A percentage has 100 units per whole, independent of display configuration. */
+const FULL_SHARE = 100;
 
 export interface DistributionRule {
 	at: number;
@@ -92,7 +95,14 @@ export function distributionShortfall(
 export function distribution(values: readonly number[], opts: DistributionOptions): BinGeometry | null;
 export function distribution(values: readonly number[], opts: LegacyDistributionOptions): BinGeometry | null;
 export function distribution(values: readonly number[], opts: DistributionOptions | LegacyDistributionOptions): BinGeometry | null {
-	const box = opts.frame;
+	const source = opts.frame;
+	const shareLabel = `${formatNumber(FULL_SHARE, opts.number_format, { si: false })}%`;
+	const rightMargin = Math.max(source.margin.right, Math.ceil(labelWidth(shareLabel, source.labels)) + MARGIN.right);
+	const right = Math.max(source.left, source.width - rightMargin);
+	const box = {
+		...source, margin: { ...source.margin, right: rightMargin },
+		right, innerWidth: right - source.left
+	};
 	const readings = finiteOf(values);
 	if (readings.length === 0 || readings.length < opts.minValues) return null;
 	const rules = opts.rules ?? [];
@@ -142,7 +152,7 @@ export function distribution(values: readonly number[], opts: DistributionOption
 		box,
 		{ along: 'y', ticks: opts.valueTicks, number_format: opts.number_format }
 	);
-	const share = valueAxis([0, 100], box, {
+	const share = valueAxis([0, FULL_SHARE], box, {
 		along: 'y',
 		ticks: opts.valueTicks,
 		number_format: opts.number_format
@@ -162,7 +172,7 @@ export function distribution(values: readonly number[], opts: DistributionOption
 			width: x.scale(x1) - x.scale(x0),
 			top,
 			height: y.scale(0) - top,
-			share: (below / readings.length) * 100
+			share: (below / readings.length) * FULL_SHARE
 		};
 	});
 	const curve = line<{ at: number; share: number }>()

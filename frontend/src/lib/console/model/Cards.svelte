@@ -5,25 +5,27 @@
 	import Sparkline from '../../components/Sparkline.svelte';
 	import { buildCardTrends } from '../model-cards';
 	import { FLAGS, RECORDED } from '../eval-instruments';
-	import { cardColumns, cardValue, cardText, cardTrendDays } from './cards';
+	import { cardColumns, cardValue, cardText, cardTrendDays, cardReadState, type CardReads } from './cards';
 	import type { ChartConfig } from '../../server/config';
 	import { completeModelRule } from './model-rule';
 	import { nameSpan } from '../span-words';
 	import { formatNumber } from '$lib/number-format';
-	let { days, instruments, start, end, rule, checkerRule, chart, windowDays }: {
+	let { days, reads, instruments, start, end, rule, checkerRule, chart, windowDays }: {
 		days: readonly (ModelDay & { determinismViolations: number | null })[] | null;
+		reads?: CardReads;
 		instruments: readonly { date: string; recorded: Readonly<Record<string, number | null>> }[];
 		start: string; end: string; rule: ModelRule; checkerRule: ModelRule; chart: ChartConfig; windowDays: number;
 	} = $props();
 	const ordered = $derived((days ?? []).filter((day) => day.date >= start && day.date <= end).toSorted((a, b) => a.date.localeCompare(b.date)));
 	const newest = $derived(ordered.at(-1));
+	const empty = $derived(days === null || reads === undefined ? 'missing' : cardReadState(reads, { start, end }));
 	const trends = $derived(buildCardTrends(cardColumns.map((c) => c.key), cardTrendDays(ordered), cardValue, []));
 	const extra = $derived(RECORDED.filter((i) => ['self_repetition', 'coherence', 'semantic_coverage'].includes(i.id)));
 </script>
 
-<div data-model-cards data-model-cards-day={newest?.date} data-windowed="model-cards" data-window-days={windowDays}>
+<div data-model-cards data-model-cards-day={newest?.date} data-model-cards-from={start} data-model-cards-to={end} data-windowed="model-cards" data-window-days={windowDays}>
 	{#if newest === undefined}
-		<p data-model-cards-empty={days === null ? 'missing' : 'quiet'} data-lede>{days === null ? 'The build-time model record is unavailable.' : 'No model work was recorded in this window.'}</p>
+		<p data-model-cards-empty={empty} data-lede>{empty === 'missing' ? 'The build-time model record is unavailable in this window.' : 'No model readings were recorded in this window.'}</p>
 		<div data-model-rule="no" data-model-rule-name="model-cards" data-model-rule-none="There are no measured card days on which to place a change." data-readout-none="No model-card readings were available."></div>
 	{:else}
 		<div class="cards" data-chart="cards" aria-label="The newest model readings and their measured daily history">

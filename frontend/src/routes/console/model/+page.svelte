@@ -3,7 +3,7 @@
 	import { useWindowChoice } from '$lib/console/window-slot';
 	import { base } from '$app/paths';
 	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
-	import { routeReach, retryAsks, tallyAsks, type RouteReach } from '$lib/console/queries/window';
+	import { routeReach, retryAsks, tallyAsks, windowRange, type RouteReach } from '$lib/console/queries/window';
 	import type { LedgerReach, SliceResult } from '$lib/data/ledger';
 	import * as queries from '$lib/console/queries/model';
 	import { settingsRules } from '$lib/console/settings-moved';
@@ -32,6 +32,8 @@
 	const allAnswers = $derived(doorIds.map((id) => answers[id] ?? 'pending'));
 	const tally = $derived(tallyAsks(allAnswers));
 	const first = $derived(reach === null ? null : Object.values(reach.ledgers).flatMap((r) => r?.state === 'ok' ? [r.first] : []).sort()[0] ?? null);
+	const nativeWindow = $derived(first !== null && reach?.through != null
+		? windowRange(windowDays, reach.through, first) : null);
 	const span = $derived(windowOfDays(data.windowDay, windowDays, knobs.today_anchor));
 	const shell = $derived(data);
 	const cardRule = $derived(settingsRules(shell, { from: span.start, to: span.end }, 'none', nameSpan(windowDays)));
@@ -67,7 +69,10 @@
 	<a class="carry-link" href="{base}/console/machine/">Hardware &rarr;</a>
 </p>
 <RouteStatus route="model" answers={allAnswers} days={windowDays} through={reach?.through ?? null}
+	recordScope="Native record"
+	settledSuffix={nativeWindow === null ? '' : `Native record window: ${nativeWindow.from} through ${nativeWindow.to} UTC.`}
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retryFailed}>
+	<p data-private-window data-range-from={span.start} data-range-to={span.end}>Published-day evidence: {span.start} through {span.end} UTC. Native panels use the record window above.</p>
 	<div data-recording-lines>
 		{#if measurementOff != null}<p data-recording="off">{measurementOff}</p>{/if}
 		{#if recording?.sampled != null}<p data-recording="sampled">{recording.sampled}</p>{/if}
@@ -83,7 +88,7 @@
 					note={id === 'model-cards' ? "What the model wrote for the day's own articles, how long it took, and what it got wrong." : null}>
 					<div data-panel-question={titles[id]}>
 					{#if id === 'model-cards'}
-						<Cards days={data.cardDays} instruments={data.instruments} start={span.start} end={span.end}
+						<Cards days={data.cardDays} reads={data.cardReads} instruments={data.instruments} start={span.start} end={span.end}
 							rule={cardRule} {checkerRule} chart={data.chart} {windowDays} />
 					{:else if id === 'doubt-reasons'}
 						<Reasons days={data.reasons} start={span.start} end={span.end} rule={checkerRule} chart={data.chart} {windowDays} />
@@ -95,7 +100,6 @@
 							{#snippet children(rows, range)}
 								<Panels {id} {rows} {range} rule={modelRuleFor(id, shell, range)} chart={data.chart} {knobs}
 									bands={data.summarizeBands} thresholds={data.matchThresholds} throughputReference={data.throughputReference} />
-								<p data-door-through>The published record used here reaches {range.to}.</p>
 							{/snippet}
 						</Query>
 					{/if}

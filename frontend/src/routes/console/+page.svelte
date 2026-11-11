@@ -3,7 +3,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { useWindowChoice } from '$lib/console/window-slot';
 	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
-	import { rangeFor, routeReach, sliceOnce, retryAsks, type PanelQuery, type Range, type RouteReach } from '$lib/console/queries/window';
+	import { rangeFor, routeReach, sliceOnce, retryAsks, windowRange, type PanelQuery, type Range, type RouteReach } from '$lib/console/queries/window';
 	import { pipelinesRecord, publishedShareFor, retryReach } from '$lib/console/pipelines/record-window';
 	import * as queries from '$lib/console/queries/pipelines';
 	import { settingsRules } from '$lib/console/settings-moved';
@@ -64,17 +64,18 @@
 	const allAnswers = $derived(asks.map((query) => answers[query.name]));
 	const busy = $derived(allAnswers.some((answer) => answer === 'pending'));
 	const recordReady = $derived(mounted && reach?.through !== null && reach?.through !== undefined && !busy);
-	const anchor = $derived(reach?.through ?? data.windowDay);
-	const viewport = $derived(windowOfDays(anchor, windowDays, knobs.today_anchor));
+	const viewport = $derived(windowOfDays(data.windowDay, windowDays, knobs.today_anchor));
 	const settings = $derived(settingsRules(data, { from: viewport.start, to: viewport.end }, 'none'));
 	const charts = $derived(data.charts.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
 	const attempts = $derived(data.visualAttempts.counts.filter((count) => count.date >= viewport.start && count.date <= viewport.end));
 	const attemptDays = $derived(data.visualAttempts.days.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
 	const attemptRead = $derived(attemptNotes(data.visualAttempts.read, viewport));
 	const yieldDays = $derived(data.extractionDays.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
-	const publishedShare = $derived(publishedShareFor(data.extractionPublishedByWindow, anchor, windowDays)
+	const publishedShare = $derived(publishedShareFor(data.extractionPublishedByWindow, data.windowDay, windowDays)
 		?? { measuredDays: 0, unused: 0, chartablePublished: 0, unusedPct: null });
 	const record = $derived(recordReady ? pipelinesRecord(reach, windowDays) : null);
+	const nativeWindow = $derived(record?.first != null && record.through !== null
+		? windowRange(windowDays, record.through, record.first) : null);
 
 	async function ask(selected: readonly PanelQuery[], retryWindow = false, days = windowDays) {
 		if (selected.length === 0) return;
@@ -142,10 +143,7 @@
 		const lost = 'lostDays' in answer && answer.lostDays.length > 0
 			? noRecordSentence(query.ledger, answer.lostDays, () => 'those days are not drawn as zero') : null;
 		const aside = 'setAside' in answer ? setAsideSentence(query.ledger, query.ledger, answer.setAside, 'this window') : null;
-		const range = ranges[query.name];
-		const different = range !== undefined && query.span === 'window' && range.from > viewport.start
-			? `${query.name}: recorded from ${range.from} through ${range.to}.` : null;
-		return [lost, aside, different].filter((note): note is string => note !== null);
+		return [lost, aside].filter((note): note is string => note !== null);
 	}));
 	const titles: Record<string, string> = {
 		'at-a-glance': 'At a glance', 'run-health': 'Run health', 'site-cost-per-item': 'What one more article costs',
@@ -157,7 +155,7 @@
 		'visual-refusals': 'Recorded refusal reasons over time',
 		'visual-written-types': 'Planned and successfully written visual types',
 		'downgrade-funnel': 'How drafted visual plans ended, by potential class', 'extraction': 'What the extractor found',
-		'article-age': 'How old an article was when we published it'
+		'article-age': 'Source age at work start'
 	};
 	const panelQueries: Record<string, PanelQuery> = {
 		'failure-mix': queries.failureMixQuery, 'item-time-split': queries.itemTimeSplitQuery,
@@ -171,21 +169,22 @@
 <WindowControlSource days={windowDays} presets={knobs.window_presets} monthsFor={() => 0}
 	ready={mounted} {busy} {record} statusLine={recordReady ? null : 'The record window is not ready.'} onChange={show} />
 <RouteStatus route="pipelines" answers={allAnswers} days={windowDays} through={recordReady ? reach?.through : null}
+	recordScope="Native record"
+	settledSuffix={nativeWindow === null ? '' : `Native record window: ${nativeWindow.from} through ${nativeWindow.to} UTC.`}
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retry}>
 	<p class="console-carry" data-console-carry="model" data-pipelines-window-from={viewport.start} data-pipelines-window-to={viewport.end}>{data.carries.pipelines} <a href="{base}/console/model/">Summaries →</a></p>
+	<p data-private-window data-range-from={viewport.start} data-range-to={viewport.end}>Published-day evidence: {viewport.start} through {viewport.end} UTC. Native panels use the record window above.</p>
 	{#each configured.panel_groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
 				{#if id === 'run-health'}
 					<RunHealth yieldDays={data.runYieldDays} grid={data.grid} window={viewport} days={windowDays} floorPct={data.floorPct}
-						windowPending={mounted && reach === null}
 						height={knobs.chart_height} width={knobs.chart_width} tickDensity={data.chart.tick_density} readoutMaxShare={data.chart.readout_max_share} />
 				{:else}
 					<Panel {id} title={titles[id]} wide={['at-a-glance', 'run-timeline', 'chart-drawing'].includes(id)} verdict={id === 'at-a-glance'}>
 						<div data-windowed={id === 'run-timeline' || id === 'chart-drawing' ? undefined : id} data-window-days={id === 'run-timeline' || id === 'chart-drawing' ? undefined : windowDays}
 							aria-label={id === 'run-timeline' || id === 'chart-drawing' ? undefined : `${titles[id]}, selected window ${countDays(windowDays)}`}
-							data-readout-fetched={id !== 'extraction' && (panelQueries[id] !== undefined || id === 'run-timeline') ? '' : undefined}
-							data-panel-state={mounted && reach === null && ['at-a-glance', 'site-cost-per-item', 'chart-drawing'].includes(id) ? 'loading' : undefined}>
+							data-readout-fetched={id !== 'extraction' && (panelQueries[id] !== undefined || id === 'run-timeline') ? '' : undefined}>
 						{#if id === 'at-a-glance'}
 							<AtAGlance days={data.charts} window={viewport} {knobs} chart={data.chart} />
 						{:else if id === 'site-cost-per-item'}
@@ -225,6 +224,10 @@
 									<ArticleAge rows={rows(query)} {knobs} />
 								{/if}
 							</Reserved>
+						{/if}
+						{#if panelQueries[id] !== undefined && id !== 'extraction' && ranges[panelQueries[id].name] !== undefined}
+							{@const range = ranges[panelQueries[id].name]}
+							<p data-native-window data-range-from={range.from} data-range-to={range.to}>Native record: {range.from} through {range.to} UTC.</p>
 						{/if}
 						</div>
 					</Panel>
