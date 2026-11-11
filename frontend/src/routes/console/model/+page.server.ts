@@ -63,6 +63,7 @@ export async function load() {
 	})]));
 	return {
 		cardDays: scores.read.state === 'read' || health.read.state === 'read' ? days : null,
+		cardReads: { article: health.read, score: scores.read },
 		instruments, reasons, windowDay: day, chart: chartConfig(),
 		summarizeBands: summarizeConfig().bands,
 		matchThresholds: { high: Math.round(evaluation.band_high_min * 100), low: Math.round(evaluation.band_medium_min * 100) },
