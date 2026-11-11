@@ -130,11 +130,14 @@ Table G - Rejected refusal shortcuts
   - `backend/tests/pipeline/test_published_whowhat_grids.py`
   - `backend/tests/pipeline/test_work_records.py`
   - `backend/utilities/build_canary_day.py`
+  - `frontend/src/lib/visual/viewport.ts`
   - `frontend/tests/reading-page.spec.ts`
+  - `frontend/tests/visual-legibility.spec.ts`
   - `frontend/tests/whowhat-visual.spec.ts`
   - `docs/reference/github-actions.md`
   - `docs/how-to/run-the-gates.md`
   - `docs/architecture/publishing/visuals.md`
+  - `docs/architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md`
 - **Acceptance gates:** Use the shared selector for the named backend publication cases and one representative reader journey. Extend existing tests instead of adding duplicate journeys. CI owns the complete suite. The manual real-model observation below is required evidence before claiming generation is restored, not a test that writes production data.
 - **Oracle:** With only serialized worker outputs crossing into an isolated publisher tree, normal assembly creates the named chart/grid asset, the digest and inventory reference it, and the reader accepts that same artifact. This proves transport and rendering; authored or recorded model replies alone do not prove present-day model generation.
 

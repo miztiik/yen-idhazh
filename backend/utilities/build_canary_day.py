@@ -95,10 +95,11 @@ from idhazh.contracts.visual_data import (
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
+from idhazh.extract import approx_tokens
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.tasks import compaction
-from idhazh.render import asset_relpath, render_planned_visual
+from idhazh.render import asset_relpath, render_planned_visual, render_planned_whowhat
 from idhazh.render.write import write_bytes_atomic
 from idhazh.telemetry import silicon
 from idhazh.telemetry.publish import (
@@ -181,8 +182,8 @@ SITE_BYTES_FIRST_DAY = 54_230
 #: at all.
 SITE_BYTES_PER_DAY = 11_000
 
-# Five items carry a real visual, so the browser suite exercises the picture
-# path rather than proving it safe by never serving one.
+# Charts and a source-backed grid exercise the reader's separate visual paths
+# rather than proving them safe by never serving either.
 #
 # Bar, line, bubble and stacked bar read the validator's committed plans and element tables,
 # so the browser and backend oracle hold the same source evidence. The other
@@ -195,6 +196,9 @@ BUBBLE_PLAN = Path("tests/fixtures/visual-validator/plans/bubble-relationship.js
 BUBBLE_TABLE = Path("tests/fixtures/visual-validator/tables/scatter-relationship.json")
 STACKED_PLAN = Path("tests/fixtures/visual-validator/plans/stacked-valid.json")
 STACKED_TABLE = Path("tests/fixtures/visual-validator/tables/stacked-whole.json")
+WHOWHAT_PLAN = Path("tests/fixtures/visual-validator/plans/whowhat.json")
+WHOWHAT_TABLE = Path("tests/fixtures/visual-validator/tables/whowhat.json")
+WHOWHAT_ARTICLE = Path("tests/fixtures/visual-validator/articles/whowhat.txt")
 
 #: A second chart, with no unit on its axis. Three stages of one process, which
 #: a unit would not describe, so the drawing code has to lay out an axis that
@@ -611,7 +615,7 @@ def lenses_for(index: int) -> list[str]:
 def visual_for(
     index: int, item_id: str, target: Path, *, visuals: VisualsConfig
 ) -> VisualDecision | None:
-    """Publish five charts and retain one failed chart decision.
+    """Publish charts and a source-backed grid, retaining one failed chart decision.
 
     Several published charts let the browser suite prove that every
     promised picture is served - a single figure cannot show that the page draws
@@ -675,6 +679,35 @@ def visual_for(
             decided(VisualKind.NONE, None, None),
             VisualPlan.read(STACKED_PLAN),
             table,
+            public_root=public_root,
+            relpath=relpath,
+            visuals=visuals,
+        )
+    if index == 5:
+        table = ElementTable.read(WHOWHAT_TABLE).model_copy(update={"item_id": item_id})
+        text = WHOWHAT_ARTICLE.read_text(encoding="utf-8").rstrip("\r\n")
+        words = len(text.split())
+        article = Article.model_validate(
+            json.loads(Path("tests/fixtures/contracts/article/ok.json").read_text(
+                encoding="utf-8"
+            ))
+            | {
+                "item_id": item_id,
+                "url_key": table.url_key,
+                "canonical_url": table.canonical_url,
+                "source_url": table.canonical_url,
+                "text": text,
+                "word_count": words,
+                "source_word_count": words,
+                "token_count": approx_tokens(words),
+            }
+        )
+        return render_planned_whowhat(
+            decided(VisualKind.NONE, None, None).model_copy(update={"url_key": table.url_key}),
+            VisualPlan.read(WHOWHAT_PLAN),
+            table,
+            article,
+            date=DATE,
             public_root=public_root,
             relpath=relpath,
             visuals=visuals,

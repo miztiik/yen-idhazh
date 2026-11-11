@@ -2,115 +2,77 @@
 
 from __future__ import annotations
 
-import json
-import shutil
 from pathlib import Path
 
 import pytest
 from pytest import MonkeyPatch
-from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.paths import read_text
 
-from idhazh import config
+from idhazh import assemble
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import DigestDay
-from idhazh.contracts.element import ElementTable
-from idhazh.contracts.summary import Summary
-from idhazh.contracts.visual import VisualPlan
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind
 from idhazh.contracts.whowhat_grid import WhowhatGridData
-from idhazh.render.whowhat_grid import write_whowhat_from_decisions
-from idhazh.render.write import asset_relpath, assets_in_day
-from idhazh.stages import common
-from idhazh.stages.two_calls import _drawn
+from idhazh.publication import read_inventory
+from idhazh.render.write import asset_relpath
+
+from ._builders import (
+    _work_stage,
+    assert_planning_references,
+    assert_reader_accepts,
+    drawable_article_fetch,
+    plan,
+    publish_worker_items,
+    whowhat_replies,
+)
 
 pytestmark = pytest.mark.visual
-
-DATE = "2026-08-21"
-ARTICLE_FIXTURE = FIXTURES_DIR / "visual-validator" / "articles" / "whowhat.txt"
-PLAN_FIXTURE = FIXTURES_DIR / "visual-validator" / "plans" / "whowhat.json"
-TABLE_FIXTURE = FIXTURES_DIR / "visual-validator" / "tables" / "whowhat.json"
-
-
-def fixture_article(table: ElementTable) -> Article:
-    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
-    text = read_text(ARTICLE_FIXTURE).rstrip("\r\n")
-    words = len(text.split())
-    payload.update(
-        {
-            "item_id": table.item_id,
-            "url_key": table.url_key,
-            "canonical_url": table.canonical_url,
-            "source_url": table.canonical_url,
-            "vertical": table.item_id.split("-", maxsplit=1)[0],
-            "text": text,
-            "word_count": words,
-            "source_word_count": words,
-            "token_count": words,
-        }
-    )
-    return Article.model_validate(payload)
-
 
 def test_publisher_writes_the_grid_from_the_item_decision_alone(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    table = ElementTable.read(TABLE_FIXTURE)
-    article = fixture_article(table)
-    plan = VisualPlan.read(PLAN_FIXTURE)
-    summary_payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
-    summary_payload.update({"item_id": table.item_id, "url_key": table.url_key})
-    summary = Summary.model_validate(summary_payload)
-
     worker = tmp_path / "worker"
-    worker_public = worker / "public"
-    monkeypatch.setattr(common, "PUBLIC_ROOT", worker_public / "digest")
-    decision = _drawn(
-        summary,
-        plan,
-        table,
-        article=article,
-        settings=config.load(CONFIG_DIR),
-        date=DATE,
-        stamp={
-            "version": VisualDecision.schema_version(),
-            "model_id": "fixture-model",
-            "decided_at": "2026-10-28T00:00:00Z",
-        },
-        run_id="whowhat-fixture",
+    run_plan, items, server = _work_stage(
+        worker,
+        monkeypatch,
+        replies=whowhat_replies(),
+        fetcher=drawable_article_fetch,
+        run_plan=plan(item_count=1),
     )
-
+    item_id = run_plan.items[0].item_id
+    article = Article.read(items / f"{item_id}.article.json")
+    decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
     assert decision.kind is VisualKind.WHOWHAT
     assert decision.whowhat_grid is not None
-    relpath = asset_relpath(DATE, table.item_id)
+    relpath = asset_relpath(run_plan.date, item_id)
     assert decision.data_path == relpath
-    assert (worker_public / relpath).is_file()
-
-    worker_items = worker / "items"
-    worker_items.mkdir(parents=True)
-    decision_path = worker_items / f"{table.item_id}{PAYLOAD_SUFFIX}"
-    decision_path.write_text(decision.to_json(), encoding="utf-8", newline="\n")
+    pairs = decision.whowhat_grid.rows
+    assert [(row.actor.span_excerpt if row.actor else None) for row in pairs] == [
+        "Denmark", "Ireland",
+    ]
+    assert article.text is not None
+    for row in pairs:
+        assert row.actor is not None and row.claim is not None
+        assert row.actor.sentence_index == row.claim.sentence_index
+        for span in (row.actor, row.claim):
+            assert article.text[span.span_start:span.span_end] == span.span_excerpt
+    assert_planning_references(
+        server,
+        {span.element_id for row in pairs for span in (row.actor, row.claim) if span is not None},
+    )
 
     publisher = tmp_path / "publisher"
-    publisher_items = publisher / "run" / DATE / "items"
-    shutil.copytree(worker_items, publisher_items)
-    handed_off = VisualDecision.read(publisher_items / decision_path.name)
+    publish_worker_items(run_plan, items, publisher, monkeypatch)
     publisher_public = publisher / "public"
-    assert not (publisher_public / relpath).exists(), "the worker's public tree must stay behind"
-
-    day_payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
-    item = next(item for item in day_payload["items"] if item["item_id"] == "ai-01")
-    item["item_id"] = table.item_id
-    item["visual"] = {
-        "kind": VisualKind.WHOWHAT.value,
-        "state": "rendered",
-        "data_path": relpath,
-        "alt": handed_off.alt_text,
-    }
-    day = DigestDay.model_validate(day_payload)
-
-    write_whowhat_from_decisions(day, [handed_off], public_root=publisher_public)
-
+    day = DigestDay.from_json(
+        read_text(assemble.day_dir(publisher_public / "digest", run_plan.date) / "digest.json")
+    )
+    published_item = next(item for item in day.items if item.item_id == item_id)
+    assert published_item.visual is not None
+    assert published_item.visual.kind == VisualKind.WHOWHAT.value
+    assert published_item.visual.data_path == relpath
     published_path = publisher_public / relpath
-    assert published_path.read_bytes() == (worker_public / relpath).read_bytes()
-    assert WhowhatGridData.from_json(read_text(published_path)) == handed_off.whowhat_grid
-    assert relpath in assets_in_day(publisher_public, DATE)
+    assert published_path.read_bytes() == (worker / "public" / relpath).read_bytes()
+    assert WhowhatGridData.from_json(read_text(published_path)) == decision.whowhat_grid
+    assert relpath in {entry.path for entry in read_inventory(publisher_public).entries}
+    assert_reader_accepts(published_path, item_id=item_id)

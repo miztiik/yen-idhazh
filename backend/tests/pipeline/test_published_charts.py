@@ -2,25 +2,28 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
 from pytest import MonkeyPatch
-from support.paths import CONFIG_DIR, read_text
+from support.paths import read_text
 
-from idhazh import assemble, config
+from idhazh import assemble
 from idhazh.contracts.digest_day import DigestDay
-from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision
+from idhazh.contracts.visual_data import VisualData
+from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind
 from idhazh.publication import read_inventory
-from idhazh.stages.assemble import stage_assemble
+from idhazh.render.write import asset_relpath
 
 from ._builders import (
     DRAWS_LABEL,
     DRAWS_SUMMARIZE_AND_PLAN,
+    _work_stage,
+    assert_planning_references,
+    assert_reader_accepts,
     drawable_article_fetch,
-    isolate_ledgers,
-    worked,
+    plan,
+    publish_worker_items,
 )
 
 pytestmark = pytest.mark.visual
@@ -39,27 +42,26 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     if assemble stops writing it.
     """
     worker = tmp_path / "worker"
-    run_plan, items, _ = worked(
+    run_plan, items, server = _work_stage(
         worker,
         monkeypatch,
         replies=(DRAWS_LABEL.read_bytes(), DRAWS_SUMMARIZE_AND_PLAN.read_bytes()),
         fetcher=drawable_article_fetch,
+        run_plan=plan(item_count=1),
     )
-    drawn = [
-        decision.data_path
-        for decision in (
-            VisualDecision.read(path) for path in sorted(items.glob(f"*{PAYLOAD_SUFFIX}"))
-        )
-        if decision.data_path is not None
-    ]
-    assert drawn, "the recorded pair drew no chart, so this test would assert nothing"
+    item_id = run_plan.items[0].item_id
+    decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
+    relpath = asset_relpath(run_plan.date, item_id)
+    assert decision.kind is VisualKind.CHART
+    assert decision.data_path == relpath
+    assert decision.spec is not None
+    compiled = VisualData.from_json(decision.spec)
+    references = {mark.element_id for mark in compiled.marks if mark.element_id is not None}
+    assert references
+    assert_planning_references(server, references)
 
     publisher = tmp_path / "publisher"
-    isolate_ledgers(publisher, monkeypatch)
-    shutil.copytree(items, publisher / "run" / run_plan.date / "items")
-    stage_assemble(
-        run_plan, settings=config.load(CONFIG_DIR), commit_sha="a" * 40, runner="fixture"
-    )
+    publish_worker_items(run_plan, items, publisher, monkeypatch)
 
     public = publisher / "public"
     day = DigestDay.from_json(
@@ -67,9 +69,10 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     )
     named = {item.visual.data_path for item in day.items if item.visual is not None}
     inventoried = {entry.path for entry in read_inventory(public).entries}
-    for relpath in drawn:
-        assert relpath in named, f"the published day does not name {relpath}"
-        assert (public / relpath).read_bytes() == (worker / "public" / relpath).read_bytes(), (
-            f"{relpath} is not the chart the work shard drew"
-        )
-        assert relpath in inventoried, f"the inventory does not count {relpath}"
+    assert relpath in named, f"the published day does not name {relpath}"
+    assert (public / relpath).read_bytes() == (worker / "public" / relpath).read_bytes(), (
+        f"{relpath} is not the chart the work shard drew"
+    )
+    assert VisualData.read(public / relpath) == compiled
+    assert relpath in inventoried, f"the inventory does not count {relpath}"
+    assert_reader_accepts(public / relpath, item_id=item_id)

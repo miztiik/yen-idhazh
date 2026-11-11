@@ -27,13 +27,25 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.visual_decision import VisualDecision
+from idhazh.contracts.visual_decision import (
+    PAYLOAD_SUFFIX,
+    NoneReason,
+    VisualDecision,
+    VisualKind,
+)
 from idhazh.fetch import FetchResult, FetchTimings
 from idhazh.llm.server import Completion
 from idhazh.stages.two_calls import _decide_the_visual, _silent_recorder
-from idhazh.telemetry.record import persist
+from idhazh.telemetry.record import persist, recorded_row
 
-from ._builders import _work_stage, captured_article_fetch, plan
+from ._builders import (
+    _work_stage,
+    captured_article_fetch,
+    declining_replies,
+    drawable_article_fetch,
+    plan,
+    publish_worker_items,
+)
 
 #: Two items prove ordering and totals across siblings.
 PLANNED_ITEMS: Final = 2
@@ -225,11 +237,31 @@ def test_a_passing_item_carries_no_failure_detail(
     """`detail_cell("")` is the string "unspecified failure", and a row that
     carried it while its outcome said `ok` read as a failure nobody had.
     """
-    run_a_shard(tmp_path, monkeypatch, caplog)
-
-    for record in named(caplog, "item.done"):
-        if record["outcome"] == "ok":
-            assert record["detail"] is None
+    caplog.set_level(logging.INFO, logger="idhazh")
+    run_plan, items, server = _work_stage(
+        tmp_path / "worker", monkeypatch,
+        replies=declining_replies(),
+        fetcher=drawable_article_fetch,
+        run_plan=plan(item_count=1),
+    )
+    item_id = run_plan.items[0].item_id
+    decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
+    recorded = recorded_row(items, item_id)
+    assert server.served == 2
+    assert decision.kind is VisualKind.NONE
+    assert decision.none_reason is NoneReason.MODEL_DECLINED
+    assert decision.asked_the_model is True
+    assert decision.data_path is None
+    assert recorded is not None
+    assert recorded.outcome.value == "ok" and recorded.detail is None
+    assert recorded.failed_field is None and recorded.failed_rule is None
+    done = named(caplog, "item.done")
+    assert len(done) == 1
+    assert done[0]["outcome"] == "ok" and done[0]["detail"] is None
+    day = publish_worker_items(run_plan, items, tmp_path / "publisher", monkeypatch)
+    assert len(day.items) == 1
+    assert day.items[0].item_id == item_id
+    assert day.items[0].visual is None
 
 
 def test_a_malformed_visual_decline_keeps_shape_diagnostics_off_the_success_detail(

@@ -69,8 +69,9 @@ export function fitChartGeometry(
 type Measured = (room: ChartRoom) => void;
 const figures = new Map<Element, Measured>();
 let observer: ResizeObserver | null = null;
+let pendingFrame: number | null = null;
 
-function measure(node: Element, run: Measured): void {
+function measure(node: Element): ChartRoom {
 	const plot = node.querySelector<SVGSVGElement>(':scope > svg');
 	const text = plot?.querySelector<SVGTextElement>('text');
 	const style = getComputedStyle(node);
@@ -82,37 +83,53 @@ function measure(node: Element, run: Measured): void {
 		(plot?.getBoundingClientRect().height ?? 0) +
 		parseFloat(style.marginTop) + parseFloat(style.marginBottom);
 	const textHeight = text ? text.getBBox().height : parseFloat(style.fontSize);
-	run({
+	return {
 		width: roomIn(node),
 		height: Math.max(0, (window.visualViewport?.height ?? window.innerHeight) - occlusion - furniture),
 		textHeight
-	});
+	};
 }
 
 function measureAll(): void {
-	for (const [node, run] of figures) measure(node, run);
+	const readings = Array.from(figures, ([node, run]) => ({ node, run, room: measure(node) }));
+	for (const { node, run, room } of readings) {
+		if (figures.get(node) === run) run(room);
+	}
+}
+
+function queueMeasurements(): void {
+	if (figures.size === 0 || pendingFrame !== null) return;
+	pendingFrame = window.requestAnimationFrame(() => {
+		pendingFrame = null;
+		measureAll();
+	});
 }
 
 /** One observer and viewport subscription serve every mounted story figure. */
 export function whenChartFits(node: Element, run: Measured): () => void {
 	if (figures.size === 0) {
-		window.addEventListener('resize', measureAll);
-		window.visualViewport?.addEventListener('resize', measureAll);
-		document.fonts.addEventListener('loadingdone', measureAll);
+		window.addEventListener('resize', queueMeasurements);
+		window.visualViewport?.addEventListener('resize', queueMeasurements);
+		document.fonts.addEventListener('loadingdone', queueMeasurements);
 	}
-	observer ??= new ResizeObserver(measureAll);
+	observer ??= new ResizeObserver(queueMeasurements);
 	figures.set(node, run);
-	observer.observe(node);
-	for (const child of node.children) observer.observe(child);
-	measure(node, run);
+	const watched = [node, ...node.children];
+	for (const target of watched) observer.observe(target);
+	run(measure(node));
 	return () => {
-		observer?.unobserve(node);
-		for (const child of node.children) observer?.unobserve(child);
+		for (const target of watched) observer?.unobserve(target);
 		figures.delete(node);
 		if (figures.size === 0) {
-			window.removeEventListener('resize', measureAll);
-			window.visualViewport?.removeEventListener('resize', measureAll);
-			document.fonts.removeEventListener('loadingdone', measureAll);
+			if (pendingFrame !== null) {
+				window.cancelAnimationFrame(pendingFrame);
+				pendingFrame = null;
+			}
+			observer?.disconnect();
+			observer = null;
+			window.removeEventListener('resize', queueMeasurements);
+			window.visualViewport?.removeEventListener('resize', queueMeasurements);
+			document.fonts.removeEventListener('loadingdone', queueMeasurements);
 		}
 	};
 }
