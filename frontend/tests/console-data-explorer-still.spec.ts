@@ -104,6 +104,13 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 	for (const ledger of FEED_LEDGERS) {
 		await expect(page.locator(`[data-ledger-name="${ledger}"]`)).toBeVisible();
 	}
+	await expect.poll(() => page.locator('[data-site-footer]').evaluate((footer) =>
+		footer.getBoundingClientRect().top -
+		document.querySelector('[data-workbench-region="answer"]')!.getBoundingClientRect().bottom
+	), 'the result must finish before the footer begins').toBeGreaterThanOrEqual(0);
+	const themeBefore = await page.locator('html').getAttribute('data-theme');
+	await page.locator('[data-site-footer] [data-theme-toggle]').click();
+	await expect(page.locator('html')).toHaveAttribute('data-theme', themeBefore === 'light' ? 'dark' : 'light');
 
 	await page.getByRole('tab', { name: 'Chart' }).click();
 	await page.locator('[data-shape-choice="partsOfOne"]').click();
@@ -157,6 +164,8 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['new packed rows', '3']]);
 	await page.screenshot({ path: test.info().outputPath('compact-workbench.png') });
+	await page.locator('[data-site-footer]').scrollIntoViewIfNeeded();
+	await page.screenshot({ path: test.info().outputPath('workbench-footer-wide.png') });
 	expect(requests.filter((url) => /\/state\/raw\/|api\.github\.com|\/contents\//.test(url))).toEqual([]);
 	expect(requests.filter((url) => url === `${origin}/config/ledgers.json`)).toHaveLength(2);
 });

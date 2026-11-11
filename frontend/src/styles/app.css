@@ -257,9 +257,8 @@ body {
 /* A workbench is a tool rather than a page of panels, so it is allowed the
    whole window, at any width. Its route asks for workbench chrome
    (`console.explorer_chrome`) and CSS reads that from the frame, as the rule
-   above reads the operator surface; no other route changes. The footer goes
-   because it would stand between the workbench and the window's bottom edge;
-   the wordmark leads to the home page, whose footer carries the same links. */
+   above reads the operator surface. Its shared footer remains after the
+   workbench's actual minimum content, not beneath overflowing panels. */
 .frame:has([data-console-chrome='workbench']) {
 	max-width: none;
 }
@@ -270,7 +269,7 @@ html:has([data-surface='operator']) { scroll-padding-block-start: var(--console-
 }
 
 /* From the wide breakpoint the frame is exactly the window's height, and the
-   route's workbench takes whatever the header and the strip leave. A window
+   route's workbench takes whatever the header and footer leave. A window
    too short for the workbench's smallest regions makes the page scroll rather
    than clip them. The width matches `frame.breakpoints_px[1]`, which a media
    query cannot read. */
@@ -285,7 +284,7 @@ html:has([data-surface='operator']) { scroll-padding-block-start: var(--console-
 		display: flex;
 		flex-direction: column;
 		flex: 1 1 0;
-		min-block-size: 0;
+		min-block-size: min-content;
 	}
 }
 

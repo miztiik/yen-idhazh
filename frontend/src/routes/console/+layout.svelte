@@ -201,10 +201,10 @@
 	}
 	@media (min-width: 1024px) {
 		.console-shell { grid-template-columns: var(--console-rail-width) minmax(0, 1fr); align-items: start; }
-		.console-shell[data-console-chrome='workbench'] { flex: 1 1 0; min-block-size: 0; align-items: stretch; }
-		[data-console-chrome='workbench'] .console-main { display: flex; flex-direction: column; min-block-size: 0; }
+		.console-shell[data-console-chrome='workbench'] { flex: 1 1 0; min-block-size: min-content; align-items: stretch; }
+		[data-console-chrome='workbench'] .console-main { display: flex; flex-direction: column; min-block-size: min-content; }
 		[data-console-chrome='workbench'] .console-toolbar { position: static; border: 0; }
-		[data-console-chrome='workbench'] .console-route-content { display: flex; flex-direction: column; flex: 1 1 0; min-block-size: 0; }
+		[data-console-chrome='workbench'] .console-route-content { display: flex; flex-direction: column; flex: 1 1 0; min-block-size: min-content; }
 		[data-console-chrome='workbench'] .console-route-head { padding-block-end: var(--console-control-gap); }
 	}
 </style>

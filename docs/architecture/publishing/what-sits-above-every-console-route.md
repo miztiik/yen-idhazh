@@ -131,7 +131,10 @@ nothing are a subset of the at-floor set, not a duplicate candidate.
 `console.explorer_chrome` selects workbench chrome. The explorer uses the same
 rail, route heading, hover surface, back-to-top control and visual tokens, but keeps its days and Run controls
 inside the editor. It has no duplicate band, completeness line or window
-sentence. Editor and result regions retain their existing behavior.
+sentence. Editor and result regions retain their query behavior. The wide
+layout reserves the configured query room and gives remaining room to results.
+Their actual minimums propagate through the frame, so a short window scrolls
+the document rather than letting a result cover the shared footer.
 
 Every console route fills the available window with configured gutters by
 default. `frame.console_max_px: null` removes the centered cap; an existing
