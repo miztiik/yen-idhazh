@@ -39,7 +39,7 @@ Table C - Repair increments and the restored-generation roll-up
 | C1 | 1 | Give the visual planner usable source evidence | - | A | DONE | fantastic-garbanzo | - | 0b1cac34-83e8-494c-99fc-6539f5299bdc |
 | C2 | 2 | Preserve the exact reason a visual was refused | 1 | B | DONE | shiny-spoon | - | ef9d68ad-ccf4-417d-9a05-fe0305ef21c7 |
 | C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2, 4, 5, 6 | C | PENDING | fuzzy-bassoon | - | 094b8d19-fd66-47ce-b6ff-72d8af8f39d7 |
-| C4 | 4 | Replay retained articles on the controlled test runtime | 1, 2 | D | IN-FLIGHT | - | - | - |
+| C4 | 4 | Replay retained articles on the controlled test runtime | 1, 2 | D | IN-FLIGHT | miniature-giggle | - | 98c0f7b2-33d5-487f-b893-37ef59cbb8c9 |
 | C5 | 5 | Correct literal sentence addressing and claim coverage | 1, 2 | D | DONE | cautious-tribble | - | e7392204-404e-484d-9cf5-5811294c4553 |
 | C6 | 6 | Show complete source-backed claims to the reader | 1, 2 | E | DONE | effective-guide | - | 96eb1442-fd7b-4734-b9a4-98d815cf9919 |
 

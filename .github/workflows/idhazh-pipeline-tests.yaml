@@ -6,7 +6,7 @@
 # nothing and it runs the configured model. It is a check that a model walks the
 # path: this checks stage execution, not server performance or summary quality.
 #
-# Four jobs. `plan` draws the articles once and lists the runners the enabled
+# Random mode has four jobs. `plan` draws once and lists the runners the enabled
 # test cases need. `test-case` is one job per runner, each with its own model
 # server: the articles split into shards the way a production day is split
 # across workers, and every shard of every test case runs at the same time, so a
@@ -33,19 +33,28 @@
 #
 # The faithfulness scorer is skipped. It would add a second model download to a
 # workflow that checks execution rather than summary quality.
+#
+# Optional retained inputs bypass the draw and every experimental case. Only
+# selected native Articles cross into a fresh, artifact-only production call
+# pair; the report and ledger-commit jobs do not run in that mode.
 name: Pipeline tests
 
-# Dispatch only, and it asks for ONE thing: which model to run the test cases
-# on. Every test case setting is drawn or read from config (Guardrail #6) - the
-# addresses, the draw size, the shard size, the job bound, which test cases run,
-# the slot counts and the windows. The committed config names the incumbent by
-# design, so which model to check is the one question config cannot answer, and
-# it is the same line a swap would later move.
+# Dispatch only. Random mode may select a candidate model; retained mode names
+# existing native inputs and keeps the production model. Other controls come
+# from committed configuration.
 on:
   workflow_dispatch:
     inputs:
       candidate_models_file:
         description: 'Models file under config/, for example models/gemma-4-e4b-qat.json. Empty runs the configured model.'
+        default: ''
+      retained_source_run:
+        description: 'Completed Content refresh run ID. Empty preserves the random mode.'
+        type: string
+        default: ''
+      retained_item_ids:
+        description: 'Explicit unique native item IDs, comma-separated and bounded by pipeline-tests.articles_a_dispatch. Required with retained_source_run.'
+        type: string
         default: ''
 
 permissions:
@@ -69,6 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     timeout-minutes: 15
     outputs:
       date: ${{ steps.plan.outputs.date }}
@@ -76,8 +86,14 @@ jobs:
       models_file: ${{ steps.models.outputs.candidate_models_file }}
       llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
       jobs: ${{ steps.jobs.outputs.jobs }}
+      retained_plan_file: ${{ steps.retained.outputs.plan_file }}
+      retained_source_attempt: ${{ steps.retained.outputs.source_attempt }}
+      retained_source_commit: ${{ steps.retained.outputs.source_commit }}
+      retained_budget_minutes: ${{ steps.retained.outputs.budget_minutes }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v7
         with:
@@ -110,6 +126,7 @@ jobs:
       # read six weeks later off the run log alone.
       - name: Pick the articles
         id: pick
+        if: inputs.retained_source_run == '' && inputs.retained_item_ids == ''
         env:
           PICK_SEED: ${{ github.run_id }}
         run: |
@@ -127,6 +144,7 @@ jobs:
       # `--models-file` empty reads the committed pointer, so an empty dispatch
       # runs the configured model.
       - id: models
+        if: inputs.retained_source_run == '' && inputs.retained_item_ids == ''
         env:
           CANDIDATE_MODELS_FILE: ${{ inputs.candidate_models_file }}
         run: |
@@ -146,6 +164,7 @@ jobs:
       # never writes.
       - name: Plan the articles
         id: plan
+        if: inputs.retained_source_run == '' && inputs.retained_item_ids == ''
         env:
           PICKED_ADDRESSES: ${{ steps.pick.outputs.addresses }}
           PICKED_FEEDS: ${{ steps.pick.outputs.feeds }}
@@ -162,20 +181,47 @@ jobs:
       # starts no job, and switching one on is an edit to that file alone.
       - name: List the runners the enabled test cases need
         id: jobs
+        if: inputs.retained_source_run == '' && inputs.retained_item_ids == ''
         run: |
           set -euo pipefail
           python3 backend/utilities/pipeline_test_case.py jobs \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
+      - name: Validate and select retained native Articles
+        id: retained
+        if: inputs.retained_source_run != '' || inputs.retained_item_ids != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RETAINED_SOURCE_RUN: ${{ inputs.retained_source_run }}
+          RETAINED_ITEM_IDS: ${{ inputs.retained_item_ids }}
+          CANDIDATE_MODELS_FILE: ${{ inputs.candidate_models_file }}
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/replay_article_calls.py prepare \
+            --source-run "$RETAINED_SOURCE_RUN" \
+            --item-ids "$RETAINED_ITEM_IDS" \
+            --candidate-models-file "$CANDIDATE_MODELS_FILE"
+
       - name: Upload the plan
+        if: inputs.retained_source_run == '' && inputs.retained_item_ids == ''
         uses: actions/upload-artifact@v7
         with:
           name: pipeline-tests-plan-${{ github.run_id }}
           path: backend/var/pipeline-tests/plan.json
           retention-days: 90
 
+      - name: Upload the validated retained inputs
+        if: inputs.retained_source_run != '' || inputs.retained_item_ids != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: pipeline-tests-retained-inputs-${{ github.run_id }}
+          path: backend/var/retained-article-verification/
+          if-no-files-found: error
+          retention-days: 90
+
   test-case:
     needs: plan
+    if: inputs.retained_source_run == '' && inputs.retained_item_ids == ''
     name: ${{ matrix.test_case }} runner ${{ matrix.runner }}
     runs-on: ubuntu-latest
     # Said here rather than inherited. The `commit` job takes the write, and a
@@ -337,12 +383,90 @@ jobs:
           if-no-files-found: ignore
           retention-days: 90
 
+  retained:
+    needs: plan
+    if: inputs.retained_source_run != '' || inputs.retained_item_ids != ''
+    name: Retained production calls
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.retained_budget_minutes) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Take the validated retained inputs
+        uses: actions/download-artifact@v8
+        with:
+          name: pipeline-tests-retained-inputs-${{ github.run_id }}
+          path: backend/var/retained-article-verification/
+
+      - uses: ./.github/actions/model-server
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          probe_url: ${{ env.MODEL_SERVER_PROBE }}
+          llama_cpp_build: ${{ needs.plan.outputs.llama_cpp_build }}
+
+      - name: The server proves the production entry
+        run: python3 backend/utilities/prove_the_entry.py --config-root config
+
+      - name: Run fresh native call pairs
+        env:
+          RETAINED_SOURCE_RUN: ${{ inputs.retained_source_run }}
+          RETAINED_ITEM_IDS: ${{ inputs.retained_item_ids }}
+          RETAINED_PLAN_FILE: ${{ needs.plan.outputs.retained_plan_file }}
+          RETAINED_SOURCE_ATTEMPT: ${{ needs.plan.outputs.retained_source_attempt }}
+          RETAINED_SOURCE_COMMIT: ${{ needs.plan.outputs.retained_source_commit }}
+          RUN_EXECUTION: ${{ github.run_id }}
+          LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/replay_article_calls.py run \
+            --source-run "$RETAINED_SOURCE_RUN" \
+            --item-ids "$RETAINED_ITEM_IDS" \
+            --plan-file "$RETAINED_PLAN_FILE" \
+            --source-attempt "$RETAINED_SOURCE_ATTEMPT" \
+            --source-commit "$RETAINED_SOURCE_COMMIT" \
+            --execution "$RUN_EXECUTION"
+
+      - name: Stop the owned model and retain its log
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -f llama-server.pid ]; then
+            kill "$(cat llama-server.pid)"
+          fi
+          if [ -f llama-server.log ]; then
+            mkdir -p backend/var/retained-article-verification
+            cp llama-server.log backend/var/retained-article-verification/
+          fi
+
+      - name: Upload native retained verification outputs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pipeline-tests-retained-${{ github.run_id }}
+          path: backend/var/retained-article-verification/
+          if-no-files-found: error
+          retention-days: 90
+
   # Every runner's articles, put back together per test case and read against
   # the draw. A runner that failed is still reported: its articles are named as
   # missing rather than dropped from the table.
   report:
     needs: [plan, test-case]
-    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && inputs.retained_source_run == '' && inputs.retained_item_ids == '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -390,7 +514,7 @@ jobs:
   # finds nothing to stage.
   commit:
     needs: [plan, test-case]
-    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && inputs.retained_source_run == '' && inputs.retained_item_ids == '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

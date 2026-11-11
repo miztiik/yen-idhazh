@@ -244,6 +244,7 @@ def _drawn(
     date: str,
     stamp: Mapping[str, str],
     run_id: str | None,
+    render_root: Path | None = None,
     published_marks: Mapping[VisualType, Sequence[int]] | None = None,
 ) -> VisualDecision:
     """Validate and deliver one typed request, preserving its original choice on refusal."""
@@ -299,7 +300,7 @@ def _drawn(
             table,
             article,
             date=date,
-            public_root=common.PUBLIC_ROOT.parent,
+            public_root=render_root if render_root is not None else common.PUBLIC_ROOT.parent,
             relpath=asset_relpath(date, summary.item_id),
             visuals=visuals,
             run_id=run_id,
@@ -365,7 +366,7 @@ def _drawn(
         ),
         drawable,
         table,
-        public_root=common.PUBLIC_ROOT.parent,
+        public_root=render_root if render_root is not None else common.PUBLIC_ROOT.parent,
         relpath=asset_relpath(date, summary.item_id),
         visuals=visuals,
         run_id=run_id,
@@ -530,6 +531,7 @@ def two_calls_one_item(
     tracer: telemetry.Tracer | None = None,
     recorder: ItemRecorder | None = None,
     capture_root: Path | None = None,
+    render_root: Path | None = None,
     published_marks: Mapping[VisualType, Sequence[int]] | None = None,
 ) -> _TwoCalls:
     """One article read once, labelled, summarized and drawn - in two adjacent calls.
@@ -873,6 +875,7 @@ def two_calls_one_item(
             wants_a_plan=wants_a_plan,
             run_id=run_id,
             recorder=kept,
+            render_root=render_root,
             published_marks=published_marks,
         )
         decision = decision.model_copy(
@@ -897,6 +900,7 @@ def _decide_the_visual(
     wants_a_plan: bool,
     run_id: str | None,
     recorder: ItemRecorder | None = None,
+    render_root: Path | None = None,
     published_marks: Mapping[VisualType, Sequence[int]] | None = None,
 ) -> VisualDecision:
     """Which of the routes to a picture, or to none, this reply took.
@@ -960,5 +964,5 @@ def _decide_the_visual(
         )
     return _drawn(
         summary, plan, table, article=article, settings=settings, date=date, stamp=stamp,
-        run_id=run_id, published_marks=published_marks,
+        run_id=run_id, render_root=render_root, published_marks=published_marks,
     )
