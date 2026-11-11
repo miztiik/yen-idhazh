@@ -13,7 +13,7 @@ const DAY = { date: '2030-06-01', reached: 0, asked: 0, drafted: 0, published: 0
 const PANELS = [
 	['at-a-glance', 'AtAGlance'], ['run-health', 'RunHealth'], ['site-cost-per-item', 'SiteCostPerItem'],
 	['chart-drawing', 'ChartDrawing'],
-	['visual-refusals', 'VisualRefusals'], ['visual-written-types', 'VisualAttempts']
+	['visual-refusals', 'VisualRefusals']
 ] as const;
 
 function words(html: string) {
@@ -79,17 +79,13 @@ for (const [id, name] of PANELS) {
 			'visual-refusals': {
 				quiet: { days: [], read: { state: 'read', first: DAY.date, through: DAY.date, lastRows: null, lostDays: [], setAside: {} } },
 				absent: { days: [], read: { state: 'not-packed' } }
-			},
-			'visual-written-types': {
-				quiet: { days: [], read: 'read', notes: [] },
-				absent: { days: [], read: 'not-packed', notes: ['The visual-attempt record is unavailable.'] }
 			}
 		};
 		const quiet = render(component, { props: { ...common, ...inputs[id].quiet } }).body;
 		const absent = render(component, { props: { ...common, ...inputs[id].absent } }).body;
 		expect(words(quiet)).not.toBe(words(absent));
 		expect(words(absent)).toContain('unavailable');
-		if (name === 'VisualAttempts' || name === 'VisualRefusals') {
+		if (name === 'VisualRefusals') {
 			expect(quiet).toContain('data-empty="quiet"');
 			expect(quiet).not.toContain('data-record-incomplete');
 			expect(absent).toContain('data-record-incomplete');

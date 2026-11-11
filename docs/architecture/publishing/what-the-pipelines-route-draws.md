@@ -37,10 +37,10 @@ surfaces follow the window control is
 
 ## Plan52: native readings and private published-day facts
 
-The route has thirteen addressed panels, in this order: `at-a-glance`,
+The route has twelve addressed panels, in this order: `at-a-glance`,
 `run-health`, `site-cost-per-item`, `failure-mix`, `item-time-split`,
 `slower-on-same-work`, `stage-timings`, `item-cost`, `run-timeline`,
-`chart-drawing`, `visual-refusals`, `visual-written-types`, `article-age`. Configuration comes from
+`chart-drawing`, `visual-refusals`, `article-age`. Configuration comes from
 `consoleKnobs()` and `routeConsole('pipelines')`, not from page data.
 
 The browser uses the declared queries in `console/queries/pipelines.ts` and the
@@ -412,15 +412,16 @@ remain build-time inputs. Their own window and
 snapshot rules do not become ItemCost's rules; the prerendered private marks
 remain available without scripts.
 
-## Visual-attempt views read the unpublished record at build time
+## Visual refusal lines read the unpublished attempt record at build time
 
-`visual-refusals` and `visual-written-types` count the rows in
+`visual-refusals` counts the rows in
 `visual-design-attempts` (one row per settled visual attempt). That record is
 not published to the Data explorer, so the browser cannot ask for it. The route
 load reads it through `visualAttemptRows` over the widest window, groups the
 rows into small per-day counts, and the page filters those counts to the
-selected window. Only the columns the views use are read, and a backend test
-holds that list to `VisualAttemptRow`. No ledger, column or producer is added.
+selected window. The view uses only the date and first refusal columns; the
+shared reader retains its day/run ordering columns. A backend test holds the
+view's column list to `VisualAttemptRow`. No ledger, column or producer is added.
 
 `visual-refusals` shows each recorded first validator refusal
 (`rejection_reason`) as a daily line, including requests that were later written.
@@ -440,33 +441,30 @@ can still draw the zero failed-check line. If only incomplete attempt counts
 are available, the panel states that no complete check count is available and
 prints those known attempts rather than drawing zeros.
 
-`visual-written-types` compares `planned_type` with successfully written
-`rendered_type` over the selected window. Each pair shows its attempt count.
-A written file is not proof of publication or a human decision to keep it.
-Older written attempts with no typed outcome are counted separately and make
-the comparison explicitly incomplete; their type is never inferred from the
-request. Both views keep the attempt reader's missing-day and set-aside-file
+The refusal view keeps the attempt reader's missing-day and set-aside-file
 notes beside the counts. A packed record that starts late or stops before the
-selected UTC window states its coverage and marks the views incomplete. Notes
-follow the selected window in both attempt views. The line adapter reads the
+selected UTC window states its coverage and marks the view incomplete. Notes
+follow the selected window. The line adapter reads the
 typed `RecordRead` coverage and loss metadata, never its explanatory prose.
 No new measurement, ledger field, producer, keep
 rate, repetition measure or single-type-day alarm is added.
 
-These views extend the existing private record section because they use the
+This view stays in the existing private record section because it uses the
 same bounded reader and its evidence rules, not another delivery path.
 
 ## Design rationale
 
 ### Selected visual diagnostics are removed, not hidden
 
-`pipeline-funnel`, `downgrade-funnel` and `extraction` have no roster entries,
-mounts, local reducers or queries. Their removal gives up stage-by-class
+`pipeline-funnel`, `downgrade-funnel`, `extraction` and `visual-written-types`
+have no roster entries, mounts, local reducers or queries. Their removal gives up stage-by-class
 attrition, draft outcomes and replacement depth, and the extraction class,
-flag and yield diagnostic. The retained visual overview does not replace those
-questions. Producer records and persisted contracts remain unchanged; unread
-item extraction cells and the intentionally undrawn evaluator flag say so in
-their existing ownership declarations.
+flag and yield diagnostic, plus the visible comparison of planned and successfully
+written visual types. Written means a file was created, not that it was published
+or kept by a person. The retained visual overview does not replace those
+questions. There is no hidden comparison or relocated panel. Producer records
+and persisted contracts remain unchanged; unread item extraction cells and the
+intentionally undrawn evaluator flag say so in their existing ownership declarations.
 
 Daily refusal lines retain a different question: the first failed plan check,
 even on an attempt later written. Separate named lines keep every recorded

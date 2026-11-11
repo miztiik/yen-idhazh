@@ -28,9 +28,7 @@
 	import RunTimeline from '$lib/console/pipelines/RunTimeline.svelte';
 	import ChartDrawing from '$lib/console/pipelines/ChartDrawing.svelte';
 	import ArticleAge from '$lib/console/pipelines/ArticleAge.svelte';
-	import VisualAttempts from '$lib/console/pipelines/VisualAttempts.svelte';
 	import VisualRefusals from '$lib/console/pipelines/VisualRefusals.svelte';
-	import { attemptNotes } from '$lib/console/pipelines/attempt-notes';
 
 	let { data } = $props();
 	const knobs = consoleKnobs();
@@ -64,7 +62,6 @@
 	const settings = $derived(settingsRules(data, { from: viewport.start, to: viewport.end }, 'none'));
 	const charts = $derived(data.charts.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
 	const attemptDays = $derived(data.visualAttempts.days.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
-	const attemptRead = $derived(attemptNotes(data.visualAttempts.read, viewport));
 	const record = $derived(recordReady ? pipelinesRecord(reach, windowDays) : null);
 	const nativeWindow = $derived(record?.first != null && record.through !== null
 		? windowRange(windowDays, record.through, record.first) : null);
@@ -144,7 +141,6 @@
 		'item-cost': 'What one item cost the model', 'run-timeline': "Where the run's time went, on the run's own clock",
 		'chart-drawing': 'Visuals drawn for articles',
 		'visual-refusals': 'Recorded refusal reasons over time',
-		'visual-written-types': 'Planned and successfully written visual types',
 		'article-age': 'Source age at work start'
 	};
 	const panelQueries: Record<string, PanelQuery> = {
@@ -183,8 +179,6 @@
 							<ChartDrawing days={charts} {windowDays} {knobs} />
 						{:else if id === 'visual-refusals'}
 							<VisualRefusals days={attemptDays} read={data.visualAttempts.read} window={viewport} {knobs} chart={data.chart} />
-						{:else if id === 'visual-written-types'}
-							<VisualAttempts days={attemptDays} read={attemptRead.state} notes={attemptRead.notes} />
 						{:else if id === 'run-timeline'}
 							<RunTimeline {knobs} chart={data.chart} answer={answers[queries.runTimelineQuery.name]} />
 						{:else if id === 'failure-mix'}

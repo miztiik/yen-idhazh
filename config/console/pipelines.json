@@ -14,7 +14,6 @@
         "run-timeline",
         "chart-drawing",
         "visual-refusals",
-        "visual-written-types",
         "article-age"
       ],
       "title": ""
@@ -22,7 +21,7 @@
   ],
   "judged": [
     "at-a-glance", "run-health", "site-cost-per-item", "failure-mix", "item-time-split",
-    "slower-on-same-work", "stage-timings", "item-cost", "run-timeline", "chart-drawing", "visual-refusals", "visual-written-types", "article-age"
+    "slower-on-same-work", "stage-timings", "item-cost", "run-timeline", "chart-drawing", "visual-refusals", "article-age"
   ],
   "knobs": {}
 }

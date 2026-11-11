@@ -146,10 +146,10 @@ def test_the_feed_record_asks_only_for_columns_the_contract_declares_in_its_orde
 
 
 def test_the_attempt_record_asks_only_for_columns_the_contract_declares_in_its_order() -> None:
-    """The Pipelines funnels read part of the attempt record, so its list is a part, in order.
+    """The Pipelines refusal view reads part of the attempt record, in the contract's order.
 
-    `ledger-rows.ts` spells the `VisualAttemptRow` columns the funnels read. A
-    column the contract renames or drops would reach a funnel as an empty
+    `ledger-rows.ts` spells the `VisualAttemptRow` columns the refusal view reads. A
+    column the contract renames or drops would reach the view as an empty
     reading rather than as an error.
     """
     asked = quoted_strings(read_text(SERVER / "ledger-rows.ts"), "VISUAL_ATTEMPT_COLUMNS")

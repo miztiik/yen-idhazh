@@ -12,7 +12,7 @@ export const prerender = true;
 
 /** Only the explicitly private BUILD_TIME panels read files here. Native item
  * clocks and evaluator readings arrive through the query door in the browser.
- * The attempt record is unpublished, so its views read it here as counts. */
+ * The attempt record is unpublished, so the refusal view reads it here as counts. */
 export async function load() {
 	const knobs = consoleConfig();
 	const widest = Math.max(...knobs.window_presets);
