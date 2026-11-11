@@ -43,6 +43,7 @@ from idhazh.classify.calls import (
     candidate_menu,
     drawn_label,
     label_budget_tokens,
+    label_request_schema,
     label_schema,
     label_system_prompt,
     label_user_turn,
@@ -741,7 +742,7 @@ class TestTheLabelCallPrompting:
             markers=a_markers(),
         )
         markers = a_markers()
-        assert payload["json_schema"] == label_schema()
+        assert payload["json_schema"] == label_request_schema(dense, a_table(dense))
         assert payload["prompt"].startswith(markers.turn("system", label_system_prompt()))
         assert "4,200 megawatt hours" in payload["prompt"]
         assert payload["prompt"].endswith(markers.opening())

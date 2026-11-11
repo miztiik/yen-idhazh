@@ -38,7 +38,11 @@
               "maxLength": 48,
               "minLength": 1,
               "title": "Sentence Id",
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "s0",
+                "s1"
+              ]
             },
             "surface": {
               "maxLength": 60,
@@ -62,7 +66,11 @@
               "maxLength": 48,
               "minLength": 1,
               "title": "Element Id",
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "quantity-149-159",
+                "quantity-197-201"
+              ]
             },
             "measure": {
               "maxLength": 60,
@@ -82,7 +90,10 @@
             "time_element_id": {
               "maxLength": 48,
               "title": "Time Element Id",
-              "type": "string"
+              "type": "string",
+              "enum": [
+                ""
+              ]
             },
             "attribution": {
               "enum": [
@@ -158,50 +169,113 @@
           "type": "object"
         },
         "SentenceRange": {
-          "additionalProperties": false,
-          "description": "A quote or a claim, as two addresses and no text.\n\nIndices only, deliberately. An exact search for a long quotation rejects a\nreal one over a single changed word, and it does so silently - which is\nworse than no check at all. Code slices the bytes between the two addresses.\n\nHere because decision 5 takes the attribution type and the hedge marker per\nclaim, and the quote indices. The rule that anchors one is the row that adds\nthe four kinds only a model can find.",
-          "properties": {
-            "sentence_start_id": {
-              "maxLength": 48,
-              "minLength": 1,
-              "title": "Sentence Start Id",
-              "type": "string"
-            },
-            "sentence_end_id": {
-              "maxLength": 48,
-              "minLength": 1,
-              "title": "Sentence End Id",
-              "type": "string"
-            },
-            "speaker": {
-              "maxLength": 60,
-              "title": "Speaker",
-              "type": "string"
-            },
-            "attribution": {
-              "enum": [
-                "named",
-                "self_reported",
-                "anonymous",
-                "unattributed"
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "description": "A quote or a claim, as two addresses and no text.\n\nIndices only, deliberately. An exact search for a long quotation rejects a\nreal one over a single changed word, and it does so silently - which is\nworse than no check at all. Code slices the bytes between the two addresses.\n\nHere because decision 5 takes the attribution type and the hedge marker per\nclaim, and the quote indices. The rule that anchors one is the row that adds\nthe four kinds only a model can find.",
+              "properties": {
+                "sentence_start_id": {
+                  "maxLength": 48,
+                  "minLength": 1,
+                  "title": "Sentence Start Id",
+                  "type": "string",
+                  "enum": [
+                    "s0"
+                  ]
+                },
+                "sentence_end_id": {
+                  "maxLength": 48,
+                  "minLength": 1,
+                  "title": "Sentence End Id",
+                  "type": "string",
+                  "enum": [
+                    "s0",
+                    "s1"
+                  ]
+                },
+                "speaker": {
+                  "maxLength": 60,
+                  "title": "Speaker",
+                  "type": "string"
+                },
+                "attribution": {
+                  "enum": [
+                    "named",
+                    "self_reported",
+                    "anonymous",
+                    "unattributed"
+                  ],
+                  "title": "Attribution",
+                  "type": "string"
+                },
+                "hedge": {
+                  "title": "Hedge",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "sentence_start_id",
+                "sentence_end_id",
+                "speaker",
+                "attribution",
+                "hedge"
               ],
-              "title": "Attribution",
-              "type": "string"
+              "title": "SentenceRange",
+              "type": "object"
             },
-            "hedge": {
-              "title": "Hedge",
-              "type": "boolean"
+            {
+              "additionalProperties": false,
+              "description": "A quote or a claim, as two addresses and no text.\n\nIndices only, deliberately. An exact search for a long quotation rejects a\nreal one over a single changed word, and it does so silently - which is\nworse than no check at all. Code slices the bytes between the two addresses.\n\nHere because decision 5 takes the attribution type and the hedge marker per\nclaim, and the quote indices. The rule that anchors one is the row that adds\nthe four kinds only a model can find.",
+              "properties": {
+                "sentence_start_id": {
+                  "maxLength": 48,
+                  "minLength": 1,
+                  "title": "Sentence Start Id",
+                  "type": "string",
+                  "enum": [
+                    "s1"
+                  ]
+                },
+                "sentence_end_id": {
+                  "maxLength": 48,
+                  "minLength": 1,
+                  "title": "Sentence End Id",
+                  "type": "string",
+                  "enum": [
+                    "s1"
+                  ]
+                },
+                "speaker": {
+                  "maxLength": 60,
+                  "title": "Speaker",
+                  "type": "string"
+                },
+                "attribution": {
+                  "enum": [
+                    "named",
+                    "self_reported",
+                    "anonymous",
+                    "unattributed"
+                  ],
+                  "title": "Attribution",
+                  "type": "string"
+                },
+                "hedge": {
+                  "title": "Hedge",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "sentence_start_id",
+                "sentence_end_id",
+                "speaker",
+                "attribution",
+                "hedge"
+              ],
+              "title": "SentenceRange",
+              "type": "object"
             }
-          },
-          "required": [
-            "sentence_start_id",
-            "sentence_end_id",
-            "speaker",
-            "attribution",
-            "hedge"
-          ],
-          "title": "SentenceRange",
-          "type": "object"
+          ]
         }
       },
       "additionalProperties": false,
@@ -269,7 +343,11 @@
           "items": {
             "maxLength": 48,
             "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "s0",
+              "s1"
+            ]
           },
           "maxItems": 2,
           "title": "Lede Sentence Ids",
