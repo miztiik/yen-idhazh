@@ -9,13 +9,15 @@ from collect_results import Inputs, send_request
 from gliner_api.declare_analysis_contracts import AnalyzeTextRequest, AnalyzeTextResult
 from gliner_api.declare_api_contracts import ANALYZE_TEXT_PATH, ErrorResult
 from gliner_api.validate_analysis_results import validate_analysis_results
+from load_caller_settings import CallerAnalysisSettings
 from prepare_default_tasks import default_classification_tasks
 from pydantic import ValidationError
 from render_classifications import read_classification_tasks
 
 
 async def collect_classifications(
-    client: httpx.AsyncClient, inputs: Inputs, root: Path, directory: Path
+    client: httpx.AsyncClient, inputs: Inputs, root: Path, directory: Path,
+    settings: CallerAnalysisSettings,
 ) -> Outcome:
     """Forward native task data once, preserving exact source and independent failures."""
     try:
@@ -32,6 +34,8 @@ async def collect_classifications(
             json.dumps(
                 {
                     "text": inputs.text,
+                    "include_confidence": settings.include_confidence,
+                    "include_spans": settings.include_spans,
                     "schema": {
                         "classifications": [
                             {"task": name, **task}

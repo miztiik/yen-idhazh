@@ -1,6 +1,6 @@
 # How a reader finds a story
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 How the archive answers a submitted question, and how a day page filters its own
 stories. Both use the same published vectors and on-device encoder; their

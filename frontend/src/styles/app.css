@@ -170,7 +170,7 @@ body {
 	max-width: var(--frame-reading);
 }
 
-/* Home and archive fill the window; prose keeps its own configured measure. */
+/* Home and archive fill the window with the configured gutters. */
 .frame:has([data-surface='home']),
 .frame:has([data-surface='archive']) {
 	max-width: none;
@@ -241,8 +241,9 @@ body {
 }
 
 /* --- The reading page's columns -----------------------------------------
-   A day is a stream, and from the wide breakpoint it is a stream with an aside
-   beside it. What goes in the aside is the day's leading stories: they are five
+   A day is a stream. On dated pages, the wide breakpoint puts an aside beside
+   it; the home page keeps the leading block above the full-width stream. What
+   goes in the aside is the day's leading stories: they are five
    anchors into the stream, so they are furniture rather than reading, and above
    the stream they took the whole first screen.
 
@@ -298,6 +299,16 @@ body {
 		   reader-facing surface scrolls sideways. */
 		max-block-size: calc(100dvh - var(--space-8));
 		overflow-y: auto;
+	}
+
+	[data-surface='home'] .day:has(> .day-aside) {
+		display: block;
+	}
+
+	[data-surface='home'] .day:has(> .day-aside) > .day-aside {
+		position: static;
+		max-block-size: none;
+		overflow: visible;
 	}
 }
 

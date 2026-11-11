@@ -91,7 +91,7 @@ They now split by what they are a claim about.
 
 **The confidence sentence stays below, and that is the reason for the whole split.** It is a claim about our summary. Printing "our summary leaves out names or figures from the opening" above a headline the reader has not read is a disclaimer on nothing.
 
-**Below the summary is document order, not paint order.** At the side-rail breakpoint the footer moves into a 14rem column beside the prose, as the meta line always did. What the split promises is the order a reader meets the facts in, including with no stylesheet and in a screen reader; where the browser paints them at 1024px and up is [layout.md](layout.md)'s business and row #18 of the reading-page plan revisits it.
+**Below the summary is document order.** The home page also paints the footer below the summary. On other reading routes, the footer can move into a column beside the prose at the side-rail breakpoint. The document order remains the same without stylesheets and for screen readers.
 
 **What it weighs: nothing worth a sentence, which is the answer that had to be measured.** Two builds on a developer machine / / node 24.12.0, 2026-09-01, over the same 12 committed days and 4,468 items - one of this branch, one of the same worktree with the five changed source files checked out at `8d658de3`. `gzip -9` on each prerendered document, treated minus control:
 

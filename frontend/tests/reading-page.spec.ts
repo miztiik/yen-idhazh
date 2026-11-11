@@ -18,20 +18,45 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	expect(title.trim()).not.toBe('');
 	const widths = await page.evaluate(() => {
 		const frame = document.querySelector<HTMLElement>('.frame')!;
-		const prose = document.querySelector<HTMLElement>('article.item .prose')!;
 		return {
 			frame: frame.getBoundingClientRect().width,
-			viewport: document.documentElement.clientWidth,
-			prose: prose.getBoundingClientRect().width,
-			measure: Number.parseFloat(getComputedStyle(prose).maxWidth)
+			viewport: document.documentElement.clientWidth
 		};
 	});
 	expect(widths.frame).toBeCloseTo(widths.viewport, 0);
-	expect(widths.prose).toBeLessThanOrEqual(widths.measure + 1);
+	async function expectFullArticleWidth() {
+		const geometry = await stories.first().evaluate((article) => {
+			const body = article.querySelector<HTMLElement>('.item-body')!;
+			const prose = article.querySelector<HTMLElement>('.prose')!;
+			const stream = article.closest<HTMLElement>('.day-stream')!;
+			const day = article.closest<HTMLElement>('.day')!;
+			const style = getComputedStyle(article);
+			return {
+				day: day.getBoundingClientRect().width,
+				stream: stream.getBoundingClientRect().width,
+				card: article.getBoundingClientRect().width,
+				body: body.getBoundingClientRect().width,
+				prose: prose.getBoundingClientRect().width,
+				rightInset: article.getBoundingClientRect().right - body.getBoundingClientRect().right,
+				expectedInset: Number.parseFloat(style.paddingRight) + Number.parseFloat(style.borderRightWidth)
+			};
+		});
+		expect(Math.abs(geometry.day - geometry.stream)).toBeLessThanOrEqual(1);
+		expect(Math.abs(geometry.stream - geometry.card)).toBeLessThanOrEqual(1);
+		expect(Math.abs(geometry.body - geometry.prose)).toBeLessThanOrEqual(1);
+		expect(Math.abs(geometry.rightInset - geometry.expectedInset)).toBeLessThanOrEqual(1);
+	}
+	await expectFullArticleWidth();
 	await expect(page.locator('[data-time-note]')).toHaveCount(0);
 	await expect(stories.locator('[data-item-time]').first()).toContainText('UTC');
 
 	await expect(page.locator('[data-leading]')).toBeVisible();
+	const leading = await page.locator('[data-leading]').boundingBox();
+	const firstStory = await stories.first().boundingBox();
+	expect(leading!.y + leading!.height).toBeLessThanOrEqual(firstStory!.y);
+	await page.setViewportSize({ width: 1280, height: 900 });
+	await expectFullArticleWidth();
+	await page.setViewportSize({ width: 1920, height: 1080 });
 	const edition = page.getByRole('region', { name: 'About today' });
 	await expect(edition.getByRole('heading', { level: 1 })).toBeVisible();
 	await expect(edition).toContainText(/\d+ stories/);
@@ -68,6 +93,7 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	await page.keyboard.insertText(title.slice(prefix.length));
 	await expect.poll(() => stories.count()).toBeLessThan(before);
 	await expect(stories.first().getByRole('heading')).toHaveText(title);
+	await expectFullArticleWidth();
 	await expect(searchOtherDays).toBeVisible();
 	await expect(searchOtherDays).toHaveCSS('clip-path', 'none');
 	await expect(page.locator('[data-filter-note]')).not.toContainText('Press Enter');
