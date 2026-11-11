@@ -208,6 +208,12 @@ ordinary required CI remains independent. See the
 ## Pages publication
 
 - Build committed data only. Do not run the producer or a model during publication.
+- Prepare Python 3.12 and install the declared backend package with
+  `pip install -e .` from the repository root before `npm run build`.
+  Frame CSS generation validates `config/appearance.json` through the native
+  `AppearanceConfig` contract, which needs the package's declared Python
+  dependencies, including Pydantic. These serve build-time validation only,
+  not producer or model execution.
 - [`publish_decision.py`](../../backend/utilities/publish_decision.py) holds the
   rule, one case per trigger, and every publish builds the run's main commit:
   - The schedule runs every 30 minutes. Generated data and documentation can
