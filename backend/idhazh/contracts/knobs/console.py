@@ -241,14 +241,9 @@ class ConsoleConfig(Model):
         default=120,
         ge=1,
         description=(
-            "How many items the run timeline draws as bars before it states the tail in "
-            "one sentence. The bars are in start order, so the first this many show the "
-            "shape of the run - a staircase or a block - which is what the panel is for. "
-            "Measured 2026-09-16 over the committed census, a day holds 349 to 465 rows, "
-            "and a bar a row would put a thousand spans in a prerendered document for a "
-            "queue whose shape is settled in its first minute. It is a cap on the "
-            "DRAWING and never on the arithmetic: every figure the panel prints is over "
-            "the whole run."
+            "Maximum visible item rows on one page of run-timeline article details. "
+            "The main comparison has one row per shard; pagination keeps every article "
+            "reachable. This limit never caps shard folds, coverage or run totals."
         ),
     )
     chart_rule_days: int = Field(

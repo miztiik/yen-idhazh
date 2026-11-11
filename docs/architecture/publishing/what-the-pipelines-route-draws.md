@@ -114,16 +114,16 @@ overlap are averaged separately, so cancellation cannot hide overlap. The chart
 draws every positive duration, an adjacent overlap deduction and an elapsed-time
 marker; formatted readouts, cohort counts and exclusions explain the arithmetic.
 
-## Where a run's time went is one panel on Pipelines, at two grains
+## Where a run's time went separates elapsed windows from item work
 
-| Panel | Grain | The sentence it is for |
-| --- | --- | --- |
-| Where the run's time went, on the run's own clock | one bar an item, or one bar a shard | Whether the run queued or worked in parallel, and where in it the time actually went. |
+The newest-run panel compares recorded shard windows by default, longest
+first. Its second view ranks cumulative item work on its own zero-based scale.
+[run-timeline.md](run-timeline.md) owns the endpoint arithmetic, coverage,
+ordering and bounded article inspection.
 
-**It answers "is it working".** It takes the run's central shape - what it took
-end to end, what its items cost added up, and how many ran at once - and it
-covers every item of the run rather than picking the worst one out. The grain
-switch changes the row and never the question.
+The headlines distinguish the recorded item window, recorded costs and
+processed attempts per minute. They do not claim measured concurrency or
+continuous shard occupancy.
 
 **It sits low on Pipelines, after the cost panels.** A
 window is a span and this panel is one run, so an operator reaches it after a
@@ -133,30 +133,26 @@ verdicts the run remains near the top, which is the thirteenth chart rule applie
 Pipelines takes one untitled group in `config/console/pipelines.json`: what it needed was
 an order, not headings, and it already carries four section headings of its own.
 
-**One panel, one source for both grains.** The panel folds item and shard rows in one
-builder call, so a step's seconds are the same seconds whichever row a reader is
-on. A shard's bar runs from its first item's start to its last item's end, which
-is the stretch it held a worker for, and its steps are that shard's items added
-up.
+**One panel, one source for both measurements.** Both folds use the same native
+query and select the same newest run. Missing endpoints, costs and shard
+identity retain their independent coverage.
 
-**Detailed sub-steps belong to an item inspection.** The page does not print
-robots, tag, prompt-render or reply-parse totals below the timeline. The reader
-keeps the recorded stage clocks and the timeline, but loses those four aggregate
-figures. The [item command](../../concepts/telemetry.md#the-committed-traces-briefly)
-prints recent trace trees with their run and attempt instead of adding item
-passes together. Expired detail remains unavailable.
-
-**Hollow is unclaimed; a solid 2 px tertiary rule is overclaimed.** The overrun
-is not the hatch for an unknown reading. Both have a written legend; neither
-claims anybody has agreed how much overhead is too much.
+**Detailed readings belong to article inspection.** Selecting a shard opens a
+bounded article list with exact recorded clocks and known stage readings.
+Complete-cohort stage averages and nested call details remain separate from
+the elapsed drawing. The
+[item command](../../concepts/telemetry.md#the-committed-traces-briefly)
+still owns retained trace trees and finer sub-steps. Expired detail remains
+unavailable.
 
 The reader is
 [../../../frontend/src/lib/console/pipelines/run-timeline.ts](../../../frontend/src/lib/console/pipelines/run-timeline.ts);
 its native clock shape is [run-timeline.md](run-timeline.md) and every drawing rule is
 [../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md).
 [../../../frontend/tests/console-pipelines-native.spec.ts](../../../frontend/tests/console-pipelines-native.spec.ts)
-checks the native offsets, signed residuals, missing clocks and capped totals.
-The retained panel draws both grains from that same result.
+checks recorded endpoints, independent axes, nested readings, incomplete clocks
+and uncapped totals. The browser journey checks the actual interval geometry,
+view switch and article disclosure.
 
 **It is a snapshot, so the window control does not reach it.** A bar's position
 is measured from its own run's start and a span cannot narrow one run, so the
