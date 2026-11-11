@@ -1,6 +1,6 @@
 # Inference workflow events
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-11
 
 Which saved events does the independent inference workflow write and read?
 
@@ -96,7 +96,7 @@ recorded spans.
 
 - [../architecture/contracts/identity.md](../architecture/contracts/identity.md) - shared identity and propagation meanings.
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md#independent-typescript-packages-and-services) - focused native checks.
-- [../../.github/workflows/ai-pipeline-tests.yml](../../.github/workflows/ai-pipeline-tests.yml) - offline generation checks and manual inference.
+- [../../.github/workflows/ai-pipeline-tests.yml](../../.github/workflows/ai-pipeline-tests.yml) - manual inference and native scoring.
 - [summary-generator-caller.md](summary-generator-caller.md) - independent full-analysis and summary-only caller capture.
 - [summary-evaluation-workflow.md](summary-evaluation-workflow.md) - retained native scorer comparison.
 - [pipeline-summary-evaluation.md](pipeline-summary-evaluation.md) - native scoring after saved inference.
