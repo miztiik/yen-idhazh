@@ -58,7 +58,7 @@ Table E - Delivery
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | E1 | 1 | Wire native controls and event reporting | - | A | DONE | vigilant-fortnight | - | GLiNER controls and events |
-| E2 | 2 | Check model alternatives with existing tools | 1 | B | PENDING | - | - | - |
+| E2 | 2 | Check model alternatives with existing tools | 1 | B | DONE | solid-tribble | - | GLiNER model suitability |
 
 ## 2 - One implementation PR
 
