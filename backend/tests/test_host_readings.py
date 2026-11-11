@@ -45,6 +45,19 @@ PROBE_PROCESSORS = 4
 USER_HZ = 100
 
 
+@pytest.mark.parametrize("pid", ["0", "-1", "not-a-pid"])
+def test_the_native_work_cli_refuses_nonpositive_or_malformed_process_identity(
+    pid: str, capsys: pytest.CaptureFixture[str],
+) -> None:
+    from idhazh import cli
+
+    with pytest.raises(SystemExit) as stopped:
+        cli.main(["work", "--server-pid", pid])
+
+    assert stopped.value.code == 2
+    assert "--server-pid" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("memory", [True, False], ids=["memory-on", "memory-off"])
 def test_memory_control_keeps_cpu_but_skips_memory_and_fault_reads(
     tmp_path: Path, monkeypatch: MonkeyPatch, memory: bool

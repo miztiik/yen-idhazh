@@ -63,6 +63,7 @@ from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.watchlist import Watchlist
 from idhazh.llm.server import SETTING_KEYS, refuse_a_sampling_key_a_route_sets
+from idhazh.llm.server_flags import interpret_server_flags
 from idhazh.source_classification import bind_source_classification
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -115,7 +116,8 @@ def refuse_a_model_nothing_could_run(models_file: str, models: ModelsConfig) -> 
     """
     for role, entry in models.entries():
         key = SETTING_KEYS["n_ctx"]
-        if key not in entry.server:
+        recorded = interpret_server_flags(entry.server)
+        if key not in recorded:
             raise ValueError(
                 f"config/{models_file} is refused: models.{role} declares no {key}. "
                 "This project computes on it, so there is no server-side default "

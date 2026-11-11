@@ -43,7 +43,7 @@ Table C
 | C3 | 3 | Replace the full console visual system and share window behavior | 1 | C | DONE | `vigilant-funicular` | - | App session `758b5e38-010f-4ba5-9945-399a21883402`; branch `console-visual-rebuild` |
 | C4 | 4 | Remove the duplicate refusal view and redraw run token volume | 1 | D | DONE | `cuddly-doodle` | - | App session `68c70212-4ac7-4a55-883e-f76bf3f4945c`; branch `settled-console-charts` |
 | C5 | 5 | Correct retained chart readings and evidence windows | 4 | E | DONE | `redesigned-system` | - | App session `1981e1da-00bf-456b-a4db-13554ac3fb87`; branch `chart-readings-and-windows` |
-| C6 | 6 | Restore collection needed by retained hardware diagnostics | 4 | F | PENDING | - | - | - |
+| C6 | 6 | Restore collection needed by retained hardware diagnostics | 4 | F | DONE | `animated-fiesta` | - | App session `7e6961ce-76c2-4e78-ad8c-f4991bad6ce5`; branch `restore-hardware-telemetry` |
 | C7 | 7 | Make retained explorer answers directly reachable and drawable | 1 | G | DONE | `ubiquitous-doodle` | - | App session `735f58fd-23bf-4189-9efb-d08402988c46`; branch `explorer-reliability` |
 | C8 | 8 | Settle remaining permanent cuts, page moves and token anomaly rules | 1 | H | BLOCKED | - | - | Individual dispositions and anomaly/baseline definitions remain unresolved. |
 
@@ -572,18 +572,29 @@ Table W
 - **Scope:** Restore process identity and shared flag interpretation only for the diagnostics and provenance consumers retained by L3.
 - **Files touched:**
   - `.github/workflows/digest.yml`
+  - `backend/idhazh/config.py`
   - `backend/idhazh/llm/server.py`
+  - `backend/idhazh/llm/server_flags.py` (new shared recorded-help adapter)
+  - `tests/fixtures/runtime/b10598-llama-server-help.txt` -> `backend/idhazh/llm/b10598-llama-server-help.txt` (move unchanged)
   - `backend/idhazh/fingerprint.py`
   - `backend/idhazh/stages/work.py`
   - `backend/tests/test_fingerprint.py`
   - `backend/tests/test_server_argv.py`
+  - `backend/tests/test_summarize.py`
+  - `backend/tests/contracts/test_model_registry.py`
   - `backend/tests/test_host_readings.py`
   - `backend/tests/test_item_records.py`
   - `backend/tests/pipeline/test_work_health_payload.py`
+  - `frontend/src/lib/console/machine/DiskReadsPanel.svelte` (requested-locking caption only)
+  - `frontend/src/lib/console/machine/disk-reads.ts` (requested-setting comments only)
+  - `frontend/tests/console-machine-journey.spec.ts`
   - `docs/architecture/sources/item-health.md`
   - `docs/architecture/publishing/console-machine.md`
+  - `docs/concepts/config/model-file.md`
+  - `docs/reference/ci-model-runtime.md`
   - `TODO/20261109-console-redesign-plan.md`
-- **Acceptance gates:** Name L3's retained consumers first; collapse unneeded collection work only against the explicit cut list. Local: lint/types and focused flag/recording tests. CI: merge-candidate gates. Inspect the next normal production record; no production dispatch or workflow-file tests.
+- **Inventory check:** H3 `disk-reads`, H10 `memory-held`, H11 `context-headroom` and fingerprint/provenance consumers remain. Shared interpretation also reaches the required-context config preflight. The existing help recording moves unchanged into the installed package; no alias table or persisted shape is added. Disk-read captions currently claim applied locking and must instead name the recorded request. Empty shards and disabled host/memory collection must not require a controller identity; an active collector without one must report that absence.
+- **Acceptance gates:** Name L3's retained consumers first; collapse unneeded collection work only against the explicit cut list. Local: shared selection, lint/types and focused flag/argv/host/recording/historical-read tests. Browser: requested-locking caption, cross-page and absent-data smoke. CI: merge-candidate gates. Inspect the next normal production record; no production dispatch or workflow-file tests.
 - **Oracle:** Long/short flag aliases yield identical settings/fingerprints; work recording with a process identity captures process readings. This cannot recover history or prove requested locking was applied.
 
 ### Decisions

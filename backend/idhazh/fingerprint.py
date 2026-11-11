@@ -35,6 +35,8 @@ from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs.model_server import is_loopback
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.llm.server import SETTING_KEYS, TurnMarkers, setting, turn_markers_digest, window
+from idhazh.llm.server_flags import DIGESTED_FLAGS as DIGESTED_FLAGS
+from idhazh.llm.server_flags import interpret_server_flags
 
 #: Sixty-four zeroes. It satisfies `Sha256`, so a manifest built on it validates,
 #: publishes, and still says nothing about which weights ran (Guardrail #10).
@@ -197,30 +199,6 @@ def _spelled_value(value: Any) -> str:
     return f"{value:.4f}" if isinstance(value, float) else str(value)
 
 
-#: The server flags that can change arithmetic, prompt rendering or cache reuse,
-#: spelled as llama-server spells them. They were this project's own field names
-#: until the model file started carrying the flags; a day written under the old
-#: names is read back through `idhazh.contracts.fingerprint.RENAMED_FLAGS`, so
-#: the rename moved no recorded value.
-DIGESTED_FLAGS: Final[tuple[str, ...]] = (
-    "-ctk",
-    "-ctv",
-    "-fa",
-    "-np",
-    "-tb",
-    "-cms",
-    "-ctxcp",
-    "-cram",
-    "--cache-prompt",
-    "--no-cache-prompt",
-    "-sps",
-    "--jinja",
-    "--no-jinja",
-    "--reasoning-preserve",
-    "--no-reasoning-preserve",
-)
-
-
 def runtime_flags_spelling(server: Mapping[str, Any]) -> dict[str, str]:
     """The runtime switches that move the arithmetic, one key each, sorted.
 
@@ -238,7 +216,8 @@ def runtime_flags_spelling(server: Mapping[str, Any]) -> dict[str, str]:
     unchanged. `runtime_build` is the only field that catches that, which is why
     a reading either side of a build change is compared on the build first.
     """
-    return {flag: str(_flag_spelling(server, flag)) for flag in sorted(DIGESTED_FLAGS)}
+    recorded = interpret_server_flags(server)
+    return {flag: str(_flag_spelling(recorded, flag)) for flag in sorted(DIGESTED_FLAGS)}
 
 
 def _flag_spelling(server: Mapping[str, Any], flag: str) -> object:
