@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from idhazh import assemble, atomic_write, config, run_context, summarize
 from idhazh.classify import calls
+from idhazh.command_logging import configure_command_logging
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import ItemId, ServerJob, canonical_json
 from idhazh.contracts.file_envelope import WriterIdentity
@@ -306,8 +307,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-commit")
     parser.add_argument("--execution", default=os.environ.get("GITHUB_RUN_ID"))
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
+        settings = config.load()
+        configure_command_logging(settings.app.logging.level.value)
         source_execution(args.source_run)
         if args.candidate_models_file:
             raise ValueError("retained mode uses the committed production model, not a candidate")
@@ -355,7 +357,7 @@ def main(argv: list[str] | None = None) -> int:
             producer="utilities.replay_article_calls",
             git_sha=Repository(config.REPO_ROOT).git("rev-parse", "HEAD").strip(),
         )
-        run_calls(root, plan=plan, articles=articles, settings=config.load(), identity=identity)
+        run_calls(root, plan=plan, articles=articles, settings=settings, identity=identity)
         return 0
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         LOG.error("retained replay failed: %s", error)
