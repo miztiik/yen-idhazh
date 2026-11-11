@@ -5,10 +5,10 @@
 How an item gets a chart, a whowhat grid or - most of the time - nothing at
 all: which pass decides, which gate refuses, and what every refusal is called.
 The rule this subsystem serves is in
-[`../../concepts/digest.md`](../../concepts/digest.md): a visual must carry a
-fact the sentence beside it does not. A picture that decorates is worse than no
-picture, because the product is trust and an invented axis label costs it
-permanently.
+[the visual rule](../../concepts/digest.md#the-visual-rule): a supported comparison
+or relationship must become quicker to grasp than prose alone. Facts already
+in the summary are not disqualified, but decoration earns no space and every
+source-evidence and qualification check still applies.
 
 This page holds the decision path end to end, and the drawing of it. Each step
 along that path is written up on a page of its own, and the table below routes.

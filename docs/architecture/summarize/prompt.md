@@ -122,7 +122,8 @@ from the Who/What grid's same-sentence actor/claim pairing, identifies unbuilt
 forms without inventing their rules in generic inspection, and illustrates
 charts, grids and valid declines. The
 [visual rule](../../concepts/digest.md#the-visual-rule) does not
-depend on unfinished article classification.
+depend on unfinished article classification or require a fact absent from the
+summary. Numeric density alone does not establish a useful comparison.
 
 An input oracle proves that finalized ids are visible and constrain references.
 Replaying an authored valid plan proves parsing and compilation, not that a
@@ -139,6 +140,33 @@ checking summary and visual behavior together.
 Put shared instructions in one stable system turn: element labels, summary rules and visual-plan rules. Keep only item-dependent requests, such as the chosen word range, in the continuation. Derive requested field names from the reply shape.
 
 Fenced headline and article text remain untrusted data. Do not let either become a system instruction, shell argument, filename or fetch destination. Scope an instruction to the job it governs: a labeling rule against inventing numbers must not forbid the summary from reporting a source figure.
+
+### Sentence addresses identify source sentences, not physical line counts
+
+The label turn prints each original sentence slice as `[sN]` followed by one
+JSON string on one physical line. JSON escapes internal line controls,
+backslashes and quotation marks; decoding and concatenating those strings
+recovers the original source, including sentence-boundary whitespace. The
+presentation does not change `Article.text`, segmentation, offsets or hashes.
+Non-ASCII text stays literal so the existing sanitizer still recognizes forged
+turn markers. The escaped strings remain fenced user data, never instructions.
+
+Copy the printed address literally. Mention surfaces must occur exactly once
+inside that original named sentence. A repeated bare name needs another exact
+unique occurrence or a minimal exact qualifying noun phrase within the existing
+bound; it does not permit neighbouring-sentence, global or fuzzy rescue.
+Distinct actors remain distinct, geographic markets belong in place mentions,
+and narrated claims retain their reporting frames and qualifications. The
+[element contract](../extraction/elements.md#the-four-kinds-only-a-model-can-find)
+owns those meanings and anchoring rules.
+
+`measure_two_calls.article_from_user_turn` recognizes the explicit current
+JSON-string heading and the historical raw-line heading separately. It decodes
+only the former and refuses malformed current strings or addresses, without
+retrying them as historical text. Historical displays keep literal escapes and
+continuation newlines; their stripped sentence separators cannot recover the
+original offsets. Use the retained native Article for that provenance.
+Raw label replies and capture fields, required fields and bounds stay unchanged.
 
 ### What is in the prompt bytes, and who wrote each part
 
@@ -263,6 +291,12 @@ A stable prefix reduces repeated reading without treating prompt wording as a co
 Task paths belong to the selected configuration so a candidate never reads
 instructions from the original checkout. One directory holds distinct products
 and call flows, not one shared summary instruction or a scanned prompt registry.
+
+Escaping sentence presentation removes unaddressed continuation lines without
+normalizing the source that evidence indexes. An explicit heading distinguishes
+that presentation from historical raw text without changing the saved reply or
+capture format. These invariants prove transport, not improved model coverage
+or useful generated visuals; those require both fresh production calls.
 
 ## See also
 

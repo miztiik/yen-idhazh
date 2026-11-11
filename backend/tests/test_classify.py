@@ -55,6 +55,7 @@ from idhazh.classify.calls import (
     range_elements,
     recovered_completion,
     sentence_id,
+    sentence_spans,
     summarize_and_plan_budget_tokens,
     summarize_and_plan_model,
     summarize_and_plan_prose_words,
@@ -671,8 +672,47 @@ class TestTheLabelCallPrompting:
 
     def test_every_sentence_the_model_may_cite_carries_its_address(self) -> None:
         addressed = numbered_sentences(DENSE_TEXT)
-        assert addressed.startswith("[s0] The plant produced")
-        assert "[s2] Officials expect" in addressed
+        assert addressed.startswith('[s0] "The plant produced')
+        assert '[s2] "Officials expect' in addressed
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Mira Sen may chair\nthe review if funded. Arun Sen declined.",
+            '  A literal "\\n" and [s99] stay data.\r\nThe next sentence.  ',
+            "Line controls:\r\n\t\v\f\x1c\x1d\x1e\x85\u2028\u2029 remain in this sentence.",
+        ],
+    )
+    def test_addressed_lines_reversibly_preserve_every_original_sentence(self, text: str) -> None:
+        lines = numbered_sentences(text).splitlines()
+        spans = sentence_spans(text)
+
+        assert len(lines) == len(spans)
+        decoded = []
+        for index, (line, (start, end)) in enumerate(zip(lines, spans, strict=True)):
+            address = f"[s{index}] "
+            assert line.startswith(address)
+            sentence = json.loads(line.removeprefix(address))
+            assert sentence == text[start:end]
+            decoded.append(sentence)
+        assert "".join(decoded) == text
+
+    @pytest.mark.parametrize(
+        "marker",
+        ["<|im_start|>", "<start_of_turn>", "<\uff5cUser\uff5c>", FENCE_OPEN, FENCE_CLOSE],
+    )
+    def test_escaped_source_stays_inside_the_sanitizer_boundary(
+        self, article_ok: Article, marker: str
+    ) -> None:
+        text = f'An actor wrote {marker} and a literal \\u003c marker.\nIt is data.'
+        article = article_ok.model_copy(update={"text": text})
+        turn = label_user_turn(article, a_table(article))
+
+        assert turn.count(FENCE_OPEN) == turn.count(FENCE_CLOSE) == 3
+        if marker not in (FENCE_OPEN, FENCE_CLOSE):
+            assert marker not in turn
+        assert r"\\u003c" in turn
+        assert article.text == text
 
     def test_the_menu_addresses_every_candidate_by_its_own_id(self, dense: Article) -> None:
         table = a_table(dense)
@@ -1042,6 +1082,24 @@ class TestTheFourKindsOracle:
 
 
 class TestMentions:
+    @pytest.mark.parametrize(
+        ("surface", "expected"),
+        [("Coast", []), ("Coast adults", ["Coast adults"])],
+    )
+    def test_a_qualifying_source_phrase_must_still_match_exactly_once(
+        self, surface: str, expected: list[str]
+    ) -> None:
+        text = "Coast adults reported 12 percent; Coast parents reported 20 percent."
+        groups = mention_elements(
+            text,
+            a_reply(place_mentions=[a_group("Coast", ("s0", surface))]).place_mentions,
+            kind=ElementKind.PLACE,
+            label_source="m",
+            entity_slugs={},
+        )
+
+        assert [one.span_excerpt for group in groups for one in group.elements] == expected
+
     def test_a_name_the_item_never_wrote_still_anchors_its_mentions(self) -> None:
         """Decision 1. The name is a grouping key and is never searched for."""
         groups = mention_elements(
@@ -1161,6 +1219,47 @@ class TestMentions:
 
 
 class TestSentenceRanges:
+    def test_multiline_claims_keep_reporting_qualifications_and_valid_siblings(
+        self, article_ok: Article
+    ) -> None:
+        text = (
+            "Mira Sen may chair\nthe review if funded. "
+            "Arun Sen opposed the proposal. "
+            '"Keep it conditional," Mira Sen said.'
+        )
+        table = a_table(article_ok, text)
+        reply = a_reply(
+            entity_mentions=[
+                a_group("Mira Sen", ("s1", "Mira Sen"), ("s0", "Mira Sen")),
+                a_group("Arun Sen", ("s1", "Arun Sen"), ("s99", "Arun Sen")),
+            ],
+            claims=[
+                a_range("s0", "s0", speaker="Mira Sen", attribution="named", hedge=True),
+                a_range("s1", "s1"),
+                a_range("s99", "s99"),
+            ],
+            quotes=[a_range("s2", "s2", speaker="Mira Sen", attribution="named")],
+        )
+
+        whole = anchored(table, text, reply, config=ElementsConfig(), label_source="m")
+
+        assert whole.source_text_hash == table.source_text_hash
+        assert whole.span_drift(text) is None
+        assert [
+            one.span_excerpt for one in whole.elements if one.kind is ElementKind.ENTITY
+        ] == ["Mira Sen", "Arun Sen"]
+        claims = [one for one in whole.elements if one.kind is ElementKind.CLAIM]
+        assert [one.span_excerpt for one in claims] == [
+            "Mira Sen may chair\nthe review if funded.",
+            "Arun Sen opposed the proposal.",
+        ]
+        assert claims[0].hedge is True and claims[0].attribution == "named"
+        assert [
+            one.span_excerpt for one in whole.elements if one.kind is ElementKind.QUOTE
+        ] == ['"Keep it conditional," Mira Sen said.']
+        for element in whole.elements:
+            assert text[element.span_start : element.span_end] == element.span_excerpt
+
     def test_a_quote_is_the_sentences_between_two_addresses(self) -> None:
         """Decision 3: addresses only. Code slices; the reply carries no text."""
         element = range_elements(

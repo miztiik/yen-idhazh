@@ -105,7 +105,8 @@ def type_role_guide(visuals: VisualsConfig) -> str:
             "no quantity is required.",
             "Decline example: decision none; purpose, type, declared_whole_element_id, title "
             "and caption null; every encoding and reference list empty; why explains "
-            "unsupported evidence or a picture that would only repeat the prose.",
+            "unsupported evidence or why no supported comparison or relationship becomes "
+            "quicker to grasp than prose alone.",
         )
     )
     return "\n".join(lines)

@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import time
@@ -66,12 +67,14 @@ from typing import Any, Final
 from idhazh import config
 from idhazh.classify import dag
 from idhazh.classify.calls import (
+    SENTENCE_PRESENTATION,
     anchored,
     build_label_request,
     build_summarize_and_plan_request,
     label_budget_tokens,
     label_system_prompt,
     parse_label,
+    sentence_id,
     summarize_and_plan_budget_tokens,
     summarize_and_plan_user_turn,
 )
@@ -104,6 +107,7 @@ CORPUS = REPO_ROOT / "corpus" / "corpus.jsonl"
 #: Read in blocks rather than whole. The weights are several gigabytes and the
 #: refusal is the first thing that runs, before a server is started.
 _HASH_BLOCK: Final = 1 << 20
+_LEGACY_SENTENCE_PRESENTATION: Final = "The item, one sentence per line:"
 
 
 def wait_for_health(port: int, *, deadline_seconds: float) -> None:
@@ -160,14 +164,39 @@ def refuse_undeclared_weights(weights: Path, models: ModelsConfig, role: str = "
 # --- Real articles, from the corpus ------------------------------------------
 
 
-def article_from_user_turn(turn: str) -> tuple[str | None, str]:
-    """Pull the title and the body back out of a summarizer user turn.
+def _prompt_block(turn: str, heading: str) -> str:
+    opening = heading + "\n" + FENCE_OPEN + "\n"
+    start = turn.index(opening) + len(opening)
+    return turn[start : turn.index("\n" + FENCE_CLOSE, start)]
 
-    `summarize.user_turn` writes `Source form: <form>`, then the title and the
-    body inside one fence. The text has already been through `sanitize`, so what
-    comes back out is what the model was given - which is the point. It is data
-    on the way in and data on the way out (Guardrail #11).
+
+def article_from_user_turn(turn: str) -> tuple[str | None, str]:
+    """Read summary turns and explicitly identified current or historical label turns.
+
+    Current JSON sentence strings concatenate to the original sanitized source.
+    Historical raw lines retain their displayed newlines and literal escapes;
+    their stripped sentence separators cannot reconstruct original offsets.
+    Use the retained native Article, not that historical display, for anchoring.
+    Decoded text stays inspection data and never becomes a prompt instruction.
     """
+    for heading in (SENTENCE_PRESENTATION, _LEGACY_SENTENCE_PRESENTATION):
+        if heading + "\n" + FENCE_OPEN not in turn:
+            continue
+        title = _prompt_block(turn, "Title:").strip() or None
+        inside = _prompt_block(turn, heading)
+        if heading == _LEGACY_SENTENCE_PRESENTATION:
+            return title, re.sub(r"(?m)^\[s[0-9]+\] ", "", inside)
+        sentences = []
+        for index, line in enumerate(inside.split("\n")):
+            address = f"[{sentence_id(index)}] "
+            if not line.startswith(address):
+                raise ValueError(f"expected addressed sentence {sentence_id(index)}")
+            sentence = json.loads(line.removeprefix(address))
+            if not isinstance(sentence, str):
+                raise ValueError(f"{sentence_id(index)} must contain a JSON string")
+            sentences.append(sentence)
+        return title, "".join(sentences)
+
     opened = turn.index(FENCE_OPEN) + len(FENCE_OPEN)
     inside = turn[opened : turn.index(FENCE_CLOSE)].strip("\n")
     if not inside.startswith("Title: "):
