@@ -149,6 +149,10 @@
 		color: var(--color-text-secondary);
 	}
 	.field:focus-within { border-color: var(--color-accent); }
+	.field:has(input:focus-visible) {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 2px;
+	}
 	.field input {
 		min-inline-size: 0;
 		inline-size: 100%;
@@ -158,6 +162,7 @@
 		font-size: var(--text-base);
 		line-height: var(--leading-base);
 	}
+	.field input:focus-visible { outline: none; }
 	.field input::-webkit-search-cancel-button { display: none; }
 	.field input::placeholder { color: var(--color-text-secondary); }
 	.clear {

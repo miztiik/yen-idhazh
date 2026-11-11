@@ -1,6 +1,6 @@
 # How a reader finds a story
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 How the archive answers a submitted question, and how a day page filters its own
 stories. Both use the same published vectors and on-device encoder; their
@@ -14,6 +14,9 @@ row. On a phone the field and Search stay together and Dates follows below.
 Dates and Search pair their visible labels with shared calendar and search
 glyphs. The field's X control is labelled "Clear search" for assistive
 technology and is attached to the field, not to the result heading.
+
+The archive uses the home's full-width frame and configured gutters. Story text
+keeps the shared prose measure rather than stretching with the search controls.
 
 Typing edits a draft. Search or Enter applies the question and both UTC date
 bounds together. Editing a draft does not discard the current answer or replace
@@ -75,6 +78,10 @@ The field remains mounted while loading, failing and presenting an answer.
 Search does not run on keystrokes. Query and date edits do not move focus,
 remount the control or replace the answer before submission.
 
+Keyboard focus on the query outlines the complete field, including its reserved
+X space, not the nested text input. The X action retains its own visible focus
+indicator. Neither focus nor typing changes the controls' geometry.
+
 The archive does not render download, privacy or date-instruction disclosures.
 The encoder loader and its verified fallback remain unchanged; the
 [encoder contract](the-on-device-encoder-and-its-vectors.md) owns their origin
@@ -133,6 +140,10 @@ and its scope together while retaining a bounded recent list before the first
 query. Existing monthly projections already contain the required vectors;
 another index would introduce a second publication and freshness obligation
 without being necessary for exact cosine search.
+
+Finding a story uses the page's full width; reading its text still needs a
+bounded measure. A field-level query outline keeps the text and its clear
+action visually connected without drawing competing focus rings.
 
 On day pages the controls already have individual outlines, so another enclosing
 card adds no meaning. Removing it keeps the edition compact without shrinking

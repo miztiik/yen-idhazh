@@ -5,7 +5,8 @@ test('one archive form preserves drafts, constrains the list by date and links t
 		Object.defineProperty(globalThis, 'WebAssembly', { value: undefined });
 	});
 	await page.goto('/archive/');
-	await expect(page.getByRole('heading', { name: 'Search our archives', exact: true })).toBeVisible();
+	const heading = page.getByRole('heading', { name: 'Search our archives', exact: true });
+	await expect(heading).toBeVisible();
 	await expect(page.locator('.search-info')).toHaveCount(0);
 	await expect(page.locator('body')).not.toContainText(
 		/On-device search|Nothing you type leaves your browser|Date changes apply with Search|Leave both dates empty/
@@ -18,19 +19,37 @@ test('one archive form preserves drafts, constrains the list by date and links t
 	await expect(page.locator('[data-topic-row], [data-day-row], footer')).toHaveCount(0);
 	await expect(page.locator('[data-search-state]')).toContainText('this browser cannot run it');
 	const field = page.locator('#archive-query');
-	await field.click();
-	const original = await field.elementHandle();
+	const fieldFrame = page.locator('[data-archive-form] .field');
 	const position = await field.boundingBox();
+	await heading.focus();
+	await page.keyboard.press('Tab');
+	await expect(field).toBeFocused();
+	expect(await field.evaluate((node) => node.matches(':focus-visible'))).toBe(true);
+	await expect(field).toHaveCSS('outline-style', 'none');
+	await expect(fieldFrame).toHaveCSS('outline-style', 'solid');
+	await expect(fieldFrame).toHaveCSS('outline-offset', '2px');
+	const original = await field.elementHandle();
 	const title = await first.innerText();
-	for (const character of 'a different question') {
+	const draft = 'a different question';
+	for (const character of draft) {
 		await page.keyboard.insertText(character);
 		await expect(field).toBeFocused();
 		expect(await field.evaluate((node, initial) => node === initial, original)).toBe(true);
-		expect((await field.boundingBox())?.y).toBe(position?.y);
+		expect(await field.boundingBox()).toEqual(position);
 	}
+	await page.keyboard.press('Home');
+	await page.keyboard.press('ArrowRight');
+	await page.keyboard.insertText('x');
+	expect(await field.evaluate((node: HTMLInputElement) => node.selectionStart)).toBe(2);
+	await page.keyboard.press('Backspace');
+	await expect(field).toHaveValue(draft);
 	const clear = page.getByRole('button', { name: 'Clear search', exact: true });
 	await expect(clear).toHaveText('');
 	await expect(clear.locator('svg')).toBeVisible();
+	await page.keyboard.press('Tab');
+	await expect(clear).toBeFocused();
+	await expect(clear).toHaveCSS('outline-style', 'solid');
+	await expect(fieldFrame).toHaveCSS('outline-style', 'none');
 	await expect(first).toHaveText(title);
 	await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeDisabled();
 	const date = await page.locator('[data-story-date]').first().getAttribute('data-story-date');
