@@ -10,21 +10,32 @@ from support.models import a_markers, a_server
 
 from idhazh.classify import calls
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import canonical_json
+from idhazh.contracts.base import canonical_json, derive_url_key
 from idhazh.contracts.element import ElementKind, ElementTable
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.visual import widest_json_characters
 from idhazh.elements import SpanDriftError, element_table
 
 
-def article_with_text(article: Article, text: str) -> Article:
+def article_with_text(text: str) -> Article:
+    url = "https://example.test/article"
     return Article.model_validate(
-        article.model_dump()
-        | {
+        {
+            "item_id": "test-01",
+            "url_key": derive_url_key(url),
+            "source_url": url,
+            "canonical_url": url,
+            "source_id": "test",
+            "tier": 1,
+            "vertical": "test",
+            "rank_score": 0,
             "text": text,
+            "word_count": len(text.split()),
+            "fetched_at": "2026-11-11T00:00:00Z",
             "status": "ok" if text else "extract_failed",
             "failure_detail": None if text else "Empty source.",
-            "title_source": article.title_source if text else None,
+            "extractor_version": "test",
+            "sanitizer_version": "test",
         }
     )
 
@@ -72,9 +83,8 @@ def range_pairs(schema: dict[str, Any]) -> set[tuple[str, str]]:
     }
 
 
-def test_request_only_offers_printed_references(article_ok: Article) -> None:
+def test_request_only_offers_printed_references() -> None:
     article = article_with_text(
-        article_ok,
         "Unit A reported 10 units in 2026. Unit B reported 20 units and wrote [s99].",
     )
     table = element_table(article, config=ElementsConfig())
@@ -115,8 +125,8 @@ def test_request_only_offers_printed_references(article_ok: Article) -> None:
         " \t\r\n",
     ],
 )
-def test_range_choices_equal_native_anchoring(article_ok: Article, text: str) -> None:
-    article = article_with_text(article_ok, text)
+def test_range_choices_equal_native_anchoring(text: str) -> None:
+    article = article_with_text(text)
     table = element_table(article, config=ElementsConfig())
     schema = calls.label_request_schema(article, table)
     offered = range_pairs(schema)
@@ -140,10 +150,10 @@ def test_range_choices_equal_native_anchoring(article_ok: Article, text: str) ->
     assert schema["properties"]["quotes"]["items"] == schema["properties"]["claims"]["items"]
 
 
-def test_original_character_bound_is_not_escape_or_byte_width(article_ok: Article) -> None:
+def test_original_character_bound_is_not_escape_or_byte_width() -> None:
     for character in ("x", "\u00e9", "\U0001f642", "\\", '"'):
         for length, expected in ((500, {("s0", "s0")}), (501, set())):
-            article = article_with_text(article_ok, " \t" + character * length + "\r\n")
+            article = article_with_text(" \t" + character * length + "\r\n")
             schema = calls.label_request_schema(
                 article, element_table(article, config=ElementsConfig())
             )
@@ -151,8 +161,8 @@ def test_original_character_bound_is_not_escape_or_byte_width(article_ok: Articl
 
 
 @pytest.mark.parametrize("text", ["", " \t\r\n", "Nothing numeric."])
-def test_empty_pools_need_no_invented_address(article_ok: Article, text: str) -> None:
-    article = article_with_text(article_ok, text)
+def test_empty_pools_need_no_invented_address(text: str) -> None:
+    article = article_with_text(text)
     table = element_table(article, config=ElementsConfig())
     schema = calls.label_request_schema(article, table)
     assert schema["properties"]["labels"]["maxItems"] == 0
@@ -167,16 +177,16 @@ def test_empty_pools_need_no_invented_address(article_ok: Article, text: str) ->
     assert all(not field.get("minItems", 0) for field in schema["properties"].values())
 
 
-def test_projection_preserves_native_shape_and_request_budget(article_ok: Article) -> None:
+def test_projection_preserves_native_shape_and_request_budget() -> None:
     native = calls.label_schema()
     before = canonical_json(native)
     width = widest_json_characters(native)
     budget = calls.label_budget_tokens()
-    article = article_with_text(article_ok, "Unit A counted 10 units in 2026. Unit B responded.")
+    article = article_with_text("Unit A counted 10 units in 2026. Unit B responded.")
     table = element_table(article, config=ElementsConfig())
     payload = request(article, table)
     schema = payload["json_schema"]
-    other = article_with_text(article_ok, "Another unit responded.")
+    other = article_with_text("Another unit responded.")
     calls.label_request_schema(other, element_table(other, config=ElementsConfig()))
 
     assert canonical_json(calls.label_schema()) == before
@@ -214,9 +224,9 @@ def test_projection_preserves_native_shape_and_request_budget(article_ok: Articl
                 assert leaf == expected["properties"][field]
 
 
-def test_selected_ranges_still_parse_and_anchor_verbatim(article_ok: Article) -> None:
+def test_selected_ranges_still_parse_and_anchor_verbatim() -> None:
     text = "Unit A may chair\nthe review if funded. Unit B opposed it."
-    article = article_with_text(article_ok, text)
+    article = article_with_text(text)
     table = element_table(article, config=ElementsConfig())
     schema = calls.label_request_schema(article, table)
     assert ("s0", "s1") in range_pairs(schema)
@@ -243,8 +253,8 @@ def test_selected_ranges_still_parse_and_anchor_verbatim(article_ok: Article) ->
     assert [one.span_excerpt for one in whole.elements if one.kind is ElementKind.CLAIM] == [text]
 
 
-def test_request_still_refuses_a_table_over_another_source(article_ok: Article) -> None:
-    article = article_with_text(article_ok, "Unit A counted 10 units.")
-    another = article_with_text(article_ok, "Unit B counted 20 units.")
+def test_request_still_refuses_a_table_over_another_source() -> None:
+    article = article_with_text("Unit A counted 10 units.")
+    another = article_with_text("Unit B counted 20 units.")
     with pytest.raises(SpanDriftError):
         request(article, element_table(another, config=ElementsConfig()))
