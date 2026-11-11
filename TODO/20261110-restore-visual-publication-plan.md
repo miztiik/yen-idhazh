@@ -38,11 +38,12 @@ Table C - Repair increments and the restored-generation roll-up
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Give the visual planner usable source evidence | - | A | DONE | fantastic-garbanzo | - | 0b1cac34-83e8-494c-99fc-6539f5299bdc |
 | C2 | 2 | Preserve the exact reason a visual was refused | 1 | B | DONE | shiny-spoon | - | ef9d68ad-ccf4-417d-9a05-fe0305ef21c7 |
-| C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2, 4, 5, 6, 7 | C | PENDING | fuzzy-bassoon | - | 094b8d19-fd66-47ce-b6ff-72d8af8f39d7 |
-| C4 | 4 | Replay retained articles on the controlled test runtime | 1, 2 | D | IN-FLIGHT | miniature-giggle | - | 98c0f7b2-33d5-487f-b893-37ef59cbb8c9 |
+| C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2, 4, 5, 6, 7, 8 | C | PENDING | fuzzy-bassoon | - | 094b8d19-fd66-47ce-b6ff-72d8af8f39d7 |
+| C4 | 4 | Replay retained articles on the controlled test runtime | 1, 2 | D | DONE | miniature-giggle | - | 98c0f7b2-33d5-487f-b893-37ef59cbb8c9 |
 | C5 | 5 | Correct literal sentence addressing and claim coverage | 1, 2 | D | DONE | cautious-tribble | - | e7392204-404e-484d-9cf5-5811294c4553 |
 | C6 | 6 | Show complete source-backed claims to the reader | 1, 2 | E | DONE | effective-guide | - | 96eb1442-fd7b-4734-b9a4-98d815cf9919 |
 | C7 | 7 | Install native Pages build validation prerequisites | - | F | DONE | fuzzy-succotash | - | 68150591-c6fc-4b82-864c-3aee606bc27e |
+| C8 | 8 | Restrict requested labels to usable native references and ranges | 1, 5, 7 | G | DONE | shiny-happiness | - | aeb6859c-ce2e-40c6-8afb-a7c83e841531 |
 
 ## 2. Row #1 - Give the visual planner usable source evidence
 
@@ -170,9 +171,9 @@ Table J - Roll-up completion evidence
 | ID | Outcome | State and evidence |
 | --- | --- | --- |
 | J1 | Serialized worker -> ordinary assembly -> native reader and stable recovery journey | DONE in [#2018](https://github.com/miztiik/yen-idhazh/pull/2018); this does not establish model generation |
-| J2 | Safe fixed-input model verification without production writes | Pending row #4 |
-| J3 | Existing-format first-call address/coverage correction | Pending row #5 |
-| J4 | Fresh warranted chart, warranted actor/claim grid and legitimate no-visual outputs | Pending rows #4 and #5, using the same named source inputs and both real production calls |
+| J2 | Safe fixed-input model verification without production writes | Row #4 delivered in [#2023](https://github.com/miztiik/yen-idhazh/pull/2023); the retained observation verified isolation, provenance and truthful failures, not positive generation |
+| J3 | Existing-format first-call address/coverage correction | Row #5 delivered in [#2022](https://github.com/miztiik/yen-idhazh/pull/2022); sentence presentation round-trips, while useful semantic coverage remains unproved |
+| J4 | Fresh warranted chart, warranted actor/claim grid and legitimate no-visual outputs | Still unproved: the retained numeric call timed out and the actor case lacked the needed anchored pairs; row #8 addresses unusable selections without guaranteeing coverage |
 | J5 | Normal asset, digest/inventory and served-reader verification on the merged producer revision | Pending actual publication; workflow success without a delivered visual is not positive proof |
 
 ## 5. Row #4 - Replay retained articles on the controlled test runtime
@@ -290,3 +291,41 @@ Table P - Rejected reader shortcuts
 - **Oracle:** Pages run `42990317413` on `2ed07ebc0f4f39f254d0a84fd7a0a58991fd6770` passed `decide`, failed build job `130421503658` at `build-frame-css.mjs` with `ModuleNotFoundError: No module named 'pydantic'`, and skipped deployment. After the declared package install, the real native appearance validation and static build must pass, with exact-head CI confirming the candidate. Local setup and PR CI do not prove a Pages deployment; C3 and Table J remain incomplete until the separate static deployment and served-site inspection.
 - **Decisions:** Reuse Python 3.12 and `pip install -e .` from the existing publishing workflows rather than copying a dependency subset into YAML. The beneficiary is native build-time validation of committed appearance configuration; no producer, source-page fetch or model execution is added. Document the prerequisite in the existing Pages section because it answers that section's current workflow question. Preserve all earlier complete row sections and unresolved generation/publication outcomes.
 - **Rejected alternatives:** Bypassing Pydantic or native validation would hide invalid configuration. Expanding the shared publication runtime without a demonstrated dependency boundary would widen this repair. Prompt/model/cap changes and manufactured visual outputs cannot prove this build prerequisite or close generation.
+
+## 9. Row #8 - Restrict requested labels to usable native references and ranges
+
+- **Scope:** Prevent the label decoder from selecting references absent from the current printed evidence or sentence ranges that existing anchoring cannot use. Specialize only the request schema for one native Article and its candidate table; preserve the saved reply contract, source meaning and optional empty selections.
+- **Files touched:**
+  - `backend/idhazh/classify/label_request.py` (new; owns the bounded request projection)
+  - `backend/idhazh/classify/calls.py`
+  - `backend/tests/test_label_request.py` (new focused request/anchoring cases)
+  - `backend/tests/test_classify.py`
+  - `backend/tests/contracts/test_decoder_grammar.py`
+  - `tests/fixtures/planner/recorded-call-payloads.json` (first request schema only)
+  - `docs/architecture/summarize/prompt.md`
+  - `docs/architecture/summarize/model-boundary.md`
+  - `docs/reference/retained-article-verification.md` (coordinator correction to the native provenance filename)
+  - `TODO/20261110-restore-visual-publication-plan.md`
+- **Acceptance gates:** Use the shared selector and the smallest applicable lint, strict-type, request, anchoring and historical-reading cases; CI owns the complete suite. Compile the actual projected request through the pinned runtime's native C++ schema converter and stock complete-object grammar validator without loading model weights. Inspect the validator's explicit verdict rather than its exit code alone. Measure dense source-cap schema/grammar size, compilation/initialization and peak memory separately from prompt capacity, using the current configured extraction cap. Keep those manual native receipts outside the repository; no test downloads, new dependencies, fixtures, parser or inference engine.
+- **Oracle:** The existing unrestricted request admits unknown or wrong-kind references and an oversized sentence-range selection that anchoring rejects. The projected request must reject those complete objects, reversed ranges and invalid endpoint combinations through the actual compiled grammar, while accepting exact-boundary excerpts, every eligible multi-sentence range and all-empty lists. Compare pair membership with real native anchoring over original trimmed source characters, including whitespace, escaping and Unicode. Native schema, field order, required keys, bounds, widest-budget arithmetic, historical parsing, prompt bytes and all non-schema request fields stay unchanged.
+
+Table Q - Native request projection decisions
+
+| ID | Decision | Authority |
+| --- | --- | --- |
+| Q1 | Keep a thin request wrapper beside the native label builder and put projection mechanics in a focused sibling without importing the builder back into it | Native request projection precedent and module boundary |
+| Q2 | Bind label ids to printed candidates, time ids to printed DATE elements plus the native empty string, and citation/lede addresses to printed sentence ids. Only code-minted addresses enter the grammar | Existing source-span and trust contracts |
+| Q3 | Correlate range endpoints with one complete-object branch per legal start and its eligible ends, shared by quotes and claims. Preserve original trimming, the native excerpt bound and every legal multi-sentence range; independent endpoint enums are insufficient | Existing `range_elements()` eligibility |
+| Q4 | Preserve empty lists and well-formed unreachable definitions when a pool is empty. Do not invent sentinels, force actor coverage or silently change the empty-source presentation | Native reply and source-presentation contracts |
+| Q5 | Keep `LabelReply`, `Citation`, `SentenceRange`, `label_schema()`, native readers/captures, exact anchoring, sanitizer, finalized menu, model/runtime, caps, context, timeout, admission and fallback unchanged. Derive budgets from the compatible native schema, not the narrower request | Tables B6 and M; native compatibility contract |
+| Q6 | Exercise actual pinned native grammar acceptance, not only JSON Schema validation or one sampled valid reply. Treat any schema factoring as unproved until equivalent native enforcement is demonstrated | Runtime/model boundary |
+| Q7 | After the real producer increment, use the existing retained-input path for a fresh bounded observation on the named controls. Record both actual request token counts and prefix continuity, source/current identities, native products and actual usefulness. A timeout supplies no missing second-call evidence | Tables H and J |
+| Q8 | Legal references cannot compel actor selection or prove semantic coverage. Keep C3 pending until useful native chart/grid outputs and ordinary publication are observed; no quota, third call, decline retry or precise-fragment substitution | Original restoration outcome and Table J |
+
+Table R - Rejected projection shortcuts
+
+| ID | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| R1 | Add more prompt wording without an enforceable selection invariant | The current guidance did not establish usable actor evidence | Another unisolated semantic change without repairing the observed unusable range | Table Q |
+| R2 | Replace native readers with the article-specific request schema | Historical replies are not governed by today's article choices | A saved-format compatibility break and Level 5 design decision | Table Q5 |
+| R3 | Claim restoration from zero invalid references or green grammar tests | Valid selections can still omit every useful actor | Continued absence of actual positive generation and publication evidence | Table Q8 |

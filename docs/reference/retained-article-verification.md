@@ -66,7 +66,7 @@ retention window. All replay files stay below the private directory
 
 - `source/<native-plan-file>`: unchanged source plan, including its envelope.
 - `inputs/<item-id>.article.json`: exact selected source Article bytes.
-- `outputs/<item-id>/items/pipeline-inputs.json`: native current model, runtime,
+- `outputs/<item-id>/items/inputs.json`: native current model, runtime,
   prompt, schema and runner provenance; extraction/sanitization versions describe
   the retained Article, not an extraction that did not happen.
 - `outputs/<item-id>/items/<item-id>.summary.json`, `<item-id>.visual.json` and

@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-11
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -20,7 +20,7 @@ flowchart LR
     direction TB
     A1["article text<br/><i>sanitized once, at the trust boundary</i>"]
     A2["the instructions<br/>named files under config/prompts/"]
-    A3["the output schema<br/><i>generated from the contract</i>"]
+    A3["the output schema<br/><i>native contract, current-item choices</i>"]
   end
 
   subgraph shim_in["Inward shim - render_prompt, completion_payload"]
@@ -42,7 +42,7 @@ flowchart LR
     direction TB
     O1["read either reply envelope"]
     O2["drop the reasoning block"]
-    O3["validate against the same schema"]
+    O3["validate against the native reply model"]
     O1 --> O2 --> O3
   end
 
@@ -181,7 +181,8 @@ Three steps, in order, all reading the entry and never a model name.
 2. **Wrap the turns.** Substitute the role into the opening, append the
    closing, and end with the reply opening the model expects.
 3. **Build the request.** Attach the output schema, ask for the prompt cache,
-   and set the budgets.
+   and set the budgets. Request-only reference choices may narrow the native
+   shape; compatible native bounds still determine reply budgets.
 
 The second call of an item is a literal byte-extension of the first, which is
 what lets the prefix cache hold. That property lives in the expression itself
@@ -291,11 +292,20 @@ not a size that follows the model - beside the `/props` filename assertion
 `digest.yml` already makes. The filename says which file; the header says what
 that file is.
 
-**Case 3 builds its schema from the one the run really sends.** The reply schema
-is generated from a model, so a committed probe schema would be a second copy
-that drifts. `prove_the_entry` takes the schema as an argument instead - which
-is also what keeps the model layer at the bottom of the dependency graph, since
-the module that builds that schema imports this one.
+**Case 3 derives a constant probe from the schema the run supplies.**
+`prove_the_entry` takes that schema as an argument and derives a one-field
+constant reply. This checks basic constrained decoding, not enforcement of
+every construct in the full request. The argument also keeps the model layer
+at the bottom of the dependency graph, since the schema builder imports it.
+
+Article-specific choices need a separate full-schema check: compile the actual
+request with the pinned native C++ converter and exercise complete valid and
+invalid objects with the native grammar validator. Include correlated range
+endpoints, original-source excerpt eligibility and empty pools, not just one
+sampled valid reply. The stock validator's explicit validity verdict is the
+result; its exit status alone does not distinguish an accepted object from a
+rejected one. This model-free check proves native grammar acceptance, not
+observed token masking, inference quality or useful visual selection.
 
 **Case 2 asks whether the slot reused anything, not whether it reused all of
 it.** The first version wanted the second call's reused count to reach the first
@@ -327,6 +337,18 @@ was not re-read - and never a number the runtime is free to choose. Anything
 finer is a second implementation of the runtime, kept in a docstring, drifting.
 
 ## Design rationale
+
+**Request choices narrow selection, not the saved contract.** The first call
+can select only printed references and source ranges its existing anchoring
+can use. Complete native-derived range branches keep correlated endpoints
+together; independent enums or constraints beside a union can admit unusable
+pairs when converted to a grammar. Historical reply readers retain the native
+shape. A request-local definition shares the unchanged speaker leaf instead
+of recompiling its bounded string in every range branch; expanding that one
+reference reproduces the direct schema, including field and alternative order.
+Schema/grammar size, native conversion/initialization and peak memory
+are separate costs from prompt-token capacity; measure the dense source-cap
+case before choosing an equivalent factoring.
 
 **Tests describe behavior, not the selected model.** Generic tests supply
 explicit turn markers, reasoning keywords and server flags. A new valid model

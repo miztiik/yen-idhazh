@@ -89,6 +89,13 @@ If extraction read only part of the article, state that limitation on the item. 
 
 Use grammar-constrained decoding derived from the declared reply model. Refuse unknown keys and validate the result after decoding. A well-shaped object still needs content checks.
 
+The label request narrows the native reply schema to this article's printed
+candidate and sentence addresses. Time references choose only printed dates or
+the native empty string. Empty candidate pools permit only an empty label list;
+no selection is mandatory. The native reply schema and historical parser stay
+unchanged, and the output budget still uses the widest native shape rather
+than the narrower request.
+
 ## The second call writes this summary, and the article is read once
 
 [classify/calls.py](../../../backend/idhazh/classify/calls.py) makes adjacent calls for each item:
@@ -159,6 +166,16 @@ Distinct actors remain distinct, geographic markets belong in place mentions,
 and narrated claims retain their reporting frames and qualifications. The
 [element contract](../extraction/elements.md#the-four-kinds-only-a-model-can-find)
 owns those meanings and anchoring rules.
+
+Quotes and claims share one request-only range definition. Each complete-object
+branch fixes a printed start address and lists only ends at or after it whose
+original source slice, after native whitespace trimming, is nonempty and fits
+the native excerpt bound. This preserves every eligible multi-sentence range.
+Serialized escapes and UTF-8 bytes do not determine source character length.
+With no eligible pair, both range lists can only be empty; the native empty
+source presentation still prints `s0`. Only code-minted addresses enter the
+grammar, never source words. Valid addresses cannot ensure useful actors are
+selected or establish semantic coverage or restored visual generation.
 
 `measure_two_calls.article_from_user_turn` recognizes the explicit current
 JSON-string heading and the historical raw-line heading separately. It decodes
