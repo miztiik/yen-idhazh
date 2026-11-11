@@ -417,6 +417,23 @@ def test_an_entry_that_declares_no_window_is_refused_by_the_flag_name() -> None:
         refuse_a_model_nothing_could_run("models/x.json", ModelsConfig.model_validate(raw))
 
 
+def test_context_alias_passes_config_preflight_without_rewriting_the_model() -> None:
+    models = ModelsConfig.model_validate(entry_with(server={"-c": 4096}))
+    before = models.to_json()
+
+    refuse_a_model_nothing_could_run("models/x.json", models)
+
+    assert models.to_json() == before
+
+
+def test_ambiguous_recorded_flags_fail_at_config_load() -> None:
+    models = ModelsConfig.model_validate(
+        entry_with(server={"--ctx-size": 4096, "-np": 1, "--parallel": 1})
+    )
+    with pytest.raises(ValueError, match="multiple spellings"):
+        refuse_a_model_nothing_could_run("models/x.json", models)
+
+
 def test_a_timeout_that_is_not_a_number_is_refused_at_load_rather_than_mid_item() -> None:
     """Four call sites multiply it by sixty, and none of them can say which key broke."""
     raw = committed_models_raw()

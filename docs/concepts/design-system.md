@@ -89,9 +89,12 @@ Render the source-backed pairs as a fixed two-column table, with explicit
 `Who` and `What` headers. Keep the row rectangular: if attribution is
 ambiguous or either span is absent, both cells stay empty rather than dropping
 one side or pairing by position. Wrap long source text in each column; do not
-shrink it, clip it, or add an inner scroll area. Both displayed labels use the
-shared `fit_source_span()` policy, while each bounded full excerpt and its span
-remain in the payload.
+shrink it, clip it, or add an inner scroll area. What shows the complete
+validated claim excerpt by default, keeping its action and qualifications
+visible. Who keeps the fitted actor label. Only a clipped actor gets native
+`details`/`summary` disclosure of its full excerpt; an unclipped actor stays
+plain text. The shared `fit_source_span()` policy still produces both fitted
+label fields, and each bounded full excerpt and its span remain in the payload.
 
 ### A control only sticks where it is one band
 

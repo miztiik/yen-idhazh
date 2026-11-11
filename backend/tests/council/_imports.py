@@ -116,6 +116,7 @@ MODULE_NAMES = (
     "idhazh.run_context",
     "idhazh.llm.reasoning",
     "idhazh.llm.server",
+    "idhazh.llm.server_flags",
     "idhazh.sanitize",
     "idhazh.source_classification",
 )

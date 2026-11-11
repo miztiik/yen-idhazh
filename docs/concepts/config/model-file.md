@@ -1,6 +1,6 @@
 # The model's own file
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-11
 
 What `config/` says about a set of weights: which model runs, what runtime
 settings are declared for those exact bytes, how a turn is written for it, and
@@ -128,9 +128,9 @@ stays one line for them too.
 
 ## Runtime settings
 
-the entry's settings hold the deterministic decode values and server settings.
-Each model has its own block, so changing the model also changes the settings
-that travel with it:
+The entry's `server` block carries runtime flags; `sampling` carries request
+decode values. Each model has its own blocks, so changing the model also
+changes the settings that travel with it:
 
 - `n_ctx`, `n_threads`, `n_batch`, `n_ubatch`
 - `n_parallel`, `n_threads_batch`
@@ -149,14 +149,25 @@ that travel with it:
   that block: it is how long the client waits, so it never goes on the wire
 - `declared_for`
 
-Optional launch settings default to `null`, which omits their flags. Numeric
-zero and boolean `false` are explicit values, not absence. The template and
-prompt-cache booleans emit their positive or negative switches. Omitted core
-settings such as `n_ctx` still receive the Python defaults and are sent.
-`cache_prompt: null` leaves completion requests explicitly cache-enabled, as
-before; a configured boolean controls both the startup flag and request body.
-`load_mode: "mmap+mlock"` emits `-lm mmap+mlock`, the combined spelling the
-runtime recommends instead of the deprecated separate switches.
+Server keys and values reach runtime argv verbatim, in their declared order.
+An omitted key leaves the runtime's default; a null value emits a bare flag,
+not an omitted option. The context setting is required because the pipeline
+computes on it. Prompt caching uses the positive or negative bare switch;
+`--no-cache-prompt` also disables request-side caching.
+`"--load-mode": "mmap+mlock"` emits `--load-mode mmap+mlock`; `-lm` is an
+equivalent spelling, not a different setting.
+
+Shared setting and fingerprint readers derive aliases from the packaged
+[recorded server help](../../reference/ci-model-runtime.md#what-the-build-accepts-is-recorded-not-re-asked).
+They retain the existing recorded keys, including short fingerprint keys.
+Config preflight refuses duplicate aliases, even with equal values, and
+opposing consumed switches. Unknown unrelated flags remain the runtime's
+responsibility. Interpretation never rewrites the model's server block or argv.
+
+Earlier alias-blind recording could report long-spelled flags as
+`runtime-default` or omit an item setting. Corrected fingerprints may therefore
+change without a runtime setting changing. Historical records remain valid and
+unchanged; no reader infers missing values from current config.
 
 The daily worker logs its locked-memory limits and raises them with
 `sudo prlimit --memlock=unlimited --pid $$` inside the script that starts the
@@ -192,9 +203,9 @@ Turning `metrics` off is therefore not free any more. It costs the log lines it
 always did, and it also leaves every later run's counter row empty, so the
 reconciliation has nothing to hold the ledger against.
 
-`n_parallel: null` and `n_parallel: 1` are not the same runtime. `null` omits
-`-np`, so llama.cpp picks its own slot count and reports unified KV; any
-explicit value passes `-np` and turns unified KV off. The context each request
+An omitted `--parallel` and an explicit `--parallel 1` are not the same runtime.
+Omission lets llama.cpp pick its slot count and report unified KV; an explicit
+value passes that flag and turns unified KV off. The context each request
 gets is unchanged at `n_parallel: 1`, because non-unified KV divides `n_ctx` by
 `n_seq_max` and `n_seq_max` is then 1. Source: llama.cpp `common/arg.cpp` and
 the `-kvu` help text, read 2026-08-25; both behaviours appear in the run logs

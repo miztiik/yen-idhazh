@@ -23,6 +23,7 @@ deleted with the field - a record nothing wrote and nothing read.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from string import Template
 from typing import Final
@@ -100,13 +101,17 @@ def a_built_envelope(**overrides: object) -> TurnMarkers:
 
 
 def stamp_with(
-    model_sha256: str | None, *, markers: TurnMarkers | None = None
+    model_sha256: str | None, *, markers: TurnMarkers | None = None,
+    server: Mapping[str, object] | None = None,
 ) -> PipelineInputs:
     """`build_inputs` with everything but the observed weights digest held still."""
     return build_inputs(
         model=CONFIGURED_MODEL,
         model_sha256=model_sha256,
-        server=a_server(**{"--batch-size": 512, "--ubatch-size": 128, "--threads": 2}),
+        server=(
+            a_server(**{"--batch-size": 512, "--ubatch-size": 128, "--threads": 2})
+            if server is None else server
+        ),
         sampling=a_sampling(temperature=0.2),
         truncation_cap_tokens=2500,
         runtime_build="llama.cpp-b4200",
@@ -260,6 +265,28 @@ def test_a_flag_the_file_leaves_out_spells_apart_from_a_pinned_one() -> None:
     assert spelling["-ctk"] == "runtime-default"
     assert spelling["-tb"] == "runtime-default"
     assert runtime_flags_spelling(a_server(**{"--jinja": None}))["--jinja"] == "set"
+
+
+def test_long_runtime_flags_move_the_existing_canonical_fingerprint_keys() -> None:
+    before = runtime_flags_spelling({"--parallel": 1, "--cache-type-k": "q8_0"})
+    after = runtime_flags_spelling({"--parallel": 2, "--cache-type-k": "f16"})
+
+    assert before == runtime_flags_spelling({"-np": 1, "-ctk": "q8_0"})
+    assert after == runtime_flags_spelling({"-np": 2, "-ctk": "f16"})
+    assert {key for key in before if before[key] != after[key]} == {"-np", "-ctk"}
+
+
+def test_core_aliases_produce_the_same_complete_input_manifest() -> None:
+    long = stamp_with(FIXTURE_MODEL_SHA256, server={
+        "--ctx-size": 4096, "--batch-size": 128, "--ubatch-size": 64,
+        "--threads": 2, "--parallel": 1,
+    })
+    short = stamp_with(FIXTURE_MODEL_SHA256, server={
+        "-c": 4096, "-b": 128, "-ub": 64, "-t": 2, "-np": 1,
+    })
+
+    assert long.changed_inputs(short) == ()
+    assert long.model_dump() == short.model_dump()
 
 
 def test_a_moved_sampling_value_moves_the_sampling_spelling() -> None:

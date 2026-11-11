@@ -49,16 +49,15 @@ export interface DiskReadDay {
 	state: DiskReadState;
 }
 
-/** What the runs in the span said about holding the model's memory down.
+/** What the runs recorded about requesting locked weights.
  *
  * Counted per run rather than per row, because the setting belongs to the
  * server a run started and every item of that run inherits it.
  */
 export interface Pinning {
-	/** Runs whose every recorded row said the memory was held down, so the
-	 * machine could not take it back. */
+	/** Runs whose recorded rows all requested locking, not proof it was applied. */
 	held: number;
-	/** Runs that recorded the setting and were not holding it down. */
+	/** Runs with at least one recorded non-locking setting. */
 	loose: number;
 	/** Runs that recorded nothing either way. */
 	silent: number;
@@ -106,16 +105,13 @@ function emptyTally(): DayTally {
 	return { reads: 0, counted: 0, excluded: 0, copiesHigh: null, copiesLow: null };
 }
 
-/** One run's setting, as its rows recorded it. A run that recorded both is
- * loose: the machine was free to take the memory back on at least one of its
- * shards, and that is the fact the reader needs. */
+/** A run with both values includes a recorded non-locking setting. */
 function pinningOf(recorded: Set<string>): 'held' | 'loose' | 'silent' {
 	if (recorded.size === 0) return 'silent';
 	return recorded.has('False') ? 'loose' : 'held';
 }
 
-/** Fold one span's item rows into one reading a day, plus what the runs said
- * about holding the model's memory down. */
+/** Fold one span into daily readings and the runs' recorded locking requests. */
 export function diskReads(
 	health: readonly Record<string, string>[],
 	marks: DiskReadMarks

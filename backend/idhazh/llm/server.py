@@ -43,6 +43,8 @@ from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.knobs.model_server import resolve_base_url
 from idhazh.contracts.knobs.models import CompanionFile, ModelEntry, ModelRef
 from idhazh.llm.reasoning import split_reasoning
+from idhazh.llm.server_flags import SETTING_KEYS as SETTING_KEYS
+from idhazh.llm.server_flags import interpret_server_flags
 from idhazh.sanitize import why_a_forged_turn_would_survive
 
 LOG: Final = logging.getLogger("idhazh")
@@ -93,7 +95,7 @@ CONTEXT_EXCEEDED_TYPE: Final = "exceed_context_size_error"
 #: What `n_predict` is sent as when a span carries no cap. It is llama.cpp's own
 #: spelling, not a sentinel of ours: `--predict` documents `number of tokens to
 #: predict (default: -1, -1 = infinity)`, recorded in
-#: `tests/fixtures/runtime/b10598-llama-server-help.txt`. Omitting the key would
+#: `idhazh.llm/b10598-llama-server-help.txt`. Omitting the key would
 #: mean the same thing, and saying it is what lets a recorded request body be
 #: read without knowing which flags the server was started with.
 UNCAPPED_N_PREDICT: Final = -1
@@ -407,37 +409,14 @@ class Completion:
         return bool(self.reasoning.strip() or self.inline_reasoning.strip())
 
 
-#: Our name for a value, and the key the model file spells it under. These are
-#: the settings this project reads BY NAME rather than handing to the server
-#: whole. Four of them are persisted under our names on the run record and drawn
-#: in words on a console panel, so a rename would move a published string and an
-#: alias does not.
-#:
-#: **Nothing that goes on the wire is here any more.** The sampling values used
-#: to be listed under their own spellings, which is a row that translates a name
-#: into itself and gates every unlisted key for nothing. They are splatted from
-#: the entry's `sampling` block instead, so naming one more of them is a key in
-#: the model file and no edit here.
-SETTING_KEYS: Final[Mapping[str, str]] = MappingProxyType(
-    {
-        "n_ctx": "--ctx-size",
-        "n_batch": "--batch-size",
-        "n_ubatch": "--ubatch-size",
-        "n_threads": "--threads",
-        "n_parallel": "-np",
-        "load_mode": "-lm",
-    }
-)
-
-
 def setting(block: Mapping[str, Any], name: str, default: Any = None) -> Any:
-    """One value out of a settings block, under this project's name for it."""
-    return block.get(SETTING_KEYS[name], default)
+    """One setting through its recorded aliases, without changing runtime argv."""
+    return interpret_server_flags(block).get(SETTING_KEYS[name], default)
 
 
 def window(server: Mapping[str, Any]) -> int:
     """The window one sequence gets. Required, because this project computes on it."""
-    return int(server[SETTING_KEYS["n_ctx"]])
+    return int(interpret_server_flags(server)[SETTING_KEYS["n_ctx"]])
 
 
 def request_timeout_seconds(entry: ModelEntry) -> float:

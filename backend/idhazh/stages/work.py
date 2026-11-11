@@ -160,6 +160,7 @@ def _shard_cells(
     and a key filled from two places is a key that can disagree with itself.
     """
     model = settings.models.summarizer
+    load_mode = setting(model.server, "load_mode")
     return {
         "machine_shard": shard,
         "shard_item_count": shard_item_count,
@@ -170,7 +171,7 @@ def _shard_cells(
         "n_parallel": setting(model.server, "n_parallel"),
         "n_threads": setting(model.server, "n_threads"),
         "n_batch": setting(model.server, "n_batch"),
-        "weights_pinned": setting(model.server, "load_mode") == "mmap+mlock",
+        "weights_pinned": None if load_mode is None else load_mode in ("mlock", "mmap+mlock"),
         "label_budget_tokens": calls.label_budget_tokens(),
         "summary_budget_tokens": calls.summarize_and_plan_budget_tokens(settings.app.summarize),
         "temperature": model.sampling.get("temperature"),
@@ -319,6 +320,10 @@ def stage_work(
     if not mine:
         LOG.info("working shard=%s/%s items=0", shard, shards)
         return
+    if collect_host and settings.app.observability.memory_profiling_enabled and server_pid is None:
+        LOG.warning(
+            "model-server PID not supplied; process memory and page faults are unrecorded"
+        )
     published_marks = load_visual_population(
         common.STATE_ROOT, on=plan.date, visuals=settings.app.visuals
     )

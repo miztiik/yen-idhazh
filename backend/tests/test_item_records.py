@@ -194,6 +194,53 @@ def test_every_cell_the_stage_hands_over_arrives_on_the_row() -> None:
     assert len(handed) > 40, "the stage hands over more than a handful, and this proves it"
 
 
+@pytest.mark.parametrize(
+    "server",
+    [
+        {"--ctx-size": 4096, "--parallel": 2, "--threads": 3, "--batch-size": 128, "--load-mode": "mmap+mlock"},
+        {"-c": 4096, "-np": 2, "-t": 3, "-b": 128, "-lm": "mmap+mlock"},
+    ],
+)
+def test_configured_aliases_reach_the_item_row_under_existing_fields(
+    server: dict[str, int | str],
+) -> None:
+    from idhazh.stages import work
+
+    settings = config.load(CONFIG_DIR)
+    settings.models.summarizer.server = server
+    cells = work._shard_cells(
+        settings, shard=0, shard_item_count=1,
+        facts=host.HostFacts(cpu_model=None, runner_name=None),
+    )
+    row = settled(recorder(), **cells).close()
+
+    assert (row.n_ctx_configured, row.n_parallel, row.n_threads, row.n_batch) == (4096, 2, 3, 128)
+    assert row.weights_pinned is True
+
+
+@pytest.mark.parametrize("load_mode", [None, "mmap", "mlock", "mmap+mlock"])
+def test_locking_records_only_the_requested_mode_and_missing_slots_stay_unknown(
+    load_mode: str | None,
+) -> None:
+    from idhazh.stages import work
+
+    settings = config.load(CONFIG_DIR)
+    settings.models.summarizer.server = {"--ctx-size": 4096}
+    if load_mode is not None:
+        settings.models.summarizer.server["--load-mode"] = load_mode
+    cells = work._shard_cells(
+        settings, shard=0, shard_item_count=1,
+        facts=host.HostFacts(cpu_model=None, runner_name=None),
+    )
+    row = settled(recorder(), **cells).close()
+
+    assert row.n_parallel is None
+    assert row.weights_pinned is (
+        None if load_mode is None else load_mode in ("mlock", "mmap+mlock")
+    )
+    assert row.llama_rss_bytes is None
+
+
 def test_a_call_slot_with_numbers_and_no_kind_is_half_a_call() -> None:
     """The test that would have caught the absent cell the pair could not be built without.
 

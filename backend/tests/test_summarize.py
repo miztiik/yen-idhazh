@@ -1790,7 +1790,9 @@ class TestTwoSpansOnOneCall:
         help text that stops carrying the line fails this one test with a
         message naming what it wanted (`CLAUDE.md` section 13).
         """
-        recorded = read_text(FIXTURES_DIR / "runtime" / "b10598-llama-server-help.txt")
+        from idhazh.llm.server_flags import read_recorded_server_help
+
+        recorded = read_recorded_server_help()
         predict = [line for line in recorded.splitlines() if "--n-predict" in line]
 
         assert predict, "the recorded help stopped documenting --n-predict"

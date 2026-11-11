@@ -379,10 +379,17 @@ jobs:
         env:
           LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
           MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
+          MODEL_SERVER_OUTCOME: ${{ steps.model_server.outcome }}
         run: |
+          set -euo pipefail
           MEMORY_ARGS=()
           if [ "$MEMORY_PROFILING" != "inherit" ]; then
             MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
+          fi
+          SERVER_ARGS=()
+          RESOLVED=$(python3 backend/utilities/memory_profiling_control.py "$MEMORY_PROFILING")
+          if [ "$RESOLVED" = "on" ] && [ "$MODEL_SERVER_OUTCOME" = "success" ]; then
+            SERVER_ARGS=(--server-pid "$(cat llama-server.pid)")
           fi
           python backend/utilities/digest_publish.py run work \
             --date "${{ needs.plan.outputs.date }}" \
@@ -391,6 +398,7 @@ jobs:
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }} \
             "${MEMORY_ARGS[@]}" \
+            "${SERVER_ARGS[@]}" \
             ${{ needs.plan.outputs.faithfulness == 'false' && '--no-faithfulness' || '' }}
 
 

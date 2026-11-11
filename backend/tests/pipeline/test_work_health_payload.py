@@ -24,6 +24,7 @@ from itertools import count
 from pathlib import Path
 from typing import Any, Final
 
+import pytest
 from pytest import LogCaptureFixture, MonkeyPatch
 from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
@@ -337,3 +338,95 @@ def test_an_item_the_shard_abandoned_leaves_a_row_too(
 
     assert set(written) == {item.item_id for item in run_plan.items}
     assert {row.code for row in written.values()} == {FailureCode.SHARD_OUT_OF_TIME}
+
+
+def test_an_empty_shard_needs_no_controller_or_host_instrument(
+    tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture,
+) -> None:
+    settings = config.load(CONFIG_DIR)
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
+    monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
+    run_plan = RunPlan(
+        version=RunPlan.schema_version(), date="2026-09-15",
+        run_id="2026-09-15-1", generated_at="2026-09-15T06:00:00Z",
+    )
+
+    stage_work(run_plan, settings=settings, scorer=None, shard=1, shards=2)
+
+    assert not (tmp_path / "run").exists()
+    assert "model-server PID not supplied" not in caplog.text
+
+
+@pytest.mark.parametrize("collection", ["on", "host-off", "memory-off", "no-pid"])
+def test_controller_identity_reaches_process_fields_only_when_collection_is_enabled(
+    tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture, collection: str,
+) -> None:
+    from idhazh.contracts.base import derive_url_key
+    from idhazh.contracts.feed_health import FetchOutcome
+    from idhazh.fetch import FetchResult
+    from idhazh.telemetry.record import HEALTH_SUFFIX
+
+    from ._builders import isolate_ledgers
+
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "off" if collection == "host-off" else "python")
+    monkeypatch.setenv("MEMORY_PROFILING", "off" if collection == "memory-off" else "on")
+    settings = config.load(CONFIG_DIR)
+    settings.app.logging.waiting_heartbeat_seconds = 0
+    isolate_ledgers(tmp_path, monkeypatch)
+    proc = tmp_path / "proc"
+    server = proc / "742"
+    server.mkdir(parents=True)
+    (server / "stat").write_text(
+        "742 (recorded-server) S 1 742 742 0 -1 0 900 0 7 0 0 0 0 0 20 0 1 0 12345\n",
+        encoding="ascii",
+    )
+    (server / "status").write_text(
+        "VmRSS: 4096 kB\nVmHWM: 8192 kB\nRssAnon: 2048 kB\n", encoding="ascii",
+    )
+    monkeypatch.setattr(host, "PROC", proc)
+    for name, filename in (("PROC_STAT", "stat"), ("MEMINFO", "meminfo"), ("LOADAVG", "loadavg")):
+        monkeypatch.setattr(host, name, proc / filename)
+    url = "https://example.com/report"
+    run_plan = RunPlan.model_validate({
+        "version": RunPlan.schema_version(), "date": "2026-09-15", "run_id": "2026-09-15-1",
+        "generated_at": "2026-09-15T06:00:00Z",
+        "verticals": [{"id": "ai", "considered": 1, "planned": 1, "eligible_feeds": 1}],
+        "items": [{
+            "item_id": "ai-01", "url_key": derive_url_key(url), "source_url": url,
+            "canonical_url": url, "source_id": "example", "tier": 1, "vertical": "ai",
+            "title": "A school publishes its building schedule", "rank_score": 1,
+        }],
+    })
+    paragraphs = (
+        "The school published a building schedule on Monday after a public meeting. "
+        "Construction will begin in January and finish before the next academic year. "
+        "The council said the work would replace classrooms and repair the library.",
+        "Residents asked for regular updates on spending and safety. The school agreed "
+        "to publish monthly reports naming completed work and any delays. Teachers "
+        "will use a nearby building while the repairs continue.",
+        "The project includes new heating equipment and wider entrances. Engineers "
+        "will check the foundations before the first rooms are closed. The school "
+        "said no lessons would be cancelled during the first phase.",
+    )
+    html = (
+        "<html><head><title>A school publishes its building schedule</title></head>"
+        "<body><article><h1>A school publishes its building schedule</h1>"
+        + "".join(f"<p>{paragraph}</p>" for paragraph in paragraphs)
+        + "</article></body></html>"
+    ).encode("ascii")
+
+    def fetch_article(_url: str) -> FetchResult:
+        return FetchResult(FetchOutcome.OK, status=200, body=html)
+
+    with a_server_that_refuses_every_completion() as endpoint:
+        stage_work(
+            run_plan, settings=settings, scorer=None, fetcher=fetch_article,
+            model_endpoint=endpoint.endpoint, server_pid=None if collection == "no-pid" else 742,
+        )
+
+    path = tmp_path / "run" / run_plan.date / "items" / f"ai-01{HEALTH_SUFFIX}"
+    row = ItemHealthRow.from_json(path.read_text(encoding="ascii"))
+    assert row.summarize_ms is not None, "the item must reach the process-scoped work window"
+    actual = (row.llama_rss_bytes, row.llama_rss_anon_bytes, row.llama_rss_peak_bytes, row.llama_major_faults)
+    assert actual == ((4096 * 1024, 2048 * 1024, 8192 * 1024, 0) if collection == "on" else (None,) * 4)
+    assert ("model-server PID not supplied" in caplog.text) is (collection == "no-pid")
