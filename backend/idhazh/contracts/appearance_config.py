@@ -142,14 +142,14 @@ class FrameConfig(Model):
             "leaves the summary alone."
         ),
     )
-    console_max_px: int = Field(
-        default=1600,
+    console_max_px: int | None = Field(
+        default=None,
         ge=FRAME_CONSOLE_MIN_PX,
         le=FRAME_CONSOLE_MAX_PX,
         description=(
-            "The widest the operator frame grows. Wider than the reading frame on "
-            "purpose: an instrument has tables and charts where a digest has "
-            "sentences, and a table is allowed the screen it is on."
+            "An optional maximum operator-frame width in CSS pixels. Null fills the "
+            "available window with the configured gutters; an existing numeric "
+            "maximum retains its cap. Charts measure their own containers."
         ),
     )
     measure_ch: int = Field(
@@ -233,7 +233,7 @@ class FrameConfig(Model):
                 "day's aside replaces the item's rail at the wide breakpoint, so a "
                 "narrower aside would give a wider screen less beside the prose"
             )
-        if self.console_max_px < self.reading_max_px:
+        if self.console_max_px is not None and self.console_max_px < self.reading_max_px:
             raise ValueError(
                 "frame.console_max_px must not be narrower than reading_max_px: "
                 "an instrument that gets less room than a paragraph is the defect "
@@ -462,11 +462,9 @@ class ChartConfig(Model):
     hover_readout: bool = Field(
         default=True,
         description=(
-            "Whether a pointer, a tap or an arrow key over a chart names the value it "
-            "is nearest, in words. The readout is additive: it may never be the only "
-            "place a fact appears, and every value it shows is also derivable from the "
-            "axis - which is what keeps the old rule against tooltips carrying "
-            "critical information intact while still answering 'what is that bar'."
+            "Whether console charts add a visible pointer-hover tooltip from their "
+            "typed drawing readings. Standing readings, keyboard and touch inspection "
+            "remain available when this is false; a tooltip never carries a fact alone."
         ),
     )
     readout_max_share: float = Field(
@@ -583,11 +581,17 @@ class AppearanceConfig(Contract):
         json_schema_extra={
             "readCompatibility": (
                 "additive; absent archive controls and console_style blocks/leaves use "
-                "declared defaults; style arrays replace whole"
+                "declared defaults; style arrays replace whole; numeric console frame "
+                "maxima retain their caps and null selects the full window"
             )
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-11",
+            change="Allow an uncapped console frame and activate additive chart hover.",
+            why="Existing numeric caps still read; non-hover fact access is unchanged.",
+        ),
         ChangelogEntry(
             version="2026-11-10",
             change="Separate archive search controls and add defaulted console-only styling.",
@@ -602,11 +606,6 @@ class AppearanceConfig(Contract):
             version="2026-10-10",
             change="console.tile_min_px added for readable daily tiles.",
             why="A tile keeps room inside its borders instead of becoming a stripe.",
-        ),
-        ChangelogEntry(
-            version="2026-10-09",
-            change="console.panel_groups and console.judged_panel_ids removed.",
-            why="Each route's console file owns its panel order and judged list.",
         ),
         ChangelogEntry(
             version="2026-09-30",
@@ -666,7 +665,10 @@ class AppearanceConfig(Contract):
         script runs, which is the one moment a static site is supposed to be
         already finished.
         """
-        if self.chart.width_px > self.frame.console_max_px:
+        if (
+            self.frame.console_max_px is not None
+            and self.chart.width_px > self.frame.console_max_px
+        ):
             raise ValueError(
                 "chart.width_px must not exceed frame.console_max_px: the server would "
                 "prerender every chart wider than its container can ever be"

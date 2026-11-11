@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -22,7 +22,7 @@ Its blocks:
 | `assist` | On-device archive search. Formerly `idhazh.json`'s `assist` block. |
 | `frame` | The frame maximums, the reading measure, the gutter range, and the three breakpoints. |
 | `theme` | Whether gradients, elevation and the display face are drawn, and how strongly a panel takes a tint. |
-| `chart` | Console chart dimensions, readout width, tick density, sparkline height, and bounded geometry for story bars, dots, slopes and lines. `hover_readout` and `palette` are still in the contract, but nothing reads them, so setting either changes nothing. |
+| `chart` | Console chart dimensions, readout width, tick density, sparkline height, additive hover tooltips, and bounded geometry for story bars, dots, slopes and lines. `hover_readout` switches only console tooltips; standing, keyboard and touch readings remain usable. `palette` is retained but currently has no consumer. |
 | `icons` | Icon size, whether an icon takes the hue of what it means, and whether a topic carries a mark. |
 | `motion` | The two durations, and one switch. `prefers-reduced-motion` sits above the switch and is deliberately not configurable. |
 
@@ -74,10 +74,13 @@ The rule the two shapes of mirror follow:
 
 ### Why a frame width is a knob, when a 2026-08-28 ruling said it should not be
 
-The objection was that a config able to set the frame to 300px would need a code change to still look right. That is true of an unvalidated number and false of a validated one. **`frame.reading_max_px` cannot be set below 960 or above 1600; `measure_ch` cannot leave 52 to 80; `breakpoints_px` must be exactly three ascending, distinct widths; and `console_max_px` may not be narrower than `reading_max_px`.** A validator refuses a document that breaks any of them, so no reachable value breaks the design. The contract is the answer to the objection rather than a refusal of the knob, and `backend/tests/test_appearance_config.py` asserts every bound in both directions.
+The objection was that a config able to set the frame to 300px would need a code change to still look right. That is true of an unvalidated number and false of a validated one. **`frame.reading_max_px` cannot be set below 960 or above 1600; `measure_ch` cannot leave 52 to 80; `breakpoints_px` must be exactly three ascending, distinct widths; and a numeric `console_max_px` may not be narrower than `reading_max_px`.** A validator refuses a document that breaks any of them, so no reachable value breaks the design. The contract is the answer to the objection rather than a refusal of the knob, and `backend/tests/test_appearance_config.py` asserts every bound in both directions.
 
 One cross-block rule keeps the initial coordinate frame within the shared shell:
-`chart.width_px` may not exceed `frame.console_max_px`. Native charts measure
+`chart.width_px` may not exceed a numeric `frame.console_max_px`. Null is the
+default and means the console fills the window with configured gutters.
+Previously written numeric caps retain their meaning and bounds, so old
+appearance documents still read without migration. Native charts measure
 their actual browser container and redraw when it changes. This retained width
 validation does not imply that a server still prerenders chart values or SVG.
 

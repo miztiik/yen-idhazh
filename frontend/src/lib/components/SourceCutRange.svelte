@@ -232,6 +232,7 @@
 			use:markReadout={{
 				count: rows.length,
 				walk: 'list',
+				hover: { name: 'source-cuts', readout: records },
 				onSelect: (index) => (picked = index),
 				selected: picked
 			}}

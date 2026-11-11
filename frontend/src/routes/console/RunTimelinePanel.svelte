@@ -104,6 +104,7 @@
 				<ol class="bars" tabindex="0" aria-label="Shard timings, longest first. Up and Down read a shard; select a row for articles."
 					use:markReadout={{
 						count: geometry.bars.length, walk: 'list', selected: picked < 0 ? null : picked,
+						hover: { name: 'run-timeline', readout: records },
 						onSelect: (index) => pickedShard = index === null ? null : geometry.bars[index].shard.shard
 					}}>
 					{#each geometry.bars as bar, index (bar.shard.shard)}

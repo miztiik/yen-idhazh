@@ -1,21 +1,21 @@
-/** What the readout strip under a console chart prints, and which of its
- * columns a pointer, a key or a tap has picked.
+/** What a console chart's shared reading prints, and which column or record was picked.
  *
  * One module, because the strip used to be composed by every chart that had
  * one and hinted at by a native tooltip on every chart that did not. A chart
  * hands this module its columns and series and gets back the one shape
  * `ChartReadout.svelte` prints; it never builds a strip of its own.
  *
- * **Every chart on the console says what it hovers, in markup.** A chart that
+ * **Every chart declares its non-hover reading, in markup.** A chart that
  * shares a column between its marks carries `data-readout-columns` on the
  * element holding both the plot and the strip, and the strip is the only key it
- * draws. A chart whose hover describes one thing at a time - a row, a tile, an
+ * draws. A chart whose strip describes one thing at a time - a row, a tile, an
  * item - carries `data-readout-records`. A chart with nothing to show beyond
- * what it already prints carries `data-readout-none` with the reason in words
- * and who agreed it. "This chart has no hover" is a decision somebody took, and
- * an undeclared chart looks exactly like one where the strip was forgotten, so
- * every chart declares which reading it offers.
+ * what it already prints carries `data-readout-none` with the reason in words.
+ * That declares no duplicate standing strip, never an exception to visible
+ * hover. Every measured console renderer supplies its same typed readings to
+ * the additive tooltip; keyboard and touch still reach the strip or printed facts.
  */
+import { createHoverReadout, type HoverReadout } from './readout-hover';
 
 /** One reading as a chart hands it over. A number is formatted by its series;
  * a string is a word with no number behind it, printed as written; null is a
@@ -448,6 +448,8 @@ export interface ReadoutOptions {
 	 * into view does it here, so a page scroll that starts on the chart cannot
 	 * drag the other figure along with it. */
 	onPick?: (index: number) => void;
+	/** The same typed reading the standing strip prints, for visible console hover. */
+	hover?: HoverReadout;
 }
 
 /** Report which column the reader is pointing at, or has stepped to.
@@ -470,6 +472,7 @@ export function pointerReadout(
 	let current = options;
 	let at: number | null = options.selected ?? null;
 	let column = nearestColumn(options.marks);
+	const hover = createHoverReadout(node, options.hover);
 
 	const select = (next: number | null) => {
 		if (next === at) return;
@@ -487,20 +490,26 @@ export function pointerReadout(
 		return column.at(((clientX - rect.left) * current.width) / rect.width);
 	};
 
-	const track = (event: PointerEvent) => select(nearest(event.clientX));
+	const track = (event: PointerEvent) => {
+		const index = nearest(event.clientX);
+		select(index);
+		hover.show(event, index);
+	};
 
 	/** A touch ends the moment the thumb lifts, and a lift raises this event.
 	 * Clearing there would blank the readout before it could be read, so only a
 	 * mouse leaving the plot clears it. */
 	const leave = (event: PointerEvent) => {
+		hover.hide();
 		if (event.pointerType === 'mouse') select(null);
 	};
 
 	const enter = () => {
+		hover.hide();
 		if (at === null && current.marks.length > 0) select(current.selected ?? 0);
 	};
 
-	const away = () => select(null);
+	const away = () => { hover.hide(); select(null); };
 
 	/** A press that lifted where it landed. A touch that turned into a page
 	 * scroll is cancelled and never gets here, which is the whole difference
@@ -513,6 +522,7 @@ export function pointerReadout(
 	};
 
 	const step = (event: KeyboardEvent) => {
+		hover.hide();
 		const last = current.marks.length - 1;
 		if (last < 0) return;
 		const from = at ?? current.selected ?? 0;
@@ -550,6 +560,7 @@ export function pointerReadout(
 
 	return {
 		update(next: ReadoutOptions) {
+			hover.update(next.hover);
 			// The layout of the marks is settled here rather than on every pointer
 			// move, which is the whole of what this action costs a dragging thumb.
 			if (next.marks !== current.marks) column = nearestColumn(next.marks);
@@ -562,6 +573,7 @@ export function pointerReadout(
 			if (at !== null && at > next.marks.length - 1) select(null);
 		},
 		destroy() {
+			hover.destroy();
 			for (const [type, handler] of bound) events.removeEventListener(type, handler);
 		}
 	};
@@ -636,6 +648,8 @@ export interface MarkReadoutOptions {
 	onSelect: (index: number | null) => void;
 	/** The mark picked elsewhere, taken as this chart's own position. */
 	selected?: number | null;
+	/** Columns, records or a printed reading, resolved from the actual mark index. */
+	hover?: HoverReadout;
 }
 
 /** Report which mark of a chart of records - a tile, a square, a row - the
@@ -656,6 +670,7 @@ export function markReadout(
 ): { update: (next: MarkReadoutOptions) => void; destroy: () => void } {
 	let current = options;
 	let at: number | null = options.selected ?? null;
+	const hover = createHoverReadout(node, options.hover);
 
 	const select = (next: number | null) => {
 		if (next === at) return;
@@ -674,24 +689,29 @@ export function markReadout(
 	const track = (event: PointerEvent) => {
 		const index = markOf(event.target);
 		if (index !== null) select(index);
+		hover.show(event, index);
 	};
 
 	/** Only a mouse leaving clears: a lifted thumb raises the same event, and
 	 * clearing there would blank the strip before it could be read. */
 	const leave = (event: PointerEvent) => {
+		hover.hide();
 		if (event.pointerType === 'mouse') select(null);
 	};
 
 	const enter = () => {
+		hover.hide();
 		if (at === null && current.count > 0) select(0);
 	};
 
 	const away = (event: FocusEvent) => {
 		if (event.relatedTarget instanceof Node && node.contains(event.relatedTarget)) return;
+		hover.hide();
 		select(null);
 	};
 
 	const step = (event: KeyboardEvent) => {
+		hover.hide();
 		const last = current.count - 1;
 		if (last < 0) return;
 		const from = at ?? 0;
@@ -726,11 +746,13 @@ export function markReadout(
 
 	return {
 		update(next: MarkReadoutOptions) {
+			hover.update(next.hover);
 			current = next;
 			if (next.selected !== undefined) at = next.selected;
 			if (at !== null && at > next.count - 1) select(null);
 		},
 		destroy() {
+			hover.destroy();
 			for (const [type, handler] of bound) events.removeEventListener(type, handler);
 		}
 	};

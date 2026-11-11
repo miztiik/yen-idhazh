@@ -27,6 +27,8 @@
 	import { grouped as formatGrouped } from '$lib/charts/series';
 	import { formatNumber } from '$lib/number-format';
 	import { useNumberFormat } from '$lib/number-format-context';
+	import { factsOf } from '$lib/charts/readout';
+	import { hoverReadout } from '$lib/charts/readout-hover';
 	import {
 		populationRange,
 		precisionCorridor,
@@ -76,6 +78,15 @@
 	const rows = $derived(record === null ? [] : rebin(record, TABLE_WIDTH));
 	const agreed = $derived(record === null ? null : populationRange(record, 'same'));
 	const disagreed = $derived(record === null ? null : populationRange(record, 'different'));
+	const readings = $derived([
+		{ name: 'Called one story', range: agreed },
+		{ name: 'Called two stories', range: disagreed }
+	].map(({ name, range }) => range === null ? null : factsOf(name, [
+		{ label: 'Lowest score', value: reads(range.min) },
+		{ label: 'Middle score', value: reads(range.median) },
+		{ label: 'Highest score', value: reads(range.max) },
+		{ label: 'Merge line', value: reads(applied) }
+	], 'No judged pair was recorded.')));
 
 	const box = $derived(frame(chartWidth(measured, width), STRIP_HEIGHT));
 	const xAxis = $derived(
@@ -189,8 +200,10 @@
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
 				aria-label="Where each verdict's pairs sit on the score, and where the line is"
+				use:hoverReadout={{ name: 'verdict-split', readout: readings }}
 			>
-				{#each [{ at: agreed, y: box.top + 18, name: 'same', words: 'called one story' }, { at: disagreed, y: box.top + 52, name: 'different', words: 'called two stories' }] as strip (strip.name)}
+				{#each [{ at: agreed, y: box.top + 18, name: 'same', words: 'called one story' }, { at: disagreed, y: box.top + 52, name: 'different', words: 'called two stories' }] as strip, index (strip.name)}
+					<g data-readout-at={index}>
 					<text
 						x={box.left}
 						y={strip.y - 10}
@@ -221,6 +234,7 @@
 							data-verdict-median={strip.name}
 						/>
 					{/if}
+					</g>
 				{/each}
 
 				<!-- The line across both strips. Overlap either side of it is where the

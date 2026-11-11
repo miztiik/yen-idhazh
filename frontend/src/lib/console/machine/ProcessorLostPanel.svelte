@@ -173,6 +173,7 @@
 			use:markReadout={{
 				count: tiles.length,
 				walk: span.days.length > 0 ? span.days.length : 'row',
+				hover: { name: 'processor-lost', readout: records },
 				onSelect: (index) => (picked = index),
 				selected: picked
 			}}

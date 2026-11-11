@@ -13,7 +13,7 @@
 	import EmptyState from './EmptyState.svelte';
 	import type { EmptyDrawing } from './empty';
 	import type { FlowGeometry, SteppedGeometry } from './flow';
-	import { markReadout, recordsOf, type ReadoutFacts } from '$lib/charts/readout';
+	import { factsOf, markReadout, recordsOf, type ReadoutFacts } from '$lib/charts/readout';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 
 	let {
@@ -24,8 +24,7 @@
 		width,
 		height,
 		readout = null,
-		readoutMaxShare = 1,
-		tooltips = true
+		readoutMaxShare = 1
 	}: {
 		geometry: FlowGeometry | SteppedGeometry | null;
 		empty: EmptyDrawing;
@@ -35,12 +34,22 @@
 		height: number;
 		readout?: readonly ReadoutFacts[] | null;
 		readoutMaxShare?: number;
-		tooltips?: boolean;
 	} = $props();
 	const numberFormat = useNumberFormat();
 	const grouped = (value: number) => formatGrouped(value, numberFormat);
 	let selected = $state<number | null>(null);
-	const records = $derived(readout === null ? [] : recordsOf(readout));
+	const records = $derived(recordsOf(readout ?? (geometry === null ? []
+		: geometry.kind === 'stepped'
+			? geometry.stages.map((stage) => factsOf(stage.label, [
+				{ label: 'Arrived', value: grouped(stage.arrived) },
+				{ label: 'Share of reached', value: `${stage.share}%` },
+				...stage.drops.map((drop) => ({ label: drop.label, value: `${grouped(drop.count)} (${drop.share}%)` }))
+			], 'No recorded stage.'))
+			: geometry.nodes.map((node) => factsOf(node.label, [
+				{ label: 'Count', value: grouped(node.value) },
+				...geometry.ribbons.filter((ribbon) => ribbon.from === node.label)
+					.map((ribbon) => ({ label: `To ${ribbon.to}`, value: grouped(ribbon.value) }))
+			], 'No recorded stage.')))));
 
 	/** How strongly the flow that carried on and a loss are drawn. Low enough
 	 * that a label crossing a ribbon still reads. */
@@ -56,9 +65,9 @@
 	<div class="stepped" data-chart-type="flow" data-chart-name={name} data-flow-shape="stepped" data-readout-records={readout === null ? undefined : records.length} data-readout-none={readout === null ? 'This kept flow prints its counts without a separate reading strip; agreed with Susan' : undefined}>
 		{#if geometry.note}<p class="stepped-note">{geometry.note}</p>{/if}
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-		<ol class="stepped-stages" aria-label={label} tabindex={readout === null ? undefined : 0} use:markReadout={{ count: records.length, walk: 'list', onSelect: (index) => selected = index }}>
+		<ol class="stepped-stages" aria-label={label} tabindex={readout === null ? undefined : 0} use:markReadout={{ count: records.length, walk: 'list', hover: { name, readout: records }, onSelect: (index) => selected = index }}>
 			{#each geometry.stages as stage, index (stage.label)}
-				<li data-readout-at={readout === null ? undefined : index}>
+				<li data-readout-at={index}>
 					<span class="stepped-name">{#if stage.token}<span class="stage-swatch" style:background="var({stage.token})" aria-hidden="true"></span>{/if}{stage.label}</span>
 					<span class="stepped-count">{grouped(stage.arrived)} ({stage.share}%)</span>
 					{#if stage.drops.length > 0}
@@ -88,15 +97,15 @@
 		data-readout-records={readout === null ? undefined : records.length}
 		data-readout-none={readout === null ? 'This kept flow prints its counts without a separate reading strip; agreed with Susan' : undefined}
 		tabindex={readout === null ? undefined : 0}
-		use:markReadout={{ count: records.length, walk: 'row', onSelect: (index) => selected = index }}
+		use:markReadout={{ count: records.length, walk: 'row', hover: { name, readout: records }, onSelect: (index) => selected = index }}
 	>
 		{#each geometry.ribbons as ribbon, index (index)}
-			<path data-readout-at={readout === null ? undefined : records.findIndex((record) => record.subject === ribbon.from)} d={ribbon.path} fill="var({ribbon.token ?? '--chart-1'})" fill-opacity={ribbon.drop ? LOST : CARRIED} aria-label={`${ribbon.from} to ${ribbon.to}: ${grouped(ribbon.value)}`}>
+			<path data-readout-at={records.findIndex((record) => record.subject === ribbon.from)} d={ribbon.path} fill="var({ribbon.token ?? '--chart-1'})" fill-opacity={ribbon.drop ? LOST : CARRIED} aria-label={`${ribbon.from} to ${ribbon.to}: ${grouped(ribbon.value)}`}>
 			</path>
 		{/each}
 		{#each geometry.nodes as node, index (index)}
 			<rect
-				data-readout-at={readout === null ? undefined : node.drop ? node.column - 1 : node.column}
+				data-readout-at={readout === null ? index : node.drop ? node.column - 1 : node.column}
 				x={node.x}
 				y={node.y}
 				width={node.width}
@@ -105,6 +114,7 @@
 				fill-opacity={node.drop ? LOST : 1}
 			/>
 			<text
+				data-readout-at={readout === null ? index : node.drop ? node.column - 1 : node.column}
 				x={readout !== null && geometry.columns > 1 && node.column === geometry.columns - 1 ? node.x - LABEL_GAP : node.x + node.width + LABEL_GAP}
 				y={node.y + node.height / 2}
 				text-anchor={readout !== null && geometry.columns > 1 && node.column === geometry.columns - 1 ? 'end' : undefined}

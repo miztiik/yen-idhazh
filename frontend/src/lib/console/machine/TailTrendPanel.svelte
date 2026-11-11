@@ -244,6 +244,7 @@
 						use:pointerReadout={{
 							marks: tailMarks,
 							width: tailW,
+							hover: { name: 'latency', readout: tailData },
 							onSelect: (index) => (tailAt = index)
 						}}
 					>

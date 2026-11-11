@@ -19,6 +19,8 @@
 	import { countDays, nameSpan, openWithSpan } from '$lib/console/span-words';
 	import { useNumberFormat } from '$lib/number-format-context';
 	import { formatNumber } from '$lib/number-format';
+	import { factsOf } from '$lib/charts/readout';
+	import { hoverReadout } from '$lib/charts/readout-hover';
 
 	let {
 		record,
@@ -35,6 +37,18 @@
 
 	const view = $derived(memoryHeldWithin(record, start, end));
 	const latest = $derived(view.days.at(-1));
+	const readings = $derived(view.days.map((day) => factsOf(`${day.date} UTC`, [
+		{ label: 'Article', value: day.itemId },
+		{ label: 'Machine memory', value: day.totalFigure },
+		...day.segments.map((segment) => ({ label: segment.label, value: segment.figure })),
+		...day.brackets.map((bracket) => ({ label: bracket.label, value: bracket.figure })),
+		...(day.overBytes > 0 ? [{ label: 'Past the machine', value: day.overFigure }] : []),
+		...(day.overlapBytes > 0 ? [{ label: 'Both brackets claim', value: day.overlapFigure }] : []),
+		...(day.swap === null ? [] : [
+			{ label: 'Pushed out to disk', value: day.swap.usedFigure },
+			{ label: 'Swap available', value: day.swap.totalFigure }
+		])
+	], 'Memory was not recorded.')));
 	const server = $derived(latest?.brackets.find((bracket) => bracket.key === 'server'));
 	const serverShare = $derived(latest && latest.totalBytes > 0 && server
 		? 100 * server.bytes / latest.totalBytes : null);
@@ -76,9 +90,10 @@
 			data-panel-question="is it working"
 			data-memory-days={view.days.length}
 			data-readout-none="one bar a day, and every part, bracket and swap it draws is printed in words under it; agreed with Susan"
+			use:hoverReadout={{ name: 'memory-held', readout: readings }}
 		>
-			{#each view.days as day (day.date)}
-				<li class="day" data-memory-day={day.date} data-memory-shape={day.shape}>
+			{#each view.days as day, index (day.date)}
+				<li class="day" data-memory-day={day.date} data-memory-shape={day.shape} data-readout-at={index}>
 					<p class="when">
 						<time datetime={day.date}>{day.date}</time>
 						<span class="inline-quiet">

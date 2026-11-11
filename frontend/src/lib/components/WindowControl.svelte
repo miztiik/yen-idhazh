@@ -13,6 +13,7 @@
 		busy = false,
 		ready = false,
 		statusId = 'window-control-status',
+		compact = false,
 		onChange
 	}: {
 		days: number | null;
@@ -22,6 +23,8 @@
 		 * so it says so instead of accepting a click it cannot honour. */
 		ready?: boolean;
 		statusId?: string | null;
+		/** Use a native select on narrow console title bands. */
+		compact?: boolean;
 		onChange: (days: number) => void;
 	} = $props();
 
@@ -37,20 +40,28 @@
 <fieldset
 	class="window-control"
 	data-window-control
+	data-window-compact={compact ? 'true' : undefined}
 	data-window-days={days ?? undefined}
 	data-window-busy={busy ? 'true' : 'false'}
 	aria-busy={busy}
 	aria-describedby={statusId ?? undefined}
 >
 	<legend class="sr-only">Days shown</legend>
-	<ChoiceTiles
+	<div class="window-presets"><ChoiceTiles
 		name="console-window"
 		{items}
 		selected={days}
 		disabled={!ready}
 		tileAttribute="data-window-preset"
 		{onChange}
-	/>
+	/></div>
+	{#if compact}
+		<select class="window-native" aria-label="Days shown" disabled={!ready} value={days ?? ''}
+			onchange={(event) => onChange(Number(event.currentTarget.value))} data-window-select>
+			{#if days === null}<option value="" disabled>Custom span</option>{/if}
+			{#each presets as preset}<option value={preset}>{plural(preset, 'day', 'days')}</option>{/each}
+		</select>
+	{/if}
 </fieldset>
 
 <style>
@@ -59,5 +70,17 @@
 		margin: 0;
 		padding: 0;
 		border: 0;
+	}
+	.window-native {
+		display: none;
+		min-block-size: var(--console-control-min-height);
+		padding-inline: var(--console-control-gap);
+		border: 1px solid var(--color-rule-strong);
+		background: var(--color-surface);
+		color: var(--color-text);
+	}
+	@media (max-width: 639px) {
+		[data-window-compact='true'] .window-presets { display: none; }
+		.window-native { display: block; }
 	}
 </style>

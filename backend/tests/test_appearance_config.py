@@ -300,6 +300,21 @@ def test_the_console_may_not_be_narrower_than_the_reading_frame() -> None:
         FrameConfig(reading_max_px=1400, console_max_px=FRAME_CONSOLE_MIN_PX)
 
 
+def test_console_frame_can_fill_the_window_without_breaking_numeric_caps() -> None:
+    assert AppearanceConfig.model_validate({}).frame.console_max_px is None
+    assert (
+        AppearanceConfig.model_validate({"frame": {"console_max_px": None}}).frame.console_max_px
+        is None
+    )
+    old = AppearanceConfig.model_validate(
+        {"version": "2026-11-10", "frame": {"console_max_px": 1600}}
+    )
+    assert old.frame.console_max_px == 1600
+    for invalid in (1099, 2001):
+        with pytest.raises(ValidationError, match="console_max_px"):
+            FrameConfig.model_validate({"console_max_px": invalid})
+
+
 def test_breakpoints_must_be_three_ascending_and_distinct() -> None:
     """Three is a decision: phone to tablet, side rail, third column."""
     with pytest.raises(ValidationError):

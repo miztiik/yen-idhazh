@@ -1,6 +1,8 @@
 /** How a chart builds its readout without a second key or invented readings. */
 import { expect, test } from '@playwright/test';
-import { readoutOf } from '../src/lib/charts/readout';
+import { factsOf, readoutOf } from '../src/lib/charts/readout';
+import { hoverPosition, hoverReading } from '../src/lib/charts/readout-hover';
+import { readoutView } from '../src/lib/charts/readout-view';
 import { frame } from '../src/lib/charts/frame';
 import { dateSeries, formatNumber, numberFormat } from './support/number-format';
 import { clocksChart } from '../src/lib/charts/machine';
@@ -10,6 +12,50 @@ import { emptyState } from '../src/lib/charts/d3/empty';
 import { consoleConfig } from '../src/lib/server/config';
 import { renderConfigured, serverCompiler, type Rewrite } from './support/server-render';
 import { diskReads, type DiskReads } from '../src/lib/console/machine/disk-reads';
+
+test('column hover and standing readings preserve zeros, partial readings and dated events', () => {
+	const readout = readoutOf({
+		type: 'dateSeries', columns: ['First UTC day', 'Unmeasured UTC day', 'Last UTC day'],
+		series: [
+			{ label: 'Read', swatch: 'var(--chart-1)', values: [0, null, null], format: (value) => `${value} tokens` },
+			{ label: 'Written', swatch: 'var(--chart-2)', values: [null, null, 4], format: (value) => `${value} tokens` }
+		],
+		events: { lines: [[{ label: 'Run 1', value: 'failed', swatch: null }], [], []] },
+		notMeasured: 'No token reading.', resting: 'last'
+	});
+	const first = hoverReading({ name: 'tokens', readout }, 0)!;
+	expect(first.heading).toBe('First UTC day');
+	expect(first.entries.map(({ label, value }) => [label, value])).toEqual([
+		['Read', '0 tokens'], ['Written', 'No token reading.'], ['Run 1', 'failed']
+	]);
+	expect(first).toEqual(readoutView(readout, 0));
+	expect(hoverReading({ name: 'tokens', readout }, 1)?.entries).toEqual([
+		{ label: 'No token reading.', value: '', swatch: null, reserve: 0 }
+	]);
+});
+
+test('record hover follows a visible tile offset and never invents a missing record', () => {
+	const record = factsOf('Actual shard', [
+		{ label: 'Seconds', value: 0, format: (value) => `${value} s` },
+		{ label: 'Clock', value: null }
+	], 'Not measured.');
+	const source = { name: 'shards', readout: [null, record], offset: 1 };
+	expect(hoverReading(source, 0)?.heading).toBe('Actual shard');
+	expect(hoverReading(source, 0)?.entries.map(({ value }) => value)).toEqual(['0 s', 'Not measured.']);
+	expect(hoverReading(source, 1)).toBeNull();
+	expect(hoverReading({ name: 'absent', readout: null }, 0)).toBeNull();
+	expect(hoverReading({ name: 'empty', readout: [] }, 0)).toBeNull();
+});
+
+test('a pointer reading fits inside the viewport and moves above a low pointer', () => {
+	const viewport = { width: 390, height: 844 };
+	const box = { width: 240, height: 120 };
+	const corner = hoverPosition({ x: 380, y: 820 }, box, viewport, 12);
+	expect(corner).toEqual({ left: 138, top: 688 });
+	expect(corner.left + box.width).toBeLessThanOrEqual(viewport.width - 12);
+	expect(corner.top + box.height).toBeLessThan(820);
+	expect(hoverPosition({ x: 0, y: 0 }, box, viewport, 12)).toEqual({ left: 12, top: 12 });
+});
 
 test('disk-read captions qualify a same-run mix of locking requests without claiming none', async ({}, info) => {
 	const compiled = serverCompiler(info.outputPath('disk-reads'));

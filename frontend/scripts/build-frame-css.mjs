@@ -24,7 +24,7 @@ const SANS = "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 const FACES = { inter: `'InterVariable', ${SANS}`, 'system-sans': SANS, 'system-mono': MONO };
 const DEFAULTS = {
-	reading_max_px: 1280, console_max_px: 1600, measure_ch: 68,
+	reading_max_px: 1280, console_max_px: null, measure_ch: 68,
 	gutter_min_px: 16, gutter_max_px: 32, zone_mark_rem: 1.75, zone_rail_rem: 14, zone_aside_rem: 18,
 	duration_fast_ms: 120, duration_base_ms: 200, display_face_enabled: true, elevation_enabled: true,
 	surface_tint_alpha: 0.07,
@@ -142,7 +142,7 @@ export function renderFrameCss(raw = {}) {
 	return `/* Generated from config/appearance.json by scripts/build-frame-css.mjs. */
 :root {
 ${declarations({
-		'frame-reading': `${frame.reading_max_px}px`, 'frame-console': `${frame.console_max_px}px`,
+		'frame-reading': `${frame.reading_max_px}px`, 'frame-console': frame.console_max_px === null ? 'none' : `${frame.console_max_px}px`,
 		measure: `${frame.measure_ch}ch`, 'gutter-min': `${frame.gutter_min_px}px`, 'gutter-max': `${frame.gutter_max_px}px`,
 		'zone-mark': `${frame.zone_mark_rem}rem`, 'zone-rail': `${frame.zone_rail_rem}rem`, 'zone-aside': `${frame.zone_aside_rem}rem`,
 		'dur-fast': `${fast}ms`, 'dur-base': `${base}ms`,

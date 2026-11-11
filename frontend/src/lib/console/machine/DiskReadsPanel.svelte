@@ -245,6 +245,7 @@
 			use:markReadout={{
 				count: reads.days.length,
 				walk: 'row',
+				hover: { name: 'disk-reads', readout },
 				onSelect: (index) => (picked = index),
 				selected: picked
 			}}

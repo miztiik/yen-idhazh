@@ -43,6 +43,16 @@ test('shard timings rank recorded windows and work independently, with articles 
 	const longest = [...expected].sort((a, b) => b.elapsed - a.elapsed || a.shard - b.shard)[0];
 	expect(Math.abs(fill.width - track.width * longest.elapsed / (end - zero))).toBeLessThan(1);
 	expect(Math.abs(fill.x - track.x - track.width * longest.start / (end - zero))).toBeLessThan(1);
+	await first.scrollIntoViewIfNeeded();
+	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+	await first.hover();
+	const tooltip = page.locator('[data-chart-tooltip="run-timeline"]');
+	await expect(tooltip).toBeVisible();
+	await expect(tooltip.locator('strong')).toHaveText(`Shard ${longest.shard}`);
+	await expect(tooltip).toContainText('Recorded window');
+	await expect(tooltip).toContainText('Item work');
+	await page.keyboard.press('Escape');
+	await expect(tooltip).toHaveCount(0);
 
 	await panel.locator('[data-shape-option="work"]').click();
 	await expect(panel).toHaveAttribute('data-timeline-view', 'work');

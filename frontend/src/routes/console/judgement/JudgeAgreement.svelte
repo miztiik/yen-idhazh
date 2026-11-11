@@ -543,6 +543,7 @@
 				use:pointerReadout={{
 					marks: readoutMarks(marks.map((mark) => mark.x)),
 					width: box.width,
+					hover: { name: 'judge-agreement', readout },
 					onSelect: (index) => (selected = index)
 				}}
 			>

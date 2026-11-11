@@ -39,6 +39,8 @@
 	} from '$lib/charts/machine-cards';
 	import { isUnrecorded, speedWords } from '$lib/charts/machine-colour';
 	import { useNumberFormat } from '$lib/number-format-context';
+	import { factsOf } from '$lib/charts/readout';
+	import { hoverReadout } from '$lib/charts/readout-hover';
 
 	/** True where this run's day published articles and the record kept no row.
 	 *
@@ -179,7 +181,12 @@
 				: `Target CPU constraints captured ${card.targetMeasuredAt}.`}
 		</p>
 
-		<div class="bar" data-machine-bar="l3" data-machine-bar-state={card.l3Bar.state}>
+		<div class="bar" data-machine-bar="l3" data-machine-bar-state={card.l3Bar.state}
+			use:hoverReadout={{ name: 'machine-cache', readout: card.l3Bar.state !== 'drawn' ? null : factsOf(card.identity.name, [
+				{ label: 'L3 cache', value: card.l3Bar.valueWords },
+				{ label: 'Largest measured', value: card.l3Bar.topWords },
+				{ label: 'Machines measured', value: String(card.l3Bar.of) }
+			], 'Cache was not recorded.') }}>
 			{#if card.l3Bar.state === 'drawn'}
 				<div
 					class="bar-track"
@@ -208,7 +215,12 @@
 			{/if}
 		</div>
 
-		<div class="bar" data-machine-bar="copy-speed" data-machine-bar-state={card.bandwidthBar.state}>
+		<div class="bar" data-machine-bar="copy-speed" data-machine-bar-state={card.bandwidthBar.state}
+			use:hoverReadout={{ name: 'machine-copy-speed', readout: card.bandwidthBar.state !== 'drawn' ? null : factsOf(card.identity.name, [
+				{ label: 'Copy speed', value: card.bandwidthBar.valueWords },
+				{ label: 'Fastest measured', value: card.bandwidthBar.topWords },
+				{ label: 'Machines measured', value: String(card.bandwidthBar.of) }
+			], 'Copy speed was not recorded.') }}>
 			{#if card.bandwidthBar.state === 'drawn'}
 				<div
 					class="bar-track"

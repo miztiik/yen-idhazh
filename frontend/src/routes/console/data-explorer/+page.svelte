@@ -1237,17 +1237,15 @@
 	   share the other leaves. The value matches `frame.breakpoints_px[1]`, which
 	   a media query cannot read. */
 	@media (min-width: 1024px) {
-		/* `min-block-size: 0` hands the split to the two `1fr` rows: each half
-		   keeps its own smallest size - the question its content, the answer
-		   `--result-floor` - and only a window shorter than both together makes
-		   the page scroll. Left to its content, the box would ask for twice the
-		   larger half, because two equal rows size to their larger minimum. */
+		/* Query controls keep their configured room; the answer takes the rest.
+		   Propagate both minimums so a short window scrolls the document instead
+		   of painting a result over the shared footer. */
 		.workbench {
 			flex: 1 1 0;
-			min-block-size: 0;
+			min-block-size: min-content;
 			display: grid;
 			grid-template-columns: minmax(0, 1fr);
-			grid-template-rows: minmax(max-content, 1fr) minmax(var(--result-floor), 1fr);
+			grid-template-rows: max-content minmax(var(--result-floor), 1fr);
 		}
 
 		.workbench > :global([data-console-panel-id='data-explorer-ask']) {

@@ -1,7 +1,7 @@
 /* Generated from config/appearance.json by scripts/build-frame-css.mjs. */
 :root {
 	--frame-reading: 1280px;
-	--frame-console: 1600px;
+	--frame-console: none;
 	--measure: 68ch;
 	--gutter-min: 16px;
 	--gutter-max: 32px;

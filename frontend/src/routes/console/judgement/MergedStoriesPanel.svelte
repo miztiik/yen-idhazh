@@ -228,6 +228,7 @@
 				use:pointerReadout={{
 					marks: readoutMarks(bars.map((one) => one.dotX)),
 					width: box.width,
+					hover: { name: 'merged-stories', readout },
 					onSelect: (index) => (selected = index)
 				}}
 			>
