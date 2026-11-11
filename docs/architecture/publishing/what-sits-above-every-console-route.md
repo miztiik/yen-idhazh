@@ -40,8 +40,10 @@ control. The title, window control and window/evidence sentence form one sticky
 band; the latest-run sentence and standing band continue in normal flow. Below
 the first breakpoint, a labelled native days select replaces the radio tiles,
 keeping the frozen band compact. Its measured height supplies the document's
-scroll padding so anchors and focused controls are not covered. The explorer's
-title stays in flow because its window and Run controls belong to the editor.
+scroll padding so anchors and focused controls are not covered. The explorer
+keeps its window and Run controls in the editor. Its title and back-to-top
+corner stick on narrow page-scrolling layouts; its full-height wide workbench
+keeps the title in flow.
 
 A back-to-top button appears once the brand has scrolled away. On wide screens
 it floats at the foot of the navigation rail, outside chart readings, and lifts
@@ -127,7 +129,7 @@ nothing are a subset of the at-floor set, not a duplicate candidate.
 ## Data explorer keeps its workbench
 
 `console.explorer_chrome` selects workbench chrome. The explorer uses the same
-rail, route heading and visual tokens, but keeps its days and Run controls
+rail, route heading, hover surface, back-to-top control and visual tokens, but keeps its days and Run controls
 inside the editor. It has no duplicate band, completeness line or window
 sentence. Editor and result regions retain their existing behavior.
 

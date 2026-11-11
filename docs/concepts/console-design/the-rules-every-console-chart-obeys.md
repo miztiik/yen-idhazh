@@ -275,7 +275,8 @@ column - four series or one - and the rules are not negotiable per chart:
  from screen readers, so no panel changes height with the window. Reader chose
  the words and Jony the room, on 2026-10-07.
 
-The console mounts one `ChartTooltip.svelte`. The shared `pointerReadout`
+Both ordinary and workbench console chrome mount the same `ChartTooltip.svelte`.
+The shared `pointerReadout`
 action resolves actual columns, `markReadout` resolves marked records and
 visible tile offsets, and `hoverReadout` supplies printed tracks without adding
 a duplicate strip. All send the same typed reading event to that surface.

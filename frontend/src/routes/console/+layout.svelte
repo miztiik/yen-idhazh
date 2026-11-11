@@ -95,8 +95,8 @@
 			{#if !workbench}
 				<WindowControl days={windowSource.days} presets={windowSource.presets}
 					busy={windowSource.busy} ready={windowSource.ready} onChange={windowSource.onChange} compact />
-				<BackToTop {heading} />
 			{/if}
+			<BackToTop {heading} />
 		</header>
 		{#if !workbench}
 			<div class="console-window-evidence">
@@ -113,12 +113,12 @@
 				{/if}
 				{#if route.worst}<p class="console-completeness" data-console-route-issue>{route.worst}</p>{/if}
 			</div>
-			<ChartTooltip enabled={hoverEnabled} />
 			<ConsoleBand band={data.band} />
 			<noscript><p class="console-noscript" data-console-noscript>Published-record charts need JavaScript. Their headings and reserved frames remain below.</p></noscript>
 		{/if}
 		<div class="console-route-content">{@render children()}</div>
 	</div>
+	<ChartTooltip enabled={hoverEnabled} />
 </section>
 
 <style>
@@ -133,7 +133,7 @@
 		letter-spacing: var(--console-body-tracking);
 	}
 	.console-main, .console-route-content { min-inline-size: 0; }
-	.console-main { isolation: isolate; }
+	.console-main, .console-route-content { isolation: isolate; }
 	.console-top-anchor { display: block; block-size: 0; }
 	.console-toolbar {
 		position: sticky;
@@ -143,7 +143,7 @@
 		border-block-end: 1px solid var(--color-rule);
 		background: var(--color-bg);
 	}
-	[data-console-chrome='workbench'] .console-toolbar { position: static; border: 0; }
+	[data-console-chrome='workbench'] .console-route-head { grid-template-columns: minmax(0, 1fr) auto; }
 	.console-window-evidence { margin-block-start: var(--console-control-padding-block); }
 	.console-route-head {
 		display: grid;
@@ -203,6 +203,7 @@
 		.console-shell { grid-template-columns: var(--console-rail-width) minmax(0, 1fr); align-items: start; }
 		.console-shell[data-console-chrome='workbench'] { flex: 1 1 0; min-block-size: 0; align-items: stretch; }
 		[data-console-chrome='workbench'] .console-main { display: flex; flex-direction: column; min-block-size: 0; }
+		[data-console-chrome='workbench'] .console-toolbar { position: static; border: 0; }
 		[data-console-chrome='workbench'] .console-route-content { display: flex; flex-direction: column; flex: 1 1 0; min-block-size: 0; }
 		[data-console-chrome='workbench'] .console-route-head { padding-block-end: var(--console-control-gap); }
 	}
