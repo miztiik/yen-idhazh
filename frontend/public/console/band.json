@@ -26,12 +26,12 @@
   },
   "compaction_lag_days": 0,
   "covers_through": "2026-11-11",
-  "generated_at": "2026-11-11T17:36:55Z",
+  "generated_at": "2026-11-11T21:01:22Z",
   "routes": [
-    {"carries": "The model spent 75 h 12 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 2,"worst": "5 runs worth a look"},
-    {"carries": "This day ran in 5 runs, 1.19x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "107 items failed"},
-    {"carries": "260 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 1380.9 MB"},
-    {"carries": "22 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
+    {"carries": "The model spent 93 h 29 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 2,"worst": "6 runs worth a look"},
+    {"carries": "This day ran in 6 runs, 1.26x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "130 items failed"},
+    {"carries": "317 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 1380.9 MB"},
+    {"carries": "29 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
     {"carries": "100 feeds failed on the last ask.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "6 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
   ],
@@ -155,12 +155,12 @@
     "compared_from": "2026-09-14"
   },
   "size": {
-    "articles_to_cap": 449096,
-    "bytes": 66193711,
-    "cap_fraction": 0.06164769735187292,
-    "left_mb": 960.8727579116821,
+    "articles_to_cap": 449045,
+    "bytes": 66307740,
+    "cap_fraction": 0.06175389513373375,
+    "left_mb": 960.7640113830566,
     "measured_days": 81,
-    "sentence": "63.1 MB of the 1 GB limit - room for about 449,000 more articles."
+    "sentence": "63.2 MB of the 1 GB limit - room for about 449,000 more articles."
   },
   "verdict": {
     "date": "2026-11-11",
@@ -171,15 +171,16 @@
       {"health": "amber","label": "Run 2 is worth a look"},
       {"health": "amber","label": "Run 3 is worth a look"},
       {"health": "amber","label": "Run 4 is worth a look"},
-      {"health": "amber","label": "Run 5 is worth a look"}
+      {"health": "amber","label": "Run 5 is worth a look"},
+      {"health": "amber","label": "Run 6 is worth a look"}
     ],
-    "sentence": "2026-11-11 ran 5 runs and published 293 of 400 planned items. 107 items failed."
+    "sentence": "2026-11-11 ran 6 runs and published 350 of 480 planned items. 130 items failed."
   },
   "version": "2026-10-11T21:00",
   "worst": {
     "href": "/console/model/",
     "id": "model",
     "label": "Summaries",
-    "sentence": "107 items failed, so they are not in the day the digest published."
+    "sentence": "130 items failed, so they are not in the day the digest published."
   }
 }
