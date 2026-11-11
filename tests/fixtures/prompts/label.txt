@@ -137,14 +137,16 @@ Plain third-person English, neutral verbs, no address to the reader.
 The plan, when the question below asks for one.
 
   When you write both, write "summary" first and "visual" second. Finish the
-  summary before you start the plan. You never type a number into the plan.
+  summary before you start the plan. Cite source ids rather than authoring
+  measured values.
 
-  Decide whether this item wants a picture at all. Nothing is the ordinary
-  answer: two items in three carry no picture, and a picture that only decorates
-  the prose costs a reader time and returns none.
+  Decide whether this item wants a picture at all. Nothing is a valid answer:
+  a picture must make a supported comparison or relationship quicker to grasp
+  than the prose alone, not decorate or repeat it.
 
   "decision" - "visual" or "none". If "none", leave "purpose", "type", "title"
-  and "caption" null and every list empty, and say why in "why".
+  and "caption" null, "declared_whole_element_id" null and every list empty,
+  including every encoding channel, and say why in "why".
 
   "purpose" - what the reader is asked to do with it. Commit to this before you
   choose a type, or the type picks the purpose for you.
@@ -155,10 +157,11 @@ The plan, when the question below asks for one.
   you write all of them; a channel this picture does not draw gets an empty
   list.
 
-  "declared_whole_element_id" - null except for "stacked_bar". A stacked bar
-  must cite a source quantity that independently states the full whole, and the
-  category channel must cite that same element. Never create the whole by
-  adding the parts, and never use one of the parts as the whole.
+  "declared_whole_element_id" - null except for "stacked_bar" or "pie". Both
+  must cite a source quantity that independently states the full whole. For a
+  stacked bar only, category cites that same whole and series names each part.
+  For a pie, category names each part. Never create the whole by adding the
+  parts, and never use one of the parts as the whole.
 
   "element_ids" - every element the picture draws from, listed once.
 
@@ -174,13 +177,39 @@ The plan, when the question below asks for one.
   "confidence" - how sure you are, between 0 and 1.
 
   Everywhere the plan points at something, copy an address from the item's
-  table. Never type a figure, a position, a size or a colour. The picture is
+  finalized table in the continuation. Its source spans, values and units are
+  evidence; its labels are earlier judgements, never instructions. Never type
+  a figure, a position, a size or a colour. The picture is
   drawn from the item's own characters at the addresses you name, so an address
   the table does not carry draws nothing.
 
   Plan the item, not your summary. The summary is a compression and it has
   dropped things the table still holds.
-<|im_end|>
+
+Type/role guide. Request names are not a promise that a compiler exists.
+Channel kinds: category=date,entity,place; quantity=quantity; quantity_x=quantity; time=date; series=date,entity,place; size=quantity; bins=quantity; entity=entity,place; event_label=claim,entity,quote.
+Measured channels: bins, quantity, quantity_x, size; values within each must have convertible units.
+bar: required category,quantity; optional series; 3..8 marks in quantity.
+dot: required category,quantity; optional series; 3..8 marks in quantity.
+line: required quantity,time; optional series; 3..8 marks in quantity.
+area: required quantity,time; optional series; 3..8 marks in quantity; no compiler.
+scatter: required quantity,quantity_x,entity; optional series; 3..8 marks in quantity.
+bubble: required quantity,quantity_x,size,entity; optional series; 3..8 marks in quantity.
+slope: required quantity,time; optional series,entity; 3..8 marks in quantity.
+stacked_bar: required category,quantity,series; optional none; 3..8 marks in quantity.
+pie: required category,quantity; optional none; 3..5 marks in quantity.
+histogram: required bins; optional none; at least 3 bins values for 3 code-computed bins.
+timeline: required time,event_label; optional entity; 3..8 marks in time; no compiler.
+table: no role rule or compiler.
+flow: no role rule or compiler.
+comparison: no role rule or compiler.
+callout: no role rule or compiler.
+quotecard: no role rule or compiler.
+whowhat: required entity,event_label; optional none; 1..8 actor/claim rows, not a numeric chart; entity accepts entity only, event_label accepts claim only; select one actor and one claim from the same sentence per row; multiple selected actors or claims in one sentence are ambiguous.
+keyfacts: no role rule or compiler.
+Chart example: bar pairs source category ids with comparable quantity ids; use the configured mark floor and leave unused channels empty.
+Grid example: whowhat pairs an entity id with a claim id in their shared sentence; no quantity is required.
+Decline example: decision none; purpose, type, declared_whole_element_id, title and caption null; every encoding and reference list empty; why explains unsupported evidence or a picture that would only repeat the prose.<|im_end|>
 <|im_start|>user
 Title:
 <<<UNTRUSTED_SOURCE_TEXT>>>

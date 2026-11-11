@@ -1,6 +1,6 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-11
 
 What the model is asked to produce, how the two calls share context, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
 
@@ -100,6 +100,34 @@ Use grammar-constrained decoding derived from the declared reply model. Refuse u
 
 The completion prompts are rendered explicitly. The second extends the first prompt and its validated reply instead of reconstructing a chat-message array. Keep the calls adjacent on the same slot so another item cannot evict the shared prefix.
 
+**The continuation receives the same finalized table as reachability and
+validation.** After the first reply, `anchored()` adds source-backed entities,
+places, quotes, claims and recovered quantities with code-computed element ids.
+The request builder requires that table rather than reconstructing ids from
+the raw label reply. Its compact, fenced data preserves the source cells and
+existing label judgements after the reusable prefix. Attaching the data does
+not depend on a placeholder in the selected continuation template.
+
+Every reference field in the derived request grammar chooses from exactly
+those visible ids. With no ids, reference lists can only be empty and the
+optional declared whole can only be null. The native persisted plan remains
+unchanged. The active configuration enables type selection and offers only
+implemented chart forms and the Who/What grid. Historical names remain in the
+native vocabulary for compatibility, not as new production requests or future
+delivery promises.
+
+The shared system turn appends a compact guide derived from the native role
+vocabulary and configured evidence floors. It distinguishes numeric charts
+from the Who/What grid's same-sentence actor/claim pairing, identifies unbuilt
+forms without inventing their rules in generic inspection, and illustrates
+charts, grids and valid declines. The
+[visual rule](../../concepts/digest.md#the-visual-rule) does not
+depend on unfinished article classification.
+
+An input oracle proves that finalized ids are visible and constrain references.
+Replaying an authored valid plan proves parsing and compilation, not that a
+real model will choose a useful visual.
+
 The label reply still declares `keyphrases` and `lede_sentence_ids`, although
 neither has a downstream consumer. The user deferred their removal. This is
 not a requirement to retain them permanently or proof of their runtime cost.
@@ -143,6 +171,28 @@ conversions differ because their outputs differ.
 The summarize-and-plan reply contains prose and bounded structure. The label reply uses a measured output-density estimate. Name the tokenizer and evidence behind that estimate; it is not a mathematical guarantee for every possible string.
 
 The label reply also becomes part of the second prompt. Count it in both positions when checking the context window. Do not silently clamp a reply budget to available context. Report a window failure at the call site.
+
+For capacity diagnostics, tokenize the complete rendered continuation with the
+configured model's vocabulary, then add the effective response limit from that
+request body. The complete input already contains the first prompt, the actual
+label reply, the shared guide and the finalized evidence menu. Cached tokens
+still occupy context; do not omit them or add the first reply's maximum budget
+again. Check the first call's own prompt and response allowance separately.
+
+An explicit `max_tokens` replaces the shape-derived budget. Summary word ranges
+are editorial requests, not those runtime token limits. The measurement utility
+reports complete-request capacity using the effective cap before applying its
+optional diagnostic decode cap, so a short timing run cannot claim more
+production space than the configured request has.
+
+The existing pre-label gate remains an estimate over measured word/menu rates
+and derived reply budgets, not a certificate for every finalized request.
+Conservative byte ceilings are not observed token counts. A bounded check with
+retained production replies and a constructed source-cap input measures those
+requests only; a repeated long source and its historical reply do not establish
+universal fit or present-day planning quality. Capacity diagnostics do not
+change admission, suppress a visual, reduce a response cap or replace existing
+summary-first recovery.
 
 A cut label reply fails as `labels_truncated`. Do not repair missing arrays as empty: that would make incomplete output indistinguishable from an article with no elements. A retry needs a deliberate input change and a configured attempt policy; repeating an identical deterministic request is not recovery.
 

@@ -651,6 +651,7 @@ def two_calls_one_item(
                     sampling=model.sampling,
                     markers=markers,
                     prompt_config=settings.app.summarize,
+                    visuals=settings.app.visuals,
                     prompt_files=settings.app.prompt_files,
                     config_dir=settings.config_dir,
                 )
@@ -750,6 +751,7 @@ def two_calls_one_item(
                 second = calls.build_summarize_and_plan_request(
                     first,
                     one.content,
+                    labelled,
                     markers=markers,
                     prompt_config=settings.app.summarize,
                     source_words=article.band_source_words,

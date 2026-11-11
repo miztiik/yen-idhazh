@@ -31,8 +31,8 @@ can act on**, so this reports three numbers that sum to the total instead.
 steady state a shard spends its life in. On item 2 the system turn should be
 served from cache and item 1's copy of the summarize-and-plan question should be
 gone. A third
-item runs the label call on its real output budget, because the template cause is the
-label call's reply length plus the divergence, and a decode cap hides it.
+item removes the summary timing cap too. Every label call uses its complete
+budget, because the continuation requires a validated, finalized element table.
 
 **It refuses a weights file `config/` does not name.** The reading this replaces
 was taken on a retired model and nobody noticed, because the tool read the
@@ -58,17 +58,20 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Final
 
 from idhazh import config
+from idhazh.classify import dag
 from idhazh.classify.calls import (
+    anchored,
     build_label_request,
     build_summarize_and_plan_request,
     label_budget_tokens,
     label_system_prompt,
+    parse_label,
     summarize_and_plan_budget_tokens,
     summarize_and_plan_user_turn,
 )
@@ -92,6 +95,7 @@ from idhazh.llm.server import (
     window,
 )
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
+from idhazh.visual_planner import plan_is_reachable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ARTICLE = REPO_ROOT / "tests" / "fixtures" / "contracts" / "article" / "ok.json"
@@ -652,6 +656,7 @@ def run_item(
     summarize_and_plan_cap: int,
     question_tokens: int | None,
     markers: TurnMarkers,
+    entity_slugs: Mapping[str, str] | None = None,
     config_dir: Path = config.DEFAULT_CONFIG_DIR,
 ) -> Reading:
     article = sample.article
@@ -665,29 +670,68 @@ def run_item(
         sampling=model.sampling,
         markers=markers,
         prompt_config=app.summarize,
+        visuals=app.visuals,
         prompt_files=app.prompt_files,
         config_dir=config_dir,
     )
     if label_cap:
-        first["n_predict"] = label_cap
+        first["max_tokens" if "max_tokens" in first else "n_predict"] = label_cap
     one = post(first, endpoint=endpoint, timeout=timeout)
     report_call("the label call", one)
+    if one.hit_the_budget:
+        raise ValueError("the label reply was truncated; no finalized evidence can be measured")
+    labelled = anchored(
+        table,
+        article.text or "",
+        parse_label(one.content),
+        config=app.elements,
+        label_source=model.id,
+        entity_slugs=entity_slugs,
+    )
+    plan = plan_is_reachable(labelled, visuals=app.visuals)
 
     second = build_summarize_and_plan_request(
         first,
         one.content,
+        labelled,
         markers=markers,
+        prompt_config=app.summarize,
+        visuals=app.visuals,
         source_words=article.band_source_words,
         brief=article.brief,
+        plan=plan,
         prompt_files=app.prompt_files,
         config_dir=config_dir,
     )
+    question_tokens = tokenizer.count(
+        summarize_and_plan_user_turn(
+            app.summarize,
+            source_words=article.band_source_words,
+            brief=article.brief,
+            plan=plan,
+            table=labelled,
+            prompt_files=app.prompt_files,
+            config_dir=config_dir,
+        )
+    )
+    capacity_request = second
     if summarize_and_plan_cap:
-        second["n_predict"] = summarize_and_plan_cap
+        limit_key = "max_tokens" if "max_tokens" in second else "n_predict"
+        second = {**second, limit_key: summarize_and_plan_cap}
+    broke = prefix_break(first, second, one.content, tokenizer)
+    if broke.rendered_two is None:
+        print("  complete-request capacity is unmeasured", file=sys.stderr)
+    else:
+        needed = dag.request_tokens(capacity_request, prompt_tokens=broke.rendered_two)
+        n_ctx = window(model.server)
+        print(
+            f"  complete second request: {broke.rendered_two} prompt tokens plus "
+            f"{dag.response_tokens(capacity_request)} reserved response tokens = "
+            f"{needed} against the {n_ctx}-token window; {n_ctx - needed} tokens remain"
+        )
     two = post(second, endpoint=endpoint, timeout=timeout)
     report_call("the summarize-and-plan call", two)
 
-    broke = prefix_break(first, second, one.content, tokenizer)
     spend = decompose(one, two)
     report_spend(spend, prefilled(one, two), question=question_tokens)
     checks = check(one, two, spend, broke)
@@ -741,6 +785,7 @@ def pick_samples(
             sampling=model.sampling,
             markers=markers,
             prompt_config=app.summarize,
+            visuals=app.visuals,
             prompt_files=app.prompt_files,
             config_dir=config_dir,
         )
@@ -862,18 +907,19 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=16,
         help=(
-            "Stop each capped decode after this many tokens. Every cause here is a "
-            "prefill fact that lands before a token is decoded, so a cap answers the "
-            "same question in minutes instead of hours - except the template cause, "
-            "which is the label call's reply length plus the divergence, and that is what the "
-            "extra uncapped item is for. Zero uses the real budgets."
+            "Stop each capped summarize-and-plan decode after this many tokens. "
+            "Label replies always use their complete production budget so their "
+            "finalized evidence can enter the continuation. Every cause here is a "
+            "prefill fact that lands before a token is decoded, so a summary cap "
+            "can shorten a timing run without cutting off its evidence. "
+            "Zero uses the real budgets."
         ),
     )
     parser.add_argument(
         "--uncapped-item",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Run one more item with the label call on its real output budget.",
+        help="Run one more item with both calls on their real output budgets.",
     )
     parser.add_argument(
         "--at-cap",
@@ -964,21 +1010,26 @@ def main(argv: list[str] | None = None) -> int:
                 "system",
                 label_system_prompt(
                     app.summarize,
+                    visuals=app.visuals,
                     prompt_files=app.prompt_files,
                     config_dir=settings.config_dir,
                 ),
             )
         )
-        label_decode = label_budget_tokens()
-        summarize_and_plan_decode = summarize_and_plan_budget_tokens(app.summarize)
+        explicit = model.sampling.get("max_tokens")
+        label_decode = label_budget_tokens() if explicit is None else int(explicit)
+        summarize_and_plan_decode = (
+            summarize_and_plan_budget_tokens(app.summarize) if explicit is None else int(explicit)
+        )
         n_ctx = window(model.server)
         ceiling = n_ctx - (label_decode + summarize_and_plan_decode + rendered_turn)
         print(
-            f"the summarize-and-plan call's question is {trailing} tokens of text and "
+            f"the question without finalized evidence is {trailing} tokens of text and "
             f"{rendered_turn} as a rendered turn; with {label_decode} for the label call's decode "
             f"and {summarize_and_plan_decode} for the second call's, the label "
             f"call's prompt may reach {ceiling} of "
-            f"{n_ctx} in production",
+            f"{n_ctx} before accounting for the actual finalized menu. "
+            "This is a provisional sample-selection ceiling, not a complete-request verdict.",
             flush=True,
         )
 
@@ -1011,6 +1062,7 @@ def main(argv: list[str] | None = None) -> int:
                     sampling=model.sampling,
                     markers=markers,
                     prompt_config=app.summarize,
+                    visuals=app.visuals,
                     prompt_files=app.prompt_files,
                     config_dir=settings.config_dir,
                 )["prompt"]
@@ -1032,7 +1084,7 @@ def main(argv: list[str] | None = None) -> int:
             if built_case:
                 label += " - at the cap, BUILT"
             elif uncapped:
-                label += " - the label call uncapped"
+                label += " - both calls uncapped"
             print()
             print(
                 f"--- {label}: {sample.article.word_count} words, {prompt_tokens} prompt "
@@ -1048,10 +1100,15 @@ def main(argv: list[str] | None = None) -> int:
                     endpoint=endpoint,
                     tokenizer=tokenizer,
                     timeout=timeout,
-                    label_cap=0 if uncapped else args.decode_cap,
-                    summarize_and_plan_cap=args.decode_cap,
+                    label_cap=0,
+                    summarize_and_plan_cap=0 if uncapped else args.decode_cap,
                     question_tokens=trailing,
                     markers=markers,
+                    entity_slugs={
+                        alias.casefold(): slug
+                        for slug, aliases in settings.watchlist.entity_terms().items()
+                        for alias in aliases
+                    },
                     config_dir=settings.config_dir,
                 )
             )

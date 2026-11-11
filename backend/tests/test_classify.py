@@ -61,14 +61,27 @@ from idhazh.classify.calls import (
     summarize_and_plan_schema,
     summarize_and_plan_user_turn,
 )
+from idhazh.classify.plan_visual_request import planning_menu, type_role_guide
 from idhazh.contracts.article import Article
-from idhazh.contracts.element import ElementKind, ElementTable, Extractor
+from idhazh.contracts.element import (
+    JUDGED_FIELDS,
+    TIER_ONE_FIELDS,
+    ElementKind,
+    ElementTable,
+    Extractor,
+)
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.models import ModelEntry
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json_characters
+from idhazh.contracts.visual import (
+    CODE_STAMPED_FIELDS,
+    EncodingRole,
+    VisualPlan,
+    VisualType,
+    widest_json_characters,
+)
 from idhazh.contracts.visual_decision import NoneReason, VisualKind
 from idhazh.elements import SpanDriftError, element_table
 from idhazh.extract import approx_tokens
@@ -82,6 +95,8 @@ from idhazh.llm.server import (
     render_prompt,
 )
 from idhazh.llm.server import window as ctx_size
+from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
+from idhazh.stages.two_calls import two_calls_one_item
 from idhazh.visual_planner import plan_lost_to_the_budget, plan_lost_to_the_window
 
 RECORDED_PAYLOADS = FIXTURES_DIR / "planner" / "recorded-call-payloads.json"
@@ -155,6 +170,13 @@ def rebuilt_payloads(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
     summarize_and_plan_call = build_summarize_and_plan_request(
         label_call,
         reply["choices"][0]["message"]["content"],
+        anchored(
+            table,
+            article.text or "",
+            parse_label(reply["choices"][0]["message"]["content"]),
+            config=ElementsConfig(max_per_article=inputs["elements_max_per_article"]),
+            label_source=inputs["model_id"],
+        ),
         markers=markers,
         source_words=article.band_source_words,
     )
@@ -1389,6 +1411,7 @@ def summarize_and_plan_payload(article: Article, reply: str = "{}") -> dict[str,
     return build_summarize_and_plan_request(
         label_payload(article),
         reply,
+        a_table(article),
         markers=a_markers(),
         source_words=article.band_source_words,
     )
@@ -1425,6 +1448,127 @@ def bounded(schema: object, path: str = "") -> set[str]:
 
 
 class TestTheSummarizeAndPlanOracle:
+    def test_the_menu_preserves_finalized_source_cells_and_existing_judgements(
+        self, article_ok: Article
+    ) -> None:
+        initial = a_table(article_ok, POINTED_TEXT, cap=2)
+        finalized = anchored(
+            initial, POINTED_TEXT, a_reply(**POINTED_REPLY),
+            config=ElementsConfig(max_per_article=2), label_source="m",
+        )
+        before = finalized.model_dump(mode="json")
+        menu = planning_menu(finalized)
+        data = json.loads(menu.removeprefix(FENCE_OPEN + "\n").removesuffix("\n" + FENCE_CLOSE))
+        assert data["columns"] == list(TIER_ONE_FIELDS)
+        assert data["rows"] == [
+            [element.model_dump(mode="json")[name] for name in TIER_ONE_FIELDS]
+            for element in finalized.elements
+        ]
+        assert data["labels"] == {
+            element.element_id: {
+                name: element.model_dump(mode="json")[name]
+                for name in JUDGED_FIELDS
+                if getattr(element, name) is not None
+            }
+            for element in finalized.elements
+            if any(getattr(element, name) is not None for name in JUDGED_FIELDS)
+        }
+        assert finalized.model_dump(mode="json") == before
+
+    def test_an_empty_table_admits_only_empty_reference_lists_and_a_null_whole(
+        self, article_ok: Article
+    ) -> None:
+        table = ElementTable.model_validate(a_table(article_ok).model_dump() | {"elements": []})
+        native = summarize_and_plan_schema()
+        schema = summarize_and_plan_schema(table=table)
+        plan = schema["$defs"]["VisualPlanDraft"]["properties"]
+        arrays = [
+            *schema["$defs"]["PlanEncodings"]["properties"].values(),
+            *(plan[name] for name in ("element_ids", "labels", "annotations")),
+        ]
+        assert all(field["maxItems"] == 0 for field in arrays)
+        assert plan["declared_whole_element_id"]["type"] == "null"
+        assert "anyOf" not in plan["declared_whole_element_id"]
+        assert all(field["items"].get("enum") != [] for field in arrays)
+        assert summarize_and_plan_schema() == native
+        assert list(schema["properties"]) == ["summary", "visual"]
+
+    def test_the_actual_planning_request_exposes_every_finalized_element(
+        self, article_ok: Article
+    ) -> None:
+        """Removing the anchored table from the request loses every actor and claim id."""
+        text = "The council supports river repairs. The board opposes river repairs."
+        article = Article.model_validate(
+            article_ok.model_dump(mode="json")
+            | {
+                "title": "River repairs draw different responses",
+                "text": text,
+                "word_count": len(text.split()),
+                "source_word_count": len(text.split()),
+                "token_count": approx_tokens(len(text.split())),
+            }
+        )
+        settings = config.load(CONFIG_DIR)
+        reply = a_reply(
+            entity_mentions=[
+                a_group("council", ("s0", "The council")),
+                a_group("board", ("s1", "The board")),
+            ],
+            claims=[a_range("s0", "s0"), a_range("s1", "s1")],
+        )
+        initial = element_table(article, config=settings.app.elements)
+        finalized = anchored(
+            initial,
+            text,
+            reply,
+            config=settings.app.elements,
+            label_source=settings.models.summarizer.id,
+        )
+        decline: dict[str, Any] = {
+            "decision": "none",
+            "purpose": None,
+            "type": None,
+            "declared_whole_element_id": None,
+            "encodings": {role.value: [] for role in EncodingRole},
+            "element_ids": [],
+            "labels": [],
+            "annotations": [],
+            "why": "The disagreement is already clear in prose.",
+            "title": None,
+            "caption": None,
+            "confidence": 0.5,
+        }
+        answer = {
+            "summary": {
+                "title": "River repairs draw different responses",
+                "summary": "The council backs river repairs while the board opposes the proposal.",
+            },
+            "visual": decline,
+        }
+        bodies = [
+            json.dumps({"content": content, "stop": True}).encode("utf-8")
+            for content in (reply.model_dump_json(), json.dumps(answer))
+        ]
+        with RecordedEndpoint(200, *bodies) as server:
+            two_calls_one_item(
+                article, settings, date="2026-11-10", endpoint=server.endpoint
+            )
+        assert len(server.sent) == 2
+        request = server.sent[1]
+        assert "visual" in request["json_schema"]["properties"]
+        ids = [element.element_id for element in finalized.elements]
+        assert ids and all(element.kind is not ElementKind.QUANTITY for element in finalized.elements)
+        assert all(element_id in request["prompt"] for element_id in ids)
+        schema = request["json_schema"]
+        plan = schema["$defs"]["VisualPlanDraft"]["properties"]
+        references = [
+            *(channel["items"] for channel in schema["$defs"]["PlanEncodings"]["properties"].values()),
+            *(plan[name]["items"] for name in ("element_ids", "labels", "annotations")),
+            plan["declared_whole_element_id"]["anyOf"][0],
+        ]
+        assert all(reference["enum"] == ids for reference in references)
+        assert all("entity-999-999" not in reference["enum"] for reference in references)
+
     def test_the_summary_call_opens_with_the_label_prompt_and_the_reply_it_returned(
         self, dense: Article
     ) -> None:
@@ -1521,6 +1665,27 @@ class TestTheInstructionsSitInFrontOfTheArticle:
         """`substitute`, not `safe_substitute` - a stray `$knob` reads as an
         instruction, and in an 8.5 KB turn nobody would see it."""
         assert "$" not in label_system_prompt(config.load(CONFIG_DIR).app.summarize)
+
+    def test_the_type_guide_keeps_the_vocabulary_and_reads_the_configured_floors(self) -> None:
+        knobs = VisualsConfig(
+            min_chart_points=4, max_chart_points=7, histogram_bins=4,
+            type_selection_enabled=True, enabled_types=[VisualType.BAR, VisualType.HISTOGRAM],
+        )
+        guide = type_role_guide(knobs)
+        assert "\nbar:" in "\n" + guide
+        assert "\nwhowhat:" not in guide
+        assert "\narea:" not in guide
+        assert "4..7 marks in quantity" in guide
+        assert "at least 4 bins values for 4 code-computed bins" in guide
+        assert "Chart example:" in guide and "Grid example:" in guide and "Decline example:" in guide
+        assert guide in label_system_prompt(visuals=knobs)
+        generic = type_role_guide(VisualsConfig())
+        assert generic != guide
+        assert all(f"\n{kind.value}:" in "\n" + generic for kind in VisualType)
+        assert "select one actor and one claim from the same sentence per row" in generic
+        assert "entity accepts entity only, event_label accepts claim only" in generic
+        assert "area: required quantity,time; optional series; 3..8 marks in quantity; no compiler." in generic
+        assert "quotecard: no role rule or compiler." in generic
 
     def test_the_band_numbers_are_the_only_numbers_behind_the_article(self) -> None:
         """Decision 1: the article's own band cannot move in front of it.
@@ -1678,12 +1843,15 @@ class TestTheDerivedBudget:
         payload = build_summarize_and_plan_request(
             build_label_with_derived_budget(dense),
             "{}",
+            a_table(dense),
             markers=a_markers(),
             source_words=dense.band_source_words,
         )
 
         assert payload["n_predict"] == summarize_and_plan_budget_tokens()
-        assert payload["json_schema"] == summarize_and_plan_schema(source_words=dense.band_source_words)
+        assert payload["json_schema"] == summarize_and_plan_schema(
+            source_words=dense.band_source_words, table=a_table(dense)
+        )
         assert "max_tokens" not in payload, (
             "two budget keys in one body and the server answers the first call's"
         )
@@ -1694,7 +1862,7 @@ class TestTheDerivedBudget:
             dense, sampling={"temperature": 0.25, "top_p": 0.8, "seed": 42}
         )
         second = build_summarize_and_plan_request(
-            first, "{}", markers=a_markers(), source_words=dense.band_source_words
+            first, "{}", a_table(dense), markers=a_markers(), source_words=dense.band_source_words
         )
 
         assert [
@@ -1992,9 +2160,15 @@ def test_the_visual_gate_moves_nothing_in_front_of_the_cached_prefix() -> None:
         "message"
     ]["content"]
 
-    asked = build_summarize_and_plan_request(first, reply, markers=a_markers(), plan=True)
+    labelled = anchored(
+        a_table(article), article.text or "", parse_label(reply),
+        config=ElementsConfig(), label_source="m",
+    )
+    asked = build_summarize_and_plan_request(
+        first, reply, labelled, markers=a_markers(), plan=True
+    )
     suppressed = build_summarize_and_plan_request(
-        first, reply, markers=a_markers(), plan=False
+        first, reply, labelled, markers=a_markers(), plan=False
     )
     asked_prompt = str(asked["prompt"])
     suppressed_prompt = str(suppressed["prompt"])

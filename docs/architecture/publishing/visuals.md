@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-11
 
 How an item gets a chart, a whowhat grid or - most of the time - nothing at
 all: which pass decides, which gate refuses, and what every refusal is called.
@@ -42,6 +42,16 @@ The shared system turn joins the separately configured
 `write_digest_summary` and `plan_visual` files; the later `continue_summary`
 turn reads its own file from the same selected config root. Their paths and
 rendering rules belong to [the prompt page](../summarize/prompt.md).
+
+Before that continuation is built, code finalizes the source element table.
+The request receives that same table as fenced item data, including newly
+anchored actor and claim ids, and its reference grammar admits only the ids
+the menu shows. A reusable guide reads the existing type/role vocabulary and
+configured floors, including the separate Who/What pairing rule. A valid
+decline remains available. Active configuration offers only the implemented
+chart forms and Who/What grid; safe replacement remains off. The
+[compiler capability table](where-a-drawing-becomes-pixels.md#declared-types-are-not-delivery-promises)
+names the abandoned forms retained only for historical reading.
 
 **It was two stages on two models until 2026-09-13.** `idhazh visuals` ran a Qwen3-4B after the
 summarizer had finished, decided a picture from the summary, and rendered it in a job of its own.
@@ -96,10 +106,11 @@ moves a span turns the test red rather than quietly turning the picture off.
 
 This is the whole safety design, and it is structural rather than instructed.
 
-1. The extractor pulls every quantity out of the article text with a regex, and gives each one an
- index and a unit.
-2. The model is shown that indexed menu and asked to choose bars **by index**.
-3. The spec is built here in Python from the chosen indices. Any derived value
+1. Code cuts quantity and date spans, then anchors the label reply's additional
+   source elements against the same article text.
+2. The model receives the finalized menu and chooses elements **by their ids**,
+   with those choices enforced by the article-specific request grammar.
+3. The spec is built here in Python from the chosen ids. Any derived value
    is arithmetic over source-backed elements through the closed, provenance-
    carrying rules in [where every drawn figure came from](where-every-drawn-figure-came-from.md).
 
@@ -433,13 +444,12 @@ flowchart TD
 
 ## Design rationale
 
-Type selection and safe replacement are separate default-off policies. Their
+Type selection is active; safe replacement remains a separate, inactive policy. Their
 configuration, production evidence and refusal rules are defined on the
 [plan validation page](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md).
 The existing item ledger carries terminal measurements so requested forms
 remain visible through both replacement and refusal. A failed file write is
 not delivery, and a useful replacement is still an unmet original request.
-Maintainer approval: 2026-10-25 UTC.
 
 **Why attempt evidence stays separate from delivery.** Selected depth says
 which replacement was chosen; deepest depth and first rejection explain the
@@ -522,11 +532,13 @@ Authority: Fowler.
 
 ### Diagrams deferred
 
-The whole diagram plan is deferred, not delivered. This includes sequence and
-contrast word lists, the `comparative` and `processual` reporting classes,
-`flow`, force layout, `hierarchy`, `state`, `mindmap`, and the expanded whole-day
-check. Existing chart selection is unchanged: the summarize-and-plan call
-chooses from the defined visual types, and code validates its choice.
+`flow` is abandoned and excluded from active requests; retaining its historical
+name does not defer a delivery. The other diagram families and their supporting
+work remain deferred, not delivered: sequence and contrast word lists, the
+`comparative` and `processual` reporting classes, force layout, `hierarchy`,
+`state`, `mindmap`, and the expanded whole-day check. The summarize-and-plan
+call chooses from the configured active visual types, and code validates its
+choice.
 
 The intended reader benefit is a diagram that explains a process or relationship
 better than the summary alone. No reader-facing diagram has yet demonstrated

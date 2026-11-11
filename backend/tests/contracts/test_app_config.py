@@ -489,10 +489,10 @@ def test_the_sequence_is_two_calls_and_growing_it_is_an_escalation() -> None:
 
 
 def test_the_two_calls_fit_the_window_at_the_cap() -> None:
-    """The second call retains the first prompt and reply, so size the full context.
+    """Preserve admission under the existing pre-label estimate.
 
-    Include the candidate menu and both reply budgets to catch config changes
-    that could exhaust the window and truncate the summary or visual plan.
+    This does not certify a complete continuation with finalized evidence or
+    an explicit response limit. Those are diagnosed from the actual request.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     n_ctx = window(committed_models().summarizer.server)
@@ -506,11 +506,24 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
         f"reply, the {SUMMARIZE_AND_PLAN_SEAM_TOKENS}-token seam and the summarize-and-plan call's "
         f"{summarize_and_plan_budget_tokens(committed.summarize)}-token reply put the pair at "
         f"{sequence} against a window of {n_ctx}, over by "
-        f"{sequence - n_ctx}. Raise --ctx-size in models.summarizer.server, or "
-        "lower extract.truncation_cap_tokens or elements.max_per_article beside it. "
-        "KV is 32 KiB a token on the configured weights, so a doubling is about a "
-        "gigabyte and docs/reference/pipeline-cost.md says what the runner had free."
+        f"{sequence - n_ctx}. Measure the complete request before proposing a "
+        "configuration or article-admission change."
     )
+
+
+@pytest.mark.parametrize("key, limit", [("n_predict", 4213), ("max_tokens", 8192)])
+def test_complete_request_accounting_uses_the_effective_response_limit(
+    key: str, limit: int,
+) -> None:
+    request = {key: limit}
+    assert dag.response_tokens(request) == limit
+    assert dag.request_tokens(request, prompt_tokens=100) == 100 + limit
+
+
+def test_request_accounting_refuses_ambiguous_or_unbounded_response_limits() -> None:
+    for request in ({}, {"n_predict": -1}, {"max_tokens": True}, {"max_tokens": 2, "n_predict": 1}):
+        with pytest.raises(ValueError, match="response-token limit"):
+            dag.response_tokens(request)
 
 
 def test_the_training_window_covers_the_longest_row_the_cap_allows() -> None:
