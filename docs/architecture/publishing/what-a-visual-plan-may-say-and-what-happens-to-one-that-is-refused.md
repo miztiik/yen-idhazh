@@ -21,6 +21,17 @@ was planned against. It lands ahead of its producers, so nothing writes one yet 
 
 What it may not carry is as much of the contract as what it holds.
 
+Cross-field failures identify both the field and the rule as native structured
+errors. A decline carrying content reports `visual_plan_decline_empty`; a
+visual missing a required field reports `visual_plan_field_required`; a
+reference outside the plan's declared elements reports
+`visual_plan_reference_declared`. Their `field` context names the offending
+field, including an encoding role when relevant. These errors preserve the
+same accepted plans and schema; they do not clear contradictory fields or
+turn an invalid decline into a valid answer. The
+[decision path](visuals.md#every-none-says-which-gate-refused-it) carries the
+safe diagnosis without copying the rejected payload.
+
 | Prohibition | What refuses it |
 | --- | --- |
 | **No geometry** | Geometry is a number, and the schema admits exactly one number. A payload naming a pixel names a key the model does not declare, and an undeclared key does not load. |

@@ -11,25 +11,27 @@ from support.ledger import writer_identity
 from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from support.prompts import SUMMARIZE_AND_PLAN_REPLIES
 from test_chart_vocabulary import draw, inputs, settings
+from test_classify import declining_reply
 from test_whowhat_grid import whowhat_inputs
 
-from idhazh import completed_writes, ledger
+from idhazh import completed_writes, elements, ledger
 from idhazh.classify import calls
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.element import ElementTable
+from idhazh.contracts.element import ElementKind, ElementTable
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.visual import PlanDecision, VisualType
+from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
 from idhazh.contracts.visual_decision import NoneReason, VisualDecision, VisualState
-from idhazh.contracts.visual_telemetry import VisualAttemptRow
+from idhazh.contracts.visual_telemetry import ValidatorCheck, VisualAttemptRow
 from idhazh.elements import ExtractionHealth
 from idhazh.fingerprint import text_digest
 from idhazh.llm.server import Completion, window
 from idhazh.stages import common
 from idhazh.stages.two_calls import _decide_the_visual, _drawn
 from idhazh.telemetry import visual_attempts
+from idhazh.visual_validator import validate_plan
 from utilities.digest_publish import permissions
 
 pytestmark = [pytest.mark.visual, pytest.mark.contract]
@@ -112,7 +114,7 @@ def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_p
             content=cut, finish_reason="length",
             prompt_tokens=window(knobs.models.summarizer.server),
         ), True),
-        (Completion(content="not JSON", finish_reason="stop"), True),
+        (Completion(content='{"visual":{"type":"bar"}', finish_reason="stop"), True),
     )
     decisions = [
         _decide_the_visual(
@@ -136,10 +138,78 @@ def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_p
         summary, article, Completion(content=json.dumps(content), finish_reason="stop"), table,
         settings=knobs, date=DATE, stamp=stamp, wants_a_plan=True, run_id=RUN,
     ))
+    assert all(
+        decision.planned_type is None and decision.rejection_reason is None
+        for decision in decisions
+    )
     observed = {stored(tmp_path / str(index), decision).none_reason
                 for index, decision in enumerate(decisions)}
     assert observed == set(NoneReason)
     assert len(observed) == 5
+
+
+def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_requests(
+    tmp_path: Path,
+) -> None:
+    summary, requested, table = inputs()
+    article = Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json")
+    knobs = settings()
+    stamp = {
+        "version": VisualDecision.schema_version(), "model_id": "fixture-model",
+        "decided_at": f"{DATE}T12:00:00Z",
+    }
+    malformed = _decide_the_visual(
+        summary, article,
+        Completion(content=declining_reply(title="model-only words"), finish_reason="stop"),
+        table, settings=knobs, date=DATE, stamp=stamp, wants_a_plan=True, run_id=RUN,
+    )
+    empty = ElementTable.model_validate(table.model_dump() | {"elements": []})
+    evidence = _drawn(
+        summary, requested, empty, settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
+    )
+
+    text = (
+        "The level was 10 MW in January 2020. The level was 20 MW in January 2021. "
+        "The level was 30 MW in January 2022."
+    )
+    timed_article = Article.model_validate(article.model_dump() | {"text": text})
+    timed = elements.element_table(timed_article, config=knobs.app.elements)
+    quantities = [one.element_id for one in timed.elements if one.kind is ElementKind.QUANTITY]
+    dates = [one.element_id for one in timed.elements if one.kind is ElementKind.DATE]
+    historical = VisualPlan.model_validate(requested.model_dump() | {
+        "type": "area", "purpose": "trend", "title": "Measured level over time",
+        "why": "Compare the measured level over time.", "caption": None,
+        "element_ids": [*quantities, *dates], "labels": [], "annotations": quantities[:1],
+        "encodings": {
+            role.value: quantities if role is EncodingRole.QUANTITY
+            else dates if role is EncodingRole.TIME else []
+            for role in EncodingRole
+        },
+    })
+    generic = settings(type_selection_enabled=False)
+    assert validate_plan(historical, timed, visuals=generic.app.visuals) == []
+    timed_summary = type(summary).model_validate(summary.model_dump() | {
+        "item_id": timed.item_id, "url_key": timed.url_key,
+    })
+    unsupported = _drawn(
+        timed_summary, historical, timed, settings=generic, date=DATE, stamp=stamp, run_id=RUN,
+    )
+
+    cases = (
+        (malformed, None, None, "visual_plan_decline_empty"),
+        (evidence, VisualType.BAR, ValidatorCheck.ELEMENT_EXISTS, "element_exists"),
+        (unsupported, VisualType.AREA, None, "area has no compiler"),
+    )
+    for index, (decision, planned_type, rejection, cause) in enumerate(cases):
+        persisted = VisualDecision.from_json(decision.to_json())
+        row = stored(tmp_path / str(index), persisted)
+        assert persisted.none_reason is row.none_reason is NoneReason.VALIDATION_FAILED
+        assert persisted.planned_type is row.planned_type is planned_type
+        assert persisted.rejection_reason is row.rejection_reason is rejection
+        assert row.rendered_type is None and row.marks is None
+        assert persisted.rationale and cause in persisted.rationale
+        assert "model-only words" not in persisted.rationale
+    assert malformed.rationale and "title" in malformed.rationale
 
 
 def test_whowhat_uses_the_same_attempt_mapping_and_storage(
