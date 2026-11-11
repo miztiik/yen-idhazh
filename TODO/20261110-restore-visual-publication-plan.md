@@ -1,6 +1,6 @@
 # Restore source-backed visual publication
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 **Level**: 3; new persisted contracts, visual semantics or runtime changes escalate to Level 5.
 
 ## 0. Operating contract
@@ -10,10 +10,10 @@ Table A - Scope and execution
 | ID | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | Restore useful chart and Who/What grid generation by repairing the evidence passed to the planner, preserving exact refusals and proving the complete publication path |
-| A2 | Hard scope - in | Finalized evidence handoff; article-specific reference grammar; rule-derived visual guidance; context accounting; existing refusal diagnostics; chart/grid publication and reader verification; active type selection restricted to implemented chart and Who/What types |
-| A3 | Hard scope - out | Table B distinguishes abandoned types from separate policy work; abandoned types are not a delivery queue |
-| A4 | Chosen strategy | Repair the existing two-call path and existing payload families before adding renderers; Fowler architectural consultation |
-| A5 | Contracts | Reuse `ElementTable`, `VisualPlan`, `VisualDecision`, `ItemHealthRow` and `VisualAttemptRow`; request-only projections do not become another persisted format. Retain historical type names for old-record compatibility, not as active request choices |
+| A2 | Hard scope - in | Finalized evidence handoff; article-specific reference grammar; rule-derived visual guidance; context accounting; existing refusal diagnostics; chart/grid publication and reader verification; implemented active types; retained-Article verification on the existing controlled test runtime; format-preserving first-call address presentation and coverage |
+| A3 | Hard scope - out | Table B distinguishes abandoned types and unchosen format changes from active repair work; abandoned types are not a delivery queue |
+| A4 | Chosen strategy | Land independently verified transport/reader increments without claiming restored generation; retain actual generation/publication as an open roll-up; correct first-call addressing before expanding the saved raw-label format |
+| A5 | Contracts | Reuse `Article`, `ElementTable`, `LabelReply`, `VisualPlan`, `VisualDecision`, `ItemHealthRow`, `VisualAttemptRow` and existing capture/provenance shapes. Retained-input selections are ephemeral CLI inputs, not a new saved manifest/result family. Preserve historical type/reply reading, source text/offsets and current raw-label/capture fields |
 | A6 | ESCALATE triggers | 1. A persisted field, enum meaning, visual role or published shape must change. 2. A third model call, different model, larger context window or changed fallback policy is proposed. 3. Source text would become an instruction, path or destination. 4. A warranted example still cannot produce a valid visual and the proposed remedy is to weaken evidence validation or force publication. 5. A row revives an abandoned type or changes the scope in Table B. 6. Article-admission behavior or the recorded meaning of a context refusal must change |
 | A7 | Execution | Autonomous orchestrator per `docs/how-to/execute-a-plan.md`; parallel N = 4, with rows serialized by their dependencies and shared files |
 
@@ -28,16 +28,19 @@ Table B - Separate work and its cost
 | B3 | Other diagram families and their supporting classification | Process and relationship stories remain without those illustrations; retirement of flow does not decide the lifecycle of other undeclared diagram forms | A separate source-backed diagram design; none is introduced by this repair |
 | B4 | Fallback activation; historical redraw | Fallback stays off, and old text-only items do not gain visuals; active type selection is changed by row #1 | A separate fallback or revision decision; direct deliveries first supply the fallback population that is currently absent |
 | B5 | The unfinished article-classification roadmap | This work does not deliver article-kind, stance, sentiment or classification-ledger features | Reconcile that roadmap with the current classifier and execute its remaining outcomes independently |
+| B6 | Precise claim-citation and capture-format expansion | Claims still use existing sentence ranges, so a future case may require finer representation; the currently audited useful whole sentences fit the native bound | A measured representation/readability blocker and a separate Level 5 design, including versioned raw-format metadata and historical capture reading; do not introduce it speculatively |
 
 ## 1. Status Reckoner
 
-Table C - One row per repair PR
+Table C - Repair increments and the restored-generation roll-up
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Give the visual planner usable source evidence | - | A | DONE | fantastic-garbanzo | - | 0b1cac34-83e8-494c-99fc-6539f5299bdc |
 | C2 | 2 | Preserve the exact reason a visual was refused | 1 | B | DONE | shiny-spoon | - | ef9d68ad-ccf4-417d-9a05-fe0305ef21c7 |
-| C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2 | C | PENDING | - | - | - |
+| C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2, 4, 5 | C | PENDING | fuzzy-bassoon | - | 094b8d19-fd66-47ce-b6ff-72d8af8f39d7 |
+| C4 | 4 | Replay retained articles on the controlled test runtime | 1, 2 | D | IN-FLIGHT | - | - | - |
+| C5 | 5 | Correct literal sentence addressing and claim coverage | 1, 2 | D | IN-FLIGHT | - | - | - |
 
 ## 2. Row #1 - Give the visual planner usable source evidence
 
@@ -123,7 +126,7 @@ Table G - Rejected refusal shortcuts
 
 ## 4. Row #3 - Prove generated visuals reach publication and the reader
 
-- **Scope:** Close the gap between a successful canned-plan test and a real request producing a source-backed chart or grid that survives ordinary assembly and renders.
+- **Scope:** Retain the completed deterministic reader coverage while closing the remaining gap to fresh, source-backed model generation and ordinary publication.
 - **Files touched:**
   - `backend/tests/pipeline/_builders.py`
   - `backend/tests/pipeline/test_published_charts.py`
@@ -159,3 +162,85 @@ Table I - Rejected delivery shortcuts
 | --- | --- | --- | --- | --- |
 | I1 | Treat any successful summary as proof of visual generation | It passes when every visual is absent | Continued false confidence and no evidence that the repair reaches a reader | Verified production failure mode |
 | I2 | Force a visual or impose a publication quota | Source evidence and reader usefulness do not follow a quota | Misleading or decorative output and a separate editorial-policy change | [Visual rule](../docs/concepts/digest.md#the-visual-rule) |
+
+Table J - Roll-up completion evidence
+
+| ID | Outcome | State and evidence |
+| --- | --- | --- |
+| J1 | Serialized worker -> ordinary assembly -> native reader and stable recovery journey | DONE in [#2018](https://github.com/miztiik/yen-idhazh/pull/2018); this does not establish model generation |
+| J2 | Safe fixed-input model verification without production writes | Pending row #4 |
+| J3 | Existing-format first-call address/coverage correction | Pending row #5 |
+| J4 | Fresh warranted chart, warranted actor/claim grid and legitimate no-visual outputs | Pending rows #4 and #5, using the same named source inputs and both real production calls |
+| J5 | Normal asset, digest/inventory and served-reader verification on the merged producer revision | Pending actual publication; workflow success without a delivered visual is not positive proof |
+
+## 5. Row #4 - Replay retained articles on the controlled test runtime
+
+- **Scope:** Add an artifact-only retained-input mode to the existing manual pipeline workflow, calling the real two-call producer on bounded native Article files without refetching or publishing.
+- **Files touched:**
+  - `.github/workflows/idhazh-pipeline-tests.yaml`
+  - `backend/utilities/replay_article_calls.py` (new; owns bounded retained-input selection, native invocation and serialization)
+  - `backend/idhazh/stages/two_calls.py`
+  - `backend/tests/test_replay_article_calls.py` (new; marked with the existing relevant tiers)
+  - `docs/reference/github-actions.md`
+  - `docs/reference/retained-article-verification.md` (new)
+- **Acceptance gates:** Inspect the shared selector; run selected Python lint/types, native controller/isolation tests and applicable existing workflow lint. CI owns the complete suite. Do not add tests of workflow-file text. Manually run the retained mode on its exact code revision after delivery, retain its outputs and verify that no commit/deploy job or reader-facing write occurred.
+- **Oracle:** A named native Article passes through `two_calls_one_item()` with actual request construction and recorded boundary responses, producing native summary/decision/capture files and any compiled asset only under the isolated output root; invalid or escaping inputs fail before inference. This proves native invocation/isolation, not live model quality.
+
+Table K - Retained-input decisions
+
+| ID | Decision | Authority |
+| --- | --- | --- |
+| K1 | Add optional `retained_source_run` and `retained_item_ids` workflow inputs. Empty source run preserves the existing random mode. Retained mode requires a positive run id and an explicit, unique list of valid native item ids bounded by the existing configured dispatch size | Existing workflow and native input contracts; bounded verification requirement |
+| K2 | Download only the explicitly selected source run's named native artifacts through existing trusted artifact machinery. Load only selected Article files inside the downloaded root; validate payloads, eligibility, identities and paths. No history/tree discovery, refetch, re-extraction or silent input repair | Guardrails 3, 11 and 12; [workflow contract](../docs/reference/github-actions.md#pipeline-tests) |
+| K3 | Use the existing model-server setup, committed configured model, operator-controlled destination and production settings. Retained mode runs no experimental case variants and forwards no expected outcome into the model request | [Model boundary](../docs/architecture/summarize/model-boundary.md) |
+| K4 | Invoke the actual `two_calls_one_item()` item-major. Retain native inputs, summaries, decisions, compiled data and both actual captures, with existing provenance/logged code/model/runtime/host identities. Do not reproduce inference logic or retry model declines | Focused Fowler design; Table H |
+| K5 | If needed for isolation, pass an optional typed render-output root through the existing native call boundary with the current default unchanged. The adapter must supply its private root; do not monkeypatch production globals, mutate committed configuration or create another inference engine | Native file-in/file-out stage boundary |
+| K6 | Keep retained mode artifact-only with read-only repository permission and no ledger-commit, deploy or frontend-public path. Validate selected inputs before model work. Fail explicitly on invalid input, genuine model failure or an unmet operator-requested outcome; never fabricate a successful summary or legitimate decline | Existing native statuses and publication boundary |
+| K7 | Ephemeral validated CLI selections and native outputs require no new saved replay protocol. If a custom case manifest, expected-outcome schema, result ledger or capture-format change is actually necessary, stop before adding it | Table A6 and B6 |
+| K8 | Keep this row's code/doc files disjoint from row #5. Each worker changes only its own Reckoner line; merge reconciliation preserves the complete current plan | [Execution contract](../docs/how-to/execute-a-plan.md#parallel-fan-out) |
+
+Table L - Rejected verification shortcuts
+
+| ID | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| L1 | Use the random article draw as fixed positive proof | It may contain no warranted chart/grid and mutable source pages do not isolate a producer change | Continued uncertainty or repeated uncontrolled dispatches | Actual generation observation; Table H |
+| L2 | Start a full model in unsafe local memory or use another model | It risks unrelated work and does not verify the committed production model | A separate resource/model decision and non-comparable evidence | Configured runtime and runner boundary |
+| L3 | Duplicate the producer or add a new workflow as a detour | A second inference path can pass while production still fails | Additional drift, maintenance and proof that never reaches the requested path | Focused Fowler design |
+
+## 6. Row #5 - Correct literal sentence addressing and claim coverage
+
+- **Scope:** Fix the demonstrated first-call address-presentation/coverage defect while preserving existing label/capture formats, source text and claim meanings.
+- **Files touched:**
+  - `backend/idhazh/classify/calls.py`
+  - `config/prompts/generate-labels.txt`
+  - `backend/utilities/measure_two_calls.py`
+  - `backend/tests/test_classify.py`
+  - `backend/tests/test_measure_two_calls.py`
+  - `backend/tests/test_prompt_files.py`
+  - `tests/fixtures/planner/recorded-call-payloads.json`
+  - `tests/fixtures/prompts/label.txt`
+  - `tests/fixtures/prompts/summarize-and-plan.txt`
+  - `docs/architecture/summarize/prompt.md`
+  - `docs/architecture/extraction/elements.md`
+- **Acceptance gates:** Use the shared selector for applicable lint/types and the smallest presentation, anchoring, prompt, legacy-reading and budget cases; CI owns the complete suite. After rows #4 and #5 are available, execute fresh fixed retained-input verification on their exact code/model revision. Do not equate unit/fixture success with corrected live label coverage.
+- **Oracle:** Each original source sentence has exactly one visible physical addressed line in a reversible presentation; native anchoring still uses the original text/offsets, correct literal references retain valid siblings, and wrong-sentence/missing/duplicate matches remain rejected. This proves presentation/provenance invariants, not that the model will copy every address correctly.
+
+Table M - Format-preserving producer decisions
+
+| ID | Decision | Authority |
+| --- | --- | --- |
+| M1 | Escape internal line controls through a reversible one-line presentation without changing Article.text, segmentation, offsets or source hashes. Make retained-prompt inspection understand both old and new presentation explicitly; do not flatten source whitespace or silently reinterpret historical prompt bytes | Existing source-span contract; measured address-presentation defect |
+| M2 | Clarify literal printed-address copying, distinct actors and source-supported narrated claims in the label prompt. Do not count lines, infer a neighbouring address, paraphrase source spans, merge distinct people merely by surname or weaken the exact unique within-sentence locator | Existing attribution/anchoring contract |
+| M3 | Keep `LabelReply.claims` as the existing `SentenceRange`, quotes as ranges and all raw-label/capture fields unchanged. Preserve required fields, list/string bounds, accepted native schemas and historical reply reading. Do not add ClaimCitation in this increment | Table B6; audited useful whole sentences fit the existing bound |
+| M4 | Preserve CLAIM versus QUOTE meaning, reporting frames, attribution, hedge and qualifications. A shorter suffix that drops a qualification is not a clean positive. Whole-sentence readability and usefulness must be checked in actual outputs, not assumed from representability | Existing native kind meanings and visual rule |
+| M5 | Keep compatible native width arithmetic, derived allowances, actual configured response/context caps and early admission unchanged. Retokenize complete actual requests for diagnostics; add no production tokenization call, capacity guard, forced visual or policy switch | [Prompt budget contract](../docs/architecture/summarize/prompt.md#the-output-budget-is-derived-not-picked) |
+| M6 | Use row #4's controlled retained-input mode for named warranted chart/grid candidates and the verified negative. Retain both fresh calls and verify coverage, native validation, output data and source provenance. The generator receives no expected kind | Table H; Table J |
+| M7 | If useful in-meaning claims still cannot be represented/read after this smaller correction, preserve the concrete counterexample and price the Level 5 raw-format option. Do not expand response/capture formats, model choices or kind meanings silently | Table A6 and B6 |
+
+Table N - Rejected producer shortcuts
+
+| ID | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| N1 | Immediately add precise claim citations and capture metadata | Existing ranges can represent the currently audited whole sentences, so that format expansion is not yet a demonstrated prerequisite | Versioned raw/capture models, legacy reading and a Level 5 design decision | Focused Fowler format ruling; newer source audit |
+| N2 | Rescue a wrong address by searching neighbouring sentences or the whole article | It turns an invalid model reference into an apparently valid source claim | A changed grounding/safety policy and weaker provenance | Existing exact within-sentence locator |
+| N3 | Declare restoration from successful summaries or authored visual replies | It repeats the failure that left normal production without visuals | Missing actual positive generation and public-delivery evidence | Table J |
