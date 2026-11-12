@@ -25,9 +25,3 @@ export const whyChosenQuery = {
 	columns: ['date', 'run_id', 'item_id', 'source_id', 'selection_score', 'authority_score', 'tier_score', 'feed_weight', 'feed_reliability', 'recency_bonus', 'lens_bonus', 'watchlist_bonus', 'carriage_step'],
 	span: 'newest-day'
 } as const satisfies PanelQuery;
-
-export const watchlistQuery = {
-	name: 'watchlistQuery', ledger: 'item-health',
-	columns: ['date', 'url_key', 'watchlist_hit', 'on_front_page'],
-	span: 'window'
-} as const satisfies PanelQuery;

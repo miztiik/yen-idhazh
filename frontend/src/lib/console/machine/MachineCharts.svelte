@@ -1,18 +1,16 @@
 <script lang="ts">
 	import Panel from '$lib/components/Panel.svelte';
-	import RateControl from '$lib/components/RateControl.svelte';
 	import RankedList from '$lib/components/RankedList.svelte';
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import Distribution from '$lib/charts/d3/Distribution.svelte';
 	import { rankedList } from '$lib/charts/d3/rankedList';
-	import { dateSeries, type SeriesInput } from '$lib/charts/d3/dateSeries';
+	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import { distribution } from '$lib/charts/d3/distribution';
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { AXIS_LABEL_GAP_PX, chartWidth, labelWidth, MARGIN, observeWidth } from '$lib/charts/frame';
 	import { useChartFrame, useChartLabels } from '$lib/charts/label-context';
-	import { clockAgreement, clocksChart, readAgainstWritten, money, type CostRate } from '$lib/charts/machine';
+	import { clockAgreement, clocksChart } from '$lib/charts/machine';
 	import { formatNumber } from '$lib/number-format';
-	import { costOverDays } from '$lib/charts/cost';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
@@ -22,10 +20,10 @@
 	import type { ChartConfig } from '$lib/server/config';
 	import type { MachineRun as CounterRun } from './counters';
 
-	let { id, title, rows, newest = null, newestRunId = null, chart, shell, start, end, knobs, rate, windowDays }: {
+	let { id, title, rows, newest = null, newestRunId = null, chart, shell, start, end, knobs, windowDays }: {
 		id: string; title: string; rows: readonly Row[];
 		newest?: CounterRun | null; newestRunId?: string | null; chart: ChartConfig; shell: ConsoleShell;
-		start: string; end: string; knobs: Readonly<Record<string, number>>; rate: CostRate; windowDays: number;
+		start: string; end: string; knobs: Readonly<Record<string, number>>; windowDays: number;
 	} = $props();
 	const numberFormat = $derived(chart.number_format);
 	const frame = useChartFrame(() => chart);
@@ -36,7 +34,6 @@
 		{ ...MARGIN, right: Math.ceil(labelWidth('100%', labels()) + AXIS_LABEL_GAP_PX) }));
 	const declined = { declined: 'This compares records within one run or kind, not a change over days.' };
 	const rule = $derived(settingsRules(shell, { from: start, to: end }, 'none'));
-	const work = $derived(id === 'counterfactual-cost' ? readAgainstWritten(textRows(rows)) : null);
 	const slower = $derived(slowerMachines(rows));
 	const comparableKinds = $derived(new Set([...slower.reading, ...slower.writing]
 		.filter((row) => (row.range?.count ?? 0) >= knobs.slower_machines_min_articles).map((row) => row.label)));
@@ -49,8 +46,7 @@
 	const readingLeader = $derived([...slower.reading].filter((row) => (row.range?.count ?? 0) >= knobs.slower_machines_min_articles)
 		.sort((a, b) => b.value - a.value)[0]);
 	const reuseMedian = $derived(labelHeldMedian(rows));
-	const comparison = $derived(id === 'counterfactual-cost' ? "Each day's counterfactual cost against the running total"
-		: id === 'two-clocks' ? "Each shard's gap against the tolerance"
+	const comparison = $derived(id === 'two-clocks' ? "Each shard's gap against the tolerance"
 		: id === 'slower-machines' ? "Each machine kind's typical time against the reference machine's"
 		: id === 'closest-to-memory' ? "Memory held at each article's lowest point against the machine's total"
 		: id === 'context-headroom' ? 'Each prompt against the reading limit'
@@ -61,24 +57,7 @@
 		Math.min(1, ...context.label, ...context.summary, ...context.rules.map((one) => one.at)),
 		Math.max(10, ...context.label, ...context.summary, ...context.rules.map((one) => one.at))
 	] as [number, number]);
-	// The operator owns these values after mount; the configured price only starts the control.
-	// svelte-ignore state_referenced_locally
-	let inputPrice = $state(rate.inputPerMillion);
-	// svelte-ignore state_referenced_locally
-	let outputPrice = $state(rate.outputPerMillion);
-	let rateSource = $state<'configured' | 'yours'>('configured');
-	const prices = $derived({ ...rate, inputPerMillion: inputPrice, outputPerMillion: outputPrice });
-	const cost = $derived(costOverDays(work?.runs ?? [], prices));
-	const priced = $derived({
-		input: cost.days.reduce((sum, day) => sum + day.read, 0),
-		output: cost.days.reduce((sum, day) => sum + day.written, 0),
-		items: cost.days.reduce((sum, day) => sum + day.items, 0)
-	});
-	const series = $derived.by((): SeriesInput[] => {
-		if (id === 'prompt-reuse') return reuseSeries(rows);
-		return [{ label: `Running counterfactual total, ${rate.currency}`, token: '--chart-1',
-			points: cost.days.map((day) => ({ date: day.date, value: day.running })) }];
-	});
+	const series = $derived(reuseSeries(rows));
 	const drawing = $derived(dateSeries(series, {
 		frame: box,
 		density: chart.tick_density,
@@ -98,16 +77,14 @@
 	const reuse = $derived(reuseChecks(rows));
 </script>
 
-<div data-windowed={{ 'context-headroom': 'machine-context', 'prompt-reuse': 'machine-prompt-reuse',
-	'counterfactual-cost': 'machine-cost' }[id]}
-	data-window-days={windowDays}
-	data-cost-running-total={id === 'counterfactual-cost' ? cost.runningTotal : undefined}>
+<div data-windowed={{ 'context-headroom': 'machine-context', 'prompt-reuse': 'machine-prompt-reuse' }[id]}
+	data-window-days={windowDays}>
 <Panel {id} {title} heading="h3" verdict={id === 'two-clocks'} note={id === 'two-clocks' ? `Newest run ${newestRunId ?? newest?.runId ?? 'not recorded'}, by shard.`
 	: `Read from the published record when you open this page - over ${nameSpan(windowDays)}.`}>
 	<div data-panel-question="is it working"
-		data-model-rule-name={['prompt-reuse', 'counterfactual-cost'].includes(id) ? undefined : id}
-		data-model-rule={['prompt-reuse', 'counterfactual-cost'].includes(id) ? undefined : 'no'}
-		data-model-rule-none={['prompt-reuse', 'counterfactual-cost'].includes(id) ? undefined : declined.declined}>
+		data-model-rule-name={id === 'prompt-reuse' ? undefined : id}
+		data-model-rule={id === 'prompt-reuse' ? undefined : 'no'}
+		data-model-rule-none={id === 'prompt-reuse' ? undefined : declined.declined}>
 		{#if id !== 'two-clocks'}<p data-comparison={comparison}>{comparison}.</p>{/if}
 		{#if id === 'two-clocks'}
 			<p class="lede" data-lede data-comparison={comparison}>{widestGap === null ? 'Neither instrument recorded a comparison.'
@@ -162,25 +139,14 @@
 			<p>{context.cut ? `${context.cut} articles were cut.` : 'No article was cut in this window.'}
 				{context.limits.length > 1 ? ` Other request-slot limits: ${context.limits.slice(1).join(', ')} tokens.` : ''}</p>
 		{:else}
-			<p class="lede" data-lede>{id === 'counterfactual-cost'
-				? `${money(cost.runningTotal, rate.currency, numberFormat)}, counterfactual, never a bill.`
-				: reuseMedian === null ? 'No label request recorded held text.' : `${formatNumber(reuseMedian, numberFormat)} tokens held for the middle label request.`}</p>
-			{#if id === 'counterfactual-cost'}
-				<RateControl configured={rate} bind:inputRate={inputPrice} bind:outputRate={outputPrice} bind:source={rateSource} />
-				<dl class="costs" data-cost-figures data-cost-source={rateSource}>
-					<div data-cost="input"><dt>Reading the prompts</dt><dd>{money(priced.input, rate.currency, numberFormat)}</dd></div>
-					<div data-cost="output"><dt>Writing the answers</dt><dd>{money(priced.output, rate.currency, numberFormat)}</dd></div>
-					<div data-cost="total"><dt>This window</dt><dd>{money(cost.runningTotal, rate.currency, numberFormat)}</dd></div>
-					<div data-cost="per-article"><dt>An article, out of {priced.items}</dt><dd>{priced.items ? money(cost.runningTotal / priced.items, rate.currency, numberFormat) : 'Not recorded'}</dd></div>
-				</dl>
-			{/if}
+			<p class="lede" data-lede>{reuseMedian === null ? 'No label request recorded held text.' : `${formatNumber(reuseMedian, numberFormat)} tokens held for the middle label request.`}</p>
 			<div use:observeWidth={(px) => (width = px)}><DateSeries geometry={drawing}
 				readout={drawing === null ? null : { ...drawing.readout, columns: drawing.dates.map(shortDate) }}
 				empty={emptyState('quiet', 'Nothing recorded for this comparison.')}
 				name={id} label={title} width={box.width} height={box.height} readoutMaxShare={chart.readout_max_share} /></div>
 			{#if ruleNote}<p data-model-rule-empty={id}>{ruleNote}</p>{/if}
-			{#if id === 'prompt-reuse'}{#each reuse as check}<p>{check.call}: our pooled held share {check.ours === null ? 'not recorded' : formatNumber(check.ours, numberFormat, { si: false })}%;
-				server's middle held share {check.server === null ? 'not recorded' : formatNumber(check.server, numberFormat, { si: false })}%; {formatNumber(check.count, numberFormat, { exact: true, si: false })} complete article readings.</p>{/each}{/if}
+			{#each reuse as check}<p>{check.call}: our pooled held share {check.ours === null ? 'not recorded' : formatNumber(check.ours, numberFormat, { si: false })}%;
+				server's middle held share {check.server === null ? 'not recorded' : formatNumber(check.server, numberFormat, { si: false })}%; {formatNumber(check.count, numberFormat, { exact: true, si: false })} complete article readings.</p>{/each}
 		{/if}
 	</div>
 </Panel>
@@ -189,6 +155,4 @@
 <style>
 	.lede { font-size: var(--console-page-title-size); line-height: var(--console-page-title-leading); font-weight: var(--console-page-title-weight); }
 	.halves > div { min-width: 0; }
-	.costs { display: flex; flex-wrap: wrap; gap: var(--space-4); }
-	.costs dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 </style>

@@ -1,8 +1,8 @@
 # Who supplied the day, and which feeds failed
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-11-12
 
-`/console/voices/` answers two questions in eight panels. The order, stable ids,
+`/console/voices/` answers two questions in seven panels. The order, stable ids,
 judged inventory and route thresholds live in `config/console/voices.json`.
 The owning page reads the immutable console configuration; its server load
 does not serialize another console configuration or an article ledger.
@@ -80,18 +80,10 @@ does not serialize another console configuration or an article ledger.
    Unknown newest-day identities also prevent a claim about the bonuses' effect.
    Recorded zero parts remain readable as zeroes without a filled bar. An
    incomplete score is not an empty ledger.
-8. **`watchlist` - What the watchlist caught.** Native `watchlistQuery` counts
-   distinct address keys, not repeated run rows. Day tiles distinguish a
-   recorded false from an unrecorded hit cell. True front-page flags are counted
-   separately from unknown front-page evidence. A partial count is a lower
-   bound, not a fabricated zero. Catch and naming thresholds are respectively
-   one and three; no-catch words require recorded quiet evidence.
-   A catch below a changed marking threshold is still counted, never called no catch.
-   An all-unknown hit column states that no tiles can be drawn; it is not quiet.
 
 ## The route's read and its four nothings
 
-The five declared queries are imported from `queries/voices.ts`, with no second
+The four declared queries are imported from `queries/voices.ts`, with no second
 column declaration. `routeReach` anchors their windows on the oldest available
 ledger end. `rangeFor(query, preset, reach, windowPresets)` establishes each
 range; the owning page calls `sliceOnce`, never the raw door. Newest-day choice
@@ -114,7 +106,7 @@ because their source view is not published as a browser ledger. All three
 explicitly name their fixed run/span rather than implying the window control
 recomputes a private decision. Every panel declines a model-change rule with
 its own name and reason: permissions, outcomes, ranking, rule distance, one
-day's choice or hit counts are not a model trend.
+day's choice are not a model trend.
 
 Pure modules under `src/lib/console/voices/` own the reductions. The Svelte
 components draw their geometry and readouts. Native tests build independent
@@ -128,6 +120,13 @@ and feed records on the real route. Compiled component tests are additional
 checks, not substitutes for those built-route states.
 
 ## Design rationale
+
+The watchlist catch-day panel and its dedicated query are permanently absent,
+without a hidden or relocated replacement. Distinct caught addresses, hit dates
+and front-page counts are no longer displayed. The retained selection-score
+panel still includes the watchlist bonus, which answers a different question
+and does not replace those counts. Watchlist configuration, producer fields,
+historical rows and private-reader column compatibility remain unchanged.
 
 Naveen authorized the known shared test integration on 2026-10-11. The eight
 feed cases, their constants and `feedHeadline` moved unchanged into the route's

@@ -2,6 +2,8 @@ import { expect, test } from './support/browser';
 
 test('Voices keeps feed evidence and its native readings usable across a window change', async ({ page }) => {
 	await page.goto('/console/voices/');
+	await expect(page.locator('[data-console-panel-id="watchlist"], a[href$="#watchlist"]')).toHaveCount(0);
+	await expect(page.locator('[data-console-panel-id="why-chosen"] [data-lede]')).toBeVisible();
 	const failures = page.locator('[data-console-panel-id="feeds-failed"]');
 	const reliability = failures.locator('[data-feed-reliability]');
 	await expect(reliability).toHaveCount(1);

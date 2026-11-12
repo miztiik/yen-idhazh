@@ -263,8 +263,6 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "lens_bonus",
             "watchlist_bonus",
             "carriage_step",
-            "watchlist_hit",
-            "on_front_page",
         ),
         "frontend/src/lib/console/machine/counters.ts": ("llama_rss_peak_bytes",),
         "frontend/src/lib/console/model/work.ts": ("version",),
@@ -299,6 +297,10 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
 #: non-zero naming it.
 UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
     {
+        "Watchlist catches retained without their day-count view": (
+            "watchlist_hit",
+            "on_front_page",
+        ),
         "Processor-steal and paging readings retained without Hardware views": (
             "cpu_steal_pct",
             "llama_major_faults",

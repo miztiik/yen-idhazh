@@ -17,8 +17,7 @@ export const EXPECT: RouteExpect | null = {
 		{ name: 'the truncation cap cost', selector: '[data-console-panel-id="source-cuts"]' },
 		{ name: 'the fetch clock record', selector: '[data-console-panel-id="fetch-time"]' },
 		{ name: 'the retirement distance', selector: '[data-console-panel-id="retiring"]' },
-		{ name: 'the newest choice', selector: '[data-console-panel-id="why-chosen"]' },
-		{ name: 'the watchlist catch', selector: '[data-console-panel-id="watchlist"]' }
+		{ name: 'the newest choice', selector: '[data-console-panel-id="why-chosen"]' }
 	],
 	ownedSelectors: [
 		'[data-failed-source]',

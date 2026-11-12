@@ -5,7 +5,6 @@ export const EXPECT: RouteExpect | null = {
 	windowed: [
 		'machine-article-cost',
 		'machine-context',
-		'machine-cost',
 		'machine-fleet',
 		'machine-latency',
 		'machine-prompt-reuse',

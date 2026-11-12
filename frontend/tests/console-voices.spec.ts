@@ -1,5 +1,6 @@
 import { test, expect } from './support/door-page';
 import { reliabilityPublished, type SourceHealthView } from '../src/lib/server/payload';
+import { whyChosen } from '../src/lib/console/voices/why-chosen';
 /** A view the way the producer writes it today, built rather than read.
  *
  * Built, because the question is what the reader does with a shape no committed
@@ -62,4 +63,18 @@ test('a view written before the ranking factor existed draws an absence, not a c
     // absence: no view at all is also false, and that is the state the panel was
     // already drawing an absence for.
     expect(reliabilityPublished(null)).toBe(false);
+});
+
+test('newest-day selection still counts the watchlist bonus without a separate catch view', () => {
+    const chosen = whyChosen([{
+        date: '2030-06-14', run_id: '2030-06-14-1', item_id: 'chosen', source_id: 'fixture-source',
+        selection_score: 4, authority_score: 2, tier_score: 2, feed_weight: 1, feed_reliability: 1,
+        recency_bonus: 1, lens_bonus: 0, watchlist_bonus: 0.5, carriage_step: 0.5
+    }], 1);
+    expect(chosen.drawn).toBe(1);
+    expect(chosen.geometry).not.toBeNull();
+    expect(chosen.records[0].facts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ label: 'Selection score', value: '4' }),
+        expect.objectContaining({ label: 'Watchlist', value: '0.5' })
+    ]));
 });

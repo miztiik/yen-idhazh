@@ -322,7 +322,7 @@ export function latencyColumns(
 }
 
 // ---------------------------------------------------------------------------
-// What a run reads against what it writes, and what it would have cost
+// What a run reads against what it writes
 // ---------------------------------------------------------------------------
 
 /** The two currencies a run's model work can be counted in. */
@@ -331,8 +331,7 @@ export type WorkUnit = 'tokens' | 'seconds';
 export interface RunWork {
 	runId: string;
 	date: string;
-	/** Every prompt token the run sent, cached ones included: a provider bills
-	 * for the prompt it was given, not for the part its own cache missed. */
+	/** Every recorded prompt token, including cached prompts and every model call. */
 	input: number;
 	output: number;
 	/** Prefill and decode over the SAME item rows the two token counts came
@@ -491,34 +490,4 @@ export function workSeries(runs: readonly RunWork[], unit: WorkUnit): SeriesInpu
 		{ label: `Written ${unit}`, token: '--chart-7',
 			points: dated.map(([date, values]) => ({ date, value: values.written })) }
 	];
-}
-
-/** A price per million tokens, and the currency it is quoted in. */
-export interface CostRate {
-	currency: string;
-	inputPerMillion: number;
-	outputPerMillion: number;
-}
-
-/** What a run's tokens would have cost at somebody else's price.
- *
- * A counterfactual and never a bill: nothing bills us, because Actions minutes
- * are free on a public repository (Guardrail #2). What this answers is the question
- * the wall clock cannot - whether four hours of runner time was a good trade -
- * and CLAUDE.md Guardrail #10 carries the maintainer's carve-out for it, on the condition
- * that the rate and its source are printed beside the figure.
- */
-export function costOf(tokens: { input: number; output: number }, rate: CostRate): number {
-	return (
-		(tokens.input * rate.inputPerMillion + tokens.output * rate.outputPerMillion) / 1_000_000
-	);
-}
-
-/** Money as the configured number and an ISO code, never a symbol. */
-export function money(
-	amount: number,
-	currency: string,
-	numberFormat: NumberFormatConfig
-): string {
-	return `${formatNumber(amount, numberFormat, { si: false })} ${currency}`;
 }

@@ -179,8 +179,7 @@
 		'tail-trend': 'Whether the slowest articles are getting slower',
 		'closest-to-memory': 'Which articles left the machine least memory', 'memory-held': "What is holding the machine's memory",
 		'context-headroom': 'How much of the reading limit an article takes', 'article-cost': 'What one article costs the machine',
-		'prompt-reuse': 'How much text the model reads again', 'read-against-written': 'What a run reads against what it writes',
-		'counterfactual-cost': "What the runner's work would have cost elsewhere"
+		'prompt-reuse': 'How much text the model reads again', 'read-against-written': 'What a run reads against what it writes'
 	};
 </script>
 
@@ -238,7 +237,7 @@
 							? rows('twoClocksQuery').filter((row) => row.machine_job === null || row.machine_job === '' || row.machine_job === 'work')
 							: rows(PANEL_QUERIES[id][0].name)}
 							newest={id === 'two-clocks' ? clockCounters.runs.find((run) => run.runId === latestRunId) ?? null : newest}
-							chart={cfg.chart} shell={data} {start} {end} {knobs} {windowDays} rate={cfg.rate} />
+							chart={cfg.chart} shell={data} {start} {end} {knobs} {windowDays} />
 					{/if}
 				</RecordFrame>
 			{/each}

@@ -3,7 +3,7 @@
 **Last Updated**: 2026-11-12
 
 `/console/machine/` asks what machine the work actually got, whether its two
-clocks agree, and what would change the cost of that work.
+clocks agree, and how much resource headroom that work left.
 [console.md](console.md) owns the standing band and shared window;
 [console-charts.md](console-charts.md) owns chart frames and readouts.
 [The machine drawing rules](../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md)
@@ -13,7 +13,7 @@ own what may not be pooled.
 
 The prerendered page carries configuration and words only. Its route load returns
 `machineConfig`; the shared layout supplies the standing band and settings-change
-words. With scripts off, all eleven titled panels remain, each with an empty
+words. With scripts off, all ten titled panels remain, each with an empty
 reserved axis frame. No run, host, article, cost or refusal is embedded in HTML
 or route page data.
 
@@ -89,7 +89,7 @@ again records its newer plan's count, and settlement keeps the newer numeric
 count. A manifest written before 2026-10-12 keeps the count assembly recomputed
 from its plan. This is the maintainer's ruling of 2026-10-12.
 
-## Four groups, eleven comparisons
+## Four groups, ten comparisons
 
 Membership and order live in `config/console/machine.json`.
 
@@ -105,7 +105,6 @@ Membership and order live in `config/console/machine.json`.
 | What the model spends | `article-cost` | Existing processor-time, model-time and incremental-memory tracks over the chosen window |
 | | `prompt-reuse` | Daily median label tokens held beside median summary tokens read fresh, plus the independent server-share check |
 | | `read-against-written` | Two run-sequence token lines; Run total or actual Median per article over one paired cohort, with measured/recorded coverage |
-| | `counterfactual-cost` | Running dated total, four editable-price figures; a counterfactual, never a bill |
 
 The two clocks open the route because a disagreement decides whether the rates
 below may be quoted. Every settled panel has one largest lede, one comparison,
@@ -174,8 +173,8 @@ medians summed by day. Input includes cached prompt tokens, and the recorded
 totals include all model calls. These are token volumes, not words or uncached
 compute. Measured versus recorded article counts qualify partial runs.
 
-`readAgainstWritten` returns both metrics from that cohort and retains the
-qualified totals consumed by counterfactual cost. `ReadWritePanel` draws native
+`readAgainstWritten` returns both metrics from that cohort and retains its
+paired-run calculations. `ReadWritePanel` draws native
 `runSeries` geometry, ordered by `compareRuns`: every known run has its own
 position, including same-day runs and unmeasured gaps. No scheduled run or
 elapsed timestamp is inferred. The numeric route knob
@@ -183,7 +182,7 @@ elapsed timestamp is inferred. The numeric route knob
 initial mode: 0 is Run total (the shipped default), 1 is Median per article.
 The config boundary rejects other values. Runtime radio choices stay in memory
 and redraw without a fetch; changing the initial mode is not persistence of a
-reader's choice. Counterfactual cost keeps its daily sums.
+reader's choice.
 
 ### The retained measurements
 
@@ -264,6 +263,13 @@ standing for measured zero; a previous successful run substituted for the
 newest refused run; lost-state claims derived from a fetch failure.
 
 ## Design rationale
+
+The hypothetical runner-price panel and its editable controls are permanently
+absent, without a hidden or relocated replacement. This loses hypothetical
+price totals and per-article scenarios, not a real bill. The shared token query,
+paired-run calculations and read/write comparison remain unchanged.
+The persisted observability price settings remain compatible; the route no
+longer sends them to a drawing or reads a browser-stored price.
 
 The history plot answers observed placement over time, not newest-run machine
 constraints, processor contention or model paging. Those three diagnostic

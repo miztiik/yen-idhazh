@@ -30,8 +30,7 @@
       "panels": [
         "article-cost",
         "prompt-reuse",
-        "read-against-written",
-        "counterfactual-cost"
+        "read-against-written"
       ],
       "title": "What the model spends"
     }
@@ -46,8 +45,7 @@
     "context-headroom",
     "article-cost",
     "prompt-reuse",
-    "read-against-written",
-    "counterfactual-cost"
+    "read-against-written"
   ],
   "knobs": {
     "clocks_agree_within_pct": 5,

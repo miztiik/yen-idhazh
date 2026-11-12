@@ -7,12 +7,12 @@ export const EXPECT: RouteExpect | null = {
 		'two-clocks': '',
 		'slower-machines': '', 'platform-mix': '', 'tail-trend': '',
 		'closest-to-memory': '', 'memory-held': '', 'context-headroom': '', 'article-cost': '',
-		'prompt-reuse': '', 'read-against-written': '', 'counterfactual-cost': ''
+		'prompt-reuse': '', 'read-against-written': ''
 	},
 	reservedPanels: [
 		'two-clocks', 'slower-machines',
 		'platform-mix', 'tail-trend', 'closest-to-memory', 'memory-held',
-		'context-headroom', 'article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost'
+		'context-headroom', 'article-cost', 'prompt-reuse', 'read-against-written'
 	],
 	pendingPanel: null,
 	pageData: ['machineConfig']
