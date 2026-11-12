@@ -1,8 +1,8 @@
 # Compact-ledger console recovery and redesign
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 **Level**: 5 - resolve design gates before implementation.
-**Status**: Rows 1-7, Row 8a, Row 8b and Row 8c are complete. The selected written-type and model-change diagnostics are permanently removed. Other cut/move dispositions and anomaly/baseline decisions remain blocked in Row 8.
+**Status**: Rows 1-7, Row 8a, Row 8b and Row 8c are complete. Row 8d implements the retained machine-history refinement, three selected Hardware cuts and N3 relocation. M8/M9, N1/N2/N4/N5 and anomaly/baseline decisions remain blocked in Row 8.
 
 ## 0. Operating contract
 
@@ -49,6 +49,7 @@ Table C
 | C9 | 8a | Simplify selected Pipelines visual diagnostics | 1, 5 | I | DONE | `psychic-goggles` | - | App session `3932eb6c-014c-40e4-9e51-5617ff2c30f0`; branch `pipelines-visual-diagnostics` |
 | C10 | 8b | Remove the Pipelines written-type diagnostic | 8a | J | DONE | `legendary-garbanzo` | - | App session `da0bfe17-ef48-4e8f-93d2-7c92c1dd13ce`; branch `remove-written-type-diagnostic` |
 | C11 | 8c | Remove the Summaries model-change comparison | 8b | K | DONE | `jubilant-happiness` | - | App session `705cdced-00f1-4c51-bbe0-ae3c6079063b`; branch `remove-model-change-comparison` |
+| C12 | 8d | Refine machine history and move the run-wide article ranking | 8c | L | IN_PROGRESS | `supreme-winner` | - | App session `740c1208-b227-45bf-9307-f57983e73022`; branch `refine-hardware-move-latency` |
 
 ## 2. Row #1 - Define console redesign and chart changes
 
@@ -134,12 +135,12 @@ Table H - Hardware; source: `config/console/machine.json`
 | ID | Panel | Operator question | Proposed disposition and cost |
 | --- | --- | --- | --- |
 | H1 | `two-clocks` | Rate-instrument agreement | KEEP first; independent clocks versus tolerance. |
-| H2 | `processor-lost` | CPU contention | KEEP; distinct slowdown cause. |
-| H3 | `disk-reads` | Paging/re-read activity | KEEP; O2 restores the missing process readings. Absence is not zero. |
-| H4 | `machine-cards` | Newest-run machine constraints | KEEP; preserve identity, quota, topology and location. |
+| H2 | `processor-lost` | CPU contention | REMOVE permanently in Row 8d; M11 names the lost processor-steal view. Collection and stored readings remain. |
+| H3 | `disk-reads` | Paging/re-read activity | REMOVE permanently in Row 8d; M12 names the lost model paging/re-read view. O2's retained memory/process consumers remain. |
+| H4 | `machine-cards` | Newest-run machine constraints | REMOVE permanently in Row 8d; M13 names the lost newest-run hardware detail. Host identity and raw/compact records remain. |
 | H5 | `slower-machines` | Relative machine performance | KEEP; distinct from a daily fixed-work trend. |
-| H6 | `platform-mix` | Observed job placement | PROPOSE CUT; M7. Its native query still serves retained machine cards, clocks and colors. |
-| H7 | `slowest-articles` | Newest-run latency outliers | PROPOSE MOVE to Pipelines; N3. Preserve original run selection and endpoint. |
+| H6 | `platform-mix` | Observed job placement | KEEP AND REFINE in Row 8d; M7. Stable categorical identity gradients, compact framing/hover and complete selected-day details; original counts, folds and endpoint remain. |
+| H7 | `slowest-articles` | Newest-run latency outliers | MOVE to Pipelines in Row 8d; N3. Preserve original run-wide ranking and independent endpoint group. |
 | H8 | `tail-trend` | Summarizing latency tails | PROPOSE MOVE to Pipelines; N4. Preserve per-run percentiles and original endpoint. |
 | H9 | `closest-to-memory` | Article memory headroom | KEEP; each article uses its own machine total. |
 | H10 | `memory-held` | OS/process memory composition | KEEP; retain OS, process and swap readings. O2 restores process collection. |
@@ -189,7 +190,7 @@ Table L
 | --- | --- | --- | --- |
 | L1 | Full visual replacement | Row 3 uses the complete console-only style family below: palette, type, rail, controls, status, panels and drawings. No reader recoloring. | Defaulted additive appearance family; native validation precedes CSS production. Missing blocks/leaves use role defaults, arrays replace whole, and only the chart dash accepts null. No dependency on L3 or L6. |
 | L2 | Closed-day eligibility/cadence | Keep `compact_after_days = 1` for item-health, summary-quality-evals, host-fingerprint and run-shards; retain validator >=1, cadence and retention. | RESOLVED: the extra whole-day wait remains. Row 2 diagnoses publication only; no freshness gain is assumed. |
-| L3 | Permanent cuts and page moves | Row 4 permanently removes G4. Row 8a removes F11/F12/F15 and retains F13 as daily lines. Row 8b removes F14. Row 8c removes G11/M6. Other Table M cuts and every Table N move remain individual proposals in Row 8; existing flat rosters determine presence/order. | Selected inventories are closed in their rows. Row 8 remains blocked on other dispositions and losses. No presentation schema, hidden charts or blanket disclosure strategy. |
+| L3 | Permanent cuts and page moves | Row 4 removes G4. Row 8a removes F11/F12/F15 and retains F13 as daily lines; Row 8b removes F14; Row 8c removes G11/M6. Row 8d retains/refines H6/M7, removes H2/H3/H4 and moves H7/N3 once to Pipelines. M8/M9 and N1/N2/N4/N5 remain individual proposals in Row 8. | Selected inventories are closed in their rows. Row 8 remains blocked on other dispositions, losses and token anomaly rules. No hidden charts, replacement disclosures or query-contract schema. |
 | L4 | Automatic explorer chart choice | Count valid readings through existing role/shape validation and floors; a small named grouped result can rank instead of selecting an undrawable scatter. | Row 7 construction settled; preserve manual choices, typed-date refusals and reporting floors. Independent of L1/L3/L6. |
 | L5 | SQL aggregation | Keep existing named column/date queries and reducers for these changes. No new aggregate API is required. | RESOLVED: placement, units, window labels and publication diagnosis do not require a query-contract migration. No transfer-saving claim. |
 | L6 | Hardware run read/write comparison | Compact item-health, settled by UTC date/run/item, supplies two per-run lines. Run total sums paired finite nonnegative input/output; Median per article takes each side's actual median over that identical cohort. Default totals; input includes cached prompts and recorded model calls. | Run-aware geometry, numeric run order, distinct same-day positions and known unmeasured gaps; no daily roll-up, fake timestamps or refetch on metric switch. Actual-run pointer/tap/keyboard readout includes full ID, UTC date and measured/recorded articles. Anomaly/baseline rules stay unresolved in Row 8. |
@@ -255,10 +256,13 @@ Table M
 | M4 | Planned and successfully written visual types / `visual-written-types` | Pipelines `/console/` -> removed | SETTLED permanent cut in Row 8b: loses the visible planned-to-written type comparison and substitutions; written is not published, and the retained overview does not replace it. |
 | M5 | Which rule refused a reply / `refusing-rule` | Summaries `/console/model/` -> removed | SETTLED permanent cut: same failed-rule query/ranking and model-stage readings remain on Pipelines. Loses the Summaries shortcut/default summarize selection, not a unique metric. |
 | M6 | What the model change moved / `model-change` | Summaries `/console/model/` -> removed | SETTLED permanent cut in Row 8c: loses the combined observational before/after comparison across different article populations. Individual metric trends and setting-change markers remain but do not replace it. |
-| M7 | Which machines ran our jobs, day by day / `platform-mix` | Hardware `/console/machine/` -> removed | OPEN proposal: loses historical machine-placement mix. Its native query still serves other Hardware readings. |
+| M7 | Which machines ran our jobs, day by day / `platform-mix` | Hardware `/console/machine/` -> retained | SETTLED retention/refinement in Row 8d. Full-identity categorical gradients replace the speed-colour encoding; compact hover preserves exact counts, and dated details retain speeds and actual jobs. |
 | M8 | What the runner's work would have cost elsewhere / `counterfactual-cost` | Hardware `/console/machine/` -> removed | OPEN proposal: loses editable hypothetical price totals and per-article scenarios, not a real bill. H14 still needs the shared token query. |
 | M9 | What the watchlist caught / `watchlist` | Voices `/console/voices/` -> removed | OPEN proposal: loses distinct watchlist hits, hit dates and front-page counts; selection scores are different. |
 | M10 | What the extractor found / `extraction` | Pipelines `/console/` -> removed | SETTLED permanent cut in Row 8a: loses extraction classes, integrity/found-fact counts, recorded flags, published chartable share and yield. The visual overview is not equivalent. |
+| M11 | How much of the processor went to somebody else / `processor-lost` | Hardware `/console/machine/` -> removed | SETTLED permanent cut in Row 8d: loses the processor-steal diagnostic. Historical machine mix is not equivalent. |
+| M12 | Whether the machine took the model's memory back / `disk-reads` | Hardware `/console/machine/` -> removed | SETTLED permanent cut in Row 8d: loses the model paging/re-read view. Raw/compact readings and retained runtime collection remain. |
+| M13 | Which machines this run was given / `machine-cards` | Hardware `/console/machine/` -> removed | SETTLED permanent cut in Row 8d: loses newest-run hardware-detail cards, including constraints, flags, clocks, copy/cache and location presentation. History does not replace them. |
 
 ### Actual page-move list
 
@@ -268,7 +272,7 @@ Table N
 | --- | --- | --- | --- |
 | N1 | What one item cost the model / `item-cost` | Pipelines `/console/` -> Summaries `/console/model/` | OPEN proposal: independent read/write clocks and seconds/token, not substituted with tokens/s. |
 | N2 | What one summary cost / `write-cost` | Summaries `/console/model/` -> Pipelines `/console/` | OPEN proposal: positive-clock distribution, median/p95 and untimed count. |
-| N3 | Which articles took longest in the last run / `slowest-articles` | Hardware `/console/machine/` -> Pipelines `/console/` | OPEN proposal: original newest-run selection, article/stage evidence, missing clocks and endpoint. |
+| N3 | Which articles took longest in the last run / `slowest-articles` | Hardware `/console/machine/` -> Pipelines `/console/` | SETTLED relocation in Row 8d: mount once after the timeline; retain run-wide newest-run selection, item/source identities, recorded item_total_ms, stage/queue/missing/overlap semantics and original three-family endpoint. |
 | N4 | Whether the slowest articles are getting slower / `tail-trend` | Hardware `/console/machine/` -> Pipelines `/console/` | OPEN proposal: per-run percentiles and original endpoint, not daily medians. |
 | N5 | Whether a run is getting slower on the same work / `slower-on-same-work` | Pipelines `/console/` -> Hardware `/console/machine/` | OPEN proposal: fixed-work normalization, reference-machine cohort and original endpoint. |
 
@@ -739,7 +743,7 @@ Table AA
 
 ## 9. Row #8 - Settle remaining permanent cuts, page moves and token anomaly rules
 
-- **Scope:** Complete the existing page-by-page disposition review for M7-M9 and N1-N5. M1-M3 and M10 are settled in Row 8a; M4 is settled in Row 8b; M6 is settled in Row 8c. Preserve every other title, loss and source/endpoint requirement in Tables F-K, M and N until each fate is settled. Separately define whether H14 needs an anomaly/baseline comparison and what it would mean; the complete baseline chart in Row 4 does not choose one.
+- **Scope:** Complete the remaining disposition review for M8/M9 and N1/N2/N4/N5. M1-M3 and M10 are settled in Row 8a; M4 in Row 8b; M6 in Row 8c; M7/M11-M13 and N3 in Row 8d. Preserve every unselected title, loss and source/endpoint requirement in Tables F-K, M and N. Separately define whether H14 needs an anomaly/baseline comparison and what it would mean; Row 4 does not choose one.
 - **Status:** BLOCKED on individual dispositions and the anomaly/baseline definition. No remaining proposal is an implementation instruction.
 - **Candidate files:** Filter to the selected IDs before implementation; do not bulk-apply this inventory:
   - `config/console/pipelines.json`, `config/console/model.json`, `config/console/machine.json`, `config/console/voices.json`
@@ -868,3 +872,50 @@ Table AA
   parent review and merge remain separate. Keep the recovery report, worktree
   and browser evidence; stop helpers when no longer needed. M7-M9, N1-N5 and
   token anomaly/baseline rules remain blocked in Row 8.
+
+## 13. Row #8d - Refine machine history and move the run-wide article ranking
+
+- **Level:** 3 - shared presentation and cross-route query grouping.
+- **Scope:** Keep `platform-mix` on Hardware with categorical identity gradients,
+  compact framing and actual compact hover. Permanently remove H2/H3/H4, with
+  no replacement disclosures or relocation. Move only N3 once to Pipelines,
+  immediately after the retained timeline. No other cut, move or anomaly rule.
+- **Consumer inventory:** `platformMixQuery` and host normalization still feed
+  history, run counts and clock comparison; `runShardsQuery` retains recorded
+  planned counts. Article-cost keeps its separate host join. Newest-run inference
+  uses the retained full newest-day clock population, not removed card queries.
+  Producer contracts, collection, raw/compact rows and host/run identities remain.
+- **History contract:** Canonical full identities from the bounded widest host
+  universe assign categorical slots and same-name qualifiers. Palette reuse never
+  merges machines. Top-kind selection, folded totals and group order remain;
+  folded identities draw distinct subsegments. The existing gradient flag selects
+  uniform opaque shading or the same flat category fill; the existing tint share
+  is independent of speed. Missing speed keeps identity; missing identity stays
+  neutral. UTC dates, exact counts, small-cohort switch and real day-job details
+  remain. Hover projects only the selected machine/day count and daily total;
+  keyboard/touch details retain all dated counts, known zeros and measured speeds.
+- **Relocation contract:** The timeline's selected-shard article list and the
+  summary-cost distribution are not equivalent to a run-wide identity ranking.
+  Preserve newest-run selection and limiting, recorded item_total_ms, item/source
+  identity, missing clocks, stage gaps, overlap and queue context. The original
+  item-health + host-fingerprint + run-shards endpoint group is separate from
+  ordinary Pipelines item-health reach. Print distinct evidence dates. Retain
+  `config/console/machine.json` -> `knobs.slowest_articles_rows` and prior inputs.
+- **Files:** Selected Hardware/Pipelines roster, route, query, presentation and
+  adapter files; optional in-memory date-series gradient/hover projections;
+  existing appearance descriptions and version metadata only; named dependent
+  source/query fixtures and tests; Hardware/Pipelines, machine-drawing, appearance
+  and shared-hover owning docs. No new persisted field, palette, engine, export,
+  raw read, current-day packing, origin, model or workflow.
+- **Acceptance:** Shared selector, smallest real behavior/contract tests and
+  applicable lint/types. Verify actual removed mounts and retained consumers,
+  identity/count stability and folded conservation, compact-hover/detail parity,
+  zero/unknown cases, destination-only mount, lagging-family endpoint independence
+  and missing newest clocks. Integrated Browser covers actual Hardware/Pipelines,
+  cross-page, console/HTTP and absent/empty inputs. Preserve before/after provenance;
+  inspect desktop stacks and narrow opposite-theme small cohort, then obtain one
+  rendered Susan judgment.
+- **Delivery:** One nested-session PR, self-contained recovery artifacts from first
+  push, exact-head CI followed to its final result. Parent review/merge is separate.
+  Preserve worktree/evidence and stop owned helpers. Row 8 remains BLOCKED for
+  M8/M9, N1/N2/N4/N5 and token anomaly/baseline definitions.

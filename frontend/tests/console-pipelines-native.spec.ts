@@ -22,12 +22,13 @@ import { nativeStageTimings } from '../src/lib/console/pipelines/stage-timings';
 import { nativeItemCost } from '../src/lib/console/pipelines/item-cost';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
 import { pipelinesRecord, retryReach } from '../src/lib/console/pipelines/record-window';
+import { PIPELINES_QUERY_GROUPS } from '../src/lib/console/pipelines/query-groups';
 import { chartFlow, visualsPublished } from '../src/lib/console/pipelines/chart-drawing';
 import type { Row, SliceResult } from '../src/lib/data/ledger';
 import { numberFormat } from './support/number-format';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ALL = Object.values(queries) as PanelQuery[];
+const ALL: readonly PanelQuery[] = PIPELINES_QUERY_GROUPS[0].queries;
 const answers = new Map<string, SliceResult>();
 let state: string;
 

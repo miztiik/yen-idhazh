@@ -163,6 +163,7 @@ test('16 native records settle to 15 jobs and Hardware keeps both halves of work
 	})), { stops: knobs.machine_colour_stops, floor: knobs.machine_colour_floor_share });
 	const view = fleetView(jobs, {
 		ramp, start: proof.from, end: proof.through, windowDays: 41,
+		appearance: { gradients: true, floor: knobs.machine_colour_floor_share },
 		minRows: knobs.fleet_min_rows, topKinds: knobs.fleet_top_kinds, numberFormat, recording: true
 	});
 	expect(view.placements).toBe(15);

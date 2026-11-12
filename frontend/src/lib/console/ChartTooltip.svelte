@@ -68,7 +68,7 @@
 				</div>
 			{/each}
 		</dl>
-		<p>Also shown on the page</p>
+		{#if active.footnote !== false}<p>Also shown on the page</p>{/if}
 	</aside>
 {/if}
 

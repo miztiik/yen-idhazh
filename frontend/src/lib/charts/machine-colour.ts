@@ -1,35 +1,7 @@
-/** Which colour a machine takes: its speed, as one hue in steps.
+/** Which versioned machine identities and whole-record speed groups keep history ordered?
  *
- * Three panels on the hardware console draw a machine - the kinds the platform
- * gave us day by day, one run's shards split by machine, and one card a machine
- * - so the three have to agree about which machine is which colour. They agree
- * by deriving it here, once for the page, from one list of placements.
- *
- * **The colour is the machine's speed, and nothing else.** A kind of machine
- * takes the step of an ordered ramp its median prompt reading speed falls in -
- * `server_prompt_tokens` over `server_prompt_seconds`, one reading a job that
- * took one - and the steps are cut at the quantiles of every kind's median over
- * the whole record the page holds. So a machine keeps its colour when the
- * operator changes the span, and a stronger colour is a faster machine in
- * either theme. The steps are cut from each kind's median rather than from
- * every job's reading, because one machine gives most of the readings - 102 of
- * 176 on 2026-09-30 - and would otherwise take most of the steps for itself.
- *
- * **Kinds on one step share its colour, so a colour never names a machine.**
- * The name and the speed are printed beside every machine a panel draws. Until
- * 2026-09-30 the colour was a hue a machine, handed out in the order of an
- * arbitrary key, and a machine whose key sorted late went without a colour
- * however often it ran.
- *
- * **A kind is one fingerprint, not a processor name.** Two records of one
- * processor read prompts at 8.7 and 12.3 tokens a second, measured 2026-09-30,
- * so a name is not a speed.
- *
- * **Two greys sit outside the ramp.** A job whose machine nobody recorded is the
- * reserved grey, flat. A known machine none of whose jobs took a speed reading
- * is that grey in stripes, because it is a machine and not an absence.
- *
- * Pure, so the browser suite drives it in plain Node.
+ * The legacy ramp supplies ordering and fold membership. Machine history uses
+ * fleet-identity.ts for categorical paint, independently of these speed groups.
  */
 
 import { median } from 'd3-array';
@@ -61,7 +33,7 @@ export const UNRECORDED_STOP = RESERVED_GREY;
  * most contrast against the panel in both themes. */
 export const MACHINE_HUE: ChartToken = '--chart-1';
 
-/** One machine as the page draws it: a key, a name and the colour of its speed. */
+/** One whole-record machine identity and its established speed-group metadata. */
 export interface MachineIdentity {
 	key: string;
 	/** Fingerprint algorithm, or null for a coarse name-only/unknown group. */
@@ -96,31 +68,8 @@ export interface MachineSeen extends VersionedFingerprint {
 	cpuModel: string | null;
 }
 
-/** The one key every panel groups, sorts and colours a machine by.
- *
- * The digest where the machine record reached this job, because two machines
- * reporting one model name are not the same machine - four draws all reporting
- * AMD EPYC 7763 differed by 8.8 percent on decode
- * (`docs/reference/host-metrics.md`). The processor's own name where it did
- * not, which is coarser and is the best key the counters ledger holds.
- *
- * **A job the record missed joins the machine of the same name when the
- * population holds exactly one digest for that name.** Without that rule one
- * machine draws two cards under one heading - the recorded job's and the
- * counters-only job's - which reads as a defect rather than as the honest
- * absence it is. Where a name really does carry two digests they stay apart,
- * and a name-only job keeps a group of its own, because which of the two it was
- * is the thing nobody knows.
- *
- * Neither cell recorded is `UNRECORDED_KEY`, and the name is left empty: a
- * caller with nothing has a different sentence to print, and a placeholder name
- * here would take it away.
- *
- * **A machine that recorded a digest but no model name is named by its digest.**
- * That is not much of a name, and it is a real identifier the record holds - the
- * same machine carries the same one on every row. An empty name is the one thing
- * that cannot ship, because colour would then be the only carrier.
- */
+/** Version plus digest is an identity; name-only evidence never joins a fingerprint.
+ * A digest without a CPU name remains named by its digest, not by colour alone. */
 export function machineKeys(
 	_population: readonly MachineSeen[]
 ): (seen: MachineSeen) => MachineKey {
@@ -244,6 +193,7 @@ export function machineRamp(
 			fingerprintVersion: placement.machine.fingerprintVersion,
 			rates: []
 		};
+		if (name < held.name) held.name = name;
 		if (placement.rate !== null && Number.isFinite(placement.rate)) held.rates.push(placement.rate);
 		byKey.set(key, held);
 	}

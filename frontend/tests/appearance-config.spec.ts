@@ -38,10 +38,11 @@ test.describe('route-owned console configuration', () => {
 		const routes = routeConsoles();
 		expect(Object.keys(routes).sort()).toEqual(BAND_UNREAD.routes.map(({ id }) => id).sort());
 		expect(routes.machine.judged).toEqual([
-			'two-clocks', 'processor-lost', 'disk-reads', 'machine-cards', 'slower-machines', 'platform-mix',
-			'slowest-articles', 'tail-trend', 'closest-to-memory', 'memory-held', 'context-headroom',
+			'two-clocks', 'slower-machines', 'platform-mix',
+			'tail-trend', 'closest-to-memory', 'memory-held', 'context-headroom',
 			'article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost'
 		]);
+		expect(routes.pipelines.judged).toContain('slowest-articles');
 		expect(routes['data-explorer'].judged).toEqual(['data-explorer-rows', 'data-explorer-shape']);
 		const judgementPanels = [
 			'merged-stories', 'merge-line', 'judge-agreement',

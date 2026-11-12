@@ -10,7 +10,7 @@
 	import type { LedgerReach, Row, SliceResult } from '$lib/data/ledger';
 	import * as queries from '$lib/console/queries/machine';
 	import { compareRuns } from '$lib/console/queries/shared';
-	import { PANEL_QUERIES, countersFrom, fingerprints, processors, shardCounts, textRows } from '$lib/console/machine/records';
+	import { PANEL_QUERIES, countersFrom, processors, shardCounts, textRows } from '$lib/console/machine/records';
 	import { describeRefusedRuns } from '$lib/console/machine/refused-runs';
 	import { finiteCell } from '$lib/console/rates';
 	import { formatNumber } from '$lib/number-format';
@@ -18,18 +18,12 @@
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { machineKeys, machineRamp } from '$lib/charts/machine-colour';
 	import { fleetJobs } from '$lib/charts/fleet';
-	import { machineCards } from '$lib/charts/machine-cards';
 	import { articleCost } from '$lib/console/machine/article-cost';
-	import { diskReads } from '$lib/console/machine/disk-reads';
-	import { processorLostOverDays, processorLostOverShards } from '$lib/console/machine/processor-lost';
 	import { memoryHeld } from '$lib/console/machine/memory-held';
 	import { percentileHistory } from '$lib/charts/machine';
 	import RecordFrame from '$lib/console/machine/RecordFrame.svelte';
 	import MachineCharts from '$lib/console/machine/MachineCharts.svelte';
 	import ArticleCostPanel from '$lib/console/machine/ArticleCostPanel.svelte';
-	import DiskReadsPanel from '$lib/console/machine/DiskReadsPanel.svelte';
-	import ProcessorLostPanel from '$lib/console/machine/ProcessorLostPanel.svelte';
-	import MachineCardsPanel from '$lib/console/machine/MachineCardsPanel.svelte';
 	import MemoryHeldPanel from '$lib/console/machine/MemoryHeldPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
 	import TailTrendPanel from '$lib/console/machine/TailTrendPanel.svelte';
@@ -39,7 +33,7 @@
 	const shared = consoleKnobs();
 	const groups = routeConsole('machine').panel_groups;
 	const configured = routeKnobs('machine', [
-		'clocks_agree_within_pct', 'slower_machines_min_articles', 'slowest_articles_rows',
+		'clocks_agree_within_pct', 'slower_machines_min_articles',
 		'closest_to_memory_rows', 'context_min_values', 'read_write_default_metric'
 	]);
 	const knobs = { ...configured, fleet_top_kinds: shared.fleet_top_kinds };
@@ -69,13 +63,8 @@
 			case 'runShardsQuery': return sliceOnce(queries.runShardsQuery, range);
 			case 'twoClocksQuery': return sliceOnce(queries.twoClocksQuery, range);
 			case 'twoClocksHostsQuery': return sliceOnce(queries.twoClocksHostsQuery, range);
-			case 'processorLostQuery': return sliceOnce(queries.processorLostQuery, range);
-			case 'diskReadsQuery': return sliceOnce(queries.diskReadsQuery, range);
-			case 'machineCardsQuery': return sliceOnce(queries.machineCardsQuery, range);
-			case 'machineCardsItemsQuery': return sliceOnce(queries.machineCardsItemsQuery, range);
 			case 'slowerMachinesQuery': return sliceOnce(queries.slowerMachinesQuery, range);
 			case 'platformMixQuery': return sliceOnce(queries.platformMixQuery, range);
-			case 'slowestArticlesQuery': return sliceOnce(queries.slowestArticlesQuery, range);
 			case 'tailTrendQuery': return sliceOnce(queries.tailTrendQuery, range);
 			case 'closestToMemoryQuery': return sliceOnce(queries.closestToMemoryQuery, range);
 			case 'memoryHeldQuery': return sliceOnce(queries.memoryHeldQuery, range);
@@ -138,14 +127,11 @@
 		{ contextWindow: cfg.contextWindow, jobTimeoutSeconds: cfg.jobTimeoutSeconds }));
 	const countedRuns = $derived(counters.runs.filter((run) => run.date >= start && run.date <= end).length);
 	const latestRunId = $derived([...new Set([...rows('platformMixQuery').filter((row) => row.date === end),
-		...rows('twoClocksQuery'), ...rows('machineCardsItemsQuery')].map((row) => String(row.run_id)))].sort(compareRuns).at(-1) ?? null);
+		...rows('twoClocksQuery')].map((row) => String(row.run_id)))].sort(compareRuns).at(-1) ?? null);
 	const newest = $derived(counters.runs.find((run) => run.runId === latestRunId) ?? null);
 	const clockReady = $derived(complete(['platformMixQuery', 'twoClocksQuery', 'runShardsQuery']));
 	const clockCounters = $derived(countersFrom(clockReady ? rows('platformMixQuery').filter((row) => row.date === end) : [],
 		rows('twoClocksQuery'), rows('runShardsQuery'), { contextWindow: cfg.contextWindow, jobTimeoutSeconds: cfg.jobTimeoutSeconds }));
-	const cardReady = $derived(complete(['platformMixQuery', 'machineCardsItemsQuery', 'runShardsQuery']));
-	const cardCounters = $derived(countersFrom(cardReady ? rows('platformMixQuery').filter((row) => row.date === end) : [],
-		rows('machineCardsItemsQuery'), rows('runShardsQuery'), { contextWindow: cfg.contextWindow, jobTimeoutSeconds: cfg.jobTimeoutSeconds }));
 	const refused = $derived(describeRefusedRuns(counters.refused.filter((run) => run.date >= start && run.date <= end)));
 	const jobs = $derived(fleetJobs(rows('platformMixQuery')));
 	const keys = $derived(machineKeys(jobs.map((job) => ({
@@ -184,16 +170,14 @@
 	const recordingGaps = $derived(Boolean((ready && off) || recordNotes.startedMidWindow ||
 		serverNotes.startedMidWindow || serverNotes.coveredElsewhere || lostSentence));
 	const evidence = $derived(recordingGaps || countFault !== null || refused !== null);
-	const lostThresholds = { marked: shared.processor_lost_pct_marked, named: shared.processor_lost_pct_named };
 	const latency = $derived(percentileHistory(textRows(rows('tailTrendQuery')), shared.min_attempts_for_rate));
 	const settings = $derived(settingsRules(data, { from: start, to: end }, 'none'));
 	const changes = $derived('changes' in settings ? settings.changes : []);
 	const changeNote = $derived('note' in settings ? settings.note : settings.declined);
 	const titles: Readonly<Record<string, string>> = {
-		'two-clocks': 'Clock agreement', 'processor-lost': 'How much of the processor went to somebody else',
-		'disk-reads': "Whether the machine took the model's memory back", 'machine-cards': 'Which machines this run was given',
+		'two-clocks': 'Clock agreement',
 		'slower-machines': 'Which machines do the same work slower', 'platform-mix': 'Which machines ran our jobs, day by day',
-		'slowest-articles': 'Which articles took longest in the last run', 'tail-trend': 'Whether the slowest articles are getting slower',
+		'tail-trend': 'Whether the slowest articles are getting slower',
 		'closest-to-memory': 'Which articles left the machine least memory', 'memory-held': "What is holding the machine's memory",
 		'context-headroom': 'How much of the reading limit an article takes', 'article-cost': 'What one article costs the machine',
 		'prompt-reuse': 'How much text the model reads again', 'read-against-written': 'What a run reads against what it writes',
@@ -236,24 +220,13 @@
 			{#each group.panels as id (id)}
 				<RecordFrame {id} title={titles[id]} state={panelState(id)} height={cfg.chart.height_px} width={cfg.chart.width_px} {retry}>
 					{#if id === 'platform-mix'}
-						<PlatformMixPanel {ramp} {start} {end} {windowDays} {lost} recordRows={rows('platformMixQuery')} recording={cfg.recording} chart={cfg.chart} knobs={shared} />
+						<PlatformMixPanel {ramp} {start} {end} {windowDays} {lost} recordRows={rows('platformMixQuery')} recording={cfg.recording}
+							gradients={cfg.gradients} chart={cfg.chart} knobs={shared} />
 					{:else if id === 'article-cost'}
 						<ArticleCostPanel cost={articleCost(textRows(rows('articleCostQuery')), processors(rows('articleCostHostsQuery')))}
 							days={windowDays} {windowDays} chart={cfg.chart} />
-					{:else if id === 'disk-reads'}
-						<DiskReadsPanel reads={diskReads(textRows(rows('diskReadsQuery')), { marked: shared.model_disk_reads_marked, named: shared.model_disk_reads_named })}
-							days={windowDays} {windowDays} readoutMaxShare={cfg.chart.readout_max_share} />
-					{:else if id === 'processor-lost'}
-						<ProcessorLostPanel span={processorLostOverDays(textRows(rows('processorLostQuery')), lostThresholds, cfg.chart.number_format)}
-							run={processorLostOverShards(textRows(rows('processorLostQuery')), newest, lostThresholds, cfg.chart.number_format)}
-							days={windowDays} {windowDays} markedAt={lostThresholds.marked} namedAt={lostThresholds.named} readoutMaxShare={cfg.chart.readout_max_share} />
 					{:else if id === 'memory-held'}
 						<MemoryHeldPanel record={memoryHeld(textRows(rows('memoryHeldQuery')), cfg.chart.number_format)} start={end} {end} days={1} />
-					{:else if id === 'machine-cards'}
-						<MachineCardsPanel newestRunId={latestRunId} machines={machineCards(cardCounters.runs.find((run) => run.runId === latestRunId) ?? null,
-							fingerprints(rows('machineCardsQuery')), { watchedFlags: cfg.flags, colour: { stops: shared.machine_colour_stops, floor: shared.machine_colour_floor_share },
-								recording: cfg.recording, cacheMargin: cfg.cacheMargin, numberFormat: cfg.chart.number_format, ramp, keys, items: rows('machineCardsItemsQuery'),
-								lost: lost.find((day) => day.date === newest?.date) ?? null })} />
 					{:else if id === 'read-against-written'}
 						<ReadWritePanel rows={rows('readAgainstWrittenQuery')} chart={cfg.chart} shell={data}
 							initialMetric={readWriteMetricDefault(knobs.read_write_default_metric)}

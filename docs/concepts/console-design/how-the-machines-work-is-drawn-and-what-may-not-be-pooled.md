@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -36,85 +36,25 @@ The chart rules these panels obey are
  another machine's speed by pooling. Hardware names the missing comparable work.
 - **A run that drew one machine says so too.** That is a good state, 4 of 90,
  and the panel reads as one rather than as a panel with a missing spread.
-- **A machine's colour is its speed, and nothing else.** A kind of machine is
- one fingerprint, and it takes the step of one hue its median prompt reading
- speed falls in - `server_prompt_tokens` over `server_prompt_seconds`, one
- reading a job that took one. The steps are cut at the quantiles of every
- kind's median over the whole record the page holds, never of the open span, so
- a machine keeps its colour when the operator moves the window; and they are cut
- from each kind's median rather than from every job, because one machine gives
- most of the readings - 102 of 176 on 2026-09-30 - and would otherwise take most
- of the steps for itself. The stronger the colour, the faster the machine, in
- both themes. The ramp is assigned once for the page, so the machine-kinds
- panel and the machine cards colour one machine alike. The
- key over the machine-kinds plot names each step by the medians of the kinds on
- it, and leaves out a step no kind lands on, because a chip that names nothing
- is a chip a reader has to learn to skip.
-- **`--chart-8`, the grey, is reserved for "Machine not recorded" and is given
- to no machine.** An absence is not a machine and must not take a machine's
- hue. A known machine none of whose jobs took a speed reading is that grey in
- stripes - hollow where it is one job's small square - because it is a machine
- and not an absence.
-- **`console.machine_colour_stops` is how many steps the speed has: five.**
- A reader cannot rank more steps of one hue on a thin bar. Kinds on one step
- share its colour, so a colour says how fast and never which machine - which is
- why every machine drawn prints its name and its speed beside the colour, and
- two kinds of one processor name are told apart in words as the faster and the
- slower.
+- **Machine-history colour identifies a machine kind, not its speed.**
+ Canonical full identities from the bounded widest host query receive the
+ existing categorical tokens in order. Fingerprint version and digest form one
+ identity; namespaced name-only evidence remains coarser and separate. Equal
+ CPU names receive stable kind qualifiers from that same universe. Neither the
+ selected window, frequency nor speed assigns a slot. Repeated palette slots
+ never merge identities: labels and position remain the second signal.
+- **Missing identity is neutral; missing speed is not missing identity.**
+ `--chart-8` remains reserved for "Machine not recorded". A known machine with
+ no speed has its own identity fill and says `Speed not recorded` in details.
+- **Each known category gets the same decorative gradient treatment.**
+ The existing gradient switch keeps fills flat when false. When true, an
+ opaque lighter-to-base gradient restarts within each machine subsegment or
+ job square, with matching swatches. Existing appearance tokens and the
+ uniform tint floor supply the stops in both themes. Strength carries no
+ speed, utilization, health or probability reading.
 - **The name is on the row, always.** Colour here encodes a fact, so it is
  semantic and may never be the only carrier of it. The rankings use named rows,
  not a scatter that cannot carry a name per mark.
-- **A card carries every watched instruction-set flag, present or absent.** A
- present flag takes `--tint-accent`; an absent one takes a hairline outline at
- the same width. The machine we draw most reports none of the watched AVX-512
- entries, so a list of what a machine has cannot show the one it is missing -
- and the missing one is what decode dispatches on. **Never read** and
- **reported none of them** are different facts: the first draws no chip and
- says so.
-- **The copy rate and the buffer it was taken with are one sentence, and a rate
- nobody can grade is withheld.** The buffer has to be at least
- `observability.host_fingerprint_bandwidth_cache_multiple` times the machine's
- cache before anybody can say the copy left it. Measured 2026-09-21 over the 65
- committed host rows, nine fall short - a 512 MiB buffer against 260 MiB or
- 480 MiB of L3 - and **those nine are the slowest rates in the fleet, not the
- fastest**, so the short buffer is a reason to distrust them rather than
- evidence they read high.
-- **A card says what clock the machine ran at and how long it had been up.**
- Uptime is there because a machine started minutes ago still has an empty page
- cache, which is one of the two reasons a run reads its weights back off disk -
- without it the eviction strip has one explanation instead of two. That reason
- is why the reading earns its place and **is not printed on the panel**: a
- Hardware subtitle is one sentence ending in its own grain, so a second sentence
- explaining a card would break the rule that keeps the page scannable. Every
- committed row is a freshly started machine: 2.6 to 38 minutes of uptime, median
- 3.8 minutes, over 65 rows on 2026-09-21. **The clock prints alone.** The
- ceiling column a share would divide by is empty on all 65, so a card that drew
- a percentage of it would publish the empty-column defect a second time. Both
- are sentences rather than bars: one reading each, with nothing to compare it
- against.
-- **L3 and the copy rate are lengths on a track every card of the panel
- shares.** Two numbers in two sentences on two cards is a subtraction the
- reader performs; two bars on one domain is a difference the eye reads. The
- reading stays in words under its own bar, so the track is the comparison and
- never the carrier of the number.
-  - **Each measure has its own domain and it comes from the readings drawn.**
-    No runner model publishes a ceiling for either, so there is no limit to
-    measure distance from: a fixed maximum would clip the next bigger machine
-    or spend the track on room nothing reaches. The domain is anchored at zero
-    and niced by `linearAxis`, which makes two lengths the two readings.
-  - **MiB of cache and GiB/s of copy rate share no axis.** They are two
-    quantities, so neither reading can be read off the other's length. The
-    twenty-to-one test does not apply between them and is never taken.
-  - **An ungraded rate is refused rather than pooled with the graded ones**:
-    nobody can say what a copy over a buffer that did not clear the cache
-    measured, and a length on the shared track would claim they can. The card
-    says why its rate is not drawn.
-  - **Under two readings of a kind there is no bar.** A lone bar's domain is
-    its own value, so it fills the track whatever it says, and a full bar reads
-    as a maximum rather than as the only one. Named on the card, because a bar
-    missing beside a bar drawn is the state a reader would otherwise have to
-    work out. The three refusals are `absent`, `alone` and `ungraded`, and
-    `data-machine-bar-state` carries whichever holds.
 - **A count of machine kinds is a count and never a rate.** No percentage, no
  probability, no pie: what the next job will draw is precisely what the
  processor lottery refuses to quote. Under `console.fleet_min_rows` placements
@@ -130,37 +70,40 @@ The chart rules these panels obey are
  that ran its jobs, slowest at the bottom.** The panel's title asks which
  machines ran our jobs, day by day, and a ranked list answers which is biggest
  rather than what is changing. The slowest sit on the baseline every day
- shares, because slow machines are what the panel exists to find. The ordering
- the list carried is not lost, it is the sentence above the plot. **Only days
+ shares. **Only days
  that recorded a placement are drawn** - a zero-height day would say the
  platform gave us nothing that day, and a day the record never reached says
- nothing at all - so the count of days is printed in the same sentence.
-- **Placements pick which kinds get a row of their own, and speed only sets the
- colour.** The `console.fleet_top_kinds` kinds placed most in the open span are
- named, a tie going to the kind placed most recently. The rest fold only with
- kinds on their own speed step, because a fold that crossed a step would say
- two speeds were one, and a step holding one of them names it. Known machines
- with no speed reading fold into one striped row, since none has a speed a merge
- could misstate. No machine recorded is always its own row, last, and never
- folded. A click or Enter on a day lists every job of it under the plot, each
- under its own machine's name, so a fold hides no machine from a reader who
- asks. The day held open is outlined at the size of its bar or its squares, the
- strip under the plot stays on it until the list closes, and on a phone a job
- takes two lines rather than scrolling sideways, because the speed at the end of
- the row is what ties a job to its colour.
+ nothing at all.
+- **Placement selection, folds and ordering retain their existing populations.**
+ `console.fleet_top_kinds` names the most-placed kinds, breaking ties by the
+ newest placement. Leftovers keep their whole-record median-speed groups,
+ including the untimed group; a lone leftover keeps its own name. Each folded
+ group retains its position and exact total but draws constituent identity
+ subsegments rather than pretending several machines have one identity colour.
+ Missing identity stays separate and last. Selecting a day opens all machine
+ counts, known zeros and actual jobs under their own qualified machine names.
+ The held day stays outlined; phone job details wrap instead of scrolling.
+- **Framing and hover are compact, not incomplete.** Keep the title, one
+ context line and the name/swatch key. Only small-cohort mode adds `One square
+ per job.` Below the plot are the selected UTC day, total recorded jobs and a
+ short selection hint. Actual mark hover shows only that date, machine and its
+ exact machine-day count out of the day's recorded jobs. Day space shows the
+ date and total. Keyboard/touch selection exposes complete counts and speed
+ notes plus run, job or pipeline/task, shard, machine, seconds and speed.
 - **The machine mix reads after mount through the shared query reader.** Its
- window is the route's own, which ends on the site's newest published day, and
+ window is the route's own, ending on the common item-health, host-fingerprint
+ and run-shards evidence day, and
  the door starts it no earlier than the day the record began. It asks only for the columns it draws. Changing the window keeps
  whole files already read, and a late answer cannot replace a newer selection.
- The route still computes the common colour ramp for its other machine panels,
- but carries no fleet rows in its document. The drill-through uses the rows
+ The widest host query fixes the identity universe, but the document carries
+ no fleet rows. The drill-through uses the rows
  already fetched for the window. `data-readout-fetched` declares that this
  panel's strip arrives with those rows and is absent from the initial document.
 - **The machine mix draws four distinct empty states.** Loading keeps the
  chart's reserved height and shimmer. A covered window without jobs is quiet;
  an unpublished ledger is missing; a hole, failed fetch or engine failure is
- unreachable and uses the warning tint. Other machine panels still use their
- build-time recording notes. The heading and note always stay. The shared
+ unreachable and uses the warning tint. Lost evidence is not a recorded zero.
+ The heading and note always stay. The shared
  [query-reader contract](../../architecture/publishing/how-the-query-door-answers-a-panel.md)
  owns the fault names and file rules.
 
@@ -337,53 +280,15 @@ same thing. What would settle it is a seventh machine kind arriving - every shar
 drops, the rarest gets rarer and the bar rises - so the number is re-derived
 from the committed rows rather than argued with.
 
-**A machine's colour became its speed on 2026-09-30, and the reader loses a
-colour that names a machine.** The colour had been a hue a machine, handed out
-in the order of an arbitrary key, so that it implied no order; and when the
-seven hues ran out, the machines whose keys sorted last went without one
-however often they ran - on the committed record the other AMD EPYC 9V74 held 27
-placements inside the fold against 25 on the named bar. An ordered one-hue ramp
-carries an order by construction, and speed is the order this panel's question
-needs: whether a slow week was the machine. The cost is that kinds on one step
-share a colour and a new fast kind can move a slower one down a step; cutting
-the steps over the whole record the page holds keeps that rare, and the name
-and the speed are printed beside every machine. Susan, with Jony on the ramp.
+**Identity, rather than speed, is the useful colour reading of placement
+history.** Uniform gradients distinguish categories without introducing a
+performance scale. Palette reuse is explicit and keeps names and positions;
+folded identities remain separately painted. The removed newest-run detail,
+processor-steal and model-paging panels are not replaced by this history.
 
-**The slowest step carries 40 percent of the hue.** Mixed from nothing, the
-slowest of five steps stood 1.36 to 1 against the panel in light and 1.31 to 1
-in dark on `--chart-1`, measured 2026-09-30, and slow machines are what the
-panel exists to show; at 40 percent it stands 1.89 to 1 in both. The steps sit
-closer together for it - 1.31 to 1.39 to 1 apart rather than 1.40 to 1.55 - so
-a line of the panel's own ground is drawn where two segments of a bar meet, and
-two machines on one step still read as two. `console.machine_colour_floor_share`
-is the value. Susan and Jony.
-
-**The machine-kinds panel compares no two quantities.** A stacked count of kinds
-over days is a composition, so it declares `data-comparison="composition"` under
-the sufficiency gate for a comparison rather than a sentence with "against" in
-it, and its bars show two fills or more wherever the platform handed out more
-than one kind of machine. Fowler and Susan.
-
-**Eight kinds get a row of their own today, past the five series a date series
-is for.** Four are the most placed, and each of the other four sits alone on its
-speed step, so folding it would hide its name and save no colour - the plot
-still draws at most five colours of the ramp and two greys. Susan.
-
-**The machine card's two readings are lengths rather than sentences, and that is
-what carries the two-second check.** `32 MiB` beside `260 MiB` on two cards is a
-division the reader performs; two bars on one track is not. The twelve flag chips
-are load-bearing for the same gate: a definition list of text rows with a
-semicolon-joined vendor string is a 2004 page, and dropping the chips fails
-**made this year**.
-
-## Rejected alternatives
-
-| Option | Why rejected | What the reader loses |
-| --- | --- | --- |
-| Bandwidth against decode speed, as a scatter | Two points define a line, so a scatter of two is a claim rather than a measurement. It ships at `console.fleet_min_rows` rows **and** `console.bandwidth_min_kinds` distinct kinds carrying a bandwidth reading. | The only on-screen test of whether decode is really bandwidth bound. The card prints the reading per machine and draws it against the other machines of the run, so only the correlation is absent. |
-| A processor detail table | Twenty-seven columns is the reference page's job. | Reading a raw column value off the console. Five columns were bought back: the card's own `<details>` carries size, region, zone, fault domain and `microcode` - the one cell that moves without anything else moving. |
-| Hashing a machine to a colour stop | It collides about 60 percent of the time over six kinds in seven stops, and a collision is a lie the page cannot see. | - |
-| Printing an ungraded copy rate with a caveat | A caveat under a number does not stop the number being compared, and these sit at one end of any ranking. | Nine of 65 rows show no rate at all; the card says why. |
+The old speed-ramp contrast measurements do not measure these categorical
+gradients and are not evidence for them. The existing tint floor is shared
+uniformly, while measured speeds remain reachable in dated job details.
 
 ## See also
 

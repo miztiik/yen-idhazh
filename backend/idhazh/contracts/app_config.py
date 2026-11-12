@@ -121,6 +121,11 @@ class AppConfig(Contract):
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-12",
+            change="Clarify the existing machine appearance controls.",
+            why="Configuration fields, bounds, defaults and historical reads are unchanged.",
+        ),
+        ChangelogEntry(
             version="2026-11-11",
             change="Restrict effective visual choices and defaults to supported numeric charts.",
             why="Retired visual names remain inert when reading historical configuration.",
@@ -134,11 +139,6 @@ class AppConfig(Contract):
             version="2026-11-07",
             change="prompt_files names the production task instructions under the selected config.",
             why="Candidate configuration must select its own named prompt files.",
-        ),
-        ChangelogEntry(
-            version="2026-10-28",
-            change="visuals.enabled_kinds includes the whowhat grid family.",
-            why="The config contract must name every visual kind its reader can route.",
         ),
         ChangelogEntry(
             version="2026-09-28",

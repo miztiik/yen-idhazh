@@ -38,6 +38,12 @@ export const runTimelineQuery = {
 	span: 'newest-day'
 } as const satisfies PanelQuery;
 
+export const slowestArticlesQuery = {
+	name: 'slowestArticlesQuery', ledger: 'item-health',
+	columns: ['run_id', 'item_id', 'source_id', 'machine_shard', 'item_total_ms', 'fetch_ms', 'extract_ms', 'summarize_ms', 'faithfulness_ms', 'stage_gap_ms', 'queue_wait_ms'],
+	span: 'newest-day'
+} as const satisfies PanelQuery;
+
 export const articleAgeQuery = {
 	name: 'articleAgeQuery', ledger: 'item-health',
 	columns: ['published_at', 'time_source', 'item_started_at', 'outcome'],

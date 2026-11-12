@@ -1,4 +1,4 @@
-/** Hardware reports its window on nine measured surfaces. */
+/** Which retained Hardware surfaces follow the selected window? */
 import type { RouteExpect } from './index';
 
 export const EXPECT: RouteExpect | null = {
@@ -6,10 +6,8 @@ export const EXPECT: RouteExpect | null = {
 		'machine-article-cost',
 		'machine-context',
 		'machine-cost',
-		'machine-disk-reads',
 		'machine-fleet',
 		'machine-latency',
-		'machine-processor-lost',
 		'machine-prompt-reuse',
 		'machine-tokens'
 	],

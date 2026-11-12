@@ -4,7 +4,7 @@
  * compaction packs the machine record - the panel draws one stacked bar a day
  * and one segment a machine kind, slowest at the bottom; a job whose machine
  * nobody recorded is the last segment and is never part of a fold; and every
- * row of the strip under the plot says the speed its colour stands for.
+ * machine keeps its own categorical paint and complete dated counts in details.
  *
  * The fixture is the door's own answer, recorded once through `sliceFromDisk`
  * over the packed machine record for 26 to 28 September 2026 with
@@ -24,17 +24,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { dateSeries, formatNumber, numberFormat } from './support/number-format';
-import { absentHatch } from '../src/lib/charts/d3/ordered-colour';
 import {
 	FLEET_COLUMNS,
 	fleetDots,
 	fleetJobs,
+	fleetHover,
 	fleetReadout,
-	fleetSentence,
+	fleetSummary,
 	fleetSeries,
 	fleetView,
-	foldSentences,
-	stepWords,
 	type FleetJob,
 	type FleetOptions
 } from '../src/lib/charts/fleet';
@@ -46,7 +44,8 @@ import {
 	UNRECORDED_NAME,
 	type MachineRamp
 } from '../src/lib/charts/machine-colour';
-import { shortDate } from '../src/lib/format';
+import { hoverReading } from '../src/lib/charts/readout-hover';
+import { PALETTE } from '../src/lib/charts/theme';
 import type { Row, SliceResult } from '../src/lib/data/slice-shapes';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -100,6 +99,7 @@ function options(jobs: readonly FleetJob[], over: Partial<FleetOptions> = {}): F
 	const config = knobs();
 	return {
 		ramp: rampOf(jobs),
+		appearance: { gradients: true, floor: config.machine_colour_floor_share },
 		start: '2026-09-26',
 		end: '2026-09-28',
 		windowDays: 3,
@@ -200,31 +200,27 @@ test.describe('THE ORACLE: the recorded door answer, drawn', () => {
 		}
 	});
 
-	test('every row of the strip says the speed its colour stands for', () => {
+	test('complete details retain exact dated counts and speed context without encoding speed in colour', () => {
 		const jobs = fleetJobs(recorded());
 		const view = fleetView(jobs, options(jobs));
-		const config = knobs();
-		const readout = fleetReadout(view, absentHatch({ degrees: config.absent_hatch_degrees, gapPx: 3, linePx: 1 }));
-		expect(readout.columns).toEqual(view.days.map(shortDate));
+		const readout = fleetReadout(view);
+		expect(readout.columns).toEqual(view.days.map((date) => `${date} UTC`));
 		expect(readout.series).toHaveLength(view.rows.length);
 		const largeCountView = {
 			...view,
 			rows: view.rows.map((row, index) =>
-				index === 0 ? { ...row, counts: [12_345, ...row.counts.slice(1)] } : row
+				index === 0 ? { ...row, parts: row.parts.map((part) => ({ ...part, counts: [12_345, ...part.counts.slice(1)] })) } : row
 			)
 		};
-		const largeCountReadout = fleetReadout(
-			largeCountView,
-			absentHatch({ degrees: config.absent_hatch_degrees, gapPx: 3, linePx: 1 })
-		);
+		const largeCountReadout = fleetReadout(largeCountView);
 		expect(largeCountReadout.series[0].values[0]).toBe(formatNumber(12_345, { exact: true, si: false }));
 		for (const series of readout.series) {
 			expect(series.note, series.label).toMatch(/^\d+(?:\.\d+)?(?: to \d+(?:\.\d+)?)? tokens a second$/);
 		}
-		// Two kinds of one name are told apart by speed, in words.
+		// Full-identity ordering qualifies equal CPU names, not speed ranking.
 		const labels = readout.series.map((series) => series.label);
-		expect(labels).toContain('AMD EPYC 9V74, faster');
-		expect(labels).toContain('AMD EPYC 9V74, slower');
+		expect(labels).toContain('AMD EPYC 9V74 (kind 1)');
+		expect(labels).toContain('AMD EPYC 9V74 (kind 2)');
 		expect(new Set(labels).size).toBe(labels.length);
 	});
 
@@ -236,16 +232,8 @@ test.describe('THE ORACLE: the recorded door answer, drawn', () => {
 		expect(view.shape).toBe('dots');
 		expect(fleetView(jobs, options(jobs, { minRows: 90 })).shape).toBe('bars');
 		expect(view.mostPlaced?.label).toBe('AMD EPYC 7763');
-		expect(fleetSentence(view)).toBe(
-			'90 jobs ran in these 3 days. The kind we are given most is AMD EPYC 7763, 50 of them.'
-		);
-		const largeView = {
-			...view,
-			placements: 12_345,
-			mostPlaced: view.mostPlaced === null ? null : { ...view.mostPlaced, placements: 12_345 }
-		};
-		expect(fleetSentence(largeView)).toContain('12,345 jobs ran');
-		expect(fleetSentence(largeView)).toContain('12,345 of them.');
+		expect(fleetSummary(view).series[0].values).toEqual(
+			view.days.map((date) => String(jobs.filter((job) => job.date === date).length)));
 		const dots = fleetDots(view, { frame: frame(760, 220), density: 6, padding: 0.2, maxPx: knobs().fleet_dot_max_px, gapPx: 1 });
 		expect(dots?.squares).toHaveLength(90);
 		expect(dots?.size).toBeLessThanOrEqual(knobs().fleet_dot_max_px);
@@ -291,7 +279,7 @@ test.describe('which kinds get a row of their own', () => {
 		const jobs = fleetJobs(rows);
 		const view = fleetView(jobs, options(jobs, { start: '2026-09-12', end: '2026-09-12', windowDays: 1, topKinds: 3 }));
 		const fold = view.rows.find((row) => row.members.length > 0);
-		expect(fold?.label).toBe(`Other machines at the ${stepWords(1, knobs().machine_colour_stops)} speed`);
+		expect(fold?.label).toBe('Other machines (2)');
 		expect(fold?.members.sort()).toEqual(['Left One', 'Left Two']);
 		expect(fold?.placements).toBe(5);
 		expect(fold?.note).toBe('10 to 11 tokens a second');
@@ -306,7 +294,13 @@ test.describe('which kinds get a row of their own', () => {
 		]);
 		// The fold stands on its step: first, because step 1 is the slowest.
 		expect(view.rows[0]).toBe(fold);
-		expect(foldSentences(view)).toEqual([`The ${fold?.label} row holds 2 kinds: Left One and Left Two.`]);
+		expect(fold?.parts.map((part) => part.key)).toEqual(['v1:l1', 'v1:l2']);
+		expect(new Set(fold?.parts.map((part) => part.colour)).size).toBe(2);
+		for (const row of view.rows) for (let day = 0; day < view.days.length; day++) {
+			expect(row.parts.reduce((sum, part) => sum + part.counts[day], 0)).toBe(row.counts[day]);
+		}
+		expect(fleetSeries(view).reduce((sum, series) =>
+			sum + series.points.reduce((count, point) => count + (point.value ?? 0), 0), 0)).toBe(53);
 		// The list a pick opens names each folded job's own machine, never the fold.
 		expect(view.lines[0].filter((line) => line.row === fold?.key).map((line) => line.machine).sort()).toEqual([
 			'Left One',
@@ -317,7 +311,7 @@ test.describe('which kinds get a row of their own', () => {
 		]);
 	});
 
-	test('machines with no speed reading fold into one hatched row past the named ones', () => {
+	test('machines without speed keep their own identity fills inside the existing untimed fold', () => {
 		const rows = [
 			...jobsOf(10, 't1', 'Timed One', 20),
 			...jobsOf(2, 'u1', 'Untimed One', null),
@@ -325,12 +319,13 @@ test.describe('which kinds get a row of their own', () => {
 		];
 		const jobs = fleetJobs(rows);
 		const view = fleetView(jobs, options(jobs, { start: '2026-09-12', end: '2026-09-12', windowDays: 1, topKinds: 1 }));
-		expect(view.rows.map((row) => row.label)).toEqual(['Timed One', 'Other machines with no speed reading']);
+		expect(view.rows.map((row) => row.label)).toEqual(['Timed One', 'Other machines (2)']);
 		const untimed = view.rows[1];
 		expect(untimed.drawing).toBe('untimed');
-		expect(untimed.note).toBe('no speed reading');
+		expect(untimed.note).toBe('Speed not recorded');
 		expect(untimed.members.sort()).toEqual(['Untimed One', 'Untimed Two']);
-		expect(fleetSeries(view)[1].hatched).toBe(true);
+		expect(fleetSeries(view).map((series) => series.label)).toEqual(['v1:t1', 'v1:u1', 'v1:u2']);
+		expect(fleetSeries(view).every((series) => series.gradient !== undefined && !series.hatched)).toBe(true);
 	});
 });
 
@@ -368,6 +363,77 @@ test.describe('a job whose machine nobody recorded', () => {
 	});
 });
 
+test('categorical identity and qualified names survive presets, row order, speed and palette reuse', () => {
+	const rows = [
+		...jobsOf(3, 'same', 'Twin', 10, '2026-09-11'),
+		job({ date: '2026-09-12', fingerprint: 'same', cpu_model: 'Twin', version: '2026-10-10', fingerprint_version: 2 }),
+		job({ date: '2026-09-12', fingerprint: null, cpu_model: 'Twin' }),
+		...jobsOf(1, 'untimed', 'Untimed', null),
+		...jobsOf(1, 'zero', 'Zero', 0),
+		...jobsOf(1, 'named-unknown', 'Machine not recorded', null),
+		...jobsOf(1, null, null, null),
+		...Array.from({ length: PALETTE.length }, (_, index) =>
+			job({ date: '2026-09-12', fingerprint: `extra-${index}`, cpu_model: `Extra ${index}` }))
+	];
+	const jobs = fleetJobs(rows);
+	const full = options(jobs, { start: '2026-09-11', end: '2026-09-12', windowDays: 2, topKinds: rows.length });
+	const wide = fleetView(jobs, full);
+	const narrow = fleetView([...jobs].reverse(), { ...full, start: '2026-09-12', windowDays: 1 });
+	const changed = jobs.map((job) => ({ ...job, rate: job.rate === null ? null : 100 - job.rate }));
+	const faster = fleetView(changed, { ...full, ramp: rampOf(changed) });
+	const paints = (view: ReturnType<typeof fleetView>) =>
+		new Map(view.rows.flatMap((row) => row.parts.map(({ key, label, colour, gradient }) =>
+			[key, { label, colour, gradient }] as const)));
+	const known = paints(wide);
+	for (const [key, paint] of paints(narrow)) expect(paint, key).toEqual(known.get(key));
+	for (const [key, paint] of paints(faster)) expect(paint, key).toEqual(known.get(key));
+	expect([...known.keys()]).toEqual(expect.arrayContaining(['name:Twin', 'v1:same', 'v2:same', UNRECORDED_KEY]));
+	expect(['name:Twin', 'v1:same', 'v2:same'].map((key) => known.get(key)?.label))
+		.toEqual(['Twin (kind 1)', 'Twin (kind 2)', 'Twin (kind 3)']);
+	const parts = wide.rows.flatMap((row) => row.parts);
+	expect(parts.filter((part) => part.key !== UNRECORDED_KEY).every((part) =>
+		part.token !== '--chart-8' && part.gradient !== null)).toBe(true);
+	expect(parts.find((part) => part.key === UNRECORDED_KEY)).toMatchObject({
+		token: '--chart-8', gradient: null, colour: 'var(--chart-8)'
+	});
+	expect(parts.find((part) => part.key === 'v1:untimed')?.note).toBe('Speed not recorded');
+	expect(parts.find((part) => part.key === 'v1:zero')?.note).toBe('0 tokens a second');
+	expect(parts.find((part) => part.key === 'v1:named-unknown')?.label).toBe('Machine not recorded (kind 1)');
+	expect(new Set(parts.map((part) => part.label)).size).toBe(parts.length);
+	expect(new Set(parts.map((part) => part.colour)).size).toBeLessThan(parts.length);
+	expect(fleetSeries(wide)).toHaveLength(parts.length);
+	const flat = fleetView(jobs, { ...full, appearance: { ...full.appearance, gradients: false } });
+	expect(fleetSeries(flat).every((series) => series.gradient === undefined)).toBe(true);
+	expect(flat.rows.flatMap((row) => row.parts.map((part) => [part.key, part.colour])))
+		.toEqual(wide.rows.flatMap((row) => row.parts.map((part) => [part.key, part.colour])));
+});
+
+test('compact mark hover and complete non-hover details quote the same machine-day counts, including zeros', () => {
+	const jobs = fleetJobs([
+		...jobsOf(2, 'a', 'Machine A', 0, '2026-09-11'),
+		...jobsOf(1, 'b', 'Machine B', null, '2026-09-12'),
+		...jobsOf(1, null, null, null, '2026-09-12')
+	]);
+	const view = fleetView(jobs, options(jobs, { start: '2026-09-11', end: '2026-09-12', windowDays: 2 }));
+	const hover = fleetHover(view);
+	const details = fleetReadout(view);
+	expect(hoverReading(hover, 0)?.entries.map(({ label, value }) => [label, value])).toEqual([['Recorded jobs', '2']]);
+	for (const row of view.rows) for (const part of row.parts) {
+		for (let day = 0; day < view.days.length; day++) {
+			const pointed = hoverReading(hover, day, part.key)!;
+			expect(pointed.heading).toBe(`${view.days[day]} UTC`);
+			expect(pointed.entries.map(({ label, value }) => [label, value]))
+				.toEqual([[part.label, `${part.counts[day]} of 2 recorded jobs`]]);
+			expect(pointed.entries[0].swatch).toBe(part.swatch);
+			expect(details.series.find((series) => series.label === part.label)?.values[day])
+				.toBe(String(part.counts[day]));
+		}
+	}
+	expect(hoverReading(hover, 0, 'v1:b')?.entries[0].value).toBe('0 of 2 recorded jobs');
+	expect(view.days).toEqual(['2026-09-11', '2026-09-12']);
+	expect(details.series.find((series) => series.label === 'Machine B')?.note).toBe('Speed not recorded');
+});
+
 test.describe('the window, the states and the rows the door hands over', () => {
 	test('a job outside the open span is not counted', () => {
 		const rows = [job({ date: '2026-09-01' }), job({ date: '2026-09-12' }), job({ date: '2026-09-20' })];
@@ -376,9 +442,7 @@ test.describe('the window, the states and the rows the door hands over', () => {
 		expect(view.placements).toBe(1);
 		expect(view.days).toEqual(['2026-09-12']);
 		expect(view.daysWithout).toBe(6);
-		expect(fleetSentence(view)).toBe(
-			'1 job ran in these 7 days, on 1 day of them. The kind we are given most is AMD EPYC 7763, 1 of them.'
-		);
+		expect(fleetSummary(view).series[0].values).toEqual(['1']);
 	});
 
 	test('recording off, nothing recorded yet and a lost record are three states', () => {
@@ -436,8 +500,9 @@ test.describe('the window, the states and the rows the door hands over', () => {
 		expect(dots.squares).toHaveLength(42);
 		expect(dots.squares.every((square) => square.y >= box.top && square.y + square.size <= box.bottom)).toBe(true);
 		// The slow machine's squares sit at or below every fast machine's square.
-		const lowestFast = Math.max(...dots.squares.filter((square) => square.row === 'fast').map((square) => square.y));
-		const highestSlow = Math.min(...dots.squares.filter((square) => square.row === 'slow').map((square) => square.y));
+		const lowestFast = Math.max(...dots.squares.filter((square) => square.row === 'v1:fast').map((square) => square.y));
+		const highestSlow = Math.min(...dots.squares.filter((square) => square.row === 'v1:slow').map((square) => square.y));
+		expect(Number.isFinite(lowestFast) && Number.isFinite(highestSlow)).toBe(true);
 		expect(highestSlow).toBeGreaterThanOrEqual(lowestFast);
 	});
 
@@ -454,8 +519,9 @@ test.describe('the window, the states and the rows the door hands over', () => {
 		const high = new Set(dots.squares.map((square) => square.y)).size;
 		expect([across, high]).toEqual([5, 6]);
 		// The slowest machine still fills the bottom lines.
-		const lowestFast = Math.max(...dots.squares.filter((square) => square.row === 'fast').map((square) => square.y));
-		const highestSlow = Math.min(...dots.squares.filter((square) => square.row === 'slow').map((square) => square.y));
+		const lowestFast = Math.max(...dots.squares.filter((square) => square.row === 'v1:fast').map((square) => square.y));
+		const highestSlow = Math.min(...dots.squares.filter((square) => square.row === 'v1:slow').map((square) => square.y));
+		expect(Number.isFinite(lowestFast) && Number.isFinite(highestSlow)).toBe(true);
 		expect(highestSlow).toBeGreaterThanOrEqual(lowestFast);
 		// The outline of the day held open is the extent of its squares.
 		expect(dots.blocks).toHaveLength(1);

@@ -19,6 +19,7 @@
 	 * neither loses height to the line.
 	 */
 	import { columnPick, pointerReadout, readoutMarks, type Readout } from '$lib/charts/readout';
+	import type { HoverReadout } from '$lib/charts/readout-hover';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import EmptyState from './EmptyState.svelte';
 	import type { SeriesGeometry } from './dateSeries';
@@ -40,6 +41,7 @@
 		hintOne = '',
 		lede = false,
 		hatch = null,
+		hover = undefined,
 		picked = null,
 		onPick
 	}: {
@@ -62,6 +64,8 @@
 		lede?: boolean;
 		/** The stripes a hatched series is drawn in. */
 		hatch?: AbsentHatch | null;
+		/** A smaller projection for pointer hover; the full non-hover reading stays available. */
+		hover?: HoverReadout;
 		/** The day a caller holds open, outlined on the plot. */
 		picked?: number | null;
 		/** Told of a day a click or Enter picked. */
@@ -103,6 +107,9 @@
 	const marks = $derived(supplied === null ? [] : readoutMarks(geometry?.columns ?? []));
 	const showing = $derived(shown ?? supplied?.resting ?? null);
 	const pattern = $derived(`${name}-hatch`);
+	const gradients = $derived([...new Map((geometry?.bars ?? []).flatMap((bar) =>
+		bar.gradient === undefined ? [] : [[bar.label, bar.gradient] as const])).entries()]);
+	const gradientIds = $derived(new Map(gradients.map(([key], index) => [key, `${name}-fill-${index}`])));
 	const declaration = $derived(geometry === null ? null : ruleDeclaration(geometry.rule));
 	const withEvents = $derived(supplied === null || geometry === null ? supplied : {
 		...supplied,
@@ -133,9 +140,19 @@
 			tabindex={supplied === null ? undefined : 0}
 			data-chart-type="dateSeries"
 			data-chart-name={name}
-			use:pointerReadout={{ marks, width: box.width, hover: { name, readout: withEvents }, onSelect: (index) => (selected = index) }}
+			use:pointerReadout={{ marks, width: box.width, hover: hover ?? { name, readout: withEvents }, onSelect: (index) => (selected = index) }}
 			use:columnPick={{ marks, width: box.width, showing, onPick: (index) => onPick?.(index) }}
 		>
+			{#if gradients.length > 0}
+				<defs>
+					{#each gradients as [key, gradient] (key)}
+						<linearGradient id={gradientIds.get(key)} x1="0%" y1="0%" x2="0%" y2="100%">
+							<stop offset="0%" stop-color={gradient.bottom} style:stop-color={gradient.top} />
+							<stop offset="100%" stop-color={gradient.bottom} />
+						</linearGradient>
+					{/each}
+				</defs>
+			{/if}
 			{#if hatch !== null && geometry.bars.some((bar) => bar.hatched)}
 				<defs>
 					<pattern
@@ -194,8 +211,10 @@
 							y={bar.y}
 							width={bar.width}
 							height={bar.height}
-							style:fill={bar.hatched && hatch !== null ? `url(#${pattern})` : bar.fill}
+							style:fill={bar.hatched && hatch !== null ? `url(#${pattern})`
+								: bar.gradient === undefined ? bar.fill : `url(#${gradientIds.get(bar.label)}) ${bar.fill}`}
 							data-series-bar={bar.label}
+							data-readout-key={bar.label}
 						/>
 					{/each}
 					{#each geometry.joins as join, at (at)}
@@ -206,6 +225,7 @@
 							y2={join.y}
 							stroke="var(--color-surface)"
 							stroke-width={JOIN}
+							pointer-events="none"
 						/>
 					{/each}
 				{:else}
@@ -256,6 +276,7 @@
 					stroke="var(--color-text)"
 					stroke-width="1"
 					data-date-series-held={picked}
+					pointer-events="none"
 				/>
 			{/if}
 			{#if selected !== null && geometry.columns[selected] !== undefined}
@@ -267,6 +288,7 @@
 					stroke="var(--color-text-tertiary)"
 					stroke-opacity="0.5"
 					data-date-series-guide
+					pointer-events="none"
 				/>
 			{/if}
 		</svg>

@@ -11,7 +11,6 @@ import { distribution } from '../src/lib/charts/d3/distribution';
 import { emptyState } from '../src/lib/charts/d3/empty';
 import { consoleConfig } from '../src/lib/server/config';
 import { renderConfigured, serverCompiler, type Rewrite } from './support/server-render';
-import { diskReads, type DiskReads } from '../src/lib/console/machine/disk-reads';
 
 test('column hover and standing readings preserve zeros, partial readings and dated events', () => {
 	const readout = readoutOf({
@@ -55,39 +54,6 @@ test('a pointer reading fits inside the viewport and moves above a low pointer',
 	expect(corner.left + box.width).toBeLessThanOrEqual(viewport.width - 12);
 	expect(corner.top + box.height).toBeLessThan(820);
 	expect(hoverPosition({ x: 0, y: 0 }, box, viewport, 12)).toEqual({ left: 12, top: 12 });
-});
-
-test('disk-read captions qualify a same-run mix of locking requests without claiming none', async ({}, info) => {
-	const compiled = serverCompiler(info.outputPath('disk-reads'));
-	const rewrite: Rewrite[] = [
-		['$lib/components/Panel.svelte', './Panel.server.mjs'],
-		['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs'],
-		...['charts/machine', 'charts/readout', 'charts/series', 'number-format-context', 'console/span-words', 'format']
-			.map((file) => [`$lib/${file}`, new URL(`../src/lib/${file}.ts`, import.meta.url).href] as const)
-	];
-	await compiled('src/lib/components/Panel.svelte', 'Panel', rewrite);
-	await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', rewrite);
-	const module = await compiled('src/lib/console/machine/DiskReadsPanel.svelte', 'DiskReadsPanel', rewrite);
-	const component = (await import(pathToFileURL(module).href)).default;
-	const caption = (reads: DiskReads) => renderConfigured(component, {
-		props: { reads, days: 14, windowDays: 14, readoutMaxShare: 1 }
-	}).body.replace(/<!--[\s\S]*?-->/g, '')
-		.match(/<p[^>]*data-disk-read-pinning="[^"]+"[^>]*>([\s\S]*?)<\/p>/)?.[1].trim();
-
-	const rows = [
-		{ date: '2026-09-04', run_id: '2026-09-04-1', weights_pinned: 'True' },
-		{ date: '2026-09-04', run_id: '2026-09-04-1', weights_pinned: 'False' }
-	];
-	const marks = { marked: 1, named: 1 };
-	const sameRun = diskReads(rows, marks);
-	expect(sameRun.pinning).toEqual({ held: 0, loose: 1, silent: 0 });
-	expect(caption(sameRun)).toBe('1 run included a recorded non-locking setting. Applied locking is unmeasured.');
-
-	const acrossRuns = diskReads([
-		...rows, { date: '2026-09-04', run_id: '2026-09-04-2', weights_pinned: 'True' }
-	], marks);
-	expect(acrossRuns.pinning).toEqual({ held: 1, loose: 1, silent: 0 });
-	expect(caption(acrossRuns)).toBe('1 of 2 runs recorded only locking requests; 1 run included a non-locking setting. Applied locking is unmeasured.');
 });
 
 test.describe('rendered distribution readings', () => {

@@ -1,6 +1,6 @@
 # Agent Notes - Browser
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-11-12
 
 Checks before trusting a browser result. Follow the [browser smoke procedure](../../how-to/run-the-gates.md).
 
@@ -8,6 +8,11 @@ Checks before trusting a browser result. Follow the [browser smoke procedure](..
 
 - Set a viewport and verify its actual CSS dimensions before measuring layout.
 - If embedded tools cannot paint or deliver input, repeat the affected check through the project's Playwright runner. DOM-dispatched events do not prove native pointer or keyboard input works.
+- Vite preview can retain a generated asset entry after its file is removed.
+  An `ENOENT` read-stream failure that stops the preview is a server failure,
+  not a page returning 404. Exercise absent files with a static server over
+  the verified static build. Change only named generated copies, keep the
+  original bytes, restore them exactly and recheck the build afterward.
 
 ## Waiting and routing
 
@@ -27,7 +32,7 @@ Checks before trusting a browser result. Follow the [browser smoke procedure](..
 - Scope locators to the intended component. Scroll lazy content into view and wait for its rendered state before measuring or interacting.
 - Compare coordinates in the same reference frame. Check that screenshots contain the whole target and rendered text does not overlap or overflow.
 - Copy SVG `getBBox()` values into a plain object with explicit `x`, `y`, `width` and `height` fields before returning them from browser evaluation. A native box can serialize as `{}`, making an overlap comparison pass without measuring anything. Require finite coordinates and positive dimensions before checking separation.
-- Use one representative journey for shared layout and one narrow resize when relevant. Do not multiply it by every page, width, theme, chart or interaction; [CLAUDE.md section 13](../../../CLAUDE.md#13-test-coverage-policy) owns that policy.
+- Use one representative journey for shared layout and one narrow resize when relevant. Do not multiply it by every page, width, theme, chart or interaction; [CLAUDE.md section 12](../../../CLAUDE.md#12-test-coverage-policy) owns that policy.
 - Check data-state rules below the browser. Use a separate browser failure case only when it exercises an independent runtime boundary; prove it reached that boundary and unaffected content still works.
 - Read page errors, console errors and failed requests. Exempt only failures deliberately caused by the case, matched to the affected request.
 

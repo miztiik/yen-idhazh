@@ -119,6 +119,7 @@
 	--chart-marker: #c1bcb1;
 	--chart-readout-bg: #151513;
 	--chart-readout-text: #f0ede5;
+	--chart-identity-highlight: #f0ede5;
 	--item-edge: #393932;
 	--shadow-sm: none;
 	--shadow-panel: none;
@@ -181,6 +182,7 @@
 	--chart-marker: #625e55;
 	--chart-readout-bg: #e9e7e1;
 	--chart-readout-text: #25251f;
+	--chart-identity-highlight: #fffefa;
 	--item-edge: #dad6cb;
 	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
 	--shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.06);

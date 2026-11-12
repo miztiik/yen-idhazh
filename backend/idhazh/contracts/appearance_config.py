@@ -257,10 +257,10 @@ class ThemeConfig(Model):
     gradient_enabled: bool = Field(
         default=True,
         description=(
-            "Gradients on chrome and identity only - the wordmark, a panel wash, an "
-            "empty state. Never on an item and never inside a chart. A gradient that "
-            "encodes nothing is decoration and is unconstrained; a gradient whose hue "
-            "would tell a reader something is semantic colour and is refused."
+            "Gradients on chrome and identity, including uniform decorative shading "
+            "inside the console's categorical machine marks. False keeps those marks "
+            "flat without changing their category colours. Never on an item. Machine "
+            "shading carries no speed, utilization, health or probability reading."
         ),
     )
     elevation_enabled: bool = Field(
@@ -588,6 +588,11 @@ class AppearanceConfig(Contract):
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-12",
+            change="Reuse appearance controls for categorical machine shading.",
+            why="Existing fields, numeric bounds, defaults and older inputs are unchanged.",
+        ),
+        ChangelogEntry(
             version="2026-11-11",
             change="Allow an uncapped console frame and activate additive chart hover.",
             why="Existing numeric caps still read; non-hover fact access is unchanged.",
@@ -601,11 +606,6 @@ class AppearanceConfig(Contract):
             version="2026-10-25",
             change="Bounded browser geometry added for story charts.",
             why="Story charts use measured reader width and stay separate from console dimensions.",
-        ),
-        ChangelogEntry(
-            version="2026-10-10",
-            change="console.tile_min_px added for readable daily tiles.",
-            why="A tile keeps room inside its borders instead of becoming a stripe.",
         ),
         ChangelogEntry(
             version="2026-09-30",

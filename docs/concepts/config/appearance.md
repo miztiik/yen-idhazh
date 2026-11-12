@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -267,15 +267,20 @@ retirement does not remove them. Design review follows the
 [representative-browser policy](../design-system.md#sufficiency-is-a-gate-not-a-taste),
 not a plot-width quota or a panel-picture matrix.
 
-Four knobs decide how the Hardware route colours a machine. A machine's colour
-is its speed: one hue in `machine_colour_stops` (5) steps, slowest to fastest,
-each kind of machine taking the step its median prompt reading speed falls in.
-`machine_colour_floor_share` (0.4) is how much of the hue the slowest step
-carries, the rest being the panel's own ground - at 0.2 the slowest step stood
-1.3 to 1 against the panel and nearly vanished. `absent_hatch_degrees` (45) is
-the angle of the stripes that mark a known thing with no reading, on every panel
-that draws them. `fleet_dot_max_px` (8) is the largest square the machine-kinds
-panel draws for one job when the open span holds too few placements for bars
+Machine-history colour identifies full machine identities, not speed.
+`theme.gradient_enabled` switches the uniform categorical shading on or off;
+false keeps the same machine colour flat. `machine_colour_floor_share` supplies
+the common highlight share, with the remaining share the category hue and the
+bottom the full hue. The generated highlight reuses the configured light
+surface or dark text neutral, so both themes stay opaque without a new palette.
+These existing settings retain their values, defaults and valid prior inputs.
+
+`machine_colour_stops` still supplies the whole-record median-speed groups used
+by the established ordering and folds; it does not select category colours.
+`absent_hatch_degrees` still controls retained absent-reading hatches, but
+missing machine speed no longer replaces an identified machine's fill.
+`fleet_dot_max_px` limits each job square when placements fall below
+`fleet_min_rows`
 ([console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](../console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md)).
 
 ## Reader surface

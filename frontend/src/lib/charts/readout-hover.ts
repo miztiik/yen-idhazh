@@ -10,13 +10,16 @@ export interface HoverReadout {
 	name: string;
 	readout: HoverSource | null;
 	offset?: number;
+	/** Optional compact projections of the same readings, keyed by an actual mark. */
+	byMark?: ReadonlyMap<string, HoverSource>;
+	footnote?: boolean;
 }
 export type ChartHover =
-	| { source: Element; reading: ReadoutView; name: string; x: number; y: number }
+	| { source: Element; reading: ReadoutView; name: string; x: number; y: number; footnote?: boolean }
 	| { source: Element; reading: null };
 
-export function hoverReading(source: HoverReadout, index: number): ReadoutView | null {
-	const readout = source.readout;
+export function hoverReading(source: HoverReadout, index: number, markKey: string | null = null): ReadoutView | null {
+	const readout = (markKey === null ? undefined : source.byMark?.get(markKey)) ?? source.readout;
 	if (readout === null) return null;
 	const at = index + (source.offset ?? 0);
 	if ('columns' in readout) return readoutView(readout, at);
@@ -60,13 +63,16 @@ export function createHoverReadout(node: Element, initial: HoverReadout | undefi
 				return;
 			}
 			if (event.target instanceof Element && event.target.closest('[data-chart-hover]') !== node) return;
-			const reading = hoverReading(source, index);
+			const mark = event.target instanceof Element ? event.target.closest('[data-readout-key]') : null;
+			const key = mark !== null && node.contains(mark) ? mark.getAttribute('data-readout-key') : null;
+			const reading = hoverReading(source, index, key);
 			if (reading === null) { hide(); return; }
 			shown = true;
-			publish({ source: node, reading, name: source.name, x: event.clientX, y: event.clientY });
+			publish({ source: node, reading, name: source.name, x: event.clientX, y: event.clientY, footnote: source.footnote });
 		},
 		update(next: HoverReadout | undefined) {
-			if (next?.readout !== source?.readout || next?.offset !== source?.offset || next?.name !== source?.name) hide();
+			if (next?.readout !== source?.readout || next?.offset !== source?.offset || next?.name !== source?.name ||
+				next?.byMark !== source?.byMark || next?.footnote !== source?.footnote) hide();
 			source = next;
 			declare();
 		},

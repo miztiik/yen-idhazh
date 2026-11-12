@@ -1,47 +1,13 @@
-/** Which machines ran our jobs, day by day: the rows a panel draws, and where.
- *
- * One stacked bar a day and one segment a kind of machine, counted over the job
- * placements the machine record holds for the open span. A count of what
- * happened and never a rate of what will: what the next job draws is precisely
- * what the processor lottery refuses to quote, so no share, no probability and
- * no pie belongs here.
- *
- * **A machine's colour is its speed** (`machine-colour.ts`), so the segments of
- * a day are stacked slowest at the bottom, where every day shares a baseline and
- * the slow machines the panel exists to show compare exactly day to day.
- *
- * **Placements pick which kinds get a row of their own; speed only sets the
- * colour.** The `topKinds` kinds placed most in the span are named, a tie going
- * to the kind placed most recently. The rest fold only with kinds on their own
- * speed step, because a fold that crossed a step would say two speeds were one,
- * and a step holding one of them names it. Known machines with no speed reading
- * fold into one hatched row, since none of them has a speed a merge could
- * misstate. No machine recorded is always its own row, last, and never folded.
- *
- * **Under `minRows` placements the panel draws one square a job, not a bar a
- * day.** A bar over a small count reads as "this much" and invites a rate the
- * count cannot support; a square a job reads as "these ones", because every
- * mark is a job a reader can point at.
- *
- * **The rows are the query door's own shape.** `fleetJobs` takes the rows a
- * query for `FLEET_COLUMNS` answers, whether the build read them off disk or a
- * browser fetched them, so where they come from can move without anything here
- * moving.
- *
- * Pure. Every threshold, colour and size arrives as an argument.
- */
+/** Which recorded jobs belong to each UTC day and machine kind? */
 
 import type { LostDay } from '../console/recording';
-import { nameSpan } from '../console/span-words';
 import type { Row } from '../data/ledger';
 import { normalizeHostRows } from '../data/host-fingerprint';
-import { shortDate } from '../format';
 import { formatNumber, type NumberFormatConfig } from '../number-format';
 import { dayTicks, type DayTick, type Frame } from './frame';
 import {
 	isUnrecorded,
 	machineKeys,
-	MACHINE_HUE,
 	promptRate,
 	rateWords,
 	UNRECORDED_KEY,
@@ -50,9 +16,11 @@ import {
 	type MachineRamp
 } from './machine-colour';
 import { readoutOf, type Readout } from './readout';
-import { RESERVED_GREY_INK, type AbsentHatch } from './d3/ordered-colour';
-import type { SeriesInput } from './d3/dateSeries';
+import type { HoverReadout } from './readout-hover';
+import { RESERVED_GREY_INK } from './d3/ordered-colour';
+import type { FillGradient, SeriesInput } from './d3/dateSeries';
 import { bandScale } from './d3/scale';
+import { fleetIdentities, type FleetIdentity } from './fleet-identity';
 
 /** The columns the panel reads, and the only ones: what a query for it names. */
 export const FLEET_COLUMNS = [
@@ -104,8 +72,7 @@ export interface FleetRow {
 	key: string;
 	/** What a reader reads. */
 	label: string;
-	/** The speed the row's colour stands for: the kind's median, the range of a
-	 * fold's medians, or `no speed reading`. Null for no machine recorded. */
+	/** Median-speed context retained for details, never a colour encoding. */
 	note: string | null;
 	colour: string;
 	drawing: FleetDrawing;
@@ -117,6 +84,13 @@ export interface FleetRow {
 	placements: number;
 	/** The kinds a fold holds, in words. Empty on a kind's own row. */
 	members: string[];
+	/** Constituent identities stay separately painted inside the established group position. */
+	parts: FleetPart[];
+}
+
+export interface FleetPart extends FleetIdentity {
+	counts: number[];
+	note: string | null;
 }
 
 /** One job of a day, as the list a pick opens names it. */
@@ -128,6 +102,7 @@ export interface FleetLine {
 	shard: number | null;
 	/** The kind of machine in words, never a fold's name. */
 	machine: string;
+	swatch: string;
 	seconds: number | null;
 	rate: number | null;
 	/** The row this job is drawn in. */
@@ -164,8 +139,9 @@ export interface FleetView {
 }
 
 export interface FleetOptions {
-	/** The page's one ramp, cut over every machine the page holds. */
+	/** Whole-record speed groups used only for the established ordering and folds. */
 	ramp: MachineRamp;
+	appearance: { gradients: boolean; floor: number };
 	/** The open span, inclusive UTC days. */
 	start: string;
 	end: string;
@@ -231,27 +207,6 @@ export function fleetJobs(rows: readonly Row[]): FleetJob[] {
 	return jobs;
 }
 
-/** A step of the ramp in words, for the fold that stands on it. */
-export function stepWords(step: number, stops: number): string {
-	if (stops <= 1) return 'only';
-	if (step <= 1) return 'slowest';
-	if (step >= stops) return 'fastest';
-	if (stops % 2 === 1 && step === (stops + 1) / 2) return 'middle';
-	if (step === 2) return 'second slowest';
-	if (step === stops - 1) return 'second fastest';
-	return `step ${step} of ${stops}`;
-}
-
-/** The word that tells kinds of one name apart, fastest first. */
-function speedRank(at: number, of: number): string {
-	if (of === 2) return at === 0 ? 'faster' : 'slower';
-	if (at === 0) return 'fastest';
-	if (at === of - 1) return 'slowest';
-	const place = at + 1;
-	const suffix = place === 2 ? 'nd' : place === 3 ? 'rd' : 'th';
-	return `${place}${suffix} fastest`;
-}
-
 function rangeNote(rates: readonly number[], numberFormat: NumberFormatConfig): string | null {
 	if (rates.length === 0) return null;
 	const low = Math.min(...rates);
@@ -263,7 +218,7 @@ function rangeNote(rates: readonly number[], numberFormat: NumberFormatConfig): 
 		: `${lowWords} to ${rateWords(high, numberFormat)}`;
 }
 
-/** A known machine the ramp has no identity for: a machine with no reading. */
+/** A known machine the ordering metadata has no speed reading for. */
 function untimed(machine: MachineKey): MachineIdentity {
 	return {
 		key: machine.key,
@@ -295,6 +250,20 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 	});
 	const days = [...new Set(inSpan.map((job) => job.date))].sort();
 	const column = new Map(days.map((date, index) => [date, index]));
+	const colours = fleetIdentities(options.ramp.rows, options.appearance);
+	function paint(identity: MachineIdentity): FleetIdentity {
+		const colour = colours.get(identity.key);
+		if (colour === undefined) throw new Error(`The widest machine universe names no ${identity.key}.`);
+		return colour;
+	}
+	function part(identity: MachineIdentity): FleetPart {
+		return {
+			...paint(identity),
+			counts: days.map((date) => placed.filter((one) => one.job.date === date && one.identity.key === identity.key).length),
+			note: isUnrecorded(identity) ? null : identity.rate === null
+				? 'Speed not recorded' : rateWords(identity.rate, options.numberFormat)
+		};
+	}
 
 	const lost = (options.lost ?? []).filter(
 		(day) => day.date >= options.start && day.date <= options.end
@@ -309,7 +278,7 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 				? 'record-lost'
 				: null;
 
-	// Each kind in the span: its placements, its newest day, and its jobs.
+	// Window frequency selects named groups; full identity selects paint.
 	const kinds = new Map<string, { identity: MachineIdentity; placements: number; newest: string }>();
 	for (const { job, identity } of placed) {
 		const held = kinds.get(identity.key) ?? { identity, placements: 0, newest: job.date };
@@ -354,15 +323,16 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 		const identity = kind.identity;
 		rows.push({
 			key: identity.key,
-			label: identity.name,
-			note: identity.rate === null ? 'no speed reading' : rateWords(identity.rate, options.numberFormat),
-			colour: identity.colour,
+			label: paint(identity).label,
+			note: identity.rate === null ? 'Speed not recorded' : rateWords(identity.rate, options.numberFormat),
+			colour: paint(identity).colour,
 			drawing: identity.step === null ? 'untimed' : 'step',
 			step: identity.step,
 			rate: identity.rate,
 			counts: counts(identity.key),
 			placements: kind.placements,
-			members: []
+			members: [],
+			parts: [part(identity)]
 		});
 	}
 	for (const [fold, members] of folds) {
@@ -372,18 +342,16 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 		const tally = counts(fold);
 		rows.push({
 			key: fold,
-			label:
-				first.step === null
-					? 'Other machines with no speed reading'
-					: `Other machines at the ${stepWords(first.step, options.ramp.steps.length)} speed`,
-			note: rangeNote(rates, options.numberFormat) ?? 'no speed reading',
-			colour: first.colour,
+			label: `Other machines (${members.length})`,
+			note: rangeNote(rates, options.numberFormat) ?? 'Speed not recorded',
+			colour: paint(first).colour,
 			drawing: first.step === null ? 'untimed' : 'step',
 			step: first.step,
 			rate: rates.length === 0 ? null : Math.min(...rates),
 			counts: tally,
 			placements: tally.reduce((sum, count) => sum + count, 0),
-			members: members.map((member) => member.name)
+			members: members.map((member) => paint(member).label),
+			parts: [...members].sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0).map(part)
 		});
 	}
 	// Slowest at the bottom of every bar and first in the strip, then the
@@ -397,19 +365,6 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 			a.key.localeCompare(b.key)
 	);
 
-	// Two kinds of one name are two machines: each takes a word saying which.
-	const byName = new Map<string, FleetRow[]>();
-	for (const row of rows) {
-		if (row.members.length > 0 || row.rate === null) continue;
-		byName.set(row.label, [...(byName.get(row.label) ?? []), row]);
-	}
-	for (const same of byName.values()) {
-		if (same.length < 2) continue;
-		[...same]
-			.sort((a, b) => (b.rate ?? 0) - (a.rate ?? 0))
-			.forEach((row, at, all) => (row.label = `${row.label}, ${speedRank(at, all.length)}`));
-	}
-
 	const unrecorded = kinds.get(UNRECORDED_KEY);
 	if (unrecorded !== undefined) {
 		rows.push({
@@ -422,12 +377,12 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 			rate: null,
 			counts: counts(UNRECORDED_KEY),
 			placements: unrecorded.placements,
-			members: []
+			members: [],
+			parts: [part(unrecorded.identity)]
 		});
 	}
 
 	const order = new Map(rows.map((row, index) => [row.key, index]));
-	const labelOf = new Map(rows.map((row) => [row.key, row.label]));
 	const lines: FleetLine[][] = days.map(() => []);
 	for (const { job, identity } of placed) {
 		const row = rowOf.get(identity.key) ?? identity.key;
@@ -437,7 +392,8 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 			pipelineName: job.pipelineName,
 			taskName: job.taskName,
 			shard: job.shard,
-			machine: row === identity.key ? (labelOf.get(row) ?? identity.name) : identity.name,
+			machine: paint(identity).label,
+			swatch: paint(identity).swatch,
 			seconds: job.seconds,
 			rate: job.rate,
 			row
@@ -476,58 +432,62 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 	};
 }
 
-/** The rows as `dateSeries` stacks them, slowest at the bottom.
- *
- * Keyed by the row's own key, which no two rows share, because two kinds of one
- * name are two series.
- */
+/** Identity subsegments preserve every group's established stack position and total. */
 export function fleetSeries(view: FleetView): SeriesInput[] {
-	return view.rows.map((row) => ({
-		label: row.key,
-		token: MACHINE_HUE,
-		fill: row.colour,
-		hatched: row.drawing === 'untimed',
-		points: view.days.map((date, index) => ({ date, value: row.counts[index] ?? 0 }))
-	}));
+	return view.rows.flatMap((row) => row.parts.map((part) => ({
+		label: part.key,
+		token: part.token,
+		fill: part.colour,
+		...(part.gradient === null ? {} : { gradient: part.gradient }),
+		points: view.days.map((date, index) => ({ date, value: part.counts[index] ?? 0 }))
+	})));
 }
 
-/** A square's outline and nothing inside: a known machine with no reading, as
- * a square the size of a job's mark shows it. Stripes on a square this small are
- * one or two lines and read as the flat grey of no machine recorded. */
-export function hollowSwatch(ink: string): string {
-	const side = (at: string, size: string) => `linear-gradient(${ink} 0 0) ${at} / ${size} no-repeat`;
-	return [
-		side('top', '100% 2px'),
-		side('bottom', '100% 2px'),
-		side('left', '2px 100%'),
-		side('right', '2px 100%')
-	].join(', ');
-}
-
-/** The strip under the plot: a day a column, every row at that day.
- *
- * It is the key as well, so every row drawn is named and swatched here and no
- * second key is drawn. Each row carries the speed its colour stands for.
- */
-export function fleetReadout(view: FleetView, hatch: AbsentHatch): Readout {
+/** Full dated counts and speed context, reachable in the selected day's details. */
+export function fleetReadout(view: FleetView): Readout {
 	return readoutOf({
 		type: 'dateSeries',
-		columns: view.days.map(shortDate),
-		series: view.rows.map((row) => ({
-			label: row.label,
-			swatch:
-				row.drawing !== 'untimed'
-					? row.colour
-					: view.shape === 'bars'
-						? hatch.background
-						: hollowSwatch(hatch.ink),
-			values: row.counts,
+		columns: view.days.map((date) => `${date} UTC`),
+		series: view.rows.flatMap((row) => row.parts.map((part) => ({
+			label: part.label,
+			swatch: part.swatch,
+			values: part.counts,
 			format: (value: number) => formatNumber(value, view.numberFormat, { exact: true, si: false }),
-			...(row.note === null ? {} : { note: row.note })
-		})),
+			...(part.note === null ? {} : { note: part.note })
+		}))),
 		notMeasured: 'No job was placed on this day',
 		resting: 'last'
 	});
+}
+
+/** Only the selected UTC day and its recorded job total belong below the plot. */
+export function fleetSummary(view: FleetView): Readout {
+	return readoutOf({
+		type: 'dateSeries',
+		columns: view.days.map((date) => `${date} UTC`),
+		series: [{
+			label: 'Recorded jobs', swatch: null,
+			values: view.days.map((_, day) => view.rows.reduce((sum, row) => sum + row.counts[day], 0)),
+			format: (value) => formatNumber(value, view.numberFormat, { exact: true, si: false })
+		}],
+		notMeasured: 'No recorded jobs', resting: 'last'
+	});
+}
+
+/** Hover projects one actual machine mark, or just its day's total over empty day space. */
+export function fleetHover(view: FleetView): HoverReadout {
+	const summary = fleetSummary(view);
+	return {
+		name: 'machine-fleet', readout: summary, footnote: false,
+		byMark: new Map(view.rows.flatMap((row) => row.parts.map((part) => [part.key, readoutOf({
+			type: 'dateSeries', columns: summary.columns,
+			series: [{
+				label: part.label, swatch: part.swatch, values: part.counts,
+				format: (count, day) => `${formatNumber(count, view.numberFormat, { exact: true, si: false })} of ${summary.series[0].values[day]} recorded jobs`
+			}],
+			notMeasured: 'No recorded jobs', resting: 'last'
+		})] as const)))
+	};
 }
 
 /** One job's square. */
@@ -536,6 +496,7 @@ export interface FleetSquare {
 	y: number;
 	size: number;
 	colour: string;
+	gradient: FillGradient | null;
 	drawing: FleetDrawing;
 	/** The column it stands in. */
 	day: number;
@@ -606,18 +567,21 @@ export function fleetDots(
 		const left = blocks[day].left;
 		let at = 0;
 		for (const row of view.rows) {
-			for (let count = 0; count < (row.counts[day] ?? 0); count += 1) {
-				const line = Math.floor(at / across);
-				squares.push({
-					x: left + (at % across) * step,
-					y: box.bottom - (line + 1) * step + opts.gapPx,
-					size,
-					colour: row.colour,
-					drawing: row.drawing,
-					day,
-					row: row.key
-				});
-				at += 1;
+			for (const part of row.parts) {
+				for (let count = 0; count < (part.counts[day] ?? 0); count += 1) {
+					const line = Math.floor(at / across);
+					squares.push({
+						x: left + (at % across) * step,
+						y: box.bottom - (line + 1) * step + opts.gapPx,
+						size,
+						colour: part.colour,
+						gradient: part.gradient,
+						drawing: row.drawing,
+						day,
+						row: part.key
+					});
+					at += 1;
+				}
 			}
 		}
 	});
@@ -632,37 +596,4 @@ export function fleetDots(
 	};
 }
 
-/** The sentence above the plot: the count, its days, and the kind given most. */
-export function fleetSentence(view: FleetView): string {
-	const ran = `${formatNumber(view.placements, view.numberFormat, { exact: true, si: false })} ${view.placements === 1 ? 'job' : 'jobs'} ran in ${nameSpan(view.windowDays)}`;
-	const on = view.days.length === view.windowDays ? '' :
-		`, on ${formatNumber(view.days.length, view.numberFormat, { exact: true, si: false })} ${view.days.length === 1 ? 'day' : 'days'} of them`;
-	const counted = `${ran}${on}.`;
-	if (view.mostPlaced === null) return counted;
-	return `${counted} The kind we are given most is ${view.mostPlaced.label}, ${formatNumber(view.mostPlaced.placements, view.numberFormat, { exact: true, si: false })} of them.`;
-}
-
-/** What each fold row holds, in words, or nothing where no row folds. */
-export function foldSentences(view: FleetView): string[] {
-	return view.rows
-		.filter((row) => row.members.length > 0)
-		.map((row) => {
-			const names = row.members;
-			const listed =
-				names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-			return `The ${row.label} row holds ${formatNumber(names.length, view.numberFormat, { exact: true, si: false })} kinds: ${listed}.`;
-		});
-}
-
-/** How to drive the strip under the plot. A pick opens that day's jobs. */
-export const FLEET_HINT =
-	"Point at a day to read every kind on it. Left and Right step through them, Escape returns to the newest. Click or Enter lists that day's jobs.";
-
-/** What the strip says when it holds one column. There is no other day to step
- * to, and a pick still opens the day's jobs. "This one day" names the window,
- * so only the 1-day window says it; the words are Reader's. */
-export function fleetHintOne(windowDays: number): string {
-	return windowDays === 1
-		? `Click or Enter lists ${nameSpan(windowDays)}'s jobs.`
-		: "Click or Enter lists the day's jobs.";
-}
+export const FLEET_HINT = 'Select a day for machine counts and jobs.';

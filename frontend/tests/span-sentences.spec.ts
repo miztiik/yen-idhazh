@@ -11,7 +11,6 @@
  */
 
 import { expect, test } from '@playwright/test';
-import { FLEET_HINT, fleetHintOne } from '../src/lib/charts/fleet';
 import {
 	coverage,
 	coverageSentence as coverageSentenceWithFormat,
@@ -179,14 +178,6 @@ test('the per-article measurement names the published articles and payload days 
 	// The rate stays a rate at one day; it is that day's own count.
 	expect(horizonRate(300, 1)).toBe("300 articles a published day, this one day's count");
 	expect(horizonRate(334.4, 7)).toBe('a median of 334 articles a published day');
-});
-
-test("the machines' strip says what one column still offers: the day's jobs", () => {
-	expect(fleetHintOne(1)).toBe("Click or Enter lists this one day's jobs.");
-	expect(fleetHintOne(7)).toBe("Click or Enter lists the day's jobs.");
-	expect(FLEET_HINT).toBe(
-		"Point at a day to read every kind on it. Left and Right step through them, Escape returns to the newest. Click or Enter lists that day's jobs."
-	);
 });
 
 test('the doubt sentences name the days they counted', () => {
