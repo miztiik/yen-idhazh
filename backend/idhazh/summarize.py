@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json
 import re
-import textwrap
 from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
@@ -230,41 +229,6 @@ def output_schema_text(
     )
 
 
-def paragraph_rule(ask: SummarizeConfig) -> str:
-    """The sentence telling the model how many paragraphs a summary may hold.
-
-    Derived here rather than written into either template, because `Template`
-    has no conditional and `paragraphs_max` is a knob: a rule spelled in the
-    file could not be turned off by the config, which is the substitution test
-    Guardrail #6 sets.
-
-    **It takes the config and never a band**, which is the constraint that
-    shaped it. The two-call path renders this into a system turn that takes no
-    article at all, so that turn is the same bytes on every item and holds one
-    prefix-cache slot; a sentence that varied with the article's band would
-    evict the cache on every alternation. So the threshold is named as a number
-    the model applies to the length it was already asked for, rather than as a
-    question answered here per band.
-
-    It is an ASK and not a control. What a reply's shape ends up being is
-    whatever `normalize_prose` folds it into.
-    """
-    if ask.paragraphs_max < 2:
-        sentence = "Write the summary as one paragraph."
-    else:
-        sentence = (
-            f"Write the summary as one paragraph, or as at most {ask.paragraphs_max} "
-            "paragraphs with one empty line between them. Use a second paragraph only "
-            f"where the summary runs to {ask.second_paragraph_from_words} words or more "
-            "and the subject turns. A break in a short summary makes two half-thoughts."
-        )
-    # Wrapped to the width both prompt files are written at. The model does not
-    # care; the person reviewing a rendered prompt fixture does, and one
-    # 240-character line in a file of 78-character ones is where a stray edit
-    # hides.
-    return textwrap.fill(sentence, width=76, initial_indent="  ", subsequent_indent="  ")
-
-
 def system_prompt(
     prompt_config: SummarizeConfig | None = None,
     *,
@@ -296,11 +260,7 @@ def system_prompt(
     ask = prompt_config or SummarizeConfig()
     band = ask.band_for(0 if brief else source_words)
     return _template(prompt_files, config_dir).substitute(
-        {
-            **ask.model_dump(),
-            **band.model_dump(),
-            "paragraph_rule": paragraph_rule(ask),
-        }
+        {**ask.model_dump(), **band.model_dump()}
     )
 
 
@@ -411,11 +371,8 @@ def parse_draft(
         content = fenced.group(1)
     ask = prompt_config or SummarizeConfig()
     draft = draft_model(ask, source_words=source_words, brief=brief).model_validate_json(content)
-    # The sanitizer is the control and the prompt is untrusted text like any
-    # other (Guardrail #11). The prompt ASKS for a blank line between paragraphs;
-    # this is what makes one, and what stops anything else a decoder emitted -
-    # a tab, a lone newline, four blank lines - reaching a published field.
-    draft.summary = normalize_prose(draft.summary, paragraphs_max=ask.paragraphs_max)
+    # Normalize paragraph separators and remove control characters before publication.
+    draft.summary = normalize_prose(draft.summary)
     return draft
 
 

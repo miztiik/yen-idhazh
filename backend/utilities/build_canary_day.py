@@ -543,19 +543,14 @@ BREAKS_AT: Final = 2
 def summary_for(index: int, raw_text: str) -> str:
     """This story's summary, folded to the one shape `Prose` admits.
 
-    Every story is folded to ONE paragraph first, and the reason is what the
-    canary text actually is: these are prompt-injection probes, and their raw
-    text already carries blank lines around the bait. Folding with no cap kept
-    all of them, which gave every story three to six paragraphs and no story the
-    shape this fixture is here to carry. Production never sees that, because
-    `parse_draft` folds a reply with `paragraphs_max` - so this passes the cap
-    for the same reason.
+    Fold the prompt-injection probes' blank lines into spaces so only the
+    designated story carries a break. This keeps both paragraph shapes in the
+    canary without changing production normalization.
 
-    The break goes at a sentence end near the middle, which is where a model
-    asked to break "where the subject turns" would put one. A text with nothing
+    The break goes at a sentence end near the middle. A text with nothing
     to split stays whole rather than growing an empty paragraph.
     """
-    one = normalize_prose(raw_text, paragraphs_max=1)
+    one = " ".join(normalize_prose(raw_text).split())
     if index != BREAKS_AT:
         return one
     sentences = re.findall(r"[^.!?]*[.!?]+\s*|[^.!?]+$", one)
@@ -564,7 +559,7 @@ def summary_for(index: int, raw_text: str) -> str:
     half = len(sentences) // 2
     head = "".join(sentences[:half])
     tail = "".join(sentences[half:])
-    return normalize_prose(f"{head}\n\n{tail}", paragraphs_max=2)
+    return normalize_prose(f"{head}\n\n{tail}")
 
 
 def desk_for(index: int) -> str | None:

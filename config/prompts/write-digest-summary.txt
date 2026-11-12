@@ -21,8 +21,6 @@ OPERATIONAL PRINCIPLES:
 
 Follow the question below for length. Do not pad.
 
-$paragraph_rule
-
 For both: keep every figure exactly as the item wrote it.
 A quotation is at most $max_verbatim_words words, in double
 quotes, with the speaker in the same sentence.

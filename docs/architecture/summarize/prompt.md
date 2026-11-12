@@ -75,11 +75,15 @@ Use the larger of the proportional and fixed-word overshoot allowances. Apply th
 
 Long-form bands may retain an over-length ending because it can carry a qualification or response. Length alone must not silently delete a story for exceeding the requested maximum. There is no automatic retry for these misses.
 
-## A long summary may be two paragraphs
+## Paragraphs follow the model's prose
 
-`summarize.paragraphs_max` limits paragraphs; `second_paragraph_from_words` decides when the prompt asks for a break. One blank line separates paragraphs. Prose normalization rejoins a lone newline, collapses repeated blank lines and replaces other control characters with spaces.
+There is no paragraph-count cap or word threshold for a paragraph break.
+One blank line separates paragraphs. Prose normalization rejoins a lone
+newline, collapses repeated blank lines and replaces other control characters
+with spaces.
 
-Fold surplus paragraphs into the last permitted paragraph rather than dropping their text. Sentence trimming must preserve retained paragraph breaks. Keep the paragraph instruction independent of an item's band when it appears in the shared system prefix.
+Preserve every nonempty paragraph. Sentence trimming must preserve retained
+paragraph breaks.
 
 Keep decoder character limits loose enough for replies the length policy would publish. A parse failure happens before trimming, so a tight rail can bypass the intended tolerance.
 

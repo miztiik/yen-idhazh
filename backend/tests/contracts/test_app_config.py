@@ -81,8 +81,7 @@ def test_the_config_file_names_every_knob_it_owns(name: str) -> None:
     reading `config/` that the knob exists. Measured 2026-09-17 before this
     landed: `idhazh.json` named 16 fewer knobs than it owns and
     `appearance.json` 2 fewer, while the other four named all of theirs.
-    `summarize.paragraphs_max` and `summarize.asks_for_a_visual_plan` were
-    among the missing, and both are load-bearing.
+    `summarize.asks_for_a_visual_plan` was among the missing.
 
     **Owns, not declares.** Three blocks sit on two models and only one file is
     their source; `CONFIG_NOT_OWNED` names the other side. Padding a legacy
