@@ -62,10 +62,16 @@ which shape a panel reaches for is
   `frontend/src/lib/charts/` and its callers: 24 domains, 21 adapting and 3 fixed
   with cause. The 1 GB Pages cap is not on this list: it is arithmetic in
   `glance.ts` and never a scale.
-- **A stacked series has a fixed order, stated once.** Read at the bottom, write
-  at the top, everywhere. Unclaimed and residual always last. A stack whose order
-  moves between panels cannot be compared between panels, and a reader cannot
-  learn it.
+- **A stacked series has a fixed order, stated once, except for daily machine
+  history.** Elsewhere, read stays at the bottom, write at the top, and unclaimed
+  and residual always last. A stack whose order moves between panels cannot be
+  compared between panels, and a reader cannot learn it. Machine history alone
+  ranks each UTC day's recorded machine counts independently, largest at the
+  bottom: it answers daily job placement, not fixed stage composition. Identity
+  follows the stable machine key, never its daily position; missing identity
+  stays neutral with its exact count. All other stacks retain their declared
+  series order. See
+  [the machine drawing contract](how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md).
 - **No piecewise or non-uniform value axis.** Where a spread genuinely defeats a
   linear domain, use a log scale and label it as one. Equal pixel steps standing
   for unequal value steps is a chart that misreports by construction; a log axis
