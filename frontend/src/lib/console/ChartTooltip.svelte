@@ -68,7 +68,7 @@
 				</div>
 			{/each}
 		</dl>
-		<p>Also shown on the page</p>
+		{#if active.footnote !== false}<p>Also shown on the page</p>{/if}
 	</aside>
 {/if}
 
@@ -99,6 +99,6 @@
 	dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 var(--console-control-gap); }
 	dt { color: var(--color-text-secondary); }
 	dd { margin: 0; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
-	.swatch { display: inline-block; inline-size: var(--console-small-size); block-size: var(--console-small-size); margin-inline-end: var(--console-control-padding-block); vertical-align: middle; }
+	.swatch { display: inline-block; inline-size: var(--console-small-size); block-size: var(--console-small-size); margin-inline-end: var(--console-control-padding-block); vertical-align: middle; border: 1px solid var(--color-rule-strong); box-sizing: border-box; }
 	p { margin: 0; color: var(--color-text-tertiary); }
 </style>

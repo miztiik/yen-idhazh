@@ -110,15 +110,11 @@ class TintMode(StrEnum):
 
 
 class ChartPalette(StrEnum):
-    """Which categorical ramp a chart draws from.
-
-    Never the confidence ramp. `design-system.md` records the chart that
-    borrowed the band tokens and told a reader the slowest stage was the
-    failing one; both ramps here are green-free, amber-free and red-free for
-    that reason.
-    """
+    """Which built-in or theme palette identifies categories, never health."""
 
     CATEGORICAL = "categorical"
+    SPECTRAL = "spectral"
+    PIYG = "piyg"
     SEQUENTIAL = "sequential"
 
 
@@ -257,10 +253,10 @@ class ThemeConfig(Model):
     gradient_enabled: bool = Field(
         default=True,
         description=(
-            "Gradients on chrome and identity only - the wordmark, a panel wash, an "
-            "empty state. Never on an item and never inside a chart. A gradient that "
-            "encodes nothing is decoration and is unconstrained; a gradient whose hue "
-            "would tell a reader something is semantic colour and is refused."
+            "Gradients on chrome and identity, including uniform decorative shading "
+            "inside the console's categorical machine marks. False keeps those marks "
+            "flat without changing their category colours. Never on an item. Machine "
+            "shading carries no speed, utilization, health or probability reading."
         ),
     )
     elevation_enabled: bool = Field(
@@ -483,7 +479,13 @@ class ChartConfig(Model):
     )
     palette: ChartPalette = Field(
         default=ChartPalette.CATEGORICAL,
-        description="Which ramp a chart draws from. Never the confidence ramp.",
+        description=(
+            "The console category palette and machine-history identity palette. "
+            "PiYG and Spectral use D3's built-in schemes; categorical retains "
+            "configured colours and sequential uses D3 Blues. The neutral absence "
+            "paint and confidence/movement roles remain separate. Palette colours "
+            "identify categories, never speed, health or a numeric midpoint."
+        ),
     )
     tick_density: int = Field(
         default=6,
@@ -582,11 +584,17 @@ class AppearanceConfig(Contract):
             "readCompatibility": (
                 "additive; absent archive controls and console_style blocks/leaves use "
                 "declared defaults; style arrays replace whole; numeric console frame "
-                "maxima retain their caps and null selects the full window"
+                "maxima retain their caps and null selects the full window; "
+                "chart.palette adds spectral and piyg while prior choices remain accepted"
             )
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-12",
+            change="Add built-in D3 console palettes and aligned appearance defaults.",
+            why="Prior choices and explicit colours still read; field shapes are unchanged.",
+        ),
         ChangelogEntry(
             version="2026-11-11",
             change="Allow an uncapped console frame and activate additive chart hover.",
@@ -601,11 +609,6 @@ class AppearanceConfig(Contract):
             version="2026-10-25",
             change="Bounded browser geometry added for story charts.",
             why="Story charts use measured reader width and stay separate from console dimensions.",
-        ),
-        ChangelogEntry(
-            version="2026-10-10",
-            change="console.tile_min_px added for readable daily tiles.",
-            why="A tile keeps room inside its borders instead of becoming a stripe.",
         ),
         ChangelogEntry(
             version="2026-09-30",

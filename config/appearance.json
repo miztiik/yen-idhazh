@@ -9,7 +9,7 @@
   "chart": {
     "height_px": 220,
     "hover_readout": true,
-    "palette": "categorical",
+    "palette": "piyg",
     "readout_max_share": 1,
     "sparkline_height_px": 36,
     "tick_density": 6,
@@ -194,17 +194,17 @@
       "light": {
         "canvas": "#f2f1ed", "inset": "#e9e7e1", "surface": "#fffefa", "raised": "#ffffff",
         "text": "#25251f", "text_secondary": "#625e55", "text_tertiary": "#746f64",
-        "rule": "#dad6cb", "rule_strong": "#b6afa0", "accent": "#0b746e",
-        "accent_hover": "#085d58", "on_accent": "#ffffff", "focus": "#0b746e",
-        "selected": "#dcedea", "chart_axis": "#b6afa0", "chart_grid": "#dad6cb",
+        "rule": "#dad6cb", "rule_strong": "#b6afa0", "accent": "#276419",
+        "accent_hover": "#1b4612", "on_accent": "#ffffff", "focus": "#8e0152",
+        "selected": "#e6f5d0", "chart_axis": "#b6afa0", "chart_grid": "#dad6cb",
         "categorical": ["#356a9a", "#7d53a0", "#167f99", "#a3427c", "#5968af", "#29739e", "#995aab", "#777268"]
       },
       "dark": {
         "canvas": "#191917", "inset": "#151513", "surface": "#22221f", "raised": "#2b2b27",
         "text": "#f0ede5", "text_secondary": "#c1bcb1", "text_tertiary": "#a39c8f",
-        "rule": "#393932", "rule_strong": "#565348", "accent": "#6bc7be",
-        "accent_hover": "#94d9d0", "on_accent": "#122722", "focus": "#6bc7be",
-        "selected": "#263d38", "chart_axis": "#565348", "chart_grid": "#393932",
+        "rule": "#393932", "rule_strong": "#565348", "accent": "#b8e186",
+        "accent_hover": "#e6f5d0", "on_accent": "#122722", "focus": "#de77ae",
+        "selected": "#1b4612", "chart_axis": "#565348", "chart_grid": "#393932",
         "categorical": ["#8bbce5", "#bea2df", "#72c6d9", "#e6a1c9", "#a4b1e8", "#83bfdc", "#cea4e0", "#b0aa9e"]
       }
     },
@@ -308,5 +308,5 @@
     "movement_good_light": "#2f6f5e",
     "surface_tint_alpha": 0.07
   },
-  "version": "2026-11-11"
+  "version": "2026-11-12"
 }

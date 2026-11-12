@@ -1,6 +1,5 @@
 /** Hardware answers over only its declared query cells. No disk or manifest reads. */
 import type { Row } from '../../data/ledger';
-import type { CardHost } from '../../charts/machine-cards';
 import { normalizeHostRow } from '../../data/host-fingerprint';
 import type { MachineProcessors } from './article-cost';
 import { machineCounters, type MachineLimits } from './counters';
@@ -9,17 +8,11 @@ import type { RankedInput } from '../../charts/d3/rankedList';
 import type { SeriesInput } from '../../charts/d3/dateSeries';
 import * as queries from '../queries/machine';
 import type { PanelQuery } from '../queries/window';
-import { newestRunRows } from '../queries/shared';
-import { formatNumber, type NumberFormatConfig } from '../../number-format';
 
 export const PANEL_QUERIES: Readonly<Record<string, readonly PanelQuery[]>> = {
 	'two-clocks': [queries.twoClocksQuery, queries.twoClocksHostsQuery, queries.platformMixQuery, queries.runShardsQuery],
-	'processor-lost': [queries.processorLostQuery],
-	'disk-reads': [queries.diskReadsQuery],
-	'machine-cards': [queries.machineCardsQuery, queries.machineCardsItemsQuery, queries.platformMixQuery, queries.runShardsQuery],
 	'slower-machines': [queries.slowerMachinesQuery],
 	'platform-mix': [queries.platformMixQuery],
-	'slowest-articles': [queries.slowestArticlesQuery],
 	'tail-trend': [queries.tailTrendQuery],
 	'closest-to-memory': [queries.closestToMemoryQuery],
 	'memory-held': [queries.memoryHeldQuery],
@@ -51,41 +44,6 @@ export function shardCounts(rows: readonly Row[]): Map<string, number> {
 
 export function countersFrom(hosts: readonly Row[], items: readonly Row[], counts: readonly Row[], limits: MachineLimits) {
 	return machineCounters(textRows(hosts), textRows(items), shardCounts(counts), limits);
-}
-
-/** Typed card rows, with unasked fields absent rather than read from another source. */
-export function fingerprints(rows: readonly Row[]): CardHost[] {
-	return rows.flatMap((row) => {
-		const shard = finiteCell(row.shard);
-		const normalized = normalizeHostRow(row);
-		const genericTask = typeof row.pipeline_name === 'string' && typeof row.task_name === 'string';
-		if (typeof row.date !== 'string' || typeof row.run_id !== 'string' ||
-			(typeof row.job !== 'string' && !genericTask) ||
-			typeof row.fingerprint !== 'string' || !row.fingerprint ||
-			shard === null || !Number.isSafeInteger(shard) || shard < 0 || normalized === null) return [];
-		const word = (name: string) => normalized[name] || null;
-		const number = (name: string) => finiteCell(normalized[name]);
-		return [{
-			version: normalized.version, date: row.date, run_id: row.run_id,
-			job: typeof row.job === 'string' ? row.job : null,
-			pipeline_name: typeof row.pipeline_name === 'string' ? row.pipeline_name : null,
-			task_name: typeof row.task_name === 'string' ? row.task_name : null,
-			shard,
-			fingerprint: normalized.fingerprint, fingerprint_version: number('fingerprint_version'),
-			cpu_model: word('cpu_model'), cpu_vendor: word('cpu_vendor'),
-			cpu_family: number('cpu_family'), cpu_model_number: number('cpu_model_number'),
-			cpu_stepping: number('cpu_stepping'), microcode: word('microcode'),
-			cpu_physical_cores: number('cpu_physical_cores'), cpu_logical_processors: number('cpu_logical_processors'),
-			cpu_allowed_processors: number('cpu_allowed_processors'), cpu_quota_cores: number('cpu_quota_cores'),
-			cpu_quota_state: word('cpu_quota_state'), cpu_target_measured_at: word('cpu_target_measured_at'),
-			l3_cache_bytes: number('l3_cache_bytes'),
-			cpu_observed_mhz: number('cpu_observed_mhz'), cpu_reported_max_mhz: number('cpu_reported_max_mhz'),
-			flags: normalized.flags,
-			boot_seconds: number('boot_seconds'), memcpy_gib_s: number('memcpy_gib_s'),
-			memcpy_probe_mib: number('memcpy_probe_mib'), vm_size: word('vm_size'),
-			vm_location: word('vm_location'), vm_zone: word('vm_zone'), vm_fault_domain: word('vm_fault_domain')
-		}];
-	});
 }
 
 /** The cost join needs measured logical counts, not a fingerprint or private metadata. */
@@ -138,38 +96,6 @@ export function slowerMachines(rows: readonly Row[]) {
 		context: `${values[kind].length} articles; notch: slowest tenth`
 	}));
 	return { reference, typical, reading: list('read'), writing: list('write'), withoutReference };
-}
-
-export function slowestArticles(
-	rows: readonly Row[],
-	numberFormat: NumberFormatConfig
-): { run: string | null; rows: RankedInput[]; unmeasured: number } {
-	const selected = newestRunRows(rows);
-	const run = selected.length ? String(selected[0].run_id) : null;
-	const ready = selected.flatMap((row): RankedInput[] => {
-		const elapsed = finiteCell(row.item_total_ms);
-		if (elapsed === null || elapsed < 0) return [];
-		const gap = finiteCell(row.stage_gap_ms);
-		const wait = finiteCell(row.queue_wait_ms);
-		const clocks = [
-			['Fetch', 'fetch_ms', '--chart-1'], ['Extract', 'extract_ms', '--chart-2'],
-			['Summarize', 'summarize_ms', '--chart-3'], ['Checking', 'faithfulness_ms', '--chart-7']
-		] as const;
-		const complete = clocks.every(([, key]) => {
-			const value = finiteCell(row[key]); return value !== null && value >= 0;
-		});
-		return [{
-			label: `${row.item_id ?? 'unnamed article'} · ${row.source_id ?? 'source not recorded'}`,
-			value: elapsed / 1000,
-			context: [wait === null ? 'queue wait not recorded' : `waited ${formatNumber(wait / 1000, numberFormat, { si: false })} s first`,
-				gap === null ? 'stage gap not recorded' : gap < 0 ? `stages overlapped by ${formatNumber(-gap / 1000, numberFormat, { si: false })} s` : ''].filter(Boolean).join('; '),
-			...(complete && gap !== null && gap >= 0 ? { segments: [
-				...clocks.map(([label, key, token]) => ({ label, value: finiteCell(row[key])! / 1000, token })),
-				...(gap > 0 ? [{ label: 'Other', value: gap / 1000, token: '--chart-8' }] : [])
-			] } : {})
-		}];
-	});
-	return { run, rows: ready, unmeasured: selected.length - ready.length };
 }
 
 export function closestToMemory(rows: readonly Row[]): RankedInput[] {

@@ -23,7 +23,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/lib/charts': [
 		'cost.ts', 'day-slots.ts', 'fleet.ts', 'frame.ts', 'glance.ts', 'indexed-runs.ts',
-		'machine-cards.ts', 'machine-colour.ts', 'machine-name.ts',
+		'colour-scheme.ts', 'fleet-identity.ts', 'machine-colour.ts', 'machine-name.ts',
 		'label-context.ts', 'machine.ts', 'rank.ts', 'readout.ts', 'run-history.ts', 'run-yield.ts', 'series.ts',
 		'skeleton.ts', 'sparkline.ts', 'stack-types.ts', 'targetbar.ts',
 		'theme.ts', 'viewport.ts'
@@ -40,7 +40,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'DigestItem.svelte', 'DigestList.svelte', 'EmptyDay.svelte', 'FailureList.svelte', 'FailureRuleRanking.svelte',
 		'FilterBar.svelte', 'FoundStories.svelte', 'ItemMeta.svelte',
 		'ItemVisual.svelte', 'KpiCard.svelte', 'LeadingStories.svelte', 'LensChips.svelte',
-		'MachineCard.svelte', 'MoreDays.svelte',
+		'MoreDays.svelte',
 		'NotHere.svelte', 'Notice.svelte', 'Panel.svelte', 'PanelGroup.svelte', 'PayloadState.svelte',
 		'RankedList.svelte', 'RateControl.svelte', 'ReadAloud.svelte', 'Reserved.svelte', 'RouteStatus.svelte',
 		'RunLengths.svelte', 'RunSquares.svelte', 'RunYield.svelte', 'SearchState.svelte',
@@ -61,10 +61,10 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/console/pipelines': [
 		'ArticleAge.svelte', 'AtAGlance.svelte', 'ChartDrawing.svelte',
 		'FailureMix.svelte', 'ItemCost.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
-		'RunTimeline.svelte', 'SiteCostPerItem.svelte', 'SlowerOnSameWork.svelte', 'StageTimings.svelte',
+		'RunTimeline.svelte', 'SlowestArticles.svelte', 'SiteCostPerItem.svelte', 'SlowerOnSameWork.svelte', 'StageTimings.svelte',
 		'VisualRefusals.svelte',
 		'article-age.ts', 'at-a-glance.ts', 'attempt-notes.ts', 'chart-drawing.ts', 'drawing-flow.ts', 'failure-mix.ts',
-		'item-cost.ts', 'item-time-split.ts', 'record-window.ts', 'run-health.ts',
+		'item-cost.ts', 'item-time-split.ts', 'query-groups.ts', 'record-window.ts', 'run-health.ts', 'slowest-articles.ts',
 		'run-timeline.ts', 'site-cost-per-item.ts', 'slower-on-same-work.ts', 'stage-timings.ts', 'visual-attempts.ts', 'visual-refusals.ts'
 	],
 	'src/lib/console/model': [
@@ -88,10 +88,9 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'status.ts', 'strip-fit.ts', 'type-colour.ts', 'type-family.ts', 'utc-instant.ts'
 	],
 	'src/lib/console/machine': [
-		'article-cost.ts', 'ArticleCostPanel.svelte', 'disk-reads.ts', 'DiskReadsPanel.svelte', 'FleetDots.svelte',
-		'MachineCardsPanel.svelte', 'MachineCharts.svelte', 'RecordFrame.svelte', 'counters.ts', 'host-types.ts', 'records.ts', 'memory-held.ts',
+		'article-cost.ts', 'ArticleCostPanel.svelte', 'FleetDots.svelte',
+		'MachineCharts.svelte', 'RecordFrame.svelte', 'counters.ts', 'host-types.ts', 'records.ts', 'memory-held.ts',
 		'MemoryHeldPanel.svelte', 'PlatformMixPanel.svelte',
-		'processor-lost.ts', 'ProcessorLostPanel.svelte',
 		'refused-runs.ts', 'run-axis.ts', 'ReadWritePanel.svelte', 'TailTrendPanel.svelte'
 	],
 	'src/lib/data': [
@@ -125,7 +124,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/routes/[date]/[vertical]': ['+page.svelte', '+page.ts'],
 	scripts: [
 		'build-canary.mjs', 'build-frame-css.mjs', 'build-icons.mjs', 'build-state.ts',
-		'build-worker-switch.mjs', 'bundle-gate.mjs', 'canary-inventory.mjs', 'stage-publication.mjs',
+		'build-worker-switch.mjs', 'bundle-gate.mjs', 'canary-inventory.mjs', 'console-palette.ts', 'stage-publication.mjs',
 		'doc-test-inputs.ts', 'duckdb-addon.ts', 'payload-ceilings.mjs', 'published-ledgers.mjs',
 		'query-engine-assets.ts', 'run-checks.ts', 'setup-duckdb.ts',
 		'staged-publication.mjs', 'test-groups.ts', 'test-results.ts', 'test-scope.ts', 'verified-preview.ts'

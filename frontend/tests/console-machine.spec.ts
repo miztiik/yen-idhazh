@@ -15,8 +15,8 @@
 import { expect, test } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { closestToMemory, contextReadings, countersFrom, fingerprints, processors, textRows, labelHeldMedian, reuseChecks, shardCounts, slowestArticles, slowerMachines } from '../src/lib/console/machine/records';
-import { machineCards } from '../src/lib/charts/machine-cards';
+import { closestToMemory, contextReadings, countersFrom, processors, textRows, labelHeldMedian, reuseChecks, shardCounts, slowerMachines } from '../src/lib/console/machine/records';
+import { slowestArticles } from '../src/lib/console/pipelines/slowest-articles';
 import { fleetJobs } from '../src/lib/charts/fleet';
 import { machineKeys } from '../src/lib/charts/machine-colour';
 import {
@@ -43,8 +43,6 @@ import {
 import { dateSeries, money, numberFormat } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import { articleCost, runnerHourSeconds } from '../src/lib/console/machine/article-cost';
-import { processorLostOverDays } from '../src/lib/console/machine/processor-lost';
-import { diskReads } from '../src/lib/console/machine/disk-reads';
 import { describeRefusedRuns } from '../src/lib/console/machine/refused-runs';
 import { hostRow, ledgers, plan, type ShardReading } from './support/machine-rows';
 import { observabilityConfig } from '../src/lib/server/config';
@@ -821,33 +819,6 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 		}
 	});
 
-	test('the processor lost to other tenants counts it', () => {
-		const thresholds = { marked: 1, named: 10 };
-		const accepted = processorLostOverDays(acceptedRows, thresholds, numberFormat);
-		expect([accepted.from, accepted.outOf, accepted.days[0].worstPct]).toEqual([2, 2, 0.5]);
-		expect(accepted.named).toBeNull();
-		const both = processorLostOverDays(bothRuns, thresholds, numberFormat);
-		expect([both.from, both.outOf, both.days[0].worstPct]).toEqual([4, 4, 12]);
-		// The day is named for a share only the refused run's article lost.
-		expect(both.named?.key).toBe('2026-09-04');
-	});
-
-	test('the waits for the disk count it', () => {
-		const marks = { marked: 1, named: 1 };
-		const accepted = diskReads(acceptedRows, marks);
-		expect([accepted.days[0].reads, accepted.days[0].counted, accepted.days[0].excluded]).toEqual([
-			0, 1, 1
-		]);
-		expect(accepted.pinning).toEqual({ held: 1, loose: 0, silent: 0 });
-		expect(accepted.worst).toBeNull();
-		const both = diskReads(bothRuns, marks);
-		expect([both.days[0].reads, both.days[0].counted, both.days[0].excluded]).toEqual([
-			4100, 2, 2
-		]);
-		expect(both.pinning).toEqual({ held: 1, loose: 1, silent: 0 });
-		expect(both.worst?.date).toBe('2026-09-04');
-	});
-
 	test('the prompt reuse counts it', () => {
 		const accepted = reuseChecks(acceptedRows).find((one) => one.call === 'summary')!;
 		// Native independent percentages use the upper middle of [80, 90].
@@ -1054,6 +1025,14 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		], numberFormat).run).toBe(newer);
 	});
 
+	test('a newest run without a recorded clock stays unmeasured instead of falling back to an older run', () => {
+		expect(slowestArticles([
+			{ run_id: '2026-09-01-9', item_id: 'older', item_total_ms: 99000 },
+			{ run_id: '2026-09-01-10', item_id: 'newest', item_total_ms: null }
+		], numberFormat)).toEqual({ run: '2026-09-01-10', rows: [], unmeasured: 1 });
+		expect(slowestArticles([{ run_id: '2026-09-01-10', item_id: 'zero', item_total_ms: 0 }], numberFormat).rows[0].value).toBe(0);
+	});
+
 	test('positive gaps close the elapsed stack; queue wait stays outside it and missing stages stay absent', () => {
 		const row = { run_id: '2026-09-01-1', item_id: 'one', item_total_ms: 5000,
 			fetch_ms: 1000, extract_ms: 1000, summarize_ms: 1000, faithfulness_ms: 1000,
@@ -1079,22 +1058,6 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 			expect(result.refused[0].why).toContain('two machine records that disagree');
 			}
 		}
-	});
-
-	test('a card never fabricates a job, shard or private unasked field', () => {
-		const row = { version: '2026-10-10', date: '2026-09-01', run_id: '2026-09-01-1', job: 'work',
-			shard: 2, fingerprint: '0123456789abcdef', fingerprint_version: 2 };
-		expect(fingerprints([{ ...row, shard: null }, { ...row, job: null }])).toEqual([]);
-		for (const shard of ['', 'not-a-shard', -1, 0.5]) {
-			expect(fingerprints([{ ...row, shard }])).toEqual([]);
-		}
-		expect(fingerprints([{ ...row, shard: 0 }])[0].shard).toBe(0);
-		const held = fingerprints([row]);
-		expect(held[0]).toMatchObject({ job: 'work', shard: 2, fingerprint: row.fingerprint });
-		expect(held[0]).toMatchObject({ version: row.version, fingerprint_version: 2 });
-		expect(held[0]).not.toHaveProperty('runner_name');
-		expect(held[0]).not.toHaveProperty('measured_at');
-		expect(held[0]).not.toHaveProperty('cores');
 	});
 
 	test('held memory is total less the low-water available, with a total endpoint, never a process total', () => {
@@ -1165,35 +1128,15 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		};
 		const busy = { date: modern.date, run_id: modern.run_id, machine_shard: 0,
 			cpu_busy_pct: 50, item_total_ms: 2000 };
-		const options = { watchedFlags: ['avx2'], colour: { stops: 5, floor: 0.4 }, numberFormat, recording: true, cacheMargin: 2 };
 		test('physical, logical, allowed, quota and frozen readings stay separate from whole-host cost', () => {
 			const held = countersFrom([modern], [], [{ run_id: 'one', shards: 1 }], limits);
 			expect(held.refused).toEqual([]);
 			expect(held.runs[0].reported[0]).toMatchObject({ logicalProcessors: 8, fingerprintVersion: 2, readTokensPerSecond: 0 });
-			const card = machineCards(held.runs[0], fingerprints([modern]), options).cards[0];
-			expect(card).toMatchObject({ physicalCores: 4, logicalProcessors: 8, allowedProcessors: 2,
-				quotaCores: 0.5, quotaState: 'finite', targetMeasuredAt: modern.cpu_target_measured_at,
-				observedMhz: 2800, reportedMaxMhz: 3200 });
 			const cost = articleCost(textRows([busy]), processors([modern]));
 			expect(cost.processorSeconds).toMatchObject({ from: 1, outOf: 1, mid: 8 });
 			expect(runnerHourSeconds(cost.processors)).toBe(28800);
-			for (const cpu_quota_state of ['unlimited', 'unavailable', null]) {
-				const row = { ...modern, cpu_quota_state, cpu_quota_cores: null, cpu_target_measured_at: null };
-				expect(machineCards(held.runs[0], fingerprints([row]), options).cards[0]).toMatchObject({
-					quotaState: cpu_quota_state, quotaCores: null, targetMeasuredAt: null
-				});
-			}
 			const unknown = { ...modern, cpu_logical_processors: null };
 			expect(articleCost(textRows([busy]), processors([unknown])).processorSeconds).toMatchObject({ from: 0, outOf: 1, mid: null });
-		});
-		test('a class card keeps one source snapshot rather than borrowing another target', () => {
-			const run = countersFrom([modern], [], [{ run_id: 'one', shards: 1 }], limits).runs[0];
-			const first = { ...modern, cpu_allowed_processors: null, cpu_quota_cores: null,
-				cpu_quota_state: null, cpu_target_measured_at: null };
-			const second = { ...modern, job: 'plan', cpu_logical_processors: 16, flags: null };
-			const card = machineCards(run, fingerprints([first, second]), options).cards[0];
-			expect(card).toMatchObject({ logicalProcessors: 8, allowedProcessors: null, quotaCores: null,
-				quotaState: null, targetMeasuredAt: null });
 		});
 		test('legacy measurements remain unknown, observed MHz migrates and manifest coverage never comes from hosts', () => {
 			const legacy = { ...modern, version: '2026-09-20', shard: 1, fingerprint_version: null,
@@ -1204,15 +1147,11 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 			expect(known.runs[0].reported[1]).toMatchObject({ logicalProcessors: null, fingerprintVersion: 1 });
 			const unknown = countersFrom(rows, [], [{ run_id: 'one', shards: null }], limits);
 			expect(unknown.runs[0].slowestJobSeconds).toMatchObject({ from: 2, outOf: null });
-			expect(fingerprints([legacy])[0]).toMatchObject({ cpu_physical_cores: null, cpu_logical_processors: null,
-				cpu_allowed_processors: null, cpu_quota_cores: null, cpu_quota_state: null,
-				cpu_target_measured_at: null, cpu_observed_mhz: 2400, cpu_reported_max_mhz: null, fingerprint_version: 1 });
 			expect(articleCost(textRows([{ ...busy, machine_shard: 1 }]), processors([legacy])).processorSeconds)
 				.toMatchObject({ from: 0, outOf: 1, mid: null });
 			const jobs = fleetJobs(textRows(rows));
 			const keys = machineKeys(jobs);
 			expect(keys(jobs[0]).key).not.toBe(keys(jobs[1]).key);
-			expect(machineCards(known.runs[0], fingerprints(rows), options).cards).toHaveLength(2);
 		});
 		test('unsupported or inconsistent host algorithms refuse the run rather than vanish; raw day and shard faults survive', () => {
 			for (const bad of [{ ...modern, version: '2099-01-01' }, { ...modern, fingerprint_version: 3 },
@@ -1226,7 +1165,6 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 				expect(held.runs).toEqual([]);
 				expect(held.refused[0].why).toContain('shard');
 				expect(processors([{ ...modern, shard }])).toEqual([]);
-				expect(fingerprints([{ ...modern, shard }])).toEqual([]);
 			}
 		});
 		test('complementary current half-rows and equal duplicates retain zeros in either order', () => {

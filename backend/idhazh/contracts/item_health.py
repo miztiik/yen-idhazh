@@ -224,10 +224,6 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "machine_job",
             "machine_pipeline_name",
             "machine_task_name",
-            "cpu_steal_pct",
-            "llama_major_faults",
-            "os_mem_cached_bytes",
-            "weights_pinned",
             "os_mem_total_bytes",
             "os_mem_available_min_bytes",
             "source_words",
@@ -303,6 +299,12 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
 #: non-zero naming it.
 UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
     {
+        "Processor-steal and paging readings retained without Hardware views": (
+            "cpu_steal_pct",
+            "llama_major_faults",
+            "os_mem_cached_bytes",
+            "weights_pinned",
+        ),
         "which extraction classes, spans and facts the removed diagnostic compared": (
             "element_class",
             "span_integrity",

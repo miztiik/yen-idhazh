@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { FLEET_COLUMNS } from '../src/lib/charts/fleet';
-import { machineCardsItemsQuery, platformMixQuery, runShardsQuery } from '../src/lib/console/queries/machine';
+import { platformMixQuery, runShardsQuery } from '../src/lib/console/queries/machine';
 import { summaryLengthQuery } from '../src/lib/console/queries/model';
 import { slowerOnSameWorkQuery } from '../src/lib/console/queries/pipelines';
 import { compareRuns, failedRuleQuery, hostKey, joinItemHosts, newestRunRows } from '../src/lib/console/queries/shared';
@@ -25,6 +25,11 @@ import { panelQueries as modelPanels } from '../src/lib/console/model/panels';
 import { failedRuleQuery as pipelinesFailedRuleQuery } from '../src/lib/console/queries/pipelines';
 import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
 import { failureRuleRows, failureRules } from '../src/lib/console/failure-rules';
+import { PIPELINES_QUERY_GROUPS } from '../src/lib/console/pipelines/query-groups';
+import { slowestArticles } from '../src/lib/console/pipelines/slowest-articles';
+import { PANEL_QUERIES } from '../src/lib/console/machine/records';
+import { rankedList } from '../src/lib/charts/d3/rankedList';
+import { numberFormat } from './support/number-format';
 
 const PRESETS = [3, 7, 30] as const;
 
@@ -255,9 +260,43 @@ test('the real three-ledger door anchors at the oldest end and asks each ledger 
 		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
 	]);
 	expect(platformMixQuery.columns).toEqual(expect.arrayContaining([...FLEET_COLUMNS]));
-	expect(machineCardsItemsQuery.columns).toEqual([
-		'date', 'run_id', 'machine_job', 'machine_pipeline_name', 'machine_task_name', 'machine_shard', 'cpu_model'
+});
+
+test('the relocated run-wide ranking keeps its original endpoint without backshifting ordinary Pipelines readings', async ({}, info) => {
+	const root = info.outputPath('independent-ranking-window');
+	const day = '2026-09-24';
+	const article = (run: string, item: string, shard: number, ms: number | null): Row => ({
+		date: day, run_id: `${day}-${run}`, item_id: item, source_id: 'source', machine_shard: shard, item_total_ms: ms,
+		fetch_ms: null, extract_ms: null, summarize_ms: null, faithfulness_ms: null, stage_gap_ms: null, queue_wait_ms: null
+	});
+	await buildRows(root, 'item-health', [
+		{ covers: day, rows: [article('9', 'older', 0, 99000), article('10', 'short', 0, 2000),
+			article('10', 'long', 1, 4000), article('10', 'missing', 2, null)] },
+		{ covers: '2026-09-25', rows: [item('2026-09-25')] },
+		{ covers: '2026-09-26', rows: [item('2026-09-26')] }
 	]);
+	await buildRows(root, 'host-fingerprint', [{ covers: '2026-09-25', rows: [host('2026-09-25')] }]);
+	await buildRows(root, 'run-shards', [{ covers: day, rows: [{ date: day, run_id: `${day}-10`, shards: 3 }] }]);
+	const reader = createQueryWindow(diskDoor(root));
+	const reaches = await Promise.all(PIPELINES_QUERY_GROUPS.map((group) => reader.routeReach(group.ledgers)));
+	const timeline = PIPELINES_QUERY_GROUPS[0].queries.find((query) => query.name === 'runTimelineQuery')!;
+	const ranking = PIPELINES_QUERY_GROUPS[1].queries[0];
+	const timelineRange = asRange(rangeFor(timeline, 7, reaches[0], PRESETS));
+	const rankingRange = asRange(rangeFor(ranking, 7, reaches[1], PRESETS));
+	expect(timelineRange.to).toBe('2026-09-26');
+	expect(rankingRange).toEqual({ from: day, to: day, days: 1, asked: 1 });
+	const answer = await reader.sliceOnce(ranking, rankingRange);
+	expect(answer.state).toBe('ok');
+	const view = slowestArticles(answer.rows, numberFormat);
+	expect(view.run).toBe(`${day}-10`);
+	expect(view.unmeasured).toBe(1);
+	expect(view.rows.map((row) => [row.label, row.value]).sort()).toEqual([['long - source', 4], ['short - source', 2]]);
+	expect(rankedList(view.rows, { max: 1 })?.rows.map((row) => row.label)).toEqual(['long - source']);
+	expect(view.rows.every((row) => row.segments === undefined)).toBe(true);
+	for (const id of ['machine-cards', 'processor-lost', 'disk-reads', 'slowest-articles']) expect(PANEL_QUERIES).not.toHaveProperty(id);
+	expect(PANEL_QUERIES['two-clocks'].map((query) => query.name))
+		.toEqual(['twoClocksQuery', 'twoClocksHostsQuery', 'platformMixQuery', 'runShardsQuery']);
+	expect(PANEL_QUERIES['article-cost'].map((query) => query.name)).toEqual(['articleCostQuery', 'articleCostHostsQuery']);
 });
 
 test('structured fetch predicates cross the real door rather than filtering the answer afterward', async ({}, info) => {

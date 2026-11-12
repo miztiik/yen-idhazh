@@ -27,7 +27,7 @@ console.log(JSON.stringify({
     style: resolveConsoleStyle(input),
     faces: CONSOLE_FONT_FACES,
     caps: CONSOLE_LINECAPS,
-    css: renderFrameCss({console_style: input})
+    css: await renderFrameCss({console_style: input})
 }));
 """
 

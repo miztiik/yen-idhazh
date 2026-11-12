@@ -286,26 +286,3 @@ def test_every_request_the_item_ledger_names_carries_its_reading_speed_column() 
         assert f"{name}_prefill_tokens_per_s" in columns, (
             f"{name} carries no reading-speed column to pair with"
         )
-
-
-def test_the_correction_the_panel_prints_names_the_date_the_contract_records() -> None:
-    """One date, written in two languages, and neither side can see the other move.
-
-    The panel tells a reader that a row older than this date counted the host's
-    stolen share as our own work. `cpu_busy_pct` records the same date, and a
-    correction printed for a day the contract did not move is a claim about the
-    archive that the archive does not support.
-    """
-    stated = ItemHealthRow.json_schema()["properties"]["cpu_busy_pct"]["description"]
-    said = re.search(r"A row written before (\d{4}-\d{2}-\d{2}) counted that time as ours", stated)
-    assert said, (
-        "`cpu_busy_pct` no longer records the date it stopped holding the stolen share, "
-        "so the correction the panel prints cannot be checked against anything"
-    )
-
-    text = read_text(CONSOLE / "machine" / "processor-lost.ts")
-    drawn = re.search(r"^export const BUSY_HELD_BOTH_BEFORE = '([^']*)';$", text, re.MULTILINE)
-    assert drawn, "processor-lost.ts no longer declares BUSY_HELD_BOTH_BEFORE"
-    assert drawn[1] == said[1], (
-        f"the panel prints a correction for {drawn[1]} and the contract records {said[1]}"
-    )

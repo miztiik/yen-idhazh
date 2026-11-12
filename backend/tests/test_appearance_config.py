@@ -37,6 +37,7 @@ from idhazh.contracts.appearance_config import (
     ZONE_RAIL_MIN_REM,
     AppearanceConfig,
     ChartConfig,
+    ChartPalette,
     FrameConfig,
     IconsConfig,
     MotionConfig,
@@ -59,6 +60,17 @@ def test_explorer_file_limit_defaults_and_bounds() -> None:
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APPEARANCE_PATH = REPO_ROOT / "config" / "appearance.json"
+
+
+def test_machine_palette_accepts_prior_values_and_matches_the_frontend_vocabulary() -> None:
+    source = (REPO_ROOT / "frontend/src/lib/server/config.ts").read_text()
+    copied = re.search(r"palette: ([^;]+);", source)
+    assert copied is not None
+    assert set(re.findall(r"'([^']+)'", copied[1])) == {value.value for value in ChartPalette}
+    for palette in ("categorical", "sequential", "spectral", "piyg"):
+        config = AppearanceConfig.model_validate({"chart": {"palette": palette}})
+        assert config.chart.palette.value == palette
+    assert ChartConfig().palette is ChartPalette.CATEGORICAL
 
 
 def test_daily_tiles_keep_an_inside_wider_than_the_gap() -> None:

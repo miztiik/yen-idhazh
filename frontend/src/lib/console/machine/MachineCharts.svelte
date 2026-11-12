@@ -16,7 +16,7 @@
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
-	import { closestToMemory, contextReadings, labelHeldMedian, reuseChecks, reuseSeries, slowestArticles, slowerMachines, textRows } from './records';
+	import { closestToMemory, contextReadings, labelHeldMedian, reuseChecks, reuseSeries, slowerMachines, textRows } from './records';
 	import type { ConsoleShell } from '$lib/console/band';
 	import type { Row } from '$lib/data/ledger';
 	import type { ChartConfig } from '$lib/server/config';
@@ -40,7 +40,6 @@
 	const slower = $derived(slowerMachines(rows));
 	const comparableKinds = $derived(new Set([...slower.reading, ...slower.writing]
 		.filter((row) => (row.range?.count ?? 0) >= knobs.slower_machines_min_articles).map((row) => row.label)));
-	const slowest = $derived(slowestArticles(rows, numberFormat));
 	const memoryReadings = $derived(closestToMemory(rows));
 	const closest = $derived(rankedList(memoryReadings, { max: knobs.closest_to_memory_rows }));
 	const tightest = $derived([...memoryReadings].sort((a, b) => b.value - a.value || a.label.localeCompare(b.label))[0]);
@@ -53,7 +52,6 @@
 	const comparison = $derived(id === 'counterfactual-cost' ? "Each day's counterfactual cost against the running total"
 		: id === 'two-clocks' ? "Each shard's gap against the tolerance"
 		: id === 'slower-machines' ? "Each machine kind's typical time against the reference machine's"
-		: id === 'slowest-articles' ? "Each article's longest stage against its other stages"
 		: id === 'closest-to-memory' ? "Memory held at each article's lowest point against the machine's total"
 		: id === 'context-headroom' ? 'Each prompt against the reading limit'
 		: 'Text held for the label call against text the summary call reads fresh');
@@ -104,9 +102,7 @@
 	'counterfactual-cost': 'machine-cost' }[id]}
 	data-window-days={windowDays}
 	data-cost-running-total={id === 'counterfactual-cost' ? cost.runningTotal : undefined}>
-<Panel {id} {title} heading="h3" verdict={id === 'two-clocks'} note={id === 'slowest-articles'
-	? `Queue wait sits outside elapsed time - one article of the newest run ${slowest.run ?? 'not recorded'}.`
-	: id === 'two-clocks' ? `Newest run ${newestRunId ?? newest?.runId ?? 'not recorded'}, by shard.`
+<Panel {id} {title} heading="h3" verdict={id === 'two-clocks'} note={id === 'two-clocks' ? `Newest run ${newestRunId ?? newest?.runId ?? 'not recorded'}, by shard.`
 	: `Read from the published record when you open this page - over ${nameSpan(windowDays)}.`}>
 	<div data-panel-question="is it working"
 		data-model-rule-name={['prompt-reuse', 'counterfactual-cost'].includes(id) ? undefined : id}
@@ -143,12 +139,6 @@
 				{/each}
 			</div>
 			<p>{slower.withoutReference} runs had no reference-machine reading. {slower.reference.unqualified} articles lacked a comparable reading.</p>
-		{:else if id === 'slowest-articles'}
-			{@const geometry = rankedList(slowest.rows, { max: knobs.slowest_articles_rows })}
-			<p class="lede" data-lede>{geometry?.rows.length ? `${formatNumber(geometry.rows[0].value, numberFormat, { si: false })} seconds for the slowest article.` : 'No article recorded elapsed time.'}</p>
-			<RankedList {geometry} caption="Longest articles" maxText={`${geometry === null ? '0' : formatNumber(geometry.max, numberFormat, { si: false })} seconds`}
-				unmeasuredNote="No elapsed time recorded." emptyNote="No elapsed time recorded." />
-			<p>{slowest.unmeasured} articles did not record elapsed time.</p>
 		{:else if id === 'closest-to-memory'}
 			<p class="lede" data-lede>{tightest?.ends
 				? `The tightest article left ${formatNumber(tightest.ends.end - tightest.value, numberFormat, { si: false })} GiB of the machine's ${formatNumber(tightest.ends.end, numberFormat, { si: false })} GiB free.`

@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -62,10 +62,16 @@ which shape a panel reaches for is
   `frontend/src/lib/charts/` and its callers: 24 domains, 21 adapting and 3 fixed
   with cause. The 1 GB Pages cap is not on this list: it is arithmetic in
   `glance.ts` and never a scale.
-- **A stacked series has a fixed order, stated once.** Read at the bottom, write
-  at the top, everywhere. Unclaimed and residual always last. A stack whose order
-  moves between panels cannot be compared between panels, and a reader cannot
-  learn it.
+- **A stacked series has a fixed order, stated once, except for daily machine
+  history.** Elsewhere, read stays at the bottom, write at the top, and unclaimed
+  and residual always last. A stack whose order moves between panels cannot be
+  compared between panels, and a reader cannot learn it. Machine history alone
+  ranks each UTC day's recorded machine counts independently, largest at the
+  bottom: it answers daily job placement, not fixed stage composition. Identity
+  follows the stable machine key, never its daily position; missing identity
+  stays neutral with its exact count. All other stacks retain their declared
+  series order. See
+  [the machine drawing contract](how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md).
 - **No piecewise or non-uniform value axis.** Where a spread genuinely defeats a
   linear domain, use a log scale and label it as one. Equal pixel steps standing
   for unequal value steps is a chart that misreports by construction; a log axis
@@ -239,6 +245,12 @@ column - four series or one - and the rules are not negotiable per chart:
 - **Every series at the hovered column, at once.** Comparing four series must
  not cost four hovers. The strip is the legend as well, so the four numbers a
  reader compares are printed once rather than twice.
+ Machine placement is the explicit compact projection: its actual mark key
+ selects only that qualified machine's count out of the selected UTC day's
+ recorded jobs. Day space shows the day and total only. The short standing
+ summary is supplemented by complete per-machine counts, known zeros, speed
+ context and job details on keyboard/touch day selection. Other charts keep
+ their full-column defaults.
 - **As wide as the plot, with its entries side by side.** `chart.readout_max_share`
  is 1: the strip may take the whole width of the plot above it, and its entries
  lie along one line and wrap only when the next one does not fit. Each value
@@ -289,8 +301,8 @@ page. Tooltip text is text, never markup.
 The bounded renderer inventory is the native DateSeries, RunSeries,
 Distribution, PairedScatter, PartsOfOne, Flow and TileStrip components; shared
 Sparkline, RunYield/RunSquares, RunLengths, StageTimings, ThroughputTrend,
-TimeHistogram, SourceCutRange, RankedList, TargetBar and MachineCard;
-FleetDots, TailTrend, AtAGlance, the processor/disk/memory/article-cost and
+TimeHistogram, SourceCutRange, RankedList and TargetBar;
+FleetDots, TailTrend, AtAGlance, the memory/article-cost and
 source-yield/fetch-time presentations; and the retained timeline and Judgement
 drawings. New callers use these mechanisms rather than inventing another hover
 protocol. Tables are printed answers, not chart marks.
@@ -369,7 +381,7 @@ which prints the row the reader pointed at; the ledger is one tab stop for every
 line, Up and Down step causes, Left and Right step days, and Escape returns to
 the worst cause on the newest day. Susan, 2026-09-28.
 
-A chart whose readings are already printed gets no duplicate strip - one target bar, a card per machine
+A chart whose readings are already printed gets no duplicate strip - one target bar
 that prints its own readings, a split that prints both halves and its total, a
 chart with no rows in it yet, a flow whose every stage and branch prints its
 count and share beside its node, a bar a day whose every part is printed in the

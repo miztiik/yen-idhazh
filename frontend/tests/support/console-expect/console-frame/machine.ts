@@ -6,12 +6,12 @@ export const EXPECT: RouteExpect = {
 		{
 			id: 'what-the-machine-was-doing',
 			title: 'What the machine was doing',
-			panels: ['two-clocks', 'processor-lost', 'disk-reads', 'machine-cards', 'slower-machines', 'platform-mix']
+			panels: ['two-clocks', 'slower-machines', 'platform-mix']
 		},
 		{
 			id: 'where-the-time-went',
 			title: 'Where the time went',
-			panels: ['slowest-articles', 'tail-trend']
+			panels: ['tail-trend']
 		},
 		{
 			id: 'how-close-to-the-limits',

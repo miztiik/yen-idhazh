@@ -30,7 +30,7 @@ EXPECTED_NAMES: Final = {
     "shared": ("failedRuleQuery",),
     "pipelines": (
         "failureMixQuery", "itemTimeSplitQuery", "slowerOnSameWorkQuery",
-        "stageTimingsQuery", "itemCostQuery", "runTimelineQuery", "articleAgeQuery",
+        "stageTimingsQuery", "itemCostQuery", "runTimelineQuery", "slowestArticlesQuery", "articleAgeQuery",
     ),
     "model": (
         "modelThroughputQuery", "callEndingQuery", "faithfulnessQuery",
@@ -39,9 +39,8 @@ EXPECTED_NAMES: Final = {
     ),
     "machine": (
         "runShardsQuery",
-        "twoClocksQuery", "twoClocksHostsQuery", "processorLostQuery", "diskReadsQuery",
-        "machineCardsQuery", "machineCardsItemsQuery", "slowerMachinesQuery", "platformMixQuery",
-        "slowestArticlesQuery", "tailTrendQuery", "closestToMemoryQuery", "memoryHeldQuery",
+        "twoClocksQuery", "twoClocksHostsQuery", "slowerMachinesQuery", "platformMixQuery",
+        "tailTrendQuery", "closestToMemoryQuery", "memoryHeldQuery",
         "contextHeadroomQuery", "articleCostQuery", "articleCostHostsQuery",
         "promptReuseQuery", "readAgainstWrittenQuery",
     ),
@@ -70,19 +69,6 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "summaryLengthQuery": ("date", "run_id", "model_id", "summary_words", "source_words_before_cap", "source_words", "compression"),
     "twoClocksQuery": ("date", "run_id", "machine_job", "machine_shard", "prefill_ms", "input_tokens", "cached_tokens"),
     "twoClocksHostsQuery": ("date", "run_id", "job", "shard", "server_prompt_tokens", "server_prompt_seconds"),
-    "processorLostQuery": ("date", "run_id", "machine_shard", "cpu_steal_pct"),
-    "diskReadsQuery": ("date", "run_id", "item_index", "llama_major_faults", "os_mem_cached_bytes", "weights_pinned"),
-    "machineCardsQuery": (
-        "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "fingerprint", "fingerprint_version",
-        "cpu_model", "cpu_vendor", "cpu_family", "cpu_model_number", "cpu_stepping",
-        "microcode", "cpu_physical_cores", "cpu_logical_processors",
-        "cpu_allowed_processors", "cpu_quota_cores", "cpu_quota_state",
-        "cpu_target_measured_at", "l3_cache_bytes", "cpu_observed_mhz",
-        "cpu_reported_max_mhz", "flags", "boot_seconds", "memcpy_gib_s",
-        "memcpy_probe_mib", "vm_size", "vm_location", "vm_zone", "vm_fault_domain",
-        *LEGACY_HOST_INPUT_COLUMNS,
-    ),
-    "machineCardsItemsQuery": ("date", "run_id", "machine_job", "machine_pipeline_name", "machine_task_name", "machine_shard", "cpu_model"),
     "slowerMachinesQuery": ("run_id", "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens"),
     "platformMixQuery": (
         "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "fingerprint", "fingerprint_version",
@@ -298,8 +284,8 @@ def test_query_span_and_fetch_predicate_match_the_panel_contracts() -> None:
         "runShardsQuery", "platformMixQuery"
     }
     assert {query.name for query in queries if query.span == "newest-day"} == {
-        "runTimelineQuery", "twoClocksQuery", "twoClocksHostsQuery", "machineCardsQuery",
-        "machineCardsItemsQuery", "slowestArticlesQuery", "memoryHeldQuery", "whyChosenQuery",
+        "runTimelineQuery", "twoClocksQuery", "twoClocksHostsQuery",
+        "slowestArticlesQuery", "memoryHeldQuery", "whyChosenQuery",
     }
     text = read_text(REPO_ROOT / QUERY_ROOT / "voices.ts")
     assert "where: [{ column: 'stage', op: '=', value: 'fetch' }]" in text

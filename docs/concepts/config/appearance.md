@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -22,7 +22,7 @@ Its blocks:
 | `assist` | On-device archive search. Formerly `idhazh.json`'s `assist` block. |
 | `frame` | The frame maximums, the reading measure, the gutter range, and the three breakpoints. |
 | `theme` | Whether gradients, elevation and the display face are drawn, and how strongly a panel takes a tint. |
-| `chart` | Console chart dimensions, readout width, tick density, sparkline height, additive hover tooltips, and bounded geometry for story bars, dots, slopes and lines. `hover_readout` switches only console tooltips; standing, keyboard and touch readings remain usable. `palette` is retained but currently has no consumer. |
+| `chart` | Console chart dimensions, readout width, tick density, sparkline height, additive hover tooltips, console category palette and bounded story geometry. `hover_readout` switches only console tooltips; standing, keyboard and touch readings remain usable. |
 | `icons` | Icon size, whether an icon takes the hue of what it means, and whether a topic carries a mark. |
 | `motion` | The two durations, and one switch. `prefers-reduced-motion` sits above the switch and is deliberately not configurable. |
 
@@ -267,15 +267,47 @@ retirement does not remove them. Design review follows the
 [representative-browser policy](../design-system.md#sufficiency-is-a-gate-not-a-taste),
 not a plot-width quota or a panel-picture matrix.
 
-Four knobs decide how the Hardware route colours a machine. A machine's colour
-is its speed: one hue in `machine_colour_stops` (5) steps, slowest to fastest,
-each kind of machine taking the step its median prompt reading speed falls in.
-`machine_colour_floor_share` (0.4) is how much of the hue the slowest step
-carries, the rest being the panel's own ground - at 0.2 the slowest step stood
-1.3 to 1 against the panel and nearly vanished. `absent_hatch_degrees` (45) is
-the angle of the stripes that mark a known thing with no reading, on every panel
-that draws them. `fleet_dot_max_px` (8) is the largest square the machine-kinds
-panel draws for one job when the open span holds too few placements for bars
+Machine-history colour identifies full machine identities, not speed.
+The existing `chart.palette` selector accepts D3's built-in `piyg` and `spectral`
+schemes. The committed choice is `piyg`; `categorical` retains configured custom
+colours and `sequential` selects D3 Blues. Machine history uses the widest stock
+scheme with a stable full-identity ordinal scale. The console CSS producer also
+aligns category tokens, syntax/type colours and the wordmark with that family.
+Quantity-to-token assignments do not change; reader colours remain untouched.
+
+The CSS producer uses D3 colour/interpolation and build-time Culori contrast
+comparison to select readable shades of the stock colours for the existing
+shared text/line roles. This is palette production, not a runtime correction
+system, accessibility scanner or new audit gate. Six-digit roles use fixed
+eight-bit sampling precision and the existing design-system text floor.
+The eighth category token remains the configured neutral absence paint in both
+themes; confidence and movement keep their separate roles. Accent, focus and
+selection overrides remain direct configured values. Neutral surfaces, layout
+and typography do not change.
+
+The colour utilities are development/build dependencies. D3 supplies the actual
+schemes; Culori supplies the contrast comparison D3 does not provide. Their
+beneficiary is legible PiYG-based console token production. The producer lives
+under `frontend/scripts/` and is not imported by runtime routes.
+These tools load through native asynchronous ESM only for a stock-palette choice;
+callers await the completed CSS. Default and explicit
+categorical CSS remain dependency-free for native contract readers; selecting a
+stock scheme without its build tools fails rather than falling back.
+`theme.gradient_enabled` switches the uniform categorical shading on or off;
+false keeps the same machine colour flat. `machine_colour_floor_share` supplies
+the common highlight share, with the remaining share the category hue and the
+bottom the full hue. The generated highlight reuses the configured light
+surface or dark text neutral, so both themes stay opaque without a hand-authored palette.
+These existing settings retain their values, defaults and valid prior inputs.
+
+`machine_colour_stops` still supplies the whole-record median-speed groups used
+by the compact legend groups and folds; it does not select category colours or
+stack positions. Each day's stack orders that day's machine counts descending,
+largest at the bottom; identity colours stay fixed as positions change.
+`absent_hatch_degrees` still controls retained absent-reading hatches, but
+missing machine speed no longer replaces an identified machine's fill.
+`fleet_dot_max_px` limits each job square when placements fall below
+`fleet_min_rows`
 ([console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](../console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md)).
 
 ## Reader surface

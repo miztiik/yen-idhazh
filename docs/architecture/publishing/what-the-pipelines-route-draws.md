@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 Moved plots use the shared width observer and redraw in the CSS-pixel frame
 their panel actually occupies. Private date axes retain missing days as null,
@@ -37,14 +37,15 @@ surfaces follow the window control is
 
 ## Plan52: native readings and private published-day facts
 
-The route has twelve addressed panels, in this order: `at-a-glance`,
+The route has thirteen addressed panels, in this order: `at-a-glance`,
 `run-health`, `site-cost-per-item`, `failure-mix`, `item-time-split`,
 `slower-on-same-work`, `stage-timings`, `item-cost`, `run-timeline`,
-`chart-drawing`, `visual-refusals`, `article-age`. Configuration comes from
+`slowest-articles`, `chart-drawing`, `visual-refusals`, `article-age`. Configuration comes from
 `consoleKnobs()` and `routeConsole('pipelines')`, not from page data.
 
 The browser uses the declared queries in `console/queries/pipelines.ts` and the
-shared `routeReach`, four-argument `rangeFor` and `sliceOnce` lifecycle. Failure
+shared `routeReach`, four-argument `rangeFor` and `sliceOnce` lifecycle. Explicit
+groups in `console/pipelines/query-groups.ts` retain separate native endpoints. Failure
 mix, failed rules, item time split, fixed-reference work, stage timings, model
 cost, newest-run timeline and stated article ages read `item-health`. The removed
 extraction panel no longer asks `summary-quality-evals`. Neither route load nor the browser reads telemetry CSV,
@@ -161,6 +162,31 @@ exactly its declared native clock columns. With that data absent, the view is
 empty and the route still renders.
 
 **Pipelines depends on `$lib/charts/machine` for its `seconds` formatter.**
+
+## The run-wide article ranking keeps its original evidence endpoint
+
+`slowest-articles` follows the timeline and mounts only on Pipelines. It ranks
+all qualifying articles across the newest recorded run, not the selected
+shard's paged details. The timeline's shard inspection and Summaries' aggregated
+writing-cost distribution do not answer that run-wide identity question.
+
+Its item-health query retains the common endpoint of item-health,
+host-fingerprint and run-shards, then clamps to that newest UTC day. Ordinary
+Pipelines native queries retain their item-health-only endpoint. A lagging host
+or count family can therefore date the ranking earlier without backshifting the
+timeline or other native readings. Each panel prints its own evidence dates.
+Retry retains each group's successful endpoint until the preset changes.
+
+The existing numeric `config/console/machine.json` knob
+`slowest_articles_rows` still limits the ranking, preserving prior configuration
+and its default. Recorded `item_total_ms` determines rank, never timestamp
+elapsed time. The newest run does not fall back when its clocks are missing;
+measured zero remains a measured article, and the unmeasured count stays visible.
+
+Complete nonnegative fetch, extract, summarize and checking stages stack with a
+positive recorded gap as `Other`. Missing stages or gap and negative overlap
+keep the whole recorded-item bar and their original context. Queue wait stays
+outside it. No clock is normalized or inferred during the move.
 
 ## Run health is one panel: the day's articles, and every run under them
 

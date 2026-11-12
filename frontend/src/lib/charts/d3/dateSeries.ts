@@ -12,7 +12,7 @@
  * **The dates on the axis come from `dayTicks`**, the one rule this console has
  * for a date axis, and never from an axis generator.
  */
-import { area, line, stack } from 'd3-shape';
+import { area, line, stack, stackOrderDescending } from 'd3-shape';
 
 import { dayTicks, type DayTick, type Frame } from '../frame';
 import type { ChartToken } from '../theme';
@@ -37,13 +37,22 @@ export interface SeriesInput {
 	/** A paint of the series' own in place of its token: a step of an ordered
 	 * ramp, which is a mix of a token and not a token. */
 	fill?: string;
+	/** Decorative categorical shading, restarted within each stacked segment. */
+	gradient?: FillGradient;
 	/** Drawn as the hatch for a known thing with no reading, in place of a fill. */
 	hatched?: boolean;
+}
+
+export interface FillGradient {
+	top: string;
+	bottom: string;
 }
 
 export interface DateSeriesOptions {
 	frame: Frame;
 	stacked?: boolean;
+	/** Rank each day's parts independently; other charts retain their declared series order. */
+	stackOrder?: 'series' | 'descending';
 	/** `chart.tick_density` - the most dates the axis may carry. */
 	density: number;
 	/** How many ticks the value axis aims for. */
@@ -90,6 +99,7 @@ export interface SeriesBar {
 	token: ChartToken;
 	/** What the bar is filled with: the series' own paint, or its token. */
 	fill: string;
+	gradient?: FillGradient;
 	hatched: boolean;
 	value: number;
 	x: number;
@@ -287,6 +297,13 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 	const layers = stack<Record<string, number | null>, string>()
 		.keys(keys)
 		.value((day, key) => day[key] ?? 0)(table);
+	const rankedStack = stack<Record<string, number | null>, string>()
+		.keys([...keys].sort().reverse())
+		.value((day, key) => day[key] ?? 0)
+		.order(stackOrderDescending);
+	const ranked = opts.stackOrder === 'descending'
+		? table.map((day) => new Map(rankedStack([day]).map((layer) => [layer.key, layer[0]])))
+		: null;
 	const totals = layers.length === 0 ? [] : layers[layers.length - 1].map((span) => span[1]);
 	const reconciled = reconciliation === undefined ? [] : dates.flatMap((date, index) => {
 		const elapsed = extraReadings[0].get(date) ?? null;
@@ -308,7 +325,8 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 		layer.flatMap((span, at) => {
 			const value = table[at][layer.key];
 			if (value === null || value === 0) return [];
-			const top = axis.scale(span[1]);
+			const placed = ranked === null ? span : ranked[at].get(layer.key)!;
+			const top = axis.scale(placed[1]);
 			const entry = series[index];
 			return [
 				{
@@ -316,12 +334,13 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 					label: layer.key,
 					token: entry.token,
 					fill: entry.fill ?? `var(${entry.token})`,
+					...(entry.gradient === undefined ? {} : { gradient: entry.gradient }),
 					hatched: entry.hatched ?? false,
 					value,
 					x: band(dates[at]) ?? 0,
 					y: top,
 					width: band.bandwidth(),
-					height: axis.scale(span[0]) - top
+					height: axis.scale(placed[0]) - top
 				}
 			];
 		})
