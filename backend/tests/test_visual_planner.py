@@ -314,7 +314,7 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         """
         system = label_system_prompt()
 
-        assert "The summary." in system
+        assert "The second job: write a grounded summary of the article" in system
         assert "The plan, when the question below asks for one." in system
         assert summarize_and_plan_user_turn(source_words=0).startswith("Now write about the item above.")
 
