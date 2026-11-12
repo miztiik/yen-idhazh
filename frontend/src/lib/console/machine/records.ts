@@ -19,8 +19,7 @@ export const PANEL_QUERIES: Readonly<Record<string, readonly PanelQuery[]>> = {
 	'context-headroom': [queries.contextHeadroomQuery],
 	'article-cost': [queries.articleCostQuery, queries.articleCostHostsQuery],
 	'prompt-reuse': [queries.promptReuseQuery],
-	'read-against-written': [queries.readAgainstWrittenQuery],
-	'counterfactual-cost': [queries.readAgainstWrittenQuery]
+	'read-against-written': [queries.readAgainstWrittenQuery]
 };
 
 export function textRows(rows: readonly Row[]): Record<string, string>[] {

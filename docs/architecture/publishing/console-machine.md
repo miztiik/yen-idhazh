@@ -3,8 +3,9 @@
 **Last Updated**: 2026-11-12
 
 `/console/machine/` asks what machine the work actually got, whether its two
-clocks agree, and what would change the cost of that work.
-[console.md](console.md) owns the standing band and shared window;
+clocks agree, and how much resource headroom that work left.
+[The shared shell](what-sits-above-every-console-route.md) owns navigation,
+the route title/window and on-demand UTC date metadata;
 [console-charts.md](console-charts.md) owns chart frames and readouts.
 [The machine drawing rules](../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md)
 own what may not be pooled.
@@ -12,8 +13,11 @@ own what may not be pooled.
 ## The publication boundary
 
 The prerendered page carries configuration and words only. Its route load returns
-`machineConfig`; the shared layout supplies the standing band and settings-change
-words. With scripts off, all eleven titled panels remain, each with an empty
+`machineConfig`; the shared layout supplies navigation, the route title/window
+and the closed `Data dates (UTC)` disclosure. That metadata keeps native record
+reach and the last console update distinct. The shared payload retains
+settings-change metadata for the dated panel rules. With scripts off, all ten
+titled panels remain, each with an empty
 reserved axis frame. No run, host, article, cost or refusal is embedded in HTML
 or route page data.
 
@@ -27,10 +31,13 @@ full-identity palette slots and name qualifiers, so narrowing a window cannot
 recolour or rename a machine. Identity is fingerprint version plus digest;
 name-only evidence and missing identity remain separate.
 
-`RouteStatus` owns one delayed shimmer and one reserved standing sentence.
-Loading is not an answer. Quiet says `Nothing recorded.`, missing says
+`RouteStatus` owns one delayed shimmer and reserved route-read status, not a
+global metric or verdict band. Successful Hardware reads retain their measured
+run count; a healthy shared completion adds no standing paragraph. Loading is
+not an answer. Reserved panel frames keep their explicit states: quiet says
+`Nothing recorded.`, missing says
 `Not published yet.`, and an unsuccessful fetch says `Did not arrive.`.
-The standing retry re-asks only unsuccessful questions and keeps successful reads.
+The route retry re-asks only unsuccessful questions and keeps successful reads.
 An incompatible index remains unavailable until reload, as the native door requires.
 Changing the window cannot allow a late answer from the old request to replace
 the new one. Redraws and resizes reuse query rows.
@@ -89,7 +96,7 @@ again records its newer plan's count, and settlement keeps the newer numeric
 count. A manifest written before 2026-10-12 keeps the count assembly recomputed
 from its plan. This is the maintainer's ruling of 2026-10-12.
 
-## Four groups, eleven comparisons
+## Four groups, ten comparisons
 
 Membership and order live in `config/console/machine.json`.
 
@@ -105,7 +112,6 @@ Membership and order live in `config/console/machine.json`.
 | What the model spends | `article-cost` | Existing processor-time, model-time and incremental-memory tracks over the chosen window |
 | | `prompt-reuse` | Daily median label tokens held beside median summary tokens read fresh, plus the independent server-share check |
 | | `read-against-written` | Two run-sequence token lines; Run total or actual Median per article over one paired cohort, with measured/recorded coverage |
-| | `counterfactual-cost` | Running dated total, four editable-price figures; a counterfactual, never a bill |
 
 The two clocks open the route because a disagreement decides whether the rates
 below may be quoted. Every settled panel has one largest lede, one comparison,
@@ -174,8 +180,8 @@ medians summed by day. Input includes cached prompt tokens, and the recorded
 totals include all model calls. These are token volumes, not words or uncached
 compute. Measured versus recorded article counts qualify partial runs.
 
-`readAgainstWritten` returns both metrics from that cohort and retains the
-qualified totals consumed by counterfactual cost. `ReadWritePanel` draws native
+`readAgainstWritten` returns both metrics from that cohort and retains its
+paired-run calculations. `ReadWritePanel` draws native
 `runSeries` geometry, ordered by `compareRuns`: every known run has its own
 position, including same-day runs and unmeasured gaps. No scheduled run or
 elapsed timestamp is inferred. The numeric route knob
@@ -183,7 +189,7 @@ elapsed timestamp is inferred. The numeric route knob
 initial mode: 0 is Run total (the shipped default), 1 is Median per article.
 The config boundary rejects other values. Runtime radio choices stay in memory
 and redraw without a fetch; changing the initial mode is not persistence of a
-reader's choice. Counterfactual cost keeps its daily sums.
+reader's choice.
 
 ### The retained measurements
 
@@ -264,6 +270,13 @@ standing for measured zero; a previous successful run substituted for the
 newest refused run; lost-state claims derived from a fetch failure.
 
 ## Design rationale
+
+The hypothetical runner-price panel and its editable controls are permanently
+absent, without a hidden or relocated replacement. This loses hypothetical
+price totals and per-article scenarios, not a real bill. The shared token query,
+paired-run calculations and read/write comparison remain unchanged.
+The persisted observability price settings remain compatible; the route no
+longer sends them to a drawing or reads a browser-stored price.
 
 The history plot answers observed placement over time, not newest-run machine
 constraints, processor contention or model paging. Those three diagnostic

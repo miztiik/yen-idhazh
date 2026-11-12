@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-12
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -270,35 +270,14 @@ for a sentence, and an assertion that a sentence is absent passes as happily
 when somebody renamed it as when the defect was fixed. `data-machine-record`
 carries one of `recorded`, `off`, `lost` and `none` on every build.
 
-## A figure in currency prints its rate, its source and the word for what it is
+## Figures use configured number formatting
 
-There is exactly one money figure on this site: the counterfactual cost on
-`/console/machine/`. CLAUDE.md Guardrail #10 forbids the rest, and carries the
-maintainer's carve-out for that one, 2026-08-30, on conditions this section holds:
-
-- **Never a currency symbol.** `0.48 USD`, never `$0.48`. A symbol in front of a
- number is the shape a bill takes, and this is not a bill - nothing bills us,
- because Actions minutes are free on a public repository.
-- **The rate is printed, in full, beside the figure.** Both halves of it: a
- provider prices prompt tokens and written tokens apart, and one blended rate
- would understate a run that wrote a lot.
-- **Where the rate came from is printed too** - `Using your rate` or `Using the
- configured rate`. A money figure whose basis is invisible is the exact thing
- Guardrail #10 exists to prevent.
-- **The word for what it is sits in the panel, not in a tooltip**: what the run
- would have cost somewhere else, never an amount owed.
-- **Once the figure has a shape, the word rides the shape.** The value axis
- reads `Counterfactual cost, USD`, and the running shape reads `Counterfactual
- cost so far, USD`; the chart's own description says it again for a reader who
- cannot see the marks. A currency code alone on an axis is the shape a bill
- takes just as surely as a symbol is, and an axis title is the label a reader
- meets before any of the numbers - so it is the one place the word cannot be
- missed. The four figures above the chart keep the sentence they already
- carried. The chart does not inherit it by being near it.
-- **A number uses the shared formatter.** It reads its locale and significant
- digits from `visuals.number_format` in `config/idhazh.json`, never from the
- browser. The Data explorer remains the exception: it prints the engine's
- answer as written.
+Console figures use the shared formatter. It reads its locale and significant
+digits from `visuals.number_format` in `config/idhazh.json`, never from the
+browser. The Data explorer remains the exception: it prints the engine's answer
+as written. The hypothetical currency panel is absent; the
+[Hardware rationale](../architecture/publishing/console-machine.md#design-rationale)
+names the lost scenario readings and the retained measurements.
 
 ## Data explorer prints the engine answer as written
 

@@ -41,7 +41,7 @@ test.describe('route-owned console configuration', () => {
 		expect(routes.machine.judged).toEqual([
 			'two-clocks', 'slower-machines', 'platform-mix',
 			'tail-trend', 'closest-to-memory', 'memory-held', 'context-headroom',
-			'article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost'
+			'article-cost', 'prompt-reuse', 'read-against-written'
 		]);
 		expect(routes.pipelines.judged).toContain('slowest-articles');
 		expect(routes['data-explorer'].judged).toEqual(['data-explorer-rows', 'data-explorer-shape']);
@@ -63,7 +63,7 @@ test.describe('route-owned console configuration', () => {
 		]);
 		expect(routes.model.judged).toEqual(modelPanels);
 		const sources = ['source-health', 'feeds-failed', 'fetch-time', 'retiring', 'source-cuts'];
-		const ranking = ['ranking-discount', 'why-chosen', 'watchlist'];
+		const ranking = ['ranking-discount', 'why-chosen'];
 		expect(routes.voices.panel_groups).toEqual([
 			{ id: 'what-the-sources-supplied', title: 'What the sources supplied', panels: sources },
 			{ id: 'what-the-ranking-did', title: 'What the ranking did', panels: ranking }

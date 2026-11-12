@@ -6,7 +6,7 @@ import { WINDOW_PREFERENCE_KEY } from '../src/lib/console/window-preference';
 const PANELS = [
 	'two-clocks', 'slower-machines',
 	'platform-mix', 'tail-trend', 'closest-to-memory', 'memory-held',
-	'context-headroom', 'article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost'
+	'context-headroom', 'article-cost', 'prompt-reuse', 'read-against-written'
 ];
 const NATIVE = /\/state\/(?:compact|raw)\/(?:item-health|host-fingerprint|run-shards)\//;
 

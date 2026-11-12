@@ -44,7 +44,7 @@ EXPECTED_NAMES: Final = {
         "contextHeadroomQuery", "articleCostQuery", "articleCostHostsQuery",
         "promptReuseQuery", "readAgainstWrittenQuery",
     ),
-    "voices": ("feedsFailedQuery", "fetchTimeQuery", "sourceCutsQuery", "whyChosenQuery", "watchlistQuery"),
+    "voices": ("feedsFailedQuery", "fetchTimeQuery", "sourceCutsQuery", "whyChosenQuery"),
     "window": (),
 }
 
@@ -92,7 +92,6 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "fetchTimeQuery": ("source_id", "fetch_ms", "fetch_connect_ms", "fetch_ttfb_ms", "robots_ms", "retry_total_ms", "retry_count"),
     "sourceCutsQuery": ("date", "source_id", "url_key", "source_words_before_cap", "source_words"),
     "whyChosenQuery": ("date", "run_id", "item_id", "source_id", "selection_score", "authority_score", "tier_score", "feed_weight", "feed_reliability", "recency_bonus", "lens_bonus", "watchlist_bonus", "carriage_step"),
-    "watchlistQuery": ("date", "url_key", "watchlist_hit", "on_front_page"),
 }
 
 
@@ -233,7 +232,7 @@ def test_every_query_declares_exactly_its_planned_columns() -> None:
 def test_validation_names_misspelled_ledgers_columns_and_the_unread_failed_field(
     ledger: str, column: str, fault: str
 ) -> None:
-    query = QueryDeclaration("voices", "watchlistQuery", ledger, (column,), "window")
+    query = QueryDeclaration("voices", "fetchTimeQuery", ledger, (column,), "window")
     faults = query_faults(
         query, ("item-health", "host-fingerprint", "summary-quality-evals"), row_columns(),
         {"item-health": ("failed_field",)},

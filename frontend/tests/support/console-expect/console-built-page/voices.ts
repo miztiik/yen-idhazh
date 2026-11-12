@@ -2,8 +2,8 @@
 import type { RouteExpect } from './index';
 export const EXPECT: RouteExpect | null = {
 	scope: 'route',
-	doorPanels: { 'feeds-failed': '', 'fetch-time': '', 'source-cuts': '', 'why-chosen': '', watchlist: '' },
+	doorPanels: { 'feeds-failed': '', 'fetch-time': '', 'source-cuts': '', 'why-chosen': '' },
 	pageData: ['sourceView', 'retiring', 'feedInput', 'chart'],
-	reservedPanels: ['feeds-failed', 'fetch-time', 'source-cuts', 'why-chosen', 'watchlist'],
+	reservedPanels: ['feeds-failed', 'fetch-time', 'source-cuts', 'why-chosen'],
 	pendingPanel: null
 };

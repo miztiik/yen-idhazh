@@ -22,7 +22,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'day.ts', 'encoder.ts', 'index.ts', 'loader.ts', 'month.ts', 'search.ts', 'session.ts', 'weights.ts'
 	],
 	'src/lib/charts': [
-		'cost.ts', 'day-slots.ts', 'fleet.ts', 'frame.ts', 'glance.ts', 'indexed-runs.ts',
+		'day-slots.ts', 'fleet.ts', 'frame.ts', 'glance.ts', 'indexed-runs.ts',
 		'colour-scheme.ts', 'fleet-identity.ts', 'machine-colour.ts', 'machine-name.ts',
 		'label-context.ts', 'machine.ts', 'rank.ts', 'readout.ts', 'run-history.ts', 'run-yield.ts', 'series.ts',
 		'skeleton.ts', 'sparkline.ts', 'stack-types.ts', 'targetbar.ts',
@@ -42,7 +42,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'ItemVisual.svelte', 'KpiCard.svelte', 'LeadingStories.svelte', 'LensChips.svelte',
 		'MoreDays.svelte',
 		'NotHere.svelte', 'Notice.svelte', 'Panel.svelte', 'PanelGroup.svelte', 'PayloadState.svelte',
-		'RankedList.svelte', 'RateControl.svelte', 'ReadAloud.svelte', 'Reserved.svelte', 'RouteStatus.svelte',
+		'RankedList.svelte', 'ReadAloud.svelte', 'Reserved.svelte', 'RouteStatus.svelte',
 		'RunLengths.svelte', 'RunSquares.svelte', 'RunYield.svelte', 'SearchState.svelte',
 		'ShapeSwitch.svelte', 'SiteFooter.svelte', 'SiteHeader.svelte',
 		'SourceCutRange.svelte', 'SourceLink.svelte', 'SourceMark.svelte', 'Sparkline.svelte',
@@ -74,10 +74,10 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/lib/console/voices': [
 		'record.ts', 'source-health.ts', 'feeds-failed.ts', 'fetch-time.ts',
-		'retiring.ts', 'source-cuts.ts', 'ranking-discount.ts', 'why-chosen.ts', 'watchlist.ts',
+		'retiring.ts', 'source-cuts.ts', 'ranking-discount.ts', 'why-chosen.ts',
 		'VoicesPanel.svelte', 'RecordFrame.svelte', 'SourceHealthPanel.svelte', 'FeedsFailedPanel.svelte', 'FeedTiles.svelte',
 		'FetchTimePanel.svelte', 'RetiringPanel.svelte', 'SourceCutsPanel.svelte',
-		'RankingDiscountPanel.svelte', 'WhyChosenPanel.svelte', 'WatchlistPanel.svelte'
+		'RankingDiscountPanel.svelte', 'WhyChosenPanel.svelte'
 	],
 	'src/lib/console/explorer': [
 		'address.ts', 'answer.ts', 'AnswerTable.svelte', 'chart-roles.ts', 'column-groups.ts',

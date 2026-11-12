@@ -33,7 +33,6 @@ export const SERIES_TOKENS = {
 	recency: '--chart-2',
 	lens: '--chart-4',
 	watchlist: '--chart-5',
-	'watchlist-day': '--chart-5',
 	carriage: '--chart-7',
 	'length-limit': '--chart-4',
 	'other-ending': '--chart-2',
@@ -49,9 +48,6 @@ export type Quantity = keyof typeof SERIES_TOKENS;
 export function quantityToken(quantity: Quantity): ChartToken | null {
 	return SERIES_TOKENS[quantity];
 }
-
-/** Kept callers retain their established colours until they adopt named quantities. */
-export const KEPT_COST_TOKENS = { read: '--chart-1', written: '--chart-4', running: '--chart-2' } as const;
 
 export const KEPT_TIME_TOKENS = {
 	fetch: '--chart-1', extract: '--chart-2', label: '--chart-3', summary: '--chart-4',
