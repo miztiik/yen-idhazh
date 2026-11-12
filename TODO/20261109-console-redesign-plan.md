@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-11-11
 **Level**: 5 - resolve design gates before implementation.
-**Status**: Rows 1-7, Row 8a and Row 8b are complete. The selected written-type diagnostic is permanently removed. Other cut/move dispositions and anomaly/baseline decisions remain blocked in Row 8.
+**Status**: Rows 1-7, Row 8a, Row 8b and Row 8c are complete. The selected written-type and model-change diagnostics are permanently removed. Other cut/move dispositions and anomaly/baseline decisions remain blocked in Row 8.
 
 ## 0. Operating contract
 
@@ -48,6 +48,7 @@ Table C
 | C8 | 8 | Settle remaining permanent cuts, page moves and token anomaly rules | 1 | H | BLOCKED | - | - | Individual dispositions and anomaly/baseline definitions remain unresolved. |
 | C9 | 8a | Simplify selected Pipelines visual diagnostics | 1, 5 | I | DONE | `psychic-goggles` | - | App session `3932eb6c-014c-40e4-9e51-5617ff2c30f0`; branch `pipelines-visual-diagnostics` |
 | C10 | 8b | Remove the Pipelines written-type diagnostic | 8a | J | DONE | `legendary-garbanzo` | - | App session `da0bfe17-ef48-4e8f-93d2-7c92c1dd13ce`; branch `remove-written-type-diagnostic` |
+| C11 | 8c | Remove the Summaries model-change comparison | 8b | K | DONE | `jubilant-happiness` | - | App session `705cdced-00f1-4c51-bbe0-ae3c6079063b`; branch `remove-model-change-comparison` |
 
 ## 2. Row #1 - Define console redesign and chart changes
 
@@ -126,7 +127,7 @@ Table G - Summaries; source: `config/console/model.json`
 | G8 | `write-cost` | Summarizing latency distribution | PROPOSE MOVE to Pipelines; N2. Preserve positive-clock distribution, median/p95 and untimed count. |
 | G9 | `score-cost` | Checker latency | KEEP; not model-writing time. |
 | G10 | `summary-length` | Output length versus requested bands | KEEP; distinct from context and source cuts. |
-| G11 | `model-change` | Before/after model change | PROPOSE CUT; M6 prices the comparison across different article cohorts. |
+| G11 | `model-change` | Before/after model change | REMOVE permanently in Row 8c; M6 names the lost observational comparison across different article populations. |
 
 Table H - Hardware; source: `config/console/machine.json`
 
@@ -188,7 +189,7 @@ Table L
 | --- | --- | --- | --- |
 | L1 | Full visual replacement | Row 3 uses the complete console-only style family below: palette, type, rail, controls, status, panels and drawings. No reader recoloring. | Defaulted additive appearance family; native validation precedes CSS production. Missing blocks/leaves use role defaults, arrays replace whole, and only the chart dash accepts null. No dependency on L3 or L6. |
 | L2 | Closed-day eligibility/cadence | Keep `compact_after_days = 1` for item-health, summary-quality-evals, host-fingerprint and run-shards; retain validator >=1, cadence and retention. | RESOLVED: the extra whole-day wait remains. Row 2 diagnoses publication only; no freshness gain is assumed. |
-| L3 | Permanent cuts and page moves | Row 4 permanently removes G4. Row 8a removes F11/F12/F15 and retains F13 as daily lines. Row 8b removes F14. Other Table M cuts and every Table N move remain individual proposals in Row 8; existing flat rosters determine presence/order. | Selected inventories are closed in their rows. Row 8 remains blocked on other dispositions and losses. No presentation schema, hidden charts or blanket disclosure strategy. |
+| L3 | Permanent cuts and page moves | Row 4 permanently removes G4. Row 8a removes F11/F12/F15 and retains F13 as daily lines. Row 8b removes F14. Row 8c removes G11/M6. Other Table M cuts and every Table N move remain individual proposals in Row 8; existing flat rosters determine presence/order. | Selected inventories are closed in their rows. Row 8 remains blocked on other dispositions and losses. No presentation schema, hidden charts or blanket disclosure strategy. |
 | L4 | Automatic explorer chart choice | Count valid readings through existing role/shape validation and floors; a small named grouped result can rank instead of selecting an undrawable scatter. | Row 7 construction settled; preserve manual choices, typed-date refusals and reporting floors. Independent of L1/L3/L6. |
 | L5 | SQL aggregation | Keep existing named column/date queries and reducers for these changes. No new aggregate API is required. | RESOLVED: placement, units, window labels and publication diagnosis do not require a query-contract migration. No transfer-saving claim. |
 | L6 | Hardware run read/write comparison | Compact item-health, settled by UTC date/run/item, supplies two per-run lines. Run total sums paired finite nonnegative input/output; Median per article takes each side's actual median over that identical cohort. Default totals; input includes cached prompts and recorded model calls. | Run-aware geometry, numeric run order, distinct same-day positions and known unmeasured gaps; no daily roll-up, fake timestamps or refetch on metric switch. Actual-run pointer/tap/keyboard readout includes full ID, UTC date and measured/recorded articles. Anomaly/baseline rules stay unresolved in Row 8. |
@@ -253,7 +254,7 @@ Table M
 | M3 | Recorded refusal reasons over time / `visual-refusals` | Pipelines `/console/` -> retained daily lines | SETTLED retention in Row 8a: replaces the long per-day list, not first failed checks or any recorded reason. Includes attempts later written; unknown days are not zero. |
 | M4 | Planned and successfully written visual types / `visual-written-types` | Pipelines `/console/` -> removed | SETTLED permanent cut in Row 8b: loses the visible planned-to-written type comparison and substitutions; written is not published, and the retained overview does not replace it. |
 | M5 | Which rule refused a reply / `refusing-rule` | Summaries `/console/model/` -> removed | SETTLED permanent cut: same failed-rule query/ranking and model-stage readings remain on Pipelines. Loses the Summaries shortcut/default summarize selection, not a unique metric. |
-| M6 | What the model change moved / `model-change` | Summaries `/console/model/` -> removed | OPEN proposal: loses before/after comparison across different article cohorts. Setting-change markers do not replace it. |
+| M6 | What the model change moved / `model-change` | Summaries `/console/model/` -> removed | SETTLED permanent cut in Row 8c: loses the combined observational before/after comparison across different article populations. Individual metric trends and setting-change markers remain but do not replace it. |
 | M7 | Which machines ran our jobs, day by day / `platform-mix` | Hardware `/console/machine/` -> removed | OPEN proposal: loses historical machine-placement mix. Its native query still serves other Hardware readings. |
 | M8 | What the runner's work would have cost elsewhere / `counterfactual-cost` | Hardware `/console/machine/` -> removed | OPEN proposal: loses editable hypothetical price totals and per-article scenarios, not a real bill. H14 still needs the shared token query. |
 | M9 | What the watchlist caught / `watchlist` | Voices `/console/voices/` -> removed | OPEN proposal: loses distinct watchlist hits, hit dates and front-page counts; selection scores are different. |
@@ -738,14 +739,14 @@ Table AA
 
 ## 9. Row #8 - Settle remaining permanent cuts, page moves and token anomaly rules
 
-- **Scope:** Complete the existing page-by-page disposition review for M6-M9 and N1-N5. M1-M3 and M10 are settled in Row 8a; M4 is settled in Row 8b. Preserve every other title, loss and source/endpoint requirement in Tables F-K, M and N until each fate is settled. Separately define whether H14 needs an anomaly/baseline comparison and what it would mean; the complete baseline chart in Row 4 does not choose one.
+- **Scope:** Complete the existing page-by-page disposition review for M7-M9 and N1-N5. M1-M3 and M10 are settled in Row 8a; M4 is settled in Row 8b; M6 is settled in Row 8c. Preserve every other title, loss and source/endpoint requirement in Tables F-K, M and N until each fate is settled. Separately define whether H14 needs an anomaly/baseline comparison and what it would mean; the complete baseline chart in Row 4 does not choose one.
 - **Status:** BLOCKED on individual dispositions and the anomaly/baseline definition. No remaining proposal is an implementation instruction.
 - **Candidate files:** Filter to the selected IDs before implementation; do not bulk-apply this inventory:
   - `config/console/pipelines.json`, `config/console/model.json`, `config/console/machine.json`, `config/console/voices.json`
   - `frontend/src/routes/console/+page.server.ts`, `frontend/src/routes/console/+page.svelte`
   - `frontend/src/routes/console/model/+page.svelte`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/src/routes/console/machine/+page.server.ts`, `frontend/src/routes/console/voices/+page.svelte`
   - `frontend/src/lib/console/queries/pipelines.ts`, `frontend/src/lib/console/queries/model.ts`, `frontend/src/lib/console/queries/machine.ts`, `frontend/src/lib/console/queries/voices.ts`
-  - `frontend/src/lib/console/model/panels.ts`, `frontend/src/lib/console/model/Panels.svelte`, `frontend/src/lib/console/model/model-change.ts`, `frontend/src/lib/console/model/slice.ts`, `frontend/src/lib/console/eval-instruments.ts`
+  - `frontend/src/lib/console/model/panels.ts`, `frontend/src/lib/console/model/Panels.svelte`, `frontend/src/lib/console/model/slice.ts`, `frontend/src/lib/console/eval-instruments.ts`
   - `frontend/src/lib/console/pipelines/ItemCost.svelte`, `frontend/src/lib/console/pipelines/SlowerOnSameWork.svelte`
   - `frontend/src/lib/console/pipelines/WriteCost.svelte` (N2 extraction), `frontend/src/lib/console/pipelines/SlowestArticles.svelte` (N3 extraction)
   - `frontend/src/lib/console/machine/MachineCharts.svelte`, `frontend/src/lib/console/machine/records.ts`, `frontend/src/lib/console/machine/TailTrendPanel.svelte`, `frontend/src/lib/console/machine/PlatformMixPanel.svelte`
@@ -836,3 +837,34 @@ Table AA
   with parent review and merge separate. Preserve the recovery report,
   worktree and browser evidence; stop helpers when no longer needed. M6-M9,
   N1-N5 and token anomaly/baseline rules remain blocked in Row 8.
+
+## 12. Row #8c - Remove the Summaries model-change comparison
+
+- **Scope:** Permanently remove G11/M6 from the roster, judged list, title,
+  mount and anchors, with no hidden or relocated replacement. The lost
+  capability is the combined observational before/after comparison across
+  different article populations. Individual metric trends and dated
+  setting/model-change markers remain but are not an equivalent replacement.
+- **Surviving consumers:** Keep all underlying metrics, private measure cards,
+  their coverage/absence behavior and the remaining Summaries panels. Preserve
+  `modelByDate`, `pipelineChanges`, historical pipeline-fingerprint identities,
+  shared paired-chart geometry and shared console hover. Only the comparison's
+  queries, adapter, paired-dot renderer, local aggregation and retired tests
+  have no surviving consumer. No producer, native/compact contract or
+  historical record is removed.
+- **Files:** `config/console/model.json`; the Summaries server type exports;
+  `console/model/Panels.svelte`, `panels.ts`, `slice.ts`, `work.ts` and
+  `model-change.ts` (delete); `console/queries/model.ts`;
+  `components/SwapDots.svelte` (delete); the dependent instrument/read-ownership
+  declarations, named test/source inventories and retired query snapshots;
+  the Summaries and quality-presentation owning docs and their direct references.
+- **Acceptance:** Shared selector, smallest relevant local specs and applicable
+  lint/types. Reuse route-absence coverage and retain real metric/marker and
+  historical-identity coverage. Integrated Browser smoke covers Summaries,
+  one cross-route journey, console/HTTP failures and representative absent/empty
+  inputs. One retained visual surface supplies Susan's rendered sufficiency
+  review; label canary/fixture evidence separately from production.
+- **Delivery:** One focused PR and exact-head CI followed to its final outcome;
+  parent review and merge remain separate. Keep the recovery report, worktree
+  and browser evidence; stop helpers when no longer needed. M7-M9, N1-N5 and
+  token anomaly/baseline rules remain blocked in Row 8.

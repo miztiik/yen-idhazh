@@ -48,15 +48,3 @@ export const summaryLengthQuery = {
 	columns: ['date', 'run_id', 'model_id', 'summary_words', 'source_words_before_cap', 'source_words', 'compression'],
 	span: 'window'
 } as const satisfies PanelQuery;
-
-export const modelChangeQuery = {
-	name: 'modelChangeQuery', ledger: 'summary-quality-evals',
-	columns: ['date', 'model_id', 'summary_words', 'source_words_before_cap', 'source_words', 'extractiveness', 'verbatim_run', 'band', 'unsupported_numbers', 'hedge_dropped'],
-	span: 'widest'
-} as const satisfies PanelQuery;
-
-export const modelChangeItemsQuery = {
-	name: 'modelChangeItemsQuery', ledger: 'item-health',
-	columns: ['date', 'summarize_ms', 'prefill_ms', 'decode_ms', 'input_tokens', 'cached_tokens', 'output_tokens'],
-	span: 'widest'
-} as const satisfies PanelQuery;

@@ -40,7 +40,7 @@ a listed type with no module both fail the build.
 | 3 | `distribution` | how bad does it get | there are fewer readings than its floor - a histogram of eight readings is a claim | Susan, 2026-09-26 | `Distribution.svelte` |
 | 4 | `partsOfOne` | what is this one thing made of | the parts do not add up to the row - then each part is a bracket from the origin | Susan, 2026-09-26 | `PartsOfOne.svelte` |
 | 5 | `tileStrip` | was it quiet, and which day did it fire | the reading has a useful value axis every day - that is `dateSeries` | Susan, 2026-09-26 | `TileStrip.svelte` |
-| 6 | `paired` | what did the change move | a side of a row made fewer attempts than the rate floor - that row draws nothing and says why | Susan, 2026-09-26 | `frontend/src/lib/components/SwapDots.svelte` |
+| 6 | `paired` | what did the change move | a side of a row made fewer attempts than the rate floor - that row draws nothing and says why | Susan, 2026-09-26 | `paired.ts` geometry; no mounted presentation |
 | 7 | `overlapTimeline` | what was happening at the same time | the reader wants totals - a timeline is the worst shape there is for a sum | Susan, 2026-09-26 | `frontend/src/routes/console/RunTimelinePanel.svelte` |
 | 8 | `flow` | where did they go, and where did they leave | never - where the panel is narrow the same call returns the stepped list | Susan, 2026-09-26 | `Flow.svelte` |
 | 9 | `pairedScatter` | do these two move together | it has fewer readings or fewer subjects than its two floors - and it never draws a trend line | Susan, 2026-09-26 | `PairedScatter.svelte` |
@@ -56,10 +56,11 @@ Five rules hold every type.
  module under `frontend/src/lib` reads `config/` while the page runs, so the panel
  reads the knob and passes it in. A default inside the module would be a second
  copy of the knob, and the one nobody updates.
-- **A type whose drawing already exists keeps its component.** `rankedList`,
- `paired` and `overlapTimeline` are drawn by the component the table names, and
+- **A type whose drawing already exists keeps its component.** `rankedList`
+ and `overlapTimeline` are drawn by the component the table names, and
  the change that first draws one of them from its geometry moves that
- component's props onto the geometry type in the same commit.
+ component's props onto the geometry type in the same commit. `paired` keeps
+ its pure geometry; the retired Summaries comparison supplies no renderer.
 - **Susan's current advice is to avoid** a pie, a donut over anything but a single
  completed share, a gauge, a dial, a radar, a treemap, a word cloud, a bubble,
  anything in three dimensions, and a bar of a rate over fewer attempts than the
