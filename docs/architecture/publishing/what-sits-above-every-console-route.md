@@ -1,6 +1,6 @@
 # What sits above every console route
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 How the console keeps navigation, the selected window and dated evidence in reach
 without putting a screen of repeated status ahead of the first useful reading.
@@ -13,8 +13,8 @@ active route's named group anchors. Links pair existing glyphs with readable
 route labels, not metadata prose or health colors. The selected route has an
 outline and tinted surface; the same glyph appears larger beside its page
 title. Descriptions remain each link's `title`. All destinations are real
-anchors with their existing URLs. Each route's issue stays beside its dated
-page evidence; the standing band retains the worst issue across routes.
+anchors with their existing URLs. Recorded run failures belong to the run-health
+comparison, not repeated route and global banners.
 
 Below that breakpoint, the same links sit in a native `Console menu` disclosure.
 It closes after navigation. Without JavaScript it starts open, so every route
@@ -36,8 +36,8 @@ before-paint theme resolution are unchanged.
 ## Route identity and the window lead the evidence
 
 The content column starts with the active route's visible heading and the days
-control. The title, window control and window/evidence sentence form one sticky
-band; the latest-run sentence and standing band continue in normal flow. Below
+control. The title, window control and closed `Data dates (UTC)` disclosure form
+one sticky band. Below
 the first breakpoint, a labelled native days select replaces the radio tiles,
 keeping the frozen band compact. Its measured height supplies the document's
 scroll padding so anchors and focused controls are not covered. The explorer
@@ -65,73 +65,48 @@ defines optional storage, presets and the exceptions to the shared span.
 
 From `frame.breakpoints_px[2]`, panel groups may use the configured number of
 columns without changing source order. Wide and route-verdict panels span the
-group. Narrow layouts use one column. The first viewport must contain the route,
-selected window, evidence date and a useful comparison or readout.
+group. Narrow layouts use one column. The first viewport contains the route,
+selected window, access to evidence dates and a useful comparison or readout.
 
 Each route keeps its browser title: route label, Console, then the configured
 site title. Client navigation updates it just as a direct load does.
 
 ## Run completion and record reach are different dates
 
-The completeness sentence dates the band's `generated_at`, in UTC. It never
-claims that every ledger reaches that instant. Packed panels date their actual
-returned record beside the window or their own readings; a pending or missing
-reach supplies no data date.
+The closed `Data dates (UTC)` disclosure holds the native window's existing
+reach and short-record explanation, the separate published-day bounds on mixed
+routes, and the last console update from the band's `generated_at`. A pending
+or missing native reach supplies no data date. Opening this metadata never
+reanchors either source. Per-panel bounds still name independently clamped or
+snapshot evidence.
 
-Prerendered markup states the run's completion instant without claiming its age.
-The browser compares UTC days using `console.completeness_grace_days`, then
-rechecks at UTC midnight and when the page becomes visible. A late record names
-the missing days. An absent band says its completion time is unavailable.
-`covers_through` and the retained zero-valued compaction-lag reading cannot
+The last-update timestamp is metadata, not a claim that every ledger reaches
+that instant. A fresh completion produces no standing paragraph. The browser
+still compares UTC days using `console.completeness_grace_days`, rechecks at UTC
+midnight and on visibility, and leaves a late or unread completion warning
+visible outside the disclosure. `covers_through` and zero compaction lag cannot
 establish freshness.
 
-## The standing band carries three facts
+## Useful panels lead, not repeated summaries
 
-The producer writes `console/band.json`; the universal console layout reads it
-once and keeps the band shared between routes. It contains:
+The shell displays no `Latest day`, `Needs attention`, `Site size`, grouped
+run-verdict band, route-worst sentence or cross-route metric carry. Navigation,
+settings-change metadata and the producer's shared payload remain unchanged.
+Run health keeps the actual day and run counts; Pipelines keeps its measured
+per-article cost and headroom comparison.
 
-- Latest day's verdict, labelled `Latest day`, not a relative day name.
-- The worst issue and its consequence, linking to its route.
-- Site size against the platform's 1 GB limit and the articles the headroom buys.
-
-These are not selected-window aggregates. The site-size runway uses the
-published record; the per-article cost panel owns its rate and denominator.
-
-Run verdicts remain available in a native disclosure. Each square names its run
-and verdict; grouped words give the same facts without a pointer. The producer's
-cap and `+N` count remain intact. Squares use the existing status-fill meanings,
-not the categorical chart palette.
-
-The band does not repeat a compaction-lag line whose value cannot move. A
-resting-feed issue names its retry behavior from configuration; it does not
-invent an operator task for a state that clears itself.
-
-## Worst-state selection keeps its existing meanings
-
-Failed-run candidates precede resting feeds, so a failed run wins a stable tie.
-Editorial faults cap at `WORTH_A_LOOK`, except a gating instrument whose recorded
-decline rate reaches either configured extreme: both accepting everything and
-rejecting everything make the instrument untrustworthy. No absent rate triggers
-that rule.
-
-Hardware candidates include a refused run, a planned shard with no record and
-the newest run's read spread. Missing-shard counts use the independently recorded
-plan denominator, never the number of host rows as both numerator and
-denominator. Spread uses the server's own prompt-token/time counters and stays
-lowest-ranked because it has no agreed alarm threshold. Swap use is reported
-only when total swap is known and positive; a box with no swap is not a full
-swap device.
-
-Voices ranks a feed at the reliability floor as `WORTH_A_LOOK`; too little source
-evidence is `WORTH_KNOWING` and retains its denominator. Feeds that answered
-nothing are a subset of the at-floor set, not a duplicate candidate.
+The trade-off is no at-a-glance cross-route worst-issue ranking, coarse verdict
+grouping or absolute site-size headline. Their producer records remain intact;
+the route navigation and diagnostic panels provide the actionable detail.
+Missing, unreachable and loading records keep their own visible states and
+working retry access, never a success-shaped fallback.
 
 ## Data explorer keeps its workbench
 
 `console.explorer_chrome` selects workbench chrome. The explorer uses the same
 rail, route heading, hover surface, back-to-top control and visual tokens, but keeps its days and Run controls
-inside the editor. It has no duplicate band, completeness line or window
-sentence. Editor and result regions retain their query behavior. The wide
+inside the editor. It has no shared date disclosure or completeness line.
+Editor and result regions retain their query behavior. The wide
 layout reserves the configured query room and gives remaining room to results.
 Their actual minimums propagate through the frame, so a short window scrolls
 the document rather than letting a result cover the shared footer.
@@ -146,11 +121,12 @@ document.
 ## Design rationale
 
 The rail keeps labelled destinations reachable without a wide top strip.
-Putting window reach beside its control distinguishes available evidence from
-run completion. Keeping this small band in reach avoids repeated trips to the
-top; letting the brand scroll away avoids a second fixed header and layout
-jumps. The native phone select trades simultaneous preset visibility for more
-space for the page title and evidence.
+Keeping source dates beside the control, on demand, distinguishes evidence
+reach from run completion without delaying the first useful chart. Removing
+repeated summaries trades immediate global alerts for space to compare the
+actual readings. Letting the brand scroll away avoids a second fixed header
+and layout jumps. The native phone select trades simultaneous preset visibility
+for more space for the page title and evidence.
 
 Neutral surfaces separate grouping from status; typography, shared hover
 tooltips and non-hover readings carry the comparison. The operator-only generated style

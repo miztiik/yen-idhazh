@@ -4,6 +4,7 @@ import { hydrated, setWindow } from './support/console-window/controls';
 import { FIRST, THROUGH, dayBefore, nativeRow, timedRow, packedPipelines, servePipelines, settled } from './support/pipelines-ledgers';
 import { routeConsoles } from '../src/lib/server/config';
 import { buildRows, serveToPage } from './support/ledger-lifecycle';
+import { shortDate } from '../src/lib/format';
 let root: string;
 test.beforeAll(async () => {
 	const days = Math.round((Date.parse(`${THROUGH}T00:00:00Z`) - Date.parse(`${FIRST}T00:00:00Z`)) / 86_400_000);
@@ -133,7 +134,7 @@ test('integrated actual canary smoke: narrow viewport, with cross-page navigatio
 	page.on('pageerror', (error) => errors.push(String(error)));
 	page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
 	page.on('response', (response) => { if (response.status() === 404) missing.push(response.url()); });
-	await page.setViewportSize({ width: 390, height: 900 });
+	await page.setViewportSize({ width: 1440, height: 900 });
 	await page.goto('/console/');
 	await hydrated(page);
 	await settled(page);
@@ -142,10 +143,75 @@ test('integrated actual canary smoke: narrow viewport, with cross-page navigatio
 	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute('data-route-state', 'ok');
 	await expect(page.locator('[data-console-panels="pipelines"]')).not.toContainText('NaN');
 	await expect(page.locator('[data-contract-blocked]')).toHaveCount(0);
+	await expect(page.locator('[data-console-band], [data-console-route-issue], [data-console-carry]')).toHaveCount(0);
+	await expect(page.locator('[data-console-data-dates]')).not.toHaveAttribute('open', '');
+	const totals = await page.locator('[data-published-total]').evaluateAll((nodes) =>
+		nodes.map((node) => Number(node.getAttribute('data-published-total'))));
+	for (const width of [1440, 390]) {
+		await page.setViewportSize({ width, height: 900 });
+		await expect.poll(async () => page.locator('[data-published-measure="articles"]').evaluate((node) =>
+			Math.abs(Number(node.getAttribute('width')) - node.getBoundingClientRect().width) < 1)).toBe(true);
+		const axes = await page.locator('[data-chart="published-counts"]').evaluateAll((nodes) => nodes.map((node) => {
+			const svg = node.getBoundingClientRect();
+			const bars = [...node.querySelectorAll('rect')];
+			const labels = [...node.querySelectorAll('[data-day-axis]')];
+			return {
+				dates: labels.map((label) => label.getAttribute('data-day-axis')),
+				ends: [bars[0], bars.at(-1)!].map((bar) => bar.getAttribute('data-published-bar')),
+				aligned: labels.every((label) => {
+					const bar = bars.find((bar) => bar.getAttribute('data-published-bar') === label.getAttribute('data-day-axis'))!;
+					return Math.abs(Number(label.getAttribute('x')) -
+						(Number(bar.getAttribute('x')) + Number(bar.getAttribute('width')) / 2)) < 0.001;
+				}),
+				fitted: labels.every((label, index) => {
+					const box = label.getBoundingClientRect();
+					return box.left >= svg.left && box.right <= svg.right && box.bottom <= svg.bottom &&
+						(index === 0 || box.left > labels[index - 1].getBoundingClientRect().right);
+				}),
+				sum: bars.reduce((sum, bar) => sum + Number(bar.getAttribute('data-published')), 0),
+				total: Number(node.getAttribute('data-published-total'))
+			};
+		}));
+		for (const axis of axes) {
+			expect(axis.dates.length).toBeGreaterThan(1);
+			expect([axis.dates[0], axis.dates.at(-1)]).toEqual(axis.ends);
+			expect(axis.aligned).toBe(true);
+			expect(axis.fitted).toBe(true);
+			expect(axis.sum).toBe(axis.total);
+		}
+	}
+	for (const [index, measure] of ['articles', 'visuals'].entries()) {
+		const plot = page.locator(`[data-published-measure="${measure}"]`);
+		const strip = page.locator(`[data-readout="published-${measure}"]`);
+		await expect(page.locator(`[data-kpi="${measure === 'articles' ? 'Articles' : 'Visuals'} published"] [data-kpi-note]`)).toHaveCount(0);
+		await plot.press('Home');
+		await expect(strip.locator('[data-readout-day]')).toHaveText(shortDate((await plot.locator('rect').first().getAttribute('data-published-bar'))!));
+		await expect(strip.locator('.readout-value')).toHaveText('0');
+		await plot.press('End');
+		await expect(strip.locator('.readout-value')).toHaveText(String(totals[index]));
+		const newest = await plot.locator('rect').last().boundingBox();
+		if (!newest) throw new Error('The measured published-day bar must be visible.');
+		await page.mouse.move(newest.x + newest.width / 2, newest.y + newest.height / 2);
+		await expect(page.locator(`[data-chart-tooltip="published-${measure}"] dd`)).toHaveText(String(totals[index]));
+		await plot.dispatchEvent('pointerdown', { pointerType: 'touch', clientX: newest.x + newest.width / 2, clientY: newest.y });
+		await plot.dispatchEvent('pointerleave', { pointerType: 'touch' });
+		await expect(strip.locator('.readout-value')).toHaveText(String(totals[index]));
+	}
+	await setWindow(page, 1);
+	await settled(page);
+	for (const measure of ['articles', 'visuals']) {
+		const plot = page.locator(`[data-published-measure="${measure}"]`);
+		const date = await plot.locator('rect').getAttribute('data-published-bar');
+		await expect(plot.locator('[data-day-axis]')).toHaveCount(1);
+		await expect(plot.locator('[data-day-axis]')).toHaveAttribute('data-day-axis', date!);
+		await expect(plot.locator('[data-day-axis]')).toHaveText(shortDate(date!));
+	}
 	const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
 	expect(overflow, 'the route overflows its real viewport').toBe(false);
-	await page.locator('[data-console-carry="model"] a').click();
+	await page.locator('[data-console-rail] > details > summary').click();
+	await page.locator('[data-console-tab="model"]').click();
 	await expect(page.locator('[data-console-route="model"]')).toBeVisible();
+	await expect(page.locator('[data-console-band], [data-console-route-issue], [data-console-carry]')).toHaveCount(0);
 	await page.goBack();
 	await settled(page);
 	await expect(page.locator('[data-console-panels="pipelines"]')).toBeVisible();

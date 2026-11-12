@@ -1,5 +1,5 @@
 <script lang="ts">
-	/** Which record reached this route, with one reserved standing and one shimmer. */
+	/** Keep loading, absent and failed record reads visible without repeating successful scope. */
 	import { onMount, type Snippet } from 'svelte';
 	import type { RouteId } from '$lib/console/band';
 	import type { LedgerReach, SliceResult } from '$lib/data/ledger';
@@ -42,13 +42,13 @@
 		const timer = setTimeout(() => { shimmer = true; }, shimmerAfterMs);
 		return () => clearTimeout(timer);
 	});
-	const standing = $derived(routeStanding({ ...tally, days, through, shimmer }));
+	const standing = $derived(tally.state === 'ok' ? settledSuffix : routeStanding({ ...tally, days, through, shimmer }));
 </script>
 
 <div data-console-panels={route} data-route-state={tally.state} data-shimmer={shimmer ? 'on' : 'off'}>
 	<p class="route-standing" data-console-standing>
 		{#if recordScope && (tally.state === 'quiet' || tally.state === 'missing' || tally.state === 'unreachable')}{recordScope}: {/if}
-		{tally.state === 'ok' && settledSuffix ? settledSuffix : standing}
+		{standing}
 		{#if tally.state === 'unreachable'}
 			<button type="button" data-console-retry onclick={onRetry}>Fetch the record again</button>
 		{/if}

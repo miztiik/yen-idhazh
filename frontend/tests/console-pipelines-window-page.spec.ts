@@ -11,6 +11,7 @@ import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/
 import { telemetryRow } from './support/telemetry-row';
 import { formatNumber, numberFormat } from './support/number-format';
 import { consoleConfig } from '../src/lib/server/config';
+import { shortDate } from '../src/lib/format';
 import { ITEM_HEALTH_COLUMNS, SCORE_COLUMNS } from '../src/lib/server/ledger-rows';
 import { hydrated, setWindow, routeHref } from './support/console-window/controls';
 import { THROUGH, FIRST, dayBefore, nativeRow, timedRow, packedPipelines, servePipelines, settled } from './support/pipelines-ledgers';
@@ -192,7 +193,7 @@ test('a late wide-window completion cannot replace a newer short request or its 
 
 test('lagging native endpoints do not move private published-day evidence', async ({ page }, info) => {
 	const document = await (await page.request.get(routeHref('pipelines'))).text();
-	const publishedDay = document.match(/data-pipelines-window-to="([^"]+)"/)?.[1];
+	const publishedDay = document.match(/data-glance[^>]*data-range-to="([^"]+)"/)?.[1];
 	if (publishedDay === undefined) throw new Error('The prerendered route must name its published-day window.');
 	const nativeThrough = dayBefore(publishedDay, 2);
 	const privateWeek = windowOfDays(publishedDay, 7, 'right');
@@ -216,9 +217,12 @@ test('lagging native endpoints do not move private published-day evidence', asyn
 	await hydrated(page);
 	await setWindow(page, 7);
 	await settled(page);
-	await expect(page.locator('[data-pipelines-window-to]')).toHaveAttribute('data-pipelines-window-to', publishedDay);
-	await expect(page.locator('[data-console-standing]')).toHaveText(`Native record window: ${nativeWeek.start} through ${nativeWeek.end} UTC.`);
-	await expect(page.locator('[data-private-window]')).toContainText(`${privateWeek.start} through ${privateWeek.end} UTC`);
+	await expect(page.locator('[data-glance]')).toHaveAttribute('data-range-to', publishedDay);
+	await expect(page.locator('[data-console-standing]')).toHaveText('');
+	await page.locator('[data-console-data-dates] > summary').click();
+	await expect(page.locator('[data-window-status]')).toHaveText(`Showing 7 days, to ${shortDate(nativeThrough)}.`);
+	await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-from', privateWeek.start);
+	await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-to', privateWeek.end);
 	await expect(page.locator('[data-windowed="item-time-split"] [data-native-window]'))
 		.toContainText(`${nativeWeek.start} through ${nativeWeek.end} UTC`);
 	await expect(page.locator(`[data-published-bar="${publishedDay}"]`).first()).toBeVisible();
@@ -241,14 +245,16 @@ test('lagging native endpoints do not move private published-day evidence', asyn
 	await expect(age.locator('rect').last()).toHaveAttribute('aria-label', /100% at or below$/);
 	await setWindow(page, 1);
 	await settled(page);
-	await expect(page.locator('[data-private-window]')).toContainText(`${publishedDay} through ${publishedDay} UTC`);
-	await expect(page.locator('[data-console-standing]')).toHaveText(`Native record window: ${nativeThrough} through ${nativeThrough} UTC.`);
+	await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-from', publishedDay);
+	await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-to', publishedDay);
+	await expect(page.locator('[data-window-status]')).toHaveText(`Showing 1 day, to ${shortDate(nativeThrough)}.`);
 	await expect(page.locator('[data-windowed="item-time-split"] [data-native-window]'))
 		.toContainText(`${nativeThrough} through ${nativeThrough} UTC`);
 	await expect(page.locator('[data-console-panel-id="article-age"] h2')).toHaveText('Source age at work start');
 	await page.locator('a[href*="/console/model/"]').first().click();
 	await expect(page.locator('[data-console-panels="model"]')).not.toHaveAttribute('data-route-state', 'loading');
-	await expect(page.locator('[data-private-window]')).toContainText(`${publishedDay} through ${publishedDay} UTC`);
+	await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-from', publishedDay);
+	await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-to', publishedDay);
 	await expect(page.locator('[data-model-query="model-throughput"] [data-native-window]'))
 		.toContainText(`${nativeThrough} through ${nativeThrough} UTC`);
 	await expect(page.locator('[data-model-cards]')).toHaveAttribute('data-model-cards-from', publishedDay);

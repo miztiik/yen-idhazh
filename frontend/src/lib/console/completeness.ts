@@ -1,25 +1,8 @@
-/** How complete the console's record is, as one sentence: when the last run
- * finished, and - once a reader's clock is known - how many whole days have
- * passed with nothing recorded.
+/** When does the last console update need an absent or late-record warning?
  *
- * Every chart on the console draws the newest days that exist rather than the
- * last N days, so when the record stops a chart gains no gap at its right edge.
- * It slides back in time and looks as full as it did the day before. This
- * sentence is what tells a stopped pipeline from a quiet one.
- *
- * All of it is UTC (CLAUDE.md section 2). The instant is the band's
- * `generated_at`, the moment the run that wrote the record finished. The day
- * is always spelled out, weekday and date and never `today`: the page's day is
- * the UTC day, and a reader's own day can be a different one.
- *
- * It dates the last run and never the newest packed day, and it does not call
- * the page complete. A chart drawn from a packed ledger can end days before
- * that run, and the route's own note for that record says how far it reaches
- * (`recording.ts`).
- *
- * No clock is read here. The prerendered page has no reader's clock to judge
- * against, so it states the instant and nothing more; a browser passes its own
- * clock once the page is open, and only then can the record be late.
+ * The band's `generated_at` dates that update, never the reach of every ledger.
+ * A fresh timestamp belongs in the date disclosure, not a standing paragraph.
+ * Only the browser's UTC clock can establish lateness.
  */
 import { clockUtc, MONTHS } from '$lib/format';
 
@@ -73,10 +56,8 @@ export function completenessSentence(state: Completeness): string {
 	if (state.kind === 'unread') {
 		return 'This page cannot say when the last run finished - its record did not load.';
 	}
+	if (state.kind === 'complete') return '';
 	const when = spelledInstant(state.finished);
-	if (state.kind === 'complete') {
-		return `The latest run on this page finished at ${when}. A run still going is not on this page yet.`;
-	}
 	const missing =
 		state.missingDays === 1 ? '1 day is missing.' : `${state.missingDays} days are missing.`;
 	return `Nothing has been recorded since ${when}. ${missing}`;

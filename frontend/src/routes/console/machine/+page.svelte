@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { useWindowChoice } from '$lib/console/window-slot';
-	import { base } from '$app/paths';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
@@ -189,7 +188,7 @@
 <RouteStatus route="machine" answers={panelAnswers} days={windowDays} {through} shimmerAfterMs={shared.shimmer_after_ms} onRetry={retry}
 	settledSuffix={counterReady ? `${formatNumber(countedRuns, cfg.chart.number_format, { exact: true })} ${countedRuns === 1 ? 'run' : 'runs'} counted.` : ''}>
 <div data-machine-start={start} data-machine-end={end} data-machine-run-count={counterReady ? countedRuns : undefined}>
-	<WindowControlSource days={windowDays} {presets} {monthsFor} {ready} onChange={show}
+	<WindowControlSource route="machine" days={windowDays} {presets} {monthsFor} {ready} onChange={show}
 		busy={panelAnswers.includes('pending')}
 		record={{ asked: windowDays, first: reach?.ledgers['item-health']?.state === 'ok' ? reach.ledgers['item-health'].first : null, through }} />
 	{#if evidence}
@@ -214,7 +213,6 @@
 		</div>
 	</details>
 	{/if}
-	<p class="console-carry" data-console-carry="pipelines">{data.carries.machine} <a href="{base}/console/">Pipelines &rarr;</a></p>
 	{#each groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
@@ -266,5 +264,4 @@
 	}
 	.machine-evidence-body { display: grid; gap: var(--console-control-padding-block); padding: var(--console-panel-padding); border-block-start: 1px solid var(--color-rule); }
 	.machine-evidence-body p { margin: 0; }
-	.console-carry { margin-block-start: var(--console-control-gap); }
 </style>

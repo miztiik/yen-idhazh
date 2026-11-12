@@ -1,6 +1,6 @@
 # Which console panel answers what
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 The console tells an operator what happened to the pipeline; the digest tells a
 reader what happened in the world. This page owns the routes and panel placement.
@@ -31,7 +31,7 @@ does not require a runtime backend.
 | Page | Owns |
 | --- | --- |
 | This page | The console's questions, routes and panel placement |
-| [what-sits-above-every-console-route.md](what-sits-above-every-console-route.md) | Shared navigation and the standing status band |
+| [what-sits-above-every-console-route.md](what-sits-above-every-console-route.md) | Shared navigation, window control and on-demand source dates |
 | [which-console-surfaces-follow-the-window-and-which-say-why-not.md](which-console-surfaces-follow-the-window-and-which-say-why-not.md) | The time-window control and declared exceptions |
 | [what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md) | Run health, failures, stage costs and retained visual attempts |
 | [how-chart-drawing-is-reported-and-the-rule-it-is-judged-against.md](how-chart-drawing-is-reported-and-the-rule-it-is-judged-against.md) | Chart-drawing outcomes and their retirement rule |
@@ -53,12 +53,11 @@ and the individual responsible within one subsystem. Its heading and content
 must answer the same question.
 
 Every route starts with its own status summary before the detail it qualifies.
-Declare the question in `data-panel-question`. The standing band covers all six
-routes, but does not replace their own summaries.
+Declare the question in `data-panel-question`. No repeated global verdict band
+or cross-route metric sentence sits above those comparisons.
 
 | Surface | Role |
 | --- | --- |
-| Standing band | Pipeline-wide status, shared by all routes |
 | Pipelines glance cards | Route status over the selected window |
 | Pipelines `Run health` | Published against planned, by day and run; the first panel below the glance cards |
 | Remaining Pipelines panels | Stage failures and costs |

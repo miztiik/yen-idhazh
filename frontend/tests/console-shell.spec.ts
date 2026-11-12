@@ -36,7 +36,7 @@ test.describe('how complete the record is, as arithmetic', () => {
     });
     test('the instant is spelled in UTC, with the weekday and never "today"', () => {
         expect(spelledInstant(at)).toBe('18:23 UTC on Sunday 27 September');
-        expect(completenessSentence({ kind: 'complete', finished: at })).toBe('The latest run on this page finished at 18:23 UTC on Sunday 27 September. A run still going is not on this page yet.');
+        expect(completenessSentence({ kind: 'complete', finished: at })).toBe('');
         expect(completenessSentence({ kind: 'behind', finished: at, missingDays: 1 })).toBe('Nothing has been recorded since 18:23 UTC on Sunday 27 September. 1 day is missing.');
         expect(completenessSentence({ kind: 'behind', finished: at, missingDays: 4 })).toBe('Nothing has been recorded since 18:23 UTC on Sunday 27 September. 4 days are missing.');
     });

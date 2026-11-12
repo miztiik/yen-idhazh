@@ -212,6 +212,7 @@ export function horizonRate(
 export interface SkylineBar {
 	date: string;
 	published: number;
+	measured: boolean;
 	x: number;
 	width: number;
 	height: number;
@@ -246,6 +247,7 @@ export function publishedSkyline(
 		bars: calendar.map((date, index) => ({
 			date,
 			published: counts[index],
+			measured: onDate.has(date),
 			x: index * pitch + (pitch - width) / 2,
 			width,
 			height: busiest === 0 ? 0 : counts[index] / busiest

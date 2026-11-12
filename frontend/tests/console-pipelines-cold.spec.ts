@@ -113,10 +113,11 @@ for (const held of ['data', 'engine'] as const) {
 		await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute('data-route-state', 'ok');
 	});
 }
-test('the verdict band costs a cold load no round trip of its own', async ({ page }) => {
+test('shared metadata adds no cold round trip or repeated summary band', async ({ page }) => {
 	const asked: string[] = [];
 	page.on('request', (request) => asked.push(new URL(request.url()).pathname));
 	await page.goto('/console/');
-	await page.waitForSelector('[data-console-band]');
+	await expect(page.locator('[data-console-route="pipelines"]')).toBeVisible();
+	await expect(page.locator('[data-console-band], [data-console-route-issue], [data-console-carry]')).toHaveCount(0);
 	expect(asked.filter((path) => path.endsWith('/console/band.json'))).toEqual([]);
 });
