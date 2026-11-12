@@ -4,7 +4,6 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveConsoleStyle } from '../src/lib/console/console-style.ts';
-import { consolePalette } from './console-palette.ts';
 
 /**
  * @typedef {import('../src/lib/console/console-style.ts').ConsoleStyleConfig} ConsoleStyleConfig
@@ -52,9 +51,15 @@ function shadow(value, enabled) {
  * @param {Pick<ThemeConfig, 'elevation_enabled' | 'surface_tint_alpha' | 'gradient_enabled'>} theme
  * @param {ChartConfig['palette']} choice
  */
-function consoleColors(style, mode, theme, choice) {
+async function consoleColors(style, mode, theme, choice) {
 	const colors = style.colors[mode];
-	const palette = consolePalette(colors, mode, choice);
+	/** @type {readonly string[]} */
+	let palette = colors.categorical;
+	if (choice !== 'categorical') {
+		// Native categorical bindings need no frontend colour-tool installation.
+		const { consolePalette } = await import('./console-palette.ts');
+		palette = consolePalette(colors, mode, choice);
+	}
 	const depth = style.elevation[mode];
 	/** @type {CssTokens} */
 	const values = {
@@ -102,7 +107,7 @@ function consoleColors(style, mode, theme, choice) {
  * Callers supply repository-authored, native-validated appearance values.
  * @param {{frame?: Partial<FrameConfig>, theme?: Partial<ThemeConfig>, motion?: Partial<MotionConfig>, chart?: Partial<ChartConfig>, console_style?: ConsoleStyleInput}} raw
  */
-export function renderFrameCss(raw = {}) {
+export async function renderFrameCss(raw = {}) {
 	const frame = { ...DEFAULTS, ...raw.frame };
 	const motion = { enabled: true, ...raw.motion };
 	const theme = { ...DEFAULTS, ...raw.theme };
@@ -172,16 +177,16 @@ ${declarations({ 'movement-good': theme.movement_good_light, 'movement-bad': the
 /* The selector includes the outer canvas and header, never a reading route. */
 ${SCOPE} {
 ${declarations(tokens)}
-${consoleColors(style, 'dark', theme, raw.chart?.palette ?? 'categorical')}
+${await consoleColors(style, 'dark', theme, raw.chart?.palette ?? 'categorical')}
 }
 
 ${SCOPE}[data-theme='light'] {
-${consoleColors(style, 'light', theme, raw.chart?.palette ?? 'categorical')}
+${await consoleColors(style, 'light', theme, raw.chart?.palette ?? 'categorical')}
 }
 `;
 }
 
-function build() {
+async function build() {
 	const path = join(REPO, 'config', 'appearance.json');
 	const raw = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {};
 	const localPython = [join(REPO, '.venv', 'Scripts', 'python.exe'), join(REPO, '.venv', 'bin', 'python')].find((path) => existsSync(path));
@@ -194,10 +199,10 @@ function build() {
 	});
 	if (validated.error) throw validated.error;
 	if (validated.status !== 0) throw new Error(`config/appearance.json failed native validation:\n${validated.stderr}`);
-	const css = renderFrameCss(JSON.parse(validated.stdout));
+	const css = await renderFrameCss(JSON.parse(validated.stdout));
 	const previous = existsSync(OUT) ? readFileSync(OUT, 'utf8') : null;
 	if (previous !== css) writeFileSync(OUT, css, { encoding: 'utf8' });
 	console.log(previous === css ? 'frame css: unchanged' : 'frame css: wrote src/styles/frame.generated.css');
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) build();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await build();

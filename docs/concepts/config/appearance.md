@@ -276,7 +276,7 @@ aligns category tokens, syntax/type colours and the wordmark with that family.
 Quantity-to-token assignments do not change; reader colours remain untouched.
 
 The CSS producer uses D3 colour/interpolation and build-time Culori contrast
-conversion to select readable shades of the stock colours for the existing
+comparison to select readable shades of the stock colours for the existing
 shared text/line roles. This is palette production, not a runtime correction
 system, accessibility scanner or new audit gate. Six-digit roles use fixed
 eight-bit sampling precision and the existing design-system text floor.
@@ -289,6 +289,10 @@ The colour utilities are development/build dependencies. D3 supplies the actual
 schemes; Culori supplies the contrast comparison D3 does not provide. Their
 beneficiary is legible PiYG-based console token production. The producer lives
 under `frontend/scripts/` and is not imported by runtime routes.
+These tools load through native asynchronous ESM only for a stock-palette choice;
+callers await the completed CSS. Default and explicit
+categorical CSS remain dependency-free for native contract readers; selecting a
+stock scheme without its build tools fails rather than falling back.
 `theme.gradient_enabled` switches the uniform categorical shading on or off;
 false keeps the same machine colour flat. `machine_colour_floor_share` supplies
 the common highlight share, with the remaining share the category hue and the

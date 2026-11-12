@@ -291,7 +291,7 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	expect(storageWarnings.some((message) => message.includes('could not be saved'))).toBe(true);
 
 	const before = Number(await plot.locator('line[stroke="var(--chart-grid)"]').first().getAttribute('x1'));
-	const substitution = await page.addStyleTag({ content: renderFrameCss({
+	const substitution = await page.addStyleTag({ content: await renderFrameCss({
 		console_style: {
 			colors: { light: { canvas: '#eef2ef' }, dark: { canvas: '#202522' } },
 			typography: { small: { size_rem: 1, leading_rem: 1.25 } }

@@ -265,12 +265,12 @@ test.describe('the committed appearance file', () => {
 		expect(changed.elevation.light.panel).toEqual({ ...defaults.elevation.light.panel, y_px: 2 });
 	});
 
-	test('the real CSS renderer substitutes a legal nondefault style and is deterministic', () => {
+	test('the real CSS renderer substitutes a legal nondefault style and is deterministic', async () => {
 		const fixture: { console_style: ConsoleStyleConfig } = JSON.parse(readFileSync(
 			join(REPO, 'tests', 'fixtures', 'contracts', 'appearance-config', 'knobs-set-away-from-the-defaults.json'), 'utf8'
 		));
-		const generated = renderFrameCss({ console_style: fixture.console_style });
-		expect(generated).toBe(renderFrameCss({ console_style: fixture.console_style }));
+		const generated = await renderFrameCss({ console_style: fixture.console_style });
+		expect(generated).toBe(await renderFrameCss({ console_style: fixture.console_style }));
 		const [reader, operator] = generated.split('/* The selector includes the outer canvas');
 		expect(reader).not.toContain('--color-bg:');
 		expect(reader).not.toContain('--console-');
@@ -280,7 +280,7 @@ test.describe('the committed appearance file', () => {
 		expect(operator).toContain('--color-bg: #1a1a18;');
 	});
 
-	test('PiYG aligns console categories while keeping neutral absence, explicit controls and reader tokens', () => {
+	test('PiYG aligns console categories while keeping neutral absence, explicit controls and reader tokens', async () => {
 		const style = resolveConsoleStyle();
 		for (const mode of ['light', 'dark'] as const) {
 			const colors = style.colors[mode];
@@ -291,8 +291,8 @@ test.describe('the committed appearance file', () => {
 			expect(new Set(palette).size).toBe(8);
 			expect(colors).toEqual(before);
 		}
-		const original = renderFrameCss();
-		const aligned = renderFrameCss({
+		const original = await renderFrameCss();
+		const aligned = await renderFrameCss({
 			chart: { palette: 'piyg' },
 			console_style: { colors: { light: { accent: '#145a55', focus: '#7d2359', selected: '#e5eee7' } } }
 		});
@@ -304,8 +304,8 @@ test.describe('the committed appearance file', () => {
 		expect(aligned).toContain('--gradient-wordmark: linear-gradient(to right,');
 	});
 
-	test('console font and elevation switches use existing fallbacks without new assets', () => {
-		const css = renderFrameCss({ theme: { display_face_enabled: false, elevation_enabled: false } });
+	test('console font and elevation switches use existing fallbacks without new assets', async () => {
+		const css = await renderFrameCss({ theme: { display_face_enabled: false, elevation_enabled: false } });
 		const operator = css.split('/* The selector includes the outer canvas')[1];
 		expect(operator).not.toContain('InterVariable');
 		expect(operator).not.toContain('rgba(0, 0, 0,');
@@ -342,12 +342,12 @@ test.describe('the committed appearance file', () => {
 		}
 	});
 
-	test('the frame producer preserves explicit numeric caps and emits no cap for the full window', () => {
-		const capped = renderFrameCss({ frame: { console_max_px: 1600 } });
-		const fluid = renderFrameCss({ frame: { console_max_px: null } });
+	test('the frame producer preserves explicit numeric caps and emits no cap for the full window', async () => {
+		const capped = await renderFrameCss({ frame: { console_max_px: 1600 } });
+		const fluid = await renderFrameCss({ frame: { console_max_px: null } });
 		expect(capped).toContain('--frame-console: 1600px;');
 		expect(fluid).toBe(capped.replace('--frame-console: 1600px;', '--frame-console: none;'));
-		expect(renderFrameCss()).toBe(fluid);
+		expect(await renderFrameCss()).toBe(fluid);
 	});
 });
 
