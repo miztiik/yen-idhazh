@@ -36,10 +36,9 @@ the order below is load-bearing: `decision` and `purpose` are committed before
 in the list, a confidence would condition every field after it - the model would
 be reading its own hedge back as evidence. It is recorded and it gates nothing.
 
-`version` and `plan_version` are stamped by code and are not decoded. `version`
-is when this shape last moved; `plan_version` is which planning vocabulary the
-plan was made against, and a later build comparing the two is how contract drift
-is found rather than drawn.
+Code stamps `version` and `plan_version` and collects `element_ids` from the
+selected references. None is requested from the current decoder. The native
+saved plan retains all three fields, so historical plans remain readable.
 
 ## Every role is a key, and an unused one is empty
 
@@ -89,57 +88,15 @@ this module's own bounds - it is what says that arithmetic is worth paying for.
 
 ## The worst-case decoded reply, in characters
 
-Every array here has a `maxItems` and every decoded string a `maxLength`
-(`ELEMENT_ID_MAX_LENGTH` and the four below), so the longest reply the decoder
-can produce is arithmetic rather than a hope. A token spans at least one
-character, so the character total is also a hard ceiling on tokens.
+Every decoded array and string is bounded. Excluding code-owned fields, the
+current plan's structural ceiling is **3,004 JSON characters**, recomputed from
+the schema at import. `WORST_CASE_REPLY_CHARACTERS` must agree with that result.
+This is a shape bound, not a measured runtime or output size.
 
-An element id costs 24 characters in JSON: `ELEMENT_ID_MAX_LENGTH` (22) plus two
-quotes. An array of `n` of them costs `25n + 1`.
-
-| Field | Key | Widest value | Characters |
-| --- | --- | --- | --- |
-| `decision` | 11 | `"visual"` | 19 |
-| `purpose` | 10 | `"distribution"` | 24 |
-| `type` | 7 | `"stacked_bar"` | 20 |
-| `declared_whole_element_id` | 28 | a maximum-length element id | 24 |
-| `encodings` | 12 | 9 required role keys (88) + 9 arrays of 8 (1809) + 8 commas + 2 braces | 1919 |
-| `element_ids` | 14 | 32 ids | 815 |
-| `labels` | 9 | 10 ids | 260 |
-| `annotations` | 14 | 4 ids | 115 |
-| `why` | 6 | 240 characters | 248 |
-| `title` | 8 | 80 characters | 90 |
-| `caption` | 10 | 200 characters | 212 |
-| `confidence` | 13 | 20 characters of decimal | 33 |
-
-3,807 for the fields, 11 commas between them and 2 braces around them:
-**3,820 characters, and therefore at most 3,820 tokens.** `worst_case_reply_characters`
-recomputes that from the generated schema and this module refuses to import if it
-and `WORST_CASE_REPLY_CHARACTERS` disagree, so a bound cannot move without the
-ceiling moving with it.
-
-Making every role required moved none of that. The worst case already counted
-every declared key, because a grammar-constrained decoder emits them all; what
-changed is that the count is now true of an ordinary plan as well as of the
-worst one.
-
-The two committed fixtures measure **838 characters** for a four-bar plan citing
-eight elements and **368** for one that declines - between a fifth and a tenth
-of the ceiling, because at most two of the nine roles are filled and the prose
-fields are nowhere near their caps.
-
-`encodings` is 51 percent of the ceiling and `element_ids` a further 22 percent,
-so the two element-reference fields are five sixths of it. No type in the
-vocabulary below fills more than four of the nine roles, so the ceiling is loose
-by construction - the schema is what constrains the decoder, and the schema
-cannot say "at most four roles for a bar". Which roles a type may fill is the
-validator's rule.
-
-`visuals.max_output_tokens` is 400 and it is the single-call planner's budget, not
-this shape's. The summarize-and-plan call decodes a summary and this plan through one budget derived
-from both shapes' bounds, which is the planner's work and not this contract's -
-`classify.calls.summarize_and_plan_budget_tokens` does the arithmetic and
-`widest_json_characters` below is the half of it this module owns.
+The native saved `element_ids` list remains bounded for historical readers and
+validation. Removing its repeated generation changes no persisted field.
+The two-call request combines the plan's structure with the unchanged summary
+allowance in `classify.calls.summarize_and_plan_budget_tokens`.
 """
 
 from __future__ import annotations
@@ -171,10 +128,9 @@ FORBIDDEN_FIELDS: Final = frozenset({"alt_text"})
 #: machine-checked rather than promised above. Bounded to 0..1 and drawn nowhere.
 NUMERIC_FIELDS: Final = frozenset({"confidence"})
 
-#: Stamped by code, so a decoder spends no character on either and neither is in
-#: the arithmetic. `version` says when this shape last moved; `plan_version` says
-#: which planning vocabulary the plan was made against.
-CODE_STAMPED_FIELDS: Final = frozenset({"version", "plan_version"})
+#: Code stamps the versions and collects the references already selected by the
+#: model. The saved field remains readable, but no current decoder repeats it.
+CODE_STAMPED_FIELDS: Final = frozenset({"version", "plan_version", "element_ids"})
 
 #: A float's repr never runs past 17 significant digits, so `0.` and a sign in
 #: front of them is 20 characters and is an upper bound with room in it.
@@ -184,7 +140,7 @@ _NUMBER_MAX_CHARACTERS: Final = 20
 #: checked against the generated schema at import. Written down as well as
 #: computed because it is what the planner's output budget is derived from, and
 #: a number nobody can read off the module is a number nobody re-derives.
-WORST_CASE_REPLY_CHARACTERS: Final = 3820
+WORST_CASE_REPLY_CHARACTERS: Final = 3004
 
 #: `<kind>-<span_start>-<span_end>` at its longest, and `ELEMENT_ID_PATTERN`
 #: already admits no more than that - the pattern bounds every one of its own
@@ -639,8 +595,8 @@ def widest_json_characters(schema: dict[str, Any]) -> int:
     first time a bound moves, and the one that is wrong is the one nobody reads.
 
     It counts every declared property, not only the required ones, because a
-    grammar-constrained decoder emits them all. The two fields code stamps are
-    skipped, because a decoder never writes either.
+    grammar-constrained decoder emits them all. Code-owned fields are skipped
+    because the current decoder never writes them.
     """
     return _widest(schema, schema.get("$defs", {}))
 

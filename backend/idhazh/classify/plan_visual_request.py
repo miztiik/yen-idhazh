@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Final
 
+from idhazh.classify.label_request import sentence_id
 from idhazh.contracts.element import (
     ELEMENT_ID_PATTERN,
-    JUDGED_FIELDS,
-    TIER_ONE_FIELDS,
     ElementTable,
 )
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import EncodingRole, VisualType
-from idhazh.render.chart import can_compile
 from idhazh.sanitize import untrusted_block
 from idhazh.visual_vocabulary import ROLE_KINDS, TYPE_RULES, VALUE_ROLES
+
+PLANNING_COLUMNS: Final = (
+    "element_id", "kind", "span_excerpt", "value", "unit", "sentence_id"
+)
+PLANNING_JUDGEMENTS: Final = ("measure", "entity")
 
 
 def planning_menu(table: ElementTable) -> str:
@@ -24,11 +27,12 @@ def planning_menu(table: ElementTable) -> str:
     labels = {}
     for element in table.elements:
         cells = element.model_dump(mode="json")
-        rows.append([cells[name] for name in TIER_ONE_FIELDS])
-        judged = {name: cells[name] for name in JUDGED_FIELDS if cells[name] is not None}
+        cells["sentence_id"] = sentence_id(element.sentence_index)
+        rows.append([cells[name] for name in PLANNING_COLUMNS])
+        judged = {name: cells[name] for name in PLANNING_JUDGEMENTS if cells[name] is not None}
         if judged:
             labels[element.element_id] = judged
-    data = {"columns": TIER_ONE_FIELDS, "rows": rows, "labels": labels}
+    data = {"columns": PLANNING_COLUMNS, "rows": rows, "labels": labels}
     return untrusted_block(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
 
 
@@ -67,22 +71,19 @@ def type_role_guide(visuals: VisualsConfig) -> str:
         if role in used
     )
     lines = [
-        "Type/role guide. Request names are not a promise that a compiler exists.",
+        "Numeric chart guide.",
         "Channel kinds: " + roles + ".",
         "Measured channels: "
         + ", ".join(sorted(role.value for role in VALUE_ROLES))
-        + "; values within each must have convertible units.",
+        + "; units within each must be convertible, but units alone do not prove comparability.",
     ]
     for visual_type in selected:
-        rules = TYPE_RULES.get(visual_type)
-        if rules is None:
-            lines.append(f"{visual_type.value}: no role rule or compiler.")
-            continue
+        rules = TYPE_RULES[visual_type]
         required = ",".join(role.value for role in EncodingRole if role in rules.required)
         optional = ",".join(role.value for role in EncodingRole if role in rules.optional) or "none"
         if visual_type is VisualType.HISTOGRAM:
             marks = (
-                f"at least {visuals.histogram_bins} bins values for "
+                f"at least {visuals.histogram_bins} source quantities for "
                 f"{visuals.histogram_bins} code-computed bins"
             )
         else:
@@ -90,18 +91,7 @@ def type_role_guide(visuals: VisualsConfig) -> str:
                 visuals.max_pie_parts if visual_type is VisualType.PIE else visuals.max_chart_points
             )
             marks = f"{visuals.min_chart_points}..{ceiling} marks in {rules.marks.value}"
-        capability = "" if can_compile(visual_type) else "; no compiler"
         lines.append(
-            f"{visual_type.value}: required {required}; optional {optional}; {marks}{capability}."
+            f"{visual_type.value}: required {required}; optional {optional}; {marks}."
         )
-    lines.extend(
-        (
-            "Chart example: bar pairs source category ids with comparable quantity ids; "
-            "use the configured mark floor and leave unused channels empty.",
-            "Decline example: decision none; purpose, type, declared_whole_element_id, title "
-            "and caption null; every encoding and reference list empty; why explains "
-            "unsupported evidence or why no supported comparison or relationship becomes "
-            "quicker to grasp than prose alone.",
-        )
-    )
     return "\n".join(lines)

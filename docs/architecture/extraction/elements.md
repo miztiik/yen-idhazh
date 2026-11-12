@@ -325,26 +325,22 @@ grammar rather than caught by a check downstream. That is the row's oracle and
 it is asserted against the generated schema, beside a shape that fails the same
 assertion so the check is known to be able to go red.
 
-Every field the reply may carry, what it is for, and who reads it. Counts are
-from run 34943695821 shard 3, 20 articles, 2026-09-15.
+Table A - Current chart evidence
 
-| Field | What we ask for | Why | Who reads it | Found |
-| --- | --- | --- | --- | --- |
-| `labels[].element_id` | the address of a figure the candidate pass found | points rather than types, so a number cannot be invented | element table, then the chart | 60 |
-| `labels[].measure` | what the figure measures, in the article's words | `4,200` is not an axis label; `exports` is | the chart's axis | - |
-| `labels[].dimension` | what it varies over - year, region | what makes a series a series | the chart | - |
-| `labels[].entity` | whose figure it is | two numbers share a chart only if they measure comparable things | the chart's grouping | - |
-| `labels[].time_element_id` | the address of the date this figure belongs to | the whole of a time series | the chart's time axis | - |
-| `labels[].attribution` | named / self_reported / anonymous / unattributed | a figure a company said about itself is not one a regulator published | element table | - |
-| `labels[].hedge` | did the article say "about", "expects", "may" | a hedged figure must not be drawn as a fact | element table | - |
-| `labels[].salience` | primary / supporting / background | which figure the story is about. A word, never a score | the chart's ranking | - |
-| `proposed[]` | a figure in digits the candidate pass missed | the pattern misses figures inside odd punctuation. Model proposes, code re-reads the characters | the chart | **0 of 20** |
-| `entity_mentions[]` | organisations and people, and where each is named | groups "OpenAI", "ChatGPT", "the company" into one thing | **the chart's category axis** - `mention_elements` is the only producer of `ENTITY` | 87 |
-| `place_mentions[]` | the same, for locations | same | **the chart's category axis** - the only producer of `PLACE` | 15 |
+| ID | Reply field | Purpose and consumer |
+| --- | --- | --- |
+| A1 | `labels[]` | A printed quantity id, its source-stated measure and named subject. Measures guide planning; known-subject links also support scatter/bubble validation. |
+| A2 | `proposed[]` | An exact sentence-local citation of one missed digit-written quantity. Code re-reads its value and unit. |
+| A3 | `named_mentions[]` | Exact citations, an `entity` or `place` kind and a source-given group name. Code supplies source-backed chart categories and resolves known identities. |
 
-`labels` was empty on 8 of 20 articles and `proposed` on all 20.
+The typed named collection preserves the former collections' combined capacity.
+Date rows retain their source values but receive no quantity labels. The label
+call no longer emits dimension, time, attribution, hedge or salience judgments.
+Those optional native element fields remain readable in historical tables.
+Chart framing must still preserve estimates, forecasts, attribution and scope.
+The [prompt contract](../summarize/prompt.md#design-rationale) owns this reduction.
 
-**The prompt names only the four consumed top-level fields, and a test holds it
+**The prompt names only the three consumed top-level fields, and a test holds it
 there.** `LabelReply` forbids an unknown key, so a prompt asking for a field the
 reply has no room for does not fail a run: the decoder moves the probability
 behind that key onto the keys the grammar does allow. A field the prompt stops
@@ -356,12 +352,11 @@ names the prompt introduces at the left margin and compares them against
 prompt moved; this one says the move is wrong, which is the difference that
 matters the moment somebody re-records.
 
-**The two mention lists reach a reader, and that was measured rather than
-assumed.** `elements.py` mints only `QUANTITY` and `DATE`; `ENTITY` and `PLACE`
-exist only because these two lists produce them. Over the published archive on
-2026-09-15, 495 bar charts have shipped and 404 of them - 82 percent - open on a
-category a `DATE` cannot supply, so a model-found mention filled it. Deleting
-the two lists takes the picture off four charts in five.
+**Named mentions supply chart labels, not an article inventory.** The pattern
+passes produce only `QUANTITY` and `DATE`. Named entity/place spans supply the
+other category and series labels; scatter/bubble also need known identity links.
+Combining the collections does not combine these meanings or discard source
+anchoring.
 
 **Retired observations are read-only compatibility.** The current reply no
 longer requests claims, quotes, keyphrases or lede addresses. Saved replies
@@ -370,32 +365,14 @@ are discarded, because the continuation replays the first raw reply. Unknown
 keys still fail. The [prompt contract](../summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once)
 owns this compatibility boundary.
 
-**The two mention lists are named for what code takes from them, and that was a
-ruling rather than a preference.** A prompt in this repository may not ask a
+**The mention list is named for what code takes from it.** A prompt in this repository may not ask a
 model to pick a reader-facing tag - a page choosing its own steers a control -
 and [`backend/tests/test_tag.py`](../../../backend/tests/test_tag.py) holds every
 prompt to it. Asking where an item names an organisation is not that: the model
 returns an address and some of the item's own words, code cuts the characters,
 and the group key is matched against slugs code already holds. The control is
-untouched, the lists carry the Tier 1 word, and the reasoning is in the design
+untouched, the list carries the Tier 1 word, and the reasoning is in the design
 rationale below.
-
-**A band is a word, and the score is code's arithmetic.** `salience` is
-`primary`, `supporting` or `background`, and `Element.salience` gets the
-midpoint of that band over 0 to 1. The model may not type `0.83`, so it does not
-get to; and three words are a judgement a person can check, where a decimal to
-two places is a precision nobody has.
-
-**`attribution` is a type, not a sentence**: `named`, `self_reported`,
-`anonymous` or `unattributed`. A closed list is what makes the attribution rule
-mechanical instead of aspirational, and `unattributed` writes nothing - the item
-stated it in its own voice, so there is no attribution to record.
-
-**`time` cites a date element and is never typed.** The date pass exists, so a
-label that wants to say when a figure applies names a `date` row of the same
-table and code copies the value that row already holds. An address that names no
-date drops the time and keeps the measure: a label is several judgements, and
-one of them being unusable says nothing about the others.
 
 **`entity` groups under a slug the watchlist holds, and this pass mints none.**
 The model names the organisation in the item's words; code matches that name
@@ -503,7 +480,7 @@ covering more than it does.
 | Failure | Why no check sees it | What the design does instead |
 | --- | --- | --- |
 | **Mis-pointing** - the model means one `"5"` and the anchor lands on another | The span is real. `text[span_start:span_end] == span_excerpt` passes, the write-time re-slice passes and the read-time one passes | The per-sentence rule. A surface is searched inside one named sentence and must hit exactly once, so ambiguity is a rejection rather than a coin toss |
-| **Mis-labelling** - right span, wrong `measure`, `entity` or `salience` | Tier 2 is a judgement and no string search reaches it | A judgement is only ever attached to an address, so it is checkable against that element's own kind, unit and magnitude. A judgement attached to a free string is checkable against nothing |
+| **Mis-labelling** - right span, wrong `measure` or `entity` | Tier 2 is a judgement and no string search reaches it | A judgement is only ever attached to an address, so it is checkable against that element's own kind, unit and magnitude. A judgement attached to a free string is checkable against nothing |
 
 Neither is closed and neither is closable by anchoring. What anchoring buys is
 that a wrong answer is still *a fact the item states*, at a location a reader can
@@ -511,16 +488,10 @@ check, rather than a sentence the model wrote.
 
 ### What the label call is not asked for
 
-An **event** and a **relation** are the next thing this table wants and neither is
-in it. When they arrive, every actor and object in one has to resolve to a
-surviving `entity` element or the row is dropped, because an unanchored arrow is
-a causal claim the article did not make.
-
-A **type for a named thing** and a **geographical hint** are sketched in the plan
-and are not asked for. `Element` has nowhere to put either, `ElementKind` already
-separates an organisation from a location, and a decoded field with no consumer
-costs output tokens on every item for ever. Adding one is cheap the day something
-reads it.
+The call returns no events, relations or reader-facing tags. Its `kind` only
+chooses the existing entity/place element kinds, not a finer taxonomy or a
+geographical classification. Generic categories and age/cohort labels are not
+silently treated as named people, products or places.
 
 ## The span-drift invariant
 
@@ -699,11 +670,10 @@ judgements about what makes a bar, and the candidate pass does not share them.
 `event type` or the plural of `entity`, because a page choosing its own
 reader-facing tags steers a control. The obvious field name trips it.
 
-The field was renamed rather than the control narrowed. The control protects the
-tag vocabulary and a mention list does not touch that vocabulary, so nothing here
-needs it changed - and the name is better, not merely permitted: the mention is
-Tier 1 and is what draws, while the group key is Tier 2. `entity_mentions` says
-the mentions are the payload.
+The control protects the tag vocabulary. A typed `named_mentions` collection
+points at source characters and selects an existing element kind; it chooses
+no reader-facing tag. Source mentions remain Tier 1 and the known group identity
+remains Tier 2.
 
 **What it costs:** the control now passes on a prompt that does ask about an
 organisation, so silence could later read as approval. This section is the

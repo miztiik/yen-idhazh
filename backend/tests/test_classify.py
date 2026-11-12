@@ -33,7 +33,6 @@ from idhazh.classify.calls import (
     MEASURED_REPLY_CHARACTERS,
     MEASURED_REPLY_TOKENS,
     PROPOSED_MAX,
-    SALIENCE_SCORE,
     SUMMARIZE_AND_PLAN_BUDGET_TOKENS,
     LabelReply,
     MentionGroup,
@@ -63,11 +62,14 @@ from idhazh.classify.calls import (
     summarize_and_plan_schema,
     summarize_and_plan_user_turn,
 )
-from idhazh.classify.plan_visual_request import planning_menu, type_role_guide
+from idhazh.classify.plan_visual_request import (
+    PLANNING_COLUMNS,
+    PLANNING_JUDGEMENTS,
+    planning_menu,
+    type_role_guide,
+)
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import (
-    JUDGED_FIELDS,
-    TIER_ONE_FIELDS,
     ElementKind,
     ElementTable,
     Extractor,
@@ -86,6 +88,7 @@ from idhazh.contracts.visual import (
     widest_json_characters,
 )
 from idhazh.contracts.visual_decision import NoneReason, VisualKind
+from idhazh.contracts.visual_validation import ValidatorCheck
 from idhazh.elements import SpanDriftError, element_table
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import (
@@ -98,9 +101,11 @@ from idhazh.llm.server import (
     render_prompt,
 )
 from idhazh.llm.server import window as ctx_size
+from idhazh.render.chart import compile_chart
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 from idhazh.stages.two_calls import _shape_cells, two_calls_one_item
 from idhazh.visual_planner import plan_lost_to_the_budget, plan_lost_to_the_window
+from idhazh.visual_validator import validate_plan
 
 RECORDED_PAYLOADS = FIXTURES_DIR / "planner" / "recorded-call-payloads.json"
 
@@ -289,7 +294,7 @@ class TestThePromptBytes:
         """
         files = config.load(CONFIG_DIR).app.prompt_files
         text = (CONFIG_DIR / files.generate_labels).read_text(encoding="utf-8")
-        named = set(re.findall(r'^"(\w+)" - ', text, re.MULTILINE))
+        named = set(re.findall(r'^"(\w+)": ', text, re.MULTILINE))
 
         assert label_system_prompt().startswith(text)
         assert named == set(LabelReply.model_fields)
@@ -414,21 +419,20 @@ def a_reply(**named: object) -> LabelReply:
     body: dict[str, object] = {
         "labels": [],
         "proposed": [],
-        "entity_mentions": [],
-        "place_mentions": [],
+        "named_mentions": [],
     }
     body.update(named)
     return LabelReply.model_validate(body)
 
 
 def a_group(
-    name: str, *surfaces: tuple[str, str], salience: str = "supporting"
+    name: str, *surfaces: tuple[str, str], kind: str = "entity"
 ) -> dict[str, object]:
     """One named thing and the sentences it is named in, as `(sentence_id, surface)`."""
     return {
         "mentions": [{"sentence_id": where, "surface": words} for where, words in surfaces],
+        "kind": kind,
         "name": name,
-        "salience": salience,
     }
 
 
@@ -436,12 +440,7 @@ def a_label(element_id: str, **named: object) -> dict[str, object]:
     body: dict[str, object] = {
         "element_id": element_id,
         "measure": "",
-        "dimension": "",
         "entity": "",
-        "time_element_id": "",
-        "attribution": "unattributed",
-        "hedge": False,
-        "salience": "background",
     }
     body.update(named)
     return body
@@ -480,7 +479,7 @@ class TestTheOracle:
         reply = a_reply(
             labels=[
                 a_label("quantity-9000-9010", measure="a fact no pass found"),
-                a_label(real, measure="output", salience="primary"),
+                a_label(real, measure="output"),
             ]
         )
 
@@ -501,8 +500,7 @@ class TestTheLabelCallShape:
         assert set(label_schema()["required"]) == {
             "labels",
             "proposed",
-            "entity_mentions",
-            "place_mentions",
+            "named_mentions",
         }
 
     def test_the_mention_lists_do_not_reach_the_tag_control(self) -> None:
@@ -525,19 +523,18 @@ class TestTheLabelCallShape:
         for banned in ("lens", "event type", "entities"):
             assert banned not in prompt, banned
             assert banned not in schema, banned
-        assert "entity_mentions" in label_schema()["properties"]
-        assert "place_mentions" in label_schema()["properties"]
+        assert "named_mentions" in label_schema()["properties"]
 
     def test_a_mention_is_written_before_the_name_that_groups_it(self) -> None:
         """Field order is decode order: the anchor first, the judgement last."""
         group = list(label_schema()["$defs"]["NamedMentions"]["properties"])
-        assert group == ["mentions", "name", "salience"]
+        assert group == ["mentions", "kind", "name"]
 
     def test_what_was_found_decodes_before_what_it_means(self) -> None:
         """Field order is decode order: the anchor first, the judgement last."""
         label = list(label_schema()["$defs"]["ElementLabel"]["properties"])
         assert label[0] == "element_id"
-        assert label[-1] == "salience"
+        assert label == ["element_id", "measure", "entity"]
 
     def test_the_schema_forbids_an_unknown_key(self) -> None:
         with pytest.raises(ValidationError):
@@ -604,7 +601,7 @@ class TestTheLabelCallsDerivedBudget:
         )
 
     def test_a_boolean_is_counted_rather_than_crashing_the_arithmetic(self) -> None:
-        """`hedge` is the only boolean either reply shape carries, and it is the label call's.
+        """Historical hedge fields still use the shared width arithmetic.
 
         The shared width function had no branch for one until 2026-09-13 and fell
         through to the map branch, raising `KeyError: 'propertyNames'` - which
@@ -612,7 +609,7 @@ class TestTheLabelCallsDerivedBudget:
         above was uncomputable rather than merely failing.
         """
         assert widest_json_characters({"type": "boolean"}) == len("false")
-        assert "boolean" in schema_types(label_schema())
+        assert "boolean" not in schema_types(label_schema())
 
     def test_the_request_hands_the_decoder_the_derived_budget(self, dense: Article) -> None:
         payload = build_label_with_derived_budget(dense)
@@ -734,80 +731,33 @@ class TestLabelling:
         first = table.elements[0].element_id
         reply = a_reply(
             labels=[
-                a_label(
-                    first,
-                    measure="output",
-                    dimension="by month",
-                    attribution="named",
-                    hedge=True,
-                    salience="primary",
-                )
+                a_label(first, measure="output")
             ]
         )
 
         element = apply_labels(table, reply, label_source="qwen").elements[0]
 
         assert element.measure == "output"
-        assert element.dimension == "by-month", "a dimension groups, so it is one controlled word"
-        assert element.attribution == "named"
-        assert element.hedge is True
+        assert all(value is None for value in (
+            element.dimension, element.attribution, element.hedge, element.time, element.salience
+        ))
         assert element.label_source == "qwen"
         assert element.ledger_version == LABEL_PASS_VERSION
 
-    def test_a_band_becomes_the_score_that_band_means(self, article_ok: Article) -> None:
-        """The model picks a word; code converts. It never types the number."""
-        table = a_table(article_ok, DENSE_TEXT)
-        reply = a_reply(labels=[a_label(table.elements[0].element_id, salience="supporting")])
-
-        assert apply_labels(table, reply, label_source="m").elements[0].salience == pytest.approx(
-            SALIENCE_SCORE["supporting"]
-        )
-
-    def test_a_fact_stated_in_the_items_own_voice_records_no_attribution(
+    def test_an_empty_label_records_no_judgement(
         self, article_ok: Article
     ) -> None:
         table = a_table(article_ok, DENSE_TEXT)
-        reply = a_reply(labels=[a_label(table.elements[0].element_id, attribution="unattributed")])
+        reply = a_reply(labels=[a_label(table.elements[0].element_id)])
+        assert apply_labels(table, reply, label_source="m") == table
 
-        assert apply_labels(table, reply, label_source="m").elements[0].attribution is None
-
-    def test_a_time_that_names_a_date_copies_the_date_the_article_wrote(
+    def test_dates_keep_their_source_values_without_quantity_judgements(
         self, article_ok: Article
     ) -> None:
         table = a_table(article_ok, DENSE_TEXT)
         date = next(one for one in table.elements if one.kind is ElementKind.DATE)
-        reply = a_reply(
-            labels=[a_label(table.elements[0].element_id, time_element_id=date.element_id)]
-        )
-
-        assert apply_labels(table, reply, label_source="m").elements[0].time == date.value
-
-    def test_a_time_that_names_no_date_drops_the_time_and_keeps_the_measure(
-        self, article_ok: Article
-    ) -> None:
-        """Each cell degrades on its own. One unusable judgement is not eight."""
-        table = a_table(article_ok, DENSE_TEXT)
-        reply = a_reply(
-            labels=[
-                a_label(
-                    table.elements[0].element_id, measure="output", time_element_id="date-1-2"
-                )
-            ]
-        )
-
-        element = apply_labels(table, reply, label_source="m").elements[0]
-        assert element.time is None
-        assert element.measure == "output"
-
-    def test_a_time_that_names_a_quantity_is_not_a_time(self, article_ok: Article) -> None:
-        """A date is the only kind that reads as a date, whatever the reply cites."""
-        table = a_table(article_ok, DENSE_TEXT)
-        other = next(
-            one for one in table.elements[1:] if one.kind is ElementKind.QUANTITY
-        ).element_id
-        reply = a_reply(labels=[a_label(table.elements[0].element_id, time_element_id=other)])
-
-        assert apply_labels(table, reply, label_source="m").elements[0].time is None
+        reply = a_reply(labels=[a_label(date.element_id, measure="not a quantity")])
+        assert apply_labels(table, reply, label_source="m") == table
 
     def test_an_entity_nothing_tracks_is_not_minted(self, article_ok: Article) -> None:
         """The name groups mentions. The slug is the watchlist's and is never invented."""
@@ -970,8 +920,10 @@ POINTED_TEXT = (
 
 #: The named mentions the producer reads for that item.
 POINTED_REPLY: dict[str, object] = {
-    "entity_mentions": [a_group("Vestas Wind Systems A/S", ("s0", "Vestas"), ("s1", "Vestas"))],
-    "place_mentions": [a_group("Aarhus", ("s1", "Aarhus"))],
+    "named_mentions": [
+        a_group("Vestas Wind Systems A/S", ("s0", "Vestas"), ("s1", "Vestas")),
+        a_group("Aarhus", ("s1", "Aarhus"), kind="place"),
+    ],
 }
 
 
@@ -1069,8 +1021,7 @@ class TestMentions:
         text = "Coast adults reported 12 percent; Coast parents reported 20 percent."
         groups = mention_elements(
             text,
-            a_reply(place_mentions=[a_group("Coast", ("s0", surface))]).place_mentions,
-            kind=ElementKind.PLACE,
+            a_reply(named_mentions=[a_group("Coast", ("s0", surface), kind="place")]).named_mentions,
             label_source="m",
             entity_slugs={},
         )
@@ -1081,8 +1032,7 @@ class TestMentions:
         """Decision 1. The name is a grouping key and is never searched for."""
         groups = mention_elements(
             POINTED_TEXT,
-            a_reply(**POINTED_REPLY).entity_mentions,
-            kind=ElementKind.ENTITY,
+            a_reply(**POINTED_REPLY).named_mentions,
             label_source="m",
             entity_slugs={},
         )
@@ -1095,8 +1045,7 @@ class TestMentions:
         text = "Vestas told Vestas staff nothing. The plant is quiet."
         groups = mention_elements(
             text,
-            a_reply(entity_mentions=[a_group("Vestas", ("s0", "Vestas"))]).entity_mentions,
-            kind=ElementKind.ENTITY,
+            a_reply(named_mentions=[a_group("Vestas", ("s0", "Vestas"))]).named_mentions,
             label_source="m",
             entity_slugs={},
         )
@@ -1107,8 +1056,7 @@ class TestMentions:
         """Only the named sentence is searched, so a real word in the wrong place misses."""
         groups = mention_elements(
             POINTED_TEXT,
-            a_reply(entity_mentions=[a_group("Aarhus", ("s0", "Aarhus"))]).entity_mentions,
-            kind=ElementKind.ENTITY,
+            a_reply(named_mentions=[a_group("Aarhus", ("s0", "Aarhus"))]).named_mentions,
             label_source="m",
             entity_slugs={},
         )
@@ -1120,11 +1068,10 @@ class TestMentions:
         groups = mention_elements(
             POINTED_TEXT,
             a_reply(
-                entity_mentions=[
+                named_mentions=[
                     a_group("Vestas", ("s0", "Vestas"), ("s9", "Vestas"), ("s1", "Vestas"))
                 ]
-            ).entity_mentions,
-            kind=ElementKind.ENTITY,
+            ).named_mentions,
             label_source="m",
             entity_slugs={},
         )
@@ -1135,8 +1082,7 @@ class TestMentions:
         """Zero surviving mentions is a name nobody can point at."""
         groups = mention_elements(
             POINTED_TEXT,
-            a_reply(entity_mentions=[a_group("Orsted", ("s0", "Orsted"))]).entity_mentions,
-            kind=ElementKind.ENTITY,
+            a_reply(named_mentions=[a_group("Orsted", ("s0", "Orsted"))]).named_mentions,
             label_source="m",
             entity_slugs={},
         )
@@ -1147,8 +1093,7 @@ class TestMentions:
         """A zero-width span is a payload the contract will not hold."""
         groups = mention_elements(
             POINTED_TEXT,
-            a_reply(entity_mentions=[a_group("Vestas", ("s0", " "))]).entity_mentions,
-            kind=ElementKind.ENTITY,
+            a_reply(named_mentions=[a_group("Vestas", ("s0", " "))]).named_mentions,
             label_source="m",
             entity_slugs={},
         )
@@ -1161,15 +1106,13 @@ class TestMentions:
 
         tracked = mention_elements(
             POINTED_TEXT,
-            reply.entity_mentions,
-            kind=ElementKind.ENTITY,
+            reply.named_mentions,
             label_source="m",
             entity_slugs={"vestas wind systems a/s": "vestas"},
         )
         unknown = mention_elements(
             POINTED_TEXT,
-            reply.entity_mentions,
-            kind=ElementKind.ENTITY,
+            reply.named_mentions,
             label_source="m",
             entity_slugs={},
         )
@@ -1178,19 +1121,18 @@ class TestMentions:
         assert all(one.entity is None for one in unknown[0].elements)
 
     def test_a_mention_is_tier_one_and_says_who_judged_the_rest(self) -> None:
-        """The span is code's; the salience is the model's, and it is attributed."""
+        """Only an assigned identity records judgment provenance."""
         element = mention_elements(
             POINTED_TEXT,
-            a_reply(**POINTED_REPLY).place_mentions,
-            kind=ElementKind.PLACE,
+            a_reply(named_mentions=[a_group("Aarhus", ("s1", "Aarhus"), kind="place")]).named_mentions,
             label_source="qwen",
-            entity_slugs={},
+            entity_slugs={"aarhus": "aarhus"},
         )[0].elements[0]
 
         assert element.kind is ElementKind.PLACE
         assert element.extractor is Extractor.MODEL
         assert element.value is None and element.unit is None
-        assert element.salience == SALIENCE_SCORE["supporting"]
+        assert element.entity == "aarhus" and element.salience is None
         assert element.label_source == "qwen"
         assert element.ledger_version == LABEL_PASS_VERSION
 
@@ -1200,7 +1142,7 @@ class TestMergingMentions:
         """A kind and a span identify one fact, so the second citation adds nothing."""
         table = a_table(article_ok, POINTED_TEXT)
         reply = a_reply(
-            entity_mentions=[
+            named_mentions=[
                 a_group("Vestas Wind Systems A/S", ("s0", "Vestas")),
                 a_group("Vestas A/S", ("s0", "Vestas")),
             ]
@@ -1241,7 +1183,7 @@ class TestMergingMentions:
         lists = label_schema()["properties"]
         per_group = label_schema()["$defs"]["NamedMentions"]["properties"]["mentions"]
         assert ANCHORED_MAX == (
-            (lists["entity_mentions"]["maxItems"] + lists["place_mentions"]["maxItems"])
+            lists["named_mentions"]["maxItems"]
             * per_group["maxItems"]
         ), "the bound is read off the grammar the decoder is handed, so it cannot drift from it"
 
@@ -1368,6 +1310,51 @@ def bounded(schema: object, path: str = "") -> set[str]:
 
 
 class TestTheSummarizeAndPlanOracle:
+    def test_current_plan_collects_references_without_losing_confidence_or_prose_checks(
+        self, article_ok: Article
+    ) -> None:
+        text = (
+            "Unit A reported 10 units. Unit B reported 20 units. "
+            "Unit C reported 30 units. The sample contained 99 units."
+        )
+        table = anchored(
+            a_table(article_ok, text), text,
+            a_reply(named_mentions=[
+                a_group("Unit A", ("s0", "Unit A")),
+                a_group("Unit B", ("s1", "Unit B")),
+                a_group("Unit C", ("s2", "Unit C")),
+            ]),
+            config=ElementsConfig(), label_source="test",
+        )
+        quantities = [
+            one.element_id for one in table.elements if one.kind is ElementKind.QUANTITY
+        ]
+        categories = [one.element_id for one in table.elements if one.kind is ElementKind.ENTITY]
+        body = json.loads(declining_reply())
+        body["visual"].pop("element_ids")
+        body["visual"].update(
+            decision="visual", purpose="comparison", type="bar",
+            title="Reported output", caption=None, why="Compare reported output.",
+            labels=categories, annotations=[quantities[0]], confidence=0.8,
+        )
+        body["visual"]["encodings"].update(category=categories, quantity=quantities[:3])
+        parsed = parse_summarize_and_plan(json.dumps(body))
+        assert parsed.visual is not None
+        assert parsed.visual.confidence == 0.8
+        assert set(parsed.visual.element_ids) == set(categories + quantities[:3])
+        assert validate_plan(parsed.visual, table, visuals=VisualsConfig()) == []
+        assert compile_chart(parsed.visual, table, visuals=VisualsConfig()).data.type is VisualType.BAR
+        assert "element_ids" not in summarize_and_plan_schema()["$defs"]["VisualPlanDraft"][
+            "properties"
+        ]
+        body["visual"]["caption"] = "The sample contained 99 units."
+        parsed = parse_summarize_and_plan(json.dumps(body))
+        assert parsed.visual is not None
+        assert ValidatorCheck.NUMERALS_MATCHED in {
+            rejection.check
+            for rejection in validate_plan(parsed.visual, table, visuals=VisualsConfig())
+        }
+
     def test_the_menu_preserves_finalized_source_cells_and_existing_judgements(
         self, article_ok: Article
     ) -> None:
@@ -1375,23 +1362,31 @@ class TestTheSummarizeAndPlanOracle:
         finalized = anchored(
             initial, POINTED_TEXT, a_reply(**POINTED_REPLY),
             config=ElementsConfig(max_per_article=2), label_source="m",
+            entity_slugs={"vestas wind systems a/s": "vestas"},
         )
         before = finalized.model_dump(mode="json")
         menu = planning_menu(finalized)
         data = json.loads(menu.removeprefix(FENCE_OPEN + "\n").removesuffix("\n" + FENCE_CLOSE))
-        assert data["columns"] == list(TIER_ONE_FIELDS)
+        assert data["columns"] == [
+            "element_id", "kind", "span_excerpt", "value", "unit", "sentence_id"
+        ]
         assert data["rows"] == [
-            [element.model_dump(mode="json")[name] for name in TIER_ONE_FIELDS]
+            [
+                (element.model_dump(mode="json") | {"sentence_id": sentence_id(element.sentence_index)})[
+                    name
+                ]
+                for name in PLANNING_COLUMNS
+            ]
             for element in finalized.elements
         ]
         assert data["labels"] == {
             element.element_id: {
                 name: element.model_dump(mode="json")[name]
-                for name in JUDGED_FIELDS
+                for name in PLANNING_JUDGEMENTS
                 if getattr(element, name) is not None
             }
             for element in finalized.elements
-            if any(getattr(element, name) is not None for name in JUDGED_FIELDS)
+            if any(getattr(element, name) is not None for name in PLANNING_JUDGEMENTS)
         }
         assert finalized.model_dump(mode="json") == before
 
@@ -1404,7 +1399,7 @@ class TestTheSummarizeAndPlanOracle:
         plan = schema["$defs"]["VisualPlanDraft"]["properties"]
         arrays = [
             *schema["$defs"]["PlanEncodings"]["properties"].values(),
-            *(plan[name] for name in ("element_ids", "labels", "annotations")),
+            *(plan[name] for name in ("labels", "annotations")),
         ]
         assert all(field["maxItems"] == 0 for field in arrays)
         assert plan["declared_whole_element_id"]["type"] == "null"
@@ -1430,7 +1425,7 @@ class TestTheSummarizeAndPlanOracle:
         )
         settings = config.load(CONFIG_DIR)
         reply = a_reply(
-            entity_mentions=[
+            named_mentions=[
                 a_group("Unit A", ("s0", "Unit A")),
                 a_group("Unit B", ("s1", "Unit B")),
                 a_group("Unit C", ("s2", "Unit C")),
@@ -1450,7 +1445,6 @@ class TestTheSummarizeAndPlanOracle:
             "type": None,
             "declared_whole_element_id": None,
             "encodings": {role.value: [] for role in EncodingRole},
-            "element_ids": [],
             "labels": [],
             "annotations": [],
             "why": "The approvals are already clear in prose.",
@@ -1488,7 +1482,7 @@ class TestTheSummarizeAndPlanOracle:
         plan = schema["$defs"]["VisualPlanDraft"]["properties"]
         references = [
             *(channel["items"] for channel in schema["$defs"]["PlanEncodings"]["properties"].values()),
-            *(plan[name]["items"] for name in ("element_ids", "labels", "annotations")),
+            *(plan[name]["items"] for name in ("labels", "annotations")),
             plan["declared_whole_element_id"]["anyOf"][0],
         ]
         assert all(reference["enum"] == ids for reference in references)
@@ -1545,8 +1539,8 @@ class TestTheInstructionsSitInFrontOfTheArticle:
         for moved in (
             "keep every figure exactly as the item wrote it",
             '"summary" - Comprehensive, cohesive narrative prose',
-            "Decide whether this item wants a picture at all",
-            '"confidence" - how sure you are',
+            "supported numeric comparison or relationship",
+            '"confidence": your self-rating',
         ):
             assert moved in system, moved
             assert moved not in summarize_and_plan_user_turn(ask), moved
@@ -1601,8 +1595,8 @@ class TestTheInstructionsSitInFrontOfTheArticle:
         assert "\nwhowhat:" not in guide
         assert "\narea:" not in guide
         assert "4..7 marks in quantity" in guide
-        assert "at least 4 bins values for 4 code-computed bins" in guide
-        assert "Chart example:" in guide and "Decline example:" in guide
+        assert "at least 4 source quantities for 4 code-computed bins" in guide
+        assert "Chart example:" not in guide and "Decline example:" not in guide
         assert guide in label_system_prompt(visuals=knobs)
         generic = type_role_guide(VisualsConfig())
         assert generic != guide
@@ -1636,9 +1630,9 @@ class TestTheInstructionsSitInFrontOfTheArticle:
         system = label_system_prompt(config.load(CONFIG_DIR).app.summarize)
 
         assert "keep every figure exactly as the item wrote it" in system
-        assert "Two rules govern this first job." in system
-        assert "Two rules govern everything you write." not in system
-        assert "in it. You never write a number." not in system
+        assert 'Call 1 returns only "labels"' in system
+        assert "Copied source text and printed addresses may contain digits." in system
+        assert "Never type a number" not in system
 
     def test_the_last_line_is_read_off_the_grammar(self) -> None:
         """The fields in the recency position cannot disagree with the decoder.
