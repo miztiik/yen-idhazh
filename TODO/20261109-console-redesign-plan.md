@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-11-12
 **Level**: 5 - resolve design gates before implementation.
-**Status**: Rows 1-7, Row 8a, Row 8b and Row 8c are complete. Row 8d implements the retained machine-history refinement, three selected Hardware cuts and N3 relocation. M8/M9, N1/N2/N4/N5 and anomaly/baseline decisions remain blocked in Row 8.
+**Status**: Rows 1-7 and Rows 8a-8d are complete. Row 8d keeps and refines machine history, removes the three selected Hardware diagnostics and relocates N3 once to Pipelines. M8/M9, N1/N2/N4/N5 and anomaly/baseline decisions remain blocked in Row 8.
 
 ## 0. Operating contract
 
@@ -49,7 +49,7 @@ Table C
 | C9 | 8a | Simplify selected Pipelines visual diagnostics | 1, 5 | I | DONE | `psychic-goggles` | - | App session `3932eb6c-014c-40e4-9e51-5617ff2c30f0`; branch `pipelines-visual-diagnostics` |
 | C10 | 8b | Remove the Pipelines written-type diagnostic | 8a | J | DONE | `legendary-garbanzo` | - | App session `da0bfe17-ef48-4e8f-93d2-7c92c1dd13ce`; branch `remove-written-type-diagnostic` |
 | C11 | 8c | Remove the Summaries model-change comparison | 8b | K | DONE | `jubilant-happiness` | - | App session `705cdced-00f1-4c51-bbe0-ae3c6079063b`; branch `remove-model-change-comparison` |
-| C12 | 8d | Refine machine history and move the run-wide article ranking | 8c | L | IN_PROGRESS | `supreme-winner` | - | App session `740c1208-b227-45bf-9307-f57983e73022`; branch `refine-hardware-move-latency` |
+| C12 | 8d | Refine machine history and move the run-wide article ranking | 8c | L | DONE | `supreme-winner` | #2038 | App session `740c1208-b227-45bf-9307-f57983e73022`; branch `refine-hardware-move-latency` |
 
 ## 2. Row #1 - Define console redesign and chart changes
 
