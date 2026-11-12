@@ -39,8 +39,8 @@
 		get days() { return chosen; },
 		select: preference.select
 	});
-	const windowSource = $derived<WindowSource>(handed ?? {
-		days: chosen, presets: configured.window_presets, busy: false, ready: false,
+	const windowSource = $derived<WindowSource>(handed !== null && handed.route === active ? handed : {
+		route: active, days: chosen, presets: configured.window_presets, busy: false, ready: false,
 		statusLine: null, monthsFor: () => 0, onChange: preference.select
 	});
 	let labels = $state.raw<ChartLabels | null>(null);

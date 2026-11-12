@@ -59,7 +59,7 @@
 	<title>Summaries &mdash; Console &mdash; {data.ui.site_title}</title>
 </svelte:head>
 
-<WindowControlSource days={windowDays} presets={knobs.window_presets} {ready} busy={tally.state === 'loading'}
+<WindowControlSource route="model" days={windowDays} presets={knobs.window_presets} {ready} busy={tally.state === 'loading'}
 	record={{ asked: windowDays, first, through: reach?.through ?? null }} publishedWindow={span} monthsFor={() => 0} onChange={show} />
 <RouteStatus route="model" answers={allAnswers} days={windowDays} through={reach?.through ?? null}
 	recordScope="Native record"

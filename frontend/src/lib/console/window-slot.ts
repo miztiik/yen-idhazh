@@ -3,6 +3,7 @@ import { getContext, onDestroy, setContext } from 'svelte';
 import type { TimeWindow } from '../charts/viewport';
 import type { RecordWindow } from './waiting';
 import type { WindowChoice } from './window-preference';
+import type { RouteId } from './band';
 
 /** What the control reads off the route under it.
  *
@@ -10,6 +11,8 @@ import type { WindowChoice } from './window-preference';
  * as long as the route is on the page instead of a copy taken when it opened.
  */
 export interface WindowSource {
+	/** Read these getters only while this route owns the layout. */
+	readonly route: RouteId;
 	readonly days: number;
 	readonly presets: readonly number[];
 	/** True while the route is fetching what the window reaches into. */

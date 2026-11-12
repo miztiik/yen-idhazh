@@ -63,7 +63,7 @@
 
 <div data-console-panels="judgement">
 	<!-- The route owns its evidence window and hands the control to the shared shell. -->
-	<WindowControlSource days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
+	<WindowControlSource route="judgement" days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
 
 	<MergedStoriesPanel
 		days={data.merges}

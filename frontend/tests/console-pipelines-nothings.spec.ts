@@ -66,7 +66,10 @@ for (const [id, name] of PANELS) {
 			tickDensity: appearance.chart.tick_density, readoutMaxShare: appearance.chart.readout_max_share
 		};
 		const inputs: Record<string, { quiet: Record<string, unknown>; absent: Record<string, unknown> }> = {
-			'at-a-glance': { quiet: { days: [DAY] }, absent: { days: [] } },
+			'at-a-glance': {
+				quiet: { days: [DAY], publishedItems: { [DAY.date]: 0 } },
+				absent: { days: [], publishedItems: {} }
+			},
 			'run-health': {
 				quiet: { yieldDays: [{ date: DAY.date, itemsPlanned: 0, itemsPublished: 0, itemsFailed: 0 }], grid: [{ date: DAY.date, squares: [] }] },
 				absent: { yieldDays: [], grid: [] }

@@ -3,8 +3,10 @@
 	import { fillWindowSlot } from '$lib/console/window-slot';
 	import type { RecordWindow } from '$lib/console/waiting';
 	import type { TimeWindow } from '$lib/charts/viewport';
+	import type { RouteId } from '$lib/console/band';
 
 	let {
+		route,
 		days,
 		presets,
 		monthsFor,
@@ -15,6 +17,7 @@
 		statusLine = null,
 		onChange
 	}: {
+		route: RouteId;
 		days: number;
 		presets: readonly number[];
 		/** Month files a preset would fetch that are not already in hand. */
@@ -29,6 +32,9 @@
 	} = $props();
 
 	fillWindowSlot({
+		get route() {
+			return route;
+		},
 		get days() {
 			return days;
 		},

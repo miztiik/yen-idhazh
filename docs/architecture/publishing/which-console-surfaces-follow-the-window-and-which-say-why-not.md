@@ -127,11 +127,13 @@ choice; explicit linked or custom UTC spans retain their existing precedence.
 The representative console journey checks shared navigation; deterministic
 window and query rules use lower-tier tests.
 
-**A route click carries the span with no page load.** The router mounts the
-next route under the same layout and tears the last one down in the same
-update, and the control then holds the span the next route draws.
-[window-slot.ts](../../../frontend/src/lib/console/window-slot.ts) now keeps which
-route holds the control in a plain variable, which a teardown reads as it is.
+**A route click carries the span with no page load.** Each window source names
+its owning route. The layout reads its getters only while that route is active:
+an outgoing route's data can already have been replaced before its teardown.
+This keeps a private published-day getter from reading another route's payload
+or inventing a replacement endpoint. The source-identity check in
+[window-slot.ts](../../../frontend/src/lib/console/window-slot.ts) separately
+prevents the outgoing teardown from clearing its replacement.
 
 **If a native read fails, it is not an empty measurement.** Retrying re-asks only
 unsuccessful questions and preserves successful sibling answers. No failure

@@ -118,7 +118,7 @@
 
 <svelte:head><title>Voices &mdash; Console &mdash; {data.ui.site_title}</title></svelte:head>
 <RouteStatus route="voices" {answers} days={windowDays} through={reach?.through ?? null} shimmerAfterMs={console.shimmer_after_ms} onRetry={() => void ask(true)}>
-	<WindowControlSource days={windowDays} presets={console.window_presets} {monthsFor} {busy} {ready}
+	<WindowControlSource route="voices" days={windowDays} presets={console.window_presets} {monthsFor} {busy} {ready}
 		record={{ asked: windowDays, first: reach?.ledgers['item-health']?.state === 'ok' ? reach.ledgers['item-health'].first : null, through: reach?.through ?? null }} onChange={show}/>
 	<PanelGroup id={config.panel_groups[0].id} title={config.panel_groups[0].title} panels={config.panel_groups[0].panels.length}>
 		<SourceHealthPanel {census} width={console.chart_width} height={console.chart_height}/>

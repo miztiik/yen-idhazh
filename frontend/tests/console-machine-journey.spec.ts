@@ -272,7 +272,13 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await tokens.scrollIntoViewIfNeeded();
 	await expect(page.locator('.console-toolbar')).toBeInViewport();
 	expect((await page.locator('.console-toolbar').boundingBox())!.y).toBeCloseTo(0, 0);
+	const dates = page.locator('[data-console-data-dates] > summary');
+	await expect(dates).toBeInViewport();
+	await dates.focus();
+	await page.keyboard.press('Enter');
 	await expect(page.locator('[data-window-status]')).toBeInViewport();
+	await page.keyboard.press('Enter');
+	await expect(page.locator('[data-console-data-dates]')).not.toHaveAttribute('open', '');
 	await page.screenshot({ path: test.info().outputPath('console-sticky-narrow-light.png') });
 	await page.locator('[data-console-top]').click();
 	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);

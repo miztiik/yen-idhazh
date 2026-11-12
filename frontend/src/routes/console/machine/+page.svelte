@@ -188,7 +188,7 @@
 <RouteStatus route="machine" answers={panelAnswers} days={windowDays} {through} shimmerAfterMs={shared.shimmer_after_ms} onRetry={retry}
 	settledSuffix={counterReady ? `${formatNumber(countedRuns, cfg.chart.number_format, { exact: true })} ${countedRuns === 1 ? 'run' : 'runs'} counted.` : ''}>
 <div data-machine-start={start} data-machine-end={end} data-machine-run-count={counterReady ? countedRuns : undefined}>
-	<WindowControlSource days={windowDays} {presets} {monthsFor} {ready} onChange={show}
+	<WindowControlSource route="machine" days={windowDays} {presets} {monthsFor} {ready} onChange={show}
 		busy={panelAnswers.includes('pending')}
 		record={{ asked: windowDays, first: reach?.ledgers['item-health']?.state === 'ok' ? reach.ledgers['item-health'].first : null, through }} />
 	{#if evidence}

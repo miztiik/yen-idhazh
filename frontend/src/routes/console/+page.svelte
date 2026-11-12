@@ -159,7 +159,7 @@
 
 <svelte:head><title>Pipelines — Console — {data.ui.site_title}</title><meta name="robots" content="noindex" /></svelte:head>
 <noscript><p data-native-script-required>The article record needs JavaScript to load. Private published-day panels remain available below.</p></noscript>
-<WindowControlSource days={windowDays} presets={knobs.window_presets} monthsFor={() => 0}
+<WindowControlSource route="pipelines" days={windowDays} presets={knobs.window_presets} monthsFor={() => 0}
 	ready={mounted} {busy} {record} publishedWindow={viewport} statusLine={recordReady ? null : 'The record window is not ready.'} onChange={show} />
 <RouteStatus route="pipelines" answers={allAnswers} days={windowDays} through={recordReady ? reach?.through : null}
 	recordScope="Native record"
