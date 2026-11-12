@@ -122,7 +122,6 @@ from idhazh.contracts.visual_label import VisualLabel, VisualLabelDraw, VisualLa
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.contracts.visual_telemetry import VisualAggregateRow, VisualAttemptRow
 from idhazh.contracts.watchlist import EdgarPolicy, EntityDef, EntityFeed, Watchlist
-from idhazh.contracts.whowhat_grid import WhowhatGridData
 
 #: Every top-level persisted document, and the whole of them.
 #:
@@ -203,7 +202,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     VisualLabelRow,
     VisualPlan,
     VisualPruneRow,
-    WhowhatGridData,
     Watchlist,
 )
 
@@ -276,7 +274,6 @@ __all__ = [
     "VisualLabelRow",
     "VisualState",
     "Watchlist",
-    "WhowhatGridData",
     "canonical_json",
     "derive_output_digest",
     "derive_url_key",

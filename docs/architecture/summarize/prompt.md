@@ -1,6 +1,6 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 What the model is asked to produce, how the two calls share context, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
 
@@ -109,7 +109,7 @@ The completion prompts are rendered explicitly. The second extends the first pro
 
 **The continuation receives the same finalized table as reachability and
 validation.** After the first reply, `anchored()` adds source-backed entities,
-places, quotes, claims and recovered quantities with code-computed element ids.
+places and recovered quantities with code-computed element ids.
 The request builder requires that table rather than reconstructing ids from
 the raw label reply. Its compact, fenced data preserves the source cells and
 existing label judgements after the reusable prefix. Attaching the data does
@@ -119,15 +119,14 @@ Every reference field in the derived request grammar chooses from exactly
 those visible ids. With no ids, reference lists can only be empty and the
 optional declared whole can only be null. The native persisted plan remains
 unchanged. The active configuration enables type selection and offers only
-implemented chart forms and the Who/What grid. Historical names remain in the
+implemented numeric chart forms. The same restriction applies when type
+selection is off. Historical names remain in the
 native vocabulary for compatibility, not as new production requests or future
 delivery promises.
 
 The shared system turn appends a compact guide derived from the native role
-vocabulary and configured evidence floors. It distinguishes numeric charts
-from the Who/What grid's same-sentence actor/claim pairing, identifies unbuilt
-forms without inventing their rules in generic inspection, and illustrates
-charts, grids and valid declines. The
+vocabulary and configured evidence floors. It illustrates supported numeric
+charts and valid declines without offering retired forms. The
 [visual rule](../../concepts/digest.md#the-visual-rule) does not
 depend on unfinished article classification or require a fact absent from the
 summary. Numeric density alone does not establish a useful comparison.
@@ -136,11 +135,15 @@ An input oracle proves that finalized ids are visible and constrain references.
 Replaying an authored valid plan proves parsing and compilation, not that a
 real model will choose a useful visual.
 
-The label reply still declares `keyphrases` and `lede_sentence_ids`, although
-neither has a downstream consumer. The user deferred their removal. This is
-not a requirement to retain them permanently or proof of their runtime cost.
-Reopening the change requires updating the reply shape and its readers and
-checking summary and visual behavior together.
+The current label reply contains only `labels`, `proposed`, `entity_mentions`
+and `place_mentions`. Claims, quotes, keyphrases and lede addresses have no
+current producer or consumer. A strict read-only legacy validator checks all
+four retired fields together, including their required nested structure,
+list/string bounds and closed keys, before discarding them. The continuation
+replays the original first reply only after that validation succeeds. Removing
+unused output must not turn malformed old evidence into an accepted reply;
+unrelated unknown keys still fail. Capture envelopes and historical raw bytes
+stay unchanged.
 
 ### Every instruction sits in front of the article
 
@@ -162,20 +165,16 @@ Copy the printed address literally. Mention surfaces must occur exactly once
 inside that original named sentence. A repeated bare name needs another exact
 unique occurrence or a minimal exact qualifying noun phrase within the existing
 bound; it does not permit neighbouring-sentence, global or fuzzy rescue.
-Distinct actors remain distinct, geographic markets belong in place mentions,
-and narrated claims retain their reporting frames and qualifications. The
-[element contract](../extraction/elements.md#the-four-kinds-only-a-model-can-find)
+Distinct people remain distinct and geographic markets belong in place mentions. The
+[element contract](../extraction/elements.md#the-two-kinds-only-a-model-can-find)
 owns those meanings and anchoring rules.
 
-Quotes and claims share one request-only range definition. Each complete-object
-branch fixes a printed start address and lists only ends at or after it whose
-original source slice, after native whitespace trimming, is nonempty and fits
-the native excerpt bound. This preserves every eligible multi-sentence range.
-Serialized escapes and UTF-8 bytes do not determine source character length.
-With no eligible pair, both range lists can only be empty; the native empty
-source presentation still prints `s0`. Only code-minted addresses enter the
-grammar, never source words. Valid addresses cannot ensure useful actors are
-selected or establish semantic coverage or restored visual generation.
+The current request grammar binds label ids to printed candidates, time ids to
+printed DATE elements or the native empty string, and citation addresses to
+printed sentences. Only code-minted addresses enter the grammar, never source
+words. Empty pools keep empty selections. The removed range producer has no
+request specialization or context allowance. Legal references do not establish
+useful numeric generation.
 
 `measure_two_calls.article_from_user_turn` recognizes the explicit current
 JSON-string heading and the historical raw-line heading separately. It decodes
@@ -183,7 +182,8 @@ only the former and refuses malformed current strings or addresses, without
 retrying them as historical text. Historical displays keep literal escapes and
 continuation newlines; their stripped sentence separators cannot recover the
 original offsets. Use the retained native Article for that provenance.
-Raw label replies and capture fields, required fields and bounds stay unchanged.
+Historical raw label replies and capture fields stay unchanged; their
+compatibility validation does not widen the current four-field decoder.
 
 ### What is in the prompt bytes, and who wrote each part
 
@@ -216,6 +216,11 @@ conversions differ because their outputs differ.
 The summarize-and-plan reply contains prose and bounded structure. The label reply uses a measured output-density estimate. Name the tokenizer and evidence behind that estimate; it is not a mathematical guarantee for every possible string.
 
 The label reply also becomes part of the second prompt. Count it in both positions when checking the context window. Do not silently clamp a reply budget to available context. Report a window failure at the call site.
+
+The label and context allowances derive from the current native shape, not
+retired observations or the narrower per-article reference menu. Effective
+configured response caps, context and timeout settings do not change with this
+retirement.
 
 For capacity diagnostics, tokenize the complete rendered continuation with the
 configured model's vocabulary, then add the effective response limit from that

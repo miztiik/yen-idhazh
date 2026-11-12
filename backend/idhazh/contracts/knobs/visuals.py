@@ -12,6 +12,7 @@ from idhazh.contracts.base import Model
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.visual import VisualType
 from idhazh.contracts.visual_decision import VisualKind
+from idhazh.contracts.visual_type import NUMERIC_TYPES
 
 MAX_PIE_PARTS: Final = 5
 
@@ -62,12 +63,11 @@ class VisualsConfig(Model):
     """
 
     enabled_kinds: list[VisualKind] = Field(
-        default_factory=lambda: [VisualKind.CHART, VisualKind.WHOWHAT],
+        default_factory=lambda: [VisualKind.CHART],
         description=(
             "Kinds the planner may choose. `none` is always available and never listed. "
-            "`chart` names the existing numeric family; `whowhat` names the separately "
-            "versioned actor/claim grid. Diagram drawing remains off: its renderer was "
-            "deleted with the Mermaid round trip on 2026-09-05."
+            "Only `chart` is active. Retired kind tokens remain readable in historical "
+            "configuration but enable no producer or reader."
         ),
     )
     type_selection_enabled: bool = Field(  # Remove after maintainer-approved permanent activation.
@@ -75,10 +75,13 @@ class VisualsConfig(Model):
         description="Apply enabled_types to the request grammar, reachability and parsed plans.",
     )
     enabled_types: list[VisualType] = Field(
-        default_factory=lambda: list(VisualType),
+        default_factory=lambda: list(NUMERIC_TYPES),
         min_length=1,
         max_length=len(VisualType),
-        description="Native type names the operator selects, including unruled and unbuilt forms.",
+        description=(
+            "Selected numeric chart types. Historical retired names remain readable "
+            "but are never effective, including when type selection is switched off."
+        ),
     )
     downgrade_enabled: bool = Field(  # Remove after tested, maintainer-approved as permanent.
         default=False,
@@ -160,7 +163,7 @@ class VisualsConfig(Model):
         default=40,
         ge=4,
         description=(
-            "Maximum displayed characters for source-backed chart labels and whowhat cell labels, "
+            "Maximum displayed characters for source-backed chart labels, "
             "including the `...` suffix. Longer text keeps its exact opening source characters; "
             "stacked-bar labels remain uncapped."
         ),
@@ -264,8 +267,9 @@ class VisualsConfig(Model):
         return self
 
     def select_types(self) -> tuple[VisualType, ...]:
-        """The effective selection, preserving the full vocabulary while its policy is off."""
-        return tuple(self.enabled_types) if self.type_selection_enabled else tuple(VisualType)
+        """Only supported numeric forms, even for historical configuration or policy-off reads."""
+        selected = self.enabled_types if self.type_selection_enabled else NUMERIC_TYPES
+        return tuple(visual_type for visual_type in selected if visual_type in NUMERIC_TYPES)
 
     @model_validator(mode="before")
     @classmethod

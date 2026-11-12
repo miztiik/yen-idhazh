@@ -14,6 +14,7 @@ from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import VisualType
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.visual_telemetry import ValidatorCheck
+from idhazh.render.chart import can_compile
 
 pytestmark = [pytest.mark.contract, pytest.mark.visual]
 
@@ -155,14 +156,19 @@ def test_an_unwritten_visual_cannot_claim_a_delivered_type() -> None:
         })
 
 
-def test_all_native_names_remain_selectable_with_both_policies_off_by_default() -> None:
+def test_current_defaults_are_numeric_and_historical_names_remain_inert() -> None:
     knobs = VisualsConfig()
-    assert knobs.enabled_types == list(VisualType)
+    supported = {visual_type for visual_type in VisualType if can_compile(visual_type)}
+    assert set(knobs.enabled_types) == supported
+    assert set(knobs.select_types()) == supported
     assert not knobs.type_selection_enabled
     assert not knobs.downgrade_enabled
     for visual_type in VisualType:
-        selected = VisualsConfig(enabled_types=[visual_type])
+        selected = VisualsConfig(enabled_types=[visual_type], type_selection_enabled=True)
         assert selected.enabled_types == [visual_type]
+        assert selected.select_types() == (
+            (visual_type,) if visual_type in supported else ()
+        )
 
 
 @pytest.mark.parametrize("types", [[], ["bar", "bar"], ["not-a-visual-type"]])

@@ -473,9 +473,7 @@
     ],
     "downgrade_lookback_days": 60,
     "downgrade_max_samples_per_type": 32,
-    "enabled_kinds": [
-      "chart"
-    ],
+    "enabled_kinds": [],
     "enabled_types": [
       "dot",
       "bar"

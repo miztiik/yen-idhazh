@@ -1,6 +1,7 @@
 """Which visual forms can current and historical typed plans name?"""
 
 from enum import StrEnum
+from typing import Final
 
 
 class VisualType(StrEnum):
@@ -30,3 +31,17 @@ class VisualType(StrEnum):
     QUOTECARD = "quotecard"
     WHOWHAT = "whowhat"
     KEYFACTS = "keyfacts"
+
+
+# Compiler-supported numeric forms, not an operator-tunable vocabulary.
+NUMERIC_TYPES: Final[tuple[VisualType, ...]] = (
+    VisualType.BAR,
+    VisualType.DOT,
+    VisualType.LINE,
+    VisualType.SCATTER,
+    VisualType.BUBBLE,
+    VisualType.SLOPE,
+    VisualType.STACKED_BAR,
+    VisualType.PIE,
+    VisualType.HISTOGRAM,
+)

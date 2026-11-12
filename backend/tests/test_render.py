@@ -32,6 +32,7 @@ from typing import Final
 import pytest
 from pydantic import TypeAdapter, ValidationError
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.visual_plans import current_plan
 
 from idhazh import telemetry
 from idhazh.contracts.app_config import AppConfig
@@ -47,7 +48,6 @@ from idhazh.contracts.visual_decision import (
     VisualKind,
     VisualState,
 )
-from idhazh.contracts.whowhat_grid import WhowhatGridData
 from idhazh.derived_values import DERIVED_VALUE_VERSION
 from idhazh.render.chart import CompileError, compile_bar, compile_chart
 from idhazh.render.write import (
@@ -85,7 +85,7 @@ def committed_visuals() -> VisualsConfig:
 
 def histogram_plan() -> VisualPlan:
     """Build the plan shape from the committed article's four source quantities."""
-    base = VisualPlan.read(BAR_PLAN)
+    base = current_plan(BAR_PLAN)
     bins = base.encodings.quantity
     payload = base.model_dump(mode="json")
     payload["type"] = VisualType.HISTOGRAM.value
@@ -280,7 +280,7 @@ class TestCompiledBar:
 
     def test_a_pie_compiles_shares_and_its_declared_total(self) -> None:
         compiled = compile_chart(
-            VisualPlan.read(PIE_PLAN),
+            current_plan(PIE_PLAN),
             ElementTable.read(PIE_TABLE),
             visuals=committed_visuals(),
         )
@@ -368,7 +368,7 @@ class TestPublishedData:
         ).data
 
     def test_stack_compilation_preserves_the_declared_whole_and_source_parts(self) -> None:
-        plan = VisualPlan.read(STACKED_PLAN)
+        plan = current_plan(STACKED_PLAN)
         table = ElementTable.read(STACKED_TABLE)
         compiled = compile_chart(plan, table, visuals=committed_visuals())
         expected = VisualData.read(STACKED_DATA)
@@ -863,32 +863,31 @@ class TestWriteChartsFromDecisions:
 
         assert not (tmp_path / "digest").exists()
 
-    def test_a_whowhat_decision_is_refused_by_the_chart_writer(self, tmp_path: Path) -> None:
-        grid = WhowhatGridData.read(
-            CONTRACT_FIXTURES_DIR / "whowhat-grid" / "whowhat.json"
-        )
+    def test_retired_outcomes_keep_metadata_but_publish_no_chart(self, tmp_path: Path) -> None:
+        from idhazh.assemble import to_digest_visual
+
         day = _charted_day()
-        decision = VisualDecision(
-            version=VisualDecision.schema_version(),
-            item_id=grid.item_id,
-            url_key="b" * 64,
-            kind=VisualKind.WHOWHAT,
-            whowhat_grid=grid,
-            alt_text="Actor and claim grid with source-backed pairs.",
-            visual_state=VisualState.RENDERED,
-            data_path=asset_relpath(day.date, grid.item_id),
-            model_id="fixture-model",
-            decided_at="2026-10-28T00:00:00Z",
-            planned_type=VisualType.WHOWHAT,
-            rendered_type=VisualType.WHOWHAT,
-            downgrade_depth=0,
-            marks=2,
-        )
-
-        with pytest.raises(ValueError, match="dedicated grid writer"):
-            write_charts_from_decisions(day, [decision], public_root=tmp_path)
-
-        assert not (tmp_path / "digest").exists()
+        relpath = asset_relpath(day.date, CHARTED_ITEM)
+        legacy = _decision(VisualKind.NONE, None).model_dump(mode="json") | {
+            "version": "2026-10-28", "item_id": CHARTED_ITEM,
+            "kind": "whowhat", "whowhat_grid": {"rows": []},
+            "visual_state": "rendered", "data_path": relpath,
+            "planned_type": "whowhat", "rendered_type": "whowhat",
+            "downgrade_depth": 0, "marks": 2,
+        }
+        decision = VisualDecision.model_validate(legacy)
+        assert decision.planned_type is decision.rendered_type is VisualType.WHOWHAT
+        assert decision.visual_state is VisualState.RENDERED and decision.marks == 2
+        assert decision.none_reason is None and decision.data_path == relpath
+        assert decision.visual_id == VisualDecision.model_validate(
+            legacy | {"whowhat_grid": None}
+        ).visual_id
+        assert "whowhat_grid" not in decision.model_dump()
+        assert to_digest_visual(decision) is None
+        write_charts_from_decisions(day, [decision], public_root=tmp_path)
+        assert not (tmp_path / relpath).exists()
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            VisualDecision.model_validate(legacy | {"unrelated": True})
 
     @pytest.mark.parametrize(
         ("filed_on", "drawn_for", "refusal"),

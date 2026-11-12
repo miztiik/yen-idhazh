@@ -42,8 +42,8 @@ every item for ever, because the article in front of it differs and a prefix
 cache cannot reach past it - 69.7 s an item at the measured 9.85 tokens a second
 (`docs/reference/benchmarks/instructions-in-front.md`).
 
-The visual decision belongs to `idhazh.visual_planner`: a supported chart,
-Who/What grid or no visual. It stays there: it is a different subject that
+The visual decision belongs to `idhazh.visual_planner`: a supported numeric chart
+or no visual. It stays there: it is a different subject that
 happened to share a file.
 """
 
@@ -61,7 +61,7 @@ from pathlib import Path
 from string import Template
 from typing import Annotated, Any, Final, Literal, NamedTuple, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model, model_validator
 
 from idhazh import summarize
 from idhazh.classify.label_request import bind_label_reference_choices
@@ -71,7 +71,7 @@ from idhazh.classify.plan_visual_request import (
     type_role_guide,
 )
 from idhazh.config import DEFAULT_CONFIG_DIR
-from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article
+from idhazh.contracts.article import Article
 from idhazh.contracts.base import Model as ContractModel
 from idhazh.contracts.base import canonical_json, derive_text_digest
 from idhazh.contracts.element import (
@@ -120,7 +120,7 @@ _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 #: judgement and re-label under a newer one without guessing. Bump it when the
 #: label vocabulary or the meaning of a band changes, not when the prompt is
 #: reworded - a reworded prompt still assigns the same fields.
-LABEL_PASS_VERSION: Final = "2026-09-09"
+LABEL_PASS_VERSION: Final = "2026-11-11"
 
 #: Structural bounds on a decoder shape, in the same place and for the same
 #: reason `VisualDraft` carries its own: a `maxItems` is a hard grammar stop, so
@@ -139,9 +139,6 @@ LABEL_PASS_VERSION: Final = "2026-09-09"
 #: `label_budget_tokens` below - so moving one of these is moving the budget.
 LABELS_MAX: Final = 16
 PROPOSED_MAX: Final = 4
-RANGES_MAX: Final = 8
-KEYPHRASES_MAX: Final = 8
-LEDE_MAX: Final = 2
 #: Named things per list, and mentions per named thing. A news item names a
 #: handful of organisations and says each one a few times; a reply that wants
 #: more of either is listing the article rather than pointing into it, and every
@@ -149,10 +146,9 @@ LEDE_MAX: Final = 2
 NAMED_MAX: Final = 6
 MENTIONS_MAX: Final = 4
 #: The most elements one reply can add to a table by pointing at the article:
-#: two mention lists filled to their bound, plus a quote and a claim list filled
-#: to theirs. It is arithmetic over the bounds above rather than a knob, so it
+#: two mention lists filled to their bound. It is arithmetic rather than a knob, so it
 #: cannot drift away from what the grammar can emit.
-ANCHORED_MAX: Final = 2 * NAMED_MAX * MENTIONS_MAX + 2 * RANGES_MAX
+ANCHORED_MAX: Final = 2 * NAMED_MAX * MENTIONS_MAX
 #: An address is `quantity-118-123` or `s7`. Nothing legitimate is longer, and a
 #: reply that pads one has written a string no lookup will find.
 ADDRESS_MAX: Final = 48
@@ -272,17 +268,8 @@ class NamedMentions(BaseModel):
     salience: Salience
 
 
-class SentenceRange(BaseModel):
-    """A quote or a claim, as two addresses and no text.
-
-    Indices only, deliberately. An exact search for a long quotation rejects a
-    real one over a single changed word, and it does so silently - which is
-    worse than no check at all. Code slices the bytes between the two addresses.
-
-    Here because decision 5 takes the attribution type and the hedge marker per
-    claim, and the quote indices. The rule that anchors one is the row that adds
-    the four kinds only a model can find.
-    """
+class _LegacySentenceRange(BaseModel):
+    """Validate a saved pre-retirement range without producing or anchoring one."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -291,6 +278,23 @@ class SentenceRange(BaseModel):
     speaker: str = Field(max_length=PHRASE_MAX)
     attribution: Attribution
     hedge: bool
+
+
+class _LegacyLabelObservations(BaseModel):
+    """Read-only bounds of the four observations retired from saved label replies.
+
+    All four were required together. Validate them before discarding them:
+    the continuation replays the original raw reply, not this narrowed model.
+    The list limits are the fixed historical format, not current decoder knobs.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    quotes: list[_LegacySentenceRange] = Field(max_length=8)
+    claims: list[_LegacySentenceRange] = Field(max_length=8)
+    keyphrases: list[Phrase] = Field(max_length=8)
+    lede_sentence_ids: list[Address] = Field(max_length=2)
+
 
 class LabelReply(BaseModel):
     """What the decoder is constrained to emit on the label call.
@@ -303,8 +307,7 @@ class LabelReply(BaseModel):
     generated schema, which is where it can fail if somebody adds an `int`.
 
     Field order is decode order. What was found is written before what it means:
-    the labels come first, then the figure code missed, then the named things
-    and the sentence ranges, and the two article-level observations last.
+    the labels come first, then the figure code missed, then the named things.
 
     **The two mention lists are named for what code takes from them.** A prompt
     in this repository may not ask a model to pick a reader-facing tag - a page
@@ -324,10 +327,21 @@ class LabelReply(BaseModel):
     proposed: list[Citation] = Field(max_length=PROPOSED_MAX)
     entity_mentions: list[NamedMentions] = Field(max_length=NAMED_MAX)
     place_mentions: list[NamedMentions] = Field(max_length=NAMED_MAX)
-    quotes: list[SentenceRange] = Field(max_length=RANGES_MAX)
-    claims: list[SentenceRange] = Field(max_length=RANGES_MAX)
-    keyphrases: list[Phrase] = Field(max_length=KEYPHRASES_MAX)
-    lede_sentence_ids: list[Address] = Field(max_length=LEDE_MAX)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _without_validated_legacy_observations(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        retired = _LegacyLabelObservations.model_fields.keys() & data.keys()
+        if not retired:
+            return data
+        _LegacyLabelObservations.model_validate({name: data[name] for name in retired})
+        return {
+            name: value
+            for name, value in data.items()
+            if name not in _LegacyLabelObservations.model_fields
+        }
 
 
 def label_schema() -> dict[str, Any]:
@@ -367,19 +381,7 @@ def label_budget_tokens() -> int:
     That role-level number is gone entirely since 2026-09-21, so this arithmetic
     is the only thing that bounds the call.
 
-    **It is not the summarize-and-plan call's rule, and the reason is arithmetic rather than
-    taste.** `summarize_and_plan_budget_tokens` spends its prose as words and counts everything
-    else one token a character, because a token spans at least one character and
-    that makes the structural half a true ceiling. The label call has no word rails to
-    spend - every bound on this shape is a character bound - so the same rule
-    reads the whole reply as structure and returns 20,229 tokens. The label call's reply
-    is paid twice, once as its own decode and once inside the summarize-and-plan call's prompt, so
-    that budget puts the pair at 39,927 tokens of reply alone, before the
-    article in front of them - against a window of 65,536 whose sizing already
-    spends 64,699 on the pair at the truncation cap. A ceiling that fits no
-    window is not a ceiling; it is a refusal to answer.
-
-    **So the ceiling is converted at the one measured density instead**, which
+    **The ceiling is converted at the one measured density**, which
     is what `CHARS_PER_OUTPUT_TOKEN` holds and what makes this a sizing rather
     than a guarantee - the same thing the summarize-and-plan call's prose half is, and for the same
     stated reason: the budget is the brake, and a budget large enough to be an
@@ -388,12 +390,9 @@ def label_budget_tokens() -> int:
     is reported as a cut, typed, rather than raised as a JSON error several frames
     from the cause (`FailureCode.LABELS_TRUNCATED`).
 
-    Measured against the committed bounds on 2026-09-13, the widest reply this
-    shape admits is 20,229 characters: 8,160 of them are 136 free-text slots at
-    `PHRASE_MAX`, 5,664 are 118 address slots at `ADDRESS_MAX`, and 6,405 are
-    keys, punctuation and closed vocabularies. Both of those bounds are
-    anti-abuse rather than expected lengths, which is why counting them as
-    tokens one for one overstates so heavily.
+    The current four-field schema is the only input to that width. Historical
+    observations are read-only compatibility and consume no current output or
+    context allowance.
     """
     return ceil(widest_json_characters(label_schema()) / CHARS_PER_OUTPUT_TOKEN)
 
@@ -401,10 +400,8 @@ def label_budget_tokens() -> int:
 #: The budget the committed bounds produce, written down as well as computed.
 #: `SUMMARIZE_AND_PLAN_BUDGET_TOKENS` is the precedent and the reason is the same: a
 #: number that only exists inside a function is a number nobody re-derives, and
-#: a bound can then move without anybody seeing what it cost. It is 7.2 times
-#: the reply that was lost and 68 times an ordinary one, which was measured at
-#: 96 tokens on 2026-09-12.
-LABEL_BUDGET_TOKENS: Final = 6491
+#: a bound can then move without anybody seeing what it cost.
+LABEL_BUDGET_TOKENS: Final = 4948
 
 if label_budget_tokens() != LABEL_BUDGET_TOKENS:
     raise TypeError(
@@ -554,16 +551,14 @@ def label_user_turn(article: Article, table: ElementTable) -> str:
 
 
 def label_request_schema(article: Article, table: ElementTable) -> dict[str, Any]:
-    """Restrict the request to its printed addresses and native-eligible ranges."""
+    """Restrict the request to its printed candidate, date and citation addresses."""
     text = article.text or ""
     schema = label_schema()
     bind_label_reference_choices(
         schema,
         table,
-        text,
         [
-            (sentence_id(index), start, end)
-            for index, (start, end) in enumerate(sentence_spans(text))
+            sentence_id(index) for index, _ in enumerate(sentence_spans(text))
         ],
     )
     return schema
@@ -890,76 +885,6 @@ def mention_elements(
     return grouped
 
 
-def range_elements(
-    text: str,
-    ranges: Sequence[SentenceRange],
-    *,
-    kind: ElementKind,
-    label_source: str,
-    entity_slugs: Mapping[str, str],
-) -> list[Element]:
-    """The run of sentences one range names, cut whole out of the article.
-
-    **Addresses only, never text** (decision 3). An exact search for a long
-    quotation rejects a real one over a single changed word and does so silently,
-    which is worse than no check at all - so the reply names the first and last
-    sentence and code cuts everything between them. The span is trimmed of
-    surrounding whitespace by moving the offsets, never by editing the slice, so
-    the excerpt is still exactly `text[span_start:span_end]`.
-
-    Four refusals, and each drops one range and nothing else:
-
-    - either address naming no sentence,
-    - a range that ends before it starts,
-    - a run that is only whitespace,
-    - a run wider than `UNTRUSTED_LINE_MAX`, which the shape will not hold. A
-      truncated excerpt would stop being the characters its span names, so the
-      long quotation is dropped rather than cut down.
-
-    The speaker is Tier 2 and reaches no reader: it groups under a slug this
-    project already tracks, exactly as a label's name does, and mints none.
-    """
-    spans = sentence_spans(text)
-    starts = sentence_starts(text)
-    found: list[Element] = []
-    for entry in ranges:
-        first = sentence_number(entry.sentence_start_id)
-        last = sentence_number(entry.sentence_end_id)
-        if first is None or last is None or not 0 <= first <= last < len(spans):
-            continue
-        span_start, span_end = spans[first][0], spans[last][1]
-        excerpt = text[span_start:span_end]
-        trimmed = excerpt.strip()
-        if not trimmed or len(trimmed) > UNTRUSTED_LINE_MAX:
-            continue
-        span_start += len(excerpt) - len(excerpt.lstrip())
-        span_end = span_start + len(trimmed)
-        judged: dict[str, Any] = {
-            "hedge": entry.hedge,
-            "label_source": label_source,
-            "ledger_version": LABEL_PASS_VERSION,
-        }
-        if entry.attribution != UNATTRIBUTED:
-            judged["attribution"] = entry.attribution
-        if (slug := entity_slugs.get(entry.speaker.strip().casefold())) is not None:
-            judged["entity"] = slug
-        found.append(
-            Element(
-                element_id=derive_element_id(kind, span_start, span_end),
-                kind=kind,
-                span_start=span_start,
-                span_end=span_end,
-                span_excerpt=trimmed,
-                value=None,
-                unit=None,
-                sentence_index=bisect_right(starts, span_start),
-                extractor=Extractor.MODEL,
-                **judged,
-            )
-        )
-    return found
-
-
 def model_anchored(
     text: str,
     reply: LabelReply,
@@ -967,11 +892,9 @@ def model_anchored(
     label_source: str,
     entity_slugs: Mapping[str, str],
 ) -> tuple[list[MentionGroup], list[Element]]:
-    """The four kinds only a model can find, and the groups the mentions fell into.
+    """Anchor entity/place mentions inside their named source sentences.
 
-    One call per kind, each with its own anchoring rule: a mention is searched
-    inside its named sentence, and a quote or a claim is sliced between two
-    sentence addresses. The groups are returned beside the flat list because a
+    The groups are returned beside the flat list because a
     drawn label is a property of a group and not of one element.
     """
     groups = [
@@ -990,23 +913,7 @@ def model_anchored(
             entity_slugs=entity_slugs,
         ),
     ]
-    pointed = [
-        *(element for group in groups for element in group.elements),
-        *range_elements(
-            text,
-            reply.quotes,
-            kind=ElementKind.QUOTE,
-            label_source=label_source,
-            entity_slugs=entity_slugs,
-        ),
-        *range_elements(
-            text,
-            reply.claims,
-            kind=ElementKind.CLAIM,
-            label_source=label_source,
-            entity_slugs=entity_slugs,
-        ),
-    ]
+    pointed = [element for group in groups for element in group.elements]
     return groups, pointed
 
 
@@ -1233,9 +1140,9 @@ def summarize_and_plan_schema(
     schema = summarize_and_plan_model(
         prompt_config, source_words=source_words, brief=brief, plan=plan
     ).model_json_schema()
-    if plan and visuals is not None and visuals.type_selection_enabled:
+    if plan:
         schema["$defs"][VisualType.__name__]["enum"] = [
-            visual_type.value for visual_type in visuals.select_types()
+            visual_type.value for visual_type in (visuals or VisualsConfig()).select_types()
         ]
     if plan and table is not None:
         bind_reference_choices(schema, table)

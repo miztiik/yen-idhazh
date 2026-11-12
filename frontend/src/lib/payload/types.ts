@@ -2,6 +2,7 @@
 
 export type ConfidenceBand = 'high' | 'medium' | 'low';
 export type SourceForm = 'article' | 'abstract';
+/** Retired kind tokens are historical metadata, never reader capabilities. */
 export type VisualKind = 'chart' | 'whowhat' | 'none';
 
 export type BandReason =
@@ -28,37 +29,6 @@ export interface DigestVisual {
 	 * never an empty chart. */
 	data_path?: string | null;
 	alt: string | null;
-}
-
-/** Source evidence for one entity or claim, at the exact offsets in Article.text. */
-export interface WhowhatSourceSpan {
-	element_id: string;
-	sentence_index: number;
-	span_start: number;
-	span_end: number;
-	span_excerpt: string;
-	display_text: string;
-}
-
-export interface WhowhatEntitySpan extends WhowhatSourceSpan {
-	kind: 'entity';
-}
-
-export interface WhowhatClaimSpan extends WhowhatSourceSpan {
-	kind: 'claim';
-}
-
-/** Both cells are populated from one sentence, or both are empty. */
-export interface WhowhatGridRow {
-	actor: WhowhatEntitySpan | null;
-	claim: WhowhatClaimSpan | null;
-}
-
-/** The independent, versioned data format read by WhowhatVisual. */
-export interface WhowhatGridData {
-	version: string;
-	item_id: string;
-	rows: WhowhatGridRow[];
 }
 
 /** One thing a drawing puts on the page, mirroring `VisualData`.

@@ -216,7 +216,7 @@ def to_digest_visual(decision: VisualDecision | None) -> DigestVisual | None:
     absence is one fewer thing in every payload for the two items in three that
     correctly get no picture.
     """
-    if decision is None or decision.kind is VisualKind.NONE:
+    if decision is None or decision.kind is not VisualKind.CHART:
         return None
     return DigestVisual(
         kind=decision.kind,

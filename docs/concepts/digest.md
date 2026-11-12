@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-12
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -36,11 +36,15 @@ The visual must complement the article at high information compression. It
 earns space only when it makes a supported comparison or relationship quicker
 to grasp than the prose alone.
 
-The current reader has three outcomes:
+The current reader has two outcomes:
 
 - **A chart** when article evidence supports a useful numeric pattern, such as a comparison or distribution. Values may be source figures or code-derived arithmetic with a traceable source chain; formatting a number does not change its value. [Where each drawn figure comes from](../architecture/publishing/where-every-drawn-figure-came-from.md) defines the boundary.
-- **A Who/What grid** when source text supports an actor and claim in the same sentence. It is a separate, source-backed format, not a chart ([layout](design-system.md#the-whowhat-grid-keeps-each-actor-beside-its-claim), [rendering](../architecture/publishing/where-a-drawing-becomes-pixels.md#the-whowhat-grid-is-a-separate-format-and-reader)).
-- **No visual** when neither form is supported or useful. This is a common, correct outcome, not a failure.
+- **No visual** when a supported numeric chart is not useful. This is a common, correct outcome, not a failure.
+
+The Who/What actor-grid is Abandoned. Its producer, compiler and reader are
+removed; historical outcome facts remain readable but project to no visual.
+The [capability table](../architecture/publishing/where-a-drawing-becomes-pixels.md#declared-types-are-not-delivery-promises)
+names every abandoned form.
 
 Diagrams are deferred; no reader-facing diagram is currently produced. The
 [visual planning page](../architecture/publishing/visuals.md#diagrams-deferred)

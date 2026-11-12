@@ -25,6 +25,7 @@ from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from support.prompts import a_table, label_payload
 from support.server import RecordedEndpoint
+from support.visual_plans import current_plan
 
 from idhazh import config, ledger
 from idhazh.classify import calls
@@ -73,7 +74,7 @@ def inputs(**changed: object) -> tuple[Summary, VisualPlan, ElementTable]:
     root = FIXTURES_DIR / "visual-validator"
     table = ElementTable.read(root / "tables/wind.json")
     requested = VisualPlan.model_validate(
-        json.loads(read_text(root / "plans/passes.json")) | changed
+        current_plan(root / "plans/passes.json").model_dump(mode="json") | changed
     )
     summary = Summary.model_validate(
         json.loads(read_text(CONTRACT_FIXTURES_DIR / "summary/ok.json"))
@@ -107,19 +108,25 @@ def record(decision: VisualDecision, number: int) -> ItemHealthRow:
 def test_selection_controls_the_actual_request_grammar_without_changing_its_prefix() -> None:
     article = Article.read(CONTRACT_FIXTURES_DIR / "article/ok.json")
     first = label_payload(article)
-    off = settings(type_selection_enabled=False, enabled_types=["quotecard"]).app.visuals
-    selected = settings(type_selection_enabled=True, enabled_types=["dot", "quotecard"]).app.visuals
+    off = settings(type_selection_enabled=False, enabled_types=["whowhat", "quotecard"]).app.visuals
+    selected = settings(
+        type_selection_enabled=True, enabled_types=["dot", "whowhat", "quotecard"]
+    ).app.visuals
     markers = a_markers()
     full = calls.summarize_and_plan_schema(visuals=off)
     recorded = json.loads(read_text(DRAWS_LABEL))["choices"][0]["message"]["content"]
     request = calls.build_summarize_and_plan_request(
         first, recorded, a_table(article), markers=markers, visuals=selected
     )
-    assert request["json_schema"]["$defs"]["VisualType"]["enum"] == ["dot", "quotecard"]
+    assert request["json_schema"]["$defs"]["VisualType"]["enum"] == ["dot"]
     assert request["prompt"].startswith(first["prompt"])
-    assert full["$defs"]["VisualType"]["enum"] == [kind.value for kind in VisualType]
+    assert full["$defs"]["VisualType"]["enum"] == [
+        kind.value for kind in VisualType if can_compile(kind)
+    ]
     assert calls.summarize_and_plan_schema()["$defs"]["VisualType"] == full["$defs"]["VisualType"]
-    assert VisualPlan.json_schema()["$defs"]["VisualType"] == full["$defs"]["VisualType"]
+    assert VisualPlan.json_schema()["$defs"]["VisualType"]["enum"] == [
+        kind.value for kind in VisualType
+    ]
     assert calls.prompt_inputs(markers=markers, visuals=off) == calls.prompt_inputs(markers=markers)
     assert calls.prompt_inputs(markers=markers, visuals=selected) != calls.prompt_inputs(
         markers=markers, visuals=off
@@ -133,14 +140,14 @@ def test_active_requests_offer_implemented_types_without_removing_historical_nam
     active = config.load(CONFIG_DIR).app.visuals
     selected = [
         "bar", "dot", "line", "scatter", "bubble", "slope",
-        "stacked_bar", "pie", "histogram", "whowhat",
+        "stacked_bar", "pie", "histogram",
     ]
     assert active.type_selection_enabled
     assert not active.downgrade_enabled
     assert [kind.value for kind in active.enabled_types] == selected
     assert calls.summarize_and_plan_schema(visuals=active)["$defs"]["VisualType"]["enum"] == selected
     assert set(active.select_types()) == {
-        kind for kind in VisualType if kind is VisualType.WHOWHAT or can_compile(kind)
+        kind for kind in VisualType if can_compile(kind)
     }
     native = VisualPlan.json_schema()["$defs"]["VisualType"]["enum"]
     assert native == [kind.value for kind in VisualType]
@@ -149,12 +156,12 @@ def test_active_requests_offer_implemented_types_without_removing_historical_nam
         assert plan.type is historical
 
 
-def test_an_unruled_selection_is_not_erased_by_the_numeric_reachability_gate() -> None:
+def test_retired_selections_cannot_make_a_numericless_article_reachable() -> None:
     _, _, table = inputs()
     empty = ElementTable.model_validate(table.model_dump(mode="json") | {"elements": []})
     assert reachable_types(empty, visuals=settings(
-        type_selection_enabled=True, enabled_types=["quotecard"]
-    ).app.visuals) == (VisualType.QUOTECARD,)
+        type_selection_enabled=True, enabled_types=["quotecard", "whowhat"]
+    ).app.visuals) == ()
     assert reachable_types(empty, visuals=settings(
         type_selection_enabled=True, enabled_types=["bar"]
     ).app.visuals) == ()
@@ -313,7 +320,7 @@ def test_real_shard_projects_outcomes_before_sealing_and_reuses_its_starting_pop
     knobs = settings(
         downgrade_enabled=True,
         downgrade_max_samples_per_type=1,
-        type_selection_enabled=True,
+        type_selection_enabled=False,
         enabled_types=["bar", "comparison"],
     )
     appended = False
@@ -335,8 +342,7 @@ def test_real_shard_projects_outcomes_before_sealing_and_reuses_its_starting_pop
             run_plan, settings=knobs, scorer=None, fetcher=fetch, model_endpoint=server.endpoint
         )
         assert server.sent[-1]["json_schema"]["$defs"]["VisualType"]["enum"] == [
-            "bar",
-            "comparison",
+            kind.value for kind in VisualType if can_compile(kind)
         ]
     assert stage_record(run_plan, settings=knobs, commit_sha="a" * 40)[0] == len(run_plan.items)
     rows = ledger.load_days(

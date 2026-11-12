@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
+from support.visual_plans import current_plan
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.element import ElementTable
@@ -23,7 +24,7 @@ pytestmark = pytest.mark.visual
 
 def _inputs() -> tuple[VisualPlan, ElementTable]:
     return (
-        VisualPlan.read(FIXTURES_DIR / "visual-validator/plans/scatter-relationship.json"),
+        current_plan(FIXTURES_DIR / "visual-validator/plans/scatter-relationship.json"),
         ElementTable.read(FIXTURES_DIR / "visual-validator/tables/scatter-relationship.json"),
     )
 

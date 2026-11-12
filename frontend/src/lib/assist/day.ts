@@ -26,6 +26,7 @@
 
 import { base } from '$app/paths';
 import type { DayForPage, DigestItem } from '$lib/payload/types';
+import { isChartKind } from '$lib/payload/project';
 
 /** What one ask came back with.
  *
@@ -250,7 +251,10 @@ async function readDay(date: string, fetcher: typeof fetch): Promise<DayReply> {
 		// and counted. The console is the whole logging surface (section 1b), so
 		// the count goes there - a reader can hand it back, and nothing they could
 		// do would fix it.
-		const items = payload.items.filter(renderable);
+		const readable = payload.items.filter(renderable);
+		const items = readable.map((item) =>
+			item.visual && !isChartKind(item.visual.kind) ? { ...item, visual: null } : item
+		);
 		if (items.length !== payload.items.length) {
 			console.warn(
 				`[digest] ${date}: ${payload.items.length - items.length} of ${payload.items.length} ` +

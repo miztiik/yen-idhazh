@@ -7,6 +7,7 @@ from typing import Final
 import pytest
 from pydantic import TypeAdapter, ValidationError
 from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
+from support.visual_plans import current_plan
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import UntrustedLine
@@ -121,7 +122,7 @@ def test_distinct_labels_that_shorten_to_the_same_text_refuse_the_chart() -> Non
 
 
 def test_stacked_bar_labels_remain_uncapped() -> None:
-    plan = VisualPlan.read(STACKED_PLAN)
+    plan = current_plan(STACKED_PLAN)
     table = ElementTable.read(STACKED_TABLE)
     compiled = compile_chart(plan, table, visuals=visuals_with_label_limit(4))
     marks = {

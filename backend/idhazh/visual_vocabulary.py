@@ -57,11 +57,10 @@ plan is a check in `visual_validator.py` or a function in `derived_values.py`.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from decimal import Decimal
 from typing import Final, NamedTuple
 
-from idhazh.contracts.element import Element, ElementKind
+from idhazh.contracts.element import ElementKind
 from idhazh.contracts.visual import EncodingRole, VisualPurpose, VisualType
 from idhazh.elements import normalise_unit
 
@@ -70,7 +69,7 @@ from idhazh.elements import normalise_unit
 #: and it is not `UNIT_TABLE_VERSION`, which stamps the other table. A plan
 #: carries the vocabulary it was planned against, and `plan_version_current`
 #: compares the two.
-PLAN_VOCABULARY_VERSION: Final = "2026-10-28"
+PLAN_VOCABULARY_VERSION: Final = "2026-11-11"
 
 
 class TypeRules(NamedTuple):
@@ -87,45 +86,13 @@ class TypeRules(NamedTuple):
     marks: EncodingRole
 
 
-class WhowhatRow(NamedTuple):
-    """A fixed-width grid row; both empty fields mean no safe source pair."""
-
-    entity: Element | None
-    claim: Element | None
-
-
-def whowhat_rows(
-    entities: Sequence[Element], claims: Sequence[Element]
-) -> tuple[WhowhatRow, ...]:
-    """Pair only a sole entity and sole claim selected from one sentence.
-
-    Multiple actors or claims in the same sentence are ambiguous without a
-    relation the plan contract does not carry. Keep that row empty rather than
-    assigning the claim to an actor by position or guesswork.
-    """
-    entity_counts: dict[int, int] = {}
-    claim_by_sentence: dict[int, list[Element]] = {}
-    for entity in entities:
-        entity_counts[entity.sentence_index] = entity_counts.get(entity.sentence_index, 0) + 1
-    for claim in claims:
-        claim_by_sentence.setdefault(claim.sentence_index, []).append(claim)
-    return tuple(
-        WhowhatRow(entity, claim_by_sentence[entity.sentence_index][0])
-        if entity_counts[entity.sentence_index] == 1
-        and len(claim_by_sentence.get(entity.sentence_index, ())) == 1
-        else WhowhatRow(None, None)
-        for entity in entities
-    )
-
-
 _R = EncodingRole
 _T = VisualType
 
-#: The twelve types whose channels the nine role descriptions determine. These
+#: The types whose channels the role descriptions determine. These
 #: are grammar-of-graphics forms and the table is not a design choice - a
 #: scatter needs two measured axes, a histogram needs bins, a timeline needs a
-#: time and something to name each dated point; whowhat needs a source-backed
-#: entity and claim.
+#: time and something to name each dated point.
 TYPE_RULES: Final[dict[VisualType, TypeRules]] = {
     _T.BAR: TypeRules(frozenset({_R.CATEGORY, _R.QUANTITY}), frozenset({_R.SERIES}), _R.QUANTITY),
     _T.DOT: TypeRules(frozenset({_R.CATEGORY, _R.QUANTITY}), frozenset({_R.SERIES}), _R.QUANTITY),
@@ -150,7 +117,6 @@ TYPE_RULES: Final[dict[VisualType, TypeRules]] = {
     _T.TIMELINE: TypeRules(
         frozenset({_R.TIME, _R.EVENT_LABEL}), frozenset({_R.ENTITY}), _R.TIME
     ),
-    _T.WHOWHAT: TypeRules(frozenset({_R.ENTITY, _R.EVENT_LABEL}), frozenset(), _R.ENTITY),
 }
 
 #: Historical names without role rules. They remain explicit so an older plan
@@ -158,7 +124,7 @@ TYPE_RULES: Final[dict[VisualType, TypeRules]] = {
 #: Production selection excludes these abandoned forms; retaining them here is
 #: not a delivery queue. Configured replacement remains a separate policy.
 UNRULED_TYPES: Final[frozenset[VisualType]] = frozenset(
-    {_T.TABLE, _T.FLOW, _T.COMPARISON, _T.CALLOUT, _T.QUOTECARD, _T.KEYFACTS}
+    {_T.TABLE, _T.FLOW, _T.COMPARISON, _T.CALLOUT, _T.QUOTECARD, _T.KEYFACTS, _T.WHOWHAT}
 )
 
 #: Which element kinds may fill each channel. A channel that measures takes a
