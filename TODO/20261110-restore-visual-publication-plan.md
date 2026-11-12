@@ -356,6 +356,7 @@ Table R - Rejected projection shortcuts
   - `backend/tests/contracts/test_app_config.py`
   - `backend/tests/contracts/test_decoder_grammar.py`
   - `backend/tests/contracts/test_visual_plan.py`
+  - `backend/tests/contracts/test_visual_outcomes.py`
   - `backend/tests/council/_imports.py`
   - `backend/tests/pipeline/_builders.py`
   - `backend/tests/pipeline/test_published_charts.py`
