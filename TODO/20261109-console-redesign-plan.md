@@ -49,7 +49,7 @@ Table C
 | C9 | 8a | Simplify selected Pipelines visual diagnostics | 1, 5 | I | DONE | `psychic-goggles` | - | App session `3932eb6c-014c-40e4-9e51-5617ff2c30f0`; branch `pipelines-visual-diagnostics` |
 | C10 | 8b | Remove the Pipelines written-type diagnostic | 8a | J | DONE | `legendary-garbanzo` | - | App session `da0bfe17-ef48-4e8f-93d2-7c92c1dd13ce`; branch `remove-written-type-diagnostic` |
 | C11 | 8c | Remove the Summaries model-change comparison | 8b | K | DONE | `jubilant-happiness` | - | App session `705cdced-00f1-4c51-bbe0-ae3c6079063b`; branch `remove-model-change-comparison` |
-| C12 | 8d | Refine machine history and move the run-wide article ranking | 8c | L | DONE | `supreme-winner` | #2038 | App session `740c1208-b227-45bf-9307-f57983e73022`; branch `refine-hardware-move-latency` |
+| C12 | 8d | Refine machine history, align console colours and move the article ranking | 8c | L | DONE | `supreme-winner` | #2038 | App session `740c1208-b227-45bf-9307-f57983e73022`; branch `refine-hardware-move-latency` |
 
 ## 2. Row #1 - Define console redesign and chart changes
 
@@ -886,7 +886,7 @@ Table AA
   uses the retained full newest-day clock population, not removed card queries.
   Producer contracts, collection, raw/compact rows and host/run identities remain.
 - **History contract:** Canonical full identities from the bounded widest host
-  universe assign D3 built-in Spectral slots and same-name qualifiers. Palette reuse
+  universe assign D3 built-in PiYG slots and same-name qualifiers. Palette reuse
   never merges machines. Top-kind selection and folded totals remain; each UTC
   day's segments rank its own counts largest at the bottom, including distinct
   folded identities. The existing gradient flag selects
@@ -904,10 +904,16 @@ Table AA
   `config/console/machine.json` -> `knobs.slowest_articles_rows` and prior inputs.
 - **Files:** Selected Hardware/Pipelines roster, route, query, presentation and
   adapter files; optional in-memory date-series gradient/hover projections;
-  existing appearance selector's additive spectral vocabulary and version metadata; named dependent
+  existing appearance selector's additive D3 vocabulary, aligned console colour roles
+  and version metadata; named dependent
   source/query fixtures and tests; Hardware/Pipelines, machine-drawing, appearance
   and shared-hover owning docs. No new persisted field, hand-authored palette, engine, export,
   raw read, current-day packing, origin, model or workflow.
+- **Console alignment:** PiYG also supplies the existing console category and
+  readable text/line tokens, with matching action/focus/selection roles. Preserve
+  neutral surfaces, reader colours, typography/layout, confidence/movement and
+  the reserved eighth absence token. D3 and build-time colour utilities produce
+  the stock-family shades; no hand-authored palette or runtime correction system.
 - **Acceptance:** Shared selector, smallest real behavior/contract tests and
   applicable lint/types. Verify actual removed mounts and retained consumers,
   identity/count stability and folded conservation, compact-hover/detail parity,

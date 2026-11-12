@@ -23,7 +23,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/lib/charts': [
 		'cost.ts', 'day-slots.ts', 'fleet.ts', 'frame.ts', 'glance.ts', 'indexed-runs.ts',
-		'fleet-identity.ts', 'machine-colour.ts', 'machine-name.ts',
+		'colour-scheme.ts', 'fleet-identity.ts', 'machine-colour.ts', 'machine-name.ts',
 		'label-context.ts', 'machine.ts', 'rank.ts', 'readout.ts', 'run-history.ts', 'run-yield.ts', 'series.ts',
 		'skeleton.ts', 'sparkline.ts', 'stack-types.ts', 'targetbar.ts',
 		'theme.ts', 'viewport.ts'
@@ -124,7 +124,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/routes/[date]/[vertical]': ['+page.svelte', '+page.ts'],
 	scripts: [
 		'build-canary.mjs', 'build-frame-css.mjs', 'build-icons.mjs', 'build-state.ts',
-		'build-worker-switch.mjs', 'bundle-gate.mjs', 'canary-inventory.mjs', 'stage-publication.mjs',
+		'build-worker-switch.mjs', 'bundle-gate.mjs', 'canary-inventory.mjs', 'console-palette.ts', 'stage-publication.mjs',
 		'doc-test-inputs.ts', 'duckdb-addon.ts', 'payload-ceilings.mjs', 'published-ledgers.mjs',
 		'query-engine-assets.ts', 'run-checks.ts', 'setup-duckdb.ts',
 		'staged-publication.mjs', 'test-groups.ts', 'test-results.ts', 'test-scope.ts', 'verified-preview.ts'

@@ -472,7 +472,7 @@ export interface ChartConfig {
 	hover_readout: boolean;
 	/** The widest the readout strip under a plot may be, as a share of that plot. */
 	readout_max_share: number;
-	palette: 'categorical' | 'sequential' | 'spectral';
+	palette: 'categorical' | 'sequential' | 'spectral' | 'piyg';
 	tick_density: number;
 	sparkline_height_px: number;
 	number_format: NumberFormatConfig;

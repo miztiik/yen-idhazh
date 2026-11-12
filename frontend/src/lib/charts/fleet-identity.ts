@@ -1,7 +1,7 @@
 /** Which stable categorical paint and qualified name belongs to each recorded machine kind? */
 import type { FillGradient } from './d3/dateSeries';
 import { scaleOrdinal } from 'd3-scale';
-import { schemeBlues, schemeSpectral } from 'd3-scale-chromatic';
+import { colourScheme } from './colour-scheme';
 import { PALETTE, type ChartPaletteToken } from './theme';
 import type { ChartConfig } from '../server/config';
 import { UNRECORDED_KEY, UNRECORDED_NAME, type MachineIdentity } from './machine-colour';
@@ -25,9 +25,8 @@ export function fleetIdentities(
 	const palette = PALETTE.filter((token) => token !== '--chart-8');
 	const colours = scaleOrdinal<string, string>()
 		.domain(known.map((machine) => machine.key))
-		.range(appearance.palette === 'spectral' ? schemeSpectral[schemeSpectral.length - 1]
-			: appearance.palette === 'sequential' ? schemeBlues[schemeBlues.length - 1]
-			: palette.map((token) => `var(${token})`));
+		.range(appearance.palette === 'categorical' ? palette.map((token) => `var(${token})`)
+			: colourScheme(appearance.palette));
 	const names = new Map<string, string[]>();
 	for (const machine of known) names.set(machine.name, [...(names.get(machine.name) ?? []), machine.key]);
 	const share = (1 - appearance.floor) * 100;

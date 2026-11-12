@@ -155,6 +155,10 @@
 		display: inline-block;
 		vertical-align: middle;
 	}
+	:global([data-surface='operator']) .readout-swatch {
+		border: 1px solid var(--color-rule-strong);
+		box-sizing: border-box;
+	}
 
 	.readout-value {
 		display: inline-block;

@@ -323,6 +323,12 @@
 		border-radius: var(--radius-sm);
 		margin-inline-end: var(--space-1);
 		vertical-align: middle;
+		border: 1px solid var(--color-rule-strong);
+		box-sizing: border-box;
+	}
+	.plot :global([data-series-bar]) {
+		stroke: var(--chart-axis);
+		stroke-width: var(--console-chart-axis-width);
 	}
 
 	.plot {

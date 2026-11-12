@@ -110,10 +110,11 @@ class TintMode(StrEnum):
 
 
 class ChartPalette(StrEnum):
-    """Which built-in or theme palette identifies machine kinds, never health."""
+    """Which built-in or theme palette identifies categories, never health."""
 
     CATEGORICAL = "categorical"
     SPECTRAL = "spectral"
+    PIYG = "piyg"
     SEQUENTIAL = "sequential"
 
 
@@ -479,10 +480,11 @@ class ChartConfig(Model):
     palette: ChartPalette = Field(
         default=ChartPalette.CATEGORICAL,
         description=(
-            "The machine-history identity palette. Spectral uses D3's built-in "
-            "scheme; categorical retains theme colours and sequential uses D3 "
-            "Blues. Other charts retain their declared quantity colours. These "
-            "colours identify machines, never speed, health or a numeric midpoint."
+            "The console category palette and machine-history identity palette. "
+            "PiYG and Spectral use D3's built-in schemes; categorical retains "
+            "configured colours and sequential uses D3 Blues. The neutral absence "
+            "paint and confidence/movement roles remain separate. Palette colours "
+            "identify categories, never speed, health or a numeric midpoint."
         ),
     )
     tick_density: int = Field(
@@ -583,15 +585,15 @@ class AppearanceConfig(Contract):
                 "additive; absent archive controls and console_style blocks/leaves use "
                 "declared defaults; style arrays replace whole; numeric console frame "
                 "maxima retain their caps and null selects the full window; "
-                "chart.palette adds spectral while categorical and sequential remain accepted"
+                "chart.palette adds spectral and piyg while prior choices remain accepted"
             )
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-11-12",
-            change="Add built-in Spectral machine colours to the existing appearance controls.",
-            why="Existing fields, numeric bounds, defaults and older inputs are unchanged.",
+            change="Add built-in D3 console palettes and aligned appearance defaults.",
+            why="Prior choices and explicit colours still read; field shapes are unchanged.",
         ),
         ChangelogEntry(
             version="2026-11-11",

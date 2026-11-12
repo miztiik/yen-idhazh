@@ -17,6 +17,7 @@ import { runInNewContext } from 'node:vm';
 import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
 import { resolveConsoleStyle, type ConsoleStyleConfig } from '../src/lib/console/console-style';
 import { renderFrameCss } from '../scripts/build-frame-css.mjs';
+import { consolePalette } from '../scripts/console-palette';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -277,6 +278,30 @@ test.describe('the committed appearance file', () => {
 		expect(operator).toContain('--console-rail-width: 13rem;');
 		expect(operator).toContain('--console-chart-grid-dash: 2 4;');
 		expect(operator).toContain('--color-bg: #1a1a18;');
+	});
+
+	test('PiYG aligns console categories while keeping neutral absence, explicit controls and reader tokens', () => {
+		const style = resolveConsoleStyle();
+		for (const mode of ['light', 'dark'] as const) {
+			const colors = style.colors[mode];
+			const before = structuredClone(colors);
+			const palette = consolePalette(colors, mode, 'piyg');
+			expect(palette.slice(0, 7)).not.toEqual(colors.categorical.slice(0, 7));
+			expect(palette[7]).toBe(colors.categorical[7]);
+			expect(new Set(palette).size).toBe(8);
+			expect(colors).toEqual(before);
+		}
+		const original = renderFrameCss();
+		const aligned = renderFrameCss({
+			chart: { palette: 'piyg' },
+			console_style: { colors: { light: { accent: '#145a55', focus: '#7d2359', selected: '#e5eee7' } } }
+		});
+		const marker = '/* The selector includes the outer canvas';
+		expect(aligned.split(marker)[0]).toBe(original.split(marker)[0]);
+		expect(aligned).toContain('--color-accent: #145a55;');
+		expect(aligned).toContain('--color-focus: #7d2359;');
+		expect(aligned).toContain('--console-selected: #e5eee7;');
+		expect(aligned).toContain('--gradient-wordmark: linear-gradient(to right,');
 	});
 
 	test('console font and elevation switches use existing fallbacks without new assets', () => {

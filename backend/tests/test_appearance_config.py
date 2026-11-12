@@ -67,7 +67,7 @@ def test_machine_palette_accepts_prior_values_and_matches_the_frontend_vocabular
     copied = re.search(r"palette: ([^;]+);", source)
     assert copied is not None
     assert set(re.findall(r"'([^']+)'", copied[1])) == {value.value for value in ChartPalette}
-    for palette in ("categorical", "sequential", "spectral"):
+    for palette in ("categorical", "sequential", "spectral", "piyg"):
         config = AppearanceConfig.model_validate({"chart": {"palette": palette}})
         assert config.chart.palette.value == palette
     assert ChartConfig().palette is ChartPalette.CATEGORICAL

@@ -27,10 +27,13 @@ Inline styles are for genuinely dynamic values such as coordinates or computed w
 
 The console's `console_style` family is generated over the entire operator page,
 including its canvas and header, before paint. It supplies neutral light/dark
-surfaces, teal actions, six paired type roles, compact controls and panel
+surfaces, PiYG-aligned actions and category colours, six paired type roles, compact controls and panel
 spacing. Reader tokens remain unchanged. Semantic confidence and movement
 retain their meanings; categorical aliases are rebound inside the console
 scope rather than inheriting resolved reader colors.
+The configured built-in scheme supplies known console categories. Build-time
+colour utilities keep their text/line variants readable, while the reserved
+eighth absence paint and confidence/movement roles retain their own meanings.
 
 | Token family | Meaning |
 | --- | --- |

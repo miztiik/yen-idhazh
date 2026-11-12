@@ -22,7 +22,7 @@ Its blocks:
 | `assist` | On-device archive search. Formerly `idhazh.json`'s `assist` block. |
 | `frame` | The frame maximums, the reading measure, the gutter range, and the three breakpoints. |
 | `theme` | Whether gradients, elevation and the display face are drawn, and how strongly a panel takes a tint. |
-| `chart` | Console chart dimensions, readout width, tick density, sparkline height, additive hover tooltips, machine-history palette and bounded story geometry. `hover_readout` switches only console tooltips; standing, keyboard and touch readings remain usable. |
+| `chart` | Console chart dimensions, readout width, tick density, sparkline height, additive hover tooltips, console category palette and bounded story geometry. `hover_readout` switches only console tooltips; standing, keyboard and touch readings remain usable. |
 | `icons` | Icon size, whether an icon takes the hue of what it means, and whether a topic carries a mark. |
 | `motion` | The two durations, and one switch. `prefers-reduced-motion` sits above the switch and is deliberately not configurable. |
 
@@ -268,10 +268,27 @@ retirement does not remove them. Design review follows the
 not a plot-width quota or a panel-picture matrix.
 
 Machine-history colour identifies full machine identities, not speed.
-The existing `chart.palette` selector adds `spectral`, using D3's widest built-in
-Spectral scheme with its ordinal scale. The committed choice is `spectral`;
-prior `categorical` inputs retain theme colours, and `sequential` selects D3
-Blues. No other chart consumes this selector or changes its quantity colours.
+The existing `chart.palette` selector accepts D3's built-in `piyg` and `spectral`
+schemes. The committed choice is `piyg`; `categorical` retains configured custom
+colours and `sequential` selects D3 Blues. Machine history uses the widest stock
+scheme with a stable full-identity ordinal scale. The console CSS producer also
+aligns category tokens, syntax/type colours and the wordmark with that family.
+Quantity-to-token assignments do not change; reader colours remain untouched.
+
+The CSS producer uses D3 colour/interpolation and build-time Culori contrast
+conversion to select readable shades of the stock colours for the existing
+shared text/line roles. This is palette production, not a runtime correction
+system, accessibility scanner or new audit gate. Six-digit roles use fixed
+eight-bit sampling precision and the existing design-system text floor.
+The eighth category token remains the configured neutral absence paint in both
+themes; confidence and movement keep their separate roles. Accent, focus and
+selection overrides remain direct configured values. Neutral surfaces, layout
+and typography do not change.
+
+The colour utilities are development/build dependencies. D3 supplies the actual
+schemes; Culori supplies the contrast comparison D3 does not provide. Their
+beneficiary is legible PiYG-based console token production. The producer lives
+under `frontend/scripts/` and is not imported by runtime routes.
 `theme.gradient_enabled` switches the uniform categorical shading on or off;
 false keeps the same machine colour flat. `machine_colour_floor_share` supplies
 the common highlight share, with the remaining share the category hue and the

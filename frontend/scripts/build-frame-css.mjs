@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveConsoleStyle } from '../src/lib/console/console-style.ts';
+import { consolePalette } from './console-palette.ts';
 
 /**
  * @typedef {import('../src/lib/console/console-style.ts').ConsoleStyleConfig} ConsoleStyleConfig
@@ -13,6 +14,7 @@ import { resolveConsoleStyle } from '../src/lib/console/console-style.ts';
  * @typedef {import('../src/lib/server/config.ts').FrameConfig} FrameConfig
  * @typedef {import('../src/lib/server/config.ts').ThemeConfig} ThemeConfig
  * @typedef {import('../src/lib/server/config.ts').MotionConfig} MotionConfig
+ * @typedef {import('../src/lib/server/config.ts').ChartConfig} ChartConfig
  * @typedef {Record<string, string | number>} CssTokens
  */
 
@@ -26,7 +28,7 @@ const FACES = { inter: `'InterVariable', ${SANS}`, 'system-sans': SANS, 'system-
 const DEFAULTS = {
 	reading_max_px: 1280, console_max_px: null, measure_ch: 68,
 	gutter_min_px: 16, gutter_max_px: 32, zone_mark_rem: 1.75, zone_rail_rem: 14, zone_aside_rem: 18,
-	duration_fast_ms: 120, duration_base_ms: 200, display_face_enabled: true, elevation_enabled: true,
+	duration_fast_ms: 120, duration_base_ms: 200, display_face_enabled: true, elevation_enabled: true, gradient_enabled: true,
 	surface_tint_alpha: 0.07,
 	movement_good_light: '#2f6f5e', movement_bad_light: '#96453a',
 	movement_good_dark: '#7fc9ae', movement_bad_dark: '#e3a396'
@@ -47,10 +49,12 @@ function shadow(value, enabled) {
 /**
  * @param {ConsoleStyleConfig} style
  * @param {'light' | 'dark'} mode
- * @param {Pick<ThemeConfig, 'elevation_enabled' | 'surface_tint_alpha'>} theme
+ * @param {Pick<ThemeConfig, 'elevation_enabled' | 'surface_tint_alpha' | 'gradient_enabled'>} theme
+ * @param {ChartConfig['palette']} choice
  */
-function consoleColors(style, mode, theme) {
+function consoleColors(style, mode, theme, choice) {
 	const colors = style.colors[mode];
+	const palette = consolePalette(colors, mode, choice);
 	const depth = style.elevation[mode];
 	/** @type {CssTokens} */
 	const values = {
@@ -74,13 +78,18 @@ function consoleColors(style, mode, theme) {
 		'tint-neutral': colors.inset,
 		'code-ground': colors.inset, 'code-text': colors.text,
 		'code-keyword': colors.accent_hover, 'code-comment': colors.text_tertiary,
-		'code-string': colors.categorical[2], 'code-number': colors.categorical[3],
+		'code-string': palette[2], 'code-number': palette[3],
 		'type-text': 'var(--code-string)', 'type-number': 'var(--code-number)',
-		'type-time': colors.categorical[0], 'type-truth': colors.categorical[1],
+		'type-time': palette[0], 'type-truth': palette[1],
 		'gradient-panel': 'none', 'gradient-wash': 'none',
 		'shimmer-band': `color-mix(in srgb, ${colors.text} ${theme.surface_tint_alpha * 100}%, transparent)`
 	};
-	colors.categorical.forEach((value, index) => { values[`chart-${index + 1}`] = value; });
+	palette.forEach((value, index) => { values[`chart-${index + 1}`] = value; });
+	if (choice !== 'categorical') {
+		values['gradient-wordmark'] = theme.gradient_enabled
+			? `linear-gradient(to right, ${palette.slice(0, -1).join(', ')})`
+			: `linear-gradient(${colors.accent}, ${colors.accent})`;
+	}
 	for (let index = 1; index <= 4; index += 1) values[`series-${index}`] = `var(--chart-${index})`;
 	for (const [name, band] of [['good', 'high'], ['warn', 'medium'], ['bad', 'low']]) {
 		values[`tint-${name}`] = `color-mix(in srgb, var(--band-${band}) ${theme.surface_tint_alpha * 100}%, ${colors.surface})`;
@@ -91,7 +100,7 @@ function consoleColors(style, mode, theme) {
 
 /**
  * Callers supply repository-authored, native-validated appearance values.
- * @param {{frame?: Partial<FrameConfig>, theme?: Partial<ThemeConfig>, motion?: Partial<MotionConfig>, console_style?: ConsoleStyleInput}} raw
+ * @param {{frame?: Partial<FrameConfig>, theme?: Partial<ThemeConfig>, motion?: Partial<MotionConfig>, chart?: Partial<ChartConfig>, console_style?: ConsoleStyleInput}} raw
  */
 export function renderFrameCss(raw = {}) {
 	const frame = { ...DEFAULTS, ...raw.frame };
@@ -163,11 +172,11 @@ ${declarations({ 'movement-good': theme.movement_good_light, 'movement-bad': the
 /* The selector includes the outer canvas and header, never a reading route. */
 ${SCOPE} {
 ${declarations(tokens)}
-${consoleColors(style, 'dark', theme)}
+${consoleColors(style, 'dark', theme, raw.chart?.palette ?? 'categorical')}
 }
 
 ${SCOPE}[data-theme='light'] {
-${consoleColors(style, 'light', theme)}
+${consoleColors(style, 'light', theme, raw.chart?.palette ?? 'categorical')}
 }
 `;
 }

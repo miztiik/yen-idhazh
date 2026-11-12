@@ -154,4 +154,8 @@
 		outline: 2px solid var(--color-focus);
 		outline-offset: 2px;
 	}
+	[data-fleet-square] {
+		stroke: var(--chart-axis);
+		stroke-width: var(--console-chart-axis-width);
+	}
 </style>

@@ -46,7 +46,7 @@ import {
 } from '../src/lib/charts/machine-colour';
 import { hoverReading } from '../src/lib/charts/readout-hover';
 import { PALETTE } from '../src/lib/charts/theme';
-import { schemeSpectral } from 'd3-scale-chromatic';
+import { schemePiYG } from 'd3-scale-chromatic';
 import type { Row, SliceResult } from '../src/lib/data/slice-shapes';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -100,7 +100,7 @@ function options(jobs: readonly FleetJob[], over: Partial<FleetOptions> = {}): F
 	const config = knobs();
 	return {
 		ramp: rampOf(jobs),
-		appearance: { gradients: true, floor: config.machine_colour_floor_share, palette: 'spectral' },
+		appearance: { gradients: true, floor: config.machine_colour_floor_share, palette: 'piyg' },
 		start: '2026-09-26',
 		end: '2026-09-28',
 		windowDays: 3,
@@ -386,7 +386,7 @@ test('categorical identity and qualified names survive presets, row order, speed
 		.toEqual(['Twin (kind 1)', 'Twin (kind 2)', 'Twin (kind 3)']);
 	const parts = wide.rows.flatMap((row) => row.parts);
 	expect(parts.filter((part) => part.key !== UNRECORDED_KEY).every((part) =>
-		schemeSpectral[schemeSpectral.length - 1].includes(part.colour))).toBe(true);
+		schemePiYG[schemePiYG.length - 1].includes(part.colour))).toBe(true);
 	expect(parts.filter((part) => part.key !== UNRECORDED_KEY).every((part) =>
 		part.token !== '--chart-8' && part.gradient !== null)).toBe(true);
 	expect(parts.find((part) => part.key === UNRECORDED_KEY)).toMatchObject({

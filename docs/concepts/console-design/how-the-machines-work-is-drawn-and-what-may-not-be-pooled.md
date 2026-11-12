@@ -38,7 +38,7 @@ The chart rules these panels obey are
  and the panel reads as one rather than as a panel with a missing spread.
 - **Machine-history colour identifies a machine kind, not its speed.**
  Canonical full identities from the bounded widest host query receive the
- configured ordinal palette in order, using D3's built-in Spectral scheme by
+ configured ordinal palette in order, using D3's built-in PiYG scheme by
  the committed setting. Fingerprint version and digest form one
  identity; namespaced name-only evidence remains coarser and separate. Equal
  CPU names receive stable kind qualifiers from that same universe. Neither the
@@ -283,7 +283,7 @@ from the committed rows rather than argued with.
 
 **Identity, rather than speed, is the useful colour reading of placement
 history.** Uniform gradients distinguish categories without introducing a
-performance scale. D3 supplies Spectral rather than a second hand-authored
+performance scale. D3 supplies PiYG rather than a second hand-authored
 palette. Palette reuse keeps distinct names; daily count ranking may change
 positions without changing identity colour. Folded identities remain separately painted. The removed newest-run detail,
 processor-steal and model-paging panels are not replaced by this history.
