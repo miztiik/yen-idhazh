@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { base } from '$app/paths';
 	import { onMount, untrack } from 'svelte';
 	import { useWindowChoice } from '$lib/console/window-slot';
 	import { consoleKnobs, routeConsole, routeKnobs } from '$lib/console/route-console';
-	import { rangeFor, routeReach, sliceOnce, retryAsks, windowRange, type PanelQuery, type Range, type RouteReach } from '$lib/console/queries/window';
+	import { rangeFor, routeReach, sliceOnce, retryAsks, type PanelQuery, type Range, type RouteReach } from '$lib/console/queries/window';
 	import { pipelinesRecord, retryReach } from '$lib/console/pipelines/record-window';
 	import { PIPELINES_QUERY_GROUPS } from '$lib/console/pipelines/query-groups';
 	import * as queries from '$lib/console/queries/pipelines';
@@ -66,8 +65,6 @@
 	const charts = $derived(data.charts.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
 	const attemptDays = $derived(data.visualAttempts.days.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
 	const record = $derived(recordReady ? pipelinesRecord(reach, windowDays) : null);
-	const nativeWindow = $derived(record?.first != null && record.through !== null
-		? windowRange(windowDays, record.through, record.first) : null);
 
 	async function ask(selected: readonly PanelQuery[], retryWindow = false, days = windowDays) {
 		if (selected.length === 0) return;
@@ -162,14 +159,11 @@
 
 <svelte:head><title>Pipelines — Console — {data.ui.site_title}</title><meta name="robots" content="noindex" /></svelte:head>
 <noscript><p data-native-script-required>The article record needs JavaScript to load. Private published-day panels remain available below.</p></noscript>
-<WindowControlSource days={windowDays} presets={knobs.window_presets} monthsFor={() => 0}
-	ready={mounted} {busy} {record} statusLine={recordReady ? null : 'The record window is not ready.'} onChange={show} />
+<WindowControlSource route="pipelines" days={windowDays} presets={knobs.window_presets} monthsFor={() => 0}
+	ready={mounted} {busy} {record} publishedWindow={viewport} statusLine={recordReady ? null : 'The record window is not ready.'} onChange={show} />
 <RouteStatus route="pipelines" answers={allAnswers} days={windowDays} through={recordReady ? reach?.through : null}
 	recordScope="Native record"
-	settledSuffix={nativeWindow === null ? '' : `Native record window: ${nativeWindow.from} through ${nativeWindow.to} UTC.`}
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retry}>
-	<p class="console-carry" data-console-carry="model" data-pipelines-window-from={viewport.start} data-pipelines-window-to={viewport.end}>{data.carries.pipelines} <a href="{base}/console/model/">Summaries →</a></p>
-	<p data-private-window data-range-from={viewport.start} data-range-to={viewport.end}>Published-day evidence: {viewport.start} through {viewport.end} UTC. Native panels use the record window above.</p>
 	{#each configured.panel_groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
@@ -183,7 +177,7 @@
 							aria-label={['run-timeline', 'slowest-articles', 'chart-drawing'].includes(id) ? undefined : `${titles[id]}, selected window ${countDays(windowDays)}`}
 							data-readout-fetched={panelQueries[id] !== undefined || id === 'run-timeline' ? '' : undefined}>
 						{#if id === 'at-a-glance'}
-							<AtAGlance days={data.charts} window={viewport} {knobs} chart={data.chart} />
+							<AtAGlance days={data.charts} publishedItems={data.publishedItems} window={viewport} {knobs} chart={data.chart} />
 						{:else if id === 'site-cost-per-item'}
 							<SiteCostPerItem manifests={data.manifests} publishedItems={data.publishedItems} window={viewport} {knobs} chart={data.chart} rule={settings} />
 						{:else if id === 'chart-drawing'}

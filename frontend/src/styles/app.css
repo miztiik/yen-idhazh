@@ -526,25 +526,6 @@ html:has([data-surface='operator']) { scroll-padding-block-start: var(--console-
 	border-color: var(--color-accent);
 }
 
-/* One sentence pointing at the panel another route owns. Not a chart and not a
-   card: it is a signpost, and a signpost that looks like a figure gets read as
-   one. */
-.console-carry {
-	margin-top: var(--space-4);
-	font-size: var(--text-sm);
-	line-height: var(--leading-sm);
-	color: var(--color-text-secondary);
-}
-
-.console-carry .carry-link {
-	color: var(--color-accent);
-	white-space: nowrap;
-}
-
-.console-carry .carry-link:hover {
-	text-decoration: underline;
-}
-
 :focus-visible {
 	outline: 2px solid var(--color-focus);
 	outline-offset: 2px;

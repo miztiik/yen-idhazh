@@ -24,8 +24,8 @@ test('retained timing columns span the selected calendar, not the lone measured 
 
 async function belowTheStrip(page: Page) {
 	return page.evaluate(() => {
-		const selectors = ['[data-console-completeness]', '[data-console-band]',
-			'[data-window-status]', '[data-console-panel]'];
+		const selectors = ['[data-console-data-dates]', '[data-window-control]',
+			'[data-console-panels="pipelines"]', '[data-console-panel]'];
 		return selectors.flatMap((selector) => {
 			const node = document.querySelector(selector);
 			return node === null ? [] : [node.getBoundingClientRect().top + window.scrollY];

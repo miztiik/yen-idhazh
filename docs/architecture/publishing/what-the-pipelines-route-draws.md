@@ -8,8 +8,8 @@ not zero, so a settings change on a day without a reading still has its place.
 Private panels keep their published-day window while native reads are pending.
 Native reads start independently; request epochs prevent late windows replacing
 the current one.
-Native record limitations sit after the failure plot, not above the private
-carry line: receiving the ledger must not move the window controls or chrome.
+Native record limitations sit after the failure plot. Source windows remain
+separate in the shared date disclosure, without repeated introductory prose.
 The retained run-square cut wording is tested on that actual component with
 independent capped and uncapped records; no item-ledger cut identities cross
 the native page's private manifest boundary.
@@ -21,7 +21,7 @@ not retired route UI. There is no restored cross-route panels/capture matrix.
 
 The retained timing and histogram plots name their actual drawing elements for
 the shared chart checks. Timeline rows name their actual bar frames. The first published-count card is the route verdict;
-its count note names the same calendar that its bars draw.
+its date axis names the same calendar that its bars draw.
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
 This page holds its native stage and cost readings and its private run figures.
@@ -91,6 +91,13 @@ disabled, native frames explicitly say the article record needs JavaScript;
 private published-day marks remain in the document.
 
 At a glance is the sole route verdict; run health remains its own comparison.
+Both published-count cards print a measured UTC date axis, using `dayTicks` and
+the actual bar centers, configured density and label metrics. Tick space is
+reserved below the unchanged bar area. Multi-day windows retain their real
+endpoints; a one-day window has one centered date. The cards have no `in these
+N days` or `in this one day` footnote. Totals and article/visual cohorts do not
+change. A missing calendar day's readout says its record is absent; a recorded
+zero remains zero. An entirely absent window shows no numeric count card.
 Declared date plots name the exact calendar they drew, including null days, and
 opted-in count cards name their own declined settings rule. The native cold-load
 check keeps the four-hop ceiling on independent ledger/data/engine branches,
@@ -238,9 +245,8 @@ The panel has no note under its title.
   succeeded`. A red run adds `under 70%`, a run that tried nothing reads `nothing
   new to try`, and a run that crashed reads `the run failed`. The words `ran
   clean` and `worth a look` are gone from this panel: they named a colour rather
-  than a fact, and the colour is already the swatch beside the row. The standing
-  band above every route still prints them beside its own squares, from its own
-  producer. A square's own label carries
+  than a fact, and the colour is already the swatch beside the row. There is no
+  second, coarse run-verdict grouping above the route. A square's own label carries
   the whole run - `Run 3 on 20 Aug 2026: 0 of 5 succeeded, under 70%, 5 failed,
   the run failed`.
 - **Each figure keeps its own empty state, and the panel never disappears.** A

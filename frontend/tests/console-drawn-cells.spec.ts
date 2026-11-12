@@ -26,8 +26,6 @@ const GRANDFATHERED: readonly ReviewedSink[] = [
 ];
 
 const ADDRESS_ALLOWED: readonly ReviewedSink[] = [
-	{ file: 'src/lib/components/ConsoleBand.svelte', attribute: 'href', value: 'href="{base}{band.worst.href}"',
-		origin: 'readBand maps the worst route id to the fixed BAND_UNREAD route href, never a ledger URL.' },
 	{ file: 'src/lib/components/ConsoleNav.svelte', attribute: 'href', value: 'href="{base}{route.href}"',
 		origin: 'The fixed BAND_UNREAD route inventory.' },
 	{ file: 'src/lib/components/DigestItem.svelte', attribute: 'href', value: 'href={day.href}',
@@ -64,8 +62,6 @@ const ADDRESS_ALLOWED: readonly ReviewedSink[] = [
 		origin: 'Explorer answerLink, only the fixed #data-explorer-rows fragment or empty string.' },
 	{ file: 'src/lib/components/ConsoleNav.svelte', attribute: 'href', value: 'href="#{group.id}"',
 		origin: 'Authored console panel group id, internal fragment only.' },
-	{ file: 'src/routes/console/+layout.svelte', attribute: 'band', value: 'band={data.band}',
-		origin: 'readBand reconstructs the worst link from a validated route id and BAND_UNREAD, not a fetched source URL.' },
 	{ file: 'src/routes/console/data-explorer/+page.svelte', attribute: 'href', value: 'href={`${data.docsBase}/blob/main/docs/how-to/query-a-ledger-from-the-console.md`}',
 		origin: 'Page docsBase is authored ui.repo_url; suffix is a fixed documentation path.' },
 	{ file: 'src/routes/console/data-explorer/+page.svelte', attribute: 'href', value: 'href={answerLink}',

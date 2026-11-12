@@ -1,7 +1,9 @@
 /** Share the mounted window choice and the active route's record reach. */
 import { getContext, onDestroy, setContext } from 'svelte';
+import type { TimeWindow } from '../charts/viewport';
 import type { RecordWindow } from './waiting';
 import type { WindowChoice } from './window-preference';
+import type { RouteId } from './band';
 
 /** What the control reads off the route under it.
  *
@@ -9,6 +11,8 @@ import type { WindowChoice } from './window-preference';
  * as long as the route is on the page instead of a copy taken when it opened.
  */
 export interface WindowSource {
+	/** Read these getters only while this route owns the layout. */
+	readonly route: RouteId;
 	readonly days: number;
 	readonly presets: readonly number[];
 	/** True while the route is fetching what the window reaches into. */
@@ -18,6 +22,8 @@ export interface WindowSource {
 	/** Optional replacement for the window's evidence sentence. */
 	readonly statusLine?: string | null;
 	readonly record?: RecordWindow | null;
+	/** Private evidence keeps its published-day endpoint, independent of the native record. */
+	readonly publishedWindow?: TimeWindow | null;
 	/** Month files a preset would fetch that the route does not hold yet. */
 	monthsFor(days: number): number;
 	onChange(days: number): void;

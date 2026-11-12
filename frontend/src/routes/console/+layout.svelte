@@ -2,7 +2,6 @@
 	/** Keep route identity, navigation, evidence and one shared window beside the readings. */
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import WindowStatus from '$lib/components/WindowStatus.svelte';
@@ -19,6 +18,7 @@
 	import { provideNumberFormat } from '$lib/number-format-context';
 	import { provideChartLabels, measureChartLabels } from '$lib/charts/label-context';
 	import type { ChartLabels } from '$lib/charts/frame';
+	import { shortDate, clockUtc } from '$lib/format';
 
 	let { data, children } = $props();
 	// svelte-ignore state_referenced_locally
@@ -39,8 +39,8 @@
 		get days() { return chosen; },
 		select: preference.select
 	});
-	const windowSource = $derived<WindowSource>(handed ?? {
-		days: chosen, presets: configured.window_presets, busy: false, ready: false,
+	const windowSource = $derived<WindowSource>(handed !== null && handed.route === active ? handed : {
+		route: active, days: chosen, presets: configured.window_presets, busy: false, ready: false,
 		statusLine: null, monthsFor: () => 0, onChange: preference.select
 	});
 	let labels = $state.raw<ChartLabels | null>(null);
@@ -100,20 +100,34 @@
 		</header>
 		{#if !workbench}
 			<div class="console-window-evidence">
-				<WindowStatus days={windowSource.days} presets={windowSource.presets}
-					monthsFor={windowSource.monthsFor} busy={windowSource.busy} ready={windowSource.ready}
-					statusLine={windowSource.statusLine ?? null} record={windowSource.record ?? null} />
+				<details class="console-data-dates" data-console-data-dates>
+					<summary>Data dates (UTC)</summary>
+					<div class="console-date-readings">
+						{#if windowSource.record}<p>Native record</p>{/if}
+						<WindowStatus days={windowSource.days} presets={windowSource.presets}
+							monthsFor={windowSource.monthsFor} busy={windowSource.busy} ready={windowSource.ready}
+							statusLine={windowSource.statusLine ?? null} record={windowSource.record ?? null} />
+						{#if windowSource.publishedWindow}
+							{@const span = windowSource.publishedWindow}
+							<p data-private-window data-range-from={span.start} data-range-to={span.end}>
+								Published days: {shortDate(span.start)}{span.start === span.end ? '' : ` - ${shortDate(span.end)}`} UTC.
+							</p>
+						{/if}
+						{#if completeness.kind !== 'unread'}
+							{@const finished = new Date(completeness.finished).toISOString()}
+							<p>Last console update: <time datetime={finished}>{shortDate(finished.slice(0, 10))}, {clockUtc(finished)}</time>.</p>
+						{/if}
+					</div>
+				</details>
 			</div>
 		{/if}
 		</div>
 		{#if !workbench}
-			<div class="console-evidence">
-				{#if completeness !== null}
+			{#if completeness.kind !== 'complete'}
+				<div class="console-evidence">
 					<p class="console-completeness" data-console-completeness={completeness.kind}>{completenessSentence(completeness)}</p>
-				{/if}
-				{#if route.worst}<p class="console-completeness" data-console-route-issue>{route.worst}</p>{/if}
-			</div>
-			<ConsoleBand band={data.band} />
+				</div>
+			{/if}
 			<noscript><p class="console-noscript" data-console-noscript>Published-record charts need JavaScript. Their headings and reserved frames remain below.</p></noscript>
 		{/if}
 		<div class="console-route-content">{@render children()}</div>
@@ -145,6 +159,14 @@
 	}
 	[data-console-chrome='workbench'] .console-route-head { grid-template-columns: minmax(0, 1fr) auto; }
 	.console-window-evidence { margin-block-start: var(--console-control-padding-block); }
+	.console-data-dates {
+		color: var(--color-text-secondary);
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
+	}
+	.console-data-dates summary { cursor: pointer; width: fit-content; }
+	.console-date-readings { display: grid; gap: var(--console-control-padding-block); padding-block-start: var(--console-control-gap); }
+	.console-date-readings p { margin: 0; }
 	.console-route-head {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto auto;
