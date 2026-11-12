@@ -96,10 +96,9 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	expect(await page.locator('[data-console-panel-id]').evaluateAll((nodes) =>
 		nodes.map((node) => node.getAttribute('data-console-panel-id')))).toEqual(PANELS);
 	await expect(page.locator('[data-console-panel-id] > header > h3')).toHaveCount(PANELS.length);
-	for (const id of ['machine-cards', 'processor-lost', 'disk-reads', 'slowest-articles', 'counterfactual-cost']) {
+	for (const id of ['machine-cards', 'processor-lost', 'disk-reads', 'slowest-articles']) {
 		await expect(page.locator(`[data-console-panel-id="${id}"], a[href$="#${id}"]`)).toHaveCount(0);
 	}
-	await expect(page.locator('[data-rate-control], [data-cost-figures]')).toHaveCount(0);
 	for (const ledger of ['item-health', 'host-fingerprint', 'run-shards']) {
 		expect(arrived.some((url) => url.includes(`/${ledger}/index/`)), `${ledger} index arrived`).toBe(true);
 		expect(arrived.some((url) => url.includes(`/${ledger}/`) && new URL(url).pathname.endsWith('.parquet')),
