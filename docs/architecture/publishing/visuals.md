@@ -223,14 +223,15 @@ expensive.
 | What the gate changes about the summarize-and-plan call | Before | Gated |
 | --- | --- | --- |
 | The decoder shape | `{summary, visual}` | the summary draft alone |
-| The output budget | 4,213 tokens | 371 tokens |
-| The trailing user turn | 2,555 characters | 961 characters |
+| The output budget | 3,397 tokens | 371 tokens |
+| The trailing user turn | finalized evidence and continuation | continuation only |
 | The system turn, the article, the label call's reply | unchanged | unchanged |
 
 Both budgets are derived from the reply shape's own bounds by the same arithmetic rather than one
 being the other minus the plan's - two ways of computing one quantity disagree the first time a
-bound moves, and the one that is wrong is the one nobody reads. The saving is 3,842 tokens off the
-ceiling, which is 91 percent of it.
+bound moves, and the one that is wrong is the one nobody reads. Suppression removes
+3,026 tokens from the 3,397-token ceiling, about 89 percent. The summary allowance
+is unchanged.
 
 **A ceiling is not a measurement of seconds, so here is one.** The "21 measured seconds" this page
 used to quote was a saving for skipping a whole call, which cannot happen, and that figure is

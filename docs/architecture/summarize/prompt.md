@@ -93,12 +93,11 @@ If extraction read only part of the article, state that limitation on the item. 
 
 Use grammar-constrained decoding derived from the declared reply model. Refuse unknown keys and validate the result after decoding. A well-shaped object still needs content checks.
 
-The label request narrows the native reply schema to this article's printed
-candidate and sentence addresses. Time references choose only printed dates or
-the native empty string. Empty candidate pools permit only an empty label list;
-no selection is mandatory. The native reply schema and historical parser stay
-unchanged, and the output budget still uses the widest native shape rather
-than the narrower request.
+The label request narrows its reply schema to printed quantity and sentence
+addresses. Date rows remain source evidence, but receive no first-pass quantity
+judgments. Empty quantity pools permit only an empty label list; no selection
+is mandatory. Output budgets use the widest current reply shape rather than
+the narrower request.
 
 ## The second call writes this summary, and the article is read once
 
@@ -129,8 +128,8 @@ native vocabulary for compatibility, not as new production requests or future
 delivery promises.
 
 The shared system turn appends a compact guide derived from the native role
-vocabulary and configured evidence floors. It illustrates supported numeric
-charts and valid declines without offering retired forms. The
+vocabulary and configured evidence floors, without repeating the prompt's
+chart and decline instructions or offering retired forms. The
 [visual rule](../../concepts/digest.md#the-visual-rule) does not
 depend on unfinished article classification or require a fact absent from the
 summary. Numeric density alone does not establish a useful comparison.
@@ -139,15 +138,24 @@ An input oracle proves that finalized ids are visible and constrain references.
 Replaying an authored valid plan proves parsing and compilation, not that a
 real model will choose a useful visual.
 
-The current label reply contains only `labels`, `proposed`, `entity_mentions`
-and `place_mentions`. Claims, quotes, keyphrases and lede addresses have no
-current producer or consumer. A strict read-only legacy validator checks all
-four retired fields together, including their required nested structure,
-list/string bounds and closed keys, before discarding them. The continuation
-replays the original first reply only after that validation succeeds. Removing
-unused output must not turn malformed old evidence into an accepted reply;
-unrelated unknown keys still fail. Capture envelopes and historical raw bytes
-stay unchanged.
+The current label reply contains `labels`, `proposed` and `named_mentions`.
+Quantity labels contain only `element_id`, `measure` and `entity`. A named group
+contains exact mention citations, its `entity` or `place` kind and a source-given
+name. The single collection preserves the former collections' combined capacity.
+Claims, quotes, keyphrases and lede addresses have no current producer.
+
+Historical replies must pass their original closed shape and bounds before
+adaptation. The older observation fields are validated together before being
+discarded; removed quantity/group judgments are validated too. The continuation
+replays the original raw reply only after validation. Unknown keys and malformed
+old evidence still fail. Capture envelopes and historical raw bytes are unchanged.
+
+The planner no longer repeats `element_ids`. Code collects the references in
+encodings, labels, annotations and the declared whole into the native saved
+plan's existing bounded field. Title, caption and diagnostic numbers must be
+supported by that selected evidence, not an additional unplotted fact.
+Planner confidence remains model-authored and unchanged. Historical raw plans
+validate their original reference list; the persisted plan shape is unchanged.
 
 ### Every instruction sits in front of the article
 
@@ -173,11 +181,9 @@ Distinct people remain distinct and geographic markets belong in place mentions.
 [element contract](../extraction/elements.md#the-two-kinds-only-a-model-can-find)
 owns those meanings and anchoring rules.
 
-The current request grammar binds label ids to printed candidates, time ids to
-printed DATE elements or the native empty string, and citation addresses to
-printed sentences. Only code-minted addresses enter the grammar, never source
-words. Empty pools keep empty selections. The removed range producer has no
-request specialization or context allowance. Legal references do not establish
+The current grammar binds quantity labels to printed quantity ids and citations
+to printed sentences. Only code-minted addresses enter the grammar, never source
+words. Empty pools keep empty selections. Legal references do not establish
 useful numeric generation.
 
 `measure_two_calls.article_from_user_turn` recognizes the explicit current
@@ -187,7 +193,7 @@ retrying them as historical text. Historical displays keep literal escapes and
 continuation newlines; their stripped sentence separators cannot recover the
 original offsets. Use the retained native Article for that provenance.
 Historical raw label replies and capture fields stay unchanged; their
-compatibility validation does not widen the current four-field decoder.
+compatibility validation does not widen the current three-field decoder.
 
 ### What is in the prompt bytes, and who wrote each part
 
@@ -311,6 +317,19 @@ Changing prompt wording or policy changes this identity. The digest makes the ch
 Prompt changes affect new work, not frozen published days. Do not rebuild the archive as an incidental part of a prompt edit. An evaluation harness must exercise the same request construction and transport as the production path it claims to assess.
 
 ## Design rationale
+
+Reduce labeling to chart evidence, not a general article inventory. Quantity
+meaning and known-subject links support chart planning and relationship checks.
+Repeated salience, attribution, hedge, dimension and time judgments have no
+independent downstream check; chart framing must still preserve material
+qualifications, and temporal charts still cite source DATE elements.
+
+The model sees source ids, kinds, excerpts, parsed values, units and sentence
+addresses, plus retained measure/subject judgments. Character offsets, extractor
+bookkeeping and unused historical judgments stay out of this projection.
+Persisted spans, source hashes and re-slicing checks remain intact: they validate
+the evidence rather than merely help debugging. Summary instructions and the
+shared-prefix continuation are unchanged.
 
 A stable prefix reduces repeated reading without treating prompt wording as a control. Per-band requests fit different source lengths while a separate acceptance policy preserves useful replies. Summary-first decoding protects the reader's primary content when visual planning cannot finish. Model-specific transport declarations keep shared editorial instructions testable across models.
 

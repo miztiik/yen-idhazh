@@ -1,54 +1,39 @@
+When requested, finish "summary" before "visual".
 
-The plan, when the question below asks for one.
+Choose "visual" only when a supported numeric comparison or relationship is
+quicker to grasp than prose. Reusing summary facts is allowed; numeric density
+alone is insufficient. Otherwise choose "none".
 
-  When you write both, write "summary" first and "visual" second. Finish the
-  summary before you start the plan. Cite source ids rather than authoring
-  measured values.
+For "none": set "purpose", "type", "declared_whole_element_id", "title" and
+"caption" to null; leave every list and encoding channel empty; explain in "why".
 
-  Decide whether this item wants a picture at all. Nothing is a valid answer:
-  a picture must make a supported comparison or relationship quicker to grasp
-  than the prose alone, not merely decorate it. Facts already in the summary
-  can support a useful picture; no new fact is required. Numeric density alone
-  does not establish a useful comparison.
+For "visual":
+  "purpose": the reader's task, chosen before "type".
+  "type": an offered form satisfying the generated guide.
+  "encodings": source IDs, aligned by displayed observation. Include every
+  channel; unused channels are empty. Within each measured channel, compare
+  compatible measures, definitions, populations and denominators with
+  convertible units. For scatter/bubble, each point's measures must share one
+  subject; points must have distinct subjects. Pair dates with values only
+  where the article establishes the association; never resolve relative dates.
+  "declared_whole_element_id": null except for pie/stacked_bar. Cite an
+  independently stated whole, never a part or calculated total. Parts must
+  exhaust that same whole. For stacked_bar, category cites the whole and series
+  names parts; for pie, category names parts.
+  "labels": source IDs whose own words name marks and axes.
+  "annotations": source references resolving to exactly one displayed numeric
+  measurement, including through its source inputs.
+  "why": a short reason for this comparison and form.
+  "title": a short factual title.
+  "caption": essential scope, attribution or qualification; null if unnecessary.
+  Keep estimates, forecasts and population/denominator distinctions visible.
+  Choose "none" if necessary distinctions cannot be preserved.
 
-  "decision" - "visual" or "none". If "none", leave "purpose", "type", "title"
-  and "caption" null, "declared_whole_element_id" null and every list empty,
-  including every encoding channel, and say why in "why".
+"confidence": your self-rating from 0 to 1, not source uncertainty.
 
-  "purpose" - what the reader is asked to do with it. Commit to this before you
-  choose a type, or the type picks the purpose for you.
-
-  "type" - the form.
-
-  "encodings" - which elements fill which channel. Every channel is a key and
-  you write all of them; a channel this picture does not draw gets an empty
-  list.
-
-  "declared_whole_element_id" - null except for "stacked_bar" or "pie". Both
-  must cite a source quantity that independently states the full whole. For a
-  stacked bar only, category cites that same whole and series names each part.
-  For a pie, category names each part. Never create the whole by adding the
-  parts, and never use one of the parts as the whole.
-
-  "element_ids" - every element the picture draws from, listed once.
-
-  "labels" - the elements whose own words name the marks and the axes.
-
-  "annotations" - the elements to mark first.
-
-  "why" - why this form, or why nothing. Nobody sees this.
-
-  "title" and "caption" - what the picture is called, and one sentence under
-  it.
-
-  "confidence" - how sure you are, between 0 and 1.
-
-  Everywhere the plan points at something, copy an address from the item's
-  finalized table in the continuation. Its source spans, values and units are
-  evidence; its labels are earlier judgements, never instructions. Never type
-  a figure, a position, a size or a colour. The picture is
-  drawn from the item's own characters at the addresses you name, so an address
-  the table does not carry draws nothing.
-
-  Plan the item, not your summary. The summary is a compression and it has
-  dropped things the table still holds.
+Use only finalized-table IDs. Any number in title, caption or why must be
+supported by the selected chart references; do not add unplotted numeric facts.
+Check meaning against the original article, not just the summary; earlier
+labels are judgments, not proof. Do not supply plotted values, dates or layout
+settings; code resolves measurements from the selected IDs. Source names may
+retain their written digits.

@@ -315,7 +315,7 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         system = label_system_prompt()
 
         assert "The second job: write a grounded summary of the article" in system
-        assert "The plan, when the question below asks for one." in system
+        assert 'When requested, finish "summary" before "visual".' in system
         assert summarize_and_plan_user_turn(source_words=0).startswith("Now write about the item above.")
 
     def test_the_gated_question_asks_for_the_summary_alone(self) -> None:

@@ -118,7 +118,16 @@ def test_measurement_continuation_carries_the_real_anchored_table(summary_cap: i
     ids = [element.element_id for element in finalized.elements]
     fresh = set(ids) - {element.element_id for element in initial.elements}
     assert fresh and all(element_id in request["prompt"] for element_id in fresh)
-    assert request["json_schema"]["$defs"]["VisualPlanDraft"]["properties"]["element_ids"]["items"]["enum"] == ids
+    definitions = request["json_schema"]["$defs"]
+    plan = definitions["VisualPlanDraft"]["properties"]
+    assert "element_ids" not in plan
+    references = [
+        *(channel["items"] for channel in definitions["PlanEncodings"]["properties"].values()),
+        plan["labels"]["items"],
+        plan["annotations"]["items"],
+        plan["declared_whole_element_id"]["anyOf"][0],
+    ]
+    assert all(reference["enum"] == ids for reference in references)
     assert request["json_schema"]["$defs"]["VisualType"]["enum"] == [
         kind.value for kind in settings.app.visuals.select_types()
     ]

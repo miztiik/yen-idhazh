@@ -59,17 +59,24 @@ from functools import lru_cache
 from math import ceil
 from pathlib import Path
 from string import Template
-from typing import Annotated, Any, Final, Literal, NamedTuple, get_args
+from typing import Annotated, Any, Final, Literal, NamedTuple
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model, model_validator
 
 from idhazh import summarize
-from idhazh.classify.label_request import bind_label_reference_choices
+from idhazh.classify.label_request import (
+    SENTENCE_ID_PREFIX,
+    bind_label_reference_choices,
+)
+from idhazh.classify.label_request import (
+    sentence_id as sentence_id,
+)
 from idhazh.classify.plan_visual_request import (
     bind_reference_choices,
     planning_menu,
     type_role_guide,
 )
+from idhazh.classify.read_label_reply import read_label_reply
 from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Model as ContractModel
@@ -120,7 +127,7 @@ _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 #: judgement and re-label under a newer one without guessing. Bump it when the
 #: label vocabulary or the meaning of a band changes, not when the prompt is
 #: reworded - a reworded prompt still assigns the same fields.
-LABEL_PASS_VERSION: Final = "2026-11-11"
+LABEL_PASS_VERSION: Final = "2026-11-12"
 
 #: Structural bounds on a decoder shape, in the same place and for the same
 #: reason `VisualDraft` carries its own: a `maxItems` is a hard grammar stop, so
@@ -139,16 +146,13 @@ LABEL_PASS_VERSION: Final = "2026-11-11"
 #: `label_budget_tokens` below - so moving one of these is moving the budget.
 LABELS_MAX: Final = 16
 PROPOSED_MAX: Final = 4
-#: Named things per list, and mentions per named thing. A news item names a
-#: handful of organisations and says each one a few times; a reply that wants
-#: more of either is listing the article rather than pointing into it, and every
-#: extra entry is output tokens, which is the expensive direction.
-NAMED_MAX: Final = 6
+#: One typed collection retains the combined capacity of the former two lists.
+NAMED_MAX: Final = 12
 MENTIONS_MAX: Final = 4
 #: The most elements one reply can add to a table by pointing at the article:
-#: two mention lists filled to their bound. It is arithmetic rather than a knob, so it
+#: the mention list filled to its bound. It is arithmetic rather than a knob, so it
 #: cannot drift away from what the grammar can emit.
-ANCHORED_MAX: Final = 2 * NAMED_MAX * MENTIONS_MAX
+ANCHORED_MAX: Final = NAMED_MAX * MENTIONS_MAX
 #: An address is `quantity-118-123` or `s7`. Nothing legitimate is longer, and a
 #: reply that pads one has written a string no lookup will find.
 ADDRESS_MAX: Final = 48
@@ -157,55 +161,22 @@ ADDRESS_MAX: Final = 48
 #: copying the article rather than pointing into it.
 PHRASE_MAX: Final = 60
 
-#: How much of the story one fact is, in three words rather than as a number.
-#: The model may not type a figure (Guardrail #11 and the module docstring), so it
-#: picks a band and code converts. The scores are the midpoints of three equal
-#: bands over the 0..1 `Element.salience` holds - written as fractions so nobody
-#: reads 0.83 as a tuned value. Nothing tunes them: they are what the three
-#: words mean.
-Salience = Literal["primary", "supporting", "background"]
-SALIENCE_SCORE: Final[dict[str, float]] = {
-    "primary": 5 / 6,
-    "supporting": 1 / 2,
-    "background": 1 / 6,
-}
-
-#: Who the item said it, as a type rather than as a sentence. A closed list is
-#: what makes the summarizer's attribution rule mechanical instead of
-#: aspirational, and it shares its vocabulary with nothing else - a free
-#: sentence here would be model-authored text with an element's authority.
-Attribution = Literal["named", "self_reported", "anonymous", "unattributed"]
-#: The reading that assigns nothing. The article stated it in its own voice, so
-#: there is no attribution to record and `Element.attribution` stays unset.
-UNATTRIBUTED: Final = "unattributed"
-
 Address = Annotated[str, StringConstraints(min_length=1, max_length=ADDRESS_MAX)]
 Phrase = Annotated[str, StringConstraints(min_length=1, max_length=PHRASE_MAX)]
 
-_SENTENCE_PREFIX: Final = "s"
 #: These identify the prompt's text encoding, not a configurable output format.
 SENTENCE_PRESENTATION: Final = "The item, one JSON string per addressed sentence:"
 #: JSON already escapes ASCII controls; these also split physical lines.
 _SENTENCE_LINE_CONTROLS: Final = str.maketrans(
     {"\x85": r"\u0085", "\u2028": r"\u2028", "\u2029": r"\u2029"}
 )
-_SLUG_SEPARATORS: Final = re.compile(r"[^a-z0-9]+")
-
-if set(SALIENCE_SCORE) != set(get_args(Salience)):
-    raise TypeError(
-        "every salience band converts to a score, and every score is a band - "
-        f"bands {get_args(Salience)}, scores {tuple(SALIENCE_SCORE)}"
-    )
 
 
 class Citation(BaseModel):
-    """One sentence's address, and the words inside it the model means.
+    """A printed sentence address and exact source words.
 
-    The one shape whose words are *searched for* rather than kept: code reads
-    only the named sentence, demands exactly one hit, and cuts the article's own
-    bytes at it. Everything else in the reply that carries words carries them as
-    a judgement about a fact code already cut, and none of it becomes a span. A
-    surface that does not resolve drops that citation and nothing else.
+    Code requires one match inside that sentence and computes the source span.
+    A missing or ambiguous match drops only that citation.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -215,108 +186,48 @@ class Citation(BaseModel):
 
 
 class ElementLabel(BaseModel):
-    """What one candidate the code already cut MEANS.
-
-    **Field order is decode order and it is load-bearing here twice.**
-    `element_id` is first, so every field after it is written about a fact
-    rather than about the article in general. `salience` is last, so it is an
-    observation of what the model has just described rather than a prior it then
-    rationalises - this codebase has measured that failure once already
-    (`VisualDraft`).
-
-    **Every field is required, including the ones that are usually empty.** A
-    field with a default is absent from the schema's `required` list, and a
-    constrained decoder emits exactly what `required` forces.
-    """
+    """The meaning and named subject of one source quantity, decoded after its address."""
 
     model_config = ConfigDict(extra="forbid")
 
     element_id: Address
     measure: str = Field(max_length=PHRASE_MAX)
-    dimension: str = Field(max_length=PHRASE_MAX)
     entity: str = Field(max_length=PHRASE_MAX)
-    time_element_id: str = Field(max_length=ADDRESS_MAX)
-    attribution: Attribution
-    hedge: bool
-    salience: Salience
 
 
 class NamedMentions(BaseModel):
-    """One named thing, and every place the item names it.
+    """One chart-relevant named thing and its source mentions.
 
-    **The mentions are the thing; the name only groups them.** A page draws a
-    mention, because a mention is characters the item wrote at an offset code
-    computed. `name` is the fullest form the item gave, it is a key rather than
-    a label, and it is never searched for - an item writes "Vestas Wind Systems
-    A/S" once and "Vestas" four times, and the fullest form may appear nowhere
-    verbatim. Searching for it would confuse a location with a label.
-
-    **Field order is decode order, and the anchors come first.** `mentions` is
-    written before `name` and `salience` for the reason `ElementLabel` puts
-    `element_id` first: a judgement written before the thing it judges is a
-    prior the rest of the object then rationalises.
-
-    `name` reaches no reader. It is matched against the slugs this project
-    already tracks, and an unknown one groups nothing rather than minting a
-    group - the ledger that resolves the two is separate work.
+    Mentions anchor before the kind and group name are interpreted. Only source
+    spans supply display words. The name resolves known aliases, never supplies
+    a display label or mints an identity.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     mentions: list[Citation] = Field(max_length=MENTIONS_MAX)
+    kind: Literal["entity", "place"]
     name: Phrase
-    salience: Salience
-
-
-class _LegacySentenceRange(BaseModel):
-    """Validate a saved pre-retirement range without producing or anchoring one."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    sentence_start_id: Address
-    sentence_end_id: Address
-    speaker: str = Field(max_length=PHRASE_MAX)
-    attribution: Attribution
-    hedge: bool
-
-
-class _LegacyLabelObservations(BaseModel):
-    """Read-only bounds of the four observations retired from saved label replies.
-
-    All four were required together. Validate them before discarding them:
-    the continuation replays the original raw reply, not this narrowed model.
-    The list limits are the fixed historical format, not current decoder knobs.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    quotes: list[_LegacySentenceRange] = Field(max_length=8)
-    claims: list[_LegacySentenceRange] = Field(max_length=8)
-    keyphrases: list[Phrase] = Field(max_length=8)
-    lede_sentence_ids: list[Address] = Field(max_length=2)
 
 
 class LabelReply(BaseModel):
     """What the decoder is constrained to emit on the label call.
 
-    Closed to unknown keys, and **no field of it accepts a number**. Not a
-    value, not a unit, not a count, not a span and not a character offset: every
-    position in this object is an address printed for the model by code, so a
-    figure the article does not carry is unreachable by grammar rather than
-    caught by a check downstream. `test_visual_planner` asserts that against the
-    generated schema, which is where it can fail if somebody adds an `int`.
+    No numeric JSON field, value, unit, count or character offset is authored.
+    Positions are printed addresses; copied source text may contain digits.
+    Code locates citations and re-reads recovered quantities from the article.
 
     Field order is decode order. What was found is written before what it means:
     the labels come first, then the figure code missed, then the named things.
 
-    **The two mention lists are named for what code takes from them.** A prompt
+    **The mention list is named for what code takes from it.** A prompt
     in this repository may not ask a model to pick a reader-facing tag - a page
     choosing its own steers a control, and `backend/tests/test_tag.py` holds
     every prompt to it. This asks for no tag. It asks where the item names an
     organisation, a person, a product or a location, and code cuts the item's
     own characters at each answer; the group key is matched against slugs code
     already holds and this pass mints none. So the control is untouched and the
-    lists carry the Tier 1 word rather than the Tier 2 one, which is also the
+    list carries the Tier 1 word rather than the Tier 2 one, which is also the
     truer name for them. The ruling is on
     `docs/architecture/extraction/elements.md`.
     """
@@ -325,23 +236,12 @@ class LabelReply(BaseModel):
 
     labels: list[ElementLabel] = Field(max_length=LABELS_MAX)
     proposed: list[Citation] = Field(max_length=PROPOSED_MAX)
-    entity_mentions: list[NamedMentions] = Field(max_length=NAMED_MAX)
-    place_mentions: list[NamedMentions] = Field(max_length=NAMED_MAX)
+    named_mentions: list[NamedMentions] = Field(max_length=NAMED_MAX)
 
     @model_validator(mode="before")
     @classmethod
-    def _without_validated_legacy_observations(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        retired = _LegacyLabelObservations.model_fields.keys() & data.keys()
-        if not retired:
-            return data
-        _LegacyLabelObservations.model_validate({name: data[name] for name in retired})
-        return {
-            name: value
-            for name, value in data.items()
-            if name not in _LegacyLabelObservations.model_fields
-        }
+    def _read_historical_reply(cls, data: Any) -> Any:
+        return read_label_reply(data)
 
 
 def label_schema() -> dict[str, Any]:
@@ -390,7 +290,7 @@ def label_budget_tokens() -> int:
     is reported as a cut, typed, rather than raised as a JSON error several frames
     from the cause (`FailureCode.LABELS_TRUNCATED`).
 
-    The current four-field schema is the only input to that width. Historical
+    The current three-field schema is the only input to that width. Historical
     observations are read-only compatibility and consume no current output or
     context allowance.
     """
@@ -401,7 +301,7 @@ def label_budget_tokens() -> int:
 #: `SUMMARIZE_AND_PLAN_BUDGET_TOKENS` is the precedent and the reason is the same: a
 #: number that only exists inside a function is a number nobody re-derives, and
 #: a bound can then move without anybody seeing what it cost.
-LABEL_BUDGET_TOKENS: Final = 4948
+LABEL_BUDGET_TOKENS: Final = 3823
 
 if label_budget_tokens() != LABEL_BUDGET_TOKENS:
     raise TypeError(
@@ -452,16 +352,11 @@ def label_system_prompt(
     )
 
 
-def sentence_id(index: int) -> str:
-    """One sentence's address. A string, so no field of the reply is an integer."""
-    return f"{_SENTENCE_PREFIX}{index}"
-
-
 def sentence_number(address: str) -> int | None:
     """The sentence an address names, or nothing when it names none."""
-    if not address.startswith(_SENTENCE_PREFIX):
+    if not address.startswith(SENTENCE_ID_PREFIX):
         return None
-    digits = address[len(_SENTENCE_PREFIX) :]
+    digits = address[len(SENTENCE_ID_PREFIX) :]
     return int(digits) if digits.isdigit() else None
 
 
@@ -550,7 +445,7 @@ def label_user_turn(article: Article, table: ElementTable) -> str:
 
 
 def label_request_schema(article: Article, table: ElementTable) -> dict[str, Any]:
-    """Restrict the request to its printed candidate, date and citation addresses."""
+    """Restrict the request to its printed quantity and citation addresses."""
     text = article.text or ""
     schema = label_schema()
     bind_label_reference_choices(
@@ -614,47 +509,24 @@ def parse_label(raw: str) -> LabelReply:
     return LabelReply.model_validate_json(content)
 
 
-def _slug(words: str) -> str | None:
-    """The controlled form of a word the model wrote, or nothing when there is none.
-
-    `Element.dimension` and `Element.entity` are slugs, because two articles'
-    words for one breakdown have to compare as a string or the field groups
-    nothing. Lowercase, one separator, no padding - and a reading that empties
-    is refused rather than written as an empty group.
-    """
-    slug = _SLUG_SEPARATORS.sub("-", words.strip().casefold()).strip("-")
-    return slug or None
-
-
 def _judgements(
     label: ElementLabel,
     *,
-    dates: Mapping[str, str],
     entity_slugs: Mapping[str, str],
     label_source: str,
 ) -> dict[str, Any]:
-    """The Tier 2 cells one label assigns, and none it cannot anchor.
-
-    Each field degrades on its own: a `time_element_id` naming no date drops the
-    time and keeps the measure, because a label is several judgements and one of
-    them being unusable says nothing about the others.
-    """
-    judged: dict[str, Any] = {"salience": SALIENCE_SCORE[label.salience], "hedge": label.hedge}
-    if label.attribution != UNATTRIBUTED:
-        judged["attribution"] = label.attribution
+    """The quantity's stated meaning and a known subject, without unused judgments."""
+    judged: dict[str, Any] = {}
     if measure := label.measure.strip():
         judged["measure"] = measure
-    if (dimension := _slug(label.dimension)) is not None:
-        judged["dimension"] = dimension
     # The model names an entity in the item's words; the slug it groups under is
     # the watchlist's. An unknown name is a name we do not track yet, not a new
     # entity this pass may mint - the alias ledger is a later row's work.
     if (slug := entity_slugs.get(label.entity.strip().casefold())) is not None:
         judged["entity"] = slug
-    if (stated := dates.get(label.time_element_id)) is not None:
-        judged["time"] = stated
-    judged["label_source"] = label_source
-    judged["ledger_version"] = LABEL_PASS_VERSION
+    if judged:
+        judged["label_source"] = label_source
+        judged["ledger_version"] = LABEL_PASS_VERSION
     return judged
 
 
@@ -681,11 +553,8 @@ def apply_labels(
     element is rebuilt through the contract, so a judgement the shape refuses
     fails here rather than at whatever reads the table next.
     """
-    known = {element.element_id for element in table.elements}
-    dates = {
-        element.element_id: element.value
-        for element in table.elements
-        if element.kind is ElementKind.DATE and element.value is not None
+    known = {
+        element.element_id for element in table.elements if element.kind is ElementKind.QUANTITY
     }
     judged: dict[str, dict[str, Any]] = {}
     for label in reply.labels:
@@ -693,7 +562,6 @@ def apply_labels(
             continue
         judged[label.element_id] = _judgements(
             label,
-            dates=dates,
             entity_slugs=entity_slugs or {},
             label_source=label_source,
         )
@@ -825,7 +693,6 @@ def mention_elements(
     text: str,
     groups: Sequence[NamedMentions],
     *,
-    kind: ElementKind,
     label_source: str,
     entity_slugs: Mapping[str, str],
 ) -> list[MentionGroup]:
@@ -852,13 +719,13 @@ def mention_elements(
     grouped: list[MentionGroup] = []
     for group in groups:
         name = group.name.strip()
-        judged: dict[str, Any] = {
-            "salience": SALIENCE_SCORE[group.salience],
-            "label_source": label_source,
-            "ledger_version": LABEL_PASS_VERSION,
-        }
+        judged: dict[str, Any] = {}
         if (slug := entity_slugs.get(name.casefold())) is not None:
-            judged["entity"] = slug
+            judged = {
+                "entity": slug,
+                "label_source": label_source,
+                "ledger_version": LABEL_PASS_VERSION,
+            }
         found: list[Element] = []
         for citation in group.mentions:
             located = _locate(text, spans, citation)
@@ -867,8 +734,8 @@ def mention_elements(
             span_start, span_end = located
             found.append(
                 Element(
-                    element_id=derive_element_id(kind, span_start, span_end),
-                    kind=kind,
+                    element_id=derive_element_id(ElementKind(group.kind), span_start, span_end),
+                    kind=ElementKind(group.kind),
                     span_start=span_start,
                     span_end=span_end,
                     span_excerpt=text[span_start:span_end],
@@ -896,22 +763,9 @@ def model_anchored(
     The groups are returned beside the flat list because a
     drawn label is a property of a group and not of one element.
     """
-    groups = [
-        *mention_elements(
-            text,
-            reply.entity_mentions,
-            kind=ElementKind.ENTITY,
-            label_source=label_source,
-            entity_slugs=entity_slugs,
-        ),
-        *mention_elements(
-            text,
-            reply.place_mentions,
-            kind=ElementKind.PLACE,
-            label_source=label_source,
-            entity_slugs=entity_slugs,
-        ),
-    ]
+    groups = mention_elements(
+        text, reply.named_mentions, label_source=label_source, entity_slugs=entity_slugs
+    )
     pointed = [element for group in groups for element in group.elements]
     return groups, pointed
 
@@ -945,20 +799,11 @@ def anchored(
     and every addition is bounded by the grammar, so the total is still a stated
     bound on work. Nothing is ever evicted here - the merge only adds.
 
-    **`settle` runs before the four model-pointed kinds are added, and it never
-    sees one.** That rule is between the two pattern passes, and it drops any
-    element sharing a character with a higher-precedence one - which is exactly
-    wrong here, because a quote carrying a quantity inside it is the shape these
-    kinds need. So the mentions and the sentence ranges are merged after it, and
-    two of them claiming one address is settled by keeping the first.
-
-    **The labels are applied before them too**, so a label can only reach a
-    candidate whose address the menu actually printed. A label naming a quote's
-    address would otherwise overwrite the judgements that quote's own producer
-    just made.
+    Mentions are added after settling the numeric passes. Two mentions claiming
+    the same kind and span keep the first. Labels apply only to source quantities.
 
     `candidates_found` counts every proposal that read as a figure and every
-    mention and range that anchored, including the ones dropped next. It is one
+    mention that anchored, including the ones dropped next. It is one
     count per pass taken before the rules that remove, which is what keeps it
     able to say the cap bit and by how much.
     """
@@ -1051,16 +896,14 @@ def _plan_half(files: PromptFilesConfig, config_dir: Path, visuals: VisualsConfi
     )
 
 
-@lru_cache(maxsize=1)
-def _plan_draft_model() -> type[BaseModel]:
+@lru_cache(maxsize=2)
+def _plan_draft_model(legacy_references: bool = False) -> type[BaseModel]:
     """The plan as the decoder meets it: `VisualPlan` without the fields code stamps.
 
     Derived from `VisualPlan.model_fields` rather than restated, so a field
     added to the contract appears here on the next import and cannot be
-    forgotten. `version` and `plan_version` are dropped because nothing decodes
-    them - `version` says when the shape last moved and `plan_version` which
-    planning vocabulary the plan was made against, and a model asked for either
-    would be guessing at a fact code already holds.
+    forgotten. Versions and the collected reference set are code-owned.
+    Historical raw replies retain their original bounded reference list.
 
     The contract's own validators are deliberately **not** carried over. This
     shape is the grammar and nothing else; whether a plan that declines also
@@ -1071,19 +914,24 @@ def _plan_draft_model() -> type[BaseModel]:
     fields: dict[str, Any] = {
         name: (info.annotation, info)
         for name, info in VisualPlan.model_fields.items()
-        if name not in CODE_STAMPED_FIELDS
+        if name not in CODE_STAMPED_FIELDS or (legacy_references and name == "element_ids")
     }
     return create_model("VisualPlanDraft", __base__=ContractModel, **fields)
 
 
 @lru_cache(maxsize=16)
-def _summarize_and_plan_model(draft: type[BaseModel]) -> type[BaseModel]:
+def _summarize_and_plan_model(
+    draft: type[BaseModel], legacy_references: bool = False
+) -> type[BaseModel]:
     """Keyed on the band-narrowed summary shape, which is a hashable type."""
     return create_model(
         "SummarizeAndPlanReply",
         __base__=ContractModel,
         summary=(draft, Field(description="The reader's summary. Decoded first, and whole.")),
-        visual=(_plan_draft_model(), Field(description="The plan for one picture, or none.")),
+        visual=(
+            _plan_draft_model(legacy_references),
+            Field(description="The plan for one picture, or none."),
+        ),
     )
 
 
@@ -1093,6 +941,7 @@ def summarize_and_plan_model(
     source_words: int | None = None,
     brief: bool = False,
     plan: bool = True,
+    legacy_references: bool = False,
 ) -> type[BaseModel]:
     """What the decoder is constrained to emit on the summarize-and-plan call.
 
@@ -1123,7 +972,7 @@ def summarize_and_plan_model(
     draft = summarize.draft_model(prompt_config, source_words=source_words, brief=brief)
     if not plan:
         return draft
-    return _summarize_and_plan_model(draft)
+    return _summarize_and_plan_model(draft, legacy_references)
 
 
 def summarize_and_plan_schema(
@@ -1228,14 +1077,14 @@ def summarize_and_plan_budget_tokens(
     the brake and the recovery is the seatbelt. A budget large enough to be an
     unbreakable ceiling would leave no window for the article it is summarising.
 
-    The committed bounds give a 4,213-token budget for the full reply and 371
+    The committed bounds give a 3,397-token budget for the full reply and 371
     tokens for the summary-only reply. The shape and both budgets are derived
     below; the measure is the current computed value, not a historical reading.
 
     **The suppressed budget is the same arithmetic over the narrower shape**,
     not that number minus the plan's. Subtracting would be a second way of
     computing one quantity, and the two disagree the first time a bound moves.
-    It loses the plan's slack with the plan: today the picture's 3,820
+    It loses the plan's slack with the plan: today the picture's 3,004
     structural characters sit behind the summary and absorb a prose overrun the
     prose half's sizing did not predict, and with them gone a cut can land
     inside the summary, where `recovered_completion` has nothing to recover.
@@ -1251,10 +1100,10 @@ def summarize_and_plan_budget_tokens(
 #: `visual.WORST_CASE_REPLY_CHARACTERS` is the precedent and the reason is the
 #: same: a number that only exists inside a function is a number nobody
 #: re-derives, and a bound can then move without anybody seeing what it cost.
-SUMMARIZE_AND_PLAN_BUDGET_TOKENS: Final = 4213
+SUMMARIZE_AND_PLAN_BUDGET_TOKENS: Final = 3397
 #: The same arithmetic with the plan off the grammar. The gap between the two is
 #: what the reachability gate saves per item, and it is a decode rather than a
-#: call (O43): 3,842 tokens off a 4,213-token ceiling, which is 91 percent of it.
+#: call: 3,026 tokens off a 3,397-token ceiling.
 #: A ceiling is not a measurement of seconds - an ordinary reply's plan half was
 #: measured at 176 tokens of 327, which is 29.3 s at the summarizer's decode
 #: rate. The working is in `docs/architecture/publishing/visuals.md`.
@@ -1429,12 +1278,23 @@ def parse_summarize_and_plan(
     draft_shape = summarize.draft_model(prompt_config, source_words=source_words, brief=brief)
     if not plan:
         return SummarizeAndPlanReply(summary=draft_shape.model_validate_json(content), visual=None)
-    body = (
-        summarize_and_plan_model(prompt_config, source_words=source_words, brief=brief)
-        .model_validate_json(content)
-        .model_dump(mode="json")
+    data = json.loads(content)
+    legacy_references = (
+        isinstance(data, dict)
+        and isinstance(data.get("visual"), dict)
+        and "element_ids" in data["visual"]
     )
+    body = summarize_and_plan_model(
+        prompt_config, source_words=source_words, brief=brief,
+        legacy_references=legacy_references,
+    ).model_validate(data).model_dump(mode="json")
     draft = draft_shape.model_validate(body["summary"])
+    if not legacy_references:
+        visual = body["visual"]
+        groups = [*visual["encodings"].values(), visual["labels"], visual["annotations"]]
+        if visual["declared_whole_element_id"] is not None:
+            groups.append([visual["declared_whole_element_id"]])
+        visual["element_ids"] = list(dict.fromkeys(cited for ids in groups for cited in ids))
     plan_made = VisualPlan.model_validate(
         body["visual"] | {"plan_version": PLAN_VOCABULARY_VERSION}
     )
