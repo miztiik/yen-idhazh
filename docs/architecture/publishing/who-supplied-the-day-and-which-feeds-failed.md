@@ -128,9 +128,8 @@ panel still includes the watchlist bonus, which answers a different question
 and does not replace those counts. Watchlist configuration, producer fields,
 historical rows and private-reader column compatibility remain unchanged.
 
-Naveen authorized the known shared test integration on 2026-10-11. The eight
-feed cases, their constants and `feedHeadline` moved unchanged into the route's
-feed spec. They run against the actual scriptless feed-only drawing, retaining
+The eight feed cases, their constants and `feedHeadline` moved unchanged into
+the route's feed spec. They run against the actual scriptless feed-only drawing, retaining
 the feed partition, cap equation, last-result and independent fixture assertions.
 A clean feed with a failed article belongs in the combined list, and its common
 axis can end before the feed record. The combined list is checked separately;

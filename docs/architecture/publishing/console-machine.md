@@ -4,7 +4,8 @@
 
 `/console/machine/` asks what machine the work actually got, whether its two
 clocks agree, and how much resource headroom that work left.
-[console.md](console.md) owns the standing band and shared window;
+[The shared shell](what-sits-above-every-console-route.md) owns navigation,
+the route title/window and on-demand UTC date metadata;
 [console-charts.md](console-charts.md) owns chart frames and readouts.
 [The machine drawing rules](../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md)
 own what may not be pooled.
@@ -12,8 +13,11 @@ own what may not be pooled.
 ## The publication boundary
 
 The prerendered page carries configuration and words only. Its route load returns
-`machineConfig`; the shared layout supplies the standing band and settings-change
-words. With scripts off, all ten titled panels remain, each with an empty
+`machineConfig`; the shared layout supplies navigation, the route title/window
+and the closed `Data dates (UTC)` disclosure. That metadata keeps native record
+reach and the last console update distinct. The shared payload retains
+settings-change metadata for the dated panel rules. With scripts off, all ten
+titled panels remain, each with an empty
 reserved axis frame. No run, host, article, cost or refusal is embedded in HTML
 or route page data.
 
@@ -27,10 +31,13 @@ full-identity palette slots and name qualifiers, so narrowing a window cannot
 recolour or rename a machine. Identity is fingerprint version plus digest;
 name-only evidence and missing identity remain separate.
 
-`RouteStatus` owns one delayed shimmer and one reserved standing sentence.
-Loading is not an answer. Quiet says `Nothing recorded.`, missing says
+`RouteStatus` owns one delayed shimmer and reserved route-read status, not a
+global metric or verdict band. Successful Hardware reads retain their measured
+run count; a healthy shared completion adds no standing paragraph. Loading is
+not an answer. Reserved panel frames keep their explicit states: quiet says
+`Nothing recorded.`, missing says
 `Not published yet.`, and an unsuccessful fetch says `Did not arrive.`.
-The standing retry re-asks only unsuccessful questions and keeps successful reads.
+The route retry re-asks only unsuccessful questions and keeps successful reads.
 An incompatible index remains unavailable until reload, as the native door requires.
 Changing the window cannot allow a late answer from the old request to replace
 the new one. Redraws and resizes reuse query rows.

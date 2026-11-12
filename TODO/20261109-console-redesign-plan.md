@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-11-12
 **Level**: 5 - resolve design gates before implementation.
-**Status**: Rows 1-7 and Rows 8a-8d are complete. Row 8e permanently removes M8/M9. N1/N2/N4/N5 are selected for separate follow-up; their mounts remain unchanged in this increment. Only H14's anomaly/baseline definition remains unresolved in Row 8.
+**Status**: Rows 1-7 and Rows 8a-8d are complete. Row 8e permanently removes M8/M9. N1/N2/N4/N5 are selected for separate follow-up; their mounts remain unchanged in this increment. H14's nullable-flag design is complete and queued after those four moves, not implemented here.
 
 ## 0. Operating contract
 
@@ -45,7 +45,7 @@ Table C
 | C5 | 5 | Correct retained chart readings and evidence windows | 4 | E | DONE | `redesigned-system` | - | App session `1981e1da-00bf-456b-a4db-13554ac3fb87`; branch `chart-readings-and-windows` |
 | C6 | 6 | Restore collection needed by retained hardware diagnostics | 4 | F | DONE | `animated-fiesta` | - | App session `7e6961ce-76c2-4e78-ad8c-f4991bad6ce5`; branch `restore-hardware-telemetry` |
 | C7 | 7 | Make retained explorer answers directly reachable and drawable | 1 | G | DONE | `ubiquitous-doodle` | - | App session `735f58fd-23bf-4189-9efb-d08402988c46`; branch `explorer-reliability` |
-| C8 | 8 | Deliver selected cuts and page moves; settle token anomaly rules | 1 | H | IN-FLIGHT | - | - | M8/M9 are implemented in Row 8e; N1/N2/N4/N5 are selected for separate delivery. Only H14's anomaly/baseline definition is unresolved. |
+| C8 | 8 | Deliver selected cuts, page moves and the queued token flag | 1 | H | IN-FLIGHT | - | - | M8/M9 are implemented in Row 8e; N1/N2/N4/N5 are selected for separate delivery. H14's design is complete and queued after those moves. |
 | C9 | 8a | Simplify selected Pipelines visual diagnostics | 1, 5 | I | DONE | `psychic-goggles` | - | App session `3932eb6c-014c-40e4-9e51-5617ff2c30f0`; branch `pipelines-visual-diagnostics` |
 | C10 | 8b | Remove the Pipelines written-type diagnostic | 8a | J | DONE | `legendary-garbanzo` | - | App session `da0bfe17-ef48-4e8f-93d2-7c92c1dd13ce`; branch `remove-written-type-diagnostic` |
 | C11 | 8c | Remove the Summaries model-change comparison | 8b | K | DONE | `jubilant-happiness` | - | App session `705cdced-00f1-4c51-bbe0-ae3c6079063b`; branch `remove-model-change-comparison` |
@@ -191,10 +191,10 @@ Table L
 | --- | --- | --- | --- |
 | L1 | Full visual replacement | Row 3 uses the complete console-only style family below: palette, type, rail, controls, status, panels and drawings. No reader recoloring. | Defaulted additive appearance family; native validation precedes CSS production. Missing blocks/leaves use role defaults, arrays replace whole, and only the chart dash accepts null. No dependency on L3 or L6. |
 | L2 | Closed-day eligibility/cadence | Keep `compact_after_days = 1` for item-health, summary-quality-evals, host-fingerprint and run-shards; retain validator >=1, cadence and retention. | RESOLVED: the extra whole-day wait remains. Row 2 diagnoses publication only; no freshness gain is assumed. |
-| L3 | Permanent cuts and page moves | Row 4 removes G4. Row 8a removes F11/F12/F15 and retains F13 as daily lines; Row 8b removes F14; Row 8c removes G11/M6. Row 8d retains/refines H6/M7, removes H2/H3/H4 and moves H7/N3 once to Pipelines. Row 8e removes M8/M9. N1/N2/N4/N5 are selected for separate follow-up. | Row 8e changes no retained panel's route. Only H14's anomaly/baseline definition remains unresolved. No hidden charts, replacement disclosures or query-contract schema. |
+| L3 | Permanent cuts and page moves | Row 4 removes G4. Row 8a removes F11/F12/F15 and retains F13 as daily lines; Row 8b removes F14; Row 8c removes G11/M6. Row 8d retains/refines H6/M7, removes H2/H3/H4 and moves H7/N3 once to Pipelines. Row 8e removes M8/M9. N1/N2/N4/N5 are selected for separate follow-up. | Row 8e changes no retained panel's route. The four moves and then H14's settled flag remain separate deliveries. No hidden charts, replacement disclosures or query-contract schema. |
 | L4 | Automatic explorer chart choice | Count valid readings through existing role/shape validation and floors; a small named grouped result can rank instead of selecting an undrawable scatter. | Row 7 construction settled; preserve manual choices, typed-date refusals and reporting floors. Independent of L1/L3/L6. |
 | L5 | SQL aggregation | Keep existing named column/date queries and reducers for these changes. No new aggregate API is required. | RESOLVED: placement, units, window labels and publication diagnosis do not require a query-contract migration. No transfer-saving claim. |
-| L6 | Hardware run read/write comparison | Compact item-health, settled by UTC date/run/item, supplies two per-run lines. Run total sums paired finite nonnegative input/output; Median per article takes each side's actual median over that identical cohort. Default totals; input includes cached prompts and recorded model calls. | Run-aware geometry, numeric run order, distinct same-day positions and known unmeasured gaps; no daily roll-up, fake timestamps or refetch on metric switch. Actual-run pointer/tap/keyboard readout includes full ID, UTC date and measured/recorded articles. Anomaly/baseline rules stay unresolved in Row 8. |
+| L6 | Hardware run read/write comparison | Compact item-health, settled by UTC date/run/item, supplies two per-run lines. Run total sums paired finite nonnegative input/output; Median per article takes each side's actual median over that identical cohort. Default totals; input includes cached prompts and recorded model calls. | Run-aware geometry, numeric run order, distinct same-day positions and known unmeasured gaps; no daily roll-up, fake timestamps or refetch on metric switch. Actual-run pointer/tap/keyboard readout includes full ID, UTC date and measured/recorded articles. Row 8 defines the settled nullable flag, queued after the four selected moves. |
 
 #### L1 - Console-only appearance settings for Row 3
 
@@ -586,7 +586,7 @@ Table T
 | T6 | H14 stays on Hardware. One builder returns Run total and actual Median per article over the same paired finite nonnegative item cohort, plus recorded/measured counts. Read includes cached prompt tokens and totals all recorded model calls; neither metric is a rate, words or uncached compute. Preserve cost helpers' dated semantics. | L6; native item-health grain. |
 | T7 | Use native runSeries geometry, not duplicate dates or fake IDs in dateSeries. Numeric run sequence has one position per known run; thin repeated UTC labels, never run points. Known unmeasured runs break paths; do not invent scheduled runs. | Shared run-axis and compareRuns contracts. |
 | T8 | Read is solid and Written dashed on one token scale. Monotone-X interpolation passes through actual readings without invented extrema; it is not statistical smoothing. Mark only selected/isolated values. Existing ChartReadout snaps to actual runs and shows exact values, full ID, UTC date and measured/recorded coverage; rest and Escape use the last known run, even if unmeasured. | Shared chart vocabulary and readout; Susan drawing ruling. |
-| T9 | Metric radios redraw the same in-memory answer. The existing numeric route knob `read_write_default_metric` selects the initial mode: 0 = Run total (shipped default), 1 = Median per article; reject other values at the config boundary. Runtime selection remains in memory. No anomaly threshold, baseline, moving average or failure-color verdict is part of this chart. | Settled baseline feature; unresolved work retained in Row 8. |
+| T9 | Metric radios redraw the same in-memory answer. The existing numeric route knob `read_write_default_metric` selects the initial mode: 0 = Run total (shipped default), 1 = Median per article; reject other values at the config boundary. Runtime selection remains in memory. No anomaly flag is implemented in this delivery. | Settled baseline feature; the flag is queued after the selected moves in Row 8. |
 
 ### Rejected alternatives
 
@@ -744,8 +744,8 @@ Table AA
 
 ## 9. Row #8 - Settle remaining permanent cuts, page moves and token anomaly rules
 
-- **Scope:** M8/M9 are implemented in Row 8e. N1/N2/N4/N5 are selected for separate delivery, preserving every source, cohort and endpoint requirement in Tables F-K and N. M1-M3 and M10 are settled in Row 8a; M4 in Row 8b; M6 in Row 8c; M7/M11-M13 and N3 in Row 8d. Separately define whether H14 needs an anomaly/baseline comparison and what it would mean.
-- **Status:** The four selected moves remain pending separate implementation. Only H14's anomaly/baseline definition is blocked; no threshold, baseline, smoothing, warning colour or detector is selected.
+- **Scope:** M8/M9 are implemented in Row 8e. N1/N2/N4/N5 are selected for separate delivery, preserving every source, cohort and endpoint requirement in Tables F-K and N. M1-M3 and M10 are settled in Row 8a; M4 in Row 8b; M6 in Row 8c; M7/M11-M13 and N3 in Row 8d. Deliver H14's settled nullable flag in its own increment after the four selected moves.
+- **Status:** The four selected moves remain pending separate implementation. H14's design is complete and queued after them; neither the moves nor the flag are implemented by Row 8e.
 - **Candidate files for the remaining work:** Narrow this inventory to its delivery before implementation:
   - `config/console/pipelines.json`, `config/console/model.json`, `config/console/machine.json`
   - `frontend/src/routes/console/+page.server.ts`, `frontend/src/routes/console/+page.svelte`
@@ -766,16 +766,29 @@ Table AA
   - `docs/architecture/publishing/console.md`, `docs/architecture/publishing/what-the-pipelines-route-draws.md`, `docs/architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md`, `docs/architecture/publishing/console-machine.md`, `docs/architecture/publishing/who-supplied-the-day-and-which-feeds-failed.md`
   - `docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md`, `docs/concepts/console-design/what-the-quality-and-source-panels-draw.md`, `docs/concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md`
   - `TODO/20261109-console-redesign-plan.md`
-- **Acceptance gates:** Preserve D14/T2-T5 and the settled losses. Deliver the four selected moves separately from Row 8e. Any H14 anomaly rule needs its own defined baseline, population and interpretation before implementation.
-- **Oracle:** Selected removals are permanent, selected moves mount once at their actual destination, and retained native answers keep their original cohorts and endpoint groups. Pending anomaly definitions do not silently acquire behavior.
+- **Acceptance gates:** Preserve D14/T2-T5 and the settled losses. Deliver the four selected moves separately from Row 8e, then use the H14 contract below in its own increment.
+- **Oracle:** Selected removals are permanent, selected moves mount once at their actual destination, and retained native answers keep their original cohorts and endpoint groups. H14 remains unimplemented until its queued increment.
+
+### H14 - Settled flag, queued after the four route moves
+
+- **Delivery:** A simple nullable boolean flag computed by browser DuckDB.
+  No H14 implementation belongs to Row 8e.
+- **Measure:** Use the selected Run total or Median per article measure;
+  evaluate read and write separately.
+- **Cohort:** Match recorded model/token settings and reset at known settings
+  changes. Use the last 30 earlier matching runs, with at least 10 required.
+- **Rule:** Compare the current value only with that prior cohort's mean and
+  sample standard deviation:
+  `abs(value - prior_mean) > 3 * prior_sample_stddev`.
+- **Exclusions:** No IQR or percentage guard, Python analytics or new tests.
 
 ## 10. Row #8a - Simplify selected Pipelines visual diagnostics
 
 - **Scope:** Permanently remove `pipeline-funnel`, `downgrade-funnel` and
   `extraction`. Retain `visual-refusals` as complete daily lines and enrich
   `chart-drawing` with its existing categorical stage colours. The losses
-  are M1, M2 and M10, not parity with the overview. M4 and every unrelated
-  cut, move and anomaly/baseline definition remain unresolved.
+  are M1, M2 and M10, not parity with the overview. Other cuts, moves and
+  the queued H14 flag are tracked in Row 8.
 - **Order:** Remove selected roster/judged entries and mounts; delete only
   unconsumed local presentation/query/load work and its retired tests.
   Keep the private attempt reader, per-day attempt counts, typed read metadata
@@ -952,14 +965,14 @@ Table AA
   read-ownership metadata; named roster, query, source, compile and browser
   expectation inventories and focused specs; owning Hardware/Voices docs and
   directly dependent pricing references.
-- **Acceptance:** Use the shared selector and applicable lint/types. Assert
-  actual panel/control absence while paired tokens and selection bonuses remain
-  usable. Review useful retained grouping on Hardware/Voices, a cross-route
-  journey, real missing/empty states and console/HTTP behavior. If integrated
+- **Acceptance:** Reuse existing roster, query-binding and retained-token
+  coverage with only necessary expectation updates; add no tests or helpers.
+  Use applicable lint/types. Review useful retained grouping on Hardware/Voices,
+  a cross-route journey, real missing/empty states and console/HTTP behavior. If integrated
   Browser tools are unavailable, preserve the certified exact build and preview
   fingerprints for the parent rather than claiming visual verification.
-- **Boundary:** N1/N2/N4/N5 remain selected for separate delivery. H14 gains no
-  anomaly threshold, baseline, statistical smoothing, warning colour or detector.
+- **Boundary:** N1/N2/N4/N5 remain selected for separate delivery. H14's settled
+  nullable flag stays queued after them and is not implemented here.
   Preserve shared chrome, UTC date disclosure, count/date axes, independent
   endpoints, machine identities/colours, missing-versus-zero states, reader
   styling, semantic roles, hover/keyboard/touch and compaction settings.
