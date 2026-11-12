@@ -304,13 +304,7 @@ def render_system(
     instruction.
     """
     band = ask.band_for(0 if brief else source_words)
-    return Template(template_text).substitute(
-        {
-            **ask.model_dump(),
-            **band.model_dump(),
-            "paragraph_rule": summarize.paragraph_rule(ask),
-        }
-    )
+    return Template(template_text).substitute({**ask.model_dump(), **band.model_dump()})
 
 
 class LiveSummarizer:

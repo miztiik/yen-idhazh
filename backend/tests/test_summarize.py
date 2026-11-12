@@ -37,7 +37,6 @@ from idhazh.contracts.base import (
     canonical_json,
     derive_output_digest,
     normalize_prose,
-    paragraphs_of,
 )
 from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.item_health import FailureCode
@@ -88,7 +87,6 @@ from idhazh.summarize import (
     length_verdict,
     output_schema,
     output_schema_text,
-    paragraph_rule,
     parse_draft,
     prompt_inputs,
     system_prompt,
@@ -2607,47 +2605,12 @@ def test_the_sanitizer_and_not_the_prompt_decides_what_a_paragraph_break_is() ->
     assert normalize_prose("  One.\n\nTwo.  ") == "One.\n\nTwo."
 
 
-def test_the_paragraph_cap_folds_the_extra_text_in_rather_than_dropping_it() -> None:
-    """A cap that shortened a summary would undo the length gate that just passed it."""
-    three = "One.\n\nTwo.\n\nThree."
-    assert normalize_prose(three, paragraphs_max=2) == "One.\n\nTwo. Three."
-    assert normalize_prose(three, paragraphs_max=1) == "One. Two. Three."
-    assert paragraphs_of(normalize_prose(three, paragraphs_max=2)) == ["One.", "Two. Three."]
-
-
-def test_the_paragraph_rule_names_the_cap_and_the_length_that_earns_a_break() -> None:
-    """A break in a 45-word summary makes two half-thoughts, not two paragraphs.
-
-    The threshold is a number the model applies to the length it was already
-    asked for, rather than a question answered per band here - see the next
-    test for why it cannot be answered per band.
-    """
-    ask = SummarizeConfig()
-    rule = paragraph_rule(ask)
-    assert str(ask.paragraphs_max) in rule
-    assert str(ask.second_paragraph_from_words) in rule
-    assert "empty line" in rule
-
-
-def test_the_paragraph_rule_cannot_vary_with_the_article() -> None:
-    """The prefix cache is why, and it is a budget fact rather than a style one.
-
-    The two-call path renders this into a system turn that takes no article, so
-    that turn is the same bytes on every item and holds one cache slot at
-    `n_parallel = 1`. A rule that read the band would make the system turn vary
-    per item and evict the article on every alternation.
-    """
-    ask = SummarizeConfig()
-    rendered = {paragraph_rule(ask) for _ in ask.bands}
-    assert len(rendered) == 1, "the rule reads the config and never a band"
-    assert paragraph_rule(ask) in calls.label_system_prompt(ask)
-
-
-def test_one_paragraph_max_turns_the_break_off_everywhere() -> None:
-    """The knob's substitution test: change the config, change the behaviour."""
-    off = paragraph_rule(SummarizeConfig(paragraphs_max=1))
-    assert off.strip() == "Write the summary as one paragraph."
-    assert "empty line" not in off
+def test_draft_parsing_preserves_every_paragraph_and_normalizes_separators() -> None:
+    first = "The company reported revenue growth and described its expansion plans."
+    second = "Its filing attributed the increase to new orders and repeat customers."
+    third = "The company cautioned that demand could weaken later in the year."
+    raw = f"{first}\n\n\n{second}\r\n\r\n{third}"
+    assert parse_draft(body(summary=raw)).summary == f"{first}\n\n{second}\n\n{third}"
 
 
 def test_a_summary_far_over_its_ask_still_reaches_the_reader() -> None:

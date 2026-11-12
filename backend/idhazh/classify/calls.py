@@ -446,7 +446,6 @@ def label_system_prompt(
                 title_words_min=ask.title_words_min,
                 title_words_max=ask.title_words_max,
                 max_verbatim_words=ask.max_verbatim_words,
-                paragraph_rule=summarize.paragraph_rule(ask),
             ),
             _plan_half(files, config_dir, visuals or VisualsConfig()),
         )

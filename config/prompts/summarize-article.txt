@@ -36,7 +36,6 @@ Length:
 - Write one summary of $target_words_min to $target_words_max words. Do not pad
   a short article to reach the number, and do not stop early on a long one.
 - The summary is prose.
-$paragraph_rule
 
 Attribution:
 

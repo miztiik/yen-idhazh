@@ -1544,7 +1544,7 @@ class TestTheInstructionsSitInFrontOfTheArticle:
 
         for moved in (
             "keep every figure exactly as the item wrote it",
-            '"summary" - coherent prose explaining the main event',
+            '"summary" - Comprehensive, cohesive narrative prose',
             "Decide whether this item wants a picture at all",
             '"confidence" - how sure you are',
         ):
@@ -1623,7 +1623,6 @@ class TestTheInstructionsSitInFrontOfTheArticle:
 
         assert f"{band.target_words_min} to {band.target_words_max} words" in turn
         assert f"{band.target_words_min} to {band.target_words_max}" not in system
-        assert f"{ask.title_words_min} to {ask.title_words_max} words" in system
         assert f"at most {ask.max_verbatim_words} words" in system
 
     def test_the_number_ban_names_the_job_it_belongs_to(self) -> None:

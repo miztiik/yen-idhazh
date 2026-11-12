@@ -215,7 +215,7 @@ _STEM_PATTERN: Final = re.compile(SLUG_PATTERN)
 # --- a published block of prose ----------------------------------------------
 #
 # A published summary is one block of prose, and since 2026-09-17 a long one may
-# be two paragraphs rather than one. The separator is a single blank line and
+# contain paragraph breaks. The separator is a single blank line and
 # nothing else, which is what keeps this additive: a payload written before that
 # date carries no break at all and is one paragraph, which is what every reader
 # already drew for it.
@@ -242,28 +242,23 @@ def paragraphs_of(prose: str) -> list[str]:
     return prose.split(PARAGRAPH_BREAK)
 
 
-def normalize_prose(raw: str, *, paragraphs_max: int | None = None) -> str:
+def normalize_prose(raw: str) -> str:
     """Fold what a model wrote into the one shape this field admits.
 
     This is the writer's half of the rule `Prose` checks, and it is why the
-    field handed to a constrained decoder can stay a plain string: the prompt
-    ASKS for a blank line and this is what MAKES one (Guardrail #11 - the
-    sanitizer is the control and the prompt is untrusted text like any other).
+    field handed to a constrained decoder can stay a plain string (Guardrail
+    #11 - the sanitizer is the control and the prompt is untrusted text like
+    any other).
 
     A lone newline rejoins its lines, because a model that wrapped its prose at
-    some width meant one paragraph. A run of blank lines is one break. Text past
-    `paragraphs_max` is folded into the last paragraph kept rather than dropped:
-    dropping it would silently shorten a summary the length gate has already
-    measured, and a long last paragraph is a worse-looking summary rather than a
-    wrong one.
+    some width meant one paragraph. A run of blank lines is one break.
+    Preserve every nonempty paragraph.
     """
     text = _CONTROL_EXCEPT_NEWLINE.sub(" ", raw.replace("\r\n", "\n").replace("\r", "\n"))
     blocks = [" ".join(block.split()) for block in _BLANK_LINE_RUN.split(text)]
     kept = [block for block in blocks if block]
     if not kept:
         return ""
-    if paragraphs_max is not None and len(kept) > paragraphs_max:
-        kept = [*kept[: paragraphs_max - 1], " ".join(kept[paragraphs_max - 1 :])]
     return PARAGRAPH_BREAK.join(kept)
 
 
