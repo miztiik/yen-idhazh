@@ -14,7 +14,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import ClassVar, Final, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from idhazh.contracts.article import UntrustedLine
 from idhazh.contracts.base import (
@@ -26,12 +26,12 @@ from idhazh.contracts.base import (
     Timestamp,
     UrlKey,
     derive_text_digest,
+    without_retired_keys,
 )
 from idhazh.contracts.chart_evidence import ChartEvidence
 from idhazh.contracts.visual_outcome import validate_visual_outcome
 from idhazh.contracts.visual_type import VisualType
 from idhazh.contracts.visual_validation import ValidatorCheck
-from idhazh.contracts.whowhat_grid import WhowhatGridData
 
 #: What one item's decision is filed as, under `backend/var/run/<date>/items/`.
 #: The writer, the reader and the workflow's upload glob all spell it, and a run
@@ -42,6 +42,7 @@ _VISUAL_ID_FORMAT: Final = "visual-id-v1"
 
 class VisualKind(StrEnum):
     CHART = "chart"
+    # Historical outcome token only; no producer or reader implements this kind.
     WHOWHAT = "whowhat"
     NONE = "none"
 
@@ -100,7 +101,20 @@ class VisualDecision(Contract):
     """The visual planner's decision plus the Render stage's outcome, one per item."""
 
     __schema_stem__: ClassVar[str] = "visual-decision"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "readCompatibility": (
+                "historical whowhat outcomes retain their metadata; their retired nested "
+                "whowhat_grid payload is discarded and never published or rendered"
+            )
+        }
+    )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-11",
+            change="Retire the actor-grid payload while preserving historical outcome metadata.",
+            why="Historical outcome facts remain readable without a retired feature contract.",
+        ),
         ChangelogEntry(
             version="2026-10-29",
             change="Record first rejection and downgrade search evidence.",
@@ -115,11 +129,6 @@ class VisualDecision(Contract):
             version="2026-10-25",
             change="Record requested and delivered types, replacement depth and delivered marks.",
             why="Refusals and replacements must not conceal the original visual request.",
-        ),
-        ChangelogEntry(
-            version="2026-10-10",
-            change="Added chart_evidence counts and rates for compiled numeric figures.",
-            why="Run reports need exact counts from the compiler's single resolution.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -143,14 +152,6 @@ class VisualDecision(Contract):
             "build-time renderer ran - and naming one here would date the field to a "
             "renderer this project has already changed twice. Null on an item decided "
             "to nothing."
-        ),
-    )
-    whowhat_grid: WhowhatGridData | None = Field(
-        default=None,
-        exclude_if=lambda value: value is None,
-        description=(
-            "The compiled actor/claim grid, kept in its own versioned payload rather "
-            "than folded into chart `spec`. Omitted unless this decision carries a whowhat grid."
         ),
     )
     data_path: RelPath | None = Field(
@@ -248,6 +249,15 @@ class VisualDecision(Contract):
         description="Delivered mark count, not the flat mark pool; null without delivery.",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _without_retired_grid_payload(cls, data: object) -> object:
+        if isinstance(data, dict) and (
+            data.get("kind") == VisualKind.WHOWHAT or data.get("whowhat_grid") is None
+        ):
+            return without_retired_keys(data, "whowhat_grid")
+        return data
+
     @model_validator(mode="after")
     def _visual_outcome_matches_delivery(self) -> Self:
         validate_visual_outcome(
@@ -293,31 +303,23 @@ class VisualDecision(Contract):
 
     @model_validator(mode="after")
     def _outcome_matches_the_decision(self) -> Self:
-        if self.whowhat_grid is not None and self.whowhat_grid.item_id != self.item_id:
-            raise ValueError("a whowhat grid names its decision item")
         if self.kind is VisualKind.NONE:
             if self.chart_evidence is not None:
                 raise ValueError("an item decided to nothing carries no compiled chart evidence")
             if self.spec is not None:
                 raise ValueError("an item decided to nothing carries no spec")
-            if self.whowhat_grid is not None:
-                raise ValueError("an item decided to nothing carries no whowhat grid")
             if self.visual_state is not VisualState.ABSENT:
                 raise ValueError("an item decided to nothing has no visual to be in a state about")
         elif self.kind is VisualKind.CHART:
             if not self.spec:
                 raise ValueError("a planned chart must carry its compiled spec")
-            if self.whowhat_grid is not None:
-                raise ValueError("a chart carries no whowhat grid")
             if self.none_reason is not None:
                 raise ValueError("only an item decided to nothing records the gate that refused it")
         else:
             if self.spec is not None:
-                raise ValueError("a whowhat grid carries no chart spec")
+                raise ValueError("a retired visual carries no chart spec")
             if self.chart_evidence is not None:
-                raise ValueError("a whowhat grid carries no compiled chart evidence")
-            if self.whowhat_grid is None:
-                raise ValueError("a planned whowhat visual carries its grid payload")
+                raise ValueError("a retired visual carries no compiled chart evidence")
             if self.none_reason is not None:
                 raise ValueError("only an item decided to nothing records the gate that refused it")
 

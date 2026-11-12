@@ -198,7 +198,7 @@ test('a served visual without kind is explicit null and keeps the chart fallback
 	});
 });
 
-test('a whowhat visual kind reaches the served day for reader routing', () => {
+test('a retired visual becomes no visual without rewriting its historical descriptor', () => {
 	const day = JSON.parse(LEGACY) as { items: Record<string, unknown>[] };
 	day.items[0]!.visual = {
 		state: 'rendered',
@@ -209,7 +209,8 @@ test('a whowhat visual kind reaches the served day for reader routing', () => {
 
 	const served = read(projectDay(JSON.stringify(day)));
 
-	expect(served?.items[0]?.visual?.kind).toBe('whowhat');
+	expect(served?.items[0]?.visual).toBeNull();
+	expect((day.items[0]?.visual as DigestViewVisual).kind).toBe('whowhat');
 });
 
 /** The day's own facts reach the wire, and an absent one is null rather than a

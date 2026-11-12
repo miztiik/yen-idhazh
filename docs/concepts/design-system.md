@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -83,19 +83,6 @@ Use native disclosure for content already present but hidden. Use a button when 
 ### No reader-facing surface scrolls sideways
 
 Wrap variable-width labels and use a configured disclosure count for overflow. Do not hide a horizontal scrollbar and leave the hidden contents behind it. Grids must allow their minimum track width to fit the available container.
-
-### The whowhat grid keeps each actor beside its claim
-
-Render the source-backed pairs as a fixed two-column table, with explicit
-`Who` and `What` headers. Keep the row rectangular: if attribution is
-ambiguous or either span is absent, both cells stay empty rather than dropping
-one side or pairing by position. Wrap long source text in each column; do not
-shrink it, clip it, or add an inner scroll area. What shows the complete
-validated claim excerpt by default, keeping its action and qualifications
-visible. Who keeps the fitted actor label. Only a clipped actor gets native
-`details`/`summary` disclosure of its full excerpt; an unclipped actor stays
-plain text. The shared `fit_source_span()` policy still produces both fitted
-label fields, and each bounded full excerpt and its span remain in the payload.
 
 ### A control only sticks where it is one band
 

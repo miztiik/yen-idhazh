@@ -93,44 +93,6 @@ DRAWS_SUMMARIZE_AND_PLAN: Final = (
 )
 
 
-def whowhat_replies() -> tuple[bytes, bytes]:
-    """Source-backed boundary inputs, not evidence that a live model chose a grid."""
-    first = json.loads(DRAWS_LABEL.read_bytes())
-    labels = json.loads(first["choices"][0]["message"]["content"])
-    labels["claims"] = [
-        {
-            "sentence_start_id": sentence,
-            "sentence_end_id": sentence,
-            "speaker": "",
-            "attribution": "unattributed",
-            "hedge": False,
-        }
-        for sentence in ("s0", "s2")
-    ]
-    first["choices"][0]["message"]["content"] = json.dumps(labels)
-
-    second = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
-    answer = json.loads(second["choices"][0]["message"]["content"])
-    actors = ["entity-55-62", "entity-224-231"]
-    claims = ["claim-0-154", "claim-224-270"]
-    answer["visual"].update(
-        type="whowhat",
-        encodings={
-            **{role: [] for role in answer["visual"]["encodings"]},
-            "entity": actors,
-            "event_label": claims,
-        },
-        element_ids=actors + claims,
-        labels=actors,
-        annotations=[],
-        title="Who approved offshore wind",
-        caption=None,
-        why="The source names each country beside its own approval.",
-    )
-    second["choices"][0]["message"]["content"] = json.dumps(answer)
-    return json.dumps(first).encode("utf-8"), json.dumps(second).encode("utf-8")
-
-
 def declining_replies() -> tuple[bytes, bytes]:
     """Keep the source-backed summary while the boundary answer declines decoration."""
     answer = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
@@ -170,11 +132,9 @@ def assert_reader_accepts(path: Path, *, item_id: str) -> None:
             "bun", "--eval",
             """
 import { refusedVisualData } from './frontend/src/lib/payload/drawing.ts';
-import { refusedWhowhatGridData } from './frontend/src/lib/payload/whowhat-grid.ts';
 const data = await Bun.stdin.json();
 if (data.item_id !== process.argv[1]) throw new Error('published item identity changed');
-const reason = data.rows === undefined
-    ? refusedVisualData(data) : refusedWhowhatGridData(data, process.argv[1]);
+const reason = refusedVisualData(data);
 if (reason !== null) throw new Error(reason);
 """,
             item_id,

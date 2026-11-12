@@ -34,9 +34,8 @@ Use **Read the original** to open the source article for its full context,
 evidence and detail. Source labels help distinguish reporting from announcements,
 government statements, research and community posts.
 
-Some stories include a chart to make figures easier to compare, or a compact
-**Who/What grid** that keeps each participant beside its claim or action. When a
-visual adds nothing useful, the story stays text.
+Some stories include a numeric chart to make figures easier to compare. When a
+chart adds nothing useful, the story stays text.
 
 ## Know when to look closer
 

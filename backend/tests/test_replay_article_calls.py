@@ -18,7 +18,6 @@ from pipeline._builders import (
     drawable_article_fetch,
     plan,
     summary,
-    whowhat_replies,
 )
 from support.paths import CONFIG_DIR
 from support.server import RecordedEndpoint
@@ -149,10 +148,8 @@ def test_invalid_or_overlarge_selection_is_not_an_inference_request(selection: s
     assert replay.select_ids(" ai-02, ai-01 ", limit=3) == ("ai-02", "ai-01")
 
 
-@pytest.mark.parametrize("kind", [VisualKind.CHART, VisualKind.WHOWHAT])
 def test_real_item_major_calls_keep_native_assets_captures_and_provenance_private(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
-    kind: VisualKind,
 ) -> None:
     saved, source, archives, original = retained(tmp_path)
     root = tmp_path / "replay"
@@ -160,10 +157,7 @@ def test_real_item_major_calls_keep_native_assets_captures_and_provenance_privat
     saved, articles, plan_file = prepared(root, source, archives, ids)
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "forbidden-public" / "digest")
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "forbidden-run")
-    positive = (
-        (DRAWS_LABEL.read_bytes(), DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
-        if kind is VisualKind.CHART else whowhat_replies()
-    )
+    positive = DRAWS_LABEL.read_bytes(), DRAWS_SUMMARIZE_AND_PLAN.read_bytes()
     caplog.set_level(logging.INFO, logger="idhazh")
     identity = replay_identity(saved)
     with RecordedEndpoint(200, *positive, *declining_replies(), hold_s=0.01) as server:
@@ -204,7 +198,7 @@ def test_real_item_major_calls_keep_native_assets_captures_and_provenance_privat
             assert captured["prompt"] == requests[index * 2 + turn]["prompt"]
             assert captured["reply"] and captured["item_id"] == article.item_id
         if index == 0:
-            assert decision.kind is kind and decision.data_path
+            assert decision.kind is VisualKind.CHART and decision.data_path
             assert (produced / "assets" / decision.data_path).is_file()
         else:
             assert decision.kind is VisualKind.NONE

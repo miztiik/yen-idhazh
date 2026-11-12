@@ -52,6 +52,7 @@
 	import { navigating } from '$app/state';
 	import { isVisualData, publishedVisualData, refusedVisualData } from '$lib/payload/drawing';
 	import type { DigestVisual, VisualData } from '$lib/payload/types';
+	import { isChartKind } from '$lib/payload/project';
 	import { numberFormatter, type NumberFormatConfig } from '$lib/number-format';
 	import { whenNear } from '$lib/reveal';
 	import type { StoryChartGeometryConfig } from '$lib/server/config';
@@ -60,17 +61,14 @@
 	import PieChart from '$lib/visual/PieChart.svelte';
 	import { drawVisual, statedDrawing, type Drawing } from '$lib/visual/bar';
 	import { fitChartGeometry, fitChartTicks, whenChartFits, type ChartRoom } from '$lib/visual/viewport';
-	import WhowhatVisual from '$lib/visual/WhowhatVisual.svelte';
 
 	let {
 		visual,
-		itemId,
 		numberFormat,
 		storyChartGeometry,
 		chartTickDensity
 	}: {
 		visual: DigestVisual | null;
-		itemId: string;
 		numberFormat: NumberFormatConfig;
 		storyChartGeometry: StoryChartGeometryConfig;
 		chartTickDensity: number;
@@ -84,7 +82,7 @@
 	 * designed states: the story has no chart.
 	 */
 	const wanted = $derived(
-		visual?.kind !== 'whowhat' && visual?.state === 'rendered' && visual.data_path
+		visual?.state === 'rendered' && isChartKind(visual.kind) && visual.data_path
 			? visual.data_path
 			: null
 	);
@@ -218,9 +216,6 @@
 	}
 </script>
 
-{#if visual && visual.kind === 'whowhat'}
-	<WhowhatVisual {visual} {itemId} />
-{:else}
 {#if currentLoad}
 	<!-- The figure takes the focus, not the marks inside it: `role="img"` replaces
 	     its whole subtree with one name, so a bar given its own tab stop would be
@@ -549,7 +544,6 @@
 	     nearly on screen, and a story whose marks never arrive keeps exactly the
 	     height it has now. -->
 	<div class="slot" use:askWhenNear></div>
-{/if}
 {/if}
 
 <style>

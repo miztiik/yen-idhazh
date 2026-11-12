@@ -1,6 +1,6 @@
 # Retained article verification
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 Which inputs and native artifacts establish a fixed-input production-call
 observation without publishing or fetching an article again.
@@ -73,7 +73,7 @@ retention window. All replay files stay below the private directory
   `<item-id>.health.json`: fresh native products, including truthful failures.
 - `outputs/<item-id>/captures/`: the actual native label and summary captures,
   with requests, replies and available call costs.
-- `outputs/<item-id>/assets/`: compiled chart or Who/What data at the native
+- `outputs/<item-id>/assets/`: compiled numeric chart data at the native
   relative asset path. This directory is not a publication tree.
 - `llama-server.log`: the owned runtime's log.
 

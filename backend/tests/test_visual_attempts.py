@@ -12,7 +12,6 @@ from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from support.prompts import SUMMARIZE_AND_PLAN_REPLIES
 from test_chart_vocabulary import draw, inputs, settings
 from test_classify import declining_reply
-from test_whowhat_grid import whowhat_inputs
 
 from idhazh import completed_writes, elements, ledger
 from idhazh.classify import calls
@@ -26,7 +25,6 @@ from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, Visu
 from idhazh.contracts.visual_decision import NoneReason, VisualDecision, VisualState
 from idhazh.contracts.visual_telemetry import ValidatorCheck, VisualAttemptRow
 from idhazh.elements import ExtractionHealth
-from idhazh.fingerprint import text_digest
 from idhazh.llm.server import Completion, window
 from idhazh.stages import common
 from idhazh.stages.two_calls import _decide_the_visual, _drawn
@@ -210,55 +208,6 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
         assert persisted.rationale and cause in persisted.rationale
         assert "model-only words" not in persisted.rationale
     assert malformed.rationale and "title" in malformed.rationale
-
-
-def test_whowhat_uses_the_same_attempt_mapping_and_storage(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-    plan, table, article = whowhat_inputs()
-    summary, _, _ = inputs()
-    summary = type(summary).model_validate(summary.model_dump(mode="json") | {
-        "item_id": article.item_id, "url_key": article.url_key,
-    })
-    decision = _drawn(
-        summary, plan, table, article=article, settings=settings(), date=DATE,
-        stamp={"version": VisualDecision.schema_version(), "model_id": "fixture-model",
-               "decided_at": f"{DATE}T12:00:00Z"},
-        run_id=RUN,
-    )
-    row = stored(tmp_path, decision)
-    assert row.planned_type is row.rendered_type is VisualType.WHOWHAT
-    assert row.state is VisualState.RENDERED
-    assert row.visual_id == decision.visual_id
-
-
-def test_real_compiler_refusal_remains_a_drafted_attempt(tmp_path: Path) -> None:
-    plan, table, article = whowhat_inputs()
-    assert article.text is not None
-    changed_text = article.text.swapcase()
-    changed_article = Article.model_validate(
-        article.model_dump(mode="json") | {"text": changed_text}
-    )
-    changed_table = ElementTable.model_validate(
-        table.model_dump(mode="json") | {"source_text_hash": text_digest(changed_text)}
-    )
-    summary, _, _ = inputs()
-    summary = type(summary).model_validate(summary.model_dump(mode="json") | {
-        "item_id": article.item_id, "url_key": article.url_key,
-    })
-    decision = _drawn(
-        summary, plan, changed_table, article=changed_article, settings=settings(), date=DATE,
-        stamp={"version": VisualDecision.schema_version(), "model_id": "fixture-model",
-               "decided_at": f"{DATE}T12:00:00Z"},
-        run_id=RUN,
-    )
-    row = stored(tmp_path, decision)
-    assert row.decision is PlanDecision.VISUAL
-    assert row.planned_type is VisualType.WHOWHAT and row.rendered_type is None
-    assert row.none_reason is NoneReason.VALIDATION_FAILED
-    assert row.rejection_reason is None
-    assert row.state is VisualState.ABSENT
 
 
 def test_distinct_actual_attempts_survive_reader_settlement_and_lossless_packing(

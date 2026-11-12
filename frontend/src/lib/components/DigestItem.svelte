@@ -221,7 +221,7 @@
 			{/if}
 		</div>
 
-		<ItemVisual visual={item.visual} itemId={item.item_id} {numberFormat} {storyChartGeometry} {chartTickDensity} />
+		<ItemVisual visual={item.visual} {numberFormat} {storyChartGeometry} {chartTickDensity} />
 	</div>
 
 	<div class="item-rail">

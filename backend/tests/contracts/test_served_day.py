@@ -267,9 +267,7 @@ def test_the_served_item_is_a_narrowing_of_the_published_one() -> None:
             continue
         assert without_description(shape) == without_description(published[name]), name
 
-    # The served visual is never wider than the committed pointer. It now carries
-    # `kind` because the browser routes whowhat grids separately; historical
-    # pointers without it still use the chart reader.
+    # Historical pointers without a kind still use the chart reader.
     assert set(DigestViewVisual.model_fields) <= set(DigestVisual.model_fields)
 
 
@@ -347,17 +345,16 @@ def test_an_old_served_visual_without_kind_keeps_the_chart_reader_path() -> None
     assert item.visual.state.value == "rendered"
 
 
-def test_a_whowhat_kind_survives_the_served_projection() -> None:
+def test_a_retired_kind_projects_to_no_visual_without_rewriting_history() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
-    visual = next(item["visual"] for item in payload["items"] if item.get("visual") is not None)
-    visual["kind"] = "whowhat"
+    written = next(item for item in payload["items"] if item.get("visual") is not None)
+    written["visual"]["kind"] = "whowhat"
 
     served = DigestView.project(payload)
 
-    item = next(item for item in served.items if item.visual is not None)
-    assert item.visual is not None
-    assert item.visual.kind is not None
-    assert item.visual.kind.value == "whowhat"
+    item = next(item for item in served.items if item.item_id == written["item_id"])
+    assert item.visual is None
+    assert written["visual"]["kind"] == "whowhat"
 
 
 def test_a_summary_written_before_paragraphs_existed_reads_as_one_paragraph() -> None:

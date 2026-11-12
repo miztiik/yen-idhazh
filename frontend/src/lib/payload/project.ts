@@ -54,7 +54,7 @@ export interface CoverageSource {
  * file and fails if it and the contract disagree, which is what stops the two
  * halves of one payload drifting across two languages.
  */
-export const VIEW_VERSION = '2026-10-28';
+export const VIEW_VERSION = '2026-11-11';
 
 /** How many publisher names a served item may carry.
  *
@@ -151,9 +151,13 @@ export const ITEM_FIELDS: readonly string[] = [
 	'also_ran_earlier'
 ];
 
-// The four `ItemVisual` reads. A missing kind is written as null, preserving
-// the chart path for served payloads published before whowhat routing existed.
+// The four `ItemVisual` reads. Missing kinds preserve the legacy chart path.
 export const VISUAL_FIELDS: readonly string[] = ['state', 'data_path', 'alt', 'kind'];
+
+/** Only charts draw; absent/null kinds are the historical chart encoding. */
+export function isChartKind(kind: unknown): boolean {
+	return kind === undefined || kind === null || kind === 'chart';
+}
 
 // The day-level keys carried over from the committed payload. `version` is the
 // other key on a staged day and it is minted rather than copied - the committed
@@ -274,7 +278,10 @@ export function coverageOf(items: readonly CoverageSource[]): Map<string, Digest
  */
 export function projectItem(item: Json, stack: readonly DigestCoverage[] = []): Json {
 	const projected = pick(item, ITEM_FIELDS);
-	projected.visual = item.visual ? pick(item.visual as Json, VISUAL_FIELDS) : null;
+	const visual = item.visual;
+	projected.visual = visual !== null && typeof visual === 'object' && !Array.isArray(visual) &&
+		isChartKind('kind' in visual ? visual.kind : undefined)
+		? pick(visual as Json, VISUAL_FIELDS) : null;
 	projected.covered_by = stack;
 	// Absent on every day published before 2026-09-16, and an absent list is an
 	// empty one rather than a null - the field is a list of names and null is not

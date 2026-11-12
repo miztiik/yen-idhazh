@@ -1,9 +1,9 @@
 # Where a drawing becomes pixels
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
-The reader's browser renders charts and lays out the whowhat grid; the pipeline
-never draws a chart. This page holds that ruling, what it cost and what it
+The reader's browser renders numeric charts; the pipeline never draws a chart.
+This page holds that ruling, what it cost and what it
 bought, where visual data is published, the contracts it travels in, the one
 place a chart renderer version is stated, and the compilers that turn validated
 plans into visual data. Who decides a visual at all is
@@ -22,32 +22,24 @@ into validated chart data. The day payload points to a separate per-item JSON fi
 the reader's browser draws its SVG with d3 scale arithmetic and Svelte elements.
 Nothing draws a chart at build time and no SVG is committed.
 
-## The whowhat grid is a separate format and reader
+## Historical visual kinds do not enable a retired reader
 
-The actor/claim grid is text, not a chart mark family. It has its own date-stamped
-`WhowhatGridData` contract and changelog; chart `VisualData`, `RENDERER_VERSION` and the chart
-reader remain unchanged. The grid writer reuses the item's `DigestVisual.data_path`,
-`asset_relpath()` and atomic-write behavior, but assembly routes `WHOWHAT` decisions to that
-dedicated writer rather than `write_charts_from_decisions()`.
+The Who/What actor-grid is Abandoned, with no producer, compiler, payload
+contract, reader or disabled implementation. Native decision reading discards
+only its named retired nested `whowhat_grid` field and keeps historical
+requested/delivered types, state, marks, paths and identity unchanged.
+Historical type/kind tokens and ledger family mapping are metadata, not
+capabilities.
 
-The compiler creates a rectangular row for each selected actor. It fills both cells only when
-exactly one selected entity and one selected claim come from that same sentence; ambiguous or
-unmatched rows have both cells empty. It re-slices each source span against the article before
-writing, keeps the full bounded excerpt (at most 500 characters), and uses Row 1's
-`fit_source_span()` helper for both fitted label fields. The browser's `WhowhatVisual` reader
-validates the grid payload and its item/path identity before rendering the two-column table.
-It shows the full claim excerpt by default and keeps the fitted actor label, with native
-disclosure only for a clipped actor, as the
-[grid design contract](../../concepts/design-system.md#the-whowhat-grid-keeps-each-actor-beside-its-claim)
-defines. Neither the compiler's fit policy nor the persisted grid changes.
+Backend digest projection, staged TypeScript projection and cached-day browser
+ingestion all turn retired visual descriptors into no visual. Chart writers
+positively select chart decisions. Absent or null historical kinds retain the
+legacy chart path; a retired kind never falls through to chart drawing. No
+stored decision, day or capture is rewritten. Numeric `VisualData`, the
+renderer and unit-table versions stay unchanged.
 
-`DigestVisual.kind` selects the family. The projection preserves an explicit `whowhat` kind for
-the new reader. An older served visual with no kind retains the established chart route, so the
-new path does not reinterpret historical chart payloads.
-
-**A reader without JavaScript gets story text, but no chart, chart description or whowhat grid.**
-The chart exists only once its marks have arrived; the grid exists only once its
-validated payload has arrived. This gives up the no-script drawing the retired
+**A reader without JavaScript gets story text, but no chart or chart description.**
+The chart exists only once its marks have arrived. This gives up the no-script drawing the retired
 build-time renderer supplied. With JavaScript, the browser builds the chart's
 accessible name from the same marks it draws, including every figure
 ([../../concepts/design-system.md](../../concepts/design-system.md#every-fact-a-drawing-shows-is-reachable-without-a-pointer)).
@@ -295,8 +287,7 @@ that order. Re-ranking them here would be the compiler deciding what the compari
 **Only a supported type is compiled.** This build compiles `bar`, `dot`, `slope`,
 `line`, `scatter`, `bubble`, `stacked_bar`, `pie` and `histogram`; a plan for any
 other declared chart type raises `CompileError` naming it rather than publishing
-a picture nobody planned. The Who/What grid uses its separate compiler and
-reader described above.
+a picture nobody planned.
 
 ### Declared types are not delivery promises
 
@@ -316,10 +307,11 @@ Table A - Declared types without a direct compiler
 | A6 | `flow` | Abandoned; no role rules or compiler. |
 | A7 | `quotecard` | Abandoned; no role rules or compiler. |
 | A8 | `comparison` | Abandoned; no role rules or compiler. |
+| A9 | `whowhat` | Abandoned; producer, role rules, compiler, payload contract and reader removed. Historical metadata is read-only. |
 
 The [text-only proposal rationale](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#design-rationale)
-and [diagram boundary](visuals.md#diagrams-deferred) remain relevant: the
-separate Who/What grid revives neither. Abandonment is distinct from the
+and [diagram boundary](visuals.md#diagrams-deferred) remain relevant.
+Abandonment is distinct from the
 [finalized planner-evidence handoff](../summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once):
 adding a compiler cannot recover a request that was suppressed, declined or
 failed to parse before reaching it.

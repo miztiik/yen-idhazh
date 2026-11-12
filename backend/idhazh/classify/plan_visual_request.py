@@ -13,7 +13,6 @@ from idhazh.contracts.element import (
 )
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import EncodingRole, VisualType
-from idhazh.contracts.whowhat_grid import MAX_WHOWHAT_ROWS
 from idhazh.render.chart import can_compile
 from idhazh.sanitize import untrusted_block
 from idhazh.visual_vocabulary import ROLE_KINDS, TYPE_RULES, VALUE_ROLES
@@ -56,9 +55,16 @@ def bind_reference_choices(schema: dict[str, Any], table: ElementTable) -> None:
 
 def type_role_guide(visuals: VisualsConfig) -> str:
     """Read the configured request vocabulary and evidence floors."""
+    selected = visuals.select_types()
+    used = {
+        role
+        for visual_type in selected
+        for role in TYPE_RULES[visual_type].required | TYPE_RULES[visual_type].optional
+    }
     roles = "; ".join(
         f"{role.value}={','.join(sorted(kind.value for kind in ROLE_KINDS[role]))}"
         for role in EncodingRole
+        if role in used
     )
     lines = [
         "Type/role guide. Request names are not a promise that a compiler exists.",
@@ -67,21 +73,14 @@ def type_role_guide(visuals: VisualsConfig) -> str:
         + ", ".join(sorted(role.value for role in VALUE_ROLES))
         + "; values within each must have convertible units.",
     ]
-    for visual_type in visuals.select_types():
+    for visual_type in selected:
         rules = TYPE_RULES.get(visual_type)
         if rules is None:
             lines.append(f"{visual_type.value}: no role rule or compiler.")
             continue
         required = ",".join(role.value for role in EncodingRole if role in rules.required)
         optional = ",".join(role.value for role in EncodingRole if role in rules.optional) or "none"
-        if visual_type is VisualType.WHOWHAT:
-            marks = (
-                f"1..{MAX_WHOWHAT_ROWS} actor/claim rows, not a numeric chart; "
-                "entity accepts entity only, event_label accepts claim only; "
-                "select one actor and one claim from the same sentence per row; "
-                "multiple selected actors or claims in one sentence are ambiguous"
-            )
-        elif visual_type is VisualType.HISTOGRAM:
+        if visual_type is VisualType.HISTOGRAM:
             marks = (
                 f"at least {visuals.histogram_bins} bins values for "
                 f"{visuals.histogram_bins} code-computed bins"
@@ -91,9 +90,7 @@ def type_role_guide(visuals: VisualsConfig) -> str:
                 visuals.max_pie_parts if visual_type is VisualType.PIE else visuals.max_chart_points
             )
             marks = f"{visuals.min_chart_points}..{ceiling} marks in {rules.marks.value}"
-        capability = (
-            "" if visual_type is VisualType.WHOWHAT or can_compile(visual_type) else "; no compiler"
-        )
+        capability = "" if can_compile(visual_type) else "; no compiler"
         lines.append(
             f"{visual_type.value}: required {required}; optional {optional}; {marks}{capability}."
         )
@@ -101,8 +98,6 @@ def type_role_guide(visuals: VisualsConfig) -> str:
         (
             "Chart example: bar pairs source category ids with comparable quantity ids; "
             "use the configured mark floor and leave unused channels empty.",
-            "Grid example: whowhat pairs an entity id with a claim id in their shared sentence; "
-            "no quantity is required.",
             "Decline example: decision none; purpose, type, declared_whole_element_id, title "
             "and caption null; every encoding and reference list empty; why explains "
             "unsupported evidence or why no supported comparison or relationship becomes "

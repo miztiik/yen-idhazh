@@ -23,7 +23,6 @@ from typing import NamedTuple
 
 from idhazh.contracts.element import (
     Element,
-    ElementKind,
     ElementTable,
 )
 from idhazh.contracts.knobs.visuals import VisualsConfig
@@ -52,7 +51,6 @@ from idhazh.visual_vocabulary import (
     TYPE_RULES,
     VALUE_ROLES,
     commensurable,
-    whowhat_rows,
 )
 
 
@@ -195,32 +193,13 @@ def reachable_types(table: ElementTable, *, visuals: VisualsConfig) -> tuple[Vis
     count, so a stranger's page cannot steer our control flow (Guardrail #11) - the
     same property the single-call gate above holds and for the same reason.
     """
-    # Each type belongs to one family. A disabled chart family must not hide an
-    # enabled whowhat grid, and the grid must not make disabled chart types
-    # reachable.
-    chart_enabled = VisualKind.CHART in visuals.enabled_kinds
-    whowhat_enabled = VisualKind.WHOWHAT in visuals.enabled_kinds
-    if not chart_enabled and not whowhat_enabled:
+    if VisualKind.CHART not in visuals.enabled_kinds:
         return ()
     drawable = _drawable(table)
     reached: list[VisualType] = []
     selected = visuals.select_types()
     for visual_type, rules in TYPE_RULES.items():
         if visual_type not in selected:
-            continue
-        if visual_type is VisualType.WHOWHAT:
-            if not whowhat_enabled:
-                continue
-            entities = [one for one in drawable if one.kind is ElementKind.ENTITY]
-            claims = [one for one in drawable if one.kind is ElementKind.CLAIM]
-            rows = whowhat_rows(entities, claims)
-            if (
-                rows
-                and any(row.entity is not None and row.claim is not None for row in rows)
-            ):
-                reached.append(visual_type)
-            continue
-        if not chart_enabled:
             continue
         fillable = {
             role: [one for one in drawable if one.kind in ROLE_KINDS[role]]
@@ -237,8 +216,6 @@ def reachable_types(table: ElementTable, *, visuals: VisualsConfig) -> tuple[Vis
         width = _widest_agreeing(marks) if rules.marks in VALUE_ROLES else len(marks)
         if width >= floor:
             reached.append(visual_type)
-    if visuals.type_selection_enabled and chart_enabled:
-        reached.extend(visual_type for visual_type in selected if visual_type not in TYPE_RULES)
     return tuple(reached)
 
 
@@ -493,7 +470,7 @@ def downgrade(
         or VisualKind.CHART not in visuals.enabled_kinds
         or plan.decision is not PlanDecision.VISUAL
         or plan.type is None
-        or plan.type not in visuals.select_types()
+        or (visuals.type_selection_enabled and plan.type not in visuals.select_types())
     ):
         return None
     pie_whole_rejected = plan.type is VisualType.PIE and any(

@@ -1,4 +1,4 @@
-"""Which native references and source ranges can this label request select?"""
+"""Which native references can this label request select, and which legacy replies remain safe?"""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 from support.models import a_markers, a_server
 
 from idhazh.classify import calls
@@ -57,30 +58,7 @@ def empty_reply(**fields: object) -> dict[str, object]:
         "proposed": [],
         "entity_mentions": [],
         "place_mentions": [],
-        "quotes": [],
-        "claims": [],
-        "keyphrases": [],
-        "lede_sentence_ids": [],
     } | fields
-
-
-def sentence_range(first: str, last: str) -> calls.SentenceRange:
-    return calls.SentenceRange(
-        sentence_start_id=first,
-        sentence_end_id=last,
-        speaker="",
-        attribution="unattributed",
-        hedge=False,
-    )
-
-
-def range_pairs(schema: dict[str, Any]) -> set[tuple[str, str]]:
-    return {
-        (first, last)
-        for branch in schema["$defs"]["SentenceRange"].get("anyOf", [])
-        for first in branch["properties"]["sentence_start_id"]["enum"]
-        for last in branch["properties"]["sentence_end_id"]["enum"]
-    }
 
 
 def test_request_only_offers_printed_references() -> None:
@@ -101,7 +79,6 @@ def test_request_only_offers_printed_references() -> None:
     )
     assert labels["time_element_id"]["enum"] == [*dates, ""]
     assert schema["$defs"]["Citation"]["properties"]["sentence_id"]["enum"] == sentences
-    assert schema["properties"]["lede_sentence_ids"]["items"]["enum"] == sentences
     assert all(f"[{address}]" in calls.candidate_menu(table) for address in candidates)
     assert all(
         f"[{address}] " in calls.numbered_sentences(article.text or "") for address in sentences
@@ -109,55 +86,6 @@ def test_request_only_offers_printed_references() -> None:
     assert "s99" not in sentences
     assert not set(candidates) & set(sentences)
     assert any(one.element_id not in dates for one in table.elements)
-
-
-@pytest.mark.parametrize(
-    "text",
-    [
-        "Unit A acted. Unit B responded. ",
-        " \t" + "x" * 500 + "\r\n",
-        "x" * 501,
-        "\u00e9" * 499 + ".",
-        "\U0001f642" * 499 + ".",
-        "x" * 247 + ". " + "y" * 249 + ".",
-        "x" * 247 + ". " + "y" * 250 + ".",
-        '  Unit A wrote "\\n".\nUnit B said "yes".  ',
-        " \t\r\n",
-    ],
-)
-def test_range_choices_equal_native_anchoring(text: str) -> None:
-    article = article_with_text(text)
-    table = element_table(article, config=ElementsConfig())
-    schema = calls.label_request_schema(article, table)
-    offered = range_pairs(schema)
-    addresses = [
-        *(calls.sentence_id(index) for index, _ in enumerate(calls.sentence_spans(text))),
-        "s99",
-        "not-a-sentence",
-    ]
-    for first in addresses:
-        for last in addresses:
-            found = calls.range_elements(
-                text,
-                [sentence_range(first, last)],
-                kind=ElementKind.CLAIM,
-                label_source="test",
-                entity_slugs={},
-            )
-            assert ((first, last) in offered) == bool(found), (first, last)
-            for element in found:
-                assert text[element.span_start : element.span_end] == element.span_excerpt
-    assert schema["properties"]["quotes"]["items"] == schema["properties"]["claims"]["items"]
-
-
-def test_original_character_bound_is_not_escape_or_byte_width() -> None:
-    for character in ("x", "\u00e9", "\U0001f642", "\\", '"'):
-        for length, expected in ((500, {("s0", "s0")}), (501, set())):
-            article = article_with_text(" \t" + character * length + "\r\n")
-            schema = calls.label_request_schema(
-                article, element_table(article, config=ElementsConfig())
-            )
-            assert range_pairs(schema) == expected
 
 
 @pytest.mark.parametrize("text", ["", " \t\r\n", "Nothing numeric."])
@@ -169,9 +97,6 @@ def test_empty_pools_need_no_invented_address(text: str) -> None:
     assert schema["$defs"]["ElementLabel"]["properties"]["time_element_id"]["enum"] == [""]
     assert "enum" not in schema["$defs"]["ElementLabel"]["properties"]["element_id"]
     if not text.strip():
-        assert schema["properties"]["quotes"]["maxItems"] == 0
-        assert schema["properties"]["claims"]["maxItems"] == 0
-        assert schema["$defs"]["SentenceRange"] == calls.label_schema()["$defs"]["SentenceRange"]
         assert schema["$defs"]["Citation"]["properties"]["sentence_id"]["enum"] == ["s0"]
     assert calls.parse_label(json.dumps(empty_reply())).model_dump() == empty_reply()
     assert all(not field.get("minItems", 0) for field in schema["properties"].values())
@@ -209,30 +134,13 @@ def test_projection_preserves_native_shape_and_request_budget() -> None:
                 ][field]
             else:
                 assert leaf == expected["properties"][field]
-    for branch in schema["$defs"]["SentenceRange"]["anyOf"]:
-        expected = native["$defs"]["SentenceRange"]
-        assert {key: value for key, value in branch.items() if key != "properties"} == {
-            key: value for key, value in expected.items() if key != "properties"
-        }
-        assert list(branch["properties"]) == list(expected["properties"])
-        for field, leaf in branch["properties"].items():
-            if field == "speaker":
-                assert leaf == {"$ref": "#/$defs/LabelRangeSpeaker"}
-                leaf = schema["$defs"]["LabelRangeSpeaker"]
-            if field in {"sentence_start_id", "sentence_end_id"}:
-                assert {key: value for key, value in leaf.items() if key != "enum"} == expected[
-                    "properties"
-                ][field]
-            else:
-                assert leaf == expected["properties"][field]
+    assert schema["required"] == ["labels", "proposed", "entity_mentions", "place_mentions"]
 
 
-def test_selected_ranges_still_parse_and_anchor_verbatim() -> None:
+def test_selected_mentions_still_parse_and_anchor_verbatim() -> None:
     text = "Unit A may chair\nthe review if funded. Unit B opposed it."
     article = article_with_text(text)
     table = element_table(article, config=ElementsConfig())
-    schema = calls.label_request_schema(article, table)
-    assert ("s0", "s1") in range_pairs(schema)
     reply = calls.parse_label(
         json.dumps(
             empty_reply(
@@ -243,7 +151,6 @@ def test_selected_ranges_still_parse_and_anchor_verbatim() -> None:
                         "salience": "primary",
                     }
                 ],
-                claims=[sentence_range("s0", "s1").model_dump()],
             )
         )
     )
@@ -253,7 +160,51 @@ def test_selected_ranges_still_parse_and_anchor_verbatim() -> None:
     assert [one.span_excerpt for one in whole.elements if one.kind is ElementKind.ENTITY] == [
         "Unit A"
     ]
-    assert [one.span_excerpt for one in whole.elements if one.kind is ElementKind.CLAIM] == [text]
+
+
+LEGACY_RANGE: dict[str, object] = {
+    "sentence_start_id": "s0", "sentence_end_id": "s0", "speaker": "",
+    "attribution": "unattributed", "hedge": False,
+}
+
+
+def legacy_observations(**fields: object) -> dict[str, object]:
+    return {
+        "quotes": [],
+        "claims": [LEGACY_RANGE],
+        "keyphrases": ["old evidence"],
+        "lede_sentence_ids": ["s0"],
+    } | fields
+
+
+def test_legacy_observations_are_validated_then_discarded_not_anchored() -> None:
+    text = "Unit A counted 10 units."
+    article = article_with_text(text)
+    table = element_table(article, config=ElementsConfig())
+    reply = calls.parse_label(json.dumps(empty_reply(**legacy_observations())))
+
+    assert reply.model_dump() == empty_reply()
+    whole = calls.anchored(table, text, reply, config=ElementsConfig(), label_source="test")
+    assert whole.elements == table.elements
+
+
+@pytest.mark.parametrize("retired", [
+    {"quotes": []},
+    legacy_observations(claims="not a list"),
+    legacy_observations(claims=[{"sentence_start_id": "s0"}]),
+    legacy_observations(quotes=[LEGACY_RANGE] * 9),
+    legacy_observations(claims=[LEGACY_RANGE | {"speaker": "x" * 61}]),
+    legacy_observations(claims=[LEGACY_RANGE | {"unrelated": True}]),
+    legacy_observations(keyphrases=["x" * 61]),
+    legacy_observations(lede_sentence_ids=["s0"] * 3),
+    legacy_observations(lede_sentence_ids=["x" * 49]),
+    legacy_observations(unrelated=[]),
+])
+def test_malformed_legacy_observations_and_unknown_fields_still_fail(
+    retired: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        calls.parse_label(json.dumps(empty_reply(**retired)))
 
 
 def test_request_still_refuses_a_table_over_another_source() -> None:

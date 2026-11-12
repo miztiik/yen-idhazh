@@ -57,7 +57,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, Final, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from idhazh.contracts.article import UntrustedLine
 from idhazh.contracts.base import (
@@ -83,7 +83,7 @@ from idhazh.contracts.visual_decision import VisualKind, VisualState
 
 
 class DigestVisual(Model):
-    """Where a story's chart or whowhat data is, and never that data itself.
+    """Where a story's visual data was filed, and never that data itself.
 
     One pointer and no chart data, ever. The day payload is the record that a
     day happened and is never deleted, so anything held inside it could not age
@@ -119,7 +119,10 @@ class DigestVisual(Model):
     @model_validator(mode="before")
     @classmethod
     def _without_the_retired_drawing_path(cls, data: Any) -> Any:
-        return without_retired_keys(data, "path")
+        current = without_retired_keys(data, "path")
+        if isinstance(current, dict) and current.get("kind") is None:
+            return current | {"kind": VisualKind.CHART}
+        return current
 
     @model_validator(mode="after")
     def _a_data_path_means_the_marks_were_written(self) -> Self:
@@ -548,7 +551,20 @@ class DigestDay(Contract):
     """`frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json`."""
 
     __schema_stem__: ClassVar[str] = "digest-day"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "readCompatibility": (
+                "historical visual metadata remains readable; absent/null kinds are charts; "
+                "retired actor pointers project to no visual without rewriting stored days"
+            )
+        }
+    )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-11",
+            change="Retire actor-grid publication while preserving historical visual metadata.",
+            why="Readers suppress retired visual pointers and keep legacy chart kinds readable.",
+        ),
         ChangelogEntry(
             version="2026-10-28",
             change="DigestVisual.kind names the separate whowhat grid format.",
@@ -563,11 +579,6 @@ class DigestDay(Contract):
             version="2026-09-24",
             change="Removed DigestItem.key_points. A frozen day that carries it still loads.",
             why="Nothing drew them, and the search filter reads title and summary instead.",
-        ),
-        ChangelogEntry(
-            version="2026-09-22T12:00",
-            change="Added DigestRunRef.run_id and .completed_at; items_failed may be null.",
-            why="The day is folded from per-run fragments, and a fold can be missing one.",
         ),
         ChangelogEntry(
             version="2026-08-21",
