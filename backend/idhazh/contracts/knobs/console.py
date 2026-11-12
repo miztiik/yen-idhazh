@@ -323,7 +323,7 @@ class ConsoleConfig(Model):
         le=7,
         description=(
             "How many whole-record median-speed groups the machine history keeps "
-            "for its established ordering and folds. Machine identity, not this "
+            "for its legend groups and folds. Machine identity, not this "
             "group, chooses categorical colour. Changing the selected window does "
             "not recompute these groups."
         ),

@@ -17,6 +17,7 @@ import {
 } from './machine-colour';
 import { readoutOf, type Readout } from './readout';
 import type { HoverReadout } from './readout-hover';
+import type { ChartConfig } from '../server/config';
 import { RESERVED_GREY_INK } from './d3/ordered-colour';
 import type { FillGradient, SeriesInput } from './d3/dateSeries';
 import { bandScale } from './d3/scale';
@@ -84,7 +85,7 @@ export interface FleetRow {
 	placements: number;
 	/** The kinds a fold holds, in words. Empty on a kind's own row. */
 	members: string[];
-	/** Constituent identities stay separately painted inside the established group position. */
+	/** Constituent identities retain exact counts inside this compact legend group. */
 	parts: FleetPart[];
 }
 
@@ -112,7 +113,7 @@ export interface FleetLine {
 export interface FleetView {
 	/** The days that recorded a placement, ascending. One column each. */
 	days: string[];
-	/** Slowest first, then the machines with no speed reading, then no machine. */
+	/** Legend-group order; each day's drawn stack ranks its own counts separately. */
 	rows: FleetRow[];
 	/** Every job of each drawn day, in row order, for the list a pick opens. */
 	lines: FleetLine[][];
@@ -141,7 +142,7 @@ export interface FleetView {
 export interface FleetOptions {
 	/** Whole-record speed groups used only for the established ordering and folds. */
 	ramp: MachineRamp;
-	appearance: { gradients: boolean; floor: number };
+	appearance: { gradients: boolean; floor: number; palette: ChartConfig['palette'] };
 	/** The open span, inclusive UTC days. */
 	start: string;
 	end: string;
@@ -432,7 +433,7 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 	};
 }
 
-/** Identity subsegments preserve every group's established stack position and total. */
+/** Every machine's exact dated counts, independently of its position in a daily stack. */
 export function fleetSeries(view: FleetView): SeriesInput[] {
 	return view.rows.flatMap((row) => row.parts.map((part) => ({
 		label: part.key,
@@ -523,12 +524,12 @@ export interface FleetBlock {
 	top: number;
 }
 
-/** One square a job, a column a day, filled from the bottom in row order.
+/** One square a job, a column a day, largest machine count first from the bottom.
  *
  * A day's squares stand as a block no wider than the busiest day's is tall: as
  * many abreast as the square root of the busiest day's count, and never more
  * than the column holds. Every day is then one width and its height is its
- * count, and the slowest machine stays at the bottom however wide the column.
+ * count, and the most frequent machine stays at the bottom however wide the column.
  * The side is the largest up to `maxPx` that lets the busiest day fit the plot.
  * `gapPx` of ground parts every square from the next.
  */
@@ -566,22 +567,22 @@ export function fleetDots(
 	view.days.forEach((_, day) => {
 		const left = blocks[day].left;
 		let at = 0;
-		for (const row of view.rows) {
-			for (const part of row.parts) {
-				for (let count = 0; count < (part.counts[day] ?? 0); count += 1) {
-					const line = Math.floor(at / across);
-					squares.push({
-						x: left + (at % across) * step,
-						y: box.bottom - (line + 1) * step + opts.gapPx,
-						size,
-						colour: part.colour,
-						gradient: part.gradient,
-						drawing: row.drawing,
-						day,
-						row: part.key
-					});
-					at += 1;
-				}
+		const parts = view.rows.flatMap((row) => row.parts).sort((a, b) =>
+			b.counts[day] - a.counts[day] || a.key.localeCompare(b.key));
+		for (const part of parts) {
+			for (let count = 0; count < (part.counts[day] ?? 0); count += 1) {
+				const line = Math.floor(at / across);
+				squares.push({
+					x: left + (at % across) * step,
+					y: box.bottom - (line + 1) * step + opts.gapPx,
+					size,
+					colour: part.colour,
+					gradient: part.gradient,
+					drawing: part.key === UNRECORDED_KEY ? 'unrecorded' : 'step',
+					day,
+					row: part.key
+				});
+				at += 1;
 			}
 		}
 	});

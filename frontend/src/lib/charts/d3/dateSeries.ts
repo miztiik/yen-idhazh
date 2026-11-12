@@ -12,7 +12,7 @@
  * **The dates on the axis come from `dayTicks`**, the one rule this console has
  * for a date axis, and never from an axis generator.
  */
-import { area, line, stack } from 'd3-shape';
+import { area, line, stack, stackOrderDescending } from 'd3-shape';
 
 import { dayTicks, type DayTick, type Frame } from '../frame';
 import type { ChartToken } from '../theme';
@@ -51,6 +51,8 @@ export interface FillGradient {
 export interface DateSeriesOptions {
 	frame: Frame;
 	stacked?: boolean;
+	/** Rank each day's parts independently; other charts retain their declared series order. */
+	stackOrder?: 'series' | 'descending';
 	/** `chart.tick_density` - the most dates the axis may carry. */
 	density: number;
 	/** How many ticks the value axis aims for. */
@@ -295,6 +297,13 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 	const layers = stack<Record<string, number | null>, string>()
 		.keys(keys)
 		.value((day, key) => day[key] ?? 0)(table);
+	const rankedStack = stack<Record<string, number | null>, string>()
+		.keys([...keys].sort().reverse())
+		.value((day, key) => day[key] ?? 0)
+		.order(stackOrderDescending);
+	const ranked = opts.stackOrder === 'descending'
+		? table.map((day) => new Map(rankedStack([day]).map((layer) => [layer.key, layer[0]])))
+		: null;
 	const totals = layers.length === 0 ? [] : layers[layers.length - 1].map((span) => span[1]);
 	const reconciled = reconciliation === undefined ? [] : dates.flatMap((date, index) => {
 		const elapsed = extraReadings[0].get(date) ?? null;
@@ -316,7 +325,8 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 		layer.flatMap((span, at) => {
 			const value = table[at][layer.key];
 			if (value === null || value === 0) return [];
-			const top = axis.scale(span[1]);
+			const placed = ranked === null ? span : ranked[at].get(layer.key)!;
+			const top = axis.scale(placed[1]);
 			const entry = series[index];
 			return [
 				{
@@ -330,7 +340,7 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 					x: band(dates[at]) ?? 0,
 					y: top,
 					width: band.bandwidth(),
-					height: axis.scale(span[0]) - top
+					height: axis.scale(placed[0]) - top
 				}
 			];
 		})

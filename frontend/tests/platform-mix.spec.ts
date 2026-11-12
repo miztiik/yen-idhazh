@@ -46,6 +46,7 @@ import {
 } from '../src/lib/charts/machine-colour';
 import { hoverReading } from '../src/lib/charts/readout-hover';
 import { PALETTE } from '../src/lib/charts/theme';
+import { schemeSpectral } from 'd3-scale-chromatic';
 import type { Row, SliceResult } from '../src/lib/data/slice-shapes';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -99,7 +100,7 @@ function options(jobs: readonly FleetJob[], over: Partial<FleetOptions> = {}): F
 	const config = knobs();
 	return {
 		ramp: rampOf(jobs),
-		appearance: { gradients: true, floor: config.machine_colour_floor_share },
+		appearance: { gradients: true, floor: config.machine_colour_floor_share, palette: 'spectral' },
 		start: '2026-09-26',
 		end: '2026-09-28',
 		windowDays: 3,
@@ -109,13 +110,6 @@ function options(jobs: readonly FleetJob[], over: Partial<FleetOptions> = {}): F
 		recording: true,
 		...over
 	};
-}
-
-/** The middle reading, averaging the two middle ones of an even count. */
-function middle(values: readonly number[]): number {
-	const sorted = [...values].sort((a, b) => a - b);
-	const at = sorted.length / 2;
-	return sorted.length % 2 === 1 ? sorted[Math.floor(at)] : (sorted[at - 1] + sorted[at]) / 2;
 }
 
 /** One job row in the door's shape. Every cell may be left to its default. */
@@ -152,7 +146,7 @@ function jobsOf(count: number, fingerprint: string | null, cpu: string | null, r
 }
 
 test.describe('THE ORACLE: the recorded door answer, drawn', () => {
-	test('one stacked bar a day, one segment a kind, slowest at the bottom', () => {
+	test('one stacked bar a day, one segment a kind, largest daily count at the bottom', () => {
 		const rows = recorded();
 		const jobs = fleetJobs(rows);
 		expect(jobs, 'every recorded row is a job with a day and a run').toHaveLength(rows.length);
@@ -160,6 +154,7 @@ test.describe('THE ORACLE: the recorded door answer, drawn', () => {
 		const bars = dateSeries(fleetSeries(view), {
 			frame: frame(760, 220),
 			stacked: true,
+			stackOrder: 'descending',
 			density: 6,
 			valueTicks: 4,
 			padding: 0.2
@@ -186,7 +181,6 @@ test.describe('THE ORACLE: the recorded door answer, drawn', () => {
 		// Every kind here is its own row: none shares a step with another leftover.
 		expect(view.rows.map((row) => row.key).sort()).toEqual([...byKind.keys()].sort());
 
-		const speedOf = (key: string) => middle(byKind.get(key)?.rates ?? []);
 		for (const date of days) {
 			// Bottom to top: the segment whose foot is lowest on the page first.
 			const segments = bars.bars.filter((bar) => bar.date === date).sort((a, b) => b.y - a.y);
@@ -195,8 +189,8 @@ test.describe('THE ORACLE: the recorded door answer, drawn', () => {
 			for (const bar of segments) {
 				expect(bar.value, `${date} ${bar.label}`).toBe(byKind.get(bar.label)?.perDay.get(date));
 			}
-			const speeds = segments.map((bar) => speedOf(bar.label));
-			expect(speeds, `${date}: slowest at the bottom`).toEqual([...speeds].sort((a, b) => a - b));
+			const counts = segments.map((bar) => bar.value);
+			expect(counts, `${date}: largest count at the bottom`).toEqual([...counts].sort((a, b) => b - a));
 		}
 	});
 
@@ -392,6 +386,8 @@ test('categorical identity and qualified names survive presets, row order, speed
 		.toEqual(['Twin (kind 1)', 'Twin (kind 2)', 'Twin (kind 3)']);
 	const parts = wide.rows.flatMap((row) => row.parts);
 	expect(parts.filter((part) => part.key !== UNRECORDED_KEY).every((part) =>
+		schemeSpectral[schemeSpectral.length - 1].includes(part.colour))).toBe(true);
+	expect(parts.filter((part) => part.key !== UNRECORDED_KEY).every((part) =>
 		part.token !== '--chart-8' && part.gradient !== null)).toBe(true);
 	expect(parts.find((part) => part.key === UNRECORDED_KEY)).toMatchObject({
 		token: '--chart-8', gradient: null, colour: 'var(--chart-8)'
@@ -432,6 +428,37 @@ test('compact mark hover and complete non-hover details quote the same machine-d
 	expect(hoverReading(hover, 0, 'v1:b')?.entries[0].value).toBe('0 of 2 recorded jobs');
 	expect(view.days).toEqual(['2026-09-11', '2026-09-12']);
 	expect(details.series.find((series) => series.label === 'Machine B')?.note).toBe('Speed not recorded');
+});
+
+test('each day ranks its own counts while full-identity colours, zeros and unknown jobs remain exact', () => {
+	const jobs = fleetJobs([
+		...jobsOf(5, 'a', 'Machine A', 1, '2026-09-11'),
+		...jobsOf(1, 'b', 'Machine B', 20, '2026-09-11'),
+		...jobsOf(1, 'a', 'Machine A', 1, '2026-09-12'),
+		...jobsOf(7, 'b', 'Machine B', 20, '2026-09-12'),
+		...jobsOf(2, null, null, null, '2026-09-12')
+	]);
+	const view = fleetView(jobs, options(jobs, { start: '2026-09-11', end: '2026-09-12', windowDays: 2 }));
+	const series = fleetSeries(view);
+	const drawing = dateSeries(series, {
+		frame: frame(760, 220), stacked: true, stackOrder: 'descending',
+		density: 6, valueTicks: 4, padding: 0.2
+	})!;
+	const bottomFirst = (date: string) => drawing.bars.filter((bar) => bar.date === date)
+		.sort((a, b) => b.y - a.y).map((bar) => [bar.label, bar.value]);
+	expect(bottomFirst('2026-09-11')).toEqual([['v1:a', 5], ['v1:b', 1]]);
+	expect(bottomFirst('2026-09-12')).toEqual([['v1:b', 7], [UNRECORDED_KEY, 2], ['v1:a', 1]]);
+	const colourA = series.find((one) => one.label === 'v1:a')!.fill;
+	expect(drawing.bars.filter((bar) => bar.label === 'v1:a').map((bar) => bar.fill)).toEqual([colourA, colourA]);
+	const hover = fleetHover(view);
+	expect(hoverReading(hover, 1, 'v1:a')?.entries[0].value).toBe('1 of 10 recorded jobs');
+	expect(hoverReading(hover, 0, UNRECORDED_KEY)?.entries[0].value).toBe('0 of 6 recorded jobs');
+	expect(fleetReadout(view).series.find((one) => one.label === UNRECORDED_NAME)?.values).toEqual(['0', '2']);
+	const squares = fleetDots(view, { frame: frame(760, 220), density: 6, padding: 0.2, maxPx: 8, gapPx: 1 })!;
+	expect(squares.squares.filter((square) => square.day === 0).map((square) => square.row))
+		.toEqual([...Array(5).fill('v1:a'), 'v1:b']);
+	expect(squares.squares.filter((square) => square.day === 1).map((square) => square.row))
+		.toEqual([...Array(7).fill('v1:b'), UNRECORDED_KEY, UNRECORDED_KEY, 'v1:a']);
 });
 
 test.describe('the window, the states and the rows the door hands over', () => {
@@ -499,7 +526,7 @@ test.describe('the window, the states and the rows the door hands over', () => {
 		if (dots === null) return;
 		expect(dots.squares).toHaveLength(42);
 		expect(dots.squares.every((square) => square.y >= box.top && square.y + square.size <= box.bottom)).toBe(true);
-		// The slow machine's squares sit at or below every fast machine's square.
+		// The more frequent machine's squares sit at or below the less frequent one's.
 		const lowestFast = Math.max(...dots.squares.filter((square) => square.row === 'v1:fast').map((square) => square.y));
 		const highestSlow = Math.min(...dots.squares.filter((square) => square.row === 'v1:slow').map((square) => square.y));
 		expect(Number.isFinite(lowestFast) && Number.isFinite(highestSlow)).toBe(true);
@@ -518,7 +545,7 @@ test.describe('the window, the states and the rows the door hands over', () => {
 		const across = new Set(dots.squares.map((square) => square.x)).size;
 		const high = new Set(dots.squares.map((square) => square.y)).size;
 		expect([across, high]).toEqual([5, 6]);
-		// The slowest machine still fills the bottom lines.
+		// The more frequent machine fills the bottom lines.
 		const lowestFast = Math.max(...dots.squares.filter((square) => square.row === 'v1:fast').map((square) => square.y));
 		const highestSlow = Math.min(...dots.squares.filter((square) => square.row === 'v1:slow').map((square) => square.y));
 		expect(Number.isFinite(lowestFast) && Number.isFinite(highestSlow)).toBe(true);

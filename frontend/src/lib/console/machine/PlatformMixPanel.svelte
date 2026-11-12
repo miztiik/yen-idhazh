@@ -75,7 +75,7 @@
 	const view = $derived(
 		fleetView(jobs, {
 			ramp,
-			appearance: { gradients, floor: knobs.machine_colour_floor_share },
+			appearance: { gradients, floor: knobs.machine_colour_floor_share, palette: chart.palette },
 			start: span?.start ?? start,
 			end: span?.end ?? end,
 			windowDays,
@@ -93,6 +93,7 @@
 			? dateSeries(fleetSeries(view), {
 					frame: box,
 					stacked: true,
+					stackOrder: 'descending',
 					density: chart.tick_density,
 					valueTicks: VALUE_TICKS,
 					padding: PADDING,
@@ -115,8 +116,8 @@
 	const readout = $derived(fleetSummary(view));
 	const details = $derived(fleetReadout(view));
 	const hover = $derived(fleetHover(view));
-	const note = $derived(`Recorded jobs per UTC day. Colour identifies machine kinds.${view.shape === 'dots' ? ' One square per job.' : ''}`);
-	const barsLabel = 'Recorded jobs per UTC day, stacked by machine kind.';
+	const note = $derived(`Recorded jobs per UTC day. Largest at the bottom; colour identifies machines.${view.shape === 'dots' ? ' One square per job.' : ''}`);
+	const barsLabel = 'Recorded jobs per UTC day, largest machine count at the bottom of each stack.';
 	const dotsLabel = 'One square per recorded job, grouped by UTC day and machine kind.';
 	const hint = FLEET_HINT;
 

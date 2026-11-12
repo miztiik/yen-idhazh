@@ -886,9 +886,10 @@ Table AA
   uses the retained full newest-day clock population, not removed card queries.
   Producer contracts, collection, raw/compact rows and host/run identities remain.
 - **History contract:** Canonical full identities from the bounded widest host
-  universe assign categorical slots and same-name qualifiers. Palette reuse never
-  merges machines. Top-kind selection, folded totals and group order remain;
-  folded identities draw distinct subsegments. The existing gradient flag selects
+  universe assign D3 built-in Spectral slots and same-name qualifiers. Palette reuse
+  never merges machines. Top-kind selection and folded totals remain; each UTC
+  day's segments rank its own counts largest at the bottom, including distinct
+  folded identities. The existing gradient flag selects
   uniform opaque shading or the same flat category fill; the existing tint share
   is independent of speed. Missing speed keeps identity; missing identity stays
   neutral. UTC dates, exact counts, small-cohort switch and real day-job details
@@ -903,9 +904,9 @@ Table AA
   `config/console/machine.json` -> `knobs.slowest_articles_rows` and prior inputs.
 - **Files:** Selected Hardware/Pipelines roster, route, query, presentation and
   adapter files; optional in-memory date-series gradient/hover projections;
-  existing appearance descriptions and version metadata only; named dependent
+  existing appearance selector's additive spectral vocabulary and version metadata; named dependent
   source/query fixtures and tests; Hardware/Pipelines, machine-drawing, appearance
-  and shared-hover owning docs. No new persisted field, palette, engine, export,
+  and shared-hover owning docs. No new persisted field, hand-authored palette, engine, export,
   raw read, current-day packing, origin, model or workflow.
 - **Acceptance:** Shared selector, smallest real behavior/contract tests and
   applicable lint/types. Verify actual removed mounts and retained consumers,

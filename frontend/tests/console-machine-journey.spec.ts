@@ -119,7 +119,13 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(machineHover).toContainText(/\d+ of \d+ recorded jobs/);
 	await expect(machineHover).not.toContainText('tokens a second');
 	await expect(machineHover.locator('p')).toHaveCount(0);
-	expect(await square.getAttribute('style')).toContain('url(#machine-fleet-square-fill-');
+	expect(await square.evaluate((node) => {
+		if (!(node instanceof SVGElement)) throw new Error('Expected the actual job square.');
+		const id = /^url\(["']?#([^"')]+)["']?\)/.exec(node.style.fill)?.[1];
+		const gradient = id === undefined ? null : document.getElementById(id);
+		return gradient instanceof SVGLinearGradientElement &&
+			new Set([...gradient.querySelectorAll('stop')].map((stop) => getComputedStyle(stop).stopColor)).size > 1;
+	}), 'the actual job square resolves to a gradient with distinct rendered stops').toBe(true);
 	const day = (await machineHover.locator('strong').textContent())!.replace(' UTC', '');
 	const machineCount = (await machineHover.locator('dd').textContent())!.split(' of ')[0];
 	const machineName = (await machineHover.locator('dt').textContent())!.trim();

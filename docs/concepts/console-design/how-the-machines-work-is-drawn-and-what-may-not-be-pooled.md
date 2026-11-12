@@ -38,7 +38,8 @@ The chart rules these panels obey are
  and the panel reads as one rather than as a panel with a missing spread.
 - **Machine-history colour identifies a machine kind, not its speed.**
  Canonical full identities from the bounded widest host query receive the
- existing categorical tokens in order. Fingerprint version and digest form one
+ configured ordinal palette in order, using D3's built-in Spectral scheme by
+ the committed setting. Fingerprint version and digest form one
  identity; namespaced name-only evidence remains coarser and separate. Equal
  CPU names receive stable kind qualifiers from that same universe. Neither the
  selected window, frequency nor speed assigns a slot. Repeated palette slots
@@ -62,25 +63,25 @@ The chart rules these panels obey are
  placements reads as "this much" and invites a rate the count cannot support,
  while a square a job reads as "these ones", because every mark is a job a
  reader can point at. A day's squares stand as a block no wider than the
- busiest day's is tall, so a day's height is its count and the slowest machine
- stays at the bottom however wide a column is; a day in one long row would turn
- "slowest at the bottom" into "slowest at the left". **It switches at 160 as a
+ busiest day's is tall, so a day's height is its count and kinds with the most
+ jobs fill from the bottom. **It switches at 160 as a
  declared estimate and not a measurement** - see the design rationale below.
 - **Over that floor the count is one bar a day, split by the kind of machine
- that ran its jobs, slowest at the bottom.** The panel's title asks which
+ that ran its jobs, largest daily count at the bottom.** The panel's title asks which
  machines ran our jobs, day by day, and a ranked list answers which is biggest
- rather than what is changing. The slowest sit on the baseline every day
- shares. **Only days
+ rather than what is changing. Rank each day independently, not by a whole-window
+ series total or machine speed. **Only days
  that recorded a placement are drawn** - a zero-height day would say the
  platform gave us nothing that day, and a day the record never reached says
  nothing at all.
-- **Placement selection, folds and ordering retain their existing populations.**
+- **Placement selection and folds retain their existing populations.**
  `console.fleet_top_kinds` names the most-placed kinds, breaking ties by the
  newest placement. Leftovers keep their whole-record median-speed groups,
  including the untimed group; a lone leftover keeps its own name. Each folded
- group retains its position and exact total but draws constituent identity
- subsegments rather than pretending several machines have one identity colour.
- Missing identity stays separate and last. Selecting a day opens all machine
+ group retains its exact total and compact legend grouping. Its constituent
+ identities are ranked individually inside each day's stack, so a group need
+ not remain contiguous. Missing identity stays separate and neutral, with its
+ actual count taking its own daily position. Selecting a day opens all machine
  counts, known zeros and actual jobs under their own qualified machine names.
  The held day stays outlined; phone job details wrap instead of scrolling.
 - **Framing and hover are compact, not incomplete.** Keep the title, one
@@ -282,8 +283,9 @@ from the committed rows rather than argued with.
 
 **Identity, rather than speed, is the useful colour reading of placement
 history.** Uniform gradients distinguish categories without introducing a
-performance scale. Palette reuse is explicit and keeps names and positions;
-folded identities remain separately painted. The removed newest-run detail,
+performance scale. D3 supplies Spectral rather than a second hand-authored
+palette. Palette reuse keeps distinct names; daily count ranking may change
+positions without changing identity colour. Folded identities remain separately painted. The removed newest-run detail,
 processor-steal and model-paging panels are not replaced by this history.
 
 The old speed-ramp contrast measurements do not measure these categorical

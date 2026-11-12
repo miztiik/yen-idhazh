@@ -270,13 +270,22 @@ constraints, processor contention or model paging. Those three diagnostic
 panels are permanently absent, without disclosures or relocations. Historical
 mix is retained but is not a substitute for their lost detail.
 
-Categorical identity uses the existing console palette in both themes, cycling
-slots without merging identities when slots repeat. Each known machine has the
+Machine identity uses D3's built-in Spectral scheme through the existing
+`chart.palette` selector, without recolouring other charts. Its widest built-in
+scheme supplies the ordinal slots; reused slots never merge identities. Each known machine has the
 same optional opaque lighter-to-base treatment, restarting inside its segment
 or job square. Missing speed does not remove identity; missing identity stays
-neutral. The existing top-kind selection, speed-group folds and group ordering
-remain; folded groups contain separately painted identity subsegments whose
-counts sum exactly to the group total.
+neutral. Top-kind selection and folded totals remain as compact legend groups.
+Every UTC day orders its actual machine segments from largest count at the
+bottom to smallest at the top, independently of other days. Folded identities
+remain separate segments even when daily ranking parts them. Their counts still
+sum exactly to the group total. The small-cohort job squares use the same daily
+count ordering.
+
+`d3-scale-chromatic` supplies the published colour schemes; no palette is
+hand-authored here. Existing D3 scale/color dependencies are reused. Only named
+schemes are imported, rather than another chart engine; its upstream complete
+minified distribution is about 20 KB before tree shaking, not the browser delta.
 
 Framing is one context line and a compact identity key. Below the plot are only
 the selected UTC day, its recorded-job total and a short selection hint. Full

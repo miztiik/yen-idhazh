@@ -22,7 +22,7 @@ Its blocks:
 | `assist` | On-device archive search. Formerly `idhazh.json`'s `assist` block. |
 | `frame` | The frame maximums, the reading measure, the gutter range, and the three breakpoints. |
 | `theme` | Whether gradients, elevation and the display face are drawn, and how strongly a panel takes a tint. |
-| `chart` | Console chart dimensions, readout width, tick density, sparkline height, additive hover tooltips, and bounded geometry for story bars, dots, slopes and lines. `hover_readout` switches only console tooltips; standing, keyboard and touch readings remain usable. `palette` is retained but currently has no consumer. |
+| `chart` | Console chart dimensions, readout width, tick density, sparkline height, additive hover tooltips, machine-history palette and bounded story geometry. `hover_readout` switches only console tooltips; standing, keyboard and touch readings remain usable. |
 | `icons` | Icon size, whether an icon takes the hue of what it means, and whether a topic carries a mark. |
 | `motion` | The two durations, and one switch. `prefers-reduced-motion` sits above the switch and is deliberately not configurable. |
 
@@ -268,15 +268,21 @@ retirement does not remove them. Design review follows the
 not a plot-width quota or a panel-picture matrix.
 
 Machine-history colour identifies full machine identities, not speed.
+The existing `chart.palette` selector adds `spectral`, using D3's widest built-in
+Spectral scheme with its ordinal scale. The committed choice is `spectral`;
+prior `categorical` inputs retain theme colours, and `sequential` selects D3
+Blues. No other chart consumes this selector or changes its quantity colours.
 `theme.gradient_enabled` switches the uniform categorical shading on or off;
 false keeps the same machine colour flat. `machine_colour_floor_share` supplies
 the common highlight share, with the remaining share the category hue and the
 bottom the full hue. The generated highlight reuses the configured light
-surface or dark text neutral, so both themes stay opaque without a new palette.
+surface or dark text neutral, so both themes stay opaque without a hand-authored palette.
 These existing settings retain their values, defaults and valid prior inputs.
 
 `machine_colour_stops` still supplies the whole-record median-speed groups used
-by the established ordering and folds; it does not select category colours.
+by the compact legend groups and folds; it does not select category colours or
+stack positions. Each day's stack orders that day's machine counts descending,
+largest at the bottom; identity colours stay fixed as positions change.
 `absent_hatch_degrees` still controls retained absent-reading hatches, but
 missing machine speed no longer replaces an identified machine's fill.
 `fleet_dot_max_px` limits each job square when placements fall below
