@@ -20,8 +20,9 @@ import { daysBetween } from '../src/lib/data/slice';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { datedFirst, evalRows, itemHealthRows, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } from '../src/lib/server/ledger-rows';
 import { carriesServerCounters } from '../src/lib/console/machine/counters';
-import { countersFrom, fingerprints } from '../src/lib/console/machine/records';
-import { machineCardsQuery, platformMixQuery } from '../src/lib/console/queries/machine';
+import { countersFrom } from '../src/lib/console/machine/records';
+import { normalizeHostRows } from '../src/lib/data/host-fingerprint';
+import { platformMixQuery } from '../src/lib/console/queries/machine';
 import { listManifestDays } from '../src/lib/server/model-work';
 import { HOLDOUT_SCORE_COLUMNS, markedPairs, markReach, mergeLineHoldoutScore } from '../src/lib/server/content-similarity-holdout';
 import { windowDay } from '../src/lib/server/window-day';
@@ -103,7 +104,7 @@ test.describe('what a read asks the door for', () => {
 		for (const [name, columns] of [
 			['article', ITEM_HEALTH_COLUMNS],
 			['score', SCORE_COLUMNS],
-			['machine', machineCardsQuery.columns],
+			['machine', platformMixQuery.columns],
 			['holdout score', HOLDOUT_SCORE_COLUMNS]
 		] as const) {
 			expect(new Set(columns).size, `${name} names a column twice`).toBe(columns.length);
@@ -778,12 +779,12 @@ test.describe("THE ORACLE: native server evidence is independent of article rows
 		});
 		expect(answer.state).toBe('ok');
 		expect(answer.rows).toHaveLength(2);
-		expect(fingerprints(answer.rows).map((host) => [
+		expect(normalizeHostRows(answer.rows).map((host) => [
 			host.version, host.fingerprint_version, host.cpu_physical_cores,
 			host.cpu_logical_processors, host.cpu_observed_mhz
 		])).toEqual([
-			['2026-09-20', 1, null, null, 2445],
-			['2026-09-20', 1, null, null, 2445]
+			['2026-09-20', '1', '', '', '2445'],
+			['2026-09-20', '1', '', '', '2445']
 		]);
 		const articles = daysBetween('2030-06-03', '2030-06-14').map((date) => ({
 			date,

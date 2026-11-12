@@ -1,6 +1,6 @@
 # What a month out of a year file costs
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-11-11
 
 What a browser pays to read one month out of a packed year file by byte range,
 against the same month's own file read whole and read by byte range, what a
@@ -29,7 +29,7 @@ earlier read used was sent all 29,816,165 bytes.
 | Machine | A Windows development machine shared with other work. The link sets the times, and three rounds of each read agreed to within 3 percent |
 | Year file | 2025: 29,816,165 bytes, 123,084 rows of the eval ledger's 42 columns, 12 row groups of 10,257 rows, one a month; its footer is 70,553 bytes |
 | Month file | June 2025: 2,490,452 bytes, the same 10,257 rows in one row group |
-| Columns | The 10 eval-ledger columns the console's model-change panel draws: `date`, `model_id`, `summary_words`, `source_words_before_cap`, `source_words`, `extractiveness`, `verbatim_run`, `band`, `unsupported_numbers`, `hedge_dropped` |
+| Columns | The 10 eval-ledger columns measured by this benchmark, taken from the retired model-change query: `date`, `model_id`, `summary_words`, `source_words_before_cap`, `source_words`, `extractiveness`, `verbatim_run`, `band`, `unsupported_numbers`, `hedge_dropped` |
 
 **How the files were built.** The 28 committed day files of the eval ledger for
 September 2026 were read back with `ledger.load_stored`, and their 10,257 rows were

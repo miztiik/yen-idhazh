@@ -23,6 +23,7 @@ from typing import Any, Final
 import pytest
 from pydantic import ValidationError
 from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
+from support.visual_plans import current_plan
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.element import ElementKind, ElementTable
@@ -70,7 +71,8 @@ def tuned_visuals(**knobs: int) -> VisualsConfig:
 
 
 def load_plan(stem: str) -> VisualPlan:
-    return VisualPlan.from_json(read_text(VALIDATOR_FIXTURES / "plans" / f"{stem}.json"))
+    path = VALIDATOR_FIXTURES / "plans" / f"{stem}.json"
+    return VisualPlan.read(path) if stem == "stale-vocabulary" else current_plan(path)
 
 
 def load_table(stem: str) -> ElementTable:
@@ -88,7 +90,7 @@ def histogram_over(*quantities: str) -> VisualPlan:
     holds the values being distributed rather than the marks drawn - so the case
     this section is about cannot be found and has to be built (section 13).
     """
-    payload: dict[str, Any] = json.loads(read_text(VALIDATOR_FIXTURES / "plans" / "passes.json"))
+    payload = load_plan("passes").model_dump(mode="json")
     payload["type"] = VisualType.HISTOGRAM.value
     payload["encodings"] = {role.value: [] for role in EncodingRole}
     payload["encodings"][EncodingRole.BINS.value] = list(quantities)
@@ -146,43 +148,6 @@ def test_the_checks_are_the_ten_the_row_names() -> None:
 def test_a_plan_of_cited_elements_and_legal_roles_passes_every_check() -> None:
     """The happy path, without which the refusals below prove nothing."""
     assert refuse("passes", "wind") == []
-
-
-def test_whowhat_accepts_only_the_source_backed_same_sentence_pairs() -> None:
-    assert refuse("whowhat", "whowhat") == []
-
-    plan = load_plan("whowhat")
-    table = load_table("whowhat")
-    payload = plan.model_dump(mode="json")
-    payload["encodings"]["entity"] = ["entity-0-16"]
-    payload["encodings"]["event_label"] = ["claim-100-138"]
-    payload["element_ids"] = ["claim-100-138", "entity-0-16"]
-    payload["labels"] = ["entity-0-16"]
-    separated = VisualPlan.model_validate(payload)
-
-    rejections = validate_plan(separated, table, visuals=committed_visuals())
-    assert [rejection.check for rejection in rejections] == [ValidatorCheck.ENOUGH_DATA]
-    assert "same-sentence" in rejections[0].detail
-
-
-def test_whowhat_event_labels_must_be_claim_elements() -> None:
-    plan = load_plan("whowhat")
-    payload = plan.model_dump(mode="json")
-    payload["encodings"]["entity"] = ["entity-0-16"]
-    payload["encodings"]["event_label"] = ["entity-0-16"]
-    payload["element_ids"] = ["entity-0-16"]
-    payload["labels"] = ["entity-0-16"]
-    payload["annotations"] = ["entity-0-16"]
-    mislabeled = VisualPlan.model_validate(payload)
-
-    rejections = validate_plan(
-        mislabeled,
-        load_table("whowhat"),
-        visuals=committed_visuals(),
-    )
-    assert [rejection.check for rejection in rejections] == [
-        ValidatorCheck.ROLES_VALID_FOR_TYPE
-    ]
 
 
 def test_stacked_parts_match_the_independently_declared_whole_after_unit_conversion() -> None:

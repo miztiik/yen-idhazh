@@ -71,7 +71,7 @@
 		data-chart-type="distribution"
 		data-chart-name={name}
 		tabindex="0"
-		use:pointerReadout={{ marks, width: box.width, onSelect: (index) => selected = index }}
+		use:pointerReadout={{ marks, width: box.width, hover: { name, readout }, onSelect: (index) => selected = index }}
 	>
 		{#each geometry.y.ticks as tick (tick.value)}
 			<line x1={box.left} x2={box.right} y1={tick.at} y2={tick.at} stroke="var(--chart-grid)" />

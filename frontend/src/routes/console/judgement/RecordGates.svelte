@@ -179,6 +179,7 @@
 				use:markReadout={{
 					count: squares.length,
 					walk: 'row',
+					hover: { name: 'record-gates', readout },
 					onSelect: (index) => (picked = index),
 					selected: picked
 				}}

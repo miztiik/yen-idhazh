@@ -11,7 +11,7 @@
 	import EmptyState from './EmptyState.svelte';
 	import type { EmptyDrawing } from './empty';
 	import type { PartsGeometry } from './partsOfOne';
-	import { markReadout, recordsOf, type ReadoutFacts } from '$lib/charts/readout';
+	import { factsOf, markReadout, recordsOf, type ReadoutFacts } from '$lib/charts/readout';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 
 	let {
@@ -38,7 +38,11 @@
 		showTotal?: boolean;
 	} = $props();
 	let selected = $state<number | null>(null);
-	const records = $derived(readout === null ? [] : recordsOf(readout));
+	const records = $derived(recordsOf(readout ?? (geometry?.rows ?? []).map((row) => factsOf(
+		row.label, row.segments.map((segment) => ({
+			label: segment.label, value: segment.value, format: String, swatch: `var(${segment.token})`
+		})), 'No part was measured.'
+	))));
 </script>
 
 {#if geometry === null}
@@ -60,9 +64,9 @@
 		</ul>
 		{/if}
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-		<ol class="parts-rows" aria-label={label} tabindex={readout === null ? undefined : 0} use:markReadout={{ count: records.length, walk: 'list', onSelect: (index) => selected = index }}>
+		<ol class="parts-rows" aria-label={label} tabindex={readout === null ? undefined : 0} use:markReadout={{ count: records.length, walk: 'list', hover: { name, readout: records }, onSelect: (index) => selected = index }}>
 			{#each geometry.rows as row, index (row.label)}
-				<li class="parts-row" data-readout-at={readout === null ? undefined : index}>
+				<li class="parts-row" data-readout-at={index}>
 					<span class="parts-name">{row.label}</span>
 					<span
 						class="parts-track"

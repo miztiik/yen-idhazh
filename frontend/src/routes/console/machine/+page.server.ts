@@ -1,6 +1,5 @@
 /** Only configuration crosses the static page boundary. The browser asks for records. */
-import { chartConfig, inferenceConfig, observabilityConfig, runConfig } from '$lib/server/config';
-import { watchedFlags } from '$lib/console/machine/host-types';
+import { chartConfig, inferenceConfig, observabilityConfig, runConfig, themeConfig } from '$lib/server/config';
 
 export const prerender = true;
 
@@ -12,8 +11,7 @@ export function load() {
 			contextWindow: inferenceConfig().n_ctx,
 			jobTimeoutSeconds: runConfig().shard_timeout_minutes * 60,
 			recording: observability.host_fingerprint,
-			flags: watchedFlags(),
-			cacheMargin: observability.host_fingerprint_bandwidth_cache_multiple,
+			gradients: themeConfig().gradient_enabled,
 			rate: {
 				currency: observability.cost_currency,
 				inputPerMillion: observability.cost_input_per_million,

@@ -6,9 +6,13 @@
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import WindowStatus from '$lib/components/WindowStatus.svelte';
+	import ChartTooltip from '$lib/console/ChartTooltip.svelte';
+	import BackToTop from '$lib/console/BackToTop.svelte';
+	import Icon from '$lib/icons/Icon.svelte';
+	import { ROUTE_GLYPHS } from '$lib/console/route-glyph';
 	import { stripRoutes } from '$lib/console/band';
 	import { consoleChromeOf } from '$lib/console/chrome';
-	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
+	import { consoleHoverReadout, consoleKnobs, routeConsole } from '$lib/console/route-console';
 	import { completenessOf, completenessSentence, untilNextUtcDay } from '$lib/console/completeness';
 	import { provideWindowSlot, type WindowSource } from '$lib/console/window-slot';
 	import { createWindowPreference } from '$lib/console/window-preference';
@@ -20,6 +24,7 @@
 	// svelte-ignore state_referenced_locally
 	provideNumberFormat(data.number_format);
 	const configured = consoleKnobs();
+	const hoverEnabled = consoleHoverReadout();
 	const routes = $derived(stripRoutes(data.routes));
 	const route = $derived(routes.find((entry) => entry.href.replace(/\/$/, '') === page.route.id) ?? routes[0]);
 	const active = $derived(route.id);
@@ -42,6 +47,24 @@
 	provideChartLabels(() => labels);
 
 	let now = $state<number | null>(null);
+	let heading = $state<HTMLHeadingElement | null>(null);
+	let toolbar = $state<HTMLElement | null>(null);
+	onMount(() => {
+		if (toolbar === null) return;
+		const node = toolbar;
+		const root = document.documentElement;
+		const previous = root.style.getPropertyValue('--console-toolbar-height');
+		const measure = () => root.style.setProperty('--console-toolbar-height',
+			`${getComputedStyle(node).position === 'sticky' ? node.getBoundingClientRect().height : 0}px`);
+		const observer = new ResizeObserver(measure);
+		observer.observe(node);
+		measure();
+		return () => {
+			observer.disconnect();
+			if (previous) root.style.setProperty('--console-toolbar-height', previous);
+			else root.style.removeProperty('--console-toolbar-height');
+		};
+	});
 	onMount(() => {
 		preference.mount(() => window.localStorage);
 		let timer: ReturnType<typeof setTimeout>;
@@ -60,29 +83,42 @@
 
 <section class="console-shell" data-surface="operator" data-console-route={active} data-console-chrome={chrome}>
 	<span class="console-label-measure" aria-hidden="true" use:measureChartLabels={(value) => { labels = value; }}>0123456789</span>
-	<ConsoleNav {routes} {active} groups={contents} worst={data.band.worst?.id ?? null} />
+	<ConsoleNav {routes} {active} groups={contents} />
 	<div class="console-main">
+		<span id="console-top" class="console-top-anchor" aria-hidden="true"></span>
+		<div class="console-toolbar" bind:this={toolbar}>
 		<header class="console-route-head">
-			<h1 id="console-top">{route.label}</h1>
+			<h1 id="console-route-title" tabindex="-1" bind:this={heading}>
+				<span class="page-glyph" data-route-glyph={ROUTE_GLYPHS[active]}><Icon id={ROUTE_GLYPHS[active]} /></span>
+				{route.label}
+			</h1>
 			{#if !workbench}
 				<WindowControl days={windowSource.days} presets={windowSource.presets}
-					busy={windowSource.busy} ready={windowSource.ready} onChange={windowSource.onChange} />
+					busy={windowSource.busy} ready={windowSource.ready} onChange={windowSource.onChange} compact />
 			{/if}
+			<BackToTop {heading} />
 		</header>
 		{#if !workbench}
-			<div class="console-evidence">
+			<div class="console-window-evidence">
 				<WindowStatus days={windowSource.days} presets={windowSource.presets}
 					monthsFor={windowSource.monthsFor} busy={windowSource.busy} ready={windowSource.ready}
 					statusLine={windowSource.statusLine ?? null} record={windowSource.record ?? null} />
+			</div>
+		{/if}
+		</div>
+		{#if !workbench}
+			<div class="console-evidence">
 				{#if completeness !== null}
 					<p class="console-completeness" data-console-completeness={completeness.kind}>{completenessSentence(completeness)}</p>
 				{/if}
+				{#if route.worst}<p class="console-completeness" data-console-route-issue>{route.worst}</p>{/if}
 			</div>
 			<ConsoleBand band={data.band} />
 			<noscript><p class="console-noscript" data-console-noscript>Published-record charts need JavaScript. Their headings and reserved frames remain below.</p></noscript>
 		{/if}
 		<div class="console-route-content">{@render children()}</div>
 	</div>
+	<ChartTooltip enabled={hoverEnabled} />
 </section>
 
 <style>
@@ -97,14 +133,29 @@
 		letter-spacing: var(--console-body-tracking);
 	}
 	.console-main, .console-route-content { min-inline-size: 0; }
+	.console-main, .console-route-content { isolation: isolate; }
+	.console-top-anchor { display: block; block-size: 0; }
+	.console-toolbar {
+		position: sticky;
+		inset-block-start: 0;
+		z-index: 1;
+		padding-block: var(--console-control-gap);
+		border-block-end: 1px solid var(--color-rule);
+		background: var(--color-bg);
+	}
+	[data-console-chrome='workbench'] .console-route-head { grid-template-columns: minmax(0, 1fr) auto; }
+	.console-window-evidence { margin-block-start: var(--console-control-padding-block); }
 	.console-route-head {
-		display: flex;
-		flex-wrap: wrap;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto;
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--console-control-gap) var(--console-panel-gap);
 	}
 	h1 {
+		display: flex;
+		align-items: center;
+		gap: var(--console-control-gap);
 		margin: 0;
 		font-family: var(--font-display);
 		font-size: var(--console-page-title-size);
@@ -112,6 +163,8 @@
 		font-weight: var(--console-page-title-weight);
 		letter-spacing: var(--console-page-title-tracking);
 	}
+	.page-glyph { display: flex; flex: none; inline-size: var(--console-page-title-leading); block-size: var(--console-page-title-leading); color: var(--color-accent); }
+	.page-glyph :global(svg) { inline-size: 100%; block-size: 100%; }
 	.console-evidence {
 		display: grid;
 		gap: var(--console-control-padding-block);
@@ -141,12 +194,17 @@
 			gap: 0;
 			margin-block: var(--console-control-padding-block);
 		}
+		@media (max-width: 639px) {
+			h1 { font-size: var(--console-panel-title-size); line-height: var(--console-panel-title-leading); }
+			.page-glyph { inline-size: var(--console-panel-title-leading); block-size: var(--console-panel-title-leading); }
+		}
 	}
 	@media (min-width: 1024px) {
 		.console-shell { grid-template-columns: var(--console-rail-width) minmax(0, 1fr); align-items: start; }
-		.console-shell[data-console-chrome='workbench'] { flex: 1 1 0; min-block-size: 0; align-items: stretch; }
-		[data-console-chrome='workbench'] .console-main { display: flex; flex-direction: column; min-block-size: 0; }
-		[data-console-chrome='workbench'] .console-route-content { display: flex; flex-direction: column; flex: 1 1 0; min-block-size: 0; }
+		.console-shell[data-console-chrome='workbench'] { flex: 1 1 0; min-block-size: min-content; align-items: stretch; }
+		[data-console-chrome='workbench'] .console-main { display: flex; flex-direction: column; min-block-size: min-content; }
+		[data-console-chrome='workbench'] .console-toolbar { position: static; border: 0; }
+		[data-console-chrome='workbench'] .console-route-content { display: flex; flex-direction: column; flex: 1 1 0; min-block-size: min-content; }
 		[data-console-chrome='workbench'] .console-route-head { padding-block-end: var(--console-control-gap); }
 	}
 </style>

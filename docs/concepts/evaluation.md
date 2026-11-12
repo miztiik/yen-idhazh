@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-11
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
@@ -377,8 +377,8 @@ row prints all three beside the count and the page never adds them into a score.
 A summary can carry more than one, so the three do not sum to the row's own
 count, which is also why they are never stacked into a bar. `doubted` in
 [frontend/src/lib/server/model-work.ts](../../frontend/src/lib/server/model-work.ts)
-is the one predicate; the model-change panel below reads the same one, so the
-list and the panel cannot disagree about what a doubt is.
+is the ranked source list's predicate, keeping its count consistent with those
+three signals.
 
 **The order is the count, and the page says so.** A share sort puts a source
 with 2 doubted of 3 above one with 40 of 400, and it is the forty that reached a

@@ -9,7 +9,7 @@
 </script>
 
 <div data-machine-panel-state={state} data-readout-fetched data-panel-query={id}
-	data-window-exempt={['two-clocks', 'machine-cards', 'slowest-articles', 'memory-held'].includes(id) ? 'newest-run' : undefined}>
+	data-window-exempt={['two-clocks', 'memory-held'].includes(id) ? 'newest-run' : undefined}>
 	{#if state === 'ok'}
 		{@render children()}
 	{:else}

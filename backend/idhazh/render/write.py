@@ -137,13 +137,10 @@ def write_charts_from_decisions(
     payloads, and the bytes have to be a drawing of that item. Both jobs run one
     commit, so a disagreement is a defect in this repository and stops the run.
     """
-    decisions = tuple(decisions)
-    if any(decision.kind is VisualKind.WHOWHAT for decision in decisions):
-        raise ValueError("whowhat grid decisions must use the dedicated grid writer")
     rendered = {
         decision.item_id: decision
         for decision in decisions
-        if decision.visual_state is VisualState.RENDERED
+        if decision.kind is VisualKind.CHART and decision.visual_state is VisualState.RENDERED
     }
     for item in day.items:
         decision = rendered.get(item.item_id)

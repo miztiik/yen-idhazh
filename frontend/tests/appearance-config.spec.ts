@@ -17,6 +17,7 @@ import { runInNewContext } from 'node:vm';
 import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
 import { resolveConsoleStyle, type ConsoleStyleConfig } from '../src/lib/console/console-style';
 import { renderFrameCss } from '../scripts/build-frame-css.mjs';
+import { consolePalette } from '../scripts/console-palette';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -38,10 +39,11 @@ test.describe('route-owned console configuration', () => {
 		const routes = routeConsoles();
 		expect(Object.keys(routes).sort()).toEqual(BAND_UNREAD.routes.map(({ id }) => id).sort());
 		expect(routes.machine.judged).toEqual([
-			'two-clocks', 'processor-lost', 'disk-reads', 'machine-cards', 'slower-machines', 'platform-mix',
-			'slowest-articles', 'tail-trend', 'closest-to-memory', 'memory-held', 'context-headroom',
+			'two-clocks', 'slower-machines', 'platform-mix',
+			'tail-trend', 'closest-to-memory', 'memory-held', 'context-headroom',
 			'article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost'
 		]);
+		expect(routes.pipelines.judged).toContain('slowest-articles');
 		expect(routes['data-explorer'].judged).toEqual(['data-explorer-rows', 'data-explorer-shape']);
 		const judgementPanels = [
 			'merged-stories', 'merge-line', 'judge-agreement',
@@ -54,7 +56,7 @@ test.describe('route-owned console configuration', () => {
 		const modelPanels = [
 			'model-cards', 'model-throughput', 'call-ending',
 			'doubt-reasons', 'faithfulness', 'source-doubts', 'write-cost',
-			'score-cost', 'summary-length', 'model-change'
+			'score-cost', 'summary-length'
 		];
 		expect(routes.model.panel_groups).toEqual([
 			{ id: 'summaries', title: '', panels: modelPanels }
@@ -263,12 +265,12 @@ test.describe('the committed appearance file', () => {
 		expect(changed.elevation.light.panel).toEqual({ ...defaults.elevation.light.panel, y_px: 2 });
 	});
 
-	test('the real CSS renderer substitutes a legal nondefault style and is deterministic', () => {
+	test('the real CSS renderer substitutes a legal nondefault style and is deterministic', async () => {
 		const fixture: { console_style: ConsoleStyleConfig } = JSON.parse(readFileSync(
 			join(REPO, 'tests', 'fixtures', 'contracts', 'appearance-config', 'knobs-set-away-from-the-defaults.json'), 'utf8'
 		));
-		const generated = renderFrameCss({ console_style: fixture.console_style });
-		expect(generated).toBe(renderFrameCss({ console_style: fixture.console_style }));
+		const generated = await renderFrameCss({ console_style: fixture.console_style });
+		expect(generated).toBe(await renderFrameCss({ console_style: fixture.console_style }));
 		const [reader, operator] = generated.split('/* The selector includes the outer canvas');
 		expect(reader).not.toContain('--color-bg:');
 		expect(reader).not.toContain('--console-');
@@ -278,8 +280,32 @@ test.describe('the committed appearance file', () => {
 		expect(operator).toContain('--color-bg: #1a1a18;');
 	});
 
-	test('console font and elevation switches use existing fallbacks without new assets', () => {
-		const css = renderFrameCss({ theme: { display_face_enabled: false, elevation_enabled: false } });
+	test('PiYG aligns console categories while keeping neutral absence, explicit controls and reader tokens', async () => {
+		const style = resolveConsoleStyle();
+		for (const mode of ['light', 'dark'] as const) {
+			const colors = style.colors[mode];
+			const before = structuredClone(colors);
+			const palette = consolePalette(colors, mode, 'piyg');
+			expect(palette.slice(0, 7)).not.toEqual(colors.categorical.slice(0, 7));
+			expect(palette[7]).toBe(colors.categorical[7]);
+			expect(new Set(palette).size).toBe(8);
+			expect(colors).toEqual(before);
+		}
+		const original = await renderFrameCss();
+		const aligned = await renderFrameCss({
+			chart: { palette: 'piyg' },
+			console_style: { colors: { light: { accent: '#145a55', focus: '#7d2359', selected: '#e5eee7' } } }
+		});
+		const marker = '/* The selector includes the outer canvas';
+		expect(aligned.split(marker)[0]).toBe(original.split(marker)[0]);
+		expect(aligned).toContain('--color-accent: #145a55;');
+		expect(aligned).toContain('--color-focus: #7d2359;');
+		expect(aligned).toContain('--console-selected: #e5eee7;');
+		expect(aligned).toContain('--gradient-wordmark: linear-gradient(to right,');
+	});
+
+	test('console font and elevation switches use existing fallbacks without new assets', async () => {
+		const css = await renderFrameCss({ theme: { display_face_enabled: false, elevation_enabled: false } });
 		const operator = css.split('/* The selector includes the outer canvas')[1];
 		expect(operator).not.toContain('InterVariable');
 		expect(operator).not.toContain('rgba(0, 0, 0,');
@@ -287,16 +313,18 @@ test.describe('the committed appearance file', () => {
 		expect(css).toContain('--font-display: var(--font-reading);');
 	});
 
-	test('the frame is wide enough to be a frame, and the console is wider', () => {
+	test('a numeric console cap remains wider than the reading frame', () => {
 		// The bounds live in the Pydantic contract and are enforced at build
 		// time. This asserts the COMMITTED values sit inside them, so a hand
 		// edit that skipped the contract still fails a gate.
 		const parsed = JSON.parse(
 			readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')
-		) as { frame: { reading_max_px: number; console_max_px: number; measure_ch: number } };
+		) as { frame: { reading_max_px: number; console_max_px: number | null; measure_ch: number } };
 
 		expect(parsed.frame.reading_max_px).toBeGreaterThanOrEqual(960);
-		expect(parsed.frame.console_max_px).toBeGreaterThanOrEqual(parsed.frame.reading_max_px);
+		if (parsed.frame.console_max_px !== null) {
+			expect(parsed.frame.console_max_px).toBeGreaterThanOrEqual(parsed.frame.reading_max_px);
+		}
 		expect(parsed.frame.measure_ch).toBeGreaterThanOrEqual(52);
 		expect(parsed.frame.measure_ch).toBeLessThanOrEqual(80);
 	});
@@ -307,9 +335,19 @@ test.describe('the committed appearance file', () => {
 		// moment a static site is supposed to be already finished.
 		const parsed = JSON.parse(
 			readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')
-		) as { frame: { console_max_px: number }; chart: { width_px: number } };
+		) as { frame: { console_max_px: number | null }; chart: { width_px: number } };
 
-		expect(parsed.chart.width_px).toBeLessThanOrEqual(parsed.frame.console_max_px);
+		if (parsed.frame.console_max_px !== null) {
+			expect(parsed.chart.width_px).toBeLessThanOrEqual(parsed.frame.console_max_px);
+		}
+	});
+
+	test('the frame producer preserves explicit numeric caps and emits no cap for the full window', async () => {
+		const capped = await renderFrameCss({ frame: { console_max_px: 1600 } });
+		const fluid = await renderFrameCss({ frame: { console_max_px: null } });
+		expect(capped).toContain('--frame-console: 1600px;');
+		expect(fluid).toBe(capped.replace('--frame-console: 1600px;', '--frame-console: none;'));
+		expect(await renderFrameCss()).toBe(fluid);
 	});
 });
 

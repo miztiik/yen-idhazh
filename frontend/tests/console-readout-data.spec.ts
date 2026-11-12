@@ -1,6 +1,8 @@
 /** How a chart builds its readout without a second key or invented readings. */
 import { expect, test } from '@playwright/test';
-import { readoutOf } from '../src/lib/charts/readout';
+import { factsOf, readoutOf } from '../src/lib/charts/readout';
+import { hoverPosition, hoverReading } from '../src/lib/charts/readout-hover';
+import { readoutView } from '../src/lib/charts/readout-view';
 import { frame } from '../src/lib/charts/frame';
 import { dateSeries, formatNumber, numberFormat } from './support/number-format';
 import { clocksChart } from '../src/lib/charts/machine';
@@ -9,39 +11,49 @@ import { distribution } from '../src/lib/charts/d3/distribution';
 import { emptyState } from '../src/lib/charts/d3/empty';
 import { consoleConfig } from '../src/lib/server/config';
 import { renderConfigured, serverCompiler, type Rewrite } from './support/server-render';
-import { diskReads, type DiskReads } from '../src/lib/console/machine/disk-reads';
 
-test('disk-read captions qualify a same-run mix of locking requests without claiming none', async ({}, info) => {
-	const compiled = serverCompiler(info.outputPath('disk-reads'));
-	const rewrite: Rewrite[] = [
-		['$lib/components/Panel.svelte', './Panel.server.mjs'],
-		['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs'],
-		...['charts/machine', 'charts/readout', 'charts/series', 'number-format-context', 'console/span-words', 'format']
-			.map((file) => [`$lib/${file}`, new URL(`../src/lib/${file}.ts`, import.meta.url).href] as const)
-	];
-	await compiled('src/lib/components/Panel.svelte', 'Panel', rewrite);
-	await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', rewrite);
-	const module = await compiled('src/lib/console/machine/DiskReadsPanel.svelte', 'DiskReadsPanel', rewrite);
-	const component = (await import(pathToFileURL(module).href)).default;
-	const caption = (reads: DiskReads) => renderConfigured(component, {
-		props: { reads, days: 14, windowDays: 14, readoutMaxShare: 1 }
-	}).body.replace(/<!--[\s\S]*?-->/g, '')
-		.match(/<p[^>]*data-disk-read-pinning="[^"]+"[^>]*>([\s\S]*?)<\/p>/)?.[1].trim();
+test('column hover and standing readings preserve zeros, partial readings and dated events', () => {
+	const readout = readoutOf({
+		type: 'dateSeries', columns: ['First UTC day', 'Unmeasured UTC day', 'Last UTC day'],
+		series: [
+			{ label: 'Read', swatch: 'var(--chart-1)', values: [0, null, null], format: (value) => `${value} tokens` },
+			{ label: 'Written', swatch: 'var(--chart-2)', values: [null, null, 4], format: (value) => `${value} tokens` }
+		],
+		events: { lines: [[{ label: 'Run 1', value: 'failed', swatch: null }], [], []] },
+		notMeasured: 'No token reading.', resting: 'last'
+	});
+	const first = hoverReading({ name: 'tokens', readout }, 0)!;
+	expect(first.heading).toBe('First UTC day');
+	expect(first.entries.map(({ label, value }) => [label, value])).toEqual([
+		['Read', '0 tokens'], ['Written', 'No token reading.'], ['Run 1', 'failed']
+	]);
+	expect(first).toEqual(readoutView(readout, 0));
+	expect(hoverReading({ name: 'tokens', readout }, 1)?.entries).toEqual([
+		{ label: 'No token reading.', value: '', swatch: null, reserve: 0 }
+	]);
+});
 
-	const rows = [
-		{ date: '2026-09-04', run_id: '2026-09-04-1', weights_pinned: 'True' },
-		{ date: '2026-09-04', run_id: '2026-09-04-1', weights_pinned: 'False' }
-	];
-	const marks = { marked: 1, named: 1 };
-	const sameRun = diskReads(rows, marks);
-	expect(sameRun.pinning).toEqual({ held: 0, loose: 1, silent: 0 });
-	expect(caption(sameRun)).toBe('1 run included a recorded non-locking setting. Applied locking is unmeasured.');
+test('record hover follows a visible tile offset and never invents a missing record', () => {
+	const record = factsOf('Actual shard', [
+		{ label: 'Seconds', value: 0, format: (value) => `${value} s` },
+		{ label: 'Clock', value: null }
+	], 'Not measured.');
+	const source = { name: 'shards', readout: [null, record], offset: 1 };
+	expect(hoverReading(source, 0)?.heading).toBe('Actual shard');
+	expect(hoverReading(source, 0)?.entries.map(({ value }) => value)).toEqual(['0 s', 'Not measured.']);
+	expect(hoverReading(source, 1)).toBeNull();
+	expect(hoverReading({ name: 'absent', readout: null }, 0)).toBeNull();
+	expect(hoverReading({ name: 'empty', readout: [] }, 0)).toBeNull();
+});
 
-	const acrossRuns = diskReads([
-		...rows, { date: '2026-09-04', run_id: '2026-09-04-2', weights_pinned: 'True' }
-	], marks);
-	expect(acrossRuns.pinning).toEqual({ held: 1, loose: 1, silent: 0 });
-	expect(caption(acrossRuns)).toBe('1 of 2 runs recorded only locking requests; 1 run included a non-locking setting. Applied locking is unmeasured.');
+test('a pointer reading fits inside the viewport and moves above a low pointer', () => {
+	const viewport = { width: 390, height: 844 };
+	const box = { width: 240, height: 120 };
+	const corner = hoverPosition({ x: 380, y: 820 }, box, viewport, 12);
+	expect(corner).toEqual({ left: 138, top: 688 });
+	expect(corner.left + box.width).toBeLessThanOrEqual(viewport.width - 12);
+	expect(corner.top + box.height).toBeLessThan(820);
+	expect(hoverPosition({ x: 0, y: 0 }, box, viewport, 12)).toEqual({ left: 12, top: 12 });
 });
 
 test.describe('rendered distribution readings', () => {

@@ -1,10 +1,10 @@
 # What the quality and source panels draw
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-11-11
 
 The panels that report what the model wrote and how the sources behaved: the
-eleven measures on `/console/model/`, the two distributions under them, the
-model-swap comparison, and the two panels on `/console/voices/` that watch a
+eleven measures on `/console/model/`, the two distributions under them, and
+the two panels on `/console/voices/` that watch a
 source counting down or losing articles to the truncation cap.
 
 The chart rules these obey are
@@ -74,8 +74,7 @@ read** - it sizes at 64,699 tokens
 and the pair has an assertion of its own.
 
 **A day the model changed draws a dashed rule across every line**, from the same
-rows the daily table draws its dividers from. Whether a swap moved anything is
-the question the table could not answer at all. The rule carries a date and an
+rows the daily table draws its dividers from. The rule carries a date and an
 id and nothing else - an arrow or a delta across it would claim the swap caused
 whatever the line then did, and no committed figure says that.
 
@@ -151,45 +150,6 @@ pre-cap length is absent. The highest rung that length reaches supplies its
 requested bounds. A missing ladder or an unreached first rung leaves the ask
 unknown, not zero. Those bounds describe the requests, not daily inside/short/
 long bins or a distance-ranked outlier list.
-
-## A swap comparison carries direction in the arrow, and a verdict only where the measure has one
-
-`What the model change moved` is seven paired dot rows. Each measure is drawn
-against its own value on the older model, so no change is 100 percent on every
-row - the only axis a median in seconds, a length in words and a count in a
-hundred summaries can share.
-
-- **The arrowhead carries the direction; the hue carries the verdict where there
- is one.** A red-for-worse ramp needs somebody to agree which way is worse for
- each of the seven. Five say so themselves, through the polarity declared on the
- measure rather than chosen by the chart; the two with no agreed direction stay
- grey and name themselves under the plot. A hue here is never a guess.
-- **The axis is symmetric about no change**, so a fifth off and a fifth on draw
- the same track length. An axis running 78 to 120 would draw one as the bigger
- move.
-- **Both absolute values print on the row label**, because a ratio with no
- magnitude behind it can be a rounding error wearing a percentage.
-- **Both article counts print above the chart, and the panel refuses to draw at
- all where either side holds fewer than `console.min_attempts_for_rate`
- summaries.** Two models over two article sets is two measurements, not a
- trend.
-
-Measured 2026-08-31 off the built page, across the one swap the ledger holds -
-`qwen3-8b-q4-k-m` on 2,228 summaries to 26 August, `qwen3-5-9b-q4-k-m` on 1,529
-since 27 August:
-
-| Measure | Before | After | Against the old model | Better | Painted |
-| --- | --- | --- | --- | --- | --- |
-| Time to write one | 120 s | 123 s | 103% | lower | bad |
-| Summary length | 100 words | 78 words | 78% | no agreed direction | neutral |
-| Copied, not rewritten | 9% | 11% | 120% | no agreed direction | neutral |
-| Marked "not sure" | 17 in 100 | 14 in 100 | 86% | lower | good |
-| Numbers not in the article | 5 in 100 | 3 in 100 | 64% | lower | good |
-| "Maybe" told as fact | 12 in 100 | 14 in 100 | 117% | lower | bad |
-| Outside the length we asked for | 29 in 100 | 11 in 100 | 38% | lower | good |
-
-It is a difference and not yet a cause, which is what the two article counts are
-there to say.
 
 ## A countdown is drawn as an area, never as a fraction in a chip
 
@@ -283,6 +243,13 @@ spelling of a name, so where the name cannot sit beside the plot it moves above
 the track and the row takes one more line of type.
 
 ## Design rationale
+
+**The combined model-change comparison is permanently removed.** This gives up
+one observational before/after view over different article populations.
+Individual metric trends, summary cards and dated setting/model-change markers
+remain, but they are not an equivalent replacement. The cut deletes local
+comparison work, not measurements, producer or compact contracts, historical
+records or their read compatibility.
 
 **A panel belongs to the question it answers, not to the route it was written
 on.** Four panels left `/console/` for `/console/voices/` - the census, the

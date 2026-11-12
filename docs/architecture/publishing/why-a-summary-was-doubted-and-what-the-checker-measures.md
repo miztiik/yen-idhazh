@@ -3,16 +3,16 @@
 **Last Updated**: 2026-11-11
 
 `/console/model/` answers what the model wrote, how long it took, and what it got
-wrong. Its ten panels are the measure cards, throughput, call endings, doubt
-reasons, faithfulness, source doubts, writing cost, checking cost, summary length
-and the newest model change. The eleven original card labels stay
+wrong. Its nine panels are the measure cards, throughput, call endings, doubt
+reasons, faithfulness, source doubts, writing cost, checking cost and summary
+length. The eleven original card labels stay
 verbatim; determinism is the twelfth card. The cards and distributions are drawn to
 the rules in
 [../../concepts/console-design/what-the-quality-and-source-panels-draw.md](../../concepts/console-design/what-the-quality-and-source-panels-draw.md).
 
 Which panel sits on which route is [console.md](console.md).
 
-The eight eligible panels read the declarations in
+The seven eligible panels read the declarations in
 `frontend/src/lib/console/queries/model.ts` through `sliceOnce`, at view time.
 The cards and their daily disclosure remain private build-time inputs; their
 published-summary and determinism counts come from distinct day metrics, not
@@ -243,11 +243,15 @@ identity-free `failedRuleQuery`, `failureRuleRows` and `FailureList.ranking`.
 Its stage control retains the model-stage readings in the native record. Summaries
 mounts no refusal chart and starts no second failed-rule query.
 
-The newest model change compares dated model-ID sets over the widest declared
-span, splitting independent score and timing populations at the change date.
-It never joins the before and after article populations. The approved declaration
-does not carry a faithfulness-score column: its median-score change therefore says
-not measured rather than inventing a score or broadening the query.
+## Design rationale
+
+The combined model-change comparison is permanently removed, with no hidden
+or relocated replacement. The
+[quality-panel rationale](../../concepts/console-design/what-the-quality-and-source-panels-draw.md#design-rationale)
+names the lost observational comparison. Individual metric trends and their
+dated setting/model-change markers remain, as do the cards and their coverage
+and absence behavior. Historical pipeline-fingerprint identities still support
+the retained markers; removing this view changes no producer or compact contract.
 
 ## See also
 

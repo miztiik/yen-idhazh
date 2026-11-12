@@ -9,7 +9,7 @@ import { windowOfDays } from '$lib/charts/viewport';
 import { measurementOff, recordingNotes, recordNotesByWindow } from '$lib/console/recording';
 
 export const prerender = true;
-export type { CapPoint, DayWindow, Distribution, ModelDay, ModelRow, ModelSwap, RunLength, ScoreCost, SourceDoubt, SourceDoubts, SwapMeasure, WriteBin, WriteTimes } from '$lib/server/model-work';
+export type { CapPoint, DayWindow, Distribution, ModelDay, ModelRow, RunLength, ScoreCost, SourceDoubt, SourceDoubts, WriteBin, WriteTimes } from '$lib/server/model-work';
 export type { ReasonDay } from '$lib/console/doubt-reasons';
 export type { EvalDay } from '$lib/console/eval-instruments';
 

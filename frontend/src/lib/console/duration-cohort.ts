@@ -5,13 +5,13 @@ import type { SeriesInput } from '../charts/d3/dateSeries';
 import { finiteCell } from './rates';
 import { SERIES_TOKENS } from './series-tokens';
 
-const STAGES = [
+export const DURATION_STAGES = [
 	['fetch_ms', 'Fetch', SERIES_TOKENS.fetch],
 	['extract_ms', 'Extract', SERIES_TOKENS.extract],
 	['summarize_ms', 'Summarize', SERIES_TOKENS.summarize],
 	['faithfulness_ms', 'Checking', SERIES_TOKENS.checking]
 ] as const;
-const DETAILS = [
+export const DURATION_DETAILS = [
 	['label_ms', 'Label call'],
 	['summary_ms', 'Summary call, including visual plan'],
 	['visual_plan_ms', 'Visual plan, inside the summary call']
@@ -33,16 +33,16 @@ export function durationCohort(rows: readonly Row[], calendar: readonly string[]
 		let invalid = 0;
 		let inconsistent = 0;
 		const cohort = own.flatMap((row) => {
-			const values = [...STAGES.map(([cell]) => finiteCell(row[cell])),
+			const values = [...DURATION_STAGES.map(([cell]) => finiteCell(row[cell])),
 				finiteCell(row.item_total_ms), finiteCell(row.stage_gap_ms)];
 			if (values.some((value) => value === null)) {
 				missing += 1;
 				return [];
 			}
 			const known = values.filter((value): value is number => value !== null);
-			const stages = known.slice(0, STAGES.length);
-			const elapsed = known[STAGES.length];
-			const gap = known[STAGES.length + 1];
+			const stages = known.slice(0, DURATION_STAGES.length);
+			const elapsed = known[DURATION_STAGES.length];
+			const gap = known[DURATION_STAGES.length + 1];
 			if (elapsed < 0 || stages.some((value) => value < 0)) {
 				invalid += 1;
 				return [];
@@ -59,12 +59,12 @@ export function durationCohort(rows: readonly Row[], calendar: readonly string[]
 			date, recorded: own.length, count: cohort.length, missing, invalid, inconsistent,
 			elapsedSum: cohort.reduce((sum, item) => sum + item.elapsed, 0),
 			elapsed: mean(cohort.map((item) => item.elapsed)),
-			stages: STAGES.map(([cell, label], index) => ({ cell, label, value: mean(cohort.map((item) => item.stages[index])) })),
+			stages: DURATION_STAGES.map(([cell, label], index) => ({ cell, label, value: mean(cohort.map((item) => item.stages[index])) })),
 			unattributed: mean(cohort.map((item) => Math.max(0, item.gap))),
 			overlap: mean(cohort.map((item) => Math.max(0, -item.gap))),
 			signedGap: mean(cohort.map((item) => item.gap)),
 			overlapping: cohort.filter((item) => item.gap < 0).length,
-			details: DETAILS.map(([cell, label]) => {
+			details: DURATION_DETAILS.map(([cell, label]) => {
 				const values = cohort.map((item) => finiteCell(item.row[cell]));
 				const recorded = values.filter((value): value is number => value !== null && value >= 0);
 				return { cell, label, timed: recorded.length,
@@ -74,7 +74,7 @@ export function durationCohort(rows: readonly Row[], calendar: readonly string[]
 	});
 	const count = days.reduce((sum, day) => sum + day.count, 0);
 	const series: SeriesInput[] = [
-		...STAGES.map(([, label, token], index) => ({
+		...DURATION_STAGES.map(([, label, token], index) => ({
 			label, token, points: days.map((day) => ({ date: day.date, value: day.stages[index].value }))
 		})),
 		{ label: 'Unattributed duration', token: SERIES_TOKENS.unattributed,

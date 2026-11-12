@@ -3,12 +3,13 @@
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
 	import type { ConsoleRoute, RouteId } from '$lib/console/band';
+	import { ROUTE_GLYPHS } from '$lib/console/route-glyph';
+	import Icon from '$lib/icons/Icon.svelte';
 
-	let { routes, active, groups = [], worst = null }: {
+	let { routes, active, groups = [] }: {
 		routes: ConsoleRoute[];
 		active: RouteId;
 		groups?: readonly { id: string; title: string }[];
-		worst?: RouteId | null;
 	} = $props();
 	let expanded = $state(true);
 	let wide = $state(false);
@@ -42,13 +43,8 @@
 							aria-current={route.id === active ? 'page' : undefined}
 							data-console-tab={route.id} data-console-tab-active={route.id === active ? 'true' : null}
 							onclick={closeMenu}>
+							<span class="route-glyph" data-route-glyph={ROUTE_GLYPHS[route.id]}><Icon id={ROUTE_GLYPHS[route.id]} /></span>
 							<span>{route.label}</span>
-							{#if route.worst || route.id === worst}
-								<small class="route-state">
-									{#if route.id === worst}<span data-console-tab-worst-mark>Worst{route.worst ? ':' : ''}</span>{/if}
-									{#if route.worst}<span data-console-tab-worst={route.id}>{route.worst}</span>{/if}
-								</small>
-							{/if}
 						</a>
 						{#if route.id === active && groups.length > 0}
 							<nav class="group-links" aria-label="On this page" data-console-contents>
@@ -88,8 +84,8 @@
 	.routes { display: grid; gap: var(--console-rail-gap); }
 	.route-link {
 		display: flex;
-		flex-direction: column;
-		justify-content: center;
+		align-items: center;
+		gap: var(--console-control-gap);
 		min-block-size: var(--console-control-min-height);
 		padding: var(--console-control-padding-block) var(--console-control-padding-inline);
 		border: 1px solid transparent;
@@ -104,15 +100,8 @@
 	}
 	.route-link:hover { background: var(--color-surface-sunken); color: var(--color-accent-strong); }
 	.route-link[aria-current='page'] { background: var(--console-selected); border-color: var(--color-accent); color: var(--color-text); }
-	.route-state {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--console-control-padding-block);
-		font-size: var(--console-small-size);
-		line-height: var(--console-small-leading);
-		font-weight: var(--console-small-weight);
-		color: var(--color-text-secondary);
-	}
+	.route-glyph { display: flex; flex: none; inline-size: var(--console-panel-title-size); block-size: var(--console-panel-title-size); }
+	.route-glyph :global(svg) { inline-size: 100%; block-size: 100%; }
 	.group-links { margin-block: var(--console-rail-gap); padding-inline: var(--console-control-padding-inline); }
 	.group-links ul { display: grid; gap: var(--console-control-padding-block); }
 	.group-links a {

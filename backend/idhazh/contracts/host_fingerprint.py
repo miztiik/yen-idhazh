@@ -164,6 +164,16 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "fingerprint",
             "fingerprint_version",
             "cpu_model",
+            "job_seconds",
+            "cpu_logical_processors",
+            "model_load_ms",
+        ),
+    }
+)
+
+UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
+    {
+        "Machine detail retained in records after its Hardware presentation was removed": (
             "cpu_vendor",
             "cpu_family",
             "cpu_model_number",
@@ -185,15 +195,7 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "vm_location",
             "vm_zone",
             "vm_fault_domain",
-            "job_seconds",
-            "cpu_logical_processors",
-            "model_load_ms",
         ),
-    }
-)
-
-UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
-    {
         "Historical machine label and sampling instant": ("measured_at", "runner_name"),
         "Total machine RAM returned by the fingerprint API, not drawn by the console": (
             "machine_memory_total_mib",

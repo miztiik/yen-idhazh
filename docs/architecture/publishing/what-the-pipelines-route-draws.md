@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 Moved plots use the shared width observer and redraw in the CSS-pixel frame
 their panel actually occupies. Private date axes retain missing days as null,
@@ -40,11 +40,12 @@ surfaces follow the window control is
 The route has thirteen addressed panels, in this order: `at-a-glance`,
 `run-health`, `site-cost-per-item`, `failure-mix`, `item-time-split`,
 `slower-on-same-work`, `stage-timings`, `item-cost`, `run-timeline`,
-`chart-drawing`, `visual-refusals`, `visual-written-types`, `article-age`. Configuration comes from
+`slowest-articles`, `chart-drawing`, `visual-refusals`, `article-age`. Configuration comes from
 `consoleKnobs()` and `routeConsole('pipelines')`, not from page data.
 
 The browser uses the declared queries in `console/queries/pipelines.ts` and the
-shared `routeReach`, four-argument `rangeFor` and `sliceOnce` lifecycle. Failure
+shared `routeReach`, four-argument `rangeFor` and `sliceOnce` lifecycle. Explicit
+groups in `console/pipelines/query-groups.ts` retain separate native endpoints. Failure
 mix, failed rules, item time split, fixed-reference work, stage timings, model
 cost, newest-run timeline and stated article ages read `item-health`. The removed
 extraction panel no longer asks `summary-quality-evals`. Neither route load nor the browser reads telemetry CSV,
@@ -114,16 +115,16 @@ overlap are averaged separately, so cancellation cannot hide overlap. The chart
 draws every positive duration, an adjacent overlap deduction and an elapsed-time
 marker; formatted readouts, cohort counts and exclusions explain the arithmetic.
 
-## Where a run's time went is one panel on Pipelines, at two grains
+## Where a run's time went separates elapsed windows from item work
 
-| Panel | Grain | The sentence it is for |
-| --- | --- | --- |
-| Where the run's time went, on the run's own clock | one bar an item, or one bar a shard | Whether the run queued or worked in parallel, and where in it the time actually went. |
+The newest-run panel compares recorded shard windows by default, longest
+first. Its second view ranks cumulative item work on its own zero-based scale.
+[run-timeline.md](run-timeline.md) owns the endpoint arithmetic, coverage,
+ordering and bounded article inspection.
 
-**It answers "is it working".** It takes the run's central shape - what it took
-end to end, what its items cost added up, and how many ran at once - and it
-covers every item of the run rather than picking the worst one out. The grain
-switch changes the row and never the question.
+The headlines distinguish the recorded item window, recorded costs and
+processed attempts per minute. They do not claim measured concurrency or
+continuous shard occupancy.
 
 **It sits low on Pipelines, after the cost panels.** A
 window is a span and this panel is one run, so an operator reaches it after a
@@ -133,30 +134,26 @@ verdicts the run remains near the top, which is the thirteenth chart rule applie
 Pipelines takes one untitled group in `config/console/pipelines.json`: what it needed was
 an order, not headings, and it already carries four section headings of its own.
 
-**One panel, one source for both grains.** The panel folds item and shard rows in one
-builder call, so a step's seconds are the same seconds whichever row a reader is
-on. A shard's bar runs from its first item's start to its last item's end, which
-is the stretch it held a worker for, and its steps are that shard's items added
-up.
+**One panel, one source for both measurements.** Both folds use the same native
+query and select the same newest run. Missing endpoints, costs and shard
+identity retain their independent coverage.
 
-**Detailed sub-steps belong to an item inspection.** The page does not print
-robots, tag, prompt-render or reply-parse totals below the timeline. The reader
-keeps the recorded stage clocks and the timeline, but loses those four aggregate
-figures. The [item command](../../concepts/telemetry.md#the-committed-traces-briefly)
-prints recent trace trees with their run and attempt instead of adding item
-passes together. Expired detail remains unavailable.
-
-**Hollow is unclaimed; a solid 2 px tertiary rule is overclaimed.** The overrun
-is not the hatch for an unknown reading. Both have a written legend; neither
-claims anybody has agreed how much overhead is too much.
+**Detailed readings belong to article inspection.** Selecting a shard opens a
+bounded article list with exact recorded clocks and known stage readings.
+Complete-cohort stage averages and nested call details remain separate from
+the elapsed drawing. The
+[item command](../../concepts/telemetry.md#the-committed-traces-briefly)
+still owns retained trace trees and finer sub-steps. Expired detail remains
+unavailable.
 
 The reader is
 [../../../frontend/src/lib/console/pipelines/run-timeline.ts](../../../frontend/src/lib/console/pipelines/run-timeline.ts);
 its native clock shape is [run-timeline.md](run-timeline.md) and every drawing rule is
 [../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md).
 [../../../frontend/tests/console-pipelines-native.spec.ts](../../../frontend/tests/console-pipelines-native.spec.ts)
-checks the native offsets, signed residuals, missing clocks and capped totals.
-The retained panel draws both grains from that same result.
+checks recorded endpoints, independent axes, nested readings, incomplete clocks
+and uncapped totals. The browser journey checks the actual interval geometry,
+view switch and article disclosure.
 
 **It is a snapshot, so the window control does not reach it.** A bar's position
 is measured from its own run's start and a span cannot narrow one run, so the
@@ -165,6 +162,31 @@ exactly its declared native clock columns. With that data absent, the view is
 empty and the route still renders.
 
 **Pipelines depends on `$lib/charts/machine` for its `seconds` formatter.**
+
+## The run-wide article ranking keeps its original evidence endpoint
+
+`slowest-articles` follows the timeline and mounts only on Pipelines. It ranks
+all qualifying articles across the newest recorded run, not the selected
+shard's paged details. The timeline's shard inspection and Summaries' aggregated
+writing-cost distribution do not answer that run-wide identity question.
+
+Its item-health query retains the common endpoint of item-health,
+host-fingerprint and run-shards, then clamps to that newest UTC day. Ordinary
+Pipelines native queries retain their item-health-only endpoint. A lagging host
+or count family can therefore date the ranking earlier without backshifting the
+timeline or other native readings. Each panel prints its own evidence dates.
+Retry retains each group's successful endpoint until the preset changes.
+
+The existing numeric `config/console/machine.json` knob
+`slowest_articles_rows` still limits the ranking, preserving prior configuration
+and its default. Recorded `item_total_ms` determines rank, never timestamp
+elapsed time. The newest run does not fall back when its clocks are missing;
+measured zero remains a measured article, and the unmeasured count stays visible.
+
+Complete nonnegative fetch, extract, summarize and checking stages stack with a
+positive recorded gap as `Other`. Missing stages or gap and negative overlap
+keep the whole recorded-item bar and their original context. Queue wait stays
+outside it. No clock is normalized or inferred during the move.
 
 ## Run health is one panel: the day's articles, and every run under them
 
@@ -416,15 +438,16 @@ remain build-time inputs. Their own window and
 snapshot rules do not become ItemCost's rules; the prerendered private marks
 remain available without scripts.
 
-## Visual-attempt views read the unpublished record at build time
+## Visual refusal lines read the unpublished attempt record at build time
 
-`visual-refusals` and `visual-written-types` count the rows in
+`visual-refusals` counts the rows in
 `visual-design-attempts` (one row per settled visual attempt). That record is
 not published to the Data explorer, so the browser cannot ask for it. The route
 load reads it through `visualAttemptRows` over the widest window, groups the
 rows into small per-day counts, and the page filters those counts to the
-selected window. Only the columns the views use are read, and a backend test
-holds that list to `VisualAttemptRow`. No ledger, column or producer is added.
+selected window. The view uses only the date and first refusal columns; the
+shared reader retains its day/run ordering columns. A backend test holds the
+view's column list to `VisualAttemptRow`. No ledger, column or producer is added.
 
 `visual-refusals` shows each recorded first validator refusal
 (`rejection_reason`) as a daily line, including requests that were later written.
@@ -444,33 +467,30 @@ can still draw the zero failed-check line. If only incomplete attempt counts
 are available, the panel states that no complete check count is available and
 prints those known attempts rather than drawing zeros.
 
-`visual-written-types` compares `planned_type` with successfully written
-`rendered_type` over the selected window. Each pair shows its attempt count.
-A written file is not proof of publication or a human decision to keep it.
-Older written attempts with no typed outcome are counted separately and make
-the comparison explicitly incomplete; their type is never inferred from the
-request. Both views keep the attempt reader's missing-day and set-aside-file
+The refusal view keeps the attempt reader's missing-day and set-aside-file
 notes beside the counts. A packed record that starts late or stops before the
-selected UTC window states its coverage and marks the views incomplete. Notes
-follow the selected window in both attempt views. The line adapter reads the
+selected UTC window states its coverage and marks the view incomplete. Notes
+follow the selected window. The line adapter reads the
 typed `RecordRead` coverage and loss metadata, never its explanatory prose.
 No new measurement, ledger field, producer, keep
 rate, repetition measure or single-type-day alarm is added.
 
-These views extend the existing private record section because they use the
+This view stays in the existing private record section because it uses the
 same bounded reader and its evidence rules, not another delivery path.
 
 ## Design rationale
 
 ### Selected visual diagnostics are removed, not hidden
 
-`pipeline-funnel`, `downgrade-funnel` and `extraction` have no roster entries,
-mounts, local reducers or queries. Their removal gives up stage-by-class
+`pipeline-funnel`, `downgrade-funnel`, `extraction` and `visual-written-types`
+have no roster entries, mounts, local reducers or queries. Their removal gives up stage-by-class
 attrition, draft outcomes and replacement depth, and the extraction class,
-flag and yield diagnostic. The retained visual overview does not replace those
-questions. Producer records and persisted contracts remain unchanged; unread
-item extraction cells and the intentionally undrawn evaluator flag say so in
-their existing ownership declarations.
+flag and yield diagnostic, plus the visible comparison of planned and successfully
+written visual types. Written means a file was created, not that it was published
+or kept by a person. The retained visual overview does not replace those
+questions. There is no hidden comparison or relocated panel. Producer records
+and persisted contracts remain unchanged; unread item extraction cells and the
+intentionally undrawn evaluator flag say so in their existing ownership declarations.
 
 Daily refusal lines retain a different question: the first failed plan check,
 even on an attempt later written. Separate named lines keep every recorded

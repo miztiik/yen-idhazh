@@ -146,10 +146,10 @@ def test_the_feed_record_asks_only_for_columns_the_contract_declares_in_its_orde
 
 
 def test_the_attempt_record_asks_only_for_columns_the_contract_declares_in_its_order() -> None:
-    """The Pipelines funnels read part of the attempt record, so its list is a part, in order.
+    """The Pipelines refusal view reads part of the attempt record, in the contract's order.
 
-    `ledger-rows.ts` spells the `VisualAttemptRow` columns the funnels read. A
-    column the contract renames or drops would reach a funnel as an empty
+    `ledger-rows.ts` spells the `VisualAttemptRow` columns the refusal view reads. A
+    column the contract renames or drops would reach the view as an empty
     reading rather than as an error.
     """
     asked = quoted_strings(read_text(SERVER / "ledger-rows.ts"), "VISUAL_ATTEMPT_COLUMNS")
@@ -286,26 +286,3 @@ def test_every_request_the_item_ledger_names_carries_its_reading_speed_column() 
         assert f"{name}_prefill_tokens_per_s" in columns, (
             f"{name} carries no reading-speed column to pair with"
         )
-
-
-def test_the_correction_the_panel_prints_names_the_date_the_contract_records() -> None:
-    """One date, written in two languages, and neither side can see the other move.
-
-    The panel tells a reader that a row older than this date counted the host's
-    stolen share as our own work. `cpu_busy_pct` records the same date, and a
-    correction printed for a day the contract did not move is a claim about the
-    archive that the archive does not support.
-    """
-    stated = ItemHealthRow.json_schema()["properties"]["cpu_busy_pct"]["description"]
-    said = re.search(r"A row written before (\d{4}-\d{2}-\d{2}) counted that time as ours", stated)
-    assert said, (
-        "`cpu_busy_pct` no longer records the date it stopped holding the stolen share, "
-        "so the correction the panel prints cannot be checked against anything"
-    )
-
-    text = read_text(CONSOLE / "machine" / "processor-lost.ts")
-    drawn = re.search(r"^export const BUSY_HELD_BOTH_BEFORE = '([^']*)';$", text, re.MULTILINE)
-    assert drawn, "processor-lost.ts no longer declares BUSY_HELD_BOTH_BEFORE"
-    assert drawn[1] == said[1], (
-        f"the panel prints a correction for {drawn[1]} and the contract records {said[1]}"
-    )

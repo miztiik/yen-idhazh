@@ -42,9 +42,9 @@ export async function hydrated(page: Page) {
 }
 
 export async function setWindow(page: Page, days: number) {
-	// The label is the target, not the 1px input inside it - that is what a
-	// person clicks and what a thumb can hit.
-	await page.locator(`[data-window-preset="${days}"]`).click();
+	const select = page.locator('[data-window-select]');
+	if (await select.isVisible()) await select.selectOption(String(days));
+	else await page.locator(`[data-window-preset="${days}"]`).click();
 	await expect(page.locator('[data-window-control]')).toHaveAttribute(
 		'data-window-days',
 		String(days)

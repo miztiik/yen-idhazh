@@ -30,6 +30,7 @@ from typing import Any, Final
 import pytest
 from pydantic import ValidationError
 from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
+from support.visual_plans import current_plan
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.derived import DerivedFunction, DerivedValue, DisplayedValue
@@ -65,7 +66,7 @@ def committed_visuals() -> VisualsConfig:
 
 
 def load_plan(stem: str) -> VisualPlan:
-    return VisualPlan.from_json(read_text(VALIDATOR_FIXTURES / "plans" / f"{stem}.json"))
+    return current_plan(VALIDATOR_FIXTURES / "plans" / f"{stem}.json")
 
 
 def load_table(stem: str) -> ElementTable:
@@ -73,8 +74,7 @@ def load_table(stem: str) -> ElementTable:
 
 
 def plan_payload(stem: str) -> dict[str, Any]:
-    payload: dict[str, Any] = json.loads(read_text(VALIDATOR_FIXTURES / "plans" / f"{stem}.json"))
-    return payload
+    return load_plan(stem).model_dump(mode="json")
 
 
 def elements_of(table: ElementTable, *ids: str) -> list[Element]:

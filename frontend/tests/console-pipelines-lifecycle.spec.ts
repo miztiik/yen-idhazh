@@ -3,6 +3,7 @@ import { expect, test } from './support/door-page';
 import { hydrated, setWindow } from './support/console-window/controls';
 import { FIRST, THROUGH, dayBefore, nativeRow, timedRow, packedPipelines, servePipelines, settled } from './support/pipelines-ledgers';
 import { routeConsoles } from '../src/lib/server/config';
+import { buildRows, serveToPage } from './support/ledger-lifecycle';
 let root: string;
 test.beforeAll(async () => {
 	const days = Math.round((Date.parse(`${THROUGH}T00:00:00Z`) - Date.parse(`${FIRST}T00:00:00Z`)) / 86_400_000);
@@ -83,13 +84,47 @@ test('removed visual diagnostics neither mount nor ask for evaluator data', asyn
 	await page.goto('/console/');
 	await hydrated(page);
 	await settled(page);
-	for (const id of ['pipeline-funnel', 'downgrade-funnel', 'extraction']) {
+	for (const id of ['pipeline-funnel', 'downgrade-funnel', 'extraction', 'visual-written-types']) {
 		await expect(page.locator(`[data-console-panel-id="${id}"]`)).toHaveCount(0);
+		await expect(page.locator(`[id="${id}"], a[href$="#${id}"]`)).toHaveCount(0);
 	}
-	for (const id of ['chart-drawing', 'visual-refusals', 'visual-written-types']) {
+	await expect(page.getByRole('heading', { name: 'Planned and successfully written visual types', exact: true })).toHaveCount(0);
+	await expect(page.locator('[data-visual-attempt-view="written"]')).toHaveCount(0);
+	for (const id of ['chart-drawing', 'visual-refusals']) {
 		await expect(page.locator(`[data-console-panel-id="${id}"]`)).toHaveCount(1);
 	}
 	expect(evaluatorRequests).toEqual([]);
+});
+
+test('the run-wide article ranking keeps lagging host/count evidence separate from the current timeline', async ({ page }) => {
+	const older = dayBefore(THROUGH, 1);
+	const state = await packedPipelines('ranking-endpoint', [
+		{ covers: older, rows: [
+			timedRow(older, { item_id: 'older-short', machine_shard: 0 }),
+			timedRow(older, { item_id: 'older-long', machine_shard: 1, item_total_ms: 1600, stage_gap_ms: 850 })
+		] },
+		{ covers: THROUGH, rows: [timedRow(THROUGH, {
+			item_id: 'latest-clock', machine_shard: 0,
+			item_started_at: `${THROUGH}T00:00:00Z`, item_ended_at: `${THROUGH}T00:00:02Z`
+		})] }
+	]);
+	await buildRows(state, 'host-fingerprint', [{ covers: older, rows: [{ date: older, run_id: `${older}-1`, job: 'work', shard: 0 }] }]);
+	await buildRows(state, 'run-shards', [{ covers: older, rows: [{ date: older, run_id: `${older}-1`, shards: 2 }] }]);
+	await servePipelines(page, state);
+	await serveToPage(page.context(), state, 'host-fingerprint');
+	await serveToPage(page.context(), state, 'run-shards');
+	await page.goto('/console/');
+	await hydrated(page);
+	await settled(page);
+	await expect(page.locator('[data-run-timeline]')).toHaveAttribute('data-run-timeline', `${THROUGH}-1`);
+	const ranking = page.locator('[data-console-panel-id="slowest-articles"]');
+	await expect(ranking).toHaveCount(1);
+	await expect(ranking.locator('[data-slowest-run]')).toHaveAttribute('data-slowest-run', `${older}-1`);
+	await expect(ranking.locator('[data-native-window]')).toContainText(`${older} through ${older} UTC`);
+	await expect(page.locator('[data-console-panel-id="stage-timings"] [data-native-window]'))
+		.toHaveText(`Native record: ${older} through ${THROUGH} UTC.`);
+	await expect(ranking.locator('[data-ranked-row]').first()).toContainText('older-long');
+	await expect(ranking).not.toContainText('latest-clock');
 });
 
 test('integrated actual canary smoke: narrow viewport, with cross-page navigation', async ({ page }) => {

@@ -220,7 +220,7 @@
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{:else if active.type === 'flow'}
 							{@const records = rows.map((row) => factsOf(text(row, active.stageColumn), [active.arrivedColumn, active.wentOnColumn, ...active.droppedColumns].map((column) => ({ label: column, value: numericValue(row, column), format: (n) => text({ [column]: n }, column) })), 'null'))}
-							<Flow geometry={flowDrawing} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Flow: ${[active.stageColumn, active.arrivedColumn, active.wentOnColumn, ...active.droppedColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={records} tooltips={false} />
+							<Flow geometry={flowDrawing} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Flow: ${[active.stageColumn, active.arrivedColumn, active.wentOnColumn, ...active.droppedColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={records} />
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{:else if active.type === 'dateSeries'}
 							{@const plotFrame = frame(chartWidth, chartHeight)}

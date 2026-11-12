@@ -25,7 +25,7 @@ ShadowAlpha = Annotated[float, Field(strict=True, ge=0, le=0.2, allow_inf_nan=Fa
 
 
 class ConsoleColors(Model):
-    """Neutral light surfaces, teal actions and a separate categorical palette."""
+    """Neutral light surfaces, PiYG-aligned actions and a separate custom palette."""
 
     canvas: Color = "#f2f1ed"
     inset: Color = "#e9e7e1"
@@ -36,11 +36,11 @@ class ConsoleColors(Model):
     text_tertiary: Color = "#746f64"
     rule: Color = "#dad6cb"
     rule_strong: Color = "#b6afa0"
-    accent: Color = "#0b746e"
-    accent_hover: Color = "#085d58"
+    accent: Color = "#276419"
+    accent_hover: Color = "#1b4612"
     on_accent: Color = "#ffffff"
-    focus: Color = "#0b746e"
-    selected: Color = "#dcedea"
+    focus: Color = "#8e0152"
+    selected: Color = "#e6f5d0"
     chart_axis: Color = "#b6afa0"
     chart_grid: Color = "#dad6cb"
     categorical: list[Color] = Field(
@@ -56,6 +56,11 @@ class ConsoleColors(Model):
         ],
         min_length=8,
         max_length=8,
+        description=(
+            "The custom categorical palette. Built-in chart.palette choices replace "
+            "the first seven emitted category colours; the eighth always remains "
+            "the configured neutral absence paint."
+        ),
     )
 
     @model_validator(mode="after")
@@ -77,11 +82,11 @@ class DarkConsoleColors(ConsoleColors):
     text_tertiary: Color = "#a39c8f"
     rule: Color = "#393932"
     rule_strong: Color = "#565348"
-    accent: Color = "#6bc7be"
-    accent_hover: Color = "#94d9d0"
+    accent: Color = "#b8e186"
+    accent_hover: Color = "#e6f5d0"
     on_accent: Color = "#122722"
-    focus: Color = "#6bc7be"
-    selected: Color = "#263d38"
+    focus: Color = "#de77ae"
+    selected: Color = "#1b4612"
     chart_axis: Color = "#565348"
     chart_grid: Color = "#393932"
     categorical: list[Color] = Field(

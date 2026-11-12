@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 `/console/machine/` asks what machine the work actually got, whether its two
 clocks agree, and what would change the cost of that work.
@@ -13,7 +13,7 @@ own what may not be pooled.
 
 The prerendered page carries configuration and words only. Its route load returns
 `machineConfig`; the shared layout supplies the standing band and settings-change
-words. With scripts off, all fifteen titled panels remain, each with an empty
+words. With scripts off, all eleven titled panels remain, each with an empty
 reserved axis frame. No run, host, article, cost or refusal is embedded in HTML
 or route page data.
 
@@ -22,8 +22,10 @@ In the browser, declared questions in `console/queries/machine.ts` ask the nativ
 The common end is the oldest successful through-day of those families, never
 the browser clock. Following panels use the chosen preset; snapshot panels use
 the newest day and name their newest recorded run rather than falling back to
-an older successful one. The widest host population supplies one machine-colour
-ramp, so narrowing a window cannot recolour a machine.
+an older successful one. The bounded widest host population supplies canonical
+full-identity palette slots and name qualifiers, so narrowing a window cannot
+recolour or rename a machine. Identity is fingerprint version plus digest;
+name-only evidence and missing identity remain separate.
 
 `RouteStatus` owns one delayed shimmer and one reserved standing sentence.
 Loading is not an answer. Quiet says `Nothing recorded.`, missing says
@@ -87,20 +89,16 @@ again records its newer plan's count, and settlement keeps the newer numeric
 count. A manifest written before 2026-10-12 keeps the count assembly recomputed
 from its plan. This is the maintainer's ruling of 2026-10-12.
 
-## Four groups, fifteen comparisons
+## Four groups, eleven comparisons
 
 Membership and order live in `config/console/machine.json`.
 
 | Group | Panel id | Drawing and grain |
 | --- | --- | --- |
 | What the machine was doing | `two-clocks` | One ranked gap percentage per shard of the newest recorded run, with the allowed-disagreement rule; the item and independent server readings are printed together |
-| | `processor-lost` | Two tile strips: one day and one shard of the newest run; unrecorded is not a zero |
-| | `disk-reads` | Daily disk-wait and disk-copy strips; first-on-shard weight loads are excluded and counted |
-| | `machine-cards` | Existing cards, one machine of the newest run, retaining flags, cache, copy-speed, clock, uptime and native location disclosure |
 | | `slower-machines` | Separate Reading and Writing rankings of comparable work by machine kind |
 | | `platform-mix` | Shipped placement counts: one square a job below the configured floor, otherwise stacked day bars; never a probability of the next draw |
-| Where the time went | `slowest-articles` | Longest elapsed articles of the newest run, with measured stages and queue context |
-| | `tail-trend` | Existing five percentile subplots, one mark a qualified run and one shared scale |
+| Where the time went | `tail-trend` | Existing five percentile subplots, one mark a qualified run and one shared scale |
 | How close we are to the limits | `closest-to-memory` | Dated articles ranked by memory held; the empty remainder ends at total machine memory |
 | | `memory-held` | Existing memory split and overlapping process brackets, for the newest day |
 | | `context-headroom` | Label and summary request distributions on one logarithmic domain, with recorded context and cut-request rules |
@@ -134,10 +132,10 @@ floor and kind cap apply independently to each list. Runs without a reference
 reading and articles lacking comparable work are counted and printed. Reading
 and writing never become one total.
 
-Slowest articles stacks only complete nonnegative fetch, extract, summarize
-and checking measurements with a positive recorded stage gap as `Other`.
-A negative gap draws one whole elapsed bar and prints the overlap. Queue wait
-sits outside elapsed time. Nothing recorded is not a zero stage.
+The run-wide slowest-article ranking is mounted once on
+[Pipelines](what-the-pipelines-route-draws.md#the-run-wide-article-ranking-keeps-its-original-evidence-endpoint).
+Its source family group and newest-day clamp remain independent of Pipelines'
+ordinary item-health endpoint.
 
 Closest-to-memory uses `total - minimum available`, not process resident
 memory. Repeated readings of one dated article contribute its tightest held
@@ -206,11 +204,9 @@ work only. Per-item costs remain independent of run-level clock refusal.
 
 The native adapters reuse the declared host read migration. Legacy cores,
 threads and maximum frequency remain unknown; a valid legacy probe frequency
-can supply the observed average. Cards carry only selected public cells. Each
-card's physical/logical counts, allowed processors, quota state and fraction,
-frozen UTC target capture, and observed/reported frequencies come from the same
-source row. Algorithm-2 identity does not prove equal constraints across jobs.
-Unlimited, unavailable and no target measurement remain distinct states.
+can supply the observed average. Algorithm-2 identity does not prove equal
+constraints across jobs. Removing a presentation deletes no host or item
+measurement, producer collection or persisted contract.
 Fingerprint identity is the algorithm and digest pair; equal text under
 algorithms 1 and 2 never joins. Name-only evidence stays coarse.
 
@@ -231,17 +227,8 @@ host measurements began is not automatically destroyed evidence. Successful
 item records without a host record, after host recording began or on an
 explicitly lost day, are named **dated article records**, not published
 articles: the approved item question does not select publication outcome.
-Cards retain `data-machine-record` and its existing reasons.
-Processor and disk ledes count marked days against recorded days. A marked day
-below the separate naming threshold remains marked; it is never described as
-a quiet machine. The original recording and threshold detail remains beside it.
-
-Disk-read captions describe recorded locking requests, never applied locking.
-A run with both recorded values belongs to the non-locking group because it
-includes a non-locking setting, not because it recorded no locking request.
-The process watch supplies disk faults and model memory only when the work
-invocation has the controller's process identity and collection is enabled.
-Missing readings stay unknown. Historical recording limits are described with
+The process watch still supplies measurements needed by retained memory and
+cost readers. Missing readings stay unknown. Historical recording limits are described with
 the [item-health producer](../sources/item-health.md#what-the-processors-did-and-what-was-taken-from-them);
 neither this page nor the context panel fills missing historical settings from
 current configuration.
@@ -250,7 +237,10 @@ current configuration.
 
 `console-machine-journey.spec.ts` follows one production-built Hardware journey:
 native index and Parquet arrival, a dated readout, and a carried window across
-the Pipelines tab. Its two context distributions must contain readings and fit
+the Pipelines tab. Machine hover projects the UTC day, qualified machine name
+and exact count out of that day's recorded jobs. Selecting the day exposes all
+machine counts, including known zeros, speed context and actual job identities.
+Its two context distributions must contain readings and fit
 their cells; the clock-rule names and whole document must fit at desktop and
 390 pixels. Independent cases check failed-host-only retry, unpublished
 indexes, and the actual scriptless prerendered document. Pure native oracles in
@@ -272,6 +262,36 @@ from the browser; substituting observed counts for unknown planned counts;
 first-wins count corrections; one read/write total; fake stages or empty marks
 standing for measured zero; a previous successful run substituted for the
 newest refused run; lost-state claims derived from a fetch failure.
+
+## Design rationale
+
+The history plot answers observed placement over time, not newest-run machine
+constraints, processor contention or model paging. Those three diagnostic
+panels are permanently absent, without disclosures or relocations. Historical
+mix is retained but is not a substitute for their lost detail.
+
+Machine identity uses D3's built-in [PiYG scheme](https://d3js.org/d3-scale-chromatic/diverging#schemePiYG) through the existing
+`chart.palette` selector, aligned with the rest of the console. Its widest built-in
+scheme supplies the ordinal slots; reused slots never merge identities. Each known machine has the
+same optional opaque lighter-to-base treatment, restarting inside its segment
+or job square. Missing speed does not remove identity; missing identity stays
+neutral. Top-kind selection and folded totals remain as compact legend groups.
+Every UTC day orders its actual machine segments from largest count at the
+bottom to smallest at the top, independently of other days. Folded identities
+remain separate segments even when daily ranking parts them. Their counts still
+sum exactly to the group total. The small-cohort job squares use the same daily
+count ordering.
+
+`d3-scale-chromatic` supplies the published colour schemes; no palette is
+hand-authored here. Existing D3 scale/color dependencies are reused. Only named
+schemes are imported, rather than another chart engine; its upstream complete
+minified distribution is about 20 KB before tree shaking, not the browser delta.
+Pale machine fills and their swatches retain a configured neutral edge, so a
+stock midpoint remains visible without changing its D3 colour or count.
+
+Framing is one context line and a compact identity key. Below the plot are only
+the selected UTC day, its recorded-job total and a short selection hint. Full
+dated counts and measured speeds remain in the keyboard/touch day details.
 
 ## See also
 

@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -153,11 +153,15 @@ recorded shard-count answers supply the arithmetic; unknown counts remain
 unknown instead of being derived from the hosts that happened to answer.
 
 **A newest-day question is a snapshot, not a selected-window aggregate.**
-The clock check, machine cards, slowest-article list and memory-held panel name
+The Hardware clock check and memory-held panel name
 the newest day or its newest recorded run. They do not fall back to an older
 successful run when the newest one was refused. The widest host population
-supplies the machine colour ramp, so changing the selected span cannot recolour
-a machine.
+supplies canonical full-identity palette slots and name qualifiers, so changing
+the selected span cannot recolour or rename a machine.
+
+Pipelines' run-wide slowest-article list is also a newest-run snapshot. It keeps
+Hardware's item-health + host-fingerprint + run-shards endpoint group, separate
+from ordinary Pipelines item-health reads, and prints its own evidence day.
 
 Panel-specific rules live in [console-machine.md](console-machine.md), beside
 the questions and missing-data meanings they protect. They do not require

@@ -241,14 +241,9 @@ class ConsoleConfig(Model):
         default=120,
         ge=1,
         description=(
-            "How many items the run timeline draws as bars before it states the tail in "
-            "one sentence. The bars are in start order, so the first this many show the "
-            "shape of the run - a staircase or a block - which is what the panel is for. "
-            "Measured 2026-09-16 over the committed census, a day holds 349 to 465 rows, "
-            "and a bar a row would put a thousand spans in a prerendered document for a "
-            "queue whose shape is settled in its first minute. It is a cap on the "
-            "DRAWING and never on the arithmetic: every figure the panel prints is over "
-            "the whole run."
+            "Maximum visible item rows on one page of run-timeline article details. "
+            "The main comparison has one row per shard; pagination keeps every article "
+            "reachable. This limit never caps shard folds, coverage or run totals."
         ),
     )
     chart_rule_days: int = Field(
@@ -327,13 +322,10 @@ class ConsoleConfig(Model):
         ge=1,
         le=7,
         description=(
-            "How many steps the machine colour has, slowest to fastest. A machine "
-            "kind takes the step its median prompt reading speed falls in, cut at "
-            "the quantiles of every kind's median over the whole record the page "
-            "holds, so a machine keeps its colour when the span changes. Five, "
-            "because a reader cannot rank many steps of one hue on a thin bar. "
-            "Kinds on one step share its colour, and the name and the speed are "
-            "printed beside every one of them."
+            "How many whole-record median-speed groups the machine history keeps "
+            "for its legend groups and folds. Machine identity, not this "
+            "group, chooses categorical colour. Changing the selected window does "
+            "not recompute these groups."
         ),
     )
     machine_colour_floor_share: float = Field(
@@ -341,11 +333,10 @@ class ConsoleConfig(Model):
         gt=0.0,
         lt=1.0,
         description=(
-            "How much of the machine hue the slowest step carries, the rest being "
-            "the panel's own ground; the steps above it rise evenly to the full "
-            "hue. 0.4, because at 0.2 the slowest step stood 1.3 to 1 against the "
-            "panel and nearly vanished, and slow machines are what the panel exists "
-            "to show. Measured 2026-09-30 on --chart-1: 1.89 to 1 in both themes."
+            "The uniform highlight share at the top of each categorical machine "
+            "gradient; the rest is that machine's categorical hue. Every known "
+            "machine uses the same treatment, independent of speed. The bottom "
+            "keeps the full hue. The existing legacy ramp also accepts this share."
         ),
     )
     absent_hatch_degrees: int = Field(

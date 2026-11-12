@@ -4,9 +4,6 @@
       "id": "what-the-machine-was-doing",
       "panels": [
         "two-clocks",
-        "processor-lost",
-        "disk-reads",
-        "machine-cards",
         "slower-machines",
         "platform-mix"
       ],
@@ -15,7 +12,6 @@
     {
       "id": "where-the-time-went",
       "panels": [
-        "slowest-articles",
         "tail-trend"
       ],
       "title": "Where the time went"
@@ -42,12 +38,8 @@
   ],
   "judged": [
     "two-clocks",
-    "processor-lost",
-    "disk-reads",
-    "machine-cards",
     "slower-machines",
     "platform-mix",
-    "slowest-articles",
     "tail-trend",
     "closest-to-memory",
     "memory-held",

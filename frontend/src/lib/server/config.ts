@@ -434,7 +434,7 @@ export interface AssistConfig {
  */
 export interface FrameConfig {
 	reading_max_px: number;
-	console_max_px: number;
+	console_max_px: number | null;
 	measure_ch: number;
 	gutter_min_px: number;
 	gutter_max_px: number;
@@ -472,7 +472,7 @@ export interface ChartConfig {
 	hover_readout: boolean;
 	/** The widest the readout strip under a plot may be, as a share of that plot. */
 	readout_max_share: number;
-	palette: 'categorical' | 'sequential';
+	palette: 'categorical' | 'sequential' | 'spectral' | 'piyg';
 	tick_density: number;
 	sparkline_height_px: number;
 	number_format: NumberFormatConfig;
@@ -761,7 +761,7 @@ const ASSIST_DEFAULTS: AssistConfig = {
 };
 const FRAME_DEFAULTS: FrameConfig = {
 	reading_max_px: 1280,
-	console_max_px: 1600,
+	console_max_px: null,
 	measure_ch: 68,
 	gutter_min_px: 16,
 	gutter_max_px: 32,

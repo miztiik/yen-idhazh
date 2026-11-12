@@ -24,6 +24,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build, type Rollup } from 'vite';
+import type { DigestVisual } from '../../src/lib/payload/types';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const FRONTEND = path.resolve(here, '..', '..');
@@ -35,7 +36,7 @@ export const BASE = '/yen-idhazh';
  * payload's own content revision, which is what decides whether a day the
  * session already holds is the day the host is serving. */
 export interface LoadedDay {
-	items: { item_id?: string }[];
+	items: { item_id?: string; visual?: DigestVisual | null }[];
 	generated_at?: string;
 }
 

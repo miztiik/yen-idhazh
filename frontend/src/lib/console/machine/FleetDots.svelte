@@ -1,25 +1,14 @@
 <script lang="ts">
-	/** Draws the machine kinds as one square a job, a column a day.
-	 *
-	 * The shape the panel takes under `console.fleet_min_rows` placements, when a
-	 * bar over a small count would read as a rate the count cannot support. Every
-	 * square is a job a reader can point at, coloured by its machine's speed, and
-	 * a day's squares fill from the bottom in the same order a bar would stack.
-	 * A known machine with no speed reading is a hollow square: stripes on a
-	 * square this small are one or two lines and read as the flat grey of no
-	 * machine recorded.
-	 *
-	 * Its hover data is the readout strip under the plot, as on every chart here:
-	 * the plot is one tab stop, and a pointer, a key or a tap picks a day. A click
-	 * or Enter holds the day open, outlined, for the list under the plot.
-	 */
+	/** Draw one square per recorded job, preserving categorical machine identity. */
 	import type { FleetDots } from '$lib/charts/fleet';
 	import { columnPick, pointerReadout, readoutMarks, type Readout } from '$lib/charts/readout';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
+	import type { HoverReadout } from '$lib/charts/readout-hover';
 
 	let {
 		geometry,
 		readout,
+		hover,
 		name,
 		label,
 		readoutMaxShare,
@@ -32,6 +21,7 @@
 		geometry: FleetDots;
 		/** The strip under the plot, one column a day in the geometry's order. */
 		readout: Readout;
+		hover: HoverReadout;
 		name: string;
 		label: string;
 		/** `chart.readout_max_share`. */
@@ -48,8 +38,6 @@
 
 	/** A tick mark's length, the same as the reserved frame draws. */
 	const TICK = 4;
-	/** The outline a hollow square is drawn with. */
-	const RING = 1.5;
 	/** How far the outline of a day held open stands off its squares. */
 	const HELD = 2;
 
@@ -60,6 +48,9 @@
 	const box = $derived(geometry.frame);
 	const marks = $derived(readoutMarks(geometry.columns));
 	const showing = $derived(shown ?? readout.resting);
+	const gradients = $derived([...new Map(geometry.squares.flatMap((square) =>
+		square.gradient === null ? [] : [[square.row, square.gradient] as const])).entries()]);
+	const gradientIds = $derived(new Map(gradients.map(([key], index) => [key, `${name}-square-fill-${index}`])));
 </script>
 
 <div class="fleet-dots-plot" data-readout-columns={readout.columns.length}>
@@ -75,9 +66,17 @@
 		data-chart-type="dateSeries"
 		data-chart-name={name}
 		data-fleet-square-size={geometry.size}
-		use:pointerReadout={{ marks, width: box.width, onSelect: (index) => (selected = index) }}
+		use:pointerReadout={{ marks, width: box.width, hover, onSelect: (index) => (selected = index) }}
 		use:columnPick={{ marks, width: box.width, showing, onPick }}
 	>
+		<defs>
+			{#each gradients as [key, gradient] (key)}
+				<linearGradient id={gradientIds.get(key)} x1="0%" y1="0%" x2="0%" y2="100%">
+					<stop offset="0%" stop-color={gradient.bottom} style:stop-color={gradient.top} />
+					<stop offset="100%" stop-color={gradient.bottom} />
+				</linearGradient>
+			{/each}
+		</defs>
 		<line x1={box.left} x2={box.right} y1={box.bottom} y2={box.bottom} stroke="var(--chart-axis)" />
 		{#each geometry.ticks as tick (tick.index)}
 			<line
@@ -100,27 +99,15 @@
 
 		<g data-lede data-fleet-squares={geometry.squares.length}>
 			{#each geometry.squares as square, at (at)}
-				{#if square.drawing === 'untimed'}
-					<rect
-						x={square.x + RING / 2}
-						y={square.y + RING / 2}
-						width={Math.max(0, square.size - RING)}
-						height={Math.max(0, square.size - RING)}
-						fill="none"
-						style:stroke={square.colour}
-						stroke-width={RING}
-						data-fleet-square={square.row}
-					/>
-				{:else}
-					<rect
-						x={square.x}
-						y={square.y}
-						width={square.size}
-						height={square.size}
-						style:fill={square.colour}
-						data-fleet-square={square.row}
-					/>
-				{/if}
+				<rect
+					x={square.x}
+					y={square.y}
+					width={square.size}
+					height={square.size}
+					style:fill={square.gradient === null ? square.colour : `url(#${gradientIds.get(square.row)}) ${square.colour}`}
+					data-fleet-square={square.row}
+					data-readout-key={square.row}
+				/>
 			{/each}
 		</g>
 
@@ -135,6 +122,7 @@
 				stroke="var(--color-text)"
 				stroke-width="1"
 				data-fleet-held={picked}
+				pointer-events="none"
 			/>
 		{/if}
 		{#if selected !== null && geometry.columns[selected] !== undefined}
@@ -146,6 +134,7 @@
 				stroke="var(--color-text-tertiary)"
 				stroke-opacity="0.5"
 				data-fleet-guide
+				pointer-events="none"
 			/>
 		{/if}
 	</svg>
@@ -164,5 +153,9 @@
 	.fleet-dots:focus-visible {
 		outline: 2px solid var(--color-focus);
 		outline-offset: 2px;
+	}
+	[data-fleet-square] {
+		stroke: var(--chart-axis);
+		stroke-width: var(--console-chart-axis-width);
 	}
 </style>

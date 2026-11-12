@@ -438,7 +438,7 @@
     "tagline": "Daily news summaries, with links to their sources.",
     "theme_default": "dark"
   },
-  "version": "2026-11-10",
+  "version": "2026-11-11",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,
@@ -449,8 +449,7 @@
     "downgrade_lookback_days": 30,
     "downgrade_max_samples_per_type": 256,
     "enabled_kinds": [
-      "chart",
-      "whowhat"
+      "chart"
     ],
     "enabled_types": [
       "bar",
@@ -461,8 +460,7 @@
       "slope",
       "stacked_bar",
       "pie",
-      "histogram",
-      "whowhat"
+      "histogram"
     ],
     "histogram_bins": 3,
     "lead_words": 150,

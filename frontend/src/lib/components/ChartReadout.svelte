@@ -32,12 +32,8 @@
 	 * blank, so no strip changes height with the window. Reader chose the words
 	 * and Jony the room, on 2026-10-07.
 	 */
-	import {
-		readoutCapStyle,
-		type Readout,
-		type ReadoutFacts,
-		type ReadoutLine
-	} from '$lib/charts/readout';
+	import { readoutCapStyle, type Readout, type ReadoutFacts } from '$lib/charts/readout';
+	import { readoutView } from '$lib/charts/readout-view';
 
 	let {
 		readout,
@@ -77,120 +73,7 @@
 		eventRoom?: boolean;
 	} = $props();
 
-	interface Entry {
-		label: string;
-		value: string;
-		swatch: string | null;
-		/** The characters the widest reading of this entry needs, or zero. */
-		reserve: number;
-		/** Room held for an event line this column does not have: laid out, never
-		 * seen and never read out. */
-		held?: boolean;
-	}
-
-	/** The widest reading a series prints, so the strip keeps room for it. A
-	 * missing reading prints the not-measured word only on a column another
-	 * series measured: a column nothing measured prints the word once, in place
-	 * of every entry, so it holds no room in any of them. */
-	function widest(
-		values: readonly (string | null)[],
-		missing: string,
-		counted: readonly boolean[]
-	): number {
-		return values.reduce(
-			(most, value, column) => Math.max(most, (value ?? (counted[column] ? missing : '')).length),
-			0
-		);
-	}
-
-	/** What the strip prints: a heading and its entries, in either shape. `one`
-	 * is a strip of one column, which names no resting column and no keys. */
-	const view = $derived.by(
-		(): {
-			shape: 'columns' | 'record';
-			heading: string;
-			resting: boolean;
-			one: boolean;
-			entries: Entry[];
-		} | null => {
-			if (readout === null) return null;
-			if ('subject' in readout) {
-				return {
-					shape: 'record',
-					heading: readout.subject,
-					resting,
-					one: false,
-					entries: readout.facts.map((fact) => ({
-						label: fact.label,
-						value: fact.value ?? readout.notMeasured,
-						swatch: fact.swatch,
-						reserve: fact.reserve ?? 0
-					}))
-				};
-			}
-			if (readout.columns.length === 0) return null;
-			const column = Math.min(readout.columns.length - 1, Math.max(0, at ?? readout.resting));
-			const counted = readout.columns.map((_, index) =>
-				readout.series.some((one) => one.values[index] !== null)
-			);
-			const measured = counted[column] ?? false;
-			const series: Entry[] = measured
-				? readout.series.map((one) => ({
-						label: one.note === undefined ? one.label : `${one.label} (${one.note})`,
-						value: one.values[column] ?? readout.notMeasured,
-						swatch: one.swatch,
-						reserve: widest(one.values, readout.notMeasured, counted)
-					}))
-				: [
-						{
-							label: readout.notMeasuredAt[column] ?? readout.notMeasured,
-							value: '',
-							swatch: null,
-							reserve: 0
-						}
-					];
-			const events = readout.events[column] ?? [];
-			// A column nothing measured already says so in one sentence, so it does
-			// not say "nothing" a second time in the events' own words. An event
-			// that did happen on it - a setting moved on a day nobody measured -
-			// still prints.
-			const none: Entry[] =
-				measured && events.length === 0 && readout.eventsNone !== ''
-					? [{ label: readout.eventsNone, value: '', swatch: null, reserve: 0 }]
-					: [];
-			// The widest whole line any column prints - its label and its value -
-			// held once for each line this column is short of the busiest. A column
-			// with its own "none" sentence already holds a line, so it holds nothing
-			// more.
-			const most = eventRoom ? Math.max(0, ...readout.events.map((lines) => lines.length)) : 0;
-			const roomiest = readout.events
-				.flat()
-				.reduce<ReadoutLine | null>(
-					(best, line) =>
-						best === null || line.label.length + line.value.length > best.label.length + best.value.length
-							? line
-							: best,
-					null
-				);
-			const held: Entry[] =
-				readout.eventsNone === '' && roomiest !== null
-					? Array.from({ length: Math.max(0, most - events.length) }, () => ({
-							label: roomiest.label,
-							value: roomiest.value,
-							swatch: roomiest.swatch,
-							reserve: 0,
-							held: true
-						}))
-					: [];
-			return {
-				shape: 'columns',
-				heading: readout.columns[column],
-				resting: at === null,
-				one: readout.columns.length === 1,
-				entries: [...series, ...events.map((line) => ({ ...line, reserve: 0 })), ...none, ...held]
-			};
-		}
-	);
+	const view = $derived(readoutView(readout, at, resting, eventRoom));
 	/** The hint line's words: the keys, what one column still offers, or none. */
 	const said = $derived(view?.one ? hintOne : hint);
 </script>
@@ -271,6 +154,10 @@
 	.readout-swatch {
 		display: inline-block;
 		vertical-align: middle;
+	}
+	:global([data-surface='operator']) .readout-swatch {
+		border: 1px solid var(--color-rule-strong);
+		box-sizing: border-box;
 	}
 
 	.readout-value {

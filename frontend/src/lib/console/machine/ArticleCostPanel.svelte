@@ -21,6 +21,8 @@
 	} from '$lib/console/machine/article-cost';
 	import { nameSpan } from '$lib/console/span-words';
 	import type { ChartConfig } from '$lib/server/config';
+	import { factsOf } from '$lib/charts/readout';
+	import { hoverReadout } from '$lib/charts/readout-hover';
 
 	let {
 		cost,
@@ -66,6 +68,16 @@
 		model: costTrack(model, chart.width_px),
 		memory: costTrack(memory, chart.width_px)
 	});
+	const readings = $derived([
+		{ label: 'Host busy processor time', figure: processor, format: (value: number) => seconds(value, numberFormat) },
+		{ label: 'Added memory', figure: memory, format: mib },
+		{ label: 'Model time', figure: model, format: (value: number) => seconds(value, numberFormat) }
+	].map(({ label, figure, format }) => figure.mid === null ? null : factsOf(label, [
+		{ label: 'Lowest', value: figure.low, format },
+		{ label: 'Middle', value: figure.mid, format },
+		{ label: 'Highest', value: figure.high, format },
+		{ label: 'Measured articles', value: `${grouped(figure.from)} of ${grouped(figure.outOf)}` }
+	], 'No price was recorded.')));
 
 	/** Which of the three states a figure is in. `unresolved` is the one worth
 	 * separating: the item ledger answered and the second instrument did not, so
@@ -90,8 +102,10 @@
 		</p>
 		<p data-comparison="The middle article against the range most articles fall in">The middle article against the range most articles fall in.</p>
 		<ul class="costs" data-chart-type="rangeTrack" data-panel-question="is it working"
-			data-readout-none="Each track prints its endpoints and middle reading in words; agreed with Susan">
+			data-readout-none="Each track prints its endpoints and middle reading in words; agreed with Susan"
+			use:hoverReadout={{ name: 'article-cost', readout: readings }}>
 			<li
+				data-readout-at="0"
 				data-article-cost="processor"
 				data-cost-state={state(processor)}
 				data-cost-low={processor.low ?? ''}
@@ -156,6 +170,7 @@
 			</li>
 
 			<li
+				data-readout-at="1"
 				data-article-cost="memory"
 				data-cost-state={state(memory)}
 				data-cost-low={memory.low ?? ''}
@@ -206,6 +221,7 @@
 			</li>
 
 			<li
+				data-readout-at="2"
 				data-article-cost="model"
 				data-cost-state={state(model)}
 				data-cost-low={model.low ?? ''}

@@ -1,6 +1,6 @@
 # Elements: every fact in an article, with the characters that prove it
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 The extraction subsystem's fact table. This page owns the element shape - the
 six kinds, the two tiers, and the span that makes a drawn figure checkable - the
@@ -12,9 +12,9 @@ Two passes write into this table from the article's own bytes with no model at
 all: [`backend/idhazh/elements.py`](../../../backend/idhazh/elements.py) finds
 quantities and it finds absolute dates. A third asks a model, and it is two
 sections below: it labels what the two patterns found, points at a figure they
-missed, and points at the four kinds no pattern can reach - an organisation, a
-place, a quote and a claim. It types nothing a reader sees. All six kinds have a
-producer now, and every one of them carries a span code cut.
+missed, and points at the two kinds no pattern can reach - an organisation or a
+place. It types nothing a reader sees. Historical quote/claim kinds remain
+readable, but have no current producer or reader-facing visual.
 
 ## What an element is
 
@@ -341,14 +341,10 @@ from run 34943695821 shard 3, 20 articles, 2026-09-15.
 | `proposed[]` | a figure in digits the candidate pass missed | the pattern misses figures inside odd punctuation. Model proposes, code re-reads the characters | the chart | **0 of 20** |
 | `entity_mentions[]` | organisations and people, and where each is named | groups "OpenAI", "ChatGPT", "the company" into one thing | **the chart's category axis** - `mention_elements` is the only producer of `ENTITY` | 87 |
 | `place_mentions[]` | the same, for locations | same | **the chart's category axis** - the only producer of `PLACE` | 15 |
-| `quotes[]` | two sentence addresses, no text | indices only: an exact search rejects a real quote over one changed word, silently | **nobody** - no renderer compiles a quote | 24 |
-| `claims[]` | the same, for the article's own assertions | preserves the complete source assertion and its qualifications | **Who/What grid**, paired with a same-sentence actor | 73 |
-| `keyphrases[]` | up to 8 phrases copied from the article | "the only search surface that needs no embedding model" | **nobody** - search uses the embedding vector | 138 |
-| `lede_sentence_ids[]` | the 1-2 sentences carrying the main point | nothing reads it since the lead-coverage metric was retired on 2026-09-24 | **nobody** | 20 |
 
 `labels` was empty on 8 of 20 articles and `proposed` on all 20.
 
-**The prompt names these eight fields and no others, and a test holds it
+**The prompt names only the four consumed top-level fields, and a test holds it
 there.** `LabelReply` forbids an unknown key, so a prompt asking for a field the
 reply has no room for does not fail a run: the decoder moves the probability
 behind that key onto the keys the grammar does allow. A field the prompt stops
@@ -367,12 +363,12 @@ exist only because these two lists produce them. Over the published archive on
 category a `DATE` cannot supply, so a model-found mention filled it. Deleting
 the two lists takes the picture off four charts in five.
 
-**Claims support the Who/What grid; quotes have no standalone visual.**
-Both retain the existing `SentenceRange`: two addresses, a speaker, attribution
-and a hedge marker, with no authored source text. Historical visual names remain
-readable, not additional production choices. The
-[active publication formats](../publishing/where-a-drawing-becomes-pixels.md#declared-types-are-not-delivery-promises)
-define what can actually reach the reader.
+**Retired observations are read-only compatibility.** The current reply no
+longer requests claims, quotes, keyphrases or lede addresses. Saved replies
+must pass their original required structure and bounds before those fields
+are discarded, because the continuation replays the first raw reply. Unknown
+keys still fail. The [prompt contract](../summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once)
+owns this compatibility boundary.
 
 **The two mention lists are named for what code takes from them, and that was a
 ruling rather than a preference.** A prompt in this repository may not ask a
@@ -449,19 +445,18 @@ the earlier one on nothing better than which offset came first.
 ones dropped next. It is one count per pass taken before the rules that remove,
 which is what keeps it able to say the cap bit and by how much.
 
-## The four kinds only a model can find
+## The two kinds only a model can find
 
-No pattern reaches an organisation, a place, a quotation or an assertion. The label call
-points at all four, and code cuts every character. The producers are in
+No pattern reaches an organisation or a place. The label call
+points at both, and code cuts every character. The producers are in
 [`backend/idhazh/classify/calls.py`](../../../backend/idhazh/classify/calls.py)
 beside `proposed`, because they read the same reply.
 
-**The anchoring rule is different for each pair, and that is the point.**
+**Every mention anchors only inside its named sentence.**
 
 | Kind | What the reply carries | How code anchors it |
 | --- | --- | --- |
 | `entity`, `place` | a group key, and up to four `(sentence address, the words)` mentions of it | Each mention is searched inside **its own named sentence** and must occur there exactly once. Every hit is one element |
-| `quote`, `claim` | the address of the first and last sentence | The run between them is sliced whole, trimmed of surrounding whitespace by moving the offsets |
 
 **A name is never searched for.** An item writes "Vestas Wind Systems A/S" once
 and "Vestas" four times, and the fullest form may appear nowhere verbatim - so
@@ -489,47 +484,16 @@ one we do not track yet, and minting a slug for it would put two spellings of on
 organisation in two groups for ever. Grouping the rest is the alias ledger's job
 and it is separate work.
 
-**A quote or claim is addresses, never authored text.** An exact search for a long quotation
-rejects a real one over a single changed word, and it does so silently, which is
-worse than no check at all. A run wider than the 500 characters the shape holds
-is **dropped rather than cut down** - a truncated excerpt stops being the
-characters its span names, and that is the one property every one of these kinds
-exists to keep.
-
-Claims include assertions narrated in the article's own voice, including
-reported actions or positions. A short quoted term inside such narration does
-not turn the whole reported action into direct quotation; actual direct
-quotations belong in quotes. Keep the complete reporting frame, attribution,
-modality and qualifications. Fitting a whole sentence within the native bound
-does not prove its displayed grid label is useful: the
-[grid compiler and reader](../publishing/where-a-drawing-becomes-pixels.md#the-whowhat-grid-is-a-separate-format-and-reader)
-must still preserve a meaningful, source-supported reading.
-
 **A rejection is per element, never per article.** A mention that will not anchor
-drops itself; a group that anchored none of its mentions drops itself; a range
-whose address names no sentence drops itself. Every sibling stands and the item
+drops itself; a group that anchored none of its mentions drops itself. Every sibling stands and the item
 still publishes (`CLAUDE.md` section 1a).
 
 **The settle rule never sees these kinds.** It drops any element sharing a
 character with a higher-precedence one, which is right for two patterns reading
-one stretch of digits and exactly wrong here: a quote holds every figure inside
-it, and both have to survive. So `anchored` runs the settle rule over the pattern
+one stretch of digits and wrong for a name containing a figure: both source spans
+must survive. So `anchored` runs the settle rule over the pattern
 candidates first and merges the model-pointed kinds after it, and two of them
 claiming one address is settled by keeping the first.
-
-### Source ranges are evidence, not permission to republish an article
-
-An article body is never republished to a reader. A
-`quote` or a `claim` element carries a run of the item's own sentences, so it is
-the one element kind whose excerpt is a paragraph of somebody's page rather than
-a figure or a name.
-
-It may go where the table goes: into the labelled table the summarize-and-plan
-call reads, into an eval row, into a log line, into a fixture. The existing
-[Who/What projection](../publishing/where-a-drawing-becomes-pixels.md#the-whowhat-grid-is-a-separate-format-and-reader)
-owns the bounded source-backed claim cells it publishes. That does not introduce
-a quote visual or permit arbitrary article excerpts on a reader-facing page.
-Source ranges remain untrusted data in every format.
 
 ### Two failures no anchoring check can see, recorded rather than papered over
 
@@ -747,19 +711,18 @@ record, and `test_the_mention_lists_do_not_reach_the_tag_control` holds the same
 three words out of the reply schema as well - the schema is handed to the decoder,
 so a class docstring is prompt text too.
 
-### A mention is an element, so the four model-pointed kinds needed no contract change
+### A mention uses the existing element contract
 
 A mention's span is its own characters, and several mentions of one organisation
 are several elements. The grouping key is `Element.entity`, which already exists,
 is already a slug, and is filled by matching the watchlist rather than by minting.
-No schema moved and no fixture gained a key.
+Historical quote/claim kinds remain readable without keeping their retired
+range producers or changing the meaning of old elements.
 
 ### `extractor` is `model`
 
-The plan spells it `model_proposed`. The contract already carried `model`, and
-`entity`, `place`, `quote` and `claim` are model-pointed the same way without
-being proposals - so `model_proposed` would be wrong on four of the five paths
-that write it. The field names **who found it**, not what shape was asked for.
+The contract carries `model` for source-backed entity/place mentions as well
+as proposed quantities. The field names **who found it**, not what shape was asked for.
 
 ## Rejected alternatives
 
@@ -787,9 +750,7 @@ that write it. The field names **who found it**, not what shape was asked for.
 | Raise on a 200-digit run or a 600-character unit word | Degrade, do not fail (`CLAUDE.md` section 1a). A pattern over fetched bytes will meet both, and one hostile page must not take an article's whole table down | Andre |
 | Exact-search a name to find its mentions | It confuses a location with a label. The fullest form may appear nowhere verbatim, so the search rejects the very thing it was written to find | Andre, row 2 decision 1 |
 | Ask the model for coreference chains | Exact and prefix matching over spans code already holds does most of it, and the model's version cannot be span-validated | Andre, pseudo-plan 10.6 |
-| Exact-search a quotation to anchor it | One changed word rejects a real quote, silently. Two sentence addresses cannot fail that way | Andre, row 2 decision 3 |
 | Draw the group name instead of a mention | The name has no span, so a page would show a string the item may not contain. The mention is the item's own characters at an offset code computed | Andre, invariant 2 |
-| Truncate a quotation too wide for the shape | A cut-down excerpt stops being the characters its span names, which is the one property these kinds exist to keep. The range is dropped instead | Fowler |
 | Run the settle rule over the model-pointed kinds | A quote holds every figure inside it, so precedence would delete one of the two. The rule is between the two patterns and the merge happens after it | Fowler |
 | One flat mention list carrying the name on every entry | The name and the band are then repeated per mention, and output tokens are the expensive direction on this runner | Andre, pseudo-plan 10.6 |
 

@@ -2,9 +2,10 @@
 	import { base } from '$app/paths';
 	import { onMount, untrack } from 'svelte';
 	import { useWindowChoice } from '$lib/console/window-slot';
-	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
+	import { consoleKnobs, routeConsole, routeKnobs } from '$lib/console/route-console';
 	import { rangeFor, routeReach, sliceOnce, retryAsks, windowRange, type PanelQuery, type Range, type RouteReach } from '$lib/console/queries/window';
 	import { pipelinesRecord, retryReach } from '$lib/console/pipelines/record-window';
+	import { PIPELINES_QUERY_GROUPS } from '$lib/console/pipelines/query-groups';
 	import * as queries from '$lib/console/queries/pipelines';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { daysInWindow, windowOfDays } from '$lib/charts/viewport';
@@ -26,19 +27,16 @@
 	import StageTimings from '$lib/console/pipelines/StageTimings.svelte';
 	import ItemCost from '$lib/console/pipelines/ItemCost.svelte';
 	import RunTimeline from '$lib/console/pipelines/RunTimeline.svelte';
+	import SlowestArticles from '$lib/console/pipelines/SlowestArticles.svelte';
 	import ChartDrawing from '$lib/console/pipelines/ChartDrawing.svelte';
 	import ArticleAge from '$lib/console/pipelines/ArticleAge.svelte';
-	import VisualAttempts from '$lib/console/pipelines/VisualAttempts.svelte';
 	import VisualRefusals from '$lib/console/pipelines/VisualRefusals.svelte';
-	import { attemptNotes } from '$lib/console/pipelines/attempt-notes';
 
 	let { data } = $props();
 	const knobs = consoleKnobs();
 	const configured = routeConsole('pipelines');
-	const asks: readonly PanelQuery[] = [
-		queries.failureMixQuery, queries.failedRuleQuery, queries.itemTimeSplitQuery, queries.slowerOnSameWorkQuery,
-		queries.stageTimingsQuery, queries.itemCostQuery, queries.runTimelineQuery, queries.articleAgeQuery
-	];
+	const ranking = routeKnobs('machine', ['slowest_articles_rows']);
+	const asks: readonly PanelQuery[] = PIPELINES_QUERY_GROUPS.flatMap((group) => [...group.queries]);
 	const readers: Record<string, (range: Range) => Promise<SliceResult>> = {
 		[queries.failureMixQuery.name]: (range) => sliceOnce(queries.failureMixQuery, range),
 		[queries.failedRuleQuery.name]: (range) => sliceOnce(queries.failedRuleQuery, range),
@@ -47,24 +45,26 @@
 		[queries.stageTimingsQuery.name]: (range) => sliceOnce(queries.stageTimingsQuery, range),
 		[queries.itemCostQuery.name]: (range) => sliceOnce(queries.itemCostQuery, range),
 		[queries.runTimelineQuery.name]: (range) => sliceOnce(queries.runTimelineQuery, range),
+		[queries.slowestArticlesQuery.name]: (range) => sliceOnce(queries.slowestArticlesQuery, range),
 		[queries.articleAgeQuery.name]: (range) => sliceOnce(queries.articleAgeQuery, range)
 	};
 	type Answer = SliceResult | LedgerReach | 'pending';
 	const choice = useWindowChoice();
 	const windowDays = $derived(choice.days);
 	let mounted = $state(false);
-	let reach = $state<RouteReach | null>(null);
+	let reaches = $state<Record<string, RouteReach>>({});
+	const reach = $derived(reaches.native ?? null);
 	let answers = $state<Record<string, Answer>>(Object.fromEntries(asks.map((query) => [query.name, 'pending'])));
 	let ranges = $state<Record<string, Range>>({});
 	let revision = 0;
 	const allAnswers = $derived(asks.map((query) => answers[query.name]));
 	const busy = $derived(allAnswers.some((answer) => answer === 'pending'));
-	const recordReady = $derived(mounted && reach?.through !== null && reach?.through !== undefined && !busy);
+	const nativeBusy = $derived(PIPELINES_QUERY_GROUPS[0].queries.some((query) => answers[query.name] === 'pending'));
+	const recordReady = $derived(mounted && reach?.through !== null && reach?.through !== undefined && !nativeBusy);
 	const viewport = $derived(windowOfDays(data.windowDay, windowDays, knobs.today_anchor));
 	const settings = $derived(settingsRules(data, { from: viewport.start, to: viewport.end }, 'none'));
 	const charts = $derived(data.charts.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
 	const attemptDays = $derived(data.visualAttempts.days.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
-	const attemptRead = $derived(attemptNotes(data.visualAttempts.read, viewport));
 	const record = $derived(recordReady ? pipelinesRecord(reach, windowDays) : null);
 	const nativeWindow = $derived(record?.first != null && record.through !== null
 		? windowRange(windowDays, record.through, record.first) : null);
@@ -72,14 +72,9 @@
 	async function ask(selected: readonly PanelQuery[], retryWindow = false, days = windowDays) {
 		if (selected.length === 0) return;
 		const ticket = ++revision;
-		const previous = retryWindow ? reach : null;
 		answers = { ...answers, ...Object.fromEntries(selected.map((query) => [query.name, 'pending'])) };
 		ranges = Object.fromEntries(Object.entries(ranges).filter(([name]) => !selected.some((query) => query.name === name)));
-		const refreshed = await routeReach(asks.map((query) => query.ledger));
-		if (ticket !== revision) return;
-		const nextReach = retryWindow ? retryReach(previous, refreshed) : refreshed;
-		reach = nextReach;
-		async function read(query: PanelQuery) {
+		async function read(query: PanelQuery, nextReach: RouteReach) {
 			const range = rangeFor(query, days, nextReach, knobs.window_presets);
 			const answer = 'from' in range ? await readers[query.name](range) : range;
 			if (ticket === revision) {
@@ -87,7 +82,17 @@
 				answers = { ...answers, [query.name]: answer };
 			}
 		}
-		await Promise.all(selected.map(read));
+		await Promise.all(PIPELINES_QUERY_GROUPS.map(async (group) => {
+			const names = new Set<string>(group.queries.map((query) => query.name));
+			const chosen = selected.filter((query) => names.has(query.name));
+			if (chosen.length === 0) return;
+			const previous = retryWindow ? reaches[group.id] ?? null : null;
+			const refreshed = await routeReach(group.ledgers);
+			if (ticket !== revision) return;
+			const nextReach = retryWindow ? retryReach(previous, refreshed) : refreshed;
+			reaches = { ...reaches, [group.id]: nextReach };
+			await Promise.all(chosen.map((query) => read(query, nextReach)));
+		}));
 	}
 	onMount(() => {
 		mounted = true;
@@ -142,15 +147,16 @@
 		'failure-mix': 'What is failing, by stage', 'item-time-split': "Where an item's time went",
 		'slower-on-same-work': 'Whether a run is getting slower on the same work', 'stage-timings': 'Time per item by stage',
 		'item-cost': 'What one item cost the model', 'run-timeline': "Where the run's time went, on the run's own clock",
+		'slowest-articles': 'Which articles took longest in the last run',
 		'chart-drawing': 'Visuals drawn for articles',
 		'visual-refusals': 'Recorded refusal reasons over time',
-		'visual-written-types': 'Planned and successfully written visual types',
 		'article-age': 'Source age at work start'
 	};
 	const panelQueries: Record<string, PanelQuery> = {
 		'failure-mix': queries.failureMixQuery, 'item-time-split': queries.itemTimeSplitQuery,
 		'slower-on-same-work': queries.slowerOnSameWorkQuery, 'stage-timings': queries.stageTimingsQuery,
-		'item-cost': queries.itemCostQuery, 'article-age': queries.articleAgeQuery
+		'item-cost': queries.itemCostQuery, 'article-age': queries.articleAgeQuery,
+		'slowest-articles': queries.slowestArticlesQuery
 	};
 </script>
 
@@ -172,8 +178,9 @@
 						height={knobs.chart_height} width={knobs.chart_width} tickDensity={data.chart.tick_density} readoutMaxShare={data.chart.readout_max_share} />
 				{:else}
 					<Panel {id} title={titles[id]} wide={['at-a-glance', 'run-timeline', 'chart-drawing', 'visual-refusals'].includes(id)} verdict={id === 'at-a-glance'}>
-						<div data-windowed={id === 'run-timeline' || id === 'chart-drawing' ? undefined : id} data-window-days={id === 'run-timeline' || id === 'chart-drawing' ? undefined : windowDays}
-							aria-label={id === 'run-timeline' || id === 'chart-drawing' ? undefined : `${titles[id]}, selected window ${countDays(windowDays)}`}
+						<div data-windowed={['run-timeline', 'slowest-articles', 'chart-drawing'].includes(id) ? undefined : id} data-window-days={['run-timeline', 'slowest-articles', 'chart-drawing'].includes(id) ? undefined : windowDays}
+							data-window-exempt={id === 'slowest-articles' ? 'newest-run' : undefined}
+							aria-label={['run-timeline', 'slowest-articles', 'chart-drawing'].includes(id) ? undefined : `${titles[id]}, selected window ${countDays(windowDays)}`}
 							data-readout-fetched={panelQueries[id] !== undefined || id === 'run-timeline' ? '' : undefined}>
 						{#if id === 'at-a-glance'}
 							<AtAGlance days={data.charts} window={viewport} {knobs} chart={data.chart} />
@@ -183,8 +190,6 @@
 							<ChartDrawing days={charts} {windowDays} {knobs} />
 						{:else if id === 'visual-refusals'}
 							<VisualRefusals days={attemptDays} read={data.visualAttempts.read} window={viewport} {knobs} chart={data.chart} />
-						{:else if id === 'visual-written-types'}
-							<VisualAttempts days={attemptDays} read={attemptRead.state} notes={attemptRead.notes} />
 						{:else if id === 'run-timeline'}
 							<RunTimeline {knobs} chart={data.chart} answer={answers[queries.runTimelineQuery.name]} />
 						{:else if id === 'failure-mix'}
@@ -206,6 +211,8 @@
 									<ItemCost rows={rows(query)} {knobs} chart={data.chart} />
 								{:else if id === 'article-age'}
 									<ArticleAge rows={rows(query)} {knobs} />
+								{:else if id === 'slowest-articles'}
+									<SlowestArticles rows={rows(query)} chart={data.chart} limit={ranking.slowest_articles_rows} />
 								{/if}
 							</Reserved>
 						{/if}

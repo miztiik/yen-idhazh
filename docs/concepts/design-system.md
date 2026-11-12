@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -9,6 +9,7 @@ New designs, charts and visuals render in the browser. Do not add prerendered da
 ## Typography is the interface
 
 - The home and archive pages fill the window with configured gutters. Home story prose fills the card's content width; archive text keeps the configured prose measure. Other reading routes retain the configured frame maximum and prose measure.
+- The console fills the available window by default, after its labelled rail and configured gutters. A configured numeric console maximum remains available; every mounted drawing measures its own content width.
 - Keep an item's hierarchy to title, summary and provenance. Use the configured display face for titles and the reading face for prose; data uses tabular numerals.
 - Keep article type readable on phones. Reduce columns before reducing prose size. Pair each size token with its leading token.
 - Edition headers, topic controls and the leading-story index are unboxed. Story cards retain their surfaces and edges.
@@ -26,10 +27,13 @@ Inline styles are for genuinely dynamic values such as coordinates or computed w
 
 The console's `console_style` family is generated over the entire operator page,
 including its canvas and header, before paint. It supplies neutral light/dark
-surfaces, teal actions, six paired type roles, compact controls and panel
+surfaces, PiYG-aligned actions and category colours, six paired type roles, compact controls and panel
 spacing. Reader tokens remain unchanged. Semantic confidence and movement
 retain their meanings; categorical aliases are rebound inside the console
 scope rather than inheriting resolved reader colors.
+The configured built-in scheme supplies known console categories. Build-time
+colour utilities keep their text/line variants readable, while the reserved
+eighth absence paint and confidence/movement roles retain their own meanings.
 
 | Token family | Meaning |
 | --- | --- |
@@ -83,26 +87,16 @@ Use native disclosure for content already present but hidden. Use a button when 
 
 Wrap variable-width labels and use a configured disclosure count for overflow. Do not hide a horizontal scrollbar and leave the hidden contents behind it. Grids must allow their minimum track width to fit the available container.
 
-### The whowhat grid keeps each actor beside its claim
-
-Render the source-backed pairs as a fixed two-column table, with explicit
-`Who` and `What` headers. Keep the row rectangular: if attribution is
-ambiguous or either span is absent, both cells stay empty rather than dropping
-one side or pairing by position. Wrap long source text in each column; do not
-shrink it, clip it, or add an inner scroll area. What shows the complete
-validated claim excerpt by default, keeping its action and qualifications
-visible. Who keeps the fitted actor label. Only a clipped actor gets native
-`details`/`summary` disclosure of its full excerpt; an unclipped actor stays
-plain text. The shared `fit_source_span()` policy still produces both fitted
-label fields, and each bounded full excerpt and its span remain in the payload.
-
 ### A control only sticks where it is one band
 
 Reading topic and search controls flow with the page at every width. Their
 variable-height topics and query actions must not obscure the stories. Other
 sticky controls occupy one band at the width where they stick. Console
 navigation uses a persistent labelled left rail, or a labelled native menu
-below its breakpoint, not a wrapped sticky header. This does not permit
+below its breakpoint. Its title, compact window control and dated evidence may
+share one measured sticky band; use the native days select where radio tiles
+would wrap. The brand scrolls away rather than adding a second fixed layer.
+This does not permit
 sideways scrolling on reading pages.
 
 ### The reading page spends its width in four named zones
@@ -145,6 +139,15 @@ the visual validator's mark-count limits.
 ### Every fact a drawing shows is reachable without a pointer
 
 The accessible description and visible marks come from the same drawing data. An item chart is one tab stop whose name includes every displayed reading and its unit. Do not require a keyboard user to tab through every mark in a long story stream. Compare the complete pointer-visible and keyboard-accessible fact sets in tests.
+
+Every measured console chart adds the same visible hover tooltip, sourced from
+its typed column, record or printed-track readings. Keep the standing strip or
+printed facts, exact keyboard/touch inspection and honest missing states.
+`chart.hover_readout` controls only this additive pointer surface; it never
+disables non-hover access. The
+[shared console chart rules](console-design/the-rules-every-console-chart-obeys.md)
+own selection, placement and the bounded renderer inventory. Reader-chart
+interaction is unchanged.
 
 A chart shows its title above the marks and its optional caption below them.
 Both are untrusted text, never markup. Exactly one selected measured mark takes

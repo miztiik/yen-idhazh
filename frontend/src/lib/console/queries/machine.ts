@@ -19,38 +19,6 @@ export const twoClocksHostsQuery = {
 	span: 'newest-day'
 } as const satisfies PanelQuery;
 
-export const processorLostQuery = {
-	name: 'processorLostQuery', ledger: 'item-health',
-	columns: ['date', 'run_id', 'machine_shard', 'cpu_steal_pct'],
-	span: 'window'
-} as const satisfies PanelQuery;
-
-export const diskReadsQuery = {
-	name: 'diskReadsQuery', ledger: 'item-health',
-	columns: ['date', 'run_id', 'item_index', 'llama_major_faults', 'os_mem_cached_bytes', 'weights_pinned'],
-	span: 'window'
-} as const satisfies PanelQuery;
-
-export const machineCardsQuery = {
-	name: 'machineCardsQuery', ledger: 'host-fingerprint',
-	columns: [
-		'version', 'date', 'run_id', 'job', 'pipeline_name', 'task_name', 'shard', 'fingerprint', 'fingerprint_version',
-		'cpu_model', 'cpu_vendor', 'cpu_family', 'cpu_model_number', 'cpu_stepping', 'microcode',
-		'cpu_physical_cores', 'cpu_logical_processors', 'cpu_allowed_processors',
-		'cpu_quota_cores', 'cpu_quota_state', 'cpu_target_measured_at', 'l3_cache_bytes',
-		'cpu_observed_mhz', 'cpu_reported_max_mhz', 'flags', 'boot_seconds', 'memcpy_gib_s',
-		'memcpy_probe_mib', 'vm_size', 'vm_location', 'vm_zone', 'vm_fault_domain',
-		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
-	],
-	span: 'newest-day'
-} as const satisfies PanelQuery;
-
-export const machineCardsItemsQuery = {
-	name: 'machineCardsItemsQuery', ledger: 'item-health',
-	columns: ['date', 'run_id', 'machine_job', 'machine_pipeline_name', 'machine_task_name', 'machine_shard', 'cpu_model'],
-	span: 'newest-day'
-} as const satisfies PanelQuery;
-
 export const slowerMachinesQuery = {
 	name: 'slowerMachinesQuery', ledger: 'item-health',
 	columns: ['run_id', 'cpu_model', 'prefill_ms', 'input_tokens', 'cached_tokens', 'decode_ms', 'output_tokens'],
@@ -66,12 +34,6 @@ export const platformMixQuery = {
 		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
 	],
 	span: 'widest'
-} as const satisfies PanelQuery;
-
-export const slowestArticlesQuery = {
-	name: 'slowestArticlesQuery', ledger: 'item-health',
-	columns: ['run_id', 'item_id', 'source_id', 'machine_shard', 'item_total_ms', 'fetch_ms', 'extract_ms', 'summarize_ms', 'faithfulness_ms', 'stage_gap_ms', 'queue_wait_ms'],
-	span: 'newest-day'
 } as const satisfies PanelQuery;
 
 export const tailTrendQuery = {

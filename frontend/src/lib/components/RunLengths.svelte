@@ -278,6 +278,7 @@
 			use:pointerReadout={{
 				marks,
 				width: box.width,
+				hover: { name: 'run-lengths', readout },
 				onSelect: (index) => (selected = index)
 			}}
 		>

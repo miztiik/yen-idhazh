@@ -55,5 +55,5 @@ export const DRIVERS: Readonly<Record<string, Readonly<Record<BasicNothing, Driv
 };
 export const BUILD_TIME: readonly string[] = [
 	'at-a-glance', 'run-health', 'site-cost-per-item', 'chart-drawing',
-	'visual-refusals', 'visual-written-types'
+	'visual-refusals'
 ];

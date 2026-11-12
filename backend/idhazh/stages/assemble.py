@@ -42,7 +42,7 @@ from idhazh.evals import metrics, sampling, score, writer
 from idhazh.fingerprint import (
     prose_changed_alone,
 )
-from idhazh.render import write_charts_from_decisions, write_whowhat_from_decisions
+from idhazh.render import write_charts_from_decisions
 from idhazh.similarity import applied
 from idhazh.stages import common
 from idhazh.stages.common import (
@@ -375,11 +375,6 @@ def stage_assemble(
     write_charts_from_decisions(
         day,
         (decision for decision in decisions if decision.kind is VisualKind.CHART),
-        public_root=common.PUBLIC_ROOT.parent,
-    )
-    write_whowhat_from_decisions(
-        day,
-        (decision for decision in decisions if decision.kind is VisualKind.WHOWHAT),
         public_root=common.PUBLIC_ROOT.parent,
     )
 

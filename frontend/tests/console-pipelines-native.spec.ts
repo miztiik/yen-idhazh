@@ -10,6 +10,9 @@ import { reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { consoleConfig } from '../src/lib/server/config';
 import { backendPython } from './support/backend-python';
 import { runTimeline } from '../src/lib/console/pipelines/run-timeline';
+import { timelineGeometry, timelineItems } from '../src/lib/console/pipelines/run-timeline-geometry';
+import { DEFAULT_CHART_LABELS } from '../src/lib/charts/frame';
+import { seconds } from '../src/lib/charts/machine';
 import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
 import { failureRuleRows } from '../src/lib/console/failure-rules';
 import { siteCostPoints } from '../src/lib/console/pipelines/site-cost-per-item';
@@ -19,12 +22,13 @@ import { nativeStageTimings } from '../src/lib/console/pipelines/stage-timings';
 import { nativeItemCost } from '../src/lib/console/pipelines/item-cost';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
 import { pipelinesRecord, retryReach } from '../src/lib/console/pipelines/record-window';
+import { PIPELINES_QUERY_GROUPS } from '../src/lib/console/pipelines/query-groups';
 import { chartFlow, visualsPublished } from '../src/lib/console/pipelines/chart-drawing';
 import type { Row, SliceResult } from '../src/lib/data/ledger';
 import { numberFormat } from './support/number-format';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ALL = Object.values(queries) as PanelQuery[];
+const ALL: readonly PanelQuery[] = PIPELINES_QUERY_GROUPS[0].queries;
 const answers = new Map<string, SliceResult>();
 let state: string;
 
@@ -87,45 +91,72 @@ test('private date axes retain missing days without inventing zero readings', ()
 	]);
 });
 
-test('native timeline offsets and signed six-step residuals retain independent producer-era oracles', () => {
-	const item = (id: string, start: string, total: number): Row => ({
-		run_id: '2030-06-01-2', item_id: id, machine_shard: 0, item_started_at: start,
-		item_total_ms: total, fetch_ms: 10, extract_ms: 20, label_ms: 30,
-		summary_ms: 40, visual_plan_ms: 50, faithfulness_ms: 60, summarize_ms: 250
+test('recorded endpoints determine elapsed geometry; parked costs and nested calls cannot extend it', () => {
+	const item = (fields: Row = {}): Row => ({
+		run_id: '2030-06-01-2', item_id: 'first', machine_shard: 0,
+		item_started_at: '2030-06-01T00:00:00Z', item_ended_at: '2030-06-01T00:02:00Z',
+		item_total_ms: 1000, queue_wait_ms: 119000, fetch_ms: 100, extract_ms: 50,
+		summarize_ms: 800, faithfulness_ms: 20, stage_gap_ms: 30,
+		label_ms: 250, summary_ms: 550, visual_plan_ms: 100, visual_plan_ms_is_estimate: true, ...fields
 	});
-	const native = runTimeline([
-		item('overrun', '2030-06-01T00:00:01Z', 100),
-		item('elapsed', '2030-06-01T00:00:08Z', 400)
+	const view = runTimeline([
+		item(), item({ item_id: 'second', machine_shard: 1, item_started_at: '2030-06-01T00:00:30Z',
+			item_ended_at: '2030-06-01T00:02:30Z', item_total_ms: 2000, summarize_ms: 1800 })
 	], 20);
-	expect(native.run?.rows.map((row) => ({
-		item: row.itemId, offset: row.startOffsetMs, total: row.totalMs, residual: row.residualMs
-	}))).toEqual([
-		{ item: 'overrun', offset: 0, total: 100, residual: -110 },
-		{ item: 'elapsed', offset: 7000, total: 400, residual: 190 }
-	]);
-	expect(native.view.workMs).toBe(500);
+	expect(view).toMatchObject({ spanMs: 150000, workMs: 3000, timedCount: 2, workCount: 2, itemsPerMinute: 0.8 });
+	const geometry = (measure: 'elapsed' | 'work') => timelineGeometry(view, measure, 5, 800, DEFAULT_CHART_LABELS, String);
+	const elapsed = geometry('elapsed');
+	expect(elapsed.domainMs).toBe(150000);
+	expect(elapsed.bars.map(({ shard, ms, offset, width }) => ({ shard: shard.shard, ms, offset, width })))
+		.toEqual([{ shard: 0, ms: 120000, offset: '0.0000%', width: '80.0000%' },
+			{ shard: 1, ms: 120000, offset: '20.0000%', width: '80.0000%' }]);
+	const work = geometry('work');
+	expect(work.domainMs).toBe(2000);
+	expect(work.bars.map(({ shard, ms, offset, width }) => ({ shard: shard.shard, ms, offset, width })))
+		.toEqual([{ shard: 1, ms: 2000, offset: '0.0000%', width: '100.0000%' },
+			{ shard: 0, ms: 1000, offset: '0.0000%', width: '50.0000%' }]);
+	expect(view.shards[0].breakdown.stages.map((stage) => stage.value)).toEqual([100, 50, 800, 20]);
+	expect(view.shards[0].breakdown.unattributed).toBe(30);
+	expect(view.items[0].calls.map((call) => call.ms)).toEqual([250, 550, 100]);
+	expect(view.items[0].planEstimated).toBe(true);
 });
 
-test('huge numeric run suffixes, missing shard/start, zero and capped totals remain honest', () => {
+test('incomplete clocks, zero work and article limits cannot silently drop measured run costs', () => {
 	const item = (suffix: string, fields: Row = {}): Row => ({
 		run_id: `2030-06-01-${suffix}`, item_id: suffix, machine_shard: 0,
-		item_started_at: '2030-06-01T00:00:02Z', item_total_ms: 10, fetch_ms: 0, ...fields
+		item_started_at: '2030-06-01T00:00:01Z', item_ended_at: '2030-06-01T00:00:01Z',
+		item_total_ms: 0, fetch_ms: 0, ...fields
 	});
 	const newest = '900719925474099312345';
 	const answer = runTimeline([
-		item('9'), item('10'), item('900719925474099312344'), item(newest),
-		item(newest, { item_id: 'later', item_started_at: '2030-06-01T00:00:03Z', machine_shard: 1 }),
-		item(newest, { item_id: 'no-shard', machine_shard: null, item_started_at: '2030-06-01T00:00:00Z' }),
-		item(newest, { item_id: 'no-start', item_started_at: null })
+		item('9'), item('10'), item('900719925474099312344'), item(newest, { item_id: 'zero' }),
+		item(newest, { item_id: 'no-end', item_ended_at: null, machine_shard: 1, item_total_ms: 30 }),
+		item(newest, { item_id: 'no-cost', machine_shard: 2, item_total_ms: null,
+			item_started_at: '2030-06-01T00:00:02Z', item_ended_at: '2030-06-01T00:00:04Z' }),
+		item(newest, { item_id: 'reversed', machine_shard: 1, item_total_ms: 40,
+			item_started_at: '2030-06-01T00:00:09Z', item_ended_at: '2030-06-01T00:00:05Z' }),
+		item(newest, { item_id: 'no-shard', machine_shard: null, item_total_ms: 50,
+			item_started_at: '2030-06-01T00:00:00Z', item_ended_at: '2030-06-01T00:00:06Z' })
 	], 1);
-	expect(answer.view.runId).toBe(`2030-06-01-${newest}`);
-	expect(answer.view.bars).toHaveLength(1);
-	expect(answer.view.itemCount).toBe(2);
-	expect(answer.view.workMs).toBe(20);
-	expect(answer.unplaced).toBe(2);
-	expect(answer.view.bars[0].startOffsetMs).toBe(0);
-	expect(answer.view.bars[0].segments[0].ms).toBe(0);
-	expect(answer.view.shardBars.reduce((sum, bar) => sum + bar.workMs, 0)).toBe(20);
+	expect(answer).toMatchObject({ runId: `2030-06-01-${newest}`, detailLimit: 1,
+		itemCount: 5, workMs: 120, workCount: 4, timedCount: 3, spanMs: 6000, unassigned: 1, itemsPerMinute: null });
+	expect(answer.shards.map(({ shard, elapsedMs, workMs }) => ({ shard, elapsedMs, workMs }))).toEqual([
+		{ shard: 0, elapsedMs: 0, workMs: 0 }, { shard: 1, elapsedMs: null, workMs: 70 },
+		{ shard: 2, elapsedMs: 2000, workMs: null }
+	]);
+	expect(answer.shards[1].items).toHaveLength(2);
+	expect(timelineItems(answer.items, 'cost').map((item) => item.itemId))
+		.toEqual(['no-shard', 'reversed', 'no-end', 'zero', 'no-cost']);
+	expect(timelineItems(answer.items, 'start').map((item) => item.itemId))
+		.toEqual(['no-shard', 'no-end', 'zero', 'no-cost', 'reversed']);
+	expect(runTimeline([], 1)).toMatchObject({ empty: true, spanMs: null, workMs: null, itemsPerMinute: null });
+});
+
+test('duration readings carry rounded minutes and retain seconds for inspected long clocks', () => {
+	expect(seconds(419.8, numberFormat, true)).toBe('7 m 0 s');
+	expect(seconds(3599.8, numberFormat, true)).toBe('1 h 0 m 0 s');
+	expect(seconds(6729, numberFormat, true)).toBe('1 h 52 m 9 s');
+	expect(seconds(6729, numberFormat)).toBe('1 h 52 m');
 });
 
 test('failure stacks account for every failed native item, with the largest stage chosen', () => {

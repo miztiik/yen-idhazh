@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -270,7 +270,7 @@ defines validation, native outputs and the distinction between source and replay
 provenance. Both inputs empty preserve the random mode.
 
 A successful summary proves execution, not visual generation. The random draw
-need not contain a warranted chart or actor/claim comparison. To establish a
+need not contain a warranted numeric chart. To establish a
 generation repair, inspect both actual calls for named warranted positive
 examples and a legitimate no-visual example, retaining their source inputs,
 code revision, committed model, runner conditions, decisions and named assets.

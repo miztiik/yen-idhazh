@@ -1,7 +1,7 @@
 # Restore source-backed visual publication
 
-**Last Updated**: 2026-11-11
-**Level**: 3; new persisted contracts, visual semantics or runtime changes escalate to Level 5.
+**Last Updated**: 2026-11-12
+**Level**: 3 for numeric publication repair; row #9 retires the actor-grid contracts and their unused label output with explicit read-side compatibility.
 
 ## 0. Operating contract
 
@@ -9,12 +9,12 @@ Table A - Scope and execution
 
 | ID | Field | Value |
 | --- | --- | --- |
-| A1 | Why this plan exists | Restore useful chart and Who/What grid generation by repairing the evidence passed to the planner, preserving exact refusals and proving the complete publication path |
-| A2 | Hard scope - in | Finalized evidence handoff; article-specific reference grammar; rule-derived visual guidance; context accounting; existing refusal diagnostics; chart/grid publication and reader verification; implemented active types; retained-Article verification on the existing controlled test runtime; format-preserving first-call address presentation and coverage |
+| A1 | Why this plan exists | Restore useful numeric chart generation by repairing the evidence passed to the planner, preserving exact refusals and proving the complete publication path; abandon and remove the Who/What grid |
+| A2 | Hard scope - in | Finalized numeric evidence handoff; article-specific reference grammar; rule-derived chart guidance; context accounting; existing refusal diagnostics; numeric publication and reader verification; nine implemented numeric types or no visual; retained-Article verification on the existing controlled test runtime; reversible sentence addressing; complete actor-grid retirement and safe historical reading |
 | A3 | Hard scope - out | Table B distinguishes abandoned types and unchosen format changes from active repair work; abandoned types are not a delivery queue |
-| A4 | Chosen strategy | Land independently verified transport/reader increments without claiming restored generation; retain actual generation/publication as an open roll-up; correct first-call addressing before expanding the saved raw-label format |
-| A5 | Contracts | Reuse `Article`, `ElementTable`, `LabelReply`, `VisualPlan`, `VisualDecision`, `ItemHealthRow`, `VisualAttemptRow` and existing capture/provenance shapes. Retained-input selections are ephemeral CLI inputs, not a new saved manifest/result family. Preserve historical type/reply reading, source text/offsets and current raw-label/capture fields |
-| A6 | ESCALATE triggers | 1. A persisted field, enum meaning, visual role or published shape must change. 2. A third model call, different model, larger context window or changed fallback policy is proposed. 3. Source text would become an instruction, path or destination. 4. A warranted example still cannot produce a valid visual and the proposed remedy is to weaken evidence validation or force publication. 5. A row revives an abandoned type or changes the scope in Table B. 6. Article-admission behavior or the recorded meaning of a context refusal must change |
+| A4 | Chosen strategy | Remove the actor-grid end to end, then remove unconsumed label work; preserve numeric extraction, publication, lifecycle recovery and truthful historical metadata. Numeric generation/publication remains an open roll-up |
+| A5 | Contracts | Row #9 removes the grid payload and current range observations, stamps the affected native contracts and projection together, and preserves strict named legacy readers. Keep `Article`, numeric `VisualData`, renderer/unit-table versions, captures/provenance, source text/offsets and historical outcome facts unchanged. Retained-input selections remain ephemeral CLI inputs |
+| A6 | ESCALATE triggers | 1. A persisted change beyond row #9's named retirement/migrations is needed. 2. A third model call, different model, larger context window or changed fallback policy is proposed. 3. Source text would become an instruction, path or destination. 4. A warranted numeric example still cannot produce a valid visual and the proposed remedy is to weaken evidence validation or force publication. 5. A row revives an abandoned type or changes the scope in Table B. 6. Article-admission behavior or the recorded meaning of a context refusal must change |
 | A7 | Execution | Autonomous orchestrator per `docs/how-to/execute-a-plan.md`; parallel N = 4, with rows serialized by their dependencies and shared files |
 
 Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
@@ -23,12 +23,12 @@ Table B - Separate work and its cost
 
 | ID | What is separate | Cost of leaving it separate | What brings it into delivery |
 | --- | --- | --- | --- |
-| B1 | Abandoned types: area, timeline, table, flow, comparison, callout, quotecard and keyfacts | These forms are neither offered for new production requests nor implemented; their contexts use an active supported form only when it preserves the evidence and purpose, otherwise no visual | No delivery row in this plan; revival requires a new product and design decision |
+| B1 | Abandoned types: area, timeline, table, flow, comparison, callout, quotecard, keyfacts and whowhat | These forms are not offered for new requests; row #9 removes the actor-grid implementation rather than retaining it behind a flag. Unsupported evidence produces no visual | No revival row in this plan; revival requires a separate product and design decision |
 | B2 | Deleting historical type names or rewriting old payloads | Native readers retain the abandoned names so existing stored records still load | A separately designed, verified read-side migration; restricting new requests does not require historical deletion |
 | B3 | Other diagram families and their supporting classification | Process and relationship stories remain without those illustrations; retirement of flow does not decide the lifecycle of other undeclared diagram forms | A separate source-backed diagram design; none is introduced by this repair |
 | B4 | Fallback activation; historical redraw | Fallback stays off, and old text-only items do not gain visuals; active type selection is changed by row #1 | A separate fallback or revision decision; direct deliveries first supply the fallback population that is currently absent |
 | B5 | The unfinished article-classification roadmap | This work does not deliver article-kind, stance, sentiment or classification-ledger features | Reconcile that roadmap with the current classifier and execute its remaining outcomes independently |
-| B6 | Precise claim-citation and capture-format expansion | Claims still use existing sentence ranges, so a future case may require finer representation; the currently audited useful whole sentences fit the native bound | A measured representation/readability blocker and a separate Level 5 design, including versioned raw-format metadata and historical capture reading; do not introduce it speculatively |
+| B6 | Claim-coverage, source-range production and future claim-format work | The abandoned actor-grid has no current consumer for claims, quotes, keyphrases or lede addresses; row #9 removes their production and retains only strict legacy raw-reply validation | A separate capability with a real consumer and a new design; no capture-format change or historical-capture edit belongs to this retirement |
 
 ## 1. Status Reckoner
 
@@ -38,12 +38,13 @@ Table C - Repair increments and the restored-generation roll-up
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Give the visual planner usable source evidence | - | A | DONE | fantastic-garbanzo | - | 0b1cac34-83e8-494c-99fc-6539f5299bdc |
 | C2 | 2 | Preserve the exact reason a visual was refused | 1 | B | DONE | shiny-spoon | - | ef9d68ad-ccf4-417d-9a05-fe0305ef21c7 |
-| C3 | 3 | Prove generated visuals reach publication and the reader | 1, 2, 4, 5, 6, 7, 8 | C | PENDING | fuzzy-bassoon | - | 094b8d19-fd66-47ce-b6ff-72d8af8f39d7 |
+| C3 | 3 | Prove generated numeric visuals reach publication and the reader | 1, 2, 4, 5, 7, 8, 9 | C | PENDING | fuzzy-bassoon | - | 094b8d19-fd66-47ce-b6ff-72d8af8f39d7 |
 | C4 | 4 | Replay retained articles on the controlled test runtime | 1, 2 | D | DONE | miniature-giggle | - | 98c0f7b2-33d5-487f-b893-37ef59cbb8c9 |
-| C5 | 5 | Correct literal sentence addressing and claim coverage | 1, 2 | D | DONE | cautious-tribble | - | e7392204-404e-484d-9cf5-5811294c4553 |
-| C6 | 6 | Show complete source-backed claims to the reader | 1, 2 | E | DONE | effective-guide | - | 96eb1442-fd7b-4734-b9a4-98d815cf9919 |
+| C5 | 5 | Correct literal sentence addressing | 1, 2 | D | DONE; claim-coverage work retired by row #9 | cautious-tribble | - | e7392204-404e-484d-9cf5-5811294c4553 |
+| C6 | 6 | Show complete source-backed claims to the reader | 1, 2 | E | COLLAPSED - Abandoned by row #9; prior reader correction delivered | effective-guide | - | 96eb1442-fd7b-4734-b9a4-98d815cf9919 |
 | C7 | 7 | Install native Pages build validation prerequisites | - | F | DONE | fuzzy-succotash | - | 68150591-c6fc-4b82-864c-3aee606bc27e |
-| C8 | 8 | Restrict requested labels to usable native references and ranges | 1, 5, 7 | G | DONE | shiny-happiness | - | aeb6859c-ce2e-40c6-8afb-a7c83e841531 |
+| C8 | 8 | Restrict requested labels to usable native references | 1, 5, 7 | G | DONE; range production retired by row #9 | shiny-happiness | - | aeb6859c-ce2e-40c6-8afb-a7c83e841531 |
+| C9 | 9 | Retire the actor-grid and unused label work | 1, 2, 5, 7, 8 | H | DONE | silver-enigma | - | 619fd6bf-b638-4d89-b3bc-825bd94ecfa6 |
 
 ## 2. Row #1 - Give the visual planner usable source evidence
 
@@ -81,18 +82,18 @@ Table D - Request decisions
 | D1 | Pass the exact post-anchoring table used by reachability and validation into the request builder. Preserve source spans, kinds, values, units and relevant existing label metadata; do not reconstruct ids from the raw label reply | Fowler consultation; [current handoff gap](../docs/architecture/summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once) |
 | D2 | Put the menu after the reusable prompt prefix as fenced item data. Keep shared instructions independent of the article and keep the two calls adjacent | [Prompt contract](../docs/architecture/summarize/prompt.md) |
 | D3 | Narrow reference fields in the derived request grammar to the visible ids. Retain the native persisted schema for historical reading. Handle an empty reference set with empty arrays and a null optional whole, not an invalid empty enum or an invented id | Fowler consultation; [native plan rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) |
-| D4 | Derive the type/role guide from the existing vocabulary and configured floors for active selected types only. Explain the grid's actor/claim pairing and give compact chart, grid and legitimate-decline examples. Do not present abandoned forms as request options or future work | [Visual rule](../docs/concepts/digest.md#the-visual-rule); Table B |
+| D4 | Derive the type/role guide from the existing vocabulary and configured floors for active selected types only. Give compact numeric-chart and legitimate-decline examples; row #9 removes the former grid guide. Do not present abandoned forms as request options or future work | [Visual rule](../docs/concepts/digest.md#the-visual-rule); Table B |
 | D5 | Include the added menu and guide in context accounting, including the bounded additions made by anchoring. Reuse the configured model's tokenizer or existing bounded sizing mechanism; do not invent a token rate, silently discard evidence or raise context limits | [Two-call context accounting](../docs/architecture/summarize/prompt.md#the-output-budget-is-derived-not-picked) |
 | D6 | Update the measurement utility and all direct builder callers with the same finalized evidence. Keep static schema/budget inspection possible without a live article, but require the production request to receive its real table | Verified callers in `classify/calls.py`, `stages/two_calls.py` and `utilities/measure_two_calls.py` |
 | D7 | Keep summary-first recovery, legitimate no-visual outcomes and existing evidence validators. Do not rely on unsupported JSON Schema conditionals to enforce cross-field rules | [Summary-first contract](../docs/architecture/summarize/prompt.md#summary-before-visual) |
-| D8 | Set the committed `enabled_types` to the implemented chart types and `whowhat`, and enable the existing type-selection policy so the actual request grammar enforces that selection. Keep fallback off. Native enum members remain available only for generic validation and historical compatibility, not as additional production choices | Table A; existing configuration mechanism |
+| D8 | Offer only implemented numeric chart types in committed configuration, defaults, effective selection and request schemas, including policy-off paths. Keep fallback off. Historical type names remain inert compatibility vocabulary, not production choices | Table A; row #9 |
 
 Table E - Rejected request shortcuts
 
 | ID | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | E1 | Only rewrite the prompt | Better wording still cannot expose ids omitted from the request | Continued invisible nonnumeric evidence and no structural reference-membership control | Fowler consultation |
-| E2 | Offer numeric charts only | It excludes the implemented source-backed text grid instead of repairing its inputs | Loss of the supported nonnumeric visual family | [Request vocabulary](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#config-selects-requests-code-owns-correctness) |
+| E2 | Retain the former rejection of numeric-only operation | Superseded: the actor-grid is abandoned and row #9 removes it end to end | Keeping an unwanted producer, compiler and reader solely for an abandoned goal | Table A; Table S |
 
 ## 3. Row #2 - Preserve the exact reason a visual was refused
 
@@ -127,34 +128,32 @@ Table G - Rejected refusal shortcuts
 | G1 | Clear contradictory fields from a declining plan and accept it | It changes an invalid model answer into apparent success | A separate acceptance-policy change and loss of the original defect | Existing native plan invariant |
 | G2 | Add a new refusal taxonomy during implementation without design | It changes persisted meaning rather than merely retaining available diagnostics | Level 5 consultation, versioned models, writer/reader updates and historical compatibility | `CLAUDE.md` sections 6 and 10 |
 
-## 4. Row #3 - Prove generated visuals reach publication and the reader
+## 4. Row #3 - Prove generated numeric visuals reach publication and the reader
 
 - **Scope:** Retain the completed deterministic reader coverage while closing the remaining gap to fresh, source-backed model generation and ordinary publication.
 - **Files touched:**
   - `backend/tests/pipeline/_builders.py`
   - `backend/tests/pipeline/test_published_charts.py`
-  - `backend/tests/pipeline/test_published_whowhat_grids.py`
   - `backend/tests/pipeline/test_work_records.py`
   - `backend/utilities/build_canary_day.py`
   - `frontend/src/lib/visual/viewport.ts`
   - `frontend/tests/reading-page.spec.ts`
   - `frontend/tests/visual-legibility.spec.ts`
-  - `frontend/tests/whowhat-visual.spec.ts`
   - `docs/reference/github-actions.md`
   - `docs/how-to/run-the-gates.md`
   - `docs/architecture/publishing/visuals.md`
   - `docs/architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md`
 - **Acceptance gates:** Use the shared selector for the named backend publication cases and one representative reader journey. Extend existing tests instead of adding duplicate journeys. CI owns the complete suite. The manual real-model observation below is required evidence before claiming generation is restored, not a test that writes production data.
-- **Oracle:** With only serialized worker outputs crossing into an isolated publisher tree, normal assembly creates the named chart/grid asset, the digest and inventory reference it, and the reader accepts that same artifact. This proves transport and rendering; authored or recorded model replies alone do not prove present-day model generation.
+- **Oracle:** With only serialized worker outputs crossing into an isolated publisher tree, normal assembly creates the named numeric asset, the digest and inventory reference it, and the reader accepts that same artifact. This proves transport and rendering; authored or recorded model replies alone do not prove present-day model generation.
 
 Table H - Delivery decisions
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| H1 | Exercise anchoring, the actual request builder, validation, compilation, worker serialization and normal assembly. Do not hand-construct a successful digest in place of assembly or pass the worker's public directory to the publisher | Fowler consultation; existing chart/grid publication boundary |
+| H1 | Exercise anchoring, the actual request builder, numeric validation/compilation, worker serialization and normal assembly. Do not hand-construct a successful digest in place of assembly or pass the worker's public directory to the publisher | Existing numeric publication boundary |
 | H2 | Reuse existing source-backed fixtures or minimal in-memory inputs. Keep network access and real inference out of automated tests; do not add fixture files or mock internal business logic | `CLAUDE.md` sections 1 and 12 |
-| H3 | Verify one reader journey containing a chart, a grid and a legitimate no-visual item. Include missing/empty visual data, one cross-page smoke and inspection for new errors or 404s; do not multiply themes or viewport journeys by default | `CLAUDE.md` sections 11 and 12 |
-| H4 | Observe a bounded run with the committed model and production request path over named source-backed positive chart/grid examples and a negative example. Inspect actual captured requests, model replies, decisions and resulting assets. Use isolated outputs and the existing model/runtime tooling, not a new inference path or public test data | Fowler consultation; [pipeline-test limits](../docs/reference/github-actions.md#pipeline-tests) |
+| H3 | Verify one representative numeric phone journey and a legitimate no-visual item. Include navigation/reload, missing/empty numeric data, one cross-page smoke and inspection for new errors or unexpected 404s; preserve numeric observer lifecycle regression coverage | `CLAUDE.md` sections 11 and 12 |
+| H4 | Separately observe a bounded run with the committed model and production request path over named source-backed positive numeric examples and a negative example. Inspect actual captured requests, replies, decisions and assets. Row #9 runs no inference, model load, production writer or workflow dispatch | [Pipeline-test limits](../docs/reference/github-actions.md#pipeline-tests); Table S |
 | H5 | Keep real-model observations separate from deterministic coverage. If a warranted example still declines or malforms, use its retained inputs to revise the request repair; do not call the capability restored because authored replies pass. Record the model, code revision and runner conditions rather than an invented visual-rate target | `CLAUDE.md` section 1, Guardrail 10 |
 | H6 | After delivery, inspect the next scheduled content run's decisions, named assets, inventory and served day. A random pipeline-test draw proves execution only; an observed decline is not automatically a failure unless that input warranted a visual | [Workflow contract](../docs/reference/github-actions.md#pipeline-tests) |
 | H7 | Keep the current owning pages whole: these edits describe their existing prompt, refusal and publication questions, not a second subsystem | [Documentation split test](../docs/reference/documentation-structure.md#a-page-answers-one-question-and-length-is-a-symptom-rather-than-the-fault) |
@@ -170,10 +169,10 @@ Table J - Roll-up completion evidence
 
 | ID | Outcome | State and evidence |
 | --- | --- | --- |
-| J1 | Serialized worker -> ordinary assembly -> native reader and stable recovery journey | DONE in [#2018](https://github.com/miztiik/yen-idhazh/pull/2018); this does not establish model generation |
+| J1 | Serialized numeric worker -> ordinary assembly -> native reader and stable recovery journey | DONE in [#2018](https://github.com/miztiik/yen-idhazh/pull/2018); row #9 preserves numeric coverage while removing actor coverage. This does not establish model generation |
 | J2 | Safe fixed-input model verification without production writes | Row #4 delivered in [#2023](https://github.com/miztiik/yen-idhazh/pull/2023); the retained observation verified isolation, provenance and truthful failures, not positive generation |
-| J3 | Existing-format first-call address/coverage correction | Row #5 delivered in [#2022](https://github.com/miztiik/yen-idhazh/pull/2022); sentence presentation round-trips, while useful semantic coverage remains unproved |
-| J4 | Fresh warranted chart, warranted actor/claim grid and legitimate no-visual outputs | Still unproved: the retained numeric call timed out and the actor case lacked the needed anchored pairs; row #8 addresses unusable selections without guaranteeing coverage |
+| J3 | Reversible first-call addressing and usable numeric references | Rows #5 and #8 delivered addressing/reference enforcement; row #9 retains it while retiring range and claim-coverage requirements |
+| J4 | Fresh warranted numeric chart and legitimate no-visual outputs | Still unproved: the retained numeric call timed out. Actor outcomes are abandoned, not replacement evidence for a numeric positive |
 | J5 | Normal asset, digest/inventory and served-reader verification on the merged producer revision | Pending actual publication; workflow success without a delivered visual is not positive proof |
 
 ## 5. Row #4 - Replay retained articles on the controlled test runtime
@@ -206,13 +205,13 @@ Table L - Rejected verification shortcuts
 
 | ID | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| L1 | Use the random article draw as fixed positive proof | It may contain no warranted chart/grid and mutable source pages do not isolate a producer change | Continued uncertainty or repeated uncontrolled dispatches | Actual generation observation; Table H |
+| L1 | Use the random article draw as fixed positive proof | It may contain no warranted numeric chart and mutable source pages do not isolate a producer change | Continued uncertainty or repeated uncontrolled dispatches | Actual generation observation; Table H |
 | L2 | Start a full model in unsafe local memory or use another model | It risks unrelated work and does not verify the committed production model | A separate resource/model decision and non-comparable evidence | Configured runtime and runner boundary |
 | L3 | Duplicate the producer or add a new workflow as a detour | A second inference path can pass while production still fails | Additional drift, maintenance and proof that never reaches the requested path | Focused Fowler design |
 
-## 6. Row #5 - Correct literal sentence addressing and claim coverage
+## 6. Row #5 - Correct literal sentence addressing
 
-- **Scope:** Fix the demonstrated first-call address-presentation/coverage defect while preserving existing label/capture formats, source text and claim meanings.
+- **Scope:** Retain the delivered reversible first-call sentence presentation and exact source anchoring; row #9 retires claim coverage and its unused output fields.
 - **Files touched:**
   - `backend/idhazh/classify/calls.py`
   - `backend/idhazh/classify/plan_visual_request.py`
@@ -235,24 +234,24 @@ Table M - Format-preserving producer decisions
 | ID | Decision | Authority |
 | --- | --- | --- |
 | M1 | Escape internal line controls through a reversible one-line presentation without changing Article.text, segmentation, offsets or source hashes. Make retained-prompt inspection understand both old and new presentation explicitly; do not flatten source whitespace or silently reinterpret historical prompt bytes | Existing source-span contract; measured address-presentation defect |
-| M2 | Clarify literal printed-address copying, distinct actors and source-supported narrated claims in the label prompt. Do not count lines, infer a neighbouring address, paraphrase source spans, merge distinct people merely by surname or weaken the exact unique within-sentence locator | Existing attribution/anchoring contract |
-| M3 | Keep `LabelReply.claims` as the existing `SentenceRange`, quotes as ranges and all raw-label/capture fields unchanged. Preserve required fields, list/string bounds, accepted native schemas and historical reply reading. Do not add ClaimCitation in this increment | Table B6; audited useful whole sentences fit the existing bound |
-| M4 | Preserve CLAIM versus QUOTE meaning, reporting frames, attribution, hedge and qualifications. A shorter suffix that drops a qualification is not a clean positive. Whole-sentence readability and usefulness must be checked in actual outputs, not assumed from representability | Existing native kind meanings and visual rule |
+| M2 | Keep literal printed-address copying and the exact unique within-sentence locator for current numeric labels and entity/place mentions; never search a neighbouring sentence to rescue a wrong address | Existing attribution/anchoring contract |
+| M3 | Row #9 replaces current range production with four consumed fields and validates historical retired fields before discarding them. Historical raw captures stay unchanged | Table B6; Table S |
+| M4 | Preserve historical element-kind meanings without retaining a current claim/quote producer or reader | Table S |
 | M5 | Keep compatible native width arithmetic, derived allowances, actual configured response/context caps and early admission unchanged. Retokenize complete actual requests for diagnostics; add no production tokenization call, capacity guard, forced visual or policy switch | [Prompt budget contract](../docs/architecture/summarize/prompt.md#the-output-budget-is-derived-not-picked) |
-| M6 | Use row #4's controlled retained-input mode for named warranted chart/grid candidates and the verified negative. Retain both fresh calls and verify coverage, native validation, output data and source provenance. The generator receives no expected kind | Table H; Table J |
-| M7 | If useful in-meaning claims still cannot be represented/read after this smaller correction, preserve the concrete counterexample and price the Level 5 raw-format option. Do not expand response/capture formats, model choices or kind meanings silently | Table A6 and B6 |
+| M6 | Use row #4's controlled retained-input mode separately for warranted numeric candidates and a verified negative. Retain both fresh calls and verify native validation, output data and source provenance; the generator receives no expected kind | Table H; Table J |
+| M7 | Claim-coverage/range expansion is abandoned with the actor-grid; retain no speculative claim-format requirement | Table B6 |
 
 Table N - Rejected producer shortcuts
 
 | ID | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| N1 | Immediately add precise claim citations and capture metadata | Existing ranges can represent the currently audited whole sentences, so that format expansion is not yet a demonstrated prerequisite | Versioned raw/capture models, legacy reading and a Level 5 design decision | Focused Fowler format ruling; newer source audit |
+| N1 | Add precise claim citations or new capture metadata | The only proposed claim reader is abandoned | Unconsumed output, versioned capture migration and a separate capability decision | Table B6 |
 | N2 | Rescue a wrong address by searching neighbouring sentences or the whole article | It turns an invalid model reference into an apparently valid source claim | A changed grounding/safety policy and weaker provenance | Existing exact within-sentence locator |
 | N3 | Declare restoration from successful summaries or authored visual replies | It repeats the failure that left normal production without visuals | Missing actual positive generation and public-delivery evidence | Table J |
 
 ## 7. Row #6 - Show complete source-backed claims to the reader
 
-- **Scope:** Correct the independent reader defect where a fitted claim prefix hides its action or qualification, using the full validated excerpt already in the grid payload. Keep the existing table, actor labels, paired empty cells and loading/failure/retry behavior.
+- **Scope:** COLLAPSED - Abandoned with the actor-grid in row #9; the prior full-claim reader correction was delivered but is not an active capability or generation outcome.
 - **Files touched:**
   - `TODO/20261110-restore-visual-publication-plan.md`
   - `frontend/src/lib/visual/WhowhatVisual.svelte`
@@ -260,25 +259,8 @@ Table N - Rejected producer shortcuts
   - `frontend/tests/reading-page.spec.ts`
   - `docs/concepts/design-system.md`
   - `docs/architecture/publishing/where-a-drawing-becomes-pixels.md`
-- **Acceptance gates:** Inspect the shared selector, run the smallest existing grid-reader and reading-page selections plus applicable Svelte/type and whitespace checks, and leave the full suite to exact-head CI. Confirm the changed oracle fails against an isolated copy of the base component before changing its rendering. Perform an integrated-browser smoke of one representative view: full claim and trailing qualification, keyboard disclosure of a clipped actor, an ordinary actor without disclosure, missing and empty grid data with recovery, and one cross-page smoke. Separate deliberately missing responses from new errors/404s. Complete one bounded Susan readiness check on the finished surface using synthetic content only. Stop private preview helpers after the checks.
-- **Oracle:** For a valid grid whose fitted claim ends before the action and final qualification, the What cell shows the exact complete `claim.span_excerpt` by default, wraps without clipping or horizontal overflow, and has no disclosure or tooltip. Who keeps `actor.display_text`; only an actor whose display differs from its full excerpt has native keyboard-operable `details`/`summary` revealing that exact excerpt. Short actors remain plain text and paired empty rows remain empty. Missing/empty grid data leaves story text and the existing retry usable. This proves reader correctness only, not actual model generation or restored publication; C3 and Table J remain incomplete.
-
-Table O - Reader correction decisions
-
-| ID | Decision | Authority |
-| --- | --- | --- |
-| O1 | Render the bounded full claim excerpt directly in What, preserving every literal word, attribution and qualification | [Reader design contract](../docs/concepts/design-system.md#the-whowhat-grid-keeps-each-actor-beside-its-claim) |
-| O2 | Keep the fitted actor label in Who; disclose the full actor excerpt through native details/summary only when the two strings differ | [Native disclosure contract](../docs/concepts/design-system.md#content-on-demand-is-a-details-not-a-button) |
-| O3 | Reuse the current two-column layout, wrapping and design tokens. Add no column, claim disclosure, tooltip, style redesign, dependency, tooling or fixture file | Existing reader surface and bounded repair scope |
-| O4 | Change no persisted shape, compiler/fit bound, prompt, source range, model, cap, admission rule, fallback or publication policy. Row #4 inference is not a prerequisite for this independent reader repair | Tables A, B and J |
-
-Table P - Rejected reader shortcuts
-
-| ID | Option | Why rejected | What it would cost to take | Authority |
-| --- | --- | --- | --- | --- |
-| P1 | Keep claims fitted and hide the rest behind disclosure or a tooltip | The action and qualification would still be absent from the default reading surface | Continued loss of the claim's meaning without an extra interaction | Table O1 |
-| P2 | Increase fit limits or alter the producer to repair the reader | Full bounded source excerpts already reach the reader | Unnecessary producer changes and coupled acceptance behavior | Table O4 |
-| P3 | Treat a synthetic or fixture grid as actual generation evidence | It proves only the renderer's behavior | The unclosed fresh-generation and ordinary-publication gap in Table J | Table J |
+- **Acceptance gates:** Historical disposition only; row #9 deletes the component, state, dedicated tests and active design guidance. Numeric reader lifecycle/recovery coverage remains required by Table H3.
+- **Oracle:** No current actor-grid is requested, compiled, published or rendered. Historical actor outcomes remain facts in records but project to no visual; numeric generation remains unresolved in Table J.
 
 ## 8. Row #7 - Install native Pages build validation prerequisites
 
@@ -292,9 +274,9 @@ Table P - Rejected reader shortcuts
 - **Decisions:** Reuse Python 3.12 and `pip install -e .` from the existing publishing workflows rather than copying a dependency subset into YAML. The beneficiary is native build-time validation of committed appearance configuration; no producer, source-page fetch or model execution is added. Document the prerequisite in the existing Pages section because it answers that section's current workflow question. Preserve all earlier complete row sections and unresolved generation/publication outcomes.
 - **Rejected alternatives:** Bypassing Pydantic or native validation would hide invalid configuration. Expanding the shared publication runtime without a demonstrated dependency boundary would widen this repair. Prompt/model/cap changes and manufactured visual outputs cannot prove this build prerequisite or close generation.
 
-## 9. Row #8 - Restrict requested labels to usable native references and ranges
+## 9. Row #8 - Restrict requested labels to usable native references
 
-- **Scope:** Prevent the label decoder from selecting references absent from the current printed evidence or sentence ranges that existing anchoring cannot use. Specialize only the request schema for one native Article and its candidate table; preserve the saved reply contract, source meaning and optional empty selections.
+- **Scope:** Retain the delivered printed candidate, date and citation-address restrictions for one native Article; row #9 removes range request specialization with its unused producers.
 - **Files touched:**
   - `backend/idhazh/classify/label_request.py` (new; owns the bounded request projection)
   - `backend/idhazh/classify/calls.py`
@@ -307,25 +289,145 @@ Table P - Rejected reader shortcuts
   - `docs/reference/retained-article-verification.md` (coordinator correction to the native provenance filename)
   - `TODO/20261110-restore-visual-publication-plan.md`
 - **Acceptance gates:** Use the shared selector and the smallest applicable lint, strict-type, request, anchoring and historical-reading cases; CI owns the complete suite. Compile the actual projected request through the pinned runtime's native C++ schema converter and stock complete-object grammar validator without loading model weights. Inspect the validator's explicit verdict rather than its exit code alone. Measure dense source-cap schema/grammar size, compilation/initialization and peak memory separately from prompt capacity, using the current configured extraction cap. Keep those manual native receipts outside the repository; no test downloads, new dependencies, fixtures, parser or inference engine.
-- **Oracle:** The existing unrestricted request admits unknown or wrong-kind references and an oversized sentence-range selection that anchoring rejects. The projected request must reject those complete objects, reversed ranges and invalid endpoint combinations through the actual compiled grammar, while accepting exact-boundary excerpts, every eligible multi-sentence range and all-empty lists. Compare pair membership with real native anchoring over original trimmed source characters, including whitespace, escaping and Unicode. Native schema, field order, required keys, bounds, widest-budget arithmetic, historical parsing, prompt bytes and all non-schema request fields stay unchanged.
+- **Oracle:** The projected current request offers only printed candidate ids, printed DATE ids or the native empty string for time, and printed sentence ids for citations. Exact source anchoring and empty selections remain valid. Row #9 removes the old range-production oracle and retains only strict historical range-structure/bounds validation; current native shape and budgets follow Table S.
 
 Table Q - Native request projection decisions
 
 | ID | Decision | Authority |
 | --- | --- | --- |
 | Q1 | Keep a thin request wrapper beside the native label builder and put projection mechanics in a focused sibling without importing the builder back into it | Native request projection precedent and module boundary |
-| Q2 | Bind label ids to printed candidates, time ids to printed DATE elements plus the native empty string, and citation/lede addresses to printed sentence ids. Only code-minted addresses enter the grammar | Existing source-span and trust contracts |
-| Q3 | Correlate range endpoints with one complete-object branch per legal start and its eligible ends, shared by quotes and claims. Preserve original trimming, the native excerpt bound and every legal multi-sentence range; independent endpoint enums are insufficient | Existing `range_elements()` eligibility |
-| Q4 | Preserve empty lists and well-formed unreachable definitions when a pool is empty. Do not invent sentinels, force actor coverage or silently change the empty-source presentation | Native reply and source-presentation contracts |
-| Q5 | Keep `LabelReply`, `Citation`, `SentenceRange`, `label_schema()`, native readers/captures, exact anchoring, sanitizer, finalized menu, model/runtime, caps, context, timeout, admission and fallback unchanged. Derive budgets from the compatible native schema, not the narrower request | Tables B6 and M; native compatibility contract |
+| Q2 | Bind label ids to printed candidates, time ids to printed DATE elements plus the native empty string, and current citation addresses to printed sentence ids. Only code-minted addresses enter the grammar | Existing source-span and trust contracts |
+| Q3 | Range endpoint specialization is retired with the claim/quote producer; the saved legacy validator checks old structures and bounds without reconstructing a current range menu | Table S |
+| Q4 | Preserve empty lists and well-formed unreachable definitions when a pool is empty. Do not invent sentinels, force coverage or silently change the empty-source presentation | Native reply and source-presentation contracts |
+| Q5 | Keep current `Citation`, exact anchoring, sanitizer, finalized menu, model/runtime, effective caps/context/timeout, admission and fallback unchanged. Row #9 changes the native label shape and derives its budgets anew, while strict legacy reading and existing capture envelopes remain compatible | Tables B6 and S |
 | Q6 | Exercise actual pinned native grammar acceptance, not only JSON Schema validation or one sampled valid reply. Treat any schema factoring as unproved until equivalent native enforcement is demonstrated | Runtime/model boundary |
 | Q7 | After the real producer increment, use the existing retained-input path for a fresh bounded observation on the named controls. Record both actual request token counts and prefix continuity, source/current identities, native products and actual usefulness. A timeout supplies no missing second-call evidence | Tables H and J |
-| Q8 | Legal references cannot compel actor selection or prove semantic coverage. Keep C3 pending until useful native chart/grid outputs and ordinary publication are observed; no quota, third call, decline retry or precise-fragment substitution | Original restoration outcome and Table J |
+| Q8 | Legal references do not prove useful numeric generation. Keep C3 pending until a useful native numeric output and ordinary publication are observed; no quota, third call, decline retry or precise-fragment substitution | Table J |
 
 Table R - Rejected projection shortcuts
 
 | ID | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| R1 | Add more prompt wording without an enforceable selection invariant | The current guidance did not establish usable actor evidence | Another unisolated semantic change without repairing the observed unusable range | Table Q |
+| R1 | Add prompt wording instead of keeping reference membership structural | Guidance cannot prevent unknown ids | Another semantic change without enforcing the printed menu | Table Q |
 | R2 | Replace native readers with the article-specific request schema | Historical replies are not governed by today's article choices | A saved-format compatibility break and Level 5 design decision | Table Q5 |
-| R3 | Claim restoration from zero invalid references or green grammar tests | Valid selections can still omit every useful actor | Continued absence of actual positive generation and publication evidence | Table Q8 |
+| R3 | Claim restoration from zero invalid references or green grammar tests | Valid selections can still decline every numeric visual | Continued absence of actual positive generation and publication evidence | Table Q8 |
+
+## 10. Row #9 - Retire the actor-grid and unused label work
+
+- **Scope:** Remove active actor-grid generation, compilation, publication, rendering, UI state, guidance and dedicated evidence while keeping numeric charts, strict historical reading and truthful outcome records.
+- **Files touched - delete:**
+  - `backend/idhazh/contracts/whowhat_grid.py`
+  - `backend/idhazh/render/whowhat_grid.py`
+  - `backend/tests/contracts/test_whowhat_grid.py`
+  - `backend/tests/pipeline/test_published_whowhat_grids.py`
+  - `backend/tests/test_whowhat_grid.py`
+  - `frontend/src/lib/visual/WhowhatVisual.svelte`
+  - `frontend/src/lib/visual/whowhat-state.ts`
+  - `frontend/src/lib/payload/whowhat-grid.ts`
+  - `frontend/tests/whowhat-visual.spec.ts`
+  - `tests/fixtures/contracts/whowhat-grid/whowhat.json`
+  - `tests/fixtures/visual-validator/articles/whowhat.txt`
+  - `tests/fixtures/visual-validator/plans/whowhat.json`
+  - `tests/fixtures/visual-validator/tables/whowhat.json`
+- **Files touched - dependencies and compatibility:**
+  - `backend/idhazh/contracts/__init__.py`
+  - `backend/idhazh/contracts/app_config.py`
+  - `backend/idhazh/contracts/knobs/visuals.py`
+  - `backend/idhazh/contracts/visual_decision.py`
+  - `backend/idhazh/contracts/visual_type.py`
+  - `backend/idhazh/contracts/digest_day.py`
+  - `backend/idhazh/contracts/digest_view.py`
+  - `backend/idhazh/visual_vocabulary.py`
+  - `backend/idhazh/visual_planner.py`
+  - `backend/idhazh/visual_validator.py`
+  - `backend/idhazh/render/__init__.py`
+  - `backend/idhazh/render/write.py`
+  - `backend/idhazh/stages/two_calls.py`
+  - `backend/idhazh/stages/assemble.py`
+  - `backend/idhazh/assemble.py`
+  - `backend/idhazh/classify/calls.py`
+  - `backend/idhazh/classify/label_request.py`
+  - `backend/idhazh/classify/plan_visual_request.py`
+  - `backend/idhazh/config.py`
+  - `backend/utilities/build_canary_day.py`
+  - `backend/utilities/measure_two_calls.py`
+  - `backend/tests/contracts/_fixtures.py`
+  - `backend/tests/contracts/test_served_day.py`
+  - `backend/tests/contracts/test_app_config.py`
+  - `backend/tests/contracts/test_decoder_grammar.py`
+  - `backend/tests/contracts/test_visual_plan.py`
+  - `backend/tests/contracts/test_visual_outcomes.py`
+  - `backend/tests/council/_imports.py`
+  - `backend/tests/pipeline/_builders.py`
+  - `backend/tests/pipeline/test_published_charts.py`
+  - `backend/tests/pipeline/test_work_records.py`
+  - `backend/tests/test_chart_vocabulary.py`
+  - `backend/tests/test_chart_bubble.py`
+  - `backend/tests/test_chart_scatter.py`
+  - `backend/tests/test_chart_text_fit.py`
+  - `backend/tests/test_chart_evidence.py`
+  - `backend/tests/test_derived_values.py`
+  - `backend/tests/support/visual_plans.py`
+  - `backend/tests/test_classify.py`
+  - `backend/tests/test_label_request.py`
+  - `backend/tests/test_measure_two_calls.py`
+  - `backend/tests/test_prompt_files.py`
+  - `backend/tests/test_render.py`
+  - `backend/tests/test_replay_article_calls.py`
+  - `backend/tests/test_visual_attempt_report.py`
+  - `backend/tests/test_visual_attempts.py`
+  - `backend/tests/test_visual_planner.py`
+  - `backend/tests/test_visual_validator.py`
+  - `frontend/scripts/test-groups.ts`
+  - `frontend/src/lib/components/ItemVisual.svelte`
+  - `frontend/src/lib/components/DigestItem.svelte`
+  - `frontend/src/lib/payload/types.ts`
+  - `frontend/src/lib/payload/project.ts`
+  - `frontend/src/lib/assist/day.ts`
+  - `frontend/tests/item-visual.spec.ts`
+  - `frontend/tests/reading-page.spec.ts`
+  - `frontend/tests/served-day.spec.ts`
+  - `frontend/tests/payload-state.spec.ts`
+  - `frontend/tests/support/day-loader.ts`
+  - `frontend/tests/visual-legibility.spec.ts`
+  - `config/idhazh.json`
+  - `config/prompts/generate-labels.txt`
+  - `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
+  - `tests/fixtures/prompts/label.txt`
+  - `tests/fixtures/prompts/summarize-and-plan.txt`
+  - `tests/fixtures/planner/recorded-call-payloads.json` (current request expectations only)
+  - `README.md`
+  - `docs/architecture/extraction/elements.md`
+  - `docs/architecture/summarize/prompt.md`
+  - `docs/architecture/publishing/visuals.md`
+  - `docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md`
+  - `docs/architecture/publishing/where-a-drawing-becomes-pixels.md`
+  - `docs/concepts/design-system.md`
+  - `docs/concepts/digest.md`
+  - `docs/concepts/telemetry.md`
+  - `docs/reference/github-actions.md`
+  - `docs/reference/retained-article-verification.md`
+  - `TODO/20261110-restore-visual-publication-plan.md`
+- **Acceptance gates:** Inspect the shared selector and run the smallest selected native unit/contract/integration checks, applicable lint and strict types locally; exact-head CI owns the full suite. Update existing tests with minimal in-memory literals, no new fixtures/mocks/network/dependencies/workflow-text tests. Verify the current decoder cannot request retired forms even with selection policy off; current labels have exactly four consumed fields; valid legacy labels load but malformed retired fields and unrelated unknown keys still fail before continuation replay. Preserve serialized numeric worker -> ordinary assembly -> asset/inventory -> TypeScript reader and valid-decline coverage. Use one integrated-browser numeric phone journey with navigation, reload, a cross-page smoke and missing/empty numeric data degradation. Review the retained surface once with synthetic/compiler numeric data; stop scoped preview helpers. Open one removal PR; do not merge or dispatch a workflow.
+- **Oracle:** Current request/producer/renderer paths support only nine numeric types or no visual, while a legacy actor decision retains its requested/delivered/state/marks/identity facts but produces no view in backend projection, TypeScript projection or cached-day ingestion. Absent/null historical kinds still follow the chart path. Strict legacy label parsing validates retired field structure and bounds before discarding them, so removing unconsumed output cannot turn malformed historical replies into accepted evidence or replay unvalidated raw bytes. This proves retirement, compatibility and numeric transport, not present-day positive numeric generation.
+
+Table S - Retirement contract and order
+
+| ID | Decision | Authority |
+| --- | --- | --- |
+| S1 | Abandon `whowhat` rather than disable it. Delete the dedicated feature contract/compiler/reader/state/tests/fixtures/canary and its rules, guides, routing, flags and selection. Offer only the implemented numeric types in defaults, effective selection and all request schemas | Tables A and B; canonical visual capability contract |
+| S2 | Reader before writer: remove the nested grid feature contract through a named legacy decision migration, preserving all historical outcome metadata. Retain only inert type/kind tokens and historical ledger family mapping; do not rewrite old records as declines or edit captures | Native persisted consumers and strict compatibility boundary |
+| S3 | Project historical actor pointers to no visual at backend, staged TypeScript and cached-day browser boundaries. Positive chart selection prevents retired kinds falling through. Absent/null historical kinds remain legacy charts | Native served-day projection parity |
+| S4 | Current label output contains only `labels`, `proposed`, `entity_mentions` and `place_mentions`. Delete unused range producers/request specialization and exclusive bounds/tests; retain strict read-only legacy label DTO validation before discard/replay and reject unrelated unknown keys | Current numeric consumers and raw continuation replay boundary |
+| S5 | Recompute `ANCHORED_MAX`, widest label shape and shape-derived label/context budgets. Stamp/changelog `VisualDecision`, `AppConfig`, `DigestDay`, `DigestView`, `VIEW_VERSION`, planning vocabulary and label pass; keep numeric data/renderer/unit-table versions and effective configured caps/context/timeout unchanged | Native shape-derived budget and compatibility rules |
+| S6 | Preserve numeric entity/place/category/time/series/relationship evidence, exact anchoring, chart validation/source grounding/sanitizer, viewport lifecycle repair, atomic paths, replay input checks and private render/capture isolation | Existing numeric behavior and safety boundaries |
+| S7 | Carry one coherent removal PR, optionally two behavioral commits: actor retirement plus compatibility, then unused label work. Preserve every unrelated complete section/status and leave actual numeric generation/publication pending | Tables C and J |
+
+Table T - Rejected retirement shortcuts
+
+| ID | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| T1 | Keep a disabled grid implementation or retain unconsumed range output | It leaves the abandoned capability and its maintenance/runtime cost in place | Continued feature contracts, prompts, code, tests and response/context work without a consumer | Table S1 and S4 |
+| T2 | Drop four arbitrary legacy raw values before parsing | Malformed old replies could become accepted evidence and the continuation replays the first raw reply | A weakened trust/compatibility boundary; validate the retired structure and bounds first instead | Table S4 |
+| T3 | Delete historical enum facts, broadly ignore unknown keys or rewrite actor outcomes as declines | It loses real persisted meaning and conceals malformed input | A history rewrite or unrelated acceptance-policy change | Table S2 |
+| T4 | Repair numeric generation, change prompts' placement/model/runtime, enable fallback, redraw history or dispatch production | None is needed to remove the actor-grid | Coupled experiments, production side effects and an unverified claim that numeric generation is restored | Tables B and J |

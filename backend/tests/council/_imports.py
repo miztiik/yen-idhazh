@@ -80,7 +80,6 @@ MODULE_NAMES = (
     "idhazh.contracts.visual_telemetry",
     "idhazh.contracts.visual_type",
     "idhazh.contracts.visual_validation",
-    "idhazh.contracts.whowhat_grid",
     "idhazh.contracts.watchlist",
     "idhazh.council",
     "idhazh.council.__init__",

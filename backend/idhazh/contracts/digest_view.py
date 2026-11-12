@@ -55,7 +55,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Annotated, Any, ClassVar, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from idhazh.contracts.article import UntrustedLine
 from idhazh.contracts.base import (
@@ -174,7 +174,7 @@ class DigestCoverage(Model):
 
 
 class DigestViewVisual(Model):
-    """A chart or whowhat pointer, as the browser that draws it needs it.
+    """A chart pointer, as the browser that draws it needs it.
 
     `kind` is optional so a cached shell can still read an older served visual;
     absent kinds keep the pre-existing chart reader path.
@@ -361,7 +361,20 @@ class DigestView(Contract):
     """`<base>/digest/<YYYY>/<MM>/<DD>/digest.json`, as a browser fetches it."""
 
     __schema_stem__: ClassVar[str] = "digest-view"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "readCompatibility": (
+                "retired visual kinds project to null; absent/null historical kinds "
+                "retain the chart path; cached-day ingestion applies the same rule"
+            )
+        }
+    )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-11",
+            change="Project retired visual kinds to no visual while retaining legacy charts.",
+            why="Old actor pointers must not reach a chart reader or a retired renderer.",
+        ),
         ChangelogEntry(
             version="2026-10-28",
             change="Project optional visual kind for whowhat reader routing.",
@@ -376,11 +389,6 @@ class DigestView(Contract):
             version="2026-09-24",
             change="Removed DigestViewItem.key_points. A staged view that carries it still loads.",
             why="Nothing drew them, and the in-page filter reads title and summary instead.",
-        ),
-        ChangelogEntry(
-            version="2026-09-22",
-            change="generated_at is the newest run's completion, not the assembling clock.",
-            why="A wall clock makes two assemblies of one set of runs disagree byte for byte.",
         ),
         ChangelogEntry(
             version="2026-08-31T12:00",
@@ -470,7 +478,7 @@ class DigestView(Contract):
             visual = item.get("visual")
             item_view["visual"] = (
                 {name: visual.get(name) for name in visual_names}
-                if isinstance(visual, Mapping)
+                if isinstance(visual, Mapping) and visual.get("kind") in (None, VisualKind.CHART)
                 else None
             )
             item_view["covered_by"] = covered.get(str(item.get("item_id")), [])

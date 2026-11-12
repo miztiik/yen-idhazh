@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.visual_plans import current_plan
 
 from idhazh import assemble
 from idhazh.contracts.app_config import AppConfig
@@ -55,7 +56,7 @@ def _render(
             model_id="fixture-model",
             decided_at=f"{DATE}T06:00:00Z",
         ),
-        VisualPlan.read(VISUAL_FIXTURES / "plans" / f"{plan_name}.json"),
+        current_plan(VISUAL_FIXTURES / "plans" / f"{plan_name}.json"),
         table,
         public_root=root,
         relpath=path,

@@ -37,6 +37,7 @@ from idhazh.contracts.appearance_config import (
     ZONE_RAIL_MIN_REM,
     AppearanceConfig,
     ChartConfig,
+    ChartPalette,
     FrameConfig,
     IconsConfig,
     MotionConfig,
@@ -59,6 +60,17 @@ def test_explorer_file_limit_defaults_and_bounds() -> None:
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APPEARANCE_PATH = REPO_ROOT / "config" / "appearance.json"
+
+
+def test_machine_palette_accepts_prior_values_and_matches_the_frontend_vocabulary() -> None:
+    source = (REPO_ROOT / "frontend/src/lib/server/config.ts").read_text()
+    copied = re.search(r"palette: ([^;]+);", source)
+    assert copied is not None
+    assert set(re.findall(r"'([^']+)'", copied[1])) == {value.value for value in ChartPalette}
+    for palette in ("categorical", "sequential", "spectral", "piyg"):
+        config = AppearanceConfig.model_validate({"chart": {"palette": palette}})
+        assert config.chart.palette.value == palette
+    assert ChartConfig().palette is ChartPalette.CATEGORICAL
 
 
 def test_daily_tiles_keep_an_inside_wider_than_the_gap() -> None:
@@ -298,6 +310,21 @@ def test_the_console_may_not_be_narrower_than_the_reading_frame() -> None:
     """An instrument that gets less room than a paragraph is the original defect."""
     with pytest.raises(ValidationError, match="console_max_px"):
         FrameConfig(reading_max_px=1400, console_max_px=FRAME_CONSOLE_MIN_PX)
+
+
+def test_console_frame_can_fill_the_window_without_breaking_numeric_caps() -> None:
+    assert AppearanceConfig.model_validate({}).frame.console_max_px is None
+    assert (
+        AppearanceConfig.model_validate({"frame": {"console_max_px": None}}).frame.console_max_px
+        is None
+    )
+    old = AppearanceConfig.model_validate(
+        {"version": "2026-11-10", "frame": {"console_max_px": 1600}}
+    )
+    assert old.frame.console_max_px == 1600
+    for invalid in (1099, 2001):
+        with pytest.raises(ValidationError, match="console_max_px"):
+            FrameConfig.model_validate({"console_max_px": invalid})
 
 
 def test_breakpoints_must_be_three_ascending_and_distinct() -> None:

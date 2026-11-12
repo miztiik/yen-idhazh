@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-12
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
@@ -124,9 +124,13 @@ Workers file settled items. Assemble accounts for missing work after it knows wh
 The work stage records each settled visual decision before writing the summary
 or starting scoring. Items that never reached visual planning write no attempt.
 Model none, reachability refusal, output-budget and window cuts, validation,
-shape/config/compiler refusals, chart/grid delivery and render failure all use
+shape/config/compiler refusals, chart delivery and render failure all use
 the same mapping in `telemetry/visual_attempts.py` and the standard ledger writer.
 Completed immutable writes remain available to the publisher if later work fails.
+
+Historical retired visual types keep their recorded family, outcome and
+identity. They do not enable a producer or reader, and are not rewritten as
+model declines.
 
 `VisualAttemptRow` copies the exact decision `visual_id`, requested and delivered
 types, first validator rejection, delivered marks and nullable floor evidence.

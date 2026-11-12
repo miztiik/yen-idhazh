@@ -163,7 +163,7 @@ test('query foundation checks are registered in their real execution tiers', () 
 test('named frontend specs map to their declared groups', () => {
 	assert.equal(groupForSpec('console-machine-data.spec.ts'), 'logic');
 	for (const name of [
-		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine', 'tokens',
+		'console-host-spans', 'console-machine-split', 'console-machine', 'tokens',
 		'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data'
 	]) {
 		assert.equal(groupForSpec(`${name}.spec.ts`), 'logic', name);
@@ -173,6 +173,9 @@ test('named frontend specs map to their declared groups', () => {
 	assert.equal(groupForSpec('frame.spec.ts'), 'logic');
 	assert.equal(groupForSpec('panel-captures.spec.ts'), undefined);
 	assert.equal(groupForSpec('panel-sufficiency.spec.ts'), undefined);
+	for (const retired of ['console-machine-cards', 'console-disk-reads', 'processor-lost']) {
+		assert.equal(groupForSpec(`${retired}.spec.ts`), undefined, retired);
+	}
 	assert.equal(groupForSpec('new-feature.spec.ts'), undefined);
 });
 

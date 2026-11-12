@@ -29,7 +29,7 @@
 			tabindex={drawing.records.length ? 0 : undefined} role="group" aria-label={strip.dates.length === 1
 				? "Every source's reading for the one recorded day, one square per source. Arrow keys move between sources. Escape returns to the first source."
 				: "Every source's days, one square a day. Arrow keys read a square, Escape returns to the first source's newest day."}
-			use:markReadout={{ count: drawing.records.length, walk: Math.max(1, strip.dates.length), selected, onSelect: (index) => selected = index }}>
+			use:markReadout={{ count: drawing.records.length, walk: Math.max(1, strip.dates.length), selected, hover: { name: 'source-yield', readout: drawing.records }, onSelect: (index) => selected = index }}>
 			{#if strip.rows.length === 0 && strip.unjudged.length === 0}
 				<p class="notes" data-retiring-empty>{#if strip.clear > 0}No source is close to retiring itself.{:else}The census arrived successfully, but no source has a yield to judge. This is not a missing census.{/if}</p>
 			{/if}

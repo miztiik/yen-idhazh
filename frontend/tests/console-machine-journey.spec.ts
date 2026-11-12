@@ -4,8 +4,8 @@ import { renderFrameCss } from '../scripts/build-frame-css.mjs';
 import { WINDOW_PREFERENCE_KEY } from '../src/lib/console/window-preference';
 
 const PANELS = [
-	'two-clocks', 'processor-lost', 'disk-reads', 'machine-cards', 'slower-machines',
-	'platform-mix', 'slowest-articles', 'tail-trend', 'closest-to-memory', 'memory-held',
+	'two-clocks', 'slower-machines',
+	'platform-mix', 'tail-trend', 'closest-to-memory', 'memory-held',
 	'context-headroom', 'article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost'
 ];
 const NATIVE = /\/state\/(?:compact|raw)\/(?:item-health|host-fingerprint|run-shards)\//;
@@ -45,18 +45,45 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	});
 	page.on('pageerror', (error) => errors.push(error.message));
 	page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
-	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.setViewportSize({ width: 1920, height: 900 });
 	await page.goto('/console/machine/');
 	await settled(page);
-	await expect(page.locator('#console-top')).toHaveText('Hardware');
+	await expect(page.locator('#console-route-title')).toHaveText('Hardware');
 	await expect(page.locator('[data-window-status]')).toContainText('20 Aug 2026');
 	await expect(page.locator('[data-console-rail]')).toHaveCSS('position', 'sticky');
+	const shellWidth = await page.locator('.frame').evaluate((node) => {
+		const shell = node.querySelector('.console-shell')!;
+		const rail = node.querySelector('[data-console-rail]')!;
+		const frame = node.getBoundingClientRect();
+		return {
+			viewport: innerWidth, frame: frame.width,
+			content: node.querySelector('.console-main')!.getBoundingClientRect().width,
+			available: frame.width - 2 * parseFloat(getComputedStyle(node).paddingInlineStart) -
+				rail.getBoundingClientRect().width - parseFloat(getComputedStyle(shell).columnGap)
+		};
+	});
+	expect(shellWidth.frame, 'the default console must not keep its former centered cap').toBe(shellWidth.viewport);
+	expect(shellWidth.content).toBeCloseTo(shellWidth.available, 1);
+	await expect(page.locator('[data-site-header] [data-theme-toggle]')).toHaveCount(0);
+	await expect(page.locator('[data-site-footer] [data-theme-toggle]')).toHaveCount(1);
+	await expect(page.locator('[data-console-nav] small')).toHaveCount(0);
+	const selectedGlyph = page.locator('[data-console-tab="machine"] [data-route-glyph]');
+	await expect(page.locator('#console-route-title [data-route-glyph]')).toHaveAttribute(
+		'data-route-glyph', (await selectedGlyph.getAttribute('data-route-glyph'))!);
+	expect((await page.locator('#console-route-title svg').boundingBox())!.width).toBeGreaterThan(
+		(await selectedGlyph.locator('svg').boundingBox())!.width);
 	await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#191917');
 	const firstComparison = page.locator('[data-console-panel-id="two-clocks"] [data-lede]');
 	await expect(firstComparison).toBeVisible();
 	await expect(firstComparison).toContainText('max gap;');
 	expect(await firstComparison.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(900);
 	await page.screenshot({ path: test.info().outputPath('hardware-wide-dark.png') });
+	const rankedRow = page.locator('[data-console-panel-id="two-clocks"] [data-ranked-row]').first();
+	await rankedRow.hover();
+	await expect(page.locator('[data-chart-tooltip]')).toContainText(
+		(await rankedRow.locator('[data-ranked-cell="value"]').textContent())!);
+	await page.locator('#console-route-title').hover();
+	await expect(page.locator('[data-chart-tooltip]')).toHaveCount(0);
 	const evidence = page.locator('[data-machine-evidence]');
 	await expect(evidence.locator('summary')).toContainText('3 runs excluded from run count. Their articles still count.');
 	await expect(page.locator('[data-machine-refused]')).not.toBeVisible();
@@ -68,7 +95,10 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(page.locator('[data-machine-refused]')).not.toBeVisible();
 	expect(await page.locator('[data-console-panel-id]').evaluateAll((nodes) =>
 		nodes.map((node) => node.getAttribute('data-console-panel-id')))).toEqual(PANELS);
-	await expect(page.locator('[data-console-panel-id] > header > h3')).toHaveCount(15);
+	await expect(page.locator('[data-console-panel-id] > header > h3')).toHaveCount(PANELS.length);
+	for (const id of ['machine-cards', 'processor-lost', 'disk-reads', 'slowest-articles']) {
+		await expect(page.locator(`[data-console-panel-id="${id}"], a[href$="#${id}"]`)).toHaveCount(0);
+	}
 	for (const ledger of ['item-health', 'host-fingerprint', 'run-shards']) {
 		expect(arrived.some((url) => url.includes(`/${ledger}/index/`)), `${ledger} index arrived`).toBe(true);
 		expect(arrived.some((url) => url.includes(`/${ledger}/`) && new URL(url).pathname.endsWith('.parquet')),
@@ -78,14 +108,41 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	const fleet = page.locator('[data-fleet-shape]');
 	await expect(fleet).toHaveCount(1);
 	expect(Number(await fleet.getAttribute('data-fleet-placements'))).toBeGreaterThan(0);
-	const locking = page.locator('[data-disk-read-pinning]');
-	await expect(locking).toContainText('recorded');
-	await expect(locking).toContainText('included a recorded non-locking setting');
-	await expect(locking).not.toContainText('no locking request');
-	await expect(locking).toContainText('Applied locking is unmeasured.');
+	const history = page.locator('[data-console-panel-id="platform-mix"]');
+	const square = history.locator('[data-fleet-square]:not([data-fleet-square="unrecorded"])').first();
+	await square.scrollIntoViewIfNeeded();
+	await square.hover();
+	const machineHover = page.locator('[data-chart-tooltip="machine-fleet"]');
+	await expect(machineHover).toBeVisible();
+	await expect(machineHover.locator('strong')).toHaveText(/\d{4}-\d{2}-\d{2} UTC/);
+	await expect(machineHover.locator('dl > div')).toHaveCount(1);
+	await expect(machineHover).toContainText(/\d+ of \d+ recorded jobs/);
+	await expect(machineHover).not.toContainText('tokens a second');
+	await expect(machineHover.locator('p')).toHaveCount(0);
+	expect(await square.evaluate((node) => {
+		if (!(node instanceof SVGElement)) throw new Error('Expected the actual job square.');
+		const id = /^url\(["']?#([^"')]+)["']?\)/.exec(node.style.fill)?.[1];
+		const gradient = id === undefined ? null : document.getElementById(id);
+		return gradient instanceof SVGLinearGradientElement &&
+			new Set([...gradient.querySelectorAll('stop')].map((stop) => getComputedStyle(stop).stopColor)).size > 1;
+	}), 'the actual job square resolves to a gradient with distinct rendered stops').toBe(true);
+	const day = (await machineHover.locator('strong').textContent())!.replace(' UTC', '');
+	const machineCount = (await machineHover.locator('dd').textContent())!.split(' of ')[0];
+	const machineName = (await machineHover.locator('dt').textContent())!.trim();
+	await square.click();
+	const dayDetails = history.locator(`[data-fleet-jobs="${day}"]`);
+	await expect(dayDetails).toBeVisible();
+	await expect(dayDetails.locator('[data-readout-row]').filter({ hasText: machineName })).toContainText(machineCount);
+	expect(await dayDetails.locator('[data-fleet-job]').count()).toBeGreaterThan(0);
+	await expect(dayDetails).toContainText('tokens a second');
+	await dayDetails.getByRole('button', { name: 'Close the list' }).click();
 	const tokens = page.locator('[data-console-panel-id="read-against-written"]');
 	const plot = tokens.locator('[data-chart-type="runSeries"]');
 	await expect(plot).toBeVisible();
+	await expect.poll(() => plot.evaluate((node) => {
+		if (!(node instanceof SVGSVGElement)) throw new Error('Expected the actual run drawing.');
+		return Math.abs(node.getBoundingClientRect().width - node.viewBox.baseVal.width);
+	}), 'the chart must redraw in CSS pixels, not stretch its old coordinate frame').toBeLessThan(1);
 	const readout = tokens.locator('[data-readout]');
 	const heading = readout.locator('[data-readout-day]');
 	const newestRun = await heading.textContent();
@@ -115,9 +172,22 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	const axisStart = Number(await plot.locator('line[stroke="var(--chart-axis)"]').first().getAttribute('x1'));
 	await plot.hover({ position: { x: axisStart, y: 80 } });
 	await expect(heading).toHaveText(firstRun!);
+	const tooltip = page.locator('[data-chart-tooltip="read-against-written"]');
+	await expect(tooltip).toBeVisible();
+	await expect(tooltip.locator('strong')).toHaveText(firstRun!);
+	const stripFacts = await readout.locator('[data-readout-row]').evaluateAll((rows) => rows.map((row) => ({
+		label: row.querySelector('.readout-label')!.textContent!.trim(),
+		value: row.querySelector('.readout-value')?.textContent?.trim() ?? ''
+	})));
+	expect(await tooltip.locator('dl > div').evaluateAll((rows) => rows.map((row) => ({
+		label: row.querySelector('dt')!.textContent!.trim(),
+		value: row.querySelector('dd')?.textContent?.trim() ?? ''
+	})))).toEqual(stripFacts);
+	await page.screenshot({ path: test.info().outputPath('run-hover-wide-dark.png') });
 	await plot.click({ position: { x: axisStart, y: 80 } });
 	await expect(heading).toHaveText(firstRun!);
 	await page.keyboard.press('Escape');
+	await expect(page.locator('[data-chart-tooltip]')).toHaveCount(0);
 	await expect(heading).toHaveText(newestRun!);
 	await expect(readout).toContainText('Read (solid)');
 	await expect(readout).toContainText('Written (dashed)');
@@ -137,6 +207,17 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(readout).toHaveText(totals!);
 	expect(nativeRequests).toEqual(beforeMetric);
 	await tokens.screenshot({ path: test.info().outputPath('run-token-lines-wide.png') });
+	const routeStart = await page.locator('.console-shell').evaluate((node) =>
+		node.getBoundingClientRect().top + window.scrollY);
+	await page.locator('[data-console-group-top]').last().click();
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(routeStart);
+	await tokens.scrollIntoViewIfNeeded();
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await page.locator('[data-console-top]').focus();
+	await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+	await expect(page.locator('#console-route-title')).toBeFocused();
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
 
 	const context = page.locator('[data-console-panel-id="context-headroom"]');
 	await expect(context.locator('svg[data-chart-type="distribution"]')).toHaveCount(2);
@@ -167,22 +248,39 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(page.locator('[data-console-nav]')).not.toBeVisible();
 	await page.getByRole('button', { name: 'Switch to the light theme' }).click();
 	await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(242, 241, 237)');
+	await expect(page.locator('[data-site-footer] [data-theme-toggle]')).toBeVisible();
+	await page.screenshot({ path: test.info().outputPath('console-footer-narrow-light.png') });
+	await page.locator('[data-console-top]').click();
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 	await page.evaluate(() => Promise.allSettled(document.getAnimations().map((animation) => animation.finished)));
 	expect(await firstComparison.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(844);
-	expect(await page.locator('[data-console-panel-id="two-clocks"] [data-ranked-row]').first()
+	expect(await page.locator('[data-console-panel-id="two-clocks"] [data-ranked-cell="value"]').first()
 		.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(844);
+	expect(await clockLabels.first().evaluate((label) => {
+		const context = label.closest('[data-ranked-row]')!.querySelector('[data-ranked-cell="context"]')!;
+		return label.getBoundingClientRect().top - context.getBoundingClientRect().bottom;
+	}), 'the threshold label must not overlap the source readings on a phone').toBeGreaterThanOrEqual(0);
 	await page.screenshot({ path: test.info().outputPath('hardware-narrow-light.png') });
 	await tokens.screenshot({ path: test.info().outputPath('run-token-lines-narrow.png') });
 	await expect.poll(contextFits).toBe(true);
 	await expect.poll(clockRulesFit).toBe(true);
 	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
-	await page.locator('[data-window-preset="7"]').click();
+	await page.locator('[data-window-select]').selectOption('7');
 	await settled(page);
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
+	await tokens.scrollIntoViewIfNeeded();
+	await expect(page.locator('.console-toolbar')).toBeInViewport();
+	expect((await page.locator('.console-toolbar').boundingBox())!.y).toBeCloseTo(0, 0);
+	await expect(page.locator('[data-window-status]')).toBeInViewport();
+	await page.screenshot({ path: test.info().outputPath('console-sticky-narrow-light.png') });
+	await page.locator('[data-console-top]').click();
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 	await page.getByText('Console menu', { exact: true }).click();
 	await page.locator('[data-console-tab="pipelines"]').click();
 	await expect(page.locator('[data-console-panels="pipelines"]')).toBeVisible();
+	await expect(page.locator('[data-console-panel-id="slowest-articles"]')).toHaveCount(1);
+	await expect(page.locator('[data-slowest-run]')).toBeVisible();
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
 	await page.getByText('Console menu', { exact: true }).click();
 	await page.locator('[data-console-tab="machine"]').click();
@@ -193,7 +291,7 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	expect(storageWarnings.some((message) => message.includes('could not be saved'))).toBe(true);
 
 	const before = Number(await plot.locator('line[stroke="var(--chart-grid)"]').first().getAttribute('x1'));
-	const substitution = await page.addStyleTag({ content: renderFrameCss({
+	const substitution = await page.addStyleTag({ content: await renderFrameCss({
 		console_style: {
 			colors: { light: { canvas: '#eef2ef' }, dark: { canvas: '#202522' } },
 			typography: { small: { size_rem: 1, leading_rem: 1.25 } }
@@ -245,10 +343,14 @@ test('unpublished native indexes keep a named absence, not a lost record or inve
 		(route) => route.fulfill({ status: 404, body: '' }));
 	await page.goto('/console/machine/');
 	await expect(page.locator('[data-console-panels="machine"]')).toHaveAttribute('data-route-state', 'missing');
-	await expect(page.locator('[data-panel-query][data-machine-panel-state="missing"]')).toHaveCount(15);
+	await expect(page.locator('[data-panel-query][data-machine-panel-state="missing"]')).toHaveCount(PANELS.length);
 	await expect(page.locator('[data-panel-query="two-clocks"]')).toContainText('Not published yet.');
 	await expect(page.locator('[data-clock-pair], [data-machine-refused], [data-recording="machine-destroyed"]')).toHaveCount(0);
 	await expect(page.locator('[data-console-retry]')).toHaveCount(0);
+	await expect(page.locator('#console-route-title')).toHaveText('Hardware');
+	await expect(page.locator('[data-console-nav]')).toBeVisible();
+	await page.locator('[data-panel-query="two-clocks"]').hover();
+	await expect(page.locator('[data-chart-tooltip]')).toHaveCount(0);
 });
 
 test('actual prerendered Hardware contains words and reserved frames, never ledger values', async ({ browser }) => {
@@ -257,10 +359,10 @@ test('actual prerendered Hardware contains words and reserved frames, never ledg
 		const page = await context.newPage();
 		const response = await page.goto('/console/machine/');
 		expect(response?.status()).toBe(200);
-		await expect(page.locator('[data-console-panel-id]')).toHaveCount(15);
-		await expect(page.locator('[data-console-panel-id] > header > h3')).toHaveCount(15);
-		await expect(page.locator('[data-panel-query][data-machine-panel-state="loading"]')).toHaveCount(15);
-		await expect(page.locator('[data-panel-query] svg')).toHaveCount(15);
+		await expect(page.locator('[data-console-panel-id]')).toHaveCount(PANELS.length);
+		await expect(page.locator('[data-console-panel-id] > header > h3')).toHaveCount(PANELS.length);
+		await expect(page.locator('[data-panel-query][data-machine-panel-state="loading"]')).toHaveCount(PANELS.length);
+		await expect(page.locator('[data-panel-query] svg')).toHaveCount(PANELS.length);
 		await expect(page.locator('[data-panel-query] svg rect:not([data-reserved-ground]), [data-panel-query] svg path')).toHaveCount(0);
 		await expect(page.locator('[data-console-standing]')).toHaveText('');
 		await expect(page.locator('[data-machine-refused], [data-cost-figures], [data-clock-pair], [data-fleet-job]')).toHaveCount(0);

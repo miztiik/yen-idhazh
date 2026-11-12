@@ -1,6 +1,6 @@
 # What a visual plan may say, and what happens to one that is refused
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 The shape the model decodes into, the four things it may not carry, the ten
 deterministic checks a plan has to clear, and the ladder a refused plan may step
@@ -163,8 +163,8 @@ The operator selects names in `visuals.enabled_types` in `config/idhazh.json`.
 Its native `VisualType` enum is declared once in
 `backend/idhazh/contracts/visual_type.py`, and remains importable from
 `contracts/visual.py`. The config rejects unknown or repeated names and an
-empty list. An unruled or unbuilt type remains a valid selection; selection is
-not permission to render.
+empty list. Retired names remain readable in historical configuration but are
+excluded from effective selection.
 
 `visuals.type_selection_enabled` is on in the committed configuration. It limits the derived
 request grammar, the ruled reachability choices and parsed requests to the
@@ -172,8 +172,10 @@ selected implemented types. The
 [capability table](where-a-drawing-becomes-pixels.md#declared-types-are-not-delivery-promises)
 names the abandoned forms. They remain readable in the complete native plan
 schema, not available as new production requests. The schema default remains
-false for older authored configurations; off preserves generic vocabulary
-inspection. Effective selection enters the input fingerprint and the shared
+false for older authored configurations; off still offers only the supported
+numeric chart types, never the full historical vocabulary. Defaults, effective
+selection and every request schema use that numeric capability set. Effective
+selection enters the input fingerprint and the shared
 type guide. Neither changes the prefix between an item's adjacent calls.
 
 `visuals.min_chart_points`, `visuals.max_chart_points` and `visuals.histogram_bins` are knobs and
@@ -203,21 +205,13 @@ is a date-stamp that lies**, which is the same argument that keeps both of them 
  anybody configures. `MAGNITUDE` in `idhazh.elements` is the precedent - a magnitude word's
  multiplier lives in code beside the pattern that reads it.
 
-Twelve of the eighteen declarable types have a role rule: the grammar-of-graphics forms, where the
-channels follow from the role names, and `whowhat`, whose actor and claim channels have an explicit
-source-pairing rule. The other six - `table`, `flow`, `comparison`, `callout`, `quotecard`,
-`keyfacts` - are **named as having no rule yet**, and a plan naming one is refused by name. Naming
+The grammar-of-graphics forms retain role rules, including historical rules
+for abandoned forms. `table`, `flow`, `comparison`, `callout`, `quotecard`,
+`keyfacts` and the abandoned `whowhat` have no role rule, and a plan naming one is refused by name. Naming
 them is the point: a type in neither set would be waved through by both per-type checks and drawn
 with nothing having ruled on it. Refusing them is correct: a request must have both validator rules
 and a supported compiler before it may render. A replacement must meet the same requirements;
 otherwise the item keeps its text without a visual.
-
-`whowhat` is narrower than the generic `ROLE_KINDS` table: the actor channel accepts entity
-elements, and `event_label` accepts claim elements only. The validator and reachability gate use the
-same rule: a row is populated only when one selected actor and one selected claim share a sentence.
-Ambiguous or unmatched rows stay empty; the plan is refused when it has no safe pair or exceeds the
-configured row ceiling. The grid compiler then re-slices both spans against `Article.text` before it
-writes the separate `WhowhatGridData` payload.
 
 `PLAN_VOCABULARY_VERSION` is the date-stamp of the role table, and it is not the plan contract's
 `version`, which says when the *shape* last moved. `plan_version_current` compares the two
@@ -372,11 +366,14 @@ is what stops the number being argued after it is seen.
 **Plan 15 Row 6's text-only visuals are abandoned.** On 2026-10-26 UTC, its
 `quotecard` and `comparison` proposal was abandoned: an exact quote requires
 article wording in new visual data, and current summarizer metadata cannot
-express an honest shared-attribute comparison without source wording. The
-separate `whowhat` grid delivered on 2026-10-28 does not revive that proposal:
-it has its own payload and reader, and it publishes only an entity and a claim
-from one source sentence. It adds no generic comparison reader, renderer or
-switch.
+express an honest shared-attribute comparison without source wording.
+
+**The Who/What actor-grid is Abandoned.** Its generation, compilation,
+publication, reader, prompts and dedicated evidence are removed rather than
+retained behind a switch. Numeric charts or no visual are the only current
+outcomes. The
+[historical compatibility rule](where-a-drawing-becomes-pixels.md#historical-visual-kinds-do-not-enable-a-retired-reader)
+preserves old outcome facts without keeping the retired feature alive.
 
 **Why every field of the model's reply is required, including the empty ones.** A field with a
 default is absent from the schema's `required` list, and a constrained decoder emits exactly what

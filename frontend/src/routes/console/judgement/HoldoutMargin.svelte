@@ -358,6 +358,7 @@
 				tabindex="0"
 				aria-label={`Where the merge line sits against the pairs a person marked as two stories. ${holdoutNote(outcome, reading, marked, applied, numberFormat)} ${agreedNote(agreedScores, applied, numberFormat)}`}
 				use:markReadout={{
+					hover: { name: 'holdout', readout: records },
 					count: points.length,
 					walk: 'row',
 					onSelect: (index) => (picked = index),

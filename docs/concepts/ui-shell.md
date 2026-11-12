@@ -59,7 +59,8 @@ Only that mounted boundary reads or writes its optional stored preset; a
 storage failure warns locally but cannot delay queries or leave controls and
 charts on different windows. The
 [console shell](../architecture/publishing/what-sits-above-every-console-route.md)
-owns its labelled rail, compact header and evidence order.
+owns its labelled glyph rail, homepage wordmark, sticky title/window evidence,
+footer theme control and back-to-top behavior.
 
 A storage permission or quota refusal must not stop page hydration or the
 theme control. Keep the current theme usable for this page, and report the

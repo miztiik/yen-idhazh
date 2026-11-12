@@ -1,4 +1,4 @@
-/** The newest-run timeline alone does not follow the day preset. */
+/** Newest-run snapshots do not narrow the run with the selected day preset. */
 import type { RouteExpect } from './index';
 
 export const EXPECT: RouteExpect | null = {
@@ -8,7 +8,6 @@ export const EXPECT: RouteExpect | null = {
 		'failure-mix',
 		'article-age',
 		'visual-refusals',
-		'visual-written-types',
 		'item-cost',
 		'run-health',
 		'site-cost-per-item',

@@ -84,6 +84,31 @@ async function load(page: Page, date: string = DATE): Promise<number | null> {
     }, date);
 }
 test.describe('what one session keeps in hand', () => {
+    test('a cached historical day drops retired visuals but keeps missing and null chart kinds', async ({ page }) => {
+        await page.route(PATTERN, (route) => route.fulfill({
+            contentType: 'application/json',
+            body: JSON.stringify({
+                generated_at: REVISION,
+                items: ['whowhat', null, undefined].map((kind, index) => ({
+                    item_id: `legacy-${index}`, title: 'A story', summary: 'A summary.',
+                    visual: { kind, state: 'rendered', data_path: `digest/2026/08/30/legacy-${index}.json`, alt: null }
+                }))
+            })
+        }));
+        await armed(page);
+        const visuals = await page.evaluate(async (date) => {
+            const loader = (window as unknown as { dayLoader: Loader }).dayLoader;
+            const first = await loader.loadDay(date);
+            const cached = await loader.loadDay(date);
+            if (first === null || cached !== first) throw new Error('the day was not held');
+            return cached.items.map((item) => item.visual);
+        }, DATE);
+        expect(visuals[0]).toBeNull();
+        expect(visuals.slice(1).map((visual) => visual?.data_path)).toEqual([
+            'digest/2026/08/30/legacy-1.json', 'digest/2026/08/30/legacy-2.json'
+        ]);
+    });
+
     test('a day that failed once is asked for again, and it recovers', async ({ page }) => {
         // The oracle. A search answer names a day, that day's fetch fails, and the
         // next answer naming it has no retry control to press - so if the failure

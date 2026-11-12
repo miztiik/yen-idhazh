@@ -104,6 +104,13 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 	for (const ledger of FEED_LEDGERS) {
 		await expect(page.locator(`[data-ledger-name="${ledger}"]`)).toBeVisible();
 	}
+	await expect.poll(() => page.locator('[data-site-footer]').evaluate((footer) =>
+		footer.getBoundingClientRect().top -
+		document.querySelector('[data-workbench-region="answer"]')!.getBoundingClientRect().bottom
+	), 'the result must finish before the footer begins').toBeGreaterThanOrEqual(0);
+	const themeBefore = await page.locator('html').getAttribute('data-theme');
+	await page.locator('[data-site-footer] [data-theme-toggle]').click();
+	await expect(page.locator('html')).toHaveAttribute('data-theme', themeBefore === 'light' ? 'dark' : 'light');
 
 	await page.getByRole('tab', { name: 'Chart' }).click();
 	await page.locator('[data-shape-choice="partsOfOne"]').click();
@@ -111,6 +118,14 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 	const chart = page.locator('[data-chart-type="partsOfOne"][data-chart-name="data-explorer-shape"]');
 	await expect(chart).toBeVisible();
 	await expect(chart.getByLabel('rows: 1', { exact: true }).first()).toBeVisible();
+	await chart.scrollIntoViewIfNeeded();
+	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+	await chart.locator('[data-readout-at]').first().hover();
+	await expect(page.locator('[data-chart-tooltip="data-explorer-shape"]')).toBeVisible();
+	await expect(page.locator('[data-chart-tooltip="data-explorer-shape"]')).toContainText('2026-10-19');
+	await expect(page.locator('[data-chart-tooltip="data-explorer-shape"]')).toContainText('cores');
+	await page.keyboard.press('Escape');
+	await expect(page.locator('[data-chart-tooltip]')).toHaveCount(0);
 	await chart.getByRole('list').focus();
 	await page.keyboard.press('ArrowDown');
 	await expect(page.locator('[data-readout="data-explorer-shape"]')).toContainText('2026-10-20');
@@ -119,6 +134,14 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 	await expect.poll(() => page.evaluate(
 		() => document.documentElement.scrollWidth <= document.documentElement.clientWidth
 	)).toBe(true);
+	await page.locator('[data-site-footer]').scrollIntoViewIfNeeded();
+	await expect(page.locator('[data-console-top]')).toBeVisible();
+	await expect(page.locator('.console-toolbar')).toHaveCSS('position', 'sticky');
+	await page.locator('[data-console-top]').focus();
+	await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+	await expect(page.locator('#console-route-title')).toBeFocused();
+	await page.screenshot({ path: test.info().outputPath('workbench-top-narrow.png') });
 
 	// Only the generated repository changes. The preview server keeps the same compiled site.
 	registry.families[0].ledgers.push({
@@ -141,6 +164,8 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['new packed rows', '3']]);
 	await page.screenshot({ path: test.info().outputPath('compact-workbench.png') });
+	await page.locator('[data-site-footer]').scrollIntoViewIfNeeded();
+	await page.screenshot({ path: test.info().outputPath('workbench-footer-wide.png') });
 	expect(requests.filter((url) => /\/state\/raw\/|api\.github\.com|\/contents\//.test(url))).toEqual([]);
 	expect(requests.filter((url) => url === `${origin}/config/ledgers.json`)).toHaveLength(2);
 });

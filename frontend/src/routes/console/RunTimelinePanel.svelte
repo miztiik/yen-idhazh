@@ -1,606 +1,182 @@
 <script lang="ts">
-	/** Where one run's time went, on a real clock, at the grain the reader picks.
-	 *
-	 * **A row is one item or one shard, and the x axis is elapsed time.** An item
-	 * that waited forty seconds for a worker sits forty seconds to the right, so
-	 * the queue is the first thing a reader sees: a wide staircase is a run that
-	 * queued, a solid block is a run that worked in parallel, and the shape is
-	 * legible before a single number is.
-	 *
-	 * **This panel answers "is it working".** It takes the run's central shape -
-	 * how long it took, what its items cost, how many ran at once - and it covers
-	 * every item of the run rather than picking the worst one out. The grain
-	 * switch changes the row, never the question.
-	 *
-	 * **One fold, two grains.** A second panel drew the shard grain from a second
-	 * ledger until 2026-09-20, and the two could name different runs as the newest
-	 * because they read different files. Both grains now come out of one builder
-	 * call over one set of rows, so a step's seconds are the same seconds
-	 * whichever row a reader is on.
-	 *
-	 * **Eight steps, eight ramp stops, fixed by position.** A step keeps its colour
-	 * whether or not the run timed it, so two runs drawn a day apart compare by
-	 * eye. The ramp deliberately holds none of the confidence hues, so no step is
-	 * ever told by its colour that it is the failing one.
-	 *
-	 * **Hollow is unclaimed and hatched is overclaimed**, and both carry a legend
-	 * key, because the maintainer could not name the hatched notch on sight. The
-	 * residual is signed and the sign changes the drawing rather than the colour:
-	 * positive, a hollow slice extends the bar to its full clock; negative, the
-	 * steps have already outrun the clock and the hatched notch covers the stretch
-	 * counted twice. Neither is tinted - nobody has agreed how much overhead is
-	 * too much, so a colour would publish an alarm that does not exist.
-	 *
-	 * Hand-written markup, not a chart: every mark is in the document before a
-	 * script runs and stays there if none ever does.
-	 */
+	/** Compare shard elapsed windows or accumulated work, never a mixture of the two. */
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
+	import TimelineDetails from '$lib/console/pipelines/TimelineDetails.svelte';
+	import { timelineGeometry, type TimelineMeasure } from '$lib/console/pipelines/run-timeline-geometry';
+	import type { RunTimelineView } from '$lib/console/pipelines/run-timeline';
 	import { seconds } from '$lib/charts/machine';
+	import { observeWidth } from '$lib/charts/frame';
+	import { useChartLabels } from '$lib/charts/label-context';
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
-	import type { RunTimelineView, TimelineBar } from '$lib/console/pipelines/run-timeline';
+	import type { ChartConfig } from '$lib/server/config';
 	import { useNumberFormat } from '$lib/number-format-context';
 	import { formatNumber } from '$lib/number-format';
 
-	let {
-		view,
-		readoutMaxShare
-	}: {
-		view: RunTimelineView;
-		/** `chart.readout_max_share`. */
-		readoutMaxShare: number;
-	} = $props();
+	let { view, chart, width }: { view: RunTimelineView; chart: ChartConfig; width: number } = $props();
 	const numberFormat = useNumberFormat();
-
-	/** The three rows this panel can draw, out of the one fold that built them. */
-	type Grain = 'item' | 'by-shard' | 'shard';
-
-	const GRAINS: { value: Grain; text: string }[] = [
-		{ value: 'item', text: 'Item' },
-		{ value: 'by-shard', text: 'By shard' },
-		{ value: 'shard', text: 'Shard' }
+	const labels = useChartLabels();
+	const count = (value: number) => formatNumber(value, numberFormat, { exact: true });
+	const secs = (ms: number) => seconds(ms / 1000, numberFormat, true);
+	const duration = (ms: number | null) => ms === null ? 'Not measured' : secs(ms);
+	const utc = (ms: number | null) => ms === null ? null : new Date(ms).toISOString().replace('T', ' ').replace('Z', ' UTC');
+	const VIEWS: { value: TimelineMeasure; text: string }[] = [
+		{ value: 'elapsed', text: 'Elapsed time' }, { value: 'work', text: 'Item work' }
 	];
-
-	let grain = $state<Grain>('item');
-
-	/** The bars in the order this grain reads them. The by-shard order is indices
-	 * into the same array, never a second copy: the builder decided the order and
-	 * the component only follows it. */
-	const drawn = $derived<TimelineBar[]>(
-		grain === 'shard'
-			? view.shardBars
-			: grain === 'by-shard'
-				? view.shardOrder.map((at) => view.bars[at])
-				: view.bars
-	);
-
-	/** Milliseconds as the same seconds string the rest of the console uses. */
-	const secs = (ms: number): string => seconds(ms / 1000, numberFormat);
-
-	/** Signed seconds, so an overrun reads as one rather than as a plain figure. */
-	const signed = (ms: number): string => (ms < 0 ? `-${secs(-ms)}` : secs(ms));
-
-	/** A short step is milliseconds, and the seconds clock rounds it to zero.
-	 * Eleven milliseconds is a measurement; `0.0 s` is a misprint. */
-	const small = (ms: number): string => (ms < 1000 ? `${Math.round(ms)} ms` : secs(ms));
-
-	/** How many shards were busy on average across the run's span.
-	 *
-	 * Work divided by span. One means a queue - one item at a time, whatever the
-	 * shard count says - and four means four shards were genuinely busy together.
-	 * It is the one number that says whether the shape is a staircase or a block.
-	 */
-	const abreast = $derived(formatNumber(view.spanMs > 0 ? view.workMs / view.spanMs : 0, numberFormat, { si: false }));
-
-	/** Few enough bars to carry their own id, or too many for anything but shape.
-	 * A shard grain is never dense - there are four of them. */
-	const labelled = $derived(grain === 'shard' || drawn.length <= 24);
-
-	/** The residual this grain adds up to. Both totals are the builder's, because
-	 * the drawn item bars are capped and a sum over them would under-report. */
-	const residualTotal = $derived(grain === 'shard' ? view.shardResidualMs : view.residualMs);
-
-	/** A step column as the word the panel prints. `summary_ms` is not a word. */
-	const plain = (step: string): string => step.replace(/_ms$/, '').replace(/_/g, ' ');
-
-	/** A list of names as a sentence: `a`, `a and b`, `a, b and c`. */
-	const listed = (steps: readonly string[]): string => {
-		const words = steps.map(plain);
-		if (words.length <= 1) return words.join('');
-		return `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`;
-	};
-
-	/** What a bar is, in one sentence: the accessible name its track carries,
-	 * and every word of it is also in the strip under the bars. */
-	const hovered = (bar: TimelineBar): string =>
-		grain === 'shard'
-			? `${bar.label}: ${bar.itemCount} ${bar.itemCount === 1 ? 'item' : 'items'}, held a worker ${secs(bar.totalMs)} from ${secs(bar.startOffsetMs)} into the run, ${secs(bar.workMs)} of it inside items, ${signed(bar.residualMs)} in no named step.`
-			: `${bar.label} on shard ${bar.shard}: began ${secs(bar.startOffsetMs)} into the run, took ${secs(bar.totalMs)}, ${signed(bar.residualMs)} of it in no named step.`;
-
-	/** The bar a pointer, a key or a tap has picked, or null for the first. */
-	let picked = $state<number | null>(null);
-
-	/** One record a bar: where it sat on the run's clock, what it cost, and each
-	 * drawn step's own time. It rests on the first bar, the run's opening. */
-	const records = $derived(
-		recordsOf(
-			drawn.map((bar) =>
-				factsOf(
-					bar.label,
-					[
-						...(grain === 'shard'
-							? [
-									{ label: 'Items', value: String(bar.itemCount) },
-									{ label: 'Held a worker', value: secs(bar.totalMs) },
-									{ label: 'From', value: `${secs(bar.startOffsetMs)} into the run` },
-									{ label: 'Of it inside items', value: secs(bar.workMs) },
-									{ label: 'In no named step', value: signed(bar.residualMs) }
-								]
-							: [
-									{ label: 'On shard', value: String(bar.shard) },
-									{ label: 'Began', value: `${secs(bar.startOffsetMs)} into the run` },
-									{ label: 'Took', value: secs(bar.totalMs) },
-									{ label: 'Of it in no named step', value: signed(bar.residualMs) }
-								]),
-						...bar.segments.map((segment) => ({
-							label:
-								view.legend.find((step) => step.name === segment.name)?.label ??
-								plain(segment.name),
-							value: small(segment.ms),
-							swatch: `var(--chart-${segment.stop})`
-						}))
-					],
-					'not timed'
-				)
-			)
-		)
-	);
+	let measure = $state<TimelineMeasure>('elapsed');
+	let measured = $state<number | null>(null);
+	let pickedShard = $state<number | null>(null);
+	let inspectedShard = $state<number | null>(null);
+	let inspectOpen = $state(false);
+	const geometry = $derived(timelineGeometry(view, measure, chart.tick_density, measured ?? width, labels(), secs));
+	const picked = $derived(geometry.bars.findIndex((bar) => bar.shard.shard === pickedShard));
+	const inspected = $derived(view.shards.find((shard) => shard.shard === inspectedShard) ?? geometry.bars[0]?.shard);
+	const records = $derived(recordsOf(geometry.bars.map(({ shard }) => factsOf(`Shard ${count(shard.shard)}`, [
+		{ label: 'Items', value: shard.items.length, format: count },
+		{ label: 'Recorded window', value: shard.elapsedMs, format: secs },
+		{ label: 'First item', value: utc(shard.startMs) },
+		{ label: 'Last completion', value: utc(shard.endMs) },
+		{ label: 'Item work', value: shard.workMs, format: secs },
+		{ label: 'Endpoint pairs', value: `${count(shard.timedCount)} of ${count(shard.items.length)}` },
+		{ label: 'Recorded costs', value: `${count(shard.workCount)} of ${count(shard.items.length)}` }
+	], 'Not measured'))));
 </script>
 
-<div
-	class="timeline"
-	class:dense={!labelled}
-	data-run-timeline={view.empty ? 'empty' : view.runId}
-	data-timeline-grain={grain}
-	data-timeline-items={view.itemCount}
-	data-timeline-shards={view.shards.join(' ')}
-	data-timeline-drawn={view.drawn.join(' ')}
-	data-timeline-unproduced={view.unproduced.join(' ')}
-	data-timeline-unrecorded={view.unrecorded.join(' ')}
-	data-timeline-span-ms={view.spanMs}
-	data-timeline-work-ms={view.workMs}
-	data-timeline-residual-ms={view.residualMs}
-	data-timeline-shard-residual-ms={view.shardResidualMs}
-	data-timeline-overruns={view.overrunCount}
-	data-timeline-density={labelled ? 'labelled' : 'dense'}
-	data-panel-question="is it working"
-	data-readout-records={view.empty ? undefined : drawn.length}
-	data-readout-none={view.empty
-		? 'no run has published an item timeline yet, so there is no bar to read; agreed with Susan'
-		: undefined}
->
+<div class="timeline" data-run-timeline={view.empty ? 'empty' : view.runId} data-timeline-view={measure}
+	data-timeline-items={view.itemCount} data-timeline-shards={view.shards.map((shard) => shard.shard).join(' ')}
+	data-timeline-span-ms={view.spanMs} data-timeline-work-ms={view.workMs}
+	data-readout-records={geometry.bars.length || undefined}
+	data-readout-none={geometry.bars.length ? undefined : 'No recorded shard is available to inspect.'}>
 	{#if view.empty}
-		<p class="note" data-run-timeline-empty>
-			No run has published an item timeline yet. A bar needs the moment an item started and what
-			it cost, and a run that recorded neither has nothing to place on a clock - which is a
-			record that has not begun, not a run that did no work.
-		</p>
+		<p class="note" data-run-timeline-empty>No item record is available for this run. Elapsed time needs recorded starts and ends; item work needs recorded costs.</p>
 	{:else}
-		<!-- Top right of its own panel, and radio inputs: three named states a
-		     reader can see all of beat one state and a verb. The control belongs
-		     to the panel rather than to the page. -->
-		<div class="grains">
-			<ShapeSwitch
-				bind:shape={grain}
-				name="timeline-grain"
-				label="Which grain to draw"
-				options={GRAINS}
-			/>
-		</div>
-
 		<dl class="headline">
-			<div>
-				<dt>The run took</dt>
-				<dd class="figure tabular-nums" data-timeline-figure="span">{secs(view.spanMs)}</dd>
-				<dd class="under">first item picked up to last item finished</dd>
+			<div class="primary">
+				<dt>Recorded item window</dt>
+				<dd class="figure" data-lede data-timeline-figure="span">{duration(view.spanMs)}</dd>
+				<dd class="note">{count(view.timedCount)} of {count(view.itemCount)} valid endpoint pairs. Excludes setup and publication.</dd>
 			</div>
 			<div>
-				<dt>Its items cost</dt>
-				<dd class="figure tabular-nums" data-timeline-figure="work">{secs(view.workMs)}</dd>
-				<dd class="under">every bar added up, waits excluded</dd>
+				<dt>Item work</dt>
+				<dd class="figure" data-timeline-figure="work">{duration(view.workMs)}</dd>
+				<dd class="note">{count(view.workCount)} of {count(view.itemCount)} costs recorded. Parked waits excluded.</dd>
 			</div>
 			<div>
-				<dt>Items at once</dt>
-				<dd class="figure tabular-nums" data-timeline-figure="abreast">{abreast}</dd>
-				<dd class="under">
-					work over span. Under one means the shards had idle stretches; one is a queue however
-					many ran, and {view.shards.length} would be all {view.shards.length} busy throughout
+				<dt>Processed items / minute</dt>
+				<dd class="figure" data-timeline-figure="rate" data-timeline-items-per-minute={view.itemsPerMinute}>
+					{view.itemsPerMinute === null ? 'Not measured' : formatNumber(view.itemsPerMinute, numberFormat, { si: false })}
+				</dd>
+				<dd class="note">
+					{#if view.itemsPerMinute === null}Requires a complete, positive item window.
+					{:else}{count(view.itemCount)} attempts, failures included. Not a publication rate.{/if}
 				</dd>
 			</div>
 		</dl>
-
-		<p class="note">
-			Run <strong>{view.runId}</strong> on {view.date}: {view.itemCount}
-			{view.itemCount === 1 ? 'item' : 'items'} across {view.shards.length}
-			{view.shards.length === 1 ? 'shard' : 'shards'}.
-			{#if grain === 'shard'}
-				One bar a shard, from its first item's start to its last item's end - the stretch it held
-				a worker for. Its steps are that shard's items added up, so the same seconds are drawn
-				here and at the item grain.
-			{:else if grain === 'by-shard'}
-				One bar an item, grouped by the shard that ran it and then by start, so one worker's
-				stretch reads contiguously instead of being picked out of the run's queue.
-			{:else}
-				One bar an item, in start order, placed where its own work began and split into the steps
-				that timed themselves. Two bars may overlap - that is two shards working at once, which
-				is why each bar names its shard.
-			{/if}
-			{#if grain !== 'shard' && view.bars.length < view.itemCount}
-				The {view.bars.length} earliest are drawn; the other {view.itemCount - view.bars.length} carry
-				the same shape and every figure above counts all {view.itemCount}.
-			{/if}
-		</p>
-
-		<ul class="legend">
-			{#each view.legend as step (step.name)}
-				<li><span class="key" style="background: var(--chart-{step.stop})"></span>{step.label}</li>
-			{/each}
-			<li><span class="key residual"></span>unclaimed - no named step accounts for it</li>
-			{#if view.overrunCount > 0}
-				<li><span class="key overrun"></span>overclaimed - two steps counted over it</li>
-			{/if}
-		</ul>
-
-		<div class="axis" aria-hidden="true">
-			{#each view.ticks as tick (tick.at)}
-				<span class="tick tabular-nums" style="inset-inline-start: {tick.at}">{secs(tick.ms)}</span>
-			{/each}
+		<p class="note">Run <strong>{view.runId}</strong> (UTC): {count(view.itemCount)} items, {count(view.shards.length)} recorded shards.</p>
+		<div class="controls">
+			<ShapeSwitch bind:shape={measure} name="timeline-view" label="Which timing to compare" options={VIEWS} />
+			<span class="note">Longest first</span>
 		</div>
-
-		<!-- One tab stop for the whole list of bars, never one a bar. -->
-		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-		<ol
-			class="bars"
-			tabindex="0"
-			aria-label="The run's bars on its own clock. Up and Down read a bar, Escape returns to the first."
-			use:markReadout={{
-				count: drawn.length,
-				walk: 'list',
-				onSelect: (index) => (picked = index),
-				selected: picked
-			}}
-		>
-			{#each drawn as bar, index (bar.id)}
-				<li
-					class="bar"
-					data-readout-at={index}
-					data-readout-picked={picked === index ? 'yes' : undefined}
-					data-timeline-bar={bar.id}
-					data-chart="run-timeline"
-					data-chart-name={`run-timeline-${bar.id}`}
-					data-timeline-shard={bar.shard}
-					data-timeline-start-ms={bar.startOffsetMs}
-					data-timeline-total-ms={bar.totalMs}
-					data-timeline-bar-work-ms={bar.workMs}
-					data-timeline-bar-items={bar.itemCount}
-					data-timeline-residual-ms={bar.residualMs}
-					data-timeline-residual-sign={bar.residualMs < 0 ? 'negative' : 'positive'}
-				>
-					<span class="gutter tabular-nums">
-						<span class="shard">{bar.shard}</span>
-						{#if labelled && grain !== 'shard'}<span class="item">{bar.label}</span>{/if}
-					</span>
-					<span class="track" role="img" aria-label={hovered(bar)}>
-						<span class="lead" style="inline-size: {bar.offset}"></span>
-						{#each bar.segments as segment (segment.name)}
-							<span
-								class="seg"
-								data-timeline-seg={segment.name}
-								data-timeline-seg-ms={segment.ms}
-								style="inline-size: {segment.width}; background: var(--chart-{segment.stop})"
-							></span>
-						{/each}
-						{#if bar.residualWidth}
-							<span
-								class="seg residual"
-								data-timeline-seg="residual"
-								data-timeline-seg-ms={bar.residualMs}
-								style="inline-size: {bar.residualWidth}"
-							></span>
-						{/if}
-						{#if bar.overrunWidth}
-							<span
-								class="overrun"
-								data-timeline-seg="overrun"
-								data-timeline-seg-ms={-bar.residualMs}
-								style="inset-inline-start: {bar.overrunOffset}; inline-size: {bar.overrunWidth}"
-							></span>
-						{/if}
-					</span>
-					<span class="total tabular-nums">{secs(bar.totalMs)}</span>
-				</li>
-			{/each}
-		</ol>
-
-		<!-- Under the bars, never over them: the record of the bar a reader is on,
-		     including the steps too thin to read off the bar itself. -->
-		<ChartReadout
-			readout={records[picked ?? 0] ?? null}
-			resting={picked === null}
-			name="run-timeline"
-			maxShare={readoutMaxShare}
-			restingNote=", the first bar"
-			hint="Point at a bar to read it. Up and Down step through the bars, Escape returns to the first."
-		/>
-
-		<p class="note residual-note" data-timeline-residual-note>
-			<strong>{signed(residualTotal)}</strong>
-			{#if grain === 'shard'}
-				of the shards' stretches sits in no named step - that is the hollow slice at the end of
-				each bar, and at this grain it holds the time between items as well as the time inside
-				one that nothing timed.
+		<p class="explanation" data-timeline-explanation>
+			{#if measure === 'elapsed'}
+				First recorded start to last finish, waits included. A left gap means a later start;
+				a right gap means earlier completion - not measured idle time.
 			{:else}
-				of this run's item time sits in no named step - that is the hollow slice at the end of
-				each bar, and it is drawn and never tinted because nobody has agreed how much overhead is
-				too much.
-			{/if}
-			{#if view.unproduced.length > 0}
-				Nothing in the pipeline times {listed(view.unproduced)} yet, so whatever those steps cost is
-				inside that slice rather than beside it.
-			{/if}
-			{#if view.unrecorded.length > 0}
-				No bar of this run recorded {listed(view.unrecorded)}, which is a gap in what this run wrote
-				down rather than a step that took no time.
-			{/if}
-			{#if view.overrunCount > 0}
-				{view.overrunCount}
-				{view.overrunCount === 1 ? 'bar overruns its' : 'bars overrun their'} own clock, ruled at
-				the end: the visual plan is decoded inside the summary call, so it is apportioned out of it
-				rather than timed beside it and the two together count part of one call twice.
+				Item costs added up; every bar starts at zero. Parked waits are excluded.
+				Open a row for stage averages and article readings.
 			{/if}
 		</p>
+		{#if geometry.bars.length === 0 || geometry.domainMs === null}
+			<p class="note" data-timeline-measure-empty>
+				{measure === 'elapsed' ? 'No shard has a complete recorded start/end pair.' : 'No shard has a recorded item cost.'}
+			</p>
+		{/if}
+		{#if geometry.bars.length > 0}
+			<p class="axis-label">{measure === 'elapsed' ? 'Time since the first recorded item start' : 'Cumulative item work'}</p>
+			<div class="plot">
+				<div class="axis" aria-hidden="true" use:observeWidth={(next) => measured = next}>
+					{#each geometry.ticks as tick (tick.ms)}
+						<span class="tick" class:first={tick.ms === 0} class:last={tick.ms === geometry.domainMs}
+							style:inset-inline-start={tick.at}>{tick.text}</span>
+					{/each}
+				</div>
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+				<ol class="bars" tabindex="0" aria-label="Shard timings, longest first. Up and Down read a shard; select a row for articles."
+					use:markReadout={{
+						count: geometry.bars.length, walk: 'list', selected: picked < 0 ? null : picked,
+						hover: { name: 'run-timeline', readout: records },
+						onSelect: (index) => pickedShard = index === null ? null : geometry.bars[index].shard.shard
+					}}>
+					{#each geometry.bars as bar, index (bar.shard.shard)}
+						<li class="bar" data-readout-at={index} data-timeline-bar={bar.shard.shard}
+							data-timeline-shard={bar.shard.shard} data-timeline-value-ms={bar.ms}
+							data-timeline-start-ms={bar.offsetMs} data-timeline-item-count={bar.shard.items.length}>
+							<button type="button" class="row" data-readout-picked={picked === index ? 'yes' : undefined}
+								data-chart="run-timeline" data-chart-name="run-timeline-shard-{bar.shard.shard}"
+								aria-expanded={inspectOpen && inspected?.shard === bar.shard.shard}
+								aria-controls="timeline-article-details"
+								onclick={() => { pickedShard = bar.shard.shard; inspectedShard = bar.shard.shard; inspectOpen = true; }}>
+								<span class="gutter">Shard {count(bar.shard.shard)}<small>{count(bar.shard.items.length)} items</small></span>
+								<span class="track" aria-hidden="true">
+									{#each geometry.ticks as tick (tick.ms)}
+										<span class="guide" style:inset-inline-start={tick.at}></span>
+									{/each}
+									{#if bar.ms !== null}
+										<span class="fill" class:zero={bar.ms === 0}
+											style:inset-inline-start={bar.offset} style:inline-size={bar.width}></span>
+									{/if}
+								</span>
+								<span class="total">{duration(bar.ms)}
+									{#if (measure === 'elapsed' ? bar.shard.timedCount : bar.shard.workCount) < bar.shard.items.length}
+										<small>partial record</small>
+									{/if}
+								</span>
+							</button>
+						</li>
+					{/each}
+				</ol>
+			</div>
+			<ChartReadout readout={records[picked < 0 ? 0 : picked] ?? null} resting={picked < 0}
+				name="run-timeline" maxShare={chart.readout_max_share} restingNote=", the longest shard"
+				hint="Point at a row to read it. Up and Down step through shards; select a row to inspect its articles." />
+		{/if}
+		{#if inspected}
+			<details id="timeline-article-details" bind:open={inspectOpen} data-timeline-details>
+				<summary>Articles in Shard {count(inspected.shard)} ({count(inspected.items.length)})</summary>
+				{#key `${view.runId}-${inspected.shard}`}
+					<TimelineDetails shard={inspected} limit={view.detailLimit} />
+				{/key}
+			</details>
+		{/if}
 	{/if}
-
 </div>
 
 <style>
-	.timeline {
-		--timeline-gutter: 9.5rem;
-		--timeline-tail: 3.25rem;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-	}
-	.timeline.dense {
-		--timeline-gutter: 2rem;
-	}
-
-	/* The control belongs to the panel, so it sits in the panel's own top right
-	   rather than anywhere on the page. */
-	.grains {
-		display: flex;
-		justify-content: flex-end;
-	}
-
-	.note {
-		margin: 0;
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-		color: var(--color-text-tertiary);
-	}
-	.note strong {
-		color: var(--color-text-secondary);
-	}
-
-	/* The three figures that answer the panel's question before any bar is read.
-	   One thing lands first, and it is the shape of the run rather than an item. */
-	.headline {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-		gap: var(--space-2) var(--space-5);
-		margin: 0;
-		padding: var(--space-3) var(--space-4);
-		border: 1px solid var(--color-rule);
-		border-radius: var(--radius-md);
-		background: var(--color-surface-sunken);
-	}
-	.headline dt {
-		font-size: var(--text-xs);
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--color-text-tertiary);
-	}
-	.headline dd {
-		margin: 0;
-	}
-	.headline .figure {
-		font-size: var(--text-xl);
-		line-height: var(--leading-xl);
-		font-weight: 600;
-		color: var(--color-text);
-	}
-	.headline .under {
-		font-size: var(--text-xs);
-		line-height: var(--leading-xs);
-		color: var(--color-text-tertiary);
-	}
-
-	.legend {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-1) var(--space-4);
-		margin: 0;
-		padding: 0;
-		list-style: none;
-		font-size: var(--text-xs);
-		color: var(--color-text-secondary);
-	}
-	.legend li {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-1);
-	}
-	.key {
-		display: inline-block;
-		inline-size: 0.75rem;
-		block-size: 0.75rem;
-		border-radius: var(--radius-sm);
-		flex: none;
-	}
-	/* Hollow, never tinted: the time nothing filled reads as an outline and not as
-	   one more coloured step. */
-	.key.residual,
-	.seg.residual {
-		background: var(--color-surface);
-		box-shadow: inset 0 0 0 1.5px var(--color-text-tertiary);
-	}
-	.key.overrun {
-		block-size: 2px;
-		background: var(--color-text-tertiary);
-	}
-
-	/* The clock. The label strip spans exactly the tracks under it - the gutter and
-	   the trailing figure are taken out on both sides, gaps included - so a bar's
-	   position is read against a scale rather than guessed. */
-	.axis {
-		position: relative;
-		margin-inline-start: calc(var(--timeline-gutter) + var(--space-2));
-		margin-inline-end: calc(var(--timeline-tail) + var(--space-2));
-		block-size: 1.1rem;
-		border-block-end: 1px solid var(--color-rule);
-		font-size: var(--text-xs);
-		color: var(--color-text-tertiary);
-	}
-	.tick {
-		position: absolute;
-		inset-block-end: 0.15rem;
-		transform: translateX(-50%);
-		white-space: nowrap;
-	}
-	.tick:first-child {
-		transform: none;
-	}
-	.tick:last-child {
-		transform: translateX(-100%);
-	}
-
-	.bars {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-	.dense .bars {
-		gap: 0.125rem;
-	}
-
-	.bar {
-		display: grid;
-		grid-template-columns: var(--timeline-gutter) 1fr var(--timeline-tail);
-		align-items: center;
-		gap: var(--space-2);
-	}
-
-	.gutter {
-		display: flex;
-		align-items: baseline;
-		gap: var(--space-1);
-		min-inline-size: 0;
-		font-size: var(--text-xs);
-		color: var(--color-text-tertiary);
-	}
-	.gutter .shard {
-		flex: none;
-		inline-size: 1rem;
-		text-align: end;
-		color: var(--color-text-secondary);
-	}
-	.gutter .item {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.track {
-		position: relative;
-		display: flex;
-		inline-size: 100%;
-		block-size: 0.9rem;
-		border-radius: var(--radius-sm);
-		background: var(--color-surface-sunken);
-		box-shadow: inset 0 0 0 1px var(--color-rule);
-	}
-	.dense .track {
-		block-size: 0.55rem;
-	}
-	/* The wait is position, never length: nothing is drawn in front of the bar. */
-	.lead {
-		flex: none;
-		block-size: 100%;
-	}
-	.seg {
-		flex: none;
-		block-size: 100%;
-	}
-	.seg:first-of-type {
-		border-start-start-radius: var(--radius-sm);
-		border-end-start-radius: var(--radius-sm);
-	}
-	.seg:last-of-type {
-		border-start-end-radius: var(--radius-sm);
-		border-end-end-radius: var(--radius-sm);
-	}
-	/* The overrun sits ON the drawing rather than after it, because the stretch it
-	   covers is time already drawn once by the step that claimed it. */
-	.overrun {
-		position: absolute;
-		inset-block-end: 0;
-		block-size: 2px;
-		background: var(--color-text-tertiary);
-	}
-
-	.total {
-		font-size: var(--text-xs);
-		text-align: end;
-		color: var(--color-text-tertiary);
-	}
-
-	.residual-note {
-		font-size: var(--text-xs);
-	}
-
-	/* One column on a phone: the gutter and the trailing figure both cost width a
-	   bar needs, and the bar is the point. */
-	@media (max-width: 40rem) {
-		.timeline,
-		.timeline.dense {
-			--timeline-gutter: 2rem;
-			--timeline-tail: 0rem;
-		}
-		.bar {
-			grid-template-columns: var(--timeline-gutter) 1fr;
-		}
-		.bar .total {
-			display: none;
-		}
-		.axis {
-			margin-inline-end: 0;
-		}
-		.gutter .item {
-			display: none;
-		}
-	}
-	/* The bar the strip is reading, so a reader stepping with a key sees where
-	   they are. An outline and never a fill: the fills are the steps. */
-	.bar[data-readout-picked] .track {
-		outline: 1px solid var(--color-focus);
-		outline-offset: 1px;
-	}
-
-	.bars:focus-visible {
-		outline: 2px solid var(--color-focus);
-		outline-offset: 2px;
-	}
+	.timeline { display: flex; flex-direction: column; gap: var(--space-3); font-variant-numeric: tabular-nums; }
+	.note, .axis-label, .explanation { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--color-text-secondary); }
+	.headline { display: flex; flex-wrap: wrap; gap: var(--space-5); margin: 0; padding-block: var(--space-3); border-block-end: 1px solid var(--color-rule); }
+	.headline > div { flex: 1; min-inline-size: min-content; }
+	dt { font-size: var(--text-xs); color: var(--color-text-secondary); }
+	dd { margin: 0; }
+	.figure { font-size: var(--text-lg); font-weight: 600; white-space: nowrap; }
+	.primary .figure { font-size: var(--text-2xl); }
+	.controls { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-3); }
+	.plot { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; column-gap: var(--space-3); }
+	.axis { position: relative; grid-column: 2; block-size: var(--space-6); font-size: var(--text-xs); color: var(--color-text-secondary); }
+	.tick { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+	.tick.first { transform: none; }
+	.tick.last:not(.first) { transform: translateX(-100%); }
+	.bars, .bar, .row { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
+	.bars { list-style: none; margin: 0; padding: 0; row-gap: var(--space-1); }
+	.row { padding-block: var(--space-2); padding-inline: 0; align-items: center; gap: var(--space-3); background: transparent; border: 0; color: var(--color-text); cursor: pointer; border-radius: var(--radius-sm); }
+	.row:hover, .row[data-readout-picked='yes'] { background: var(--color-surface-sunken); }
+	.row:focus-visible, .bars:focus-visible { outline: 2px solid var(--color-focus); outline-offset: var(--space-1); }
+	.gutter { text-align: start; font-size: var(--text-sm); font-weight: 600; white-space: nowrap; }
+	small { display: block; font-size: var(--text-xs); font-weight: 400; color: var(--color-text-secondary); }
+	.track { position: relative; display: block; block-size: var(--space-5); }
+	.fill { position: absolute; block-size: 100%; background: var(--chart-1); border-radius: var(--radius-sm); }
+	.fill.zero { border-inline-start: 1px solid var(--chart-1); }
+	.guide { position: absolute; inset-block: calc(0px - var(--space-2)); border-inline-start: 1px solid var(--color-rule); }
+	.total { text-align: end; font-size: var(--text-sm); white-space: nowrap; }
+	summary { font-size: var(--text-sm); cursor: pointer; }
 </style>

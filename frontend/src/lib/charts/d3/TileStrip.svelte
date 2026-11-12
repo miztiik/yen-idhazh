@@ -15,7 +15,7 @@
 	import { tileWindow } from '$lib/charts/d3/tileStrip';
 	import { chartWidth, dayTicks, observeWidth } from '$lib/charts/frame';
 	import { useChartLabels } from '$lib/charts/label-context';
-	import { markReadout, type Readout } from '$lib/charts/readout';
+	import { factsOf, markReadout, type Readout } from '$lib/charts/readout';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 
 	let {
@@ -47,6 +47,10 @@
 	let selected = $state<number | null>(null);
 	let measured = $state<number | null>(null);
 	const visible = $derived(geometry === null ? null : tileWindow(geometry, chartWidth(measured, width), tileMinPx));
+	const hoverSource = $derived(readout ?? (geometry?.tiles ?? []).map((tile) => factsOf(
+		tile.date, [{ label: 'State', value: stateWords[tile.state] },
+			...(tile.reading === null ? [] : [{ label: 'Reading', value: tile.reading, format: String }])], stateWords.absent
+	)));
 	const endpoints = $derived(visible === null || visible.tiles.length === 0 ? [] : dayTicks(
 		[visible.tiles[0].date, visible.tiles[visible.tiles.length - 1].date],
 		{ density: 2, columns: [0, chartWidth(measured, width)], labels: labels() }
@@ -75,10 +79,12 @@
 		data-chart-name={name}
 		aria-label="{label} - {geometry.counts.fired} {stateWords.fired}, {geometry.counts.quiet} {stateWords.quiet}, {geometry.counts.absent} {stateWords.absent}"
 		tabindex={readout === null ? undefined : 0}
-		use:markReadout={{ count: visible?.tiles.length ?? 0, selected: selected === null ? null : selected - (visible?.offset ?? 0), walk: 'row', onSelect: (index) => selected = index === null ? null : index + (visible?.offset ?? 0) }}
+		use:markReadout={{ count: visible?.tiles.length ?? 0, selected: selected === null ? null : selected - (visible?.offset ?? 0), walk: 'row',
+			hover: { name, readout: hoverSource, offset: visible?.offset ?? 0 },
+			onSelect: (index) => selected = index === null ? null : index + (visible?.offset ?? 0) }}
 	>
 		{#each visible?.tiles ?? [] as tile, index (tile.date)}
-			<li class="tile {tile.state}" style:min-inline-size={tileMinPx === undefined ? undefined : `${tileMinPx}px`} data-tile-state={tile.state} data-readout-at={readout === null ? undefined : index} aria-label={titleOf(tile)}></li>
+			<li class="tile {tile.state}" style:min-inline-size={tileMinPx === undefined ? undefined : `${tileMinPx}px`} data-tile-state={tile.state} data-readout-at={index} aria-label={titleOf(tile)}></li>
 		{/each}
 	</ol>
 	{#if tileMinPx !== undefined && showAxis}

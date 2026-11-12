@@ -114,11 +114,22 @@ class AppConfig(Contract):
         json_schema_extra={
             "readCompatibility": (
                 "additive; absent archive controls use defaults; "
-                "absent prompt_files uses the declared task paths"
+                "absent prompt_files uses the declared task paths; retired visual type/kind "
+                "tokens remain readable but never enable production choices"
             )
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-12",
+            change="Clarify the existing machine appearance controls.",
+            why="Configuration fields, bounds, defaults and historical reads are unchanged.",
+        ),
+        ChangelogEntry(
+            version="2026-11-11",
+            change="Restrict effective visual choices and defaults to supported numeric charts.",
+            why="Retired visual names remain inert when reading historical configuration.",
+        ),
         ChangelogEntry(
             version="2026-11-10",
             change="Archive search coverage and Top visibility have separate controls.",
@@ -128,16 +139,6 @@ class AppConfig(Contract):
             version="2026-11-07",
             change="prompt_files names the production task instructions under the selected config.",
             why="Candidate configuration must select its own named prompt files.",
-        ),
-        ChangelogEntry(
-            version="2026-10-28",
-            change="visuals.enabled_kinds includes the whowhat grid family.",
-            why="The config contract must name every visual kind its reader can route.",
-        ),
-        ChangelogEntry(
-            version="2026-10-24T18:29",
-            change="visuals.number_format added.",
-            why="The digest and console need one declared number style.",
         ),
         ChangelogEntry(
             version="2026-09-28",

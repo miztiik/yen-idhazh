@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-12
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -62,10 +62,16 @@ which shape a panel reaches for is
   `frontend/src/lib/charts/` and its callers: 24 domains, 21 adapting and 3 fixed
   with cause. The 1 GB Pages cap is not on this list: it is arithmetic in
   `glance.ts` and never a scale.
-- **A stacked series has a fixed order, stated once.** Read at the bottom, write
-  at the top, everywhere. Unclaimed and residual always last. A stack whose order
-  moves between panels cannot be compared between panels, and a reader cannot
-  learn it.
+- **A stacked series has a fixed order, stated once, except for daily machine
+  history.** Elsewhere, read stays at the bottom, write at the top, and unclaimed
+  and residual always last. A stack whose order moves between panels cannot be
+  compared between panels, and a reader cannot learn it. Machine history alone
+  ranks each UTC day's recorded machine counts independently, largest at the
+  bottom: it answers daily job placement, not fixed stage composition. Identity
+  follows the stable machine key, never its daily position; missing identity
+  stays neutral with its exact count. All other stacks retain their declared
+  series order. See
+  [the machine drawing contract](how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md).
 - **No piecewise or non-uniform value axis.** Where a spread genuinely defeats a
   linear domain, use a log scale and label it as one. Equal pixel steps standing
   for unequal value steps is a chart that misreports by construction; a log axis
@@ -83,9 +89,10 @@ which shape a panel reaches for is
 - **A switch control sits top right of its own panel, and it is radio inputs.**
   Two named states a reader can see both of beats one state and a verb. Top right
   because the control belongs to the panel rather than to the page.
-- **A tooltip is never the only carrier of a fact.** Every panel carrying one also
-  carries the readout strip or a printed list. The dominant reading device has no
-  hover.
+- **Every measured chart has a visible hover tooltip, never hover-only facts.**
+  Use the shared typed reading mechanism, not native titles or a panel-specific
+  tooltip. Keep the strip or printed list and keyboard/touch access, because a
+  phone has no hover.
 - **A segment under 1 px at `console.chart_width` is not drawn as a segment.**
   Where a split's smallest band falls below that, the split becomes a printed
   figure and the bar draws whole. A band the browser cannot paint leaves a
@@ -121,6 +128,8 @@ Ranked rows and nested comparisons respond to their own container width, not
 the viewport. A half-width panel on a wide screen uses stacked rows when its
 columns would otherwise squeeze out the track. Every row still shares one
 column set and one scale; no reading is clipped or shortened to make it fit.
+Fitted threshold labels occupy their own text band above the track rather than
+floating into a row's context. On narrow rows the context spans the full width.
 
 The operator asks the same question of most of this console: which one is worst.
 A date sort cannot answer it - the source that cost the digest the most articles
@@ -227,13 +236,21 @@ a zero. A number stays a number until the one `format` each series carries turns
 it into words. It binds every chart on the console whose marks sit on a shared
 column - four series or one - and the rules are not negotiable per chart:
 
-- **A fixed strip below the plot, never a floating box over it.** A floating
- tooltip covers the mark it explains, and one that dodges the cursor moves the
- thing being read. Measured 2026-08-30: a floating box occupied 40 to 55
- percent of the chart it explained.
+- **A standing strip below the plot plus an additive visible hover tooltip.**
+ Both resolve the same typed reading through `readout-view.ts`. The tooltip
+ sits beside the pointer, fits within the viewport and cannot intercept input.
+ It closes on leave, Escape, scrolling, resizing or a change to its source
+ data. The strip stays available without hover and retains its exact selection
+ and reserved room.
 - **Every series at the hovered column, at once.** Comparing four series must
  not cost four hovers. The strip is the legend as well, so the four numbers a
  reader compares are printed once rather than twice.
+ Machine placement is the explicit compact projection: its actual mark key
+ selects only that qualified machine's count out of the selected UTC day's
+ recorded jobs. Day space shows the day and total only. The short standing
+ summary is supplemented by complete per-machine counts, known zeros, speed
+ context and job details on keyboard/touch day selection. Other charts keep
+ their full-column defaults.
 - **As wide as the plot, with its entries side by side.** `chart.readout_max_share`
  is 1: the strip may take the whole width of the plot above it, and its entries
  lie along one line and wrap only when the next one does not fit. Each value
@@ -270,6 +287,26 @@ column - four series or one - and the rules are not negotiable per chart:
  from screen readers, so no panel changes height with the window. Reader chose
  the words and Jony the room, on 2026-10-07.
 
+Both ordinary and workbench console chrome mount the same `ChartTooltip.svelte`.
+The shared `pointerReadout`
+action resolves actual columns, `markReadout` resolves marked records and
+visible tile offsets, and `hoverReadout` supplies printed tracks without adding
+a duplicate strip. All send the same typed reading event to that surface.
+`chart.hover_readout: false` disables only the tooltip. Touch selects the
+standing reading without raising an overlay. Empty and reserved drawings send
+no invented measurement; a selectable unmeasured column names its absence.
+Long tooltip contents stay a preview, with the full reading retained on the
+page. Tooltip text is text, never markup.
+
+The bounded renderer inventory is the native DateSeries, RunSeries,
+Distribution, PairedScatter, PartsOfOne, Flow and TileStrip components; shared
+Sparkline, RunYield/RunSquares, RunLengths, StageTimings, ThroughputTrend,
+TimeHistogram, SourceCutRange, RankedList and TargetBar;
+FleetDots, TailTrend, AtAGlance, the memory/article-cost and
+source-yield/fetch-time presentations; and the retained timeline and Judgement
+drawings. New callers use these mechanisms rather than inventing another hover
+protocol. Tables are printed answers, not chart marks.
+
 Native components use the geometry they draw for selection too.
 [../../../frontend/src/lib/charts/d3/DateSeries.svelte](../../../frontend/src/lib/charts/d3/DateSeries.svelte)
 binds `pointerReadout` and `columnPick` to its SVG. `readoutMarks` in
@@ -278,7 +315,7 @@ binds `pointerReadout` and `columnPick` to its SVG. `readoutMarks` in
 [../../../frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts),
 so marks and hit positions use the same width.
 
-## A chart with no column to hover says so, and no chart draws a key twice
+## A chart with no standing strip says why, and no chart draws a key twice
 
 The strip **is** the legend. It prints each series in the colour that series is
 drawn in, at the column the reader is on, so a standing key beside it would draw
@@ -344,26 +381,24 @@ which prints the row the reader pointed at; the ledger is one tab stop for every
 line, Up and Down step causes, Left and Right step days, and Escape returns to
 the worst cause on the newest day. Susan, 2026-09-28.
 
-A chart with nothing to hover gets no strip - one target bar, a card per machine
+A chart whose readings are already printed gets no duplicate strip - one target bar
 that prints its own readings, a split that prints both halves and its total, a
 chart with no rows in it yet, a flow whose every stage and branch prints its
 count and share beside its node, a bar a day whose every part is printed in the
 key under it, a span per request that prints its low, middle and high under it,
 and a weight bar a feed whose weight is printed on its row. A strip there would
-print what the reader is already looking at. **That is a decision, so it is
-written down where the chart is, and it is not the author's alone**: such a
-chart carries `data-readout-none` with the reason in words, closing
-`; agreed with Susan`. A reason the design review never saw is the old failure
-with an attribute on it.
+print what the reader is already looking at. Such a chart carries
+`data-readout-none` with the reason in words. This declares why no standing
+strip is needed, never an exception to the shared hover standard. Its tooltip
+uses the same typed values and formatted words as the printed track.
 
-The three declarations exist because of what the absence looks like otherwise. A
-chart somebody decided needs no hover and a chart where the readout was forgotten
-are the same chart on screen.
+The three declarations distinguish intentionally printed facts from a forgotten
+standing reading. None exempts measured marks from visible hover.
 Every drawn chart must declare one of the three. A chart that declares a strip
 must draw it, without an in-chart swatch or native tooltip. The strip must
 include the named mark's words and figures and print a day as `27 Sep 2026`,
-not `2026-09-27`. A `none` reason must have at least five words and Susan's
-agreement; an attribute alone tells a reader nothing.
+not `2026-09-27`. A `none` reason names where the full facts are printed; an
+attribute alone tells a reader nothing.
 
 ## The holdout margin is drawn at the scale of the margin, not of the score
 

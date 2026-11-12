@@ -1,31 +1,19 @@
 <script lang="ts">
-	/** Which machines ran our jobs, day by day.
-	 *
-	 * A count of what happened, never a rate: what the next job will draw is the
-	 * one thing this cannot say. One bar a day, each split by the kind of machine
-	 * that ran its jobs, and a machine's colour is its speed - stronger is faster,
-	 * slowest at the bottom where every day shares a baseline. Under
-	 * `console.fleet_min_rows` placements the bars become one square a job.
-	 *
-	 * It draws from the machine record's rows in the query door's own shape and
-	 * works everything else out here, so the list a pick opens reuses the rows
-	 * already in hand rather than asking for them again.
-	 */
+	/** Show historical job placements by machine identity, with exact day details. */
 	import Panel from '$lib/components/Panel.svelte';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import { emptyState } from '$lib/charts/d3/empty';
-	import { absentHatch } from '$lib/charts/d3/ordered-colour';
 	import {
 		FLEET_HINT,
 		fleetDots,
-		fleetHintOne,
+		fleetHover,
 		fleetJobs,
 		fleetReadout,
-		fleetSentence,
+		fleetSummary,
 		fleetSeries,
-		fleetView,
-		foldSentences
+		fleetView
 	} from '$lib/charts/fleet';
 	import { chartWidth, observeWidth } from '$lib/charts/frame';
 	import { useChartFrame } from '$lib/charts/label-context';
@@ -36,7 +24,6 @@
 	import type { Row } from '$lib/data/ledger';
 	import { longDate } from '$lib/format';
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
-	import { formatNumber } from '$lib/number-format';
 	import { tick } from 'svelte';
 
 	let {
@@ -46,11 +33,12 @@
 		windowDays,
 		lost,
 		recording,
+		gradients,
 		chart,
 		knobs,
 		recordRows
 	}: {
-		/** The page's one ramp, so this panel and the machine cards colour a machine alike. */
+		/** The widest host universe keeps ordering and identity stable across presets. */
 		ramp: MachineRamp;
 		/** The open span, inclusive UTC days, and how many days it covers. */
 		start: string;
@@ -60,11 +48,12 @@
 		lost: LostDay[];
 		/** False where the machine record is switched off. */
 		recording: boolean;
+		gradients: boolean;
 		chart: ChartConfig;
 		recordRows: readonly Row[];
 		knobs: Pick<
 			ConsoleConfig,
-			'fleet_min_rows' | 'fleet_top_kinds' | 'fleet_dot_max_px' | 'absent_hatch_degrees'
+			'fleet_min_rows' | 'fleet_top_kinds' | 'fleet_dot_max_px' | 'machine_colour_floor_share'
 		>;
 	} = $props();
 
@@ -73,22 +62,20 @@
 	const frame = useChartFrame(() => chart);
 	/** The share of a day's column left empty beside its bar. */
 	const PADDING = 0.2;
-	/** The ground between two squares, and a hatch's stripe and gap, in CSS px. */
+	/** One CSS pixel separates counted job squares without changing their count. */
 	const SQUARE_GAP = 1;
-	const HATCH_GAP = 3;
-	const HATCH_LINE = 1;
 
-	const rows = $derived(recordRows.filter((row) => String(row.date) >= start && String(row.date) <= end));
 	const span = $derived({ start, end });
 	$effect(() => {
 		void start;
 		void end;
 		openDay = null;
 	});
-	const jobs = $derived(fleetJobs(rows));
+	const jobs = $derived(fleetJobs(recordRows));
 	const view = $derived(
 		fleetView(jobs, {
 			ramp,
+			appearance: { gradients, floor: knobs.machine_colour_floor_share, palette: chart.palette },
 			start: span?.start ?? start,
 			end: span?.end ?? end,
 			windowDays,
@@ -99,9 +86,6 @@
 			lost
 		})
 	);
-	const hatch = $derived(
-		absentHatch({ degrees: knobs.absent_hatch_degrees, gapPx: HATCH_GAP, linePx: HATCH_LINE })
-	);
 	let measured = $state<number | null>(null);
 	const box = $derived(frame(chartWidth(measured, chart.width_px), chart.height_px));
 	const bars = $derived(
@@ -109,6 +93,7 @@
 			? dateSeries(fleetSeries(view), {
 					frame: box,
 					stacked: true,
+					stackOrder: 'descending',
 					density: chart.tick_density,
 					valueTicks: VALUE_TICKS,
 					padding: PADDING,
@@ -128,36 +113,13 @@
 				})
 			: null
 	);
-	const readout = $derived(fleetReadout(view, hatch));
-	const sentence = $derived(fleetSentence(view));
-	const folds = $derived(foldSentences(view));
-	/** The steps at least one kind of machine lands on. A step no kind reaches
-	 * names nothing, so the key leaves it out. */
-	const landed = $derived(ramp.steps.filter((step) => step.low !== null && step.high !== null));
-	const keyed = $derived(landed.length > 0);
-	/** One sentence, whose last clause names the span in the words every
-	 * Hardware subtitle uses, so the page reads alike from panel to panel. One day
-	 * is not "each day", so at one day the clause names the day itself. */
-	const note = $derived(
-		'The platform picks the machine for every job, so a slow week can be the machine and not the ' +
-			(windowDays === 1
-				? `code - ${nameSpan(windowDays)} split by the kind that ran its jobs.`
-				: `code - each day split by the kind that ran its jobs, over ${nameSpan(windowDays)}.`)
-	);
-	/** What the two plots are, to a screen reader. "A day" needs a second day, so at
-	 * one day each label is for that day. */
-	const barsLabel = $derived(
-		windowDays === 1
-			? `Jobs in ${nameSpan(windowDays)}, stacked by the kind of machine that ran them, slowest at the bottom.`
-			: `Jobs a day over ${nameSpan(windowDays)}, stacked by the kind of machine that ran them, slowest at the bottom.`
-	);
-	const dotsLabel = $derived(
-		windowDays === 1
-			? `One square a job, one column for ${nameSpan(windowDays)}, coloured by the speed of the machine that ran it.`
-			: `One square a job, a column a day over ${nameSpan(windowDays)}, coloured by the speed of the machine that ran it.`
-	);
+	const readout = $derived(fleetSummary(view));
+	const details = $derived(fleetReadout(view));
+	const hover = $derived(fleetHover(view));
+	const note = $derived(`Recorded jobs per UTC day. Largest at the bottom; colour identifies machines.${view.shape === 'dots' ? ' One square per job.' : ''}`);
+	const barsLabel = 'Recorded jobs per UTC day, largest machine count at the bottom of each stack.';
+	const dotsLabel = 'One square per recorded job, grouped by UTC day and machine kind.';
 	const hint = FLEET_HINT;
-	const hintOne = $derived(fleetHintOne(windowDays));
 
 	/** The day whose jobs are listed under the plot, by date, so a new span
 	 * cannot leave the list on a column that now means another day. */
@@ -180,11 +142,6 @@
 		plot?.querySelector('svg')?.focus();
 	}
 
-	function stepText(low: number, high: number): string {
-		const lowText = formatNumber(low, chart.number_format, { si: false });
-		const highText = formatNumber(high, chart.number_format, { si: false });
-		return lowText === highText ? lowText : `${lowText} to ${highText}`;
-	}
 </script>
 
 <div data-windowed="machine-fleet" data-readout-fetched="host-fingerprint" data-window-days={windowDays} data-fleet-state="ready" data-fleet-from={span.start} data-fleet-through={span.end}>
@@ -215,30 +172,18 @@
 				data-fleet-placements={view.placements}
 				data-fleet-min-rows={view.minRows}
 			>
-				<p class="reads" data-fleet-basis={view.placements}>
-					{sentence}
-					{#each folds as fold (fold)}
-						<span data-fleet-fold>{fold}</span>
+				<div class="machine-key" data-fleet-identity-key>
+					{#each view.rows as row (row.key)}
+						<span class="key-group">
+							{#if row.parts.length > 1}<span>{row.label}:</span>{/if}
+							{#each row.parts as part (part.key)}
+								<span class="key-kind" data-fleet-kind={part.key}>
+									<span class="chip" style:background={part.swatch}></span>{part.label}
+								</span>
+							{/each}
+						</span>
 					{/each}
-					This counts what we were given and predicts nothing about the next job.
-				</p>
-				{#if keyed}
-					<!-- The speed each colour stands for, named by the kinds that land on
-					     it over the whole record, so the key holds still when the span
-					     moves. The strip under the plot names every row. -->
-					<p class="speed-key" data-fleet-speed-key>
-						<span class="key-lead">The stronger the colour, the faster the machine.</span>
-						<span class="key-end">Slower</span>
-						{#each landed as step (step.step)}
-							<span class="key-step" data-fleet-speed-step={step.step}>
-								<span class="chip" style="background: {step.colour}"></span>
-								{stepText(step.low ?? 0, step.high ?? 0)}
-							</span>
-						{/each}
-						<span class="key-end">Faster</span>
-						<span class="key-unit">tokens a second, each kind's middle reading</span>
-					</p>
-				{/if}
+				</div>
 				<div
 					class="plot"
 					bind:this={plot}
@@ -256,11 +201,12 @@
 							width={box.width}
 							height={box.height}
 							{readout}
+							{hover}
 							readoutMaxShare={chart.readout_max_share}
 							{hint}
-							{hintOne}
+							hintOne={hint}
+							restingNote=""
 							lede
-							{hatch}
 							picked={open < 0 ? null : open}
 							onPick={pick}
 						/>
@@ -268,11 +214,13 @@
 						<FleetDots
 							geometry={squares}
 							{readout}
+							{hover}
 							name="machine-fleet"
 							label={dotsLabel}
 							readoutMaxShare={chart.readout_max_share}
 							{hint}
-							{hintOne}
+							hintOne={hint}
+							restingNote=""
 							picked={open < 0 ? null : open}
 							onPick={pick}
 						/>
@@ -286,7 +234,7 @@
 						class="jobs"
 						bind:this={list}
 						role="region"
-						aria-label="Jobs on {longDate(view.days[open])}"
+						aria-label="Jobs on {longDate(view.days[open])} UTC"
 						tabindex="0"
 						data-fleet-jobs={view.days[open]}
 						onkeydown={(event) => {
@@ -296,10 +244,11 @@
 							}
 						}}
 					>
+						<ChartReadout readout={details} at={open} name="machine-fleet-details" maxShare={chart.readout_max_share} hint="" />
 						<table>
 							<caption>
 								{view.lines[open].length}
-								{view.lines[open].length === 1 ? 'job' : 'jobs'} on {longDate(view.days[open])}
+								{view.lines[open].length === 1 ? 'job' : 'jobs'} on {longDate(view.days[open])} UTC
 							</caption>
 							<thead>
 								<tr>
@@ -322,13 +271,13 @@
 											? `${line.pipelineName}/${line.taskName}`
 											: line.job ?? 'not recorded'}</td>
 										<td class="number shard"><span class="narrow-word" aria-hidden="true">{'shard '}</span>{line.shard ?? 'not recorded'}</td>
-										<td class="machine">{line.machine}</td>
+										<td class="machine"><span class="chip" style:background={line.swatch}></span> {line.machine}</td>
 										{#if line.seconds === null}
 											<td class="number seconds"><span class="narrow-word" aria-hidden="true">{'seconds '}</span>not recorded</td>
 										{:else}
 											<td class="number seconds">{Math.round(line.seconds)}<span class="narrow-word" aria-hidden="true">{' seconds'}</span></td>
 										{/if}
-										<td class="number speed">{line.rate === null ? 'no speed reading' : rateWords(line.rate, chart.number_format)}</td>
+										<td class="number speed">{line.rate === null ? 'Speed not recorded' : rateWords(line.rate, chart.number_format)}</td>
 									</tr>
 								{/each}
 							</tbody>
@@ -349,47 +298,37 @@
 		color: var(--color-text-secondary);
 	}
 
-	.reads {
-		margin: var(--space-3) 0 0;
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-		color: var(--color-text-secondary);
-	}
-
-	.speed-key {
+	.machine-key, .key-group, .key-kind {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: var(--space-1) var(--space-3);
-		margin: var(--space-2) 0 0;
-		font-size: var(--text-xs);
-		color: var(--color-text-tertiary);
+		gap: var(--console-control-gap);
 	}
-
-	.key-step {
-		display: inline-flex;
+	.machine-key {
+		gap: var(--console-control-gap) var(--console-panel-gap);
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
+		color: var(--color-text-secondary);
+	}
+	.key-kind {
+		display: inline;
 		align-items: center;
-		gap: var(--space-1);
-		font-variant-numeric: tabular-nums;
-	}
-
-	.key-end {
-		font-weight: 600;
-		color: var(--color-text-secondary);
-	}
-
-	/* The key's sentence takes a line of its own, so the steps under it read as
-	   one row from slower to faster. */
-	.key-lead {
-		flex-basis: 100%;
-		color: var(--color-text-secondary);
+		overflow-wrap: anywhere;
 	}
 
 	.chip {
 		display: inline-block;
-		inline-size: 12px;
-		block-size: 12px;
-		border-radius: 2px;
+		inline-size: var(--console-small-size);
+		block-size: var(--console-small-size);
+		border-radius: var(--radius-sm);
+		margin-inline-end: var(--space-1);
+		vertical-align: middle;
+		border: 1px solid var(--color-rule-strong);
+		box-sizing: border-box;
+	}
+	.plot :global([data-series-bar]) {
+		stroke: var(--chart-axis);
+		stroke-width: var(--console-chart-axis-width);
 	}
 
 	.plot {
