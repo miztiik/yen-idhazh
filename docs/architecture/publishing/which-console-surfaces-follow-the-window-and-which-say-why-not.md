@@ -6,8 +6,8 @@ One control at the top of the console sets the span for the whole page. This pag
 is the control, and the list of every surface that does not simply follow it -
 which is the question asked far more often than how the control is drawn.
 
-Which panel sits on which route is [console.md](console.md). The control stands beside the active route heading, with record reach directly
-below it. Labelled route navigation occupies a separate left rail or narrow menu;
+Which panel sits on which route is [console.md](console.md). The control stands beside the active route heading, with record reach in the closed
+`Data dates (UTC)` disclosure below it. Labelled route navigation occupies a separate left rail or narrow menu;
 the shell it stands in is
 [what-sits-above-every-console-route.md](what-sits-above-every-console-route.md).
 
@@ -59,7 +59,8 @@ to its own ledger's first day. Neither the browser clock nor the build clock
 supplies a data day. A reach that did not arrive supplies no day at all.
 
 The typed record reach passes through the existing route-to-layout window
-slot. `WindowStatus` says `Showing N days, to DATE.` If the record is shorter
+slot. Within `Data dates (UTC)`, `WindowStatus` says `Showing N days, to DATE.`
+If the record is shorter
 than the requested preset, it also names its first day and the UTC day on
 which that preset fills. A first frame with no record yet prints no data date.
 Build-time evidence keeps the published-day behavior above. This does not
@@ -74,12 +75,12 @@ extraction or flag queries. Settings markers follow the evidence they annotate.
 Summaries keeps its private cards, daily figures and published doubt reasons
 on the published-day window. Native panels retain the common record endpoint,
 their own first-day clamp and any declared widest-span comparison. Both routes
-print the private bounds and the native panels' actual bounds in UTC. Neither
+keep the private bounds and native reach in the shared date disclosure; panels
+retain their own independently clamped bounds. Neither
 an empty private window nor an unavailable native read moves either clock.
-Their standing names the native record window rather than claiming that every
-panel ends there; quiet, missing and failed standings also name their native
-scope. Per-panel bounds replace repeated query-name scope notices; lost-day
-and unread-file notes remain.
+Successful native reads add no standing summary. Quiet, missing and failed
+standings still name their native scope. Lost-day and unread-file notes remain
+visible beside the affected readings.
 
 The Summaries load carries the article and score readers' existing typed
 coverage into the private cards. Empty cards are quiet only when both records
@@ -94,7 +95,7 @@ the configured presets, using the actual record reach and current typography.
 Hidden, aria-hidden copies share one grid cell; no fixed line count assumes a font or width.
 During a fetch, the previous reach is retained only for sizing. The visible
 line claims no date until the current answer arrives, and switching presets
-does not move the evidence and panels below it.
+does not move the evidence within the disclosure.
 
 ### Build-time window space and control behavior
 
@@ -169,8 +170,8 @@ another browser case per panel or preset.
 
 ## The surfaces that do not simply follow the span
 
-Each one says so on the page. Three are on Voices, one on Pipelines, one on
-Judgement, and one stands on every route.
+Each one says so on the page. Three are on Voices, one on Pipelines and one on
+Judgement.
 
 | Surface | Route | What it does | Why |
 | --- | --- | --- | --- |
@@ -178,7 +179,6 @@ Judgement, and one stands on every route.
 | `Sources we may ask, and what they yield` | Voices | Permission, reading and retirement read every run on record; the publishing record reads `collect.source_yield_min_complete_days` complete days | It renders the run's own decisions, and the run rests on the whole count. The publishing record has a fixed span because that span is also its readability bar - one question, one number. |
 | `What the ranking makes of each feed` | Voices | Reads the factor the run applied, over the span the run reduced it on | The run reduced it over `collect.reliability_window_days` when it happened. Redrawing it over seven days would print a number no run ever applied. |
 | `What the record still needs` | Judgement | The three bars read the record's newest row on or before the window's last day, so they show the same counts at every preset; the strip of squares and the count of fitted days follow the span | The record is a running total that changes only when a run writes a row, so its newest row is what it holds whatever span is open. Read from the window's rows alone, a window with no row drew the bars at zero, which is the picture of a record that holds nothing. When the bars stand on a row before the window, the note names its day: `The bars show what the record held on 14 Jun 2030, before this one day.` |
-| `Site size` | every route | Absolute number always; the delta and the runway are windowed | The size is a level and the operator wants today's, whatever span he is reading. The delta and the runway are rates, and a rate has to say what it is over. |
 | `Minutes per visual` | Pipelines | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
 
 Source truncation and item-cost panels now derive their answers from declared
@@ -211,7 +211,7 @@ declared cells and dates. Their route documents contain no copy of those query
 answers. Unused server readers and retired public-month mirrors do not survive
 as fallback paths. Their removal deletes no native records.
 
-The shared band, private build-time panels and route-shell prerendering remain.
+The shared producer payload, private build-time panels and route-shell prerendering remain.
 [console.md](console.md#rendering-direction) names the private boundary. Removing
 ECharts does not authorize a no-prerender architecture or public copies of those
 inputs. Each query and build-time read still names a fixed-size input under

@@ -2,6 +2,7 @@
 	/** Hand the active route's window, record reach and fetch state to the layout. */
 	import { fillWindowSlot } from '$lib/console/window-slot';
 	import type { RecordWindow } from '$lib/console/waiting';
+	import type { TimeWindow } from '$lib/charts/viewport';
 
 	let {
 		days,
@@ -10,6 +11,7 @@
 		busy = false,
 		ready = false,
 		record = null,
+		publishedWindow = null,
 		statusLine = null,
 		onChange
 	}: {
@@ -21,6 +23,7 @@
 		/** False until a browser has run the route. */
 		ready?: boolean;
 		record?: RecordWindow | null;
+		publishedWindow?: TimeWindow | null;
 		statusLine?: string | null;
 		onChange: (days: number) => void;
 	} = $props();
@@ -40,6 +43,9 @@
 		},
 		get record() {
 			return record;
+		},
+		get publishedWindow() {
+			return publishedWindow;
 		},
 		get statusLine() {
 			return statusLine;

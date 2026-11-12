@@ -123,21 +123,14 @@ const FETCHED_PANELS = ['What is failing, by stage', "Where an item's time went"
  * those tests read about a single box rather than a set. */
 const FETCHED_PANEL = FETCHED_PANELS[0];
 
-/** Every block the console lays out in its one column, keyed by what it is.
+/** Measure the retained title, control, date disclosure, navigation and panel blocks.
  *
- * Panels alone are not the chrome an operator is looking at. He sees the title,
- * the strip, the band, the window control, the carry line and the glance grid
- * before the first panel begins - measured 2026-09-09 on the canary build at
- * 1280x900, that panel starts 894px down - and until this read them, nothing
- * watched any of it.
- *
- * The container the panels sit in is left out, and so is the section wrapping
- * the panel that fills by fetch: both are ancestors of the box that grows, so
- * they grow with it, and that is arithmetic rather than a defect.
+ * Ancestors of fetched panels are excluded because they legitimately grow with
+ * their content. Hidden text-measurement elements are not operator chrome.
  */
 async function columnBoxes(page: Page): Promise<Record<string, [number, number, number, number]>> {
 	return page
-		.locator('[data-surface="operator"] > *, [data-console-panels] > *, [data-console-panel]')
+		.locator('[data-console-rail], #console-route-title, [data-window-control], [data-console-data-dates], [data-console-completeness], [data-console-panels] > *, [data-console-panel]')
 		.evaluateAll((nodes, fetchedPanels) => {
 			const fetched = fetchedPanels
 				.map((title) => document.querySelector(`[data-console-panel="${title}"]`))
@@ -150,11 +143,11 @@ async function columnBoxes(page: Page): Promise<Record<string, [number, number, 
 				);
 				const named =
 					node.getAttribute('data-console-panel') ??
-					(marker === undefined
+					(node.id || (marker === undefined
 						? node.tagName.toLowerCase()
 						: marker.value === ''
 							? marker.name
-							: `${marker.name}=${marker.value}`);
+							: `${marker.name}=${marker.value}`));
 				// The section headings carry no attribute at all, so the name alone is
 				// not a key. The ordinal is stable because the DOM order is, and the
 				// oracle fails anyway if a block appears or vanishes.
@@ -234,7 +227,9 @@ test('THE ORACLE: nothing above the first panel moves when the payload lands', a
 	const chrome = Object.keys(first).filter(
 		(name) => first[name][3] < firstPanelTop && first[name][2] > 0
 	);
-	expect(chrome.length, 'nothing was drawn above the first panel at all').toBeGreaterThan(3);
+	expect(chrome).toEqual(expect.arrayContaining([
+		'data-console-rail', 'console-route-title', 'data-window-control', 'data-console-data-dates'
+	]));
 
 	await settled(page);
 	await page.screenshot();
@@ -251,6 +246,7 @@ test('THE ORACLE: nothing above the first panel moves when the payload lands', a
 		.filter((name) => JSON.stringify(first[name]) !== JSON.stringify(after[name]))
 		.map((name) => `${name}: ${JSON.stringify(first[name])} -> ${JSON.stringify(after[name])}`);
 	expect(moved, `the chrome moved under the operator:\n${moved.join('\n')}`).toEqual([]);
+	expect(Math.min(...Object.values(await panelBoxes(page)).map((box) => box[3]))).toBe(firstPanelTop);
 });
 
 test('THE ORACLE: the reserved chart box is the box the chart takes', async ({ page }) => {

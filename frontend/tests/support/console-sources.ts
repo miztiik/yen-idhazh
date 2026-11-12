@@ -36,7 +36,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/lib/components': [
 		'ArchiveSearch.svelte', 'ChartReadout.svelte', 'ChoiceTiles.svelte',
-		'ConfidenceChip.svelte', 'ConsoleBand.svelte', 'ConsoleNav.svelte', 'DayNotice.svelte',
+		'ConfidenceChip.svelte', 'ConsoleNav.svelte', 'DayNotice.svelte',
 		'DigestItem.svelte', 'DigestList.svelte', 'EmptyDay.svelte', 'FailureList.svelte', 'FailureRuleRanking.svelte',
 		'FilterBar.svelte', 'FoundStories.svelte', 'ItemMeta.svelte',
 		'ItemVisual.svelte', 'KpiCard.svelte', 'LeadingStories.svelte', 'LensChips.svelte',

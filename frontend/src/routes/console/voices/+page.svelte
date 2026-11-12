@@ -2,7 +2,6 @@
 	/** What did sources supply, and what did the ranking do with their articles? */
 	import { onMount, untrack } from 'svelte';
 	import { useWindowChoice } from '$lib/console/window-slot';
-	import { base } from '$app/paths';
 	import { consoleKnobs, routeConsole, routeKnobs } from '$lib/console/route-console';
 	import { rangeFor, routeReach, sliceOnce, retryAsks, type Range, type RouteReach } from '$lib/console/queries/window';
 	import { feedsFailedQuery, fetchTimeQuery, sourceCutsQuery, whyChosenQuery, watchlistQuery } from '$lib/console/queries/voices';
@@ -121,7 +120,6 @@
 <RouteStatus route="voices" {answers} days={windowDays} through={reach?.through ?? null} shimmerAfterMs={console.shimmer_after_ms} onRetry={() => void ask(true)}>
 	<WindowControlSource days={windowDays} presets={console.window_presets} {monthsFor} {busy} {ready}
 		record={{ asked: windowDays, first: reach?.ledgers['item-health']?.state === 'ok' ? reach.ledgers['item-health'].first : null, through: reach?.through ?? null }} onChange={show}/>
-	<p class="console-carry" data-console-carry="pipelines">{data.carries.voices} <a href="{base}/console/">Pipelines -&gt;</a></p>
 	<PanelGroup id={config.panel_groups[0].id} title={config.panel_groups[0].title} panels={config.panel_groups[0].panels.length}>
 		<SourceHealthPanel {census} width={console.chart_width} height={console.chart_height}/>
 		<FeedsFailedPanel days={windowDays} view={failed ?? (feedsAnswer !== 'pending' ? fallback : null)} {fallback} panelState={feedPanelState} articleState={stateOf(feedsAnswer)}

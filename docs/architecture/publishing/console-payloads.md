@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-11-12
 The operator console reads native records as well as the remaining public
 projections. Each crossing into the site needs a contract (Guardrail #11).
 This page lists the public projections. The machine-readable copy is
@@ -175,6 +175,21 @@ panel on any route can draw, and it is **anchored on the newest day found rather
 than on today**: a clock anchor answers with nothing at all for a corpus that
 stopped publishing three months ago.
 
+Worst-state derivation remains a producer contract even though the console no
+longer displays its standing summary. Failed-run candidates precede resting
+feeds, so a failed run wins a stable tie. Editorial faults cap at
+`WORTH_A_LOOK`, except a gating instrument whose recorded decline rate reaches
+either configured extreme. An absent rate cannot establish that fault.
+
+Hardware candidates include a refused run, a planned shard with no record and
+the newest run's read spread. Missing shards use the independently recorded plan
+denominator, not host rows as both numerator and denominator. Spread uses the
+server's prompt-token/time counters and stays lowest-ranked without an agreed
+alarm threshold. Swap use requires known positive total swap. Voices keeps a
+feed at the reliability floor as `WORTH_A_LOOK`, and insufficient evidence as
+`WORTH_KNOWING` with its denominator. Non-answering feeds remain a subset of the
+at-floor set, not duplicate candidates.
+
 ### The refresh paths have one declaration
 
 `REFRESH_PATHS` on the `Commit the day` step names what a rebuild owns after a
@@ -280,23 +295,16 @@ the document, then one shard, then the next.** `loadVisibleMonths` awaits each
 month in turn, so a month is a hop and the single hop of headroom is one more
 month, not one more file.
 
-### The band is drawn once, in `console/+layout.svelte`
+### The shared payload is not a standing summary
 
-The title, the strip, the sentence that dates the record and the band are the
-console shell, and they live in one component beside the load that fetches them.
-The strip carries the days control: the shell draws it and the route holds it,
-handing its window up through `window-slot.ts`. Each route renders its panels
-inside the shell. Three routes each drawing their own band is three copies of
-one verdict, and the day two of them disagreed about which route is worst there
-would be no way to say which was right.
-
-The order down the page is title, strip, completeness sentence, band, the
-sentence about the span, the jump links, content. `console-band.spec.ts` holds
-it, and
-[what-sits-above-every-console-route.md](what-sits-above-every-console-route.md)
-owns it. The shell holds the operator surface and each route's panels sit one
-element inside it, so `[data-surface="operator"]` still means the whole page.
-Which tab is lit is read off the route rather than passed in by each page.
+`console/+layout.ts` still validates the same producer payload. The layout uses
+its navigation, settings and completion metadata without rendering the
+latest-day, worst-issue and site-size summary band or cross-route carries.
+No persisted fields or compatibility rules change.
+[The console shell](what-sits-above-every-console-route.md) owns the compact
+date disclosure and the trade-off in removing those headlines. The route keeps
+its own window through `window-slot.ts`; no data source moves to the browser
+clock or to another source's endpoint.
 
 ### How big the band is, and what makes it grow
 

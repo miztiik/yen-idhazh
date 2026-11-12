@@ -1,6 +1,5 @@
 <script lang="ts">
 	/** Which stories the day merged, and what the judge and hand marks can tell us. */
-	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { useWindowChoice } from '$lib/console/window-slot';
 	import { windowOfDays } from '$lib/charts/viewport';
@@ -63,15 +62,8 @@
 </svelte:head>
 
 <div data-console-panels="judgement">
-	<!-- The title, the strip, the band and the days control are the shell and
-	     live in `../+layout.svelte`. The window stays here because it governs
-	     this route's panels and nothing above them, and this hands it up. -->
+	<!-- The route owns its evidence window and hands the control to the shared shell. -->
 	<WindowControlSource days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
-
-	<p class="console-carry" data-console-carry="model">
-		{data.carries.judgement}
-		<a class="carry-link" href="{base}/console/model/">Summaries &rarr;</a>
-	</p>
 
 	<MergedStoriesPanel
 		days={data.merges}

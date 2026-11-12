@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { useWindowChoice } from '$lib/console/window-slot';
-	import { base } from '$app/paths';
 	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
-	import { routeReach, retryAsks, tallyAsks, windowRange, type RouteReach } from '$lib/console/queries/window';
+	import { routeReach, retryAsks, tallyAsks, type RouteReach } from '$lib/console/queries/window';
 	import type { LedgerReach, SliceResult } from '$lib/data/ledger';
 	import * as queries from '$lib/console/queries/model';
 	import { settingsRules } from '$lib/console/settings-moved';
@@ -32,8 +31,6 @@
 	const allAnswers = $derived(doorIds.map((id) => answers[id] ?? 'pending'));
 	const tally = $derived(tallyAsks(allAnswers));
 	const first = $derived(reach === null ? null : Object.values(reach.ledgers).flatMap((r) => r?.state === 'ok' ? [r.first] : []).sort()[0] ?? null);
-	const nativeWindow = $derived(first !== null && reach?.through != null
-		? windowRange(windowDays, reach.through, first) : null);
 	const span = $derived(windowOfDays(data.windowDay, windowDays, knobs.today_anchor));
 	const shell = $derived(data);
 	const cardRule = $derived(settingsRules(shell, { from: span.start, to: span.end }, 'none', nameSpan(windowDays)));
@@ -63,16 +60,10 @@
 </svelte:head>
 
 <WindowControlSource days={windowDays} presets={knobs.window_presets} {ready} busy={tally.state === 'loading'}
-	record={{ asked: windowDays, first, through: reach?.through ?? null }} monthsFor={() => 0} onChange={show} />
-<p class="console-carry" data-console-carry="machine">
-	{data.carries.model}
-	<a class="carry-link" href="{base}/console/machine/">Hardware &rarr;</a>
-</p>
+	record={{ asked: windowDays, first, through: reach?.through ?? null }} publishedWindow={span} monthsFor={() => 0} onChange={show} />
 <RouteStatus route="model" answers={allAnswers} days={windowDays} through={reach?.through ?? null}
 	recordScope="Native record"
-	settledSuffix={nativeWindow === null ? '' : `Native record window: ${nativeWindow.from} through ${nativeWindow.to} UTC.`}
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retryFailed}>
-	<p data-private-window data-range-from={span.start} data-range-to={span.end}>Published-day evidence: {span.start} through {span.end} UTC. Native panels use the record window above.</p>
 	<div data-recording-lines>
 		{#if measurementOff != null}<p data-recording="off">{measurementOff}</p>{/if}
 		{#if recording?.sampled != null}<p data-recording="sampled">{recording.sampled}</p>{/if}

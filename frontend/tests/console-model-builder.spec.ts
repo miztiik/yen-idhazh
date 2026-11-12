@@ -13,7 +13,8 @@ for (const evidence of ['missing', 'quiet', 'populated'] as const) {
 				await expect(page.locator('[data-model-cards] [data-kpi]')).toHaveCount(0);
 				if (evidence === 'quiet') {
 					await page.locator('[data-window-preset="1"]').click();
-					await expect(page.locator('[data-private-window]')).toContainText('2030-06-15 through 2030-06-15 UTC');
+					await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-from', '2030-06-15');
+					await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-to', '2030-06-15');
 					await expect(page.locator('[data-model-cards-empty]')).toHaveAttribute('data-model-cards-empty', 'missing');
 					await expect(page.locator('[data-model-cards]')).not.toContainText('No model work');
 					await expect(page.locator('[data-model-cards] [data-kpi]')).toHaveCount(0);
