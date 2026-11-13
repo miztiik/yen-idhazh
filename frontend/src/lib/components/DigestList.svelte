@@ -90,7 +90,6 @@
 	let shownCount = $state(0);
 	let added = $state(0);
 	let cleared = $state(false);
-	let pager = $state<HTMLButtonElement>();
 	const loading = $derived(status === 'loading' || status === 'slow');
 	/** The story a reader's own address named, or the empty string.
 	 *
@@ -450,12 +449,12 @@
 		const next = revealed(visible, list.pinnedRows, leading, nextShown, PAGE);
 		const first = next[before];
 		if (!first) return;
-		const keepFocus = document.activeElement === pager;
+		const focused = document.activeElement;
 		added = next.length - before;
 		shownCount = nextShown;
 		await tick();
 		// A reader who moved away during rendering keeps their new focus.
-		if (keepFocus && (document.activeElement === pager || document.activeElement === document.body)) {
+		if (document.activeElement === focused || document.activeElement === document.body) {
 			restoreAnchor(`#${first.item_id}`);
 		}
 	}
@@ -575,7 +574,6 @@
 					     block cannot reach a scoped class, and it can reach an
 					     attribute. -->
 					<button
-						bind:this={pager}
 						type="button"
 						data-pager-scripted
 						onclick={() => void loadMore()}
