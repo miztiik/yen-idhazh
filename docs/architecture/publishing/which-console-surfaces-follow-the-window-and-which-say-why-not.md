@@ -191,6 +191,16 @@ Panel-specific rules live in [console-machine.md](console-machine.md), beside
 the questions and missing-data meanings they protect. They do not require
 another browser case per panel or preset.
 
+**The token comparison draws selected runs but assesses a fixed history.**
+Read/Written values still follow the preset. Their separate browser DuckDB
+assessment uses the configured widest console span at the panel's original
+three-family endpoint, clamped to item-health's first day. Narrowing or widening
+the display cannot alter a run's assessment for the same source snapshot.
+Unavailable older evidence remains unassessed; the reader never widens the
+input to fill a baseline. The
+[Hardware contract](console-machine.md#what-may-not-be-pooled) owns the exact
+matching, prior-run rule and warning readout.
+
 ## The surfaces that do not simply follow the span
 
 Each one says so on the page. Three are on Voices, one on Pipelines and one on

@@ -22,6 +22,8 @@ export interface RunTrace {
 	dashed: boolean;
 	/** One reading per supplied run, with known unmeasured runs left null. */
 	values: readonly (number | null)[];
+	/** Nullable query verdicts; only true adds a warning mark. */
+	warnings?: readonly (boolean | null)[];
 	format: (value: number) => string;
 }
 
@@ -31,6 +33,7 @@ export interface RunPoint {
 	x: number;
 	y: number;
 	alone: boolean;
+	warning: boolean;
 }
 
 export interface RunLine {
@@ -81,6 +84,9 @@ export function runSeries(
 		if (!trace.label.trim() || names.has(trace.label)) throw new Error('Run series labels must be distinct and nonempty.');
 		names.add(trace.label);
 		if (trace.values.length !== runs.length) throw new Error(`"${trace.label}" needs one reading per run.`);
+		if (trace.warnings !== undefined && trace.warnings.length !== runs.length) {
+			throw new Error(`"${trace.label}" needs one assessment per run.`);
+		}
 		if (trace.values.some((value) => value !== null && !Number.isFinite(value))) {
 			throw new Error(`"${trace.label}" needs finite readings or null.`);
 		}
@@ -105,7 +111,10 @@ export function runSeries(
 				if (segment.length) segments.push(segment);
 				segment = [];
 			} else {
-				segment.push({ column, value, x: columns[column], y: axis.scale(value), alone: false });
+				segment.push({
+					column, value, x: columns[column], y: axis.scale(value), alone: false,
+					warning: trace.warnings?.[index] === true
+				});
 			}
 		}
 		if (segment.length) segments.push(segment);

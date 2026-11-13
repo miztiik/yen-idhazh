@@ -265,6 +265,10 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "carriage_step",
         ),
         "frontend/src/lib/console/machine/counters.ts": ("llama_rss_peak_bytes",),
+        "frontend/src/lib/data/token-deviation-query.ts": (
+            "n_threads", "n_batch", "model_quantisation", "temperature",
+            "label_budget_tokens", "summary_budget_tokens", "run_visual_decision",
+        ),
         "frontend/src/lib/console/model/work.ts": ("version",),
         "frontend/src/lib/server/payload.ts": ("detail",),
         "backend/utilities/slot_probe.py": (
@@ -321,15 +325,6 @@ UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
         ),
         "how a call ended, and how much of its prompt the server already held": (
             "recovered",
-        ),
-        "which recorded settings no current item panel reads": (
-            "n_threads",
-            "n_batch",
-            "model_quantisation",
-            "temperature",
-            "label_budget_tokens",
-            "summary_budget_tokens",
-            "run_visual_decision",
         ),
         "how shard size and processor load explain a slow item": (
             "shard_item_count",

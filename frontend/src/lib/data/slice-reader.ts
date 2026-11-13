@@ -74,6 +74,7 @@ import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry, type IndexReading, t
 import type { FileShortfall, PageKeeper, WantedFile } from './page-keeper';
 import { filesFor, firstNamed, newestNamed, type ChosenFile } from './slice';
 import { rowsFor } from './slice-query';
+import { checkedTokenDeviationOptions, type TokenDeviationOptions } from './token-deviation-query';
 import type { LedgerCatalog } from './ledger-catalog';
 import {
 	checkedRequest,
@@ -209,11 +210,17 @@ export function explainShortfall(
 
 /** Answer one request: the four states above, or a `SliceRequestError` for a
  *  request the door refuses before it fetches anything. */
-export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options: SliceOptions): Promise<SliceResult> {
+export async function readSlice(
+	keeper: PageKeeper, ledger: LedgerName, options: SliceOptions, tokenHistory?: TokenDeviationOptions
+): Promise<SliceResult> {
 	if (keeper.catalog.get(ledger) === undefined) {
 		throw new SliceRequestError(`${JSON.stringify(ledger)} is not a ledger the console may query`);
 	}
 	const request = checkedRequest(options);
+	if (tokenHistory !== undefined) {
+		checkedTokenDeviationOptions(tokenHistory);
+		if (ledger !== 'item-health') throw new SliceRequestError('token history reads only item-health');
+	}
 	const unreachable = (at: DateStamp, why: string): SliceResult => {
 		keeper.warn(`${LOG_PREFIX} ${ledger} ${request.from} to ${request.to}: ${why}, so nothing is drawn from ${at}`);
 		return { state: 'unreachable', rows: [], at, fault: null };
@@ -279,8 +286,10 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 		}
 		try {
 			rows = await rowsFor(held.engine, held.names, { ...request, from: first }, until, (message) =>
-				keeper.warn(`${LOG_PREFIX} ${ledger}: ${message}`)
-			);
+				keeper.warn(`${LOG_PREFIX} ${ledger}: ${message}`),
+				tokenHistory === undefined ? undefined : {
+					options: tokenHistory, complete: lostDays.length === 0 && Object.keys(setAside).length === 0
+				});
 		} finally {
 			await held.done();
 		}

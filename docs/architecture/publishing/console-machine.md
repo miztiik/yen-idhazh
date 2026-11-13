@@ -204,6 +204,56 @@ The config boundary rejects other values. Runtime radio choices stay in memory
 and redraw without a fetch; changing the initial mode is not persistence of a
 reader's choice.
 
+The token panel separately asks `tokenDeviations()` through the same staged
+data door. Browser DuckDB returns a nullable warning for each real run, trace
+and measure; presentation never calculates its statistics. The fixed input is
+the configured widest console span, clamped to item-health's first day and
+ending at this panel's original three-family endpoint. Display presets do not
+change that input. Both measures arrive together, so switching radios does not
+fetch or reassess.
+
+Each Read or Written value compares with at most the last 30 earlier qualifying
+matching runs, with at least 10 required:
+`abs(value - prior_mean) > 3 * prior_sample_stddev`. The current run and every
+later run are excluded. The comparison is strict and two-sided. The validated
+numeric route knobs `read_write_history_runs`, `read_write_min_prior_runs` and
+`read_write_stddev_multiplier` own those defaults; counts are whole numbers
+at least two, the minimum cannot exceed the history count, and the multiplier
+is positive and finite. Sample deviation zero stays zero: an unequal current
+value flags, while an equal value does not.
+Rule labels and readouts retain fractional multipliers rather than rounding
+them as whole article counts.
+
+Matching uses recorded model identity, quantisation, context, slots, threads,
+batch, temperature, output budgets and visual-decision setting.
+All measured articles in a run must have one known setup. Contiguous setup
+changes reset the baseline, including a return to an older setup; an unknown
+or unmeasured setup breaks that segment. The existing settings-change metadata
+also resets comparisons, including prompt and configured truncation-cap changes.
+An article's actual cut cap is an outcome, not its run's configured setup.
+The metadata covers changes only by UTC day, not by run or
+per-run prompt identity, so every run on a change day is unassessed. Dates
+outside that metadata's comparison coverage are unassessed too. No historical
+setting is reconstructed from current configuration.
+
+Missing values, too little earlier matching history, missing or failed history,
+unknown/mixed settings and unavailable baselines produce NULL, never FALSE.
+A lost day or set-aside file anywhere in the fixed input withholds its
+assessments. The raw selected-window read remains independent and still draws
+available measurements. History is never expanded beyond its declared bound
+to manufacture a baseline.
+
+A hollow warning diamond uses the existing semantic warning role without
+recolouring either categorical trace or changing its solid/dashed identity.
+The same pointer, keyboard, touch and hover readout explains Read and Written
+separately, naming the measured/recorded current cohort, actual prior runs and
+their article coverage, mean, sample deviation and strict cutoff. It says
+`Investigate; not proof of failure.`, `Not flagged.`, or the exact reason for
+`Unassessed`; none changes run status or implies complete-run consumption.
+The run readout retains its largest observed height at its current width.
+Selecting a shorter explanation must not shrink a bottom-of-page viewport and
+clear the shared hover; a width change measures the natural text again.
+
 ### The retained measurements
 
 Host busy processor time is `cpu_busy_pct / 100 * cpu_logical_processors *

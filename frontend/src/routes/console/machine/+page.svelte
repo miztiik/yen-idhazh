@@ -5,10 +5,11 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
-	import { consoleKnobs, readWriteMetricDefault, routeConsole, routeKnobs } from '$lib/console/route-console';
+	import { consoleKnobs, readWriteMetricDefault, routeConsole, routeKnobs, tokenDeviationRules } from '$lib/console/route-console';
 	import { routeReach, rangeFor, sliceOnce, retryAsks, tallyAsks, windowRange, type Range, type PanelQuery, type RouteReach } from '$lib/console/queries/window';
 	import type { LedgerReach, Row, SliceResult } from '$lib/data/ledger';
 	import * as queries from '$lib/console/queries/machine';
+	import { tokenDeviationsOnce, type TokenHistory } from '$lib/console/queries/token-deviations';
 	import { compareRuns } from '$lib/console/queries/shared';
 	import { PANEL_QUERIES, countersFrom, processors, shardCounts, textRows } from '$lib/console/machine/records';
 	import { MACHINE_QUERY_GROUPS } from '$lib/console/machine/query-groups';
@@ -36,9 +37,16 @@
 	const groups = routeConsole('machine').panel_groups;
 	const configured = routeKnobs('machine', [
 		'clocks_agree_within_pct', 'slower_machines_min_articles',
-		'closest_to_memory_rows', 'context_min_values', 'read_write_default_metric'
+		'closest_to_memory_rows', 'context_min_values', 'read_write_default_metric',
+		'read_write_history_runs', 'read_write_min_prior_runs', 'read_write_stddev_multiplier'
 	]);
 	const knobs = { ...configured, fleet_top_kinds: shared.fleet_top_kinds };
+	const deviationRules = tokenDeviationRules(knobs);
+	const tokenOptions = $derived({
+		...deviationRules, settingsFrom: data.settingsMoved?.compared_from ?? null,
+		settingsThrough: data.read ? data.band.verdict.date : null,
+		changeDays: data.settingsMoved?.changes.map((change) => change.date) ?? []
+	});
 	const cfg = $derived(data.machineConfig);
 	const presets = shared.window_presets;
 	const choice = useWindowChoice();
@@ -50,6 +58,8 @@
 	let ranges = $state<Record<string, Range>>({});
 	let answers = $state<Record<string, SliceResult | LedgerReach>>({});
 	let countFault = $state<string | null>(null);
+	let tokenHistory = $state<TokenHistory | null>(null);
+	let tokenHistoryRange = $state<Range | null>(null);
 	const asked: readonly PanelQuery[] = MACHINE_QUERY_GROUPS.flatMap((group) => [...group.queries]);
 	let requestedDays: number | null = null;
 	onMount(() => {
@@ -84,6 +94,7 @@
 	$effect(() => {
 		const days = windowDays;
 		const attempt = generation;
+		const historyOptions = tokenOptions;
 		if (!ready) return;
 		let current = true;
 		const previous = untrack(() => reaches);
@@ -93,13 +104,32 @@
 		reaches = {};
 		ranges = {};
 		countFault = null;
+		tokenHistory = null;
+		tokenHistoryRange = null;
 		void Promise.all(MACHINE_QUERY_GROUPS.map(async (group) => {
 			try {
 				const refreshed = await routeReach(group.ledgers);
 				if (!current) return;
 				const found = retryWindow ? retryReach(previous[group.id] ?? null, refreshed) : refreshed;
 				reaches = { ...reaches, [group.id]: found };
-				await Promise.all(group.queries.map(async (query) => {
+				const readHistory = async () => {
+					if (group.id !== 'native') return;
+					const range = rangeFor({ ...queries.readAgainstWrittenQuery, span: 'widest' }, days, found, presets);
+					if ('state' in range) {
+						if (current) tokenHistory = { state: range.state, readings: [], incomplete: false };
+						return;
+					}
+					if (current) tokenHistoryRange = range;
+					try {
+						const result = await tokenDeviationsOnce(range, historyOptions);
+						if (current) tokenHistory = result;
+					} catch (error) {
+						if (!current) return;
+						console.warn('[machine] Earlier token history did not arrive.', error);
+						tokenHistory = { state: 'unreachable', readings: [], incomplete: false };
+					}
+				};
+				await Promise.all([readHistory(), ...group.queries.map(async (query) => {
 					const range = rangeFor(query, days, found, presets);
 					let result: SliceResult | LedgerReach = 'state' in range ? range : await ask(query, range);
 					if (current && query.name === 'runShardsQuery' && 'rows' in result) {
@@ -112,10 +142,11 @@
 						if ('from' in range) ranges = { ...ranges, [query.name]: range };
 						answers = { ...answers, [query.name]: result };
 					}
-				}));
+				})]);
 			} catch (error) {
 				if (!current) return;
 				console.warn('[machine] The published record did not arrive.', group.id, error);
+				if (group.id === 'native') tokenHistory = { state: 'unreachable', readings: [], incomplete: false };
 				answers = { ...answers, ...Object.fromEntries(group.queries.map((query) => [query.name, { state: 'unreachable', fault: 'engine' }])) };
 			}
 		}));
@@ -241,6 +272,7 @@
 					{:else if id === 'read-against-written'}
 						<ReadWritePanel rows={rows('readAgainstWrittenQuery')} chart={cfg.chart} shell={data}
 							initialMetric={readWriteMetricDefault(knobs.read_write_default_metric)}
+							history={tokenHistory} historyRange={tokenHistoryRange} {deviationRules}
 							{start} {end} {windowDays} />
 					{:else if id === 'slower-on-same-work'}
 						<Panel {id} title={titles[id]} heading="h3">
