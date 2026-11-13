@@ -12,7 +12,7 @@
     {
       "id": "where-the-time-went",
       "panels": [
-        "tail-trend"
+        "slower-on-same-work"
       ],
       "title": "Where the time went"
     },
@@ -39,7 +39,7 @@
     "two-clocks",
     "slower-machines",
     "platform-mix",
-    "tail-trend",
+    "slower-on-same-work",
     "closest-to-memory",
     "memory-held",
     "context-headroom",

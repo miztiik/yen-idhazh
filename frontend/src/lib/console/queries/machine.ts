@@ -36,9 +36,9 @@ export const platformMixQuery = {
 	span: 'widest'
 } as const satisfies PanelQuery;
 
-export const tailTrendQuery = {
-	name: 'tailTrendQuery', ledger: 'item-health',
-	columns: ['date', 'run_id', 'summarize_ms'],
+export const slowerOnSameWorkQuery = {
+	name: 'slowerOnSameWorkQuery', ledger: 'item-health',
+	columns: ['date', 'cpu_model', 'prefill_ms', 'input_tokens', 'cached_tokens', 'decode_ms', 'output_tokens'],
 	span: 'window'
 } as const satisfies PanelQuery;
 

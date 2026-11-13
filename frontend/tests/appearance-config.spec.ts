@@ -40,7 +40,7 @@ test.describe('route-owned console configuration', () => {
 		expect(Object.keys(routes).sort()).toEqual(BAND_UNREAD.routes.map(({ id }) => id).sort());
 		expect(routes.machine.judged).toEqual([
 			'two-clocks', 'slower-machines', 'platform-mix',
-			'tail-trend', 'closest-to-memory', 'memory-held', 'context-headroom',
+			'slower-on-same-work', 'closest-to-memory', 'memory-held', 'context-headroom',
 			'article-cost', 'prompt-reuse', 'read-against-written'
 		]);
 		expect(routes.pipelines.judged).toContain('slowest-articles');

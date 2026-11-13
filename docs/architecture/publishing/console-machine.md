@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-13
 
 `/console/machine/` asks what machine the work actually got, whether its two
 clocks agree, and how much resource headroom that work left.
@@ -24,7 +24,9 @@ or route page data.
 In the browser, declared questions in `console/queries/machine.ts` ask the native
 `item-health`, `host-fingerprint` and `run-shards` ledgers through `sliceOnce`.
 The common end is the oldest successful through-day of those families, never
-the browser clock. Following panels use the chosen preset; snapshot panels use
+the browser clock. The fixed-work trend separately keeps its item-health-only
+endpoint and first-day clamp; its own UTC bounds print beside its readings.
+Neither group moves the other's endpoint. Following panels use the chosen preset; snapshot panels use
 the newest day and name their newest recorded run rather than falling back to
 an older successful one. The bounded widest host population supplies canonical
 full-identity palette slots and name qualifiers, so narrowing a window cannot
@@ -105,7 +107,7 @@ Membership and order live in `config/console/machine.json`.
 | What the machine was doing | `two-clocks` | One ranked gap percentage per shard of the newest recorded run, with the allowed-disagreement rule; the item and independent server readings are printed together |
 | | `slower-machines` | Separate Reading and Writing rankings of comparable work by machine kind |
 | | `platform-mix` | Shipped placement counts: one square a job below the configured floor, otherwise stacked day bars; never a probability of the next draw |
-| Where the time went | `tail-trend` | Existing five percentile subplots, one mark a qualified run and one shared scale |
+| Where the time went | `slower-on-same-work` | One dated seconds reading for a fixed typical article on one reference machine |
 | How close we are to the limits | `closest-to-memory` | Dated articles ranked by memory held; the empty remainder ends at total machine memory |
 | | `memory-held` | Existing memory split and overlapping process brackets, for the newest day |
 | | `context-headroom` | Label and summary request distributions on one logarithmic domain, with recorded context and cut-request rules |
@@ -137,6 +139,17 @@ middle; the slowest-tenth notch uses `ceil(0.9*n)-1`. The configured ten-article
 floor and kind cap apply independently to each list. Runs without a reference
 reading and articles lacking comparable work are counted and printed. Reading
 and writing never become one total.
+
+The fixed-work trend is a different comparison. `slower-on-same-work` chooses
+one reference machine by qualifying article count, with a lexical name
+tie-break, and one typical fresh-input/output token pair over the complete
+qualifying window cohort. Each UTC date prices that same article using its
+reference machine's upper-middle read and write milliseconds per token,
+divided by 1000 and summed as seconds. It keeps its daily calendar, null gaps,
+window median, reference details and unqualified/unnamed counts. It does not
+borrow the machine ranking's per-run normalization or three-family endpoint.
+The existing renderer is mounted inside one route-owned card in the timing
+group, with settings rules over its own clamped item-health range.
 
 The run-wide slowest-article ranking is mounted once on
 [Pipelines](what-the-pipelines-route-draws.md#the-run-wide-article-ranking-keeps-its-original-evidence-endpoint).
@@ -216,10 +229,10 @@ measurement, producer collection or persisted contract.
 Fingerprint identity is the algorithm and digest pair; equal text under
 algorithms 1 and 2 never joins. Name-only evidence stays coarse.
 
-The tail retains all five percentiles on one domain; under-floor runs are
-printed rather than drawn. Settings-change rules cross the whole stack.
-Its lede quotes the slowest tenth in seconds, not a ratio of the two extreme
-percentiles. Memory-held quotes the model server's resident bound as a share of
+The per-run percentile trend is mounted once on
+[Pipelines](what-the-pipelines-route-draws.md#per-run-slow-article-percentiles-keep-their-own-window),
+with its original cohort, floor and three-family endpoint.
+Memory-held quotes the model server's resident bound as a share of
 the whole machine, explicitly at most because its mapped pages overlap.
 Every dated comparison names changed dates with no measured column, rather than
 claiming nothing changed because no rule could be drawn. No-change and

@@ -11,7 +11,7 @@ export const EXPECT: RouteExpect | null = {
 		'write-cost',
 		'run-health',
 		'site-cost-per-item',
-		'slower-on-same-work',
+		'machine-latency',
 		'stage-timings',
 		'item-time-split'
 	],

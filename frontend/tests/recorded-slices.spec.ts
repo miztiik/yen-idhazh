@@ -24,7 +24,8 @@ const FIXTURES = path.join(REPO, 'tests', 'fixtures', 'console');
 const MODULES = { pipelines, model, machine, voices } satisfies
 	Record<string, Readonly<Record<string, PanelQuery>>>;
 const RECORDED_ROUTES: Readonly<Record<string, string>> = {
-	itemCostQuery: 'pipelines', writeCostQuery: 'model'
+	itemCostQuery: 'pipelines', writeCostQuery: 'model',
+	tailTrendQuery: 'machine', slowerOnSameWorkQuery: 'pipelines'
 };
 let state: string;
 

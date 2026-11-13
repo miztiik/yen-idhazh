@@ -22,9 +22,10 @@
 	import SiteCostPerItem from '$lib/console/pipelines/SiteCostPerItem.svelte';
 	import FailureMix from '$lib/console/pipelines/FailureMix.svelte';
 	import ItemTimeSplit from '$lib/console/pipelines/ItemTimeSplit.svelte';
-	import SlowerOnSameWork from '$lib/console/pipelines/SlowerOnSameWork.svelte';
 	import StageTimings from '$lib/console/pipelines/StageTimings.svelte';
 	import TimeCost from '$lib/console/TimeCost.svelte';
+	import TailTrendPanel from '$lib/console/pipelines/TailTrendPanel.svelte';
+	import RecordFrame from '$lib/console/machine/RecordFrame.svelte';
 	import RunTimeline from '$lib/console/pipelines/RunTimeline.svelte';
 	import SlowestArticles from '$lib/console/pipelines/SlowestArticles.svelte';
 	import ChartDrawing from '$lib/console/pipelines/ChartDrawing.svelte';
@@ -40,9 +41,9 @@
 		[queries.failureMixQuery.name]: (range) => sliceOnce(queries.failureMixQuery, range),
 		[queries.failedRuleQuery.name]: (range) => sliceOnce(queries.failedRuleQuery, range),
 		[queries.itemTimeSplitQuery.name]: (range) => sliceOnce(queries.itemTimeSplitQuery, range),
-		[queries.slowerOnSameWorkQuery.name]: (range) => sliceOnce(queries.slowerOnSameWorkQuery, range),
 		[queries.stageTimingsQuery.name]: (range) => sliceOnce(queries.stageTimingsQuery, range),
 		[queries.writeCostQuery.name]: (range) => sliceOnce(queries.writeCostQuery, range),
+		[queries.tailTrendQuery.name]: (range) => sliceOnce(queries.tailTrendQuery, range),
 		[queries.runTimelineQuery.name]: (range) => sliceOnce(queries.runTimelineQuery, range),
 		[queries.slowestArticlesQuery.name]: (range) => sliceOnce(queries.slowestArticlesQuery, range),
 		[queries.articleAgeQuery.name]: (range) => sliceOnce(queries.articleAgeQuery, range)
@@ -142,8 +143,9 @@
 	const titles: Record<string, string> = {
 		'at-a-glance': 'At a glance', 'run-health': 'Run health', 'site-cost-per-item': 'What one more article costs',
 		'failure-mix': 'What is failing, by stage', 'item-time-split': "Where an item's time went",
-		'slower-on-same-work': 'Whether a run is getting slower on the same work', 'stage-timings': 'Time per item by stage',
+		'stage-timings': 'Time per item by stage',
 		'write-cost': 'What one summary cost', 'run-timeline': "Where the run's time went, on the run's own clock",
+		'tail-trend': 'Whether the slowest articles are getting slower',
 		'slowest-articles': 'Which articles took longest in the last run',
 		'chart-drawing': 'Visuals drawn for articles',
 		'visual-refusals': 'Recorded refusal reasons over time',
@@ -151,7 +153,7 @@
 	};
 	const panelQueries: Record<string, PanelQuery> = {
 		'failure-mix': queries.failureMixQuery, 'item-time-split': queries.itemTimeSplitQuery,
-		'slower-on-same-work': queries.slowerOnSameWorkQuery, 'stage-timings': queries.stageTimingsQuery,
+		'stage-timings': queries.stageTimingsQuery,
 		'write-cost': queries.writeCostQuery, 'article-age': queries.articleAgeQuery,
 		'slowest-articles': queries.slowestArticlesQuery
 	};
@@ -167,7 +169,18 @@
 	{#each configured.panel_groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
-				{#if id === 'run-health'}
+				{#if id === 'tail-trend'}
+					{@const answer = answers[queries.tailTrendQuery.name]}
+					{@const range = ranges[queries.tailTrendQuery.name]}
+					<RecordFrame {id} title={titles[id]} heading="h2" state={answer === 'pending' ? 'loading' : answer.state}
+						height={knobs.chart_height} width={knobs.chart_width} {retry} {range}
+						windowed={{ name: 'machine-latency', days: windowDays }}>
+						{#if range !== undefined}
+							<TailTrendPanel rows={rows(queries.tailTrendQuery)} {range} shell={data} chart={data.chart}
+								{windowDays} floor={knobs.min_attempts_for_rate} />
+						{/if}
+					</RecordFrame>
+				{:else if id === 'run-health'}
 					<RunHealth yieldDays={data.runYieldDays} grid={data.grid} window={viewport} days={windowDays} floorPct={data.floorPct}
 						height={knobs.chart_height} width={knobs.chart_width} tickDensity={data.chart.tick_density} readoutMaxShare={data.chart.readout_max_share} />
 				{:else}
@@ -197,8 +210,6 @@
 							<Reserved record panelState={panelState(query)} height={knobs.chart_height} width={knobs.chart_width} name={id} label={titles[id]}>
 								{#if id === 'item-time-split'}
 									<ItemTimeSplit rows={rows(query)} calendar={calendar(query)} {knobs} chart={data.chart} rule={queryRule(query)} />
-								{:else if id === 'slower-on-same-work'}
-									<SlowerOnSameWork rows={rows(query)} calendar={calendar(query)} {knobs} chart={data.chart} rule={queryRule(query)} />
 								{:else if id === 'stage-timings'}
 									<StageTimings rows={rows(query)} {knobs} chart={data.chart} window={queryWindow(query)} rule={queryRule(query)} />
 								{:else if id === 'write-cost'}

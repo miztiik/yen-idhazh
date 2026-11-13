@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as queries from '../src/lib/console/queries/pipelines';
+import { slowerOnSameWorkQuery } from '../src/lib/console/queries/machine';
 import { createQueryWindow, rangeFor, type PanelQuery } from '../src/lib/console/queries/window';
 import { reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { consoleConfig } from '../src/lib/server/config';
@@ -17,7 +18,7 @@ import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
 import { failureRuleRows } from '../src/lib/console/failure-rules';
 import { siteCostPoints } from '../src/lib/console/pipelines/site-cost-per-item';
 import { articleAge } from '../src/lib/console/pipelines/article-age';
-import { slowerOnSameWork } from '../src/lib/console/pipelines/slower-on-same-work';
+import { slowerOnSameWork } from '../src/lib/console/machine/slower-on-same-work';
 import { nativeStageTimings } from '../src/lib/console/pipelines/stage-timings';
 import { nativeItemCost } from '../src/lib/console/model/item-cost';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
@@ -28,7 +29,7 @@ import type { Row, SliceResult } from '../src/lib/data/ledger';
 import { numberFormat } from './support/number-format';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ALL: readonly PanelQuery[] = PIPELINES_QUERY_GROUPS[0].queries;
+const ALL: readonly PanelQuery[] = [...PIPELINES_QUERY_GROUPS[0].queries, slowerOnSameWorkQuery];
 const answers = new Map<string, SliceResult>();
 let state: string;
 
@@ -184,7 +185,7 @@ test('failure stacks account for every failed native item, with the largest stag
 });
 
 test('one fixed reference prices the same typical work independently on every day', () => {
-	const own = rows(queries.slowerOnSameWorkQuery);
+	const own = rows(slowerOnSameWorkQuery);
 	const work = slowerOnSameWork(own);
 	const qualified = own.filter((row) => ['prefill_ms', 'input_tokens', 'cached_tokens', 'decode_ms', 'output_tokens']
 		.every((cell) => typeof row[cell] === 'number') && Number(row.input_tokens) > Number(row.cached_tokens) &&

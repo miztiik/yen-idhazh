@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { useWindowChoice } from '$lib/console/window-slot';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
+	import Panel from '$lib/components/Panel.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
 	import { consoleKnobs, readWriteMetricDefault, routeConsole, routeKnobs } from '$lib/console/route-console';
@@ -10,6 +11,8 @@
 	import * as queries from '$lib/console/queries/machine';
 	import { compareRuns } from '$lib/console/queries/shared';
 	import { PANEL_QUERIES, countersFrom, processors, shardCounts, textRows } from '$lib/console/machine/records';
+	import { MACHINE_QUERY_GROUPS } from '$lib/console/machine/query-groups';
+	import { retryReach } from '$lib/console/pipelines/record-window';
 	import { describeRefusedRuns } from '$lib/console/machine/refused-runs';
 	import { finiteCell } from '$lib/console/rates';
 	import { formatNumber } from '$lib/number-format';
@@ -19,13 +22,13 @@
 	import { fleetJobs } from '$lib/charts/fleet';
 	import { articleCost } from '$lib/console/machine/article-cost';
 	import { memoryHeld } from '$lib/console/machine/memory-held';
-	import { percentileHistory } from '$lib/charts/machine';
+	import { daysInWindow } from '$lib/charts/viewport';
 	import RecordFrame from '$lib/console/machine/RecordFrame.svelte';
 	import MachineCharts from '$lib/console/machine/MachineCharts.svelte';
 	import ArticleCostPanel from '$lib/console/machine/ArticleCostPanel.svelte';
 	import MemoryHeldPanel from '$lib/console/machine/MemoryHeldPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
-	import TailTrendPanel from '$lib/console/machine/TailTrendPanel.svelte';
+	import SlowerOnSameWork from '$lib/console/machine/SlowerOnSameWork.svelte';
 	import ReadWritePanel from '$lib/console/machine/ReadWritePanel.svelte';
 
 	let { data } = $props();
@@ -42,11 +45,13 @@
 	const windowDays = $derived(choice.days);
 	let ready = $state(false);
 	let generation = $state(0);
-	let reach = $state<RouteReach | null>(null);
+	let reaches = $state<Record<string, RouteReach>>({});
+	const reach = $derived(reaches.native ?? null);
+	let ranges = $state<Record<string, Range>>({});
 	let answers = $state<Record<string, SliceResult | LedgerReach>>({});
 	let countFault = $state<string | null>(null);
-	const asked = [...new Map([...Object.values(PANEL_QUERIES).flat(), queries.platformMixQuery, queries.articleCostQuery]
-		.map((query) => [query.name, query])).values()];
+	const asked: readonly PanelQuery[] = MACHINE_QUERY_GROUPS.flatMap((group) => [...group.queries]);
+	let requestedDays: number | null = null;
 	onMount(() => {
 		ready = true;
 	});
@@ -54,7 +59,7 @@
 		choice.select(days);
 	}
 	function retry() {
-		retryAsks(asked.filter((query) => answers[query.name]?.state === 'unreachable'));
+		retryAsks(asked.filter((query) => ['missing', 'unreachable'].includes(answers[query.name]?.state ?? 'loading')));
 		generation++;
 	}
 	function ask(query: PanelQuery, range: Range): Promise<SliceResult> {
@@ -64,7 +69,7 @@
 			case 'twoClocksHostsQuery': return sliceOnce(queries.twoClocksHostsQuery, range);
 			case 'slowerMachinesQuery': return sliceOnce(queries.slowerMachinesQuery, range);
 			case 'platformMixQuery': return sliceOnce(queries.platformMixQuery, range);
-			case 'tailTrendQuery': return sliceOnce(queries.tailTrendQuery, range);
+			case 'slowerOnSameWorkQuery': return sliceOnce(queries.slowerOnSameWorkQuery, range);
 			case 'closestToMemoryQuery': return sliceOnce(queries.closestToMemoryQuery, range);
 			case 'memoryHeldQuery': return sliceOnce(queries.memoryHeldQuery, range);
 			case 'contextHeadroomQuery': return sliceOnce(queries.contextHeadroomQuery, range);
@@ -81,15 +86,20 @@
 		const attempt = generation;
 		if (!ready) return;
 		let current = true;
+		const previous = untrack(() => reaches);
+		const retryWindow = requestedDays === days;
+		requestedDays = days;
 		answers = {};
-		reach = null;
+		reaches = {};
+		ranges = {};
 		countFault = null;
-		void (async () => {
+		void Promise.all(MACHINE_QUERY_GROUPS.map(async (group) => {
 			try {
-				const found = await routeReach(['item-health', 'host-fingerprint', 'run-shards']);
+				const refreshed = await routeReach(group.ledgers);
 				if (!current) return;
-				reach = found;
-				await Promise.all(asked.map(async (query) => {
+				const found = retryWindow ? retryReach(previous[group.id] ?? null, refreshed) : refreshed;
+				reaches = { ...reaches, [group.id]: found };
+				await Promise.all(group.queries.map(async (query) => {
 					const range = rangeFor(query, days, found, presets);
 					let result: SliceResult | LedgerReach = 'state' in range ? range : await ask(query, range);
 					if (current && query.name === 'runShardsQuery' && 'rows' in result) {
@@ -98,14 +108,17 @@
 							result = { state: 'unreachable' };
 						}
 					}
-					if (current) answers = { ...answers, [query.name]: result };
+					if (current) {
+						if ('from' in range) ranges = { ...ranges, [query.name]: range };
+						answers = { ...answers, [query.name]: result };
+					}
 				}));
 			} catch (error) {
 				if (!current) return;
-				console.warn('[machine] The published record did not arrive.', error);
-				answers = Object.fromEntries(asked.map((query) => [query.name, { state: 'unreachable', fault: 'engine' }]));
+				console.warn('[machine] The published record did not arrive.', group.id, error);
+				answers = { ...answers, ...Object.fromEntries(group.queries.map((query) => [query.name, { state: 'unreachable', fault: 'engine' }])) };
 			}
-		})();
+		}));
 		return () => { current = false; };
 	});
 	const through = $derived(reach?.through ?? null);
@@ -169,14 +182,13 @@
 	const recordingGaps = $derived(Boolean((ready && off) || recordNotes.startedMidWindow ||
 		serverNotes.startedMidWindow || serverNotes.coveredElsewhere || lostSentence));
 	const evidence = $derived(recordingGaps || countFault !== null || refused !== null);
-	const latency = $derived(percentileHistory(textRows(rows('tailTrendQuery')), shared.min_attempts_for_rate));
-	const settings = $derived(settingsRules(data, { from: start, to: end }, 'none'));
-	const changes = $derived('changes' in settings ? settings.changes : []);
-	const changeNote = $derived('note' in settings ? settings.note : settings.declined);
+	const sameWorkRange = $derived(ranges[queries.slowerOnSameWorkQuery.name]);
+	const sameWorkCalendar = $derived(sameWorkRange === undefined ? [] : daysInWindow({ start: sameWorkRange.from, end: sameWorkRange.to }));
+	const sameWorkRule = $derived(settingsRules(data, { from: sameWorkRange?.from ?? '', to: sameWorkRange?.to ?? '' }, 'none'));
 	const titles: Readonly<Record<string, string>> = {
 		'two-clocks': 'Clock agreement',
 		'slower-machines': 'Which machines do the same work slower', 'platform-mix': 'Which machines ran our jobs, day by day',
-		'tail-trend': 'Whether the slowest articles are getting slower',
+		'slower-on-same-work': 'Whether a run is getting slower on the same work',
 		'closest-to-memory': 'Which articles left the machine least memory', 'memory-held': "What is holding the machine's memory",
 		'context-headroom': 'How much of the reading limit an article takes', 'article-cost': 'What one article costs the machine',
 		'prompt-reuse': 'How much text the model reads again', 'read-against-written': 'What a run reads against what it writes'
@@ -215,7 +227,9 @@
 	{#each groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
-				<RecordFrame {id} title={titles[id]} state={panelState(id)} height={cfg.chart.height_px} width={cfg.chart.width_px} {retry}>
+				<RecordFrame {id} title={titles[id]} state={panelState(id)} height={cfg.chart.height_px} width={cfg.chart.width_px} {retry}
+					range={id === 'slower-on-same-work' ? sameWorkRange : undefined}
+					windowed={id === 'slower-on-same-work' ? { name: id, days: windowDays } : undefined}>
 					{#if id === 'platform-mix'}
 						<PlatformMixPanel {ramp} {start} {end} {windowDays} {lost} recordRows={rows('platformMixQuery')} recording={cfg.recording}
 							gradients={cfg.gradients} chart={cfg.chart} knobs={shared} />
@@ -228,10 +242,16 @@
 						<ReadWritePanel rows={rows('readAgainstWrittenQuery')} chart={cfg.chart} shell={data}
 							initialMetric={readWriteMetricDefault(knobs.read_write_default_metric)}
 							{start} {end} {windowDays} />
-					{:else if id === 'tail-trend'}
-						<TailTrendPanel rows={latency.runs} {start} {end} modelChanges={changes.map((move) => move.date)}
-							missingMarkers={changeNote} moved={changes.map((move) => ({ date: move.date, settings: [move.words] }))}
-							chart={cfg.chart} {windowDays} days={windowDays} floor={latency.floor} tooFew={latency.tooFew} />
+					{:else if id === 'slower-on-same-work'}
+						<Panel {id} title={titles[id]} heading="h3">
+							<div>
+								<SlowerOnSameWork rows={rows(queries.slowerOnSameWorkQuery.name)} calendar={sameWorkCalendar}
+									knobs={shared} chart={cfg.chart} rule={sameWorkRule} />
+								{#if sameWorkRange !== undefined}
+									<p data-native-window data-range-from={sameWorkRange.from} data-range-to={sameWorkRange.to}>Native record: {sameWorkRange.from} through {sameWorkRange.to} UTC.</p>
+								{/if}
+							</div>
+						</Panel>
 					{:else}
 						<MachineCharts {id} newestRunId={latestRunId} title={titles[id]} rows={id === 'two-clocks'
 							? rows('twoClocksQuery').filter((row) => row.machine_job === null || row.machine_job === '' || row.machine_job === 'work')

@@ -11,7 +11,7 @@ export const EXPECT: RouteExpect = {
 		{
 			id: 'where-the-time-went',
 			title: 'Where the time went',
-			panels: ['tail-trend']
+			panels: ['slower-on-same-work']
 		},
 		{
 			id: 'how-close-to-the-limits',

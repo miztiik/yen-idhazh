@@ -13,7 +13,7 @@ export const PANEL_QUERIES: Readonly<Record<string, readonly PanelQuery[]>> = {
 	'two-clocks': [queries.twoClocksQuery, queries.twoClocksHostsQuery, queries.platformMixQuery, queries.runShardsQuery],
 	'slower-machines': [queries.slowerMachinesQuery],
 	'platform-mix': [queries.platformMixQuery],
-	'tail-trend': [queries.tailTrendQuery],
+	'slower-on-same-work': [queries.slowerOnSameWorkQuery],
 	'closest-to-memory': [queries.closestToMemoryQuery],
 	'memory-held': [queries.memoryHeldQuery],
 	'context-headroom': [queries.contextHeadroomQuery],

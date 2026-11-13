@@ -61,11 +61,11 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/console/pipelines': [
 		'ArticleAge.svelte', 'AtAGlance.svelte', 'ChartDrawing.svelte',
 		'FailureMix.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
-		'RunTimeline.svelte', 'SlowestArticles.svelte', 'SiteCostPerItem.svelte', 'SlowerOnSameWork.svelte', 'StageTimings.svelte',
+		'RunTimeline.svelte', 'SlowestArticles.svelte', 'SiteCostPerItem.svelte', 'TailTrendPanel.svelte', 'StageTimings.svelte',
 		'VisualRefusals.svelte',
 		'article-age.ts', 'at-a-glance.ts', 'attempt-notes.ts', 'chart-drawing.ts', 'drawing-flow.ts', 'failure-mix.ts',
 		'item-time-split.ts', 'query-groups.ts', 'record-window.ts', 'run-health.ts', 'slowest-articles.ts',
-		'run-timeline.ts', 'site-cost-per-item.ts', 'slower-on-same-work.ts', 'stage-timings.ts', 'visual-attempts.ts', 'visual-refusals.ts'
+		'run-timeline.ts', 'site-cost-per-item.ts', 'stage-timings.ts', 'visual-attempts.ts', 'visual-refusals.ts'
 	],
 	'src/lib/console/model': [
 		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'source-doubts.ts', 'summary-length.ts',
@@ -91,7 +91,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'article-cost.ts', 'ArticleCostPanel.svelte', 'FleetDots.svelte',
 		'MachineCharts.svelte', 'RecordFrame.svelte', 'counters.ts', 'host-types.ts', 'records.ts', 'memory-held.ts',
 		'MemoryHeldPanel.svelte', 'PlatformMixPanel.svelte',
-		'refused-runs.ts', 'run-axis.ts', 'ReadWritePanel.svelte', 'TailTrendPanel.svelte'
+		'query-groups.ts', 'refused-runs.ts', 'run-axis.ts', 'ReadWritePanel.svelte', 'SlowerOnSameWork.svelte', 'slower-on-same-work.ts'
 	],
 	'src/lib/data': [
 		'ask-reader.ts', 'compact-index.ts', 'configured-catalog.ts', 'engine.ts', 'fetched-bytes.ts', 'host-fingerprint.ts', 'ledger-catalog.ts', 'ledger-columns.ts',
