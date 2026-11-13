@@ -10,6 +10,7 @@ import { pageKeeper, type PageKeeper } from './page-keeper';
 import { renewReadSession } from './read-session';
 import { readSlice } from './slice-reader';
 import { questionReader } from './question-reader';
+import { TOKEN_HISTORY_COLUMNS, type TokenDeviationOptions } from './token-deviation-query';
 import type { LedgerCatalog } from './ledger-catalog';
 import type { QueryEngine } from './slice-query';
 import type { AskOptions, AskResult, Column, DateStamp, LedgerName, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
@@ -28,6 +29,7 @@ export function explorerBaseUrl(): string {
 export interface LedgerReader {
 	question: ReturnType<typeof questionReader>;
 	slice(ledger: LedgerName, options: SliceOptions): Promise<SliceResult>;
+	tokenDeviations(from: DateStamp, to: DateStamp, options: TokenDeviationOptions): Promise<SliceResult>;
 	ledgerReach(ledger: LedgerName): Promise<LedgerReach>;
 	ask(options: AskOptions): Promise<AskResult>;
 	askCost(ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<SpanCost>;
@@ -63,6 +65,9 @@ export function createLedgerReader(catalog: LedgerCatalog, compactPrefix = explo
 	return {
 		question,
 		slice: (ledger, options) => readSlice(keeper(), ledger, options),
+		tokenDeviations: (from, to, options) => readSlice(keeper(), 'item-health', {
+			columns: TOKEN_HISTORY_COLUMNS, from, to
+		}, options),
 		ledgerReach: (ledger) => readReach(keeper(), ledger),
 		ask: (options) => readAsk(compactKeeper(), options),
 		askCost: (ledgers, from, to) => readAskCost(compactKeeper(), ledgers, from, to),
@@ -86,6 +91,9 @@ export function createLedgerReader(catalog: LedgerCatalog, compactPrefix = explo
 let configuredReader: LedgerReader | null = null;
 function panelReader(): LedgerReader { return configuredReader ??= createLedgerReader(configuredCatalog); }
 export function slice(ledger: LedgerName, options: SliceOptions): Promise<SliceResult> { return panelReader().slice(ledger, options); }
+export function tokenDeviations(from: DateStamp, to: DateStamp, options: TokenDeviationOptions): Promise<SliceResult> {
+	return panelReader().tokenDeviations(from, to, options);
+}
 export function ledgerReach(ledger: LedgerName): Promise<LedgerReach> { return panelReader().ledgerReach(ledger); }
 export function ask(options: AskOptions): Promise<AskResult> { return panelReader().ask(options); }
 export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<SpanCost> { return panelReader().askCost(ledgers, from, to); }

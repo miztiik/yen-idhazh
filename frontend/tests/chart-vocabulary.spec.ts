@@ -38,7 +38,7 @@ import {
 import { serverCompiler } from './support/server-render';
 import { drawnSourceFiles, readSource, resolveSource, scriptTree } from './support/console-sources';
 import { chartConfig, routeConsoles, routeConsolesFrom } from '../src/lib/server/config';
-import { readWriteMetricDefault } from '../src/lib/console/route-console';
+import { readWriteMetricDefault, tokenDeviationRules } from '../src/lib/console/route-console';
 import { BAND_UNREAD } from '../src/lib/console/band';
 
 /**
@@ -829,7 +829,8 @@ test.describe('drawn by Svelte, rendered on the server', () => {
 					date: '2026-09-01', run_id: '2026-09-01-1', item_id: `article-${index}`, input_tokens, output_tokens
 				})),
 				chart: chartConfig(), shell: BAND_UNREAD, start: '2026-09-01', end: '2026-09-01',
-				windowDays: 1, initialMetric: readWriteMetricDefault(routes.machine.knobs.read_write_default_metric)
+				windowDays: 1, initialMetric: readWriteMetricDefault(routes.machine.knobs.read_write_default_metric),
+				history: null, historyRange: null, deviationRules: tokenDeviationRules(routes.machine.knobs)
 			});
 			expect(body).toContain(`data-token-metric="${metric}"`);
 			expect(body).toContain(`data-token-measure="${metric}" data-selected="true"`);

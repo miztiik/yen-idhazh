@@ -1,5 +1,6 @@
 import { BAND_UNREAD, type RouteId } from './band';
 import type { ConsoleConfig } from '../server/config';
+import { checkedTokenDeviationRules, type TokenDeviationRules } from '../data/token-deviation-query';
 
 export interface ConsolePanelGroup {
 	readonly id: string;
@@ -28,6 +29,14 @@ export function readWriteMetricDefault(value: number): ReadWriteMetric {
 	if (value === 0) return 'total';
 	if (value === 1) return 'median';
 	throw new Error('config/console/machine.json knobs.read_write_default_metric must be 0 (Run total) or 1 (Median per article)');
+}
+
+export function tokenDeviationRules(knobs: Readonly<Record<string, number>>): TokenDeviationRules {
+	return checkedTokenDeviationRules({
+		historyRuns: knobs.read_write_history_runs,
+		minimumRuns: knobs.read_write_min_prior_runs,
+		multiplier: knobs.read_write_stddev_multiplier
+	});
 }
 
 function object(value: unknown, path: string): Record<string, unknown> {
@@ -108,6 +117,8 @@ export function routeConsolesFrom(files: Readonly<Record<string, unknown>>): Rou
 		if (route === 'machine' && Object.hasOwn(finite, 'read_write_default_metric')) {
 			readWriteMetricDefault(finite.read_write_default_metric);
 		}
+		if (route === 'machine' && ['read_write_history_runs', 'read_write_min_prior_runs', 'read_write_stddev_multiplier']
+			.some((key) => Object.hasOwn(finite, key))) tokenDeviationRules(finite);
 		result[route] = { panel_groups: groups, judged, knobs: finite };
 	}
 	return result;

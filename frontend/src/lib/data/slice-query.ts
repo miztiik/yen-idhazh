@@ -25,6 +25,7 @@
  */
 
 import type { DateStamp, Predicate, Row, SliceOptions } from './slice-shapes';
+import { tokenDeviationStatement, type TokenDeviationOptions } from './token-deviation-query';
 
 /** The cell a compacted row carries its UTC day in, where its contract has one:
  *  `ledger.keys.DATE_CELL`. */
@@ -145,7 +146,8 @@ export async function rowsFor(
 	names: readonly string[],
 	request: Required<SliceOptions>,
 	until: DateStamp,
-	warn: (message: string) => void
+	warn: (message: string) => void,
+	tokenHistory?: { options: TokenDeviationOptions; complete: boolean }
 ): Promise<Row[]> {
 	const files = listOf(names);
 	const described = await engine.rows(`DESCRIBE SELECT * FROM ${source(files)}`, []);
@@ -157,9 +159,12 @@ export async function rowsFor(
 	if (dayColumn(present) === null) {
 		warn(`no file in this span holds the column ${DATE_COLUMN} or ${FILED_DAY_COLUMN}, so no row is placed in the span`);
 	}
-	const { sql, params } = statementFor(files, present, request, until);
+	const sourceQuery = statementFor(files, present, request, until);
+	const { sql, params } = tokenHistory === undefined ? sourceQuery
+		: tokenDeviationStatement(sourceQuery, tokenHistory.options, tokenHistory.complete);
 	const raw = await engine.rows(sql, params);
-	return raw.map((cells) =>
-		Object.fromEntries(request.columns.map((column) => [column, cellOf(column, cells[column])]))
-	);
+	return raw.map((cells) => Object.fromEntries(
+		(tokenHistory === undefined ? request.columns : Object.keys(cells))
+			.map((column) => [column, cellOf(column, cells[column])])
+	));
 }

@@ -69,6 +69,15 @@
 				<line x1={geometry.columns[showing]} x2={geometry.columns[showing]} y1={box.top} y2={box.bottom}
 					stroke="var(--chart-axis)" data-run-guide />
 			{/if}
+			{#each geometry.lines as trace (trace.label)}
+				{#each trace.points.filter((point) => point.warning) as point (point.column)}
+					<path class="warning" d="M -1 0 L 0 -1 L 1 0 L 0 1 Z"
+						transform="translate({point.x} {point.y}) scale({box.labels.fontSize / 2})"
+						fill="var(--color-surface)" stroke="var(--band-medium)" vector-effect="non-scaling-stroke"
+						data-token-warning={trace.label} data-run-id={geometry.runs[point.column].runId}
+						data-run-value={point.value} />
+				{/each}
+			{/each}
 		</svg>
 		<ChartReadout readout={geometry.readout} at={selected} {name} maxShare={readoutMaxShare}
 			restingNote=", the newest run"
@@ -86,4 +95,5 @@
 	.trace.dashed, .boundary { stroke-dasharray: calc(var(--console-chart-line-width) * 4) calc(var(--console-chart-line-width) * 2); }
 	.boundary.checker { stroke-dasharray: var(--console-chart-line-width) calc(var(--console-chart-line-width) * 2); }
 	circle { r: calc(var(--console-chart-line-width) * 2); stroke-width: var(--console-chart-line-width); }
+	.warning { stroke-width: var(--console-chart-line-width); }
 </style>

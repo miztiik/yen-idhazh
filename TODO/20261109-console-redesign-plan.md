@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-11-13
 **Level**: 5 - resolve design gates before implementation.
-**Status**: Rows 1-7 and Rows 8a-8g are complete. N1/N2/N4/N5 retain their measurements and original endpoint groups. H14's nullable-flag design is complete and remains queued for separate delivery.
+**Status**: All selected increments are implemented. N1/N2/N4/N5 retain their measurements and original endpoint groups. Row 8 delivers the final H14 increment: browser-DuckDB warning flags on the existing per-run token chart.
 
 ## 0. Operating contract
 
@@ -45,7 +45,7 @@ Table C
 | C5 | 5 | Correct retained chart readings and evidence windows | 4 | E | DONE | `redesigned-system` | - | App session `1981e1da-00bf-456b-a4db-13554ac3fb87`; branch `chart-readings-and-windows` |
 | C6 | 6 | Restore collection needed by retained hardware diagnostics | 4 | F | DONE | `animated-fiesta` | - | App session `7e6961ce-76c2-4e78-ad8c-f4991bad6ce5`; branch `restore-hardware-telemetry` |
 | C7 | 7 | Make retained explorer answers directly reachable and drawable | 1 | G | DONE | `ubiquitous-doodle` | - | App session `735f58fd-23bf-4189-9efb-d08402988c46`; branch `explorer-reliability` |
-| C8 | 8 | Deliver selected cuts, page moves and the queued token flag | 1 | H | IN-FLIGHT | - | - | M8/M9 are implemented in Row 8e and N1/N2 in Row 8f. Row 8g delivers N4/N5, followed by H14's settled design in a separate delivery. |
+| C8 | 8 | Deliver the final per-run token warning | 8g | H | DONE | `fluffy-broccoli` | - | App session `9d595242-1534-40a3-989a-d4cab65643d8`; branch `fluffy-broccoli` |
 | C9 | 8a | Simplify selected Pipelines visual diagnostics | 1, 5 | I | DONE | `psychic-goggles` | - | App session `3932eb6c-014c-40e4-9e51-5617ff2c30f0`; branch `pipelines-visual-diagnostics` |
 | C10 | 8b | Remove the Pipelines written-type diagnostic | 8a | J | DONE | `legendary-garbanzo` | - | App session `da0bfe17-ef48-4e8f-93d2-7c92c1dd13ce`; branch `remove-written-type-diagnostic` |
 | C11 | 8c | Remove the Summaries model-change comparison | 8b | K | DONE | `jubilant-happiness` | - | App session `705cdced-00f1-4c51-bbe0-ae3c6079063b`; branch `remove-model-change-comparison` |
@@ -744,37 +744,37 @@ Table AA
 | AA2 | Migrate the ledger date type | Archive migration for a query mistake. | Schema versioning and historical reader changes. | O8. |
 | AA3 | Add explorer exports or a server endpoint | Duplicates data delivery. | New persisted/publication contract or hosting change. | A5/B3. |
 
-## 9. Row #8 - Settle remaining permanent cuts, page moves and token anomaly rules
+## 9. Row #8 - Mark unusual token readings on the existing per-run chart
 
-- **Scope:** M8/M9 are implemented in Row 8e and N1/N2 in Row 8f. Row 8g delivers N4/N5, preserving every source, cohort and endpoint requirement in Tables F-K and N. M1-M3 and M10 are settled in Row 8a; M4 in Row 8b; M6 in Row 8c; M7/M11-M13 and N3 in Row 8d. Deliver H14's settled nullable flag in its own increment after the selected moves.
-- **Status:** Row 8g implements the two hardware-timing moves. H14's design is complete and queued after them; no warning implementation belongs to this delivery.
-- **Delivery inventory:** Rows 8f/8g name their exact move inventories below. Narrow the remaining H14 inventory to its delivery before implementation:
-  - `config/console/pipelines.json`, `config/console/model.json`, `config/console/machine.json`
-  - `frontend/src/routes/console/+page.server.ts`, `frontend/src/routes/console/+page.svelte`
-  - `frontend/src/routes/console/model/+page.svelte`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/src/routes/console/machine/+page.server.ts`
-  - `frontend/src/lib/console/queries/pipelines.ts`, `frontend/src/lib/console/queries/model.ts`, `frontend/src/lib/console/queries/machine.ts`
-  - `frontend/src/lib/console/model/panels.ts`, `frontend/src/lib/console/model/Panels.svelte`, `frontend/src/lib/console/model/slice.ts`, `frontend/src/lib/console/eval-instruments.ts`
-  - `frontend/src/lib/console/model/ItemCost.svelte`, `frontend/src/lib/console/model/item-cost.ts` (moved in Row 8f); `frontend/src/lib/console/machine/SlowerOnSameWork.svelte`, `frontend/src/lib/console/machine/slower-on-same-work.ts` (moved in Row 8g)
-  - `frontend/src/lib/console/TimeCost.svelte` (shared writing/checking presentation extracted in Row 8f)
-  - `frontend/src/lib/console/machine/MachineCharts.svelte`, `frontend/src/lib/console/machine/records.ts`, `frontend/src/lib/console/machine/query-groups.ts`, `frontend/src/lib/console/pipelines/TailTrendPanel.svelte` (moved in Row 8g), `frontend/src/lib/console/machine/PlatformMixPanel.svelte`
-  - `frontend/src/lib/server/ledger-rows.ts`, `frontend/src/lib/charts/machine.ts`
-  - `backend/tests/contracts/test_panel_queries.py`
-  - `frontend/tests/console-model-instruments.spec.ts`, `frontend/tests/console-model-panels.spec.ts`, `frontend/tests/console-model-reductions.spec.ts`, `frontend/tests/console-model-ledgers.spec.ts`, `frontend/tests/console-panel-queries.spec.ts`
-  - `frontend/tests/console-item-cost.spec.ts`, `frontend/tests/console-pipelines-native.spec.ts`, `frontend/tests/console-pipelines-nothings.spec.ts`, `frontend/tests/console-pipelines-retained-item-cost.spec.ts`
-  - `frontend/tests/console-canary-host-halves.spec.ts`, `frontend/tests/recorded-slices.spec.ts`, `frontend/tests/ledger-rows.spec.ts`, `frontend/tests/chart-vocabulary.spec.ts`, `frontend/tests/platform-mix.spec.ts`
-  - `frontend/tests/console-visual-attempts.spec.ts`, `frontend/tests/console-machine-journey.spec.ts`, `frontend/tests/console-pipelines-lifecycle.spec.ts`
-  - `frontend/scripts/test-groups.ts`, `frontend/tests/support/panel-tab.ts`, `frontend/tests/support/console-sources.ts`, `frontend/tests/support/console-window/server-panels.ts`
-  - `frontend/tests/support/console-expect/console-built-page/model.ts`, `frontend/tests/support/console-expect/console-built-page/pipelines.ts`, `frontend/tests/support/console-expect/console-built-page/machine.ts`, `frontend/tests/support/console-expect/console-built-page/voices.ts`
-  - `docs/architecture/publishing/console.md`, `docs/architecture/publishing/what-the-pipelines-route-draws.md`, `docs/architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md`, `docs/architecture/publishing/console-machine.md`, `docs/architecture/publishing/who-supplied-the-day-and-which-feeds-failed.md`
-  - `docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md`, `docs/concepts/console-design/what-the-quality-and-source-panels-draw.md`, `docs/concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md`
+- **Scope:** H14 only, after Row 8g. Keep every merged cut, placement, source,
+  cohort and endpoint. Add no producer, export, stored field, service or test.
+- **Status:** Implemented as a narrow browser computation and warning/readout
+  adapter; the original raw chart query and both metric modes remain.
+- **Delivery inventory:**
+  - `config/console/machine.json`, `frontend/src/lib/console/route-console.ts`
+  - `frontend/src/lib/data/token-deviation-query.ts`, `frontend/src/lib/data/slice-query.ts`, `frontend/src/lib/data/slice-reader.ts`, `frontend/src/lib/data/ledger.ts`
+  - `frontend/src/lib/console/queries/token-deviations.ts`, `frontend/src/lib/console/machine/token-deviations.ts`
+  - `frontend/src/lib/console/machine/ReadWritePanel.svelte`, `frontend/src/lib/charts/d3/runSeries.ts`, `frontend/src/lib/charts/d3/RunSeries.svelte`
+  - `frontend/src/routes/console/machine/+page.svelte`
+  - `frontend/tests/chart-vocabulary.spec.ts` (existing component-prop binding only; no new coverage)
+  - `backend/idhazh/contracts/item_health.py` (existing column-reader metadata only)
+  - `docs/architecture/publishing/console-machine.md`, `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`, `docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md`
   - `TODO/20261109-console-redesign-plan.md`
-- **Acceptance gates:** Preserve D14/T2-T5 and the settled losses. Deliver the four selected moves separately from Row 8e, then use the H14 contract below in its own increment.
-- **Oracle:** Selected removals are permanent, selected moves mount once at their actual destination, and retained native answers keep their original cohorts and endpoint groups. H14 remains unimplemented until its queued increment.
+- **Acceptance gates:** Existing relevant lint, types, contract/query/logic and
+  browser checks; no new tests or local full suite. Inspect the production SQL
+  with explicitly synthetic temporary values, then the actual Hardware surface
+  and one cross-route interaction. Certify the committed-head canary through
+  the existing verified-preview machinery; CI certifies the exact candidate.
+- **Oracle:** SQL alone supplies the nullable per-run, per-trace, per-measure
+  flag. Earlier matching runs exclude the current and future runs, keep numeric
+  suffix order and a fixed historical input, and retain actual measured article
+  coverage. Unavailable evidence cannot become normal. Warning diamonds and
+  exact shared readouts do not recolour traces or change run status.
 
-### H14 - Settled flag, queued after the four route moves
+### H14 - Implemented warning and unavailable-baseline rules
 
 - **Delivery:** A simple nullable boolean flag computed by browser DuckDB.
-  No H14 implementation belongs to Row 8e.
+  Svelte/D3 draws it without calculating statistics.
 - **Measure:** Use the selected Run total or Median per article measure;
   evaluate read and write separately.
 - **Cohort:** Match recorded model/token settings and reset at known settings
@@ -782,6 +782,17 @@ Table AA
 - **Rule:** Compare the current value only with that prior cohort's mean and
   sample standard deviation:
   `abs(value - prior_mean) > 3 * prior_sample_stddev`.
+- **Bound:** The configured widest console span, clamped to item-health's first
+  day at H14's original three-family endpoint. Display presets cannot alter the
+  assessment. Counts and multiplier use validated numeric route knobs.
+- **Unavailable:** Missing readings, insufficient prior runs, unknown/mixed
+  recorded settings, settings-change days and unavailable history stay NULL.
+  Date-only change metadata withholds the whole UTC day. Lost days or unread
+  files withhold assessments for the fixed input. No expansion or fabricated
+  baseline fills the gap. A flat baseline retains the strict expression above.
+- **Readout:** Separate Read/Written reasons name the measured current cohort
+  and actual prior baseline. Warnings call for investigation, not a failure
+  verdict; unflagged readings have no success colour.
 - **Exclusions:** No IQR or percentage guard, Python analytics or new tests.
 
 ## 10. Row #8a - Simplify selected Pipelines visual diagnostics

@@ -53,6 +53,9 @@
     "slowest_articles_rows": 20,
     "closest_to_memory_rows": 20,
     "context_min_values": 2,
-    "read_write_default_metric": 0
+    "read_write_default_metric": 0,
+    "read_write_history_runs": 30,
+    "read_write_min_prior_runs": 10,
+    "read_write_stddev_multiplier": 3
   }
 }
