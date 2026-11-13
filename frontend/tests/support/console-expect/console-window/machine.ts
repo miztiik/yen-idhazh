@@ -6,7 +6,7 @@ export const EXPECT: RouteExpect | null = {
 		'machine-article-cost',
 		'machine-context',
 		'machine-fleet',
-		'machine-latency',
+		'slower-on-same-work',
 		'machine-prompt-reuse',
 		'machine-tokens'
 	],

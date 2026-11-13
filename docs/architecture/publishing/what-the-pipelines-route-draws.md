@@ -39,19 +39,22 @@ surfaces follow the window control is
 
 The route has thirteen addressed panels, in this order: `at-a-glance`,
 `run-health`, `site-cost-per-item`, `failure-mix`, `item-time-split`,
-`slower-on-same-work`, `stage-timings`, `write-cost`, `run-timeline`,
+`stage-timings`, `write-cost`, `tail-trend`, `run-timeline`,
 `slowest-articles`, `chart-drawing`, `visual-refusals`, `article-age`. Configuration comes from
 `consoleKnobs()` and `routeConsole('pipelines')`, not from page data.
 
 The browser uses the declared queries in `console/queries/pipelines.ts` and the
 shared `routeReach`, four-argument `rangeFor` and `sliceOnce` lifecycle. Explicit
 groups in `console/pipelines/query-groups.ts` retain separate native endpoints. Failure
-mix, failed rules, item time split, fixed-reference work, stage timings,
+mix, failed rules, item time split, stage timings,
 newest-run timeline and stated article ages read `item-health`. Writing cost
 reads the same article clocks but keeps a separate common endpoint with
 `summary-quality-evals`, as it did on Summaries. The removed
 extraction panel no longer asks `summary-quality-evals`. Neither route load nor the browser reads telemetry CSV,
 `run-timeline`, `span-rollup` or a month inventory for these panels.
+The per-run percentile trend and newest-run slowest ranking share their
+original item-health/host-fingerprint/run-shards endpoint group, not the
+ordinary item-health or writing-cost endpoint.
 
 `at-a-glance`, `run-health`, `site-cost-per-item` and `chart-drawing`
 remain private BUILD_TIME readings of manifests,
@@ -197,6 +200,24 @@ Complete nonnegative fetch, extract, summarize and checking stages stack with a
 positive recorded gap as `Other`. Missing stages or gap and negative overlap
 keep the whole recorded-item bar and their original context. Queue wait stays
 outside it. No clock is normalized or inferred during the move.
+
+## Per-run slow-article percentiles keep their own window
+
+`tail-trend` sits after writing cost, beside the other windowed timings.
+It retains positive finite `summarize_ms` grouped by actual run, numeric run
+ordering, and the configured measured-article floor. Its p50, p75, p90, p95
+and p99 are linearly interpolated and rounded to whole milliseconds; the five
+subplots share one seconds domain. Timed counts, under-floor run identities
+and counts, percentile readouts and settings-change rules are unchanged.
+Unlike the ranking's newest-day snapshot, it asks the inclusive selected
+preset and clamps its start to item-health's own first day. Its settings
+markers retain the full selected preset ending at the same three-family
+endpoint as the ranking, not the ordinary Pipelines endpoint.
+The queried UTC bounds print inside the panel. Daily stage medians and the
+whole-window writing-cost histogram remain separate measurements.
+The component owns its card; its native state frame does not wrap it in a
+second card. The fixed-reference daily speed comparison belongs to
+[Hardware](console-machine.md#what-may-not-be-pooled).
 
 ## Run health is one panel: the day's articles, and every run under them
 

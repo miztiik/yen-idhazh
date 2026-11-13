@@ -10,10 +10,9 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import {
 		latencyColumns,
+		percentileHistory,
 		seconds,
-		PERCENTILES,
-		type LatencyHistory,
-		type LatencyRun
+		PERCENTILES
 	} from '$lib/charts/machine';
 	import {
 		chartWidth,
@@ -34,44 +33,39 @@
 	import {
 		namesMoved,
 		namesMovedShort,
+		settingsRules,
 		settingsByDate,
 		unreadRuleNote,
 		type SettingsMoved
 	} from '$lib/console/settings-moved';
-	import { boundaryDates, firstOfDay, inSpan, runTicks, MARK_PAD } from './run-axis';
+	import { boundaryDates, firstOfDay, inSpan, runTicks, MARK_PAD } from '../machine/run-axis';
+	import { textRows } from '../machine/records';
+	import { windowRange, type Range } from '../queries/window';
+	import type { ConsoleShell } from '../band';
+	import type { Row } from '$lib/data/ledger';
 	import { countDays, nameSpan } from '$lib/console/span-words';
 	import type { ChartConfig } from '$lib/server/config';
 	import { formatNumber } from '$lib/number-format';
 
-	let {
-		rows,
-		start,
-		end,
-		modelChanges,
-		missingMarkers,
-		moved,
-		chart,
-		windowDays,
-		days,
-		floor,
-		tooFew
-	}: {
-		rows: readonly LatencyRun[];
-		start: string;
-		end: string;
-		modelChanges: readonly string[];
-		/** The line for the days this span's markers could only come from the score
-		 * record, when that record did not read; null when no marker was lost. */
-		missingMarkers: string | null;
-		/** What the run record says moved, by date. A date in `modelChanges` with no
-		 * entry here moved something the record cannot name. */
-		moved: readonly SettingsMoved[];
+	let { rows, range, shell, chart, windowDays, floor }: {
+		rows: readonly Row[];
+		range: Range;
+		shell: ConsoleShell;
 		chart: ChartConfig;
 		windowDays: number;
-		days: number;
 		floor: number;
-		tooFew: LatencyHistory['tooFew'];
 	} = $props();
+	const latency = $derived(percentileHistory(textRows(rows), floor));
+	const span = $derived(windowRange(windowDays, range.to, '0001-01-01'));
+	const start = $derived(span.from);
+	const end = $derived(span.to);
+	const days = $derived(windowDays);
+	const tooFew = $derived(latency.tooFew);
+	const settings = $derived(settingsRules(shell, { from: start, to: end }, 'none'));
+	const changes = $derived('changes' in settings ? settings.changes : []);
+	const modelChanges = $derived(changes.map((move) => move.date));
+	const moved: readonly SettingsMoved[] = $derived(changes.map((move) => ({ date: move.date, settings: [move.words] })));
+	const missingMarkers = $derived('note' in settings ? settings.note : settings.declined);
 
 	/** One sub-plot, and the air between two of them. Five stacked rather than
 	 * five side by side: they share the day axis at the foot, so a reader
@@ -87,7 +81,7 @@
 	let tailWidth = $state<number | null>(null);
 	let tailAt = $state<number | null>(null);
 
-	const tailRuns = $derived(inSpan(rows, start, end));
+	const tailRuns = $derived(inSpan(latency.runs, start, end));
 	// A function of the runs alone, so a resize reuses them (as the context chain
 	// on its own panel does): the caption columns, the boundary set and the
 	// shared domain no longer rebuild on a drag.
@@ -193,7 +187,7 @@
 	data-tail-domain={JSON.stringify(tailY.domain)}
 >
 	<Panel
-		heading="h3"
+		heading="h2"
 		id="tail-trend"
 		title="Whether the slowest articles are getting slower"
 		note="A slow end that keeps drifting is the one that eventually runs a job past its limit - one mark a run, over {nameSpan(windowDays)}."
@@ -439,6 +433,7 @@
 			</ul>
 		{/if}
 		</div>
+		<p data-native-window data-range-from={range.from} data-range-to={range.to}>Native record: {range.from} through {range.to} UTC.</p>
 	</Panel>
 </div>
 

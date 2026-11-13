@@ -50,7 +50,7 @@ const states: Readonly<Record<BasicNothing, Driver>> = {
 export const stateSelector = (id: string, state: BasicNothing): string =>
 	`[data-reserved="${id}"][data-panel-state="${state}"]`;
 export const DRIVERS: Readonly<Record<string, Readonly<Record<BasicNothing, Driver>>>> = {
-	'failure-mix': states, 'item-time-split': states, 'slower-on-same-work': states,
+	'failure-mix': states, 'item-time-split': states, 'tail-trend': states,
 	'stage-timings': states, 'write-cost': states, 'run-timeline': states, 'article-age': states
 };
 export const BUILD_TIME: readonly string[] = [

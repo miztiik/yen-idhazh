@@ -5,13 +5,13 @@ export const EXPECT: RouteExpect | null = {
 	scope: 'route',
 	doorPanels: {
 		'two-clocks': '',
-		'slower-machines': '', 'platform-mix': '', 'tail-trend': '',
+		'slower-machines': '', 'platform-mix': '', 'slower-on-same-work': '',
 		'closest-to-memory': '', 'memory-held': '', 'context-headroom': '', 'article-cost': '',
 		'prompt-reuse': '', 'read-against-written': ''
 	},
 	reservedPanels: [
 		'two-clocks', 'slower-machines',
-		'platform-mix', 'tail-trend', 'closest-to-memory', 'memory-held',
+		'platform-mix', 'slower-on-same-work', 'closest-to-memory', 'memory-held',
 		'context-headroom', 'article-cost', 'prompt-reuse', 'read-against-written'
 	],
 	pendingPanel: null,

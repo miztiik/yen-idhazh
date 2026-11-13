@@ -8,14 +8,14 @@ export const PIPELINES_QUERY_GROUPS = [
 		id: 'native',
 		ledgers: ['item-health'],
 		queries: [
-			queries.failureMixQuery, queries.failedRuleQuery, queries.itemTimeSplitQuery, queries.slowerOnSameWorkQuery,
+			queries.failureMixQuery, queries.failedRuleQuery, queries.itemTimeSplitQuery,
 			queries.stageTimingsQuery, queries.runTimelineQuery, queries.articleAgeQuery
 		]
 	},
 	{
-		id: 'slowest-articles',
+		id: 'hardware-timing',
 		ledgers: ['item-health', 'host-fingerprint', 'run-shards'],
-		queries: [queries.slowestArticlesQuery]
+		queries: [queries.slowestArticlesQuery, queries.tailTrendQuery]
 	},
 	{
 		id: 'write-cost',

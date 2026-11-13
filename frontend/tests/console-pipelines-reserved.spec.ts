@@ -115,8 +115,8 @@ async function holdMonths(page: Page) {
  * changing size fails, whatever the reason.
  */
 const FETCHED_PANELS = ['What is failing, by stage', "Where an item's time went",
-	'Whether a run is getting slower on the same work', 'Time per item by stage',
-	'What one summary cost', "Where the run's time went, on the run's own clock",
+	'Time per item by stage', 'What one summary cost',
+	'Whether the slowest articles are getting slower', "Where the run's time went, on the run's own clock",
 	'Which articles took longest in the last run', 'Source age at work start'];
 
 /** The one the waiting and retry rows drive. Either would do; one is named so

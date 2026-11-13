@@ -29,8 +29,8 @@ QUERY_ROOT: Final = "frontend/src/lib/console/queries"
 EXPECTED_NAMES: Final = {
     "shared": ("failedRuleQuery",),
     "pipelines": (
-        "failureMixQuery", "itemTimeSplitQuery", "slowerOnSameWorkQuery",
-        "stageTimingsQuery", "writeCostQuery", "runTimelineQuery", "slowestArticlesQuery", "articleAgeQuery",
+        "failureMixQuery", "itemTimeSplitQuery",
+        "stageTimingsQuery", "writeCostQuery", "tailTrendQuery", "runTimelineQuery", "slowestArticlesQuery", "articleAgeQuery",
     ),
     "model": (
         "modelThroughputQuery", "itemCostQuery", "callEndingQuery", "faithfulnessQuery",
@@ -40,7 +40,7 @@ EXPECTED_NAMES: Final = {
     "machine": (
         "runShardsQuery",
         "twoClocksQuery", "twoClocksHostsQuery", "slowerMachinesQuery", "platformMixQuery",
-        "tailTrendQuery", "closestToMemoryQuery", "memoryHeldQuery",
+        "slowerOnSameWorkQuery", "closestToMemoryQuery", "memoryHeldQuery",
         "contextHeadroomQuery", "articleCostQuery", "articleCostHostsQuery",
         "promptReuseQuery", "readAgainstWrittenQuery",
     ),
