@@ -182,8 +182,6 @@
 </script>
 
 <div
-	data-windowed="machine-latency"
-	data-window-days={windowDays}
 	data-tail-domain={JSON.stringify(tailY.domain)}
 >
 	<Panel

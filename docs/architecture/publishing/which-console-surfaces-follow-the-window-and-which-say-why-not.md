@@ -100,6 +100,8 @@ clamp their start to item-health's own first day and print compact UTC bounds.
 The tail's settings markers still cover the full selected preset at its own
 endpoint; the fixed-work trend's rules follow its clamped query range.
 Neither route backshifts its other panels or adopts private published-day dates.
+Their selected-window labels belong to the persistent state frame, so waiting,
+quiet and unavailable records still name the chosen span without inventing dates.
 
 The Summaries load carries the article and score readers' existing typed
 coverage into the private cards. Empty cards are quiet only when both records

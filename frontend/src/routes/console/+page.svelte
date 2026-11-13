@@ -173,7 +173,8 @@
 					{@const answer = answers[queries.tailTrendQuery.name]}
 					{@const range = ranges[queries.tailTrendQuery.name]}
 					<RecordFrame {id} title={titles[id]} heading="h2" state={answer === 'pending' ? 'loading' : answer.state}
-						height={knobs.chart_height} width={knobs.chart_width} {retry} {range}>
+						height={knobs.chart_height} width={knobs.chart_width} {retry} {range}
+						windowed={{ name: 'machine-latency', days: windowDays }}>
 						{#if range !== undefined}
 							<TailTrendPanel rows={rows(queries.tailTrendQuery)} {range} shell={data} chart={data.chart}
 								{windowDays} floor={knobs.min_attempts_for_rate} />

@@ -18,7 +18,6 @@
 	import { formatNumber } from '$lib/number-format';
 	import { measurementOff, recordingNotes, type RecordRead } from '$lib/console/recording';
 	import { settingsRules } from '$lib/console/settings-moved';
-	import { countDays } from '$lib/console/span-words';
 	import { machineKeys, machineRamp } from '$lib/charts/machine-colour';
 	import { fleetJobs } from '$lib/charts/fleet';
 	import { articleCost } from '$lib/console/machine/article-cost';
@@ -229,7 +228,8 @@
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
 				<RecordFrame {id} title={titles[id]} state={panelState(id)} height={cfg.chart.height_px} width={cfg.chart.width_px} {retry}
-					range={id === 'slower-on-same-work' ? sameWorkRange : undefined}>
+					range={id === 'slower-on-same-work' ? sameWorkRange : undefined}
+					windowed={id === 'slower-on-same-work' ? { name: id, days: windowDays } : undefined}>
 					{#if id === 'platform-mix'}
 						<PlatformMixPanel {ramp} {start} {end} {windowDays} {lost} recordRows={rows('platformMixQuery')} recording={cfg.recording}
 							gradients={cfg.gradients} chart={cfg.chart} knobs={shared} />
@@ -244,7 +244,7 @@
 							{start} {end} {windowDays} />
 					{:else if id === 'slower-on-same-work'}
 						<Panel {id} title={titles[id]} heading="h3">
-							<div data-windowed={id} data-window-days={windowDays} aria-label={`${titles[id]}, selected window ${countDays(windowDays)}`}>
+							<div>
 								<SlowerOnSameWork rows={rows(queries.slowerOnSameWorkQuery.name)} calendar={sameWorkCalendar}
 									knobs={shared} chart={cfg.chart} rule={sameWorkRule} />
 								{#if sameWorkRange !== undefined}
