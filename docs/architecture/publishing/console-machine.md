@@ -248,6 +248,9 @@ separately, naming the measured/recorded current cohort, actual prior runs and
 their article coverage, mean, sample deviation and strict cutoff. It says
 `Investigate; not proof of failure.`, `Not flagged.`, or the exact reason for
 `Unassessed`; none changes run status or implies complete-run consumption.
+The run readout retains its largest observed height at its current width.
+Selecting a shorter explanation must not shrink a bottom-of-page viewport and
+clear the shared hover; a width change measures the natural text again.
 
 ### The retained measurements
 
