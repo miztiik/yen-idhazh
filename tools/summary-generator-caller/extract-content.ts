@@ -1,7 +1,7 @@
 /** How is one source fetched and extracted with explicit operation context? */
 import { createChildContext } from "@idhazh/common-contracts/create-operation-context";
 import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operation-metadata";
-import { JSDOM } from "jsdom";
+import { JSDOM, VirtualConsole } from "jsdom";
 import { Defuddle } from "defuddle/node";
 import type { PipelineEventData } from "./contracts/pipeline-event.schema.js";
 import { loadAnalysisConfig, type AnalysisConfig } from "./load-analysis-config.js";
@@ -67,7 +67,11 @@ export async function extractContentFromUrl(
   const parseContext = createChildContext(context, {
     links: [{ traceId: fetchContext.traceId, spanId: fetchContext.spanId }],
   });
-  return parseExtractedDocument(new JSDOM(html, { url }), url, parseContext, onProgress, config);
+  const virtualConsole = new VirtualConsole();
+  virtualConsole.on("jsdomError", () => {});
+  return parseExtractedDocument(
+    new JSDOM(html, { url, virtualConsole }), url, parseContext, onProgress, config,
+  );
 }
 
 export async function parseExtractedDocument(

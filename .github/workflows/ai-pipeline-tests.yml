@@ -20,7 +20,7 @@ on:
       article_count_goal:
         description: 'Target number of articles to collect from feeds'
         required: false
-        default: '3'
+        default: '1'
       feed_max_age_hours:
         description: 'Max article age in hours (feed mode only)'
         required: false
@@ -51,7 +51,7 @@ on:
       max_word_length:
         description: 'Maximum ingested word count per article before truncation'
         required: false
-        default: '8200'
+        default: '2000'
       prompt:
         description: 'System Prompt Preamble'
         required: false
