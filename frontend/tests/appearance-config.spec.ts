@@ -54,8 +54,8 @@ test.describe('route-owned console configuration', () => {
 		]);
 		expect(routes.judgement.judged).toEqual(judgementPanels);
 		const modelPanels = [
-			'model-cards', 'model-throughput', 'call-ending',
-			'doubt-reasons', 'faithfulness', 'source-doubts', 'write-cost',
+			'model-cards', 'model-throughput', 'item-cost', 'call-ending',
+			'doubt-reasons', 'faithfulness', 'source-doubts',
 			'score-cost', 'summary-length'
 		];
 		expect(routes.model.panel_groups).toEqual([

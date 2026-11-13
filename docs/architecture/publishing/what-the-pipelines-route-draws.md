@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-13
 
 Moved plots use the shared width observer and redraw in the CSS-pixel frame
 their panel actually occupies. Private date axes retain missing days as null,
@@ -39,15 +39,17 @@ surfaces follow the window control is
 
 The route has thirteen addressed panels, in this order: `at-a-glance`,
 `run-health`, `site-cost-per-item`, `failure-mix`, `item-time-split`,
-`slower-on-same-work`, `stage-timings`, `item-cost`, `run-timeline`,
+`slower-on-same-work`, `stage-timings`, `write-cost`, `run-timeline`,
 `slowest-articles`, `chart-drawing`, `visual-refusals`, `article-age`. Configuration comes from
 `consoleKnobs()` and `routeConsole('pipelines')`, not from page data.
 
 The browser uses the declared queries in `console/queries/pipelines.ts` and the
 shared `routeReach`, four-argument `rangeFor` and `sliceOnce` lifecycle. Explicit
 groups in `console/pipelines/query-groups.ts` retain separate native endpoints. Failure
-mix, failed rules, item time split, fixed-reference work, stage timings, model
-cost, newest-run timeline and stated article ages read `item-health`. The removed
+mix, failed rules, item time split, fixed-reference work, stage timings,
+newest-run timeline and stated article ages read `item-health`. Writing cost
+reads the same article clocks but keeps a separate common endpoint with
+`summary-quality-evals`, as it did on Summaries. The removed
 extraction panel no longer asks `summary-quality-evals`. Neither route load nor the browser reads telemetry CSV,
 `run-timeline`, `span-rollup` or a month inventory for these panels.
 
@@ -76,7 +78,8 @@ and recorded zero remain distinct.
 
 The approved A1 contracts are wired: FailureList accepts identity-free rule rows
 with stage radios, StageTimings retains the complete settings/checker rule, and
-the two cost histograms use the named reading-prompt and writing-reply tokens.
+the writing-cost histogram uses the named summary-call token. The independent
+reading-prompt and writing-reply histograms belong to Summaries.
 The rule ranking makes no source, detail or distinct-article claim. Failure
 percentages divide failed rows by recorded rows, since the declared slice carries
 no article identity. Private payload shrinkage is a signed reading, not a zero
@@ -174,7 +177,7 @@ empty and the route still renders.
 
 `slowest-articles` follows the timeline and mounts only on Pipelines. It ranks
 all qualifying articles across the newest recorded run, not the selected
-shard's paged details. The timeline's shard inspection and Summaries' aggregated
+shard's paged details. The timeline's shard inspection and the aggregated
 writing-cost distribution do not answer that run-wide identity question.
 
 Its item-health query retains the common endpoint of item-health,
@@ -370,79 +373,21 @@ public telemetry or run-timeline mirror and no build-time timeline reader
 ([telemetry-series.md](telemetry-series.md),
 [console-payloads.md](console-payloads.md)).
 
-## What one item cost the model is two clocks, drawn apart
+## What one summary cost keeps its whole-summary clock
 
-`What one item cost the model` is a native Pipelines panel with two
-distributions and their paired per-token costs. It answers what a run total
-cannot: how long the model spent on **one** article, split into the part it
-spent reading and the part it spent writing.
+`write-cost` sits after stage timings. It reads positive `summarize_ms`
+measurements, not the independent prefill/decode clocks now on Summaries.
+The existing `model/cost.ts` reducer and shared `console/TimeCost.svelte`
+presentation retain the doubling-bin distribution, cumulative share, nearest-rank
+median/p95, seconds conversion and count of rows without a positive clock.
+Checking cost still uses that shared implementation on Summaries, over score_ms.
 
-Hardware compares independent server and item clocks at run or shard grain.
-This panel instead reads the declared `itemCostQuery` cells from item-health for
-the selected record window. Its maintainer is
-[nativeItemCost](../../../frontend/src/lib/console/pipelines/item-cost.ts), drawn
-by [ItemCost.svelte](../../../frontend/src/lib/console/pipelines/ItemCost.svelte).
-
-### Reading and writing are two charts, and pooling them is refused
-
-Reading and writing have independent clocks. Article length and reply length
-can move them separately, so one pooled `model seconds` distribution would hide
-which one moved. The lead names the writing median. The per-token comparison
-uses each side's own complete clock/token pairs, not a fixed cost ratio or a
-claim about a token saving on a particular article.
-
-Both use **doubling bins** from
-[series.ts](../../../frontend/src/lib/charts/series.ts), with a shared time domain
-so the same duration has the same position. Reading uses finite, non-negative
-`prefill_ms`; writing independently uses finite, non-negative `decode_ms`.
-A measured zero belongs in the first bin. An absent clock is not a zero.
-Each histogram applies `console.min_attempts_for_rate` to its own clock count
-and states the count when it has too few readings.
-
-### Prompt reuse belongs to Hardware, not a comparison note on ItemCost
-
-The native Hardware panel draws the day's middle label-call held tokens and
-summary-call fresh tokens. Its
-[records.ts](../../../frontend/src/lib/console/machine/records.ts) helpers also
-print each call's pooled held share over complete input/cache pairs, the
-server's middle recorded share and that call's pair count. Label and summary
-remain separate; absent cache counts do not become zero reuse.
-
-A share alone cannot say that the cache got worse: it can fall because the
-prompt got longer or because less text was held. The dated native readings and
-their settings rule carry the comparison. ItemCost links to Hardware; it has no
-middle-versus-maximum held-token note, first-call reuse verdict or cache-change
-classifier. Per-call charging remains
-[the model's contract](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum).
-
-### Every denominator is its own
-
-The two histogram cohorts and two per-token cohorts need not match. Reading's
-per-token cost pairs a non-negative prefill clock with recorded input and cache
-counts, where `input_tokens > cached_tokens >= 0`. It sums those clocks and
-divides by their fresh tokens, `input_tokens - cached_tokens`. Writing independently
-pairs a non-negative decode clock with positive output tokens and divides the
-clock sum by the output-token sum. Each side prints its own pair count.
-
-An empty cell stays empty. A mean that treats an absent instrument as a zero
-turns an unmeasured call into an infinitely fast one. A recorded cache count of
-zero can qualify for reading; an unknown cache count cannot. The panel counts
-prompts with an input count but no cache count and says they are not treated as
-read whole. The writing-to-reading cost ratio is unknown unless both rates exist
-and the reading cost is positive.
-
-### It follows the selected native record window
-
-The browser requests `itemCostQuery` for the selected configured preset and
-computes these answers from the returned rows. The common recorded endpoint,
-query's returned range and request epoch govern this panel just as they govern
-the other native windowed answers. There is no server-reduced ItemCost seed or
-telemetry-month fallback.
-
-Private published-count cards, run health, site cost and chart drawing
-remain build-time inputs. Their own window and
-snapshot rules do not become ItemCost's rules; the prerendered private marks
-remain available without scripts.
+The query group keeps the older available endpoint of item-health and
+summary-quality-evals. Its selected window clamps only to item-health's first
+day and prints its own UTC bounds. It does not backshift the other Pipelines
+panels, use the private published-day window or pick newer item rows. The
+[distribution drawing rules](../../concepts/console-design/what-the-quality-and-source-panels-draw.md#a-distribution-answers-what-a-median-refuses-to)
+remain unchanged.
 
 ## Visual refusal lines read the unpublished attempt record at build time
 

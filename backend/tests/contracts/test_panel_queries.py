@@ -30,11 +30,11 @@ EXPECTED_NAMES: Final = {
     "shared": ("failedRuleQuery",),
     "pipelines": (
         "failureMixQuery", "itemTimeSplitQuery", "slowerOnSameWorkQuery",
-        "stageTimingsQuery", "itemCostQuery", "runTimelineQuery", "slowestArticlesQuery", "articleAgeQuery",
+        "stageTimingsQuery", "writeCostQuery", "runTimelineQuery", "slowestArticlesQuery", "articleAgeQuery",
     ),
     "model": (
-        "modelThroughputQuery", "callEndingQuery", "faithfulnessQuery",
-        "sourceDoubtsQuery", "sourceDoubtsItemsQuery", "writeCostQuery", "scoreCostQuery",
+        "modelThroughputQuery", "itemCostQuery", "callEndingQuery", "faithfulnessQuery",
+        "sourceDoubtsQuery", "sourceDoubtsItemsQuery", "scoreCostQuery",
         "summaryLengthQuery",
     ),
     "machine": (

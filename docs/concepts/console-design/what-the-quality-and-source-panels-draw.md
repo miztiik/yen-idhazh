@@ -1,6 +1,6 @@
 # What the quality and source panels draw
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-13
 
 The panels that report what the model wrote and how the sources behaved: the
 eleven measures on `/console/model/`, the two distributions under them, and
@@ -95,7 +95,7 @@ bottom of the page.
 
 ## A distribution answers what a median refuses to
 
-`What one summary cost` is a log-binned histogram of the time to write one
+`What one summary cost` on Pipelines is a log-binned histogram of the time to write one
 summary, with a cumulative curve on a second axis and a rule at the median and
 at the 95th, each printing its own value.
 
@@ -115,7 +115,8 @@ configured shard timeout.
 
 **Writing and checking have separate native distributions.** The declared
 `writeCostQuery` reads `summarize_ms` from item-health; `scoreCostQuery` reads
-`score_ms` from summary-quality-evals. `model/cost.ts` and `TimeHistogram.svelte`
+`score_ms` from summary-quality-evals on Summaries. `model/cost.ts`,
+`console/TimeCost.svelte` and `TimeHistogram.svelte`
 derive and draw each one after the browser read. Checking happens after writing
 and is not another model-writing clock. Nonpositive or missing readings remain
 counted as untimed, not instant.

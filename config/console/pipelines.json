@@ -10,7 +10,7 @@
         "item-time-split",
         "slower-on-same-work",
         "stage-timings",
-        "item-cost",
+        "write-cost",
         "run-timeline",
         "slowest-articles",
         "chart-drawing",
@@ -22,7 +22,7 @@
   ],
   "judged": [
     "at-a-glance", "run-health", "site-cost-per-item", "failure-mix", "item-time-split",
-    "slower-on-same-work", "stage-timings", "item-cost", "run-timeline", "slowest-articles", "chart-drawing", "visual-refusals", "article-age"
+    "slower-on-same-work", "stage-timings", "write-cost", "run-timeline", "slowest-articles", "chart-drawing", "visual-refusals", "article-age"
   ],
   "knobs": {}
 }

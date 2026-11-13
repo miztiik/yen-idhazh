@@ -22,7 +22,6 @@
 		const currentPreset = preset;
 		const revision = retry;
 		const asked = queries;
-		if (currentReach === null) return;
 		void revision;
 		let current = true;
 		panelState = 'loading';
@@ -30,6 +29,7 @@
 		range = null;
 		notes = [];
 		onAnswer(name, 'pending');
+		if (currentReach === null) return;
 		void Promise.all(asked.map(async (query) => {
 			const selected = rangeFor(query, currentPreset, currentReach, presets);
 			return { selected, answer: 'from' in selected ? await modelSlice(query, selected) : selected };
@@ -47,7 +47,8 @@
 				if ((answer.state !== 'ok' && answer.state !== 'quiet') || !('rows' in answer) || !('from' in selected)) return [];
 				const lines: string[] = [];
 				const first = Object.values(currentReach.ledgers).flatMap((ledger) => ledger?.state === 'ok' ? [ledger.first] : []).sort()[0];
-				if (first !== undefined && answer.first > first) lines.push(`Recorded from ${answer.first}; earlier days on this page have no ${asked[index].ledger} record.`);
+				const own = currentReach.ledgers[asked[index].ledger];
+				if (first !== undefined && own?.state === 'ok' && own.first > first) lines.push(`Recorded from ${own.first}; earlier days on this page have no ${asked[index].ledger} record.`);
 				if (answer.lostDays.length) lines.push(noRecordSentence('This record', answer.lostDays, (days) => `these figures do not show ${days}`));
 				const aside = setAsideSentence('This record', asked[index].ledger, answer.setAside, 'these figures');
 				if (aside !== null) lines.push(aside);

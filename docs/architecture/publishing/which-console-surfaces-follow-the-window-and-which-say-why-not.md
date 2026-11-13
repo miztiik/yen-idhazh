@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-13
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -81,6 +81,16 @@ an empty private window nor an unavailable native read moves either clock.
 Successful native reads add no standing summary. Quiet, missing and failed
 standings still name their native scope. Lost-day and unread-file notes remain
 visible beside the affected readings.
+
+Moved timing panels keep their original endpoint groups. Summaries' `item-cost`
+uses item-health alone, independently of its other native panels' common
+item-health/evaluation endpoint. Pipelines' `write-cost` retains that common
+item-health/evaluation endpoint, independently of ordinary Pipelines readings.
+Both clamp their first day to item-health's own first day and print their actual
+UTC bounds beside the panel. A lagging evaluation ledger therefore dates
+write-cost earlier without backshifting either route or changing item-cost.
+Recording-start notes use the ledger's actual first day, not the selected
+slice's first day; narrowing a preset does not claim that earlier records vanished.
 
 The Summaries load carries the article and score readers' existing typed
 coverage into the private cards. Empty cards are quiet only when both records

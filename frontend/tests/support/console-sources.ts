@@ -55,21 +55,21 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'doubt-reasons.ts', 'duration-cohort.ts', 'eval-instruments.ts', 'failure-rules.ts',
 		'holdout.ts', 'judgement-evidence.ts', 'merge-line.ts', 'model-cards.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
-		'settings-moved.ts', 'span-words.ts', 'verdict-split.ts', 'waiting.ts', 'window-preference.ts', 'window-slot.ts'
+		'settings-moved.ts', 'span-words.ts', 'TimeCost.svelte', 'verdict-split.ts', 'waiting.ts', 'window-preference.ts', 'window-slot.ts'
 	],
 	'src/lib/console/queries': ['machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
 	'src/lib/console/pipelines': [
 		'ArticleAge.svelte', 'AtAGlance.svelte', 'ChartDrawing.svelte',
-		'FailureMix.svelte', 'ItemCost.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
+		'FailureMix.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
 		'RunTimeline.svelte', 'SlowestArticles.svelte', 'SiteCostPerItem.svelte', 'SlowerOnSameWork.svelte', 'StageTimings.svelte',
 		'VisualRefusals.svelte',
 		'article-age.ts', 'at-a-glance.ts', 'attempt-notes.ts', 'chart-drawing.ts', 'drawing-flow.ts', 'failure-mix.ts',
-		'item-cost.ts', 'item-time-split.ts', 'query-groups.ts', 'record-window.ts', 'run-health.ts', 'slowest-articles.ts',
+		'item-time-split.ts', 'query-groups.ts', 'record-window.ts', 'run-health.ts', 'slowest-articles.ts',
 		'run-timeline.ts', 'site-cost-per-item.ts', 'slower-on-same-work.ts', 'stage-timings.ts', 'visual-attempts.ts', 'visual-refusals.ts'
 	],
 	'src/lib/console/model': [
 		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'source-doubts.ts', 'summary-length.ts',
-		'model-throughput.ts', 'model-rule.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
+		'model-throughput.ts', 'model-rule.ts', 'cost.ts', 'item-cost.ts', 'ItemCost.svelte', 'Query.svelte', 'Series.svelte',
 		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'Reasons.svelte', 'doubt-reasons.ts', 'slice.ts', 'work.ts'
 	],
 	'src/lib/console/voices': [
