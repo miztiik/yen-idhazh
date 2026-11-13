@@ -1010,7 +1010,7 @@ Table AA
   contracts/item_health.py (reader ownership only); the existing panel-query
   contract inventory, recorded-slice fixture-route bindings, appearance roster,
   item-cost imports, Summaries journey
-  roster/selector, Pipelines waiting roster, retained fixture import and bounded
+  roster/selector, Pipelines waiting/lifecycle source bindings, retained fixture import and bounded
   source/window/state expectations; owning route/window/chart docs and this plan.
 - **Acceptance:** Add no tests, cases, helpers, fixtures or coverage assertions.
   Update only bindings changed by the moves. Use existing selected checks,
