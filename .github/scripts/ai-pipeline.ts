@@ -41,7 +41,7 @@ export interface ArticleProcessingConfig {
 }
 
 export const DEFAULT_ARTICLE_CONFIG: ArticleProcessingConfig = {
-  maxWordLength: 2000,
+  maxWordLength: 1200,
   defaultFallbackArticleUrl:
     "https://www.nakedcapitalism.com/2026/10/when-will-politicians-turn-to-mmt.html",
   blockedCategories: ["Links", "Show Types"],

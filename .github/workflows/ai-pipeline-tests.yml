@@ -51,7 +51,7 @@ on:
       max_word_length:
         description: 'Maximum ingested word count per article before truncation'
         required: false
-        default: '2000'
+        default: '1200'
       prompt:
         description: 'System Prompt Preamble'
         required: false
