@@ -356,6 +356,9 @@ export function shortlist(
  * reads 12 plus its outlying leads, and quadrupling the day does not move the
  * second number.
  *
+ * `initial` holds the first page steady: its outlying leads remain before any
+ * later batches, so asking for more never inserts cards above the reader.
+ *
  * `leading` is the block the page actually drew, which is a subset of the day's
  * published leads: a topic route and a filter both draw no block, and a lead
  * the reader has hidden drops out of it. `pinnedRows` says where every
@@ -365,14 +368,20 @@ export function revealed(
 	visible: readonly DigestItem[],
 	pinnedRows: readonly number[],
 	leading: ReadonlySet<string>,
-	shown: number
+	shown: number,
+	initial: number = shown
 ): DigestItem[] {
-	const drawn = visible.slice(0, shown);
-	if (leading.size === 0) return drawn;
+	if (leading.size === 0) return visible.slice(0, shown);
+	const start = Math.min(initial, shown);
+	const drawn = visible.slice(0, start);
 	for (const row of pinnedRows) {
-		if (row < shown) continue;
+		if (row < start) continue;
 		const item = visible[row];
 		if (leading.has(item.item_id)) drawn.push(item);
+	}
+	// Leads already on screen keep their seats; continuation goes below them.
+	for (const item of visible.slice(start, shown)) {
+		if (!leading.has(item.item_id)) drawn.push(item);
 	}
 	return drawn;
 }

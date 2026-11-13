@@ -108,6 +108,7 @@
 	<title>{longDate(data.date)} &mdash; {data.ui.site_title}</title>
 </svelte:head>
 
+<div data-surface="reading">
 {#if reported === 'missing'}
 	<NotHere
 		status={404}
@@ -117,7 +118,7 @@
 	/>
 {:else}
 	{#if day}
-		<DigestList {day} datePrefix="{data.date}/" settled={reported === 'ready'} ui={data.ui} />
+		<DigestList {day} datePrefix="{data.date}/" settled={reported === 'ready'} status={reported} ui={data.ui} />
 	{/if}
 	<PayloadState
 		status={reported}
@@ -127,3 +128,4 @@
 		onRetry={() => fetchDay(data.date, true)}
 	/>
 {/if}
+</div>

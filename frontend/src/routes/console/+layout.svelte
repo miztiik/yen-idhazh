@@ -6,7 +6,7 @@
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import WindowStatus from '$lib/components/WindowStatus.svelte';
 	import ChartTooltip from '$lib/console/ChartTooltip.svelte';
-	import BackToTop from '$lib/console/BackToTop.svelte';
+	import BackToTop from '$lib/components/BackToTop.svelte';
 	import Icon from '$lib/icons/Icon.svelte';
 	import { ROUTE_GLYPHS } from '$lib/console/route-glyph';
 	import { stripRoutes } from '$lib/console/band';

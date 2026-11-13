@@ -95,9 +95,9 @@
 	<meta name="description" content={data.ui.tagline} />
 </svelte:head>
 
-<div data-surface="home">
+<div data-surface="reading">
 	{#if day}
-		<DigestList {day} datePrefix="{day.date}/" settled={reported === 'ready'} ui={data.ui} />
+		<DigestList {day} datePrefix="{day.date}/" settled={reported === 'ready'} status={reported} ui={data.ui} />
 		<PayloadState
 			status={reported}
 			holding={true}

@@ -256,7 +256,7 @@
 		text-wrap: pretty;
 	}
 
-	:global([data-surface='home']) .prose {
+	:global([data-surface='reading']) .prose {
 		max-width: none;
 	}
 
@@ -273,7 +273,7 @@
 		text-wrap: balance;
 	}
 
-	:global([data-surface='home']) .title {
+	:global([data-surface='reading']) .title {
 		text-wrap: wrap;
 	}
 
@@ -390,7 +390,7 @@
 		box-shadow: var(--shadow-md);
 	}
 
-	/* On reading routes other than home, the footer moves beside the summary.
+	/* In archive results, the footer moves beside the summary.
 	   It is still after the summary in the document, which is what the split
 	   promises; what moves is where it is painted. The value matches
 	   frame.breakpoints_px[1] in config/appearance.json; a media query cannot
@@ -418,52 +418,22 @@
 			margin-inline-start: var(--space-3);
 		}
 
-		:global([data-surface='home']) .item {
+		:global([data-surface='reading']) .item {
 			grid-template-columns: minmax(0, 1fr);
 		}
 
-		:global([data-surface='home']) .item.has-mark {
+		:global([data-surface='reading']) .item.has-mark {
 			grid-template-columns: var(--zone-mark) minmax(0, 1fr);
 		}
 
-		:global([data-surface='home']) .item.has-mark > .item-rail {
+		:global([data-surface='reading']) .item.has-mark > .item-rail {
 			grid-column: 2;
 		}
 
-		:global([data-surface='home']) .item-rail {
+		:global([data-surface='reading']) .item-rail {
 			position: static;
 			margin-inline-start: 0;
 		}
 	}
 
-	/* On other reading routes, at this width the footer gives the column back
-	   to a day that grew an aside (app.css). The frame's content box holds a 68-character measure plus
-	   exactly ONE trailing column: measured 2026-09-02, keeping both leaves the
-	   summary 570 CSS px against a measure of 659.81. So where the page has
-	   claimed the column, the footer returns to under the
-	   summary it is a claim about.
-
-	   A day with no leading block has no aside - every committed day before
-	   2026-09-01 is one, because the block did not exist yet - and there the
-	   rail is the only thing standing beside the prose. Retiring it everywhere
-	   would leave those days 466 px of empty card instead of 230. The value
-	   matches frame.breakpoints_px[2]. */
-	@media (min-width: 1400px) {
-		:global(.day:has(> .day-aside)) .item {
-			grid-template-columns: minmax(0, 1fr);
-		}
-
-		:global(.day:has(> .day-aside)) .item.has-mark {
-			grid-template-columns: var(--zone-mark) minmax(0, 1fr);
-		}
-
-		:global(.day:has(> .day-aside)) .item.has-mark > .item-rail {
-			grid-column: 2;
-		}
-
-		:global(.day:has(> .day-aside)) .item-rail {
-			position: static;
-			margin-inline-start: 0;
-		}
-	}
 </style>
