@@ -1,11 +1,11 @@
 # How a day page is arranged
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-13
 
 A day page from top to bottom: the header that states each publication fact
 once, the controls, the leading block, the story stream and the footer that is
-its links and nothing else. Wide dated pages put the leading block beside the
-stream; the home page keeps it above. Every ruling here is about the page rather
+its links and nothing else. Home, dated and topic URLs use the same full-width
+shell, with the leading block above the stream. Every rule here is about the page rather
 than the story on it - what one item shows is
 [what-a-story-shows-and-where-each-fact-sits.md](what-a-story-shows-and-where-each-fact-sits.md).
 
@@ -27,12 +27,13 @@ how a lead is chosen is
 
 Three rules make this hierarchy rather than truncation:
 
-- **No item is removed, hidden or re-ranked.** A lead names a story the stream
- already holds, in the place it already holds it, and the block draws what the
+- **No item is removed, hidden or editorially re-ranked.** A lead names a story the stream
+ already holds, and the block draws what the
  payload hands it rather than re-ranking anything in the browser.
 - **Every lead's story is rendered, so every anchor resolves.** The stream draws
- the head of the published order plus every lead, in published order and never
- twice. That is not a nicety: measured 2026-09-01 on the 601-story day of
+ the head of the reading order plus every lead, never twice. Subsequent batches
+ append below those already-visible stories rather than moving the leads.
+ That is not a nicety: measured 2026-09-01 on the 601-story day of
  2026-08-31, the five leads sat at positions 249, 285, 337, 344 and 493, so a
  page holding only the head is a block whose links land on nothing - and
  SvelteKit's own `handleMissingId` check fails the build rather than shipping
@@ -53,49 +54,43 @@ The arithmetic lives in
 [frontend/src/lib/day-shape.ts](../../../frontend/src/lib/day-shape.ts), the way
 the run strip's axis does, so the rules can be tested without a browser.
 
-## The day is a stream with an aside, and the aside is a zone rather than a width
+## Every digest address uses one reading shell
 
-The home page uses the full window width with the configured gutters. Its
+Home, dated, topic and story-fragment addresses use the full window width with configured gutters. Their
 leading stories sit above the stream and story prose fills each card's content
-width. Dated and topic pages keep `frame.reading_max_px` and
-`frame.measure_ch`.
-
-On other day pages, from `frame.breakpoints_px[2]` (1400px), the story stream
-and an `18rem` sticky leading-stories column sit side by side. Below that width
-the block draws above the stream exactly where `digest.sections` puts it.
-
-**Why it happens there and not sooner.** The aside uses width left over after
-the prose and source mark fit. It must not narrow the reading column. Check the
-used widths at the configured breakpoint and with larger text; the
-[shared prose measure](../../concepts/design-system.md#the-measure-is-one-block-not-one-class-per-line)
-is the constraint, not a pixel reading from one build.
-
-**One trailing column at a time.** On other reading routes, the item's footer
-rail wants the same slot, and keeping both leaves the summary 570px against a
-measure of 659.81. So the item retires its rail at the same breakpoint and its footer returns under
-the summary - which is where the item's own split puts it anyway, because the
-confidence sentence is a claim about the summary and the rail painted it level
-with the title. On the home page the footer always stays below the summary.
-
-**On dated pages, the aside stands beside the stream, never beside the day's
-controls.** The day is rendered in four parts - the sections before the leads, the leads, the
-sections between the leads and the stream, and the stream - and the two control
-parts span both columns, leaving room for wrapped topic controls and the search
-field without narrowing either beside the aside. Each part renders its own sections in `digest.sections` order
-and the parts are in that order too, so the document order a narrow screen and a
-reader with no script see is exactly what config asked for, and reordering the
-page is still a config edit.
-The home page keeps those same parts in document order without a side column.
+width. The item footer stays beneath the prose. A topic pill changes the story
+selection, a date link changes the edition and a fragment focuses its story;
+none changes the frame, prose width or number of columns.
 
 The controls precede the leads in `digest.sections`. Filtering can hide the
 leading block without moving the field above it. Section ownership follows the
 configured order even when no leads are visible: controls never transfer
 between render loops, so the input keeps its DOM identity, focus and caret.
-An absent leading block creates no empty aside or reserved blank space.
+An absent leading block creates no reserved blank space.
 
-The aside needs the leads to come before the items in `digest.sections`. Any
-other order and the day is one column at every width, because an aside beside
-the day's controls is the arrangement the rule above refuses.
+### Continuation and reading controls
+
+The initial stream contains the head of the reading order and every visible
+lead. "Load more stories" appends the next unread portion of that order beneath
+the cards already drawn, without replacing their mounted elements or inserting
+labels between articles. Explicit activation focuses and scrolls to the first
+appended article. The pager's polite status reports the added count and the
+displayed count against the reachable story count.
+
+While the day's payload is pending, the pager says "Loading more stories..."
+and cannot accept duplicate requests. A failed payload leaves the current
+stories readable and uses the route's existing explanation and retry action.
+Already-loaded stories appear immediately, without an artificial wait.
+
+Read-state actions share a separate "Reading controls" group below continuation
+and above the homepage's "Earlier days" navigation. The group remains reachable
+when all stories are hidden. Clearing marks affects this day on this device,
+acknowledges completion and retains the control's focus.
+
+A floating circular up-caret appears after the site header leaves view. It
+returns to the edition heading, moves keyboard focus there and respects reduced
+motion and the configured motion switch. Its position clears the site footer
+and device safe area; it does not add another row inside the story stream.
 
 ### The zones are config, and they scale with the root font size
 

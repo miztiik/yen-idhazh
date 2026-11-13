@@ -74,7 +74,7 @@ The build-time loader lives under `frontend/src/lib/server/`, which is the frame
 
 **`/` stays prerendered, and that is a decision rather than a leftover.** The four reasons behind it, what reversing it would cost and the measurement it was confirmed on are one entry under [Design rationale](#design-rationale). It is written once, there, because two statements of one decision leave the next reader working out which governs.
 
-**The seed keeps the day's leads.** A lead is chosen across the whole day rather than off its head - measured 2026-09-01 on the 601-story day of 2026-08-31, the five sat at positions 249, 285, 337, 344 and 493 - so a seed built as a plain prefix ships a leading block whose links land on nothing. The aside only exists once a lead resolves, so it would also mean a first paint in one column that re-lays itself into two when the fetch arrives, re-wrapping every card on screen. `dayShell` has taken a `keep` option for exactly this since the seam was built, and had no caller in `frontend/src` until now.
+**The seed keeps the day's leads.** A lead is chosen across the whole day rather than off its head - measured 2026-09-01 on the 601-story day of 2026-08-31, the five sat at positions 249, 285, 337, 344 and 493 - so a seed built as a plain prefix ships a leading block whose links land on nothing. Keeping the leads also prevents that block from appearing above the stories only after the fetch arrives. `dayShell` takes a `keep` option for this; every digest URL uses the same full-width reading shell.
 
 **Published-ledger charts carry no drawing options or ledger values in their
 route documents.** Native components derive and draw their answers in the

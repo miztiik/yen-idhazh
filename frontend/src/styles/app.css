@@ -170,8 +170,8 @@ body {
 	max-width: var(--frame-reading);
 }
 
-/* Home and archive fill the window with the configured gutters. */
-.frame:has([data-surface='home']),
+/* Every digest address and the archive use the configured window gutters. */
+.frame:has([data-surface='reading']),
 .frame:has([data-surface='archive']) {
 	max-width: none;
 }
@@ -305,76 +305,12 @@ html:has([data-surface='operator']) { scroll-padding-block-start: var(--console-
 	overflow-wrap: break-word;
 }
 
-/* --- The reading page's columns -----------------------------------------
-   A day is a stream. On dated pages, the wide breakpoint puts an aside beside
-   it; the home page keeps the leading block above the full-width stream. What
-   goes in the aside is the day's leading stories: they are five
-   anchors into the stream, so they are furniture rather than reading, and above
-   the stream they took the whole first screen.
-
-   Why here and not a breakpoint earlier: measured 2026-09-02 at 1536px, the
-   frame's content box is 1216 px and the summary is 659.81, so 230.19 px stood
-   empty beside the prose on every item. An 18rem aside plus a 2rem gap spends
-   288 of that and leaves the measure untouched. It does NOT fit beside the
-   item's own trailing rail as well - that arrangement leaves the summary
-   570 px - so the item gives its rail back at the same width
-   (DigestItem.svelte).
-
-   The aside stands beside the STREAM and never beside the day's controls, so
-   the wrapping topics and search field can use the whole content box.
-
-   Below the breakpoint these are plain blocks, so the parts stack in
-   `digest.sections` order and the leads are exactly where config put them. */
+/* One reading stream on home, topic, dated and fragment-linked pages.
+   Sections retain configured document order at every viewport width. */
 .day > .day-head,
 .day > .day-stream,
 .day > .day-aside {
 	display: block;
-}
-
-@media (min-width: 1400px) {
-	.day:has(> .day-aside) {
-		display: grid;
-		/* Three rows, whatever `digest.sections` holds: the day's controls before
-		   the leads, the ones after them, and the stream. A row count that
-		   tracked the section list could not be written here, because `repeat()`
-		   will not read a custom property. */
-		grid-template-columns: minmax(0, 1fr) var(--zone-aside);
-		grid-template-rows: min-content min-content 1fr;
-		column-gap: var(--space-6);
-		align-items: start;
-	}
-
-	.day:has(> .day-aside) > .day-head {
-		grid-column: 1 / -1;
-	}
-
-	.day:has(> .day-aside) > .day-stream {
-		grid-column: 1;
-		grid-row: 3;
-		min-width: 0;
-	}
-
-	.day:has(> .day-aside) > .day-aside {
-		position: sticky;
-		top: var(--space-5);
-		grid-column: 2;
-		grid-row: 3 / -1;
-		/* A day with five long leads can outgrow a short window. The column
-		   scrolls itself rather than being cut off, and only ever downward - no
-		   reader-facing surface scrolls sideways. */
-		max-block-size: calc(100dvh - var(--space-8));
-		overflow-y: auto;
-	}
-
-	[data-surface='home'] .day:has(> .day-aside) {
-		display: block;
-	}
-
-	[data-surface='home'] .day:has(> .day-aside) > .day-aside {
-		position: static;
-		max-block-size: none;
-		overflow: visible;
-	}
 }
 
 /* A grid splits on the width it HAS, never on the width of the window. Asking

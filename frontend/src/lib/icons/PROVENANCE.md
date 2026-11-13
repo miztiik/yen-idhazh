@@ -1,6 +1,6 @@
 # Icon provenance
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-11-13
 
 ## Source
 
@@ -38,6 +38,9 @@ that added them.
 Each file keeps Lucide's own geometry, its 24-unit box and its `currentColor`
 stroke. The filename is a semantic id this project chose - `topic-ai`, not
 `cpu` - because the page names what a mark means, never what it looks like.
+
+The reading page's circular return control uses `go-top` from Lucide
+`chevron-up`, unmodified from the same upstream version.
 
 ## How a new icon is added
 
