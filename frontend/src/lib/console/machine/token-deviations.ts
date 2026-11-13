@@ -26,7 +26,7 @@ export function tokenDeviationReading(
 	readings: ReadonlyMap<string, TokenAssessment>,
 	rules: TokenDeviationRules,
 	tokens: (value: number) => string,
-	count: (value: number) => string
+	formatNumber: (value: number) => string
 ): { warning: boolean | null; line: ReadoutLine } {
 	const label = `${trace === 'read' ? 'Read' : 'Written'} assessment`;
 	const unassessed = (reason: string) => ({
@@ -44,7 +44,7 @@ export function tokenDeviationReading(
 		return unassessed('the displayed measured cohort does not match the history reading.');
 	}
 	if (row.reason === 'insufficient-history') {
-		return unassessed(`${count(row.priorCount ?? 0)} earlier matching runs; need at least ${count(rules.minimumRuns)}, using up to ${count(rules.historyRuns)}.`);
+		return unassessed(`${formatNumber(row.priorCount ?? 0)} earlier matching runs; need at least ${formatNumber(rules.minimumRuns)}, using up to ${formatNumber(rules.historyRuns)}.`);
 	}
 	if (row.reason !== null) {
 		if (!(row.reason in REASONS)) throw new Error(`Unknown token assessment reason: ${row.reason}`);
@@ -59,9 +59,9 @@ export function tokenDeviationReading(
 			label,
 			swatch: row.warning ? 'var(--band-medium)' : null,
 			value: `${row.warning ? 'Investigate; not proof of failure.' : 'Not flagged.'} ` +
-				`Distance from prior mean ${tokens(row.distance)} ${row.warning ? '>' : '<='} ${count(rules.multiplier)} sample standard deviations (${tokens(row.threshold)}). ` +
-				`Baseline: ${count(row.priorCount)} earlier matching runs, ${row.priorFirst} through ${row.priorLast} UTC; ` +
-				`${count(row.priorMeasured)} measured of ${count(row.priorRecorded)} recorded articles; ` +
+				`Distance from prior mean ${tokens(row.distance)} ${row.warning ? '>' : '<='} ${formatNumber(rules.multiplier)} sample standard deviations (${tokens(row.threshold)}). ` +
+				`Baseline: ${formatNumber(row.priorCount)} earlier matching runs, ${row.priorFirst} through ${row.priorLast} UTC; ` +
+				`${formatNumber(row.priorMeasured)} measured of ${formatNumber(row.priorRecorded)} recorded articles; ` +
 				`mean ${tokens(row.priorMean)}, sample deviation ${tokens(row.priorStddev)}.`
 		}
 	};

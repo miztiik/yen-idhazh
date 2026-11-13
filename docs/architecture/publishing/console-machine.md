@@ -221,6 +221,8 @@ numeric route knobs `read_write_history_runs`, `read_write_min_prior_runs` and
 at least two, the minimum cannot exceed the history count, and the multiplier
 is positive and finite. Sample deviation zero stays zero: an unequal current
 value flags, while an equal value does not.
+Rule labels and readouts retain fractional multipliers rather than rounding
+them as whole article counts.
 
 Matching uses recorded model identity, quantisation, context, slots, threads,
 batch, temperature, output budgets and visual-decision setting.

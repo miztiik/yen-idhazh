@@ -47,13 +47,14 @@
 	const measured = $derived(runs.filter((run) => run.measured > 0).length);
 	const rule = $derived(settingsRules(shell, { from: start, to: end }, 'none'));
 	const exact = $derived({ ...chart.number_format, significant_digits: MAX_SIGNIFICANT_DIGITS });
-	const tokens = (value: number) => `${formatNumber(value, exact, { si: false })} tokens`;
+	const precise = (value: number) => formatNumber(value, exact, { si: false });
+	const tokens = (value: number) => `${precise(value)} tokens`;
 	const count = (value: number) => formatNumber(value, chart.number_format, { exact: true });
 	const historyReadings = $derived(new Map((history?.readings ?? []).map((row) =>
 		[tokenAssessmentKey(row.date, row.runId, row.metric, row.trace), row])));
 	const assessments = $derived(runs.map((run) => ({
-		read: tokenDeviationReading(run, metric, 'read', history, historyReadings, deviationRules, tokens, count),
-		written: tokenDeviationReading(run, metric, 'written', history, historyReadings, deviationRules, tokens, count)
+		read: tokenDeviationReading(run, metric, 'read', history, historyReadings, deviationRules, tokens, precise),
+		written: tokenDeviationReading(run, metric, 'written', history, historyReadings, deviationRules, tokens, precise)
 	})));
 	const geometry = $derived(runSeries(
 		runs.map((run, index) => ({ runId: run.runId, date: run.date, events: [{
@@ -88,7 +89,7 @@
 			<p data-token-unit>{metric === 'total' ? 'Tokens per run' : 'Median tokens per article'}.
 				Run sequence, not elapsed time; dates are UTC.</p>
 			<p data-token-deviation-rule>Warning diamonds call for investigation, not proof of failure:
-				more than {count(deviationRules.multiplier)} sample standard deviations from up to
+				more than {precise(deviationRules.multiplier)} sample standard deviations from up to
 				{count(deviationRules.historyRuns)} earlier matching runs, with at least {count(deviationRules.minimumRuns)} required.
 				{#if historyRange}Fixed history: {historyRange.from} through {historyRange.to} UTC.{/if}
 				Change days are unassessed because settings changes are dated only by UTC day.</p>
