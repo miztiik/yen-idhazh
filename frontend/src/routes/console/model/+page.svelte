@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { useWindowChoice } from '$lib/console/window-slot';
 	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
 	import { routeReach, retryAsks, tallyAsks, type RouteReach } from '$lib/console/queries/window';
+	import { retryReach } from '$lib/console/pipelines/record-window';
 	import type { LedgerReach, SliceResult } from '$lib/data/ledger';
 	import * as queries from '$lib/console/queries/model';
 	import { settingsRules } from '$lib/console/settings-moved';
@@ -23,6 +24,8 @@
 	const choice = useWindowChoice();
 	const windowDays = $derived(choice.days);
 	let reach = $state<RouteReach | null>(null);
+	let itemCostReach = $state<RouteReach | null>(null);
+	let itemCostRevision = 0;
 	let ready = $state(false);
 	let retry = $state(0);
 	let answers = $state<Record<string, SliceResult | LedgerReach | 'pending'>>({});
@@ -40,15 +43,33 @@
 	onMount(() => {
 		ready = true;
 		void refresh();
+		return () => { itemCostRevision += 1; };
+	});
+	$effect(() => {
+		const days = windowDays;
+		if (ready) untrack(() => { void refreshItemCost(days); });
 	});
 	async function refresh() {
 		reach = await routeReach([queries.modelThroughputQuery.ledger, queries.faithfulnessQuery.ledger]);
 	}
+	async function refreshItemCost(days: number, retryWindow = false) {
+		const ticket = ++itemCostRevision;
+		const previous = itemCostReach;
+		itemCostReach = null;
+		answers['item-cost'] = 'pending';
+		const refreshed = await routeReach([queries.itemCostQuery.ledger]);
+		if (ticket !== itemCostRevision || days !== windowDays) return;
+		itemCostReach = retryWindow ? retryReach(previous, refreshed) : refreshed;
+	}
 	function retryFailed() {
-		const failed = doorIds.filter((id) => answers[id] !== 'pending' && answers[id]?.state === 'unreachable');
+		const failed = doorIds.filter((id) => {
+			const answer = answers[id];
+			return answer !== 'pending' && (answer?.state === 'unreachable' || (id === 'item-cost' && answer?.state === 'missing'));
+		});
 		retryAsks(failed.flatMap((id) => panelQueries[id]));
 		for (const id of failed) answers[id] = 'pending';
-		void refresh().then(() => { retry += 1; });
+		if (failed.includes('item-cost')) void refreshItemCost(windowDays, true);
+		if (failed.some((id) => id !== 'item-cost')) void refresh().then(() => { retry += 1; });
 	}
 	function show(days: number) {
 		choice.select(days);
@@ -85,8 +106,8 @@
 						<Reasons days={data.reasons} start={span.start} end={span.end} rule={checkerRule} chart={data.chart} {windowDays} />
 					{:else if id in panelQueries}
 						{#if id === 'faithfulness'}<a href={data.faithfulnessReference}>How each of these measures is scored</a>{/if}
-						<Query queries={panelQueries[id]} {reach} preset={windowDays} presets={knobs.window_presets}
-							{retry} height={knobs.chart_height} width={knobs.chart_width} name={id}
+						<Query queries={panelQueries[id]} reach={id === 'item-cost' ? itemCostReach : reach} preset={windowDays} presets={knobs.window_presets}
+							retry={id === 'item-cost' ? 0 : retry} height={knobs.chart_height} width={knobs.chart_width} name={id}
 							onAnswer={(name, answer) => { answers[name] = answer; }}>
 							{#snippet children(rows, range)}
 								<Panels {id} {rows} {range} rule={modelRuleFor(id, shell, range)} chart={data.chart} {knobs}

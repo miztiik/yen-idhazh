@@ -22,7 +22,6 @@
 		const currentPreset = preset;
 		const revision = retry;
 		const asked = queries;
-		if (currentReach === null) return;
 		void revision;
 		let current = true;
 		panelState = 'loading';
@@ -30,6 +29,7 @@
 		range = null;
 		notes = [];
 		onAnswer(name, 'pending');
+		if (currentReach === null) return;
 		void Promise.all(asked.map(async (query) => {
 			const selected = rangeFor(query, currentPreset, currentReach, presets);
 			return { selected, answer: 'from' in selected ? await modelSlice(query, selected) : selected };

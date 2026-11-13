@@ -9,12 +9,17 @@ export const PIPELINES_QUERY_GROUPS = [
 		ledgers: ['item-health'],
 		queries: [
 			queries.failureMixQuery, queries.failedRuleQuery, queries.itemTimeSplitQuery, queries.slowerOnSameWorkQuery,
-			queries.stageTimingsQuery, queries.itemCostQuery, queries.runTimelineQuery, queries.articleAgeQuery
+			queries.stageTimingsQuery, queries.runTimelineQuery, queries.articleAgeQuery
 		]
 	},
 	{
 		id: 'slowest-articles',
 		ledgers: ['item-health', 'host-fingerprint', 'run-shards'],
 		queries: [queries.slowestArticlesQuery]
+	},
+	{
+		id: 'write-cost',
+		ledgers: ['item-health', 'summary-quality-evals'],
+		queries: [queries.writeCostQuery]
 	}
 ] as const satisfies readonly { id: string; ledgers: readonly LedgerName[]; queries: readonly PanelQuery[] }[];

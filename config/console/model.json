@@ -1,7 +1,7 @@
 {
   "panel_groups": [
-    { "id": "summaries", "title": "", "panels": ["model-cards", "model-throughput", "call-ending", "doubt-reasons", "faithfulness", "source-doubts", "write-cost", "score-cost", "summary-length"] }
+    { "id": "summaries", "title": "", "panels": ["model-cards", "model-throughput", "item-cost", "call-ending", "doubt-reasons", "faithfulness", "source-doubts", "score-cost", "summary-length"] }
   ],
-  "judged": ["model-cards", "model-throughput", "call-ending", "doubt-reasons", "faithfulness", "source-doubts", "write-cost", "score-cost", "summary-length"],
+  "judged": ["model-cards", "model-throughput", "item-cost", "call-ending", "doubt-reasons", "faithfulness", "source-doubts", "score-cost", "summary-length"],
   "knobs": {}
 }

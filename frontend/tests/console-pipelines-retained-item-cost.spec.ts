@@ -2,9 +2,9 @@
 import { expect, test, type Page } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { nativeItemCost } from '../src/lib/console/pipelines/item-cost';
+import { nativeItemCost } from '../src/lib/console/model/item-cost';
 import { labelHeldMedian, reuseChecks, reuseSeries } from '../src/lib/console/machine/records';
-import { itemCostQuery } from '../src/lib/console/queries/pipelines';
+import { itemCostQuery } from '../src/lib/console/queries/model';
 import { promptReuseQuery } from '../src/lib/console/queries/machine';
 import { rangeFor, type RouteReach } from '../src/lib/console/queries/window';
 import type { Row } from '../src/lib/data/ledger';

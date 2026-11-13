@@ -19,7 +19,7 @@ import { siteCostPoints } from '../src/lib/console/pipelines/site-cost-per-item'
 import { articleAge } from '../src/lib/console/pipelines/article-age';
 import { slowerOnSameWork } from '../src/lib/console/pipelines/slower-on-same-work';
 import { nativeStageTimings } from '../src/lib/console/pipelines/stage-timings';
-import { nativeItemCost } from '../src/lib/console/pipelines/item-cost';
+import { nativeItemCost } from '../src/lib/console/model/item-cost';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
 import { pipelinesRecord, retryReach } from '../src/lib/console/pipelines/record-window';
 import { PIPELINES_QUERY_GROUPS } from '../src/lib/console/pipelines/query-groups';

@@ -7,6 +7,12 @@ export const modelThroughputQuery = {
 	span: 'window'
 } as const satisfies PanelQuery;
 
+export const itemCostQuery = {
+	name: 'itemCostQuery', ledger: 'item-health',
+	columns: ['date', 'prefill_ms', 'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens', 'label_input_tokens', 'label_cached_tokens'],
+	span: 'window'
+} as const satisfies PanelQuery;
+
 export const callEndingQuery = {
 	name: 'callEndingQuery', ledger: 'item-health',
 	columns: ['date', 'summary_finish_reason', 'label_finish_reason'],
@@ -28,12 +34,6 @@ export const sourceDoubtsQuery = {
 export const sourceDoubtsItemsQuery = {
 	name: 'sourceDoubtsItemsQuery', ledger: 'item-health',
 	columns: ['url_key', 'source_id'],
-	span: 'window'
-} as const satisfies PanelQuery;
-
-export const writeCostQuery = {
-	name: 'writeCostQuery', ledger: 'item-health',
-	columns: ['date', 'summarize_ms'],
 	span: 'window'
 } as const satisfies PanelQuery;
 

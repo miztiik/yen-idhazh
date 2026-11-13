@@ -24,7 +24,7 @@
 	import ItemTimeSplit from '$lib/console/pipelines/ItemTimeSplit.svelte';
 	import SlowerOnSameWork from '$lib/console/pipelines/SlowerOnSameWork.svelte';
 	import StageTimings from '$lib/console/pipelines/StageTimings.svelte';
-	import ItemCost from '$lib/console/pipelines/ItemCost.svelte';
+	import TimeCost from '$lib/console/TimeCost.svelte';
 	import RunTimeline from '$lib/console/pipelines/RunTimeline.svelte';
 	import SlowestArticles from '$lib/console/pipelines/SlowestArticles.svelte';
 	import ChartDrawing from '$lib/console/pipelines/ChartDrawing.svelte';
@@ -42,7 +42,7 @@
 		[queries.itemTimeSplitQuery.name]: (range) => sliceOnce(queries.itemTimeSplitQuery, range),
 		[queries.slowerOnSameWorkQuery.name]: (range) => sliceOnce(queries.slowerOnSameWorkQuery, range),
 		[queries.stageTimingsQuery.name]: (range) => sliceOnce(queries.stageTimingsQuery, range),
-		[queries.itemCostQuery.name]: (range) => sliceOnce(queries.itemCostQuery, range),
+		[queries.writeCostQuery.name]: (range) => sliceOnce(queries.writeCostQuery, range),
 		[queries.runTimelineQuery.name]: (range) => sliceOnce(queries.runTimelineQuery, range),
 		[queries.slowestArticlesQuery.name]: (range) => sliceOnce(queries.slowestArticlesQuery, range),
 		[queries.articleAgeQuery.name]: (range) => sliceOnce(queries.articleAgeQuery, range)
@@ -143,7 +143,7 @@
 		'at-a-glance': 'At a glance', 'run-health': 'Run health', 'site-cost-per-item': 'What one more article costs',
 		'failure-mix': 'What is failing, by stage', 'item-time-split': "Where an item's time went",
 		'slower-on-same-work': 'Whether a run is getting slower on the same work', 'stage-timings': 'Time per item by stage',
-		'item-cost': 'What one item cost the model', 'run-timeline': "Where the run's time went, on the run's own clock",
+		'write-cost': 'What one summary cost', 'run-timeline': "Where the run's time went, on the run's own clock",
 		'slowest-articles': 'Which articles took longest in the last run',
 		'chart-drawing': 'Visuals drawn for articles',
 		'visual-refusals': 'Recorded refusal reasons over time',
@@ -152,7 +152,7 @@
 	const panelQueries: Record<string, PanelQuery> = {
 		'failure-mix': queries.failureMixQuery, 'item-time-split': queries.itemTimeSplitQuery,
 		'slower-on-same-work': queries.slowerOnSameWorkQuery, 'stage-timings': queries.stageTimingsQuery,
-		'item-cost': queries.itemCostQuery, 'article-age': queries.articleAgeQuery,
+		'write-cost': queries.writeCostQuery, 'article-age': queries.articleAgeQuery,
 		'slowest-articles': queries.slowestArticlesQuery
 	};
 </script>
@@ -201,8 +201,8 @@
 									<SlowerOnSameWork rows={rows(query)} calendar={calendar(query)} {knobs} chart={data.chart} rule={queryRule(query)} />
 								{:else if id === 'stage-timings'}
 									<StageTimings rows={rows(query)} {knobs} chart={data.chart} window={queryWindow(query)} rule={queryRule(query)} />
-								{:else if id === 'item-cost'}
-									<ItemCost rows={rows(query)} {knobs} chart={data.chart} />
+								{:else if id === 'write-cost'}
+									<TimeCost id="write-cost" rows={rows(query)} range={ranges[query.name]} chart={data.chart} />
 								{:else if id === 'article-age'}
 									<ArticleAge rows={rows(query)} {knobs} />
 								{:else if id === 'slowest-articles'}

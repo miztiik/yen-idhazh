@@ -1,6 +1,6 @@
 # Which console panel answers what
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-13
 
 The console tells an operator what happened to the pipeline; the digest tells a
 reader what happened in the world. This page owns the routes and panel placement.
@@ -85,6 +85,13 @@ legible, tables must fit their container, and titles must use plain words.
 Feed and source panels belong to Voices, not Pipelines. Keep `/console/` as the
 Pipelines address; renaming a label is not a reason to break an existing bookmark.
 Shared navigation and window behavior follow their owning pages above.
+
+Model read/write timing (`item-cost`) sits beside throughput on Summaries.
+The whole-summary duration distribution (`write-cost`) sits after stage timings
+on Pipelines. Moving a panel does not change its clocks or evidence endpoint:
+item-cost uses item-health alone, while write-cost keeps the common item-health
+and summary-quality-evals endpoint. Both retain item-health's own first-day
+clamp and print their selected UTC bounds.
 
 ### Each route owns its config, expectations and gate drivers
 

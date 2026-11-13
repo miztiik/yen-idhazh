@@ -1,10 +1,10 @@
 # Why a summary was doubted, and what the checker measures
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-13
 
 `/console/model/` answers what the model wrote, how long it took, and what it got
-wrong. Its nine panels are the measure cards, throughput, call endings, doubt
-reasons, faithfulness, source doubts, writing cost, checking cost and summary
+wrong. Its nine panels are the measure cards, throughput, model read/write
+timing, call endings, doubt reasons, faithfulness, source doubts, checking cost and summary
 length. The eleven original card labels stay
 verbatim; determinism is the twelfth card. The cards and distributions are drawn to
 the rules in
@@ -32,6 +32,43 @@ off, recording start, coverage by another record and private partial-read notes
 keep the shared recording helpers' words. Live doors retain lost-day and
 set-aside-file notes even when the surviving record is quiet. A missing value is
 not a zero, and a failed read never supplies a success-shaped fallback.
+
+## What one item cost the model is two clocks, drawn apart
+
+`item-cost` sits immediately after throughput. Throughput measures tokens per
+second; this panel keeps the independent reading/writing duration distributions
+and their paired per-token costs. Its lead names the writing median.
+[nativeItemCost](../../../frontend/src/lib/console/model/item-cost.ts) and
+[ItemCost.svelte](../../../frontend/src/lib/console/model/ItemCost.svelte)
+reduce and draw the original item-health cells, not summary-quality scores.
+
+The two distributions share one seconds domain and the existing doubling bins.
+Reading independently includes finite, nonnegative prefill_ms; writing includes
+finite, nonnegative decode_ms. Measured zero belongs in the first bin; absence
+does not. Each histogram applies console.min_attempts_for_rate to its own clock
+count and prints the count when it cannot draw a distribution.
+
+The two per-token cohorts are independent of those histogram populations.
+Reading pairs a nonnegative prefill clock with input > cached >= 0 and divides
+the clock sum by the fresh-token sum. Writing pairs a nonnegative decode clock
+with positive output tokens and divides by their sum. Each prints its pair
+count. These remain time-per-token costs, not inverted tokens-per-second rates.
+Unknown cache counts are not zero reuse; the note counts prompts whose cache
+count is unknown. The writing/reading cost ratio is unavailable unless both
+costs exist and the reading cost is positive.
+
+This panel keeps its item-health-only endpoint. It does not inherit Summaries'
+common item-health/evaluation endpoint or the private cards' published-day
+window. Each selected preset refreshes that independent reach; the first day
+clamps to item-health's own first day. Its compact note prints the actual UTC
+bounds. Request epochs discard stale answers, retry retains the successful
+endpoint, and missing, quiet and unreachable stay distinct.
+
+Prompt reuse remains on Hardware, linked from the panel. Its per-call held
+tokens, fresh tokens, pooled shares and recorded cache percentages remain
+separate readings; an unknown cache count cannot become a whole-prompt read.
+Per-call charging follows
+[the model's contract](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum).
 
 ## Why a summary was doubted, and the one ledger that can answer it
 

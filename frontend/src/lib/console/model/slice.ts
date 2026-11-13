@@ -5,11 +5,11 @@ import { sliceOnce, type PanelQuery, type Range } from '../queries/window';
 export function modelSlice(query: PanelQuery, range: Range) {
 	switch (query.name) {
 		case 'modelThroughputQuery': return sliceOnce(queries.modelThroughputQuery, range);
+		case 'itemCostQuery': return sliceOnce(queries.itemCostQuery, range);
 		case 'callEndingQuery': return sliceOnce(queries.callEndingQuery, range);
 		case 'faithfulnessQuery': return sliceOnce(queries.faithfulnessQuery, range);
 		case 'sourceDoubtsQuery': return sliceOnce(queries.sourceDoubtsQuery, range);
 		case 'sourceDoubtsItemsQuery': return sliceOnce(queries.sourceDoubtsItemsQuery, range);
-		case 'writeCostQuery': return sliceOnce(queries.writeCostQuery, range);
 		case 'scoreCostQuery': return sliceOnce(queries.scoreCostQuery, range);
 		case 'summaryLengthQuery': return sliceOnce(queries.summaryLengthQuery, range);
 		default: throw new Error(`No declared Summaries query is named ${query.name}.`);

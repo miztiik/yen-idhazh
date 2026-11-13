@@ -200,8 +200,6 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "cached_tokens",
             "decode_ms",
             "output_tokens",
-            "label_input_tokens",
-            "label_cached_tokens",
             "run_id",
             "item_id",
             "source_id",
@@ -217,6 +215,8 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
         "frontend/src/lib/console/queries/model.ts": (
             "url_key",
             "model_id",
+            "label_input_tokens",
+            "label_cached_tokens",
             "summary_finish_reason",
             "label_finish_reason",
         ),

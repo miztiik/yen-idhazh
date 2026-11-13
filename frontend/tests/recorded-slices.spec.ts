@@ -23,6 +23,9 @@ const FIXTURES = path.join(REPO, 'tests', 'fixtures', 'console');
 // These four modules are the complete row-4 scope, not a repository walk.
 const MODULES = { pipelines, model, machine, voices } satisfies
 	Record<string, Readonly<Record<string, PanelQuery>>>;
+const RECORDED_ROUTES: Readonly<Record<string, string>> = {
+	itemCostQuery: 'pipelines', writeCostQuery: 'model'
+};
 let state: string;
 
 function queriesIn(exports: Readonly<Record<string, PanelQuery>>): PanelQuery[] {
@@ -58,7 +61,7 @@ function canonical(answer: SliceResult): SliceResult {
 }
 
 function record(route: string, name: string, answer: SliceResult): void {
-	const filename = path.join(FIXTURES, route, `${name}.json`);
+	const filename = path.join(FIXTURES, RECORDED_ROUTES[name] ?? route, `${name}.json`);
 	const actual = canonical(answer);
 	if (process.env.IDHAZH_RECORD_SLICES === '1') {
 		mkdirSync(path.dirname(filename), { recursive: true });

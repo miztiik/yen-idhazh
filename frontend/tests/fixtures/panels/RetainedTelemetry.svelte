@@ -4,7 +4,7 @@
 	import StageTimings from '$lib/console/pipelines/StageTimings.svelte';
 	import FailureMix from '$lib/console/pipelines/FailureMix.svelte';
 	import ItemTimeSplit from '$lib/console/pipelines/ItemTimeSplit.svelte';
-	import ItemCost from '$lib/console/pipelines/ItemCost.svelte';
+	import ItemCost from '$lib/console/model/ItemCost.svelte';
 	import { daysInWindow, monthsToFetch, windowOfDays } from '$lib/charts/viewport';
 	import { nameSpan } from '$lib/console/span-words';
 	import type { TelemetryRow } from '$lib/charts/series';
