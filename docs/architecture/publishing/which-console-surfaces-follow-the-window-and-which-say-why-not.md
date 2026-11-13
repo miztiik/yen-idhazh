@@ -89,6 +89,8 @@ item-health/evaluation endpoint, independently of ordinary Pipelines readings.
 Both clamp their first day to item-health's own first day and print their actual
 UTC bounds beside the panel. A lagging evaluation ledger therefore dates
 write-cost earlier without backshifting either route or changing item-cost.
+Recording-start notes use the ledger's actual first day, not the selected
+slice's first day; narrowing a preset does not claim that earlier records vanished.
 
 The Summaries load carries the article and score readers' existing typed
 coverage into the private cards. Empty cards are quiet only when both records
