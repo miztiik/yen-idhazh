@@ -157,12 +157,12 @@ test('the doubt-reasons chart describes its one column at one day', () => {
 });
 
 test('the faithfulness plot names its two points at one day, and its lines over seven', () => {
-	const lower = 'the other is the summary a quarter of the way up from the bottom.';
+	const lower = 'the other is p25.';
 	expect(matchLabel(1, [])).toBe(
-		`Summary faithfulness in this one day, as a percentage. One point is the day's middle summary and ${lower}`
+		`Summary faithfulness in this one day, as a percentage. One point is the day's median (p50) and ${lower}`
 	);
 	expect(matchLabel(7, [70, 82])).toBe(
-		`Summary faithfulness per day over 7 days, as a percentage. One line is each day's middle summary and ${lower} A line crosses the plot at 70 and 82 percent, the scores a published story is banded on.`
+		`Summary faithfulness per day over 7 days, as a percentage. One line is each day's median (p50) and ${lower} A line crosses the plot at 70 and 82 percent, the scores a published story is banded on.`
 	);
 	expect(matchPoints(1)).toBe('Both points are this one day.');
 	expect(matchPoints(7)).toBe('One point is one day over these 7 days.');
@@ -217,13 +217,13 @@ test('the doubt sentences name the days they counted', () => {
 	expect(neverSeenNote(clean, 7)).toBe(`${five} these 7 days, so they have no line on the chart.`);
 });
 
-test('the faithfulness headline names the one day, since one day has no middle day', () => {
+test('the faithfulness headline distinguishes daily percentiles from their window medians', () => {
 	const days = [evalDay('2026-10-06')];
 	expect(matchHeadline(days, 1)).toBe(
-		'This one day put half its summaries above 82 percent, and a quarter of them under 70 percent, on 412 summaries checked.'
+		'This one day: median (p50) 82 percent and p25 70 percent, on 412 summaries checked.'
 	);
 	expect(matchHeadline(days, 7)).toBe(
-		'Over these 7 days the middle day put half its summaries above 82 percent, and a quarter of them under 70 percent, on 412 summaries checked.'
+		'Over these 7 days: median daily p50 82 percent and median daily p25 70 percent, on 412 summaries checked.'
 	);
 });
 

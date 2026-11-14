@@ -66,6 +66,15 @@ Five rules hold for every number the console prints:
  tell" is a share of the pairs whose two readings agreed, so it prints `2% of
  the 41 that agreed`, and `1 of the 3 that agreed` under the floor.
 
+**Use statistical names for statistical readings.** Name the central reading
+`median (p50)`, not "the middle article" or "the middle request". Name the
+duration cutoff `p90 (90th percentile)`, not "slowest tenth": about 90% of
+durations lie at or below it, with the slowest tenth above it. For throughput,
+the slow end is instead p10; never relabel a duration percentile as a speed
+percentile. The interquartile range is `p25-p75`. Existing percentile
+calculations remain unchanged: observed-rank and interpolated readers retain
+their established conventions.
+
 **A verdict word is set by the share it judges, never by why a day was held.**
 `inside` and `past` compare a share the page prints with its own mark, the
 dashed limit the plot draws for that share: `past` when the share is above the

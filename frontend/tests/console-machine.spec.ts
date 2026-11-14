@@ -19,6 +19,9 @@ import { closestToMemory, contextReadings, countersFrom, processors, textRows, l
 import { slowestArticles } from '../src/lib/console/pipelines/slowest-articles';
 import { fleetJobs } from '../src/lib/charts/fleet';
 import { machineKeys } from '../src/lib/charts/machine-colour';
+import { machineRamp } from '../src/lib/charts/machine-colour';
+import { shardPhases } from '../src/lib/console/machine/shard-phases';
+import { machinePhases } from '../src/lib/console/machine/machine-phases';
 import {
 	clockAgreement,
 	clocksChart,
@@ -82,6 +85,97 @@ const LIMITS: MachineLimits = {
 	contextWindow: MODELS.summarizer.server['--ctx-size'],
 	jobTimeoutSeconds: CONFIG.run.shard_timeout_minutes * 60
 };
+
+test('phase totals and weighted rates keep shards separate and exclude incomplete identities or timings', () => {
+	const row = { date: '2026-11-01', run_id: '2026-11-01-1', machine_job: 'work', machine_shard: 0,
+		cpu_model: 'cpu-a', input_tokens: 300, cached_tokens: 100, output_tokens: 100, prefill_ms: 1000, decode_ms: 2000 };
+	const work = shardPhases([
+		row,
+		{ ...row, input_tokens: 500, output_tokens: 200, prefill_ms: 4000, decode_ms: 1000 },
+		{ ...row, machine_shard: 1, prefill_ms: 4000, decode_ms: 4000 },
+		{ ...row, run_id: '2026-11-01-2' },
+		{ ...row, cached_tokens: null },
+		{ ...row, prefill_ms: 0 },
+		{ ...row, machine_shard: null }
+	], []);
+	expect(work.excluded).toBe(3);
+	expect(work.shards).toHaveLength(3);
+	expect(work.shards.find((shard) => shard.label.endsWith('shard 1'))).toMatchObject({
+		articles: 1, prefill: 4, decode: 4, total: 8, prefillTps: 50, decodeTps: 25, prefillShare: 50
+	});
+	expect(work.shards.find((shard) => shard.articles === 2)).toMatchObject({
+		articles: 2, prefill: 5, decode: 3, prefillTps: 120, decodeTps: 100, prefillShare: 62.5
+	});
+	expect(shardPhases([{ ...row, decode_ms: null }], []).shards).toEqual([]);
+});
+
+test('shard hardware joins by date, run, task and shard; unknown and conflicting L3 never borrow a CPU peer reading', () => {
+	const item = { date: '2026-11-01', run_id: '2026-11-01-1', machine_job: 'work', machine_shard: 0,
+		machine_pipeline_name: 'digest', machine_task_name: 'summarize', cpu_model: 'same-cpu',
+		input_tokens: 300, cached_tokens: 100, output_tokens: 100, prefill_ms: 1000, decode_ms: 2000 };
+	const host = { date: item.date, run_id: item.run_id, job: 'work', shard: 0,
+		pipeline_name: 'digest', task_name: 'summarize', cpu_model: 'Intel(R) Xeon(R) measured', l3_cache_bytes: 0 };
+	const hosts = [
+		host, { ...host, l3_cache_bytes: null }, { ...host, run_id: '2026-11-01-2', l3_cache_bytes: 99 },
+		{ ...host, date: '2026-11-02', l3_cache_bytes: 100 }, { ...host, shard: 1, l3_cache_bytes: 101 },
+		{ ...host, pipeline_name: 'other', l3_cache_bytes: 102 },
+		{ ...host, task_name: 'judge', cpu_model: 'AMD measured', l3_cache_bytes: 128 },
+		{ ...host, task_name: 'judge', cpu_model: 'AMD measured', l3_cache_bytes: 256 }
+	];
+	const work = shardPhases([item, { ...item, machine_task_name: 'judge' }, { ...item, machine_shard: 2 }], hosts);
+	expect(work.shards.find((shard) => shard.label.includes('digest/summarize') && shard.label.endsWith('shard 0')))
+		.toMatchObject({ cpuModels: ['Intel(R) Xeon(R) measured'], l3CacheBytes: [0] });
+	expect(work.shards.find((shard) => shard.label.includes('digest/judge')))
+		.toMatchObject({ cpuModels: ['AMD measured'], l3CacheBytes: [128, 256] });
+	expect(work.shards.find((shard) => shard.label.endsWith('shard 2')))
+		.toMatchObject({ cpuModels: ['same-cpu'], l3CacheBytes: [] });
+});
+
+test('hardware phase means weight articles, not shards or runs, and phase rates weight measured seconds', () => {
+	const item = { date: '2026-11-01', run_id: '2026-11-01-1', machine_job: 'work', machine_shard: 0,
+		cpu_model: 'cpu-a', input_tokens: 300, cached_tokens: 100, output_tokens: 100, prefill_ms: 1000, decode_ms: 2000 };
+	const work = machinePhases([
+		item,
+		{ ...item, input_tokens: 500, output_tokens: 200, prefill_ms: 4000, decode_ms: 1000 },
+		{ ...item, machine_shard: 1, prefill_ms: 4000, decode_ms: 4000 },
+		{ ...item, run_id: '2026-11-01-2' },
+		{ ...item, decode_ms: null }
+	], []);
+	expect(work.excluded).toBe(1);
+	expect(work.machines).toHaveLength(1);
+	expect(work.machines[0]).toMatchObject({
+		cpuModels: ['cpu-a'], l3CacheBytes: [], articles: 4, shards: 3,
+		prefill: 2.5, decode: 2.25, total: 4.75, prefillTps: 100
+	});
+	expect(work.machines[0].decodeTps).toBeCloseTo(500 / 9);
+	expect(work.machines[0].prefillShare).toBeCloseTo(100 * 10 / 19);
+	expect(machinePhases([{ ...item, prefill_ms: 0 }], []).machines).toEqual([]);
+});
+
+test('hardware phase groups keep CPU models and distinct, zero, missing or conflicting L3 readings separate', () => {
+	const item = { date: '2026-11-01', run_id: '2026-11-01-1', machine_job: 'work',
+		cpu_model: 'cpu-a', input_tokens: 300, cached_tokens: 100, output_tokens: 100, prefill_ms: 1000, decode_ms: 2000 };
+	const host = { date: item.date, run_id: item.run_id, job: 'work', cpu_model: 'cpu-a' };
+	const work = machinePhases([
+		...[0, 1, 2, 3, 4, 5].map((machine_shard) => ({ ...item, machine_shard })),
+		{ ...item, machine_shard: 6, cpu_model: 'cpu-b' }
+	], [
+		{ ...host, shard: 0, l3_cache_bytes: 128 },
+		{ ...host, shard: 1, l3_cache_bytes: 128 },
+		{ ...host, shard: 2, l3_cache_bytes: 256 },
+		{ ...host, shard: 3, l3_cache_bytes: 0 },
+		{ ...host, shard: 5, l3_cache_bytes: 128 },
+		{ ...host, shard: 5, l3_cache_bytes: 256 },
+		{ ...host, shard: 6, cpu_model: 'cpu-b', l3_cache_bytes: 128 }
+	]);
+	expect(work.machines).toHaveLength(6);
+	expect(work.machines.find((machine) => machine.cpuModels[0] === 'cpu-a' &&
+		machine.l3CacheBytes.length === 1 && machine.l3CacheBytes[0] === 128))
+		.toMatchObject({ articles: 2, shards: 2, total: 3 });
+	expect(work.machines.map((machine) => [machine.cpuModels, machine.l3CacheBytes])).toEqual(expect.arrayContaining([
+		[['cpu-a'], [256]], [['cpu-a'], [0]], [['cpu-a'], []], [['cpu-a'], [128, 256]], [['cpu-b'], [128]]
+	]));
+});
 
 function drawingOptions(stacked = false) {
 	return {

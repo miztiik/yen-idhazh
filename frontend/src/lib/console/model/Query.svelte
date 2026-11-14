@@ -13,7 +13,7 @@
 		onAnswer: (name: string, answer: SliceResult | LedgerReach | 'pending') => void;
 		children: Snippet<[readonly Row[][], Range]>;
 	} = $props();
-	let rows = $state<Row[][]>([]);
+	let rows = $state.raw<Row[][]>([]);
 	let range = $state<Range | null>(null);
 	let panelState = $state<'loading' | 'ready' | 'quiet' | 'missing' | 'unreachable'>('loading');
 	let notes = $state<string[]>([]);

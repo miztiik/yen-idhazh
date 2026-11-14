@@ -53,7 +53,7 @@
 {:else if scores !== null}
 	<div data-eval-panel="faithfulness" data-match-floor={scores.floor}>
 	<p data-lede>{scores.days.at(-1)?.matchMid == null ? 'Faithfulness was not measured.' : `${scores.days.at(-1)?.matchMid}% median faithfulness`}</p>
-	<p data-comparison="each day's median against its middle half">Each day's median against its middle half.</p>
+	<p data-comparison="each day's median (p50) against its interquartile range (p25-p75)">Each day's median (p50) against its interquartile range (p25-p75).</p>
 	<Series series={scores.series} {rule} {chart} name="faithfulness" rules={scores.rules} domain={[scores.floor, 100]} />
 	<p>{scores.wider}</p>
 	<p data-model-match-rule>These scores are banded on the site's agreed thresholds.</p>
@@ -95,7 +95,7 @@
 	<TimeCost {id} rows={rows[0]} {range} {chart} />
 {:else if id === 'summary-length'}
 	<p data-lede>{median(lengths.map((run) => run.median)) ?? 'not measured'} median words per run</p>
-	<p data-comparison="each run's middle length against its shortest and longest">Each run's middle length against its shortest and longest.</p>
+	<p data-comparison="each run's median (p50) length against its shortest and longest">Each run's median (p50) length against its shortest and longest.</p>
 	<div data-eval-panel="summary-length">
 		<RunLengths runs={lengths} width={chart.width_px} height={chart.height_px} tickDensity={chart.tick_density} readoutMaxShare={chart.readout_max_share} rule={lengthRule} />
 		<table><caption>{RECORDED.find((i) => i.id === 'compression')?.label}</caption><thead><tr><th>Run</th><th>Median compression</th></tr></thead>

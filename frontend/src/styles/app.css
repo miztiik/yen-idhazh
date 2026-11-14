@@ -468,6 +468,14 @@ html:has([data-surface='operator']) { scroll-padding-block-start: var(--console-
 	border-radius: var(--radius-sm);
 }
 
+[data-surface='operator'] .chart-bar {
+	border-radius: var(--radius-full);
+}
+
+[data-surface='operator'] .chart-bar-stack {
+	clip-path: inset(0 calc(100% - var(--chart-filled-width, 100%)) 0 0 round var(--radius-full));
+}
+
 /* --- The reserved block ------------------------------------------------
    `loading` is one of the five state classes design-system.md names, and this
    is where it lives. A block wearing it is holding a place: it is in the
@@ -501,6 +509,16 @@ html:has([data-surface='operator']) { scroll-padding-block-start: var(--console-
    things; a dozen starting in the same frame reads as one page waiting.
    The switch also arrives late - `console.shimmer_after_ms` - so a fetch that
    lands first never animates at all. */
+@property --console-shimmer-position {
+	syntax: '<percentage>';
+	inherits: true;
+	initial-value: -100%;
+}
+
+[data-shimmer='on'] {
+	animation: shimmer var(--dur-shimmer) linear infinite;
+}
+
 [data-shimmer='on'] .loading {
 	background-image: linear-gradient(
 		90deg,
@@ -510,26 +528,22 @@ html:has([data-surface='operator']) { scroll-padding-block-start: var(--console-
 	);
 	background-size: 200% 100%;
 	background-repeat: no-repeat;
-	animation: shimmer var(--dur-shimmer) linear infinite;
+	background-position: var(--console-shimmer-position) 0;
 }
 
 @keyframes shimmer {
-	from {
-		background-position: -100% 0;
-	}
+	from { --console-shimmer-position: -100%; }
+	to { --console-shimmer-position: 100%; }
+}
 
-	@keyframes toastIn {
-		from {
-			opacity: 0;
-			transform: translateY(var(--space-2));
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
+@keyframes toastIn {
+	from {
+		opacity: 0;
+		transform: translateY(var(--space-2));
 	}
 	to {
-		background-position: 100% 0;
+		opacity: 1;
+		transform: translateY(0);
 	}
 }
 

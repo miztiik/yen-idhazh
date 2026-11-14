@@ -27,7 +27,7 @@ export interface RouteStanding {
 
 export function routeStanding(reading: RouteStanding): string {
 	if (!Number.isInteger(reading.days) || reading.days < 1) throw new Error('A route standing needs a positive day count.');
-	if (reading.state === 'loading') return reading.shimmer ? 'Fetching the record.' : '';
+	if (reading.state === 'loading') return 'Loading chart data. Previously loaded windows are reused.';
 	if (reading.state === 'unreachable') {
 		return `Part of the record did not arrive, so ${reading.unreachable} ${reading.unreachable === 1 ? 'panel has' : 'panels have'} nothing to draw.`;
 	}

@@ -20,6 +20,9 @@ Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributor
 
 ## What is committed
 
+Console destinations use `summaries` from `file-text`, `judgement` from `scale`,
+and `voices` from `rss`, unmodified from the same upstream version.
+
 The explorer's three further chart choices use unmodified Lucide 0.544.0 sources:
 `shape-side-by-side` from Lucide `align-start-vertical`, SHA-256 is `c5263b3a6c487881926ca3e54bc99d6f6078c3e5ed747b436919a3b15ea7a97a`;
 `shape-days` from Lucide `calendar-check`, SHA-256 is `397142a6dac44158ef3dee0c575c2a81527c416a1222d87ee2ec870c96a3d110`;

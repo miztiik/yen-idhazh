@@ -288,11 +288,13 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(page.locator('[data-console-panel-id="slowest-articles"]')).toHaveCount(1);
 	await expect(page.locator('[data-slowest-run]')).toBeVisible();
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
+	const beforeHardwareReturn = [...nativeRequests];
 	await page.getByText('Console menu', { exact: true }).click();
 	await page.locator('[data-console-tab="machine"]').click();
 	await settled(page);
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
 	await expect(page).toHaveTitle(/Hardware/);
+	expect(nativeRequests, 'returning to Hardware reuses the loaded native files').toEqual(beforeHardwareReturn);
 	expect(storageWarnings.some((message) => message.includes('could not be read'))).toBe(true);
 	expect(storageWarnings.some((message) => message.includes('could not be saved'))).toBe(true);
 
@@ -370,7 +372,7 @@ test('actual prerendered Hardware contains words and reserved frames, never ledg
 		await expect(page.locator('[data-panel-query][data-machine-panel-state="loading"]')).toHaveCount(PANELS.length);
 		await expect(page.locator('[data-panel-query] svg')).toHaveCount(PANELS.length);
 		await expect(page.locator('[data-panel-query] svg rect:not([data-reserved-ground]), [data-panel-query] svg path')).toHaveCount(0);
-		await expect(page.locator('[data-console-standing]')).toHaveText('');
+		await expect(page.locator('[data-console-standing]')).toHaveText('Loading chart data. Previously loaded windows are reused.');
 		await expect(page.locator('[data-machine-refused], [data-cost-figures], [data-clock-pair], [data-fleet-job]')).toHaveCount(0);
 		const html = await response!.text();
 		expect(html).not.toMatch(/machineCounters:|machineRuns:|runShards:|RunManifest|RunPlan/);

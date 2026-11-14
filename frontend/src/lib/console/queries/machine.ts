@@ -21,7 +21,8 @@ export const twoClocksHostsQuery = {
 
 export const slowerMachinesQuery = {
 	name: 'slowerMachinesQuery', ledger: 'item-health',
-	columns: ['run_id', 'cpu_model', 'prefill_ms', 'input_tokens', 'cached_tokens', 'decode_ms', 'output_tokens'],
+	columns: ['date', 'run_id', 'machine_job', 'machine_pipeline_name', 'machine_task_name', 'machine_shard',
+		'cpu_model', 'prefill_ms', 'input_tokens', 'cached_tokens', 'decode_ms', 'output_tokens'],
 	span: 'window'
 } as const satisfies PanelQuery;
 
@@ -29,7 +30,7 @@ export const platformMixQuery = {
 	name: 'platformMixQuery', ledger: 'host-fingerprint',
 	columns: [
 		'version', 'date', 'run_id', 'job', 'pipeline_name', 'task_name', 'shard', 'fingerprint', 'fingerprint_version',
-		'cpu_model', 'cpu_logical_processors', 'model_load_ms', 'job_seconds',
+		'cpu_model', 'cpu_logical_processors', 'l3_cache_bytes', 'model_load_ms', 'job_seconds',
 		'server_prompt_tokens', 'server_prompt_seconds',
 		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
 	],

@@ -46,7 +46,7 @@
 </script>
 
 <div data-console-panels={route} data-route-state={tally.state} data-shimmer={shimmer ? 'on' : 'off'}>
-	<p class="route-standing" data-console-standing>
+	<p class="route-standing" data-console-standing role="status" aria-live="polite">
 		{#if recordScope && (tally.state === 'quiet' || tally.state === 'missing' || tally.state === 'unreachable')}{recordScope}: {/if}
 		{standing}
 		{#if tally.state === 'unreachable'}

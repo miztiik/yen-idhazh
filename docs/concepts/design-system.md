@@ -109,6 +109,19 @@ In archive results, apply `--measure` once to the block holding title and summar
 
 ### A chart's column is set by what the chart was drawn at
 
+Console histogram bins and time-series columns have square corners, flat tops
+and straight baselines, including stacked daily columns and compact count
+charts. Their geometry shows measured intervals, counts and additive parts;
+pill-shaped caps remove part of that drawing and obscure its boundaries.
+Rounding is not a blanket rule for filled marks.
+
+Horizontal comparison bars keep pill ends using the configured `--radius-full`.
+Shared `chart-bar` and `chart-bar-stack` styles round each complete filled
+outline; additive joins stay flush, including when an end segment is narrower
+than the radius. Rounding never changes measured lengths, scales, markers or
+overflow. Range bands, job squares, background regions and icons are not
+comparison bars.
+
 Draw against the actual content width in CSS pixels. Do not shrink a wide drawing until its labels are unreadable. Reserve the figure's dimensions to avoid layout shifts; choose a simpler layout when the available width cannot hold its labels.
 The [chart contract](../architecture/publishing/where-a-drawing-becomes-pixels.md#design-rationale)
 defines how the producer shortens long source labels without changing their source wording,

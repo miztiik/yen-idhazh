@@ -207,7 +207,7 @@
 	}
 
 	function sentence(source: SourceCut): string {
-		return `${source.sourceId}: ${source.cut} of ${source.articles} articles cut. Shortest article ${grouped(source.lengths.min)} words, middle ${grouped(source.lengths.median)}, longest ${grouped(source.lengths.max)}.`;
+		return `${source.sourceId}: ${source.cut} of ${source.articles} articles cut. Shortest article ${grouped(source.lengths.min)} words, median (p50) ${grouped(source.lengths.median)}, longest ${grouped(source.lengths.max)}.`;
 	}
 </script>
 
@@ -418,7 +418,7 @@
 	{/if}
 
 	<ul class="key" data-source-cuts="key">
-		<li><span class="swatch swatch-range"></span>shortest to longest article, dot at the middle one</li>
+		<li><span class="swatch swatch-range"></span>shortest to longest article, dot at the median (p50)</li>
 		<li><span class="swatch swatch-past"></span>past the cut - the part the machine never read</li>
 	</ul>
 </div>

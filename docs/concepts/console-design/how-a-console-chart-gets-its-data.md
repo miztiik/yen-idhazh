@@ -97,8 +97,13 @@ Its ledger, columns, structured predicates and span are independent of the drawi
 The native score ledger is `summary-quality-evals`; the older `scores` name and
 word-count spellings are not new columns.
 
-`queries/window.ts` owns the console's slice call and holds only the current
-promise for a query's range. A changed window replaces that ask. The query door
+`queries/window.ts` owns the console's slice call and keeps recent answers in
+browser memory across route navigation. Each complete query declaration holds
+at most one range per configured window preset, evicting the least recently used
+range. Concurrent identical asks share a promise; different columns or predicates
+cannot reuse an incompatible answer. Failed reads are not retained, and explicit
+retry clears the selected query's ranges. Reloading starts a fresh session.
+The query door
 still owns fetched files, index validation and the signed engine add-on.
 An unavailable reach names no invented day and starts no slice.
 Declaring readers changes registry ownership, not the persisted row's schema
@@ -125,14 +130,19 @@ The route has one reserved standing and one delayed shimmer; retry asks only
 for the failed record, not already usable siblings. Existing month-based
 callers retain their treatment until their route migration removes it.
 
-The standing says `Fetching the record.` while delayed reads are pending.
+The standing immediately says `Loading chart data. Previously loaded windows
+are reused.` Each reserved chart also says `Loading chart data...`; a pending
+read is never described as absent evidence. The standing is a polite live status.
 Size and timing studies are suspended by maintainer direction; the UI prints no
 guessed engine-download figure and no absent reading holds the functionality.
 
 The standing's state tally is pure. It imports no query engine, and completing
-one answer does not restart the route's wait while another is pending. Ledger
-frames share that one shimmer without drawing placeholder bars. With reduced
-motion they keep a still frame.
+one answer does not restart the route's wait while another is pending. All
+reserved frames share one inherited, animated sweep position from the route,
+including frames mounted after the wait began, without drawing placeholder bars.
+The sweep starts after the configured delay. With reduced motion they keep a
+still frame and the loading words. Immutable query answers are held as shallow
+reactive state: mounting a chart does not proxy every ledger cell.
 
 The operator sweep uses existing neutral inks, not the faint surface-wash
 token: `--color-rule-strong` over a transparent ledger frame and

@@ -74,7 +74,7 @@
 		{ label: 'Model time', figure: model, format: (value: number) => seconds(value, numberFormat) }
 	].map(({ label, figure, format }) => figure.mid === null ? null : factsOf(label, [
 		{ label: 'Lowest', value: figure.low, format },
-		{ label: 'Middle', value: figure.mid, format },
+		{ label: 'Median (p50)', value: figure.mid, format },
 		{ label: 'Highest', value: figure.high, format },
 		{ label: 'Measured articles', value: `${grouped(figure.from)} of ${grouped(figure.outOf)}` }
 	], 'No price was recorded.')));
@@ -98,11 +98,11 @@
 		<p class="lede" data-lede
 			data-model-rule-name="machine-article-cost"
 			data-model-rule="no" data-model-rule-none="These are per-article prices, not a comparison between days.">
-			{processor.mid === null ? 'No processor price recorded.' : `${seconds(processor.mid, numberFormat)} of processor time for the middle article.`}
+			{processor.mid === null ? 'No processor price recorded.' : `${seconds(processor.mid, numberFormat)} median (p50) processor time per article.`}
 		</p>
-		<p data-comparison="The middle article against the range most articles fall in">The middle article against the range most articles fall in.</p>
+		<p data-comparison="Median (p50) against the measured minimum and maximum">Median (p50) against the measured minimum and maximum.</p>
 		<ul class="costs" data-chart-type="rangeTrack" data-panel-question="is it working"
-			data-readout-none="Each track prints its endpoints and middle reading in words; agreed with Susan"
+			data-readout-none="Each track prints its minimum, median (p50) and maximum."
 			use:hoverReadout={{ name: 'article-cost', readout: readings }}>
 			<li
 				data-readout-at="0"
@@ -148,8 +148,8 @@
 						</div>
 					{/if}
 					<p class="reach">
-						The middle article of {grouped(processor.from)}, which is the ones a machine record
-						could be matched to out of {grouped(processor.outOf)} that recorded a busy share and a
+						Median (p50) across {grouped(processor.from)} articles matched to a machine record,
+						out of {grouped(processor.outOf)} that recorded a busy share and a
 						clock; the cheapest took {seconds(processor.low, numberFormat)} and the dearest {seconds(
 							processor.high,
 							numberFormat
@@ -163,7 +163,7 @@
 								: `smallest machine's ${Math.min(...cost.processors)} processors`}, which is {fits(
 								hour,
 								processor.mid
-							)} articles at the middle figure above.
+							)} articles at the median (p50) cost above.
 						</p>
 					{/if}
 				{/if}
@@ -207,7 +207,7 @@
 						</div>
 					{/if}
 					<p class="reach">
-						The middle step of {grouped(memory.from)} taken inside {grouped(cost.shards)}
+						Median (p50) of {grouped(memory.from)} memory changes inside {grouped(cost.shards)}
 						{cost.shards === 1 ? 'shard' : 'shards'}; the largest fall was {mib(memory.low)} and the
 						largest rise {mib(memory.high)}.
 					</p>
@@ -255,7 +255,7 @@
 						</div>
 					{/if}
 					<p class="reach">
-						The middle article of {grouped(model.from)}; the quickest took {seconds(model.low, numberFormat)} and the
+						Median (p50) across {grouped(model.from)} articles; the quickest took {seconds(model.low, numberFormat)} and the
 						slowest {seconds(model.high, numberFormat)}.
 					</p>
 					<p class="against">

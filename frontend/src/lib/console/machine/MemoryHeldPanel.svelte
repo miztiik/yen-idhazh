@@ -113,7 +113,8 @@
 							.map((segment) => `${segment.label}, ${segment.figure}`)
 							.join('; ')}
 					>
-						{#each day.segments as segment (segment.key)}
+						<span class="memory-segments chart-bar-stack">
+						{#each day.segments.filter((segment) => segment.bytes > 0) as segment (segment.key)}
 							<span
 								class="segment {segment.key}"
 								style="width: {segment.width}"
@@ -121,6 +122,7 @@
 								data-memory-bytes={segment.bytes}
 							></span>
 						{/each}
+						</span>
 						{#if day.overBytes > 0}
 							<span
 								class="edge"
@@ -160,7 +162,7 @@
 								{/if}
 								{#each day.brackets as bracket (bracket.key)}
 									<span
-										class="reach {bracket.key}"
+										class="reach chart-bar {bracket.key}"
 										style="width: {bracket.width}"
 										data-memory-bracket-bar={bracket.key}
 									></span>
@@ -185,7 +187,7 @@
 					{#if day.swap !== null}
 						<p class="swap" data-memory-swap-used={day.swap.usedBytes}>
 							<span class="swap-track">
-								<span class="swap-fill" style="width: {day.swap.width}"></span>
+								<span class="swap-fill chart-bar" style="width: {day.swap.width}"></span>
 							</span>
 							{#if day.swap.none}
 								Nothing had been pushed out to disk, out of {day.swap.totalFigure} the machine keeps
@@ -285,6 +287,8 @@
 		height: 100%;
 	}
 
+	.memory-segments { display: flex; width: 100%; height: 100%; }
+
 	.segment.free,
 	.swatch.free {
 		background: var(--color-surface-sunken);
@@ -364,7 +368,7 @@
 		position: relative;
 		display: block;
 		height: 4px;
-		border-radius: 2px;
+		border-radius: var(--radius-sm);
 		border-inline-start: 2px solid var(--color-text);
 		border-inline-end: 2px solid var(--color-text);
 		background: var(--color-rule-strong);
@@ -403,7 +407,7 @@
 	.swap-fill {
 		display: block;
 		height: 100%;
-		border-radius: 2px;
+		border-radius: var(--radius-sm);
 		background: var(--color-text-tertiary);
 	}
 </style>

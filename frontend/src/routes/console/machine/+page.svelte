@@ -53,10 +53,10 @@
 	const windowDays = $derived(choice.days);
 	let ready = $state(false);
 	let generation = $state(0);
-	let reaches = $state<Record<string, RouteReach>>({});
+	let reaches = $state.raw<Record<string, RouteReach>>({});
 	const reach = $derived(reaches.native ?? null);
-	let ranges = $state<Record<string, Range>>({});
-	let answers = $state<Record<string, SliceResult | LedgerReach>>({});
+	let ranges = $state.raw<Record<string, Range>>({});
+	let answers = $state.raw<Record<string, SliceResult | LedgerReach>>({});
 	let countFault = $state<string | null>(null);
 	let tokenHistory = $state<TokenHistory | null>(null);
 	let tokenHistoryRange = $state<Range | null>(null);
@@ -288,6 +288,7 @@
 						<MachineCharts {id} newestRunId={latestRunId} title={titles[id]} rows={id === 'two-clocks'
 							? rows('twoClocksQuery').filter((row) => row.machine_job === null || row.machine_job === '' || row.machine_job === 'work')
 							: rows(PANEL_QUERIES[id][0].name)}
+							hostRows={id === 'slower-machines' ? rows('platformMixQuery') : []}
 							newest={id === 'two-clocks' ? clockCounters.runs.find((run) => run.runId === latestRunId) ?? null : newest}
 							chart={cfg.chart} shell={data} {start} {end} {knobs} {windowDays} />
 					{/if}
