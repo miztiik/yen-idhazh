@@ -161,6 +161,11 @@ test('L3 groups combine vendors, count jobs rather than fingerprints, and preser
 		['0 MiB L3', [0, 1]], ['L3 not measured', [0, 1]]
 	]);
 	expect(view.placements).toBe(6);
+	const colours = view.rows.slice(0, -1).map((row) => row.colour);
+	expect(new Set(colours).size).toBe(3);
+	expect(colours[0]).toBe(schemePiYG[11][0]);
+	expect(colours.at(-1)).toBe(schemePiYG[11].at(-1));
+	expect(view.rows.at(-1)?.parts[0].gradient).toBeNull();
 	expect(fleetSummary(view).series[0].values).toEqual(['3', '3']);
 	expect(view.lines[0].map((line) => line.machine)).toContain('Intel Xeon');
 	expect(view.lines[0].map((line) => line.l3Cache)).toEqual(['32 MiB L3', '32 MiB L3', '32 MiB L3']);

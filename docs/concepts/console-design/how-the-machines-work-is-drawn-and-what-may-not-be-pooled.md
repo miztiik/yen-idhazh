@@ -38,9 +38,10 @@ The chart rules these panels obey are
  and the panel reads as one rather than as a panel with a missing spread.
 - **Daily placement history groups jobs by exact reported L3 bytes across CPU
  vendors.** MiB is a display conversion, not a grouping rounded to a bin.
- The widest bounded host query fixes the descending capacity order and tint
- positions across presets. Larger capacities are darker; one theme-aware
- chart hue and the configured tint floor supply a coherent progression.
+ The widest bounded host query fixes the descending capacity order and colour
+ positions across presets. Capacities sample the full configured chart palette
+ rather than adjacent shades of one hue, so neighbouring groups remain distinct.
+ Numerical legend order carries capacity order; darkness does not imply rank.
  Missing L3 is a separate neutral `L3 not measured` group; measured zero stays
  `0 MiB L3`. CPU names and versioned fingerprint qualifiers remain in job
  details. Equal capacities do not imply equal topology or performance.
@@ -281,11 +282,12 @@ from the committed rows rather than argued with.
 **Reported L3 capacity is the useful ordered reading of placement history.**
  CPU model categories hid the cache comparison behind many unrelated hues.
  Combining vendors by exact cache bytes answers the available question without
- claiming equivalent performance or unique host counts. A single chart hue,
- lightened toward each theme's existing identity-highlight token, replaces
- unrelated categorical colours; the tint floor and gradient switch remain
- configurable. Daily count ranking may move segments without changing their
- capacity tint. The legend's numerical order makes that tint readable.
+ claiming equivalent performance or unique host counts. Closely spaced tints
+ obscure the boundaries between capacity groups, especially in narrow stacks.
+ Sampling the full configured palette separates those groups; numerical legend
+ order carries rank instead of darkness. The tint floor and gradient switch
+ still control the decorative fill. Daily count ranking may move segments
+ without changing their capacity colour.
 
 L2 aggregation requires a separately declared and collected L2-capacity field;
 historical L2 cannot be inferred from L3 or CPU names. Unique physical-machine

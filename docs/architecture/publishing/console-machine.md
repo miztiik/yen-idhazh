@@ -29,7 +29,7 @@ endpoint and first-day clamp; its own UTC bounds print beside its readings.
 Neither group moves the other's endpoint. Following panels use the chosen preset; snapshot panels use
 the newest day and name their newest recorded run rather than falling back to
 an older successful one. The bounded widest host population supplies canonical
-L3 capacity tint positions and full-identity name qualifiers, so narrowing a
+L3 capacity colour positions and full-identity name qualifiers, so narrowing a
 window cannot recolour a capacity or rename a machine. Identity is fingerprint version plus digest;
 name-only evidence and missing identity remain separate.
 
