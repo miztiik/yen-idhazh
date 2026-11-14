@@ -95,7 +95,7 @@ CONTEXT_EXCEEDED_TYPE: Final = "exceed_context_size_error"
 #: What `n_predict` is sent as when a span carries no cap. It is llama.cpp's own
 #: spelling, not a sentinel of ours: `--predict` documents `number of tokens to
 #: predict (default: -1, -1 = infinity)`, recorded in
-#: `idhazh.llm/b10598-llama-server-help.txt`. Omitting the key would
+#: `idhazh.llm/b12359-llama-server-help.txt`. Omitting the key would
 #: mean the same thing, and saying it is what lets a recorded request body be
 #: read without knowing which flags the server was started with.
 UNCAPPED_N_PREDICT: Final = -1

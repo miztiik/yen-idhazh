@@ -42,7 +42,7 @@
   "scoring": {
     "consistency_source_mode": "full_source_prompt",
     "evaluate_relevance": false,
-    "max_input_tokens": 4096,
+    "max_input_tokens": 6144,
     "source_window_tokens": 512,
     "source_overlap_tokens": 64,
     "max_source_windows": 256,

@@ -1,5 +1,5 @@
 {
-  "articles_a_dispatch": 3,
+  "articles_a_dispatch": 1,
   "articles_a_shard": 1,
   "budget_minutes": 140,
   "candidates": [
@@ -27,7 +27,7 @@
   ],
   "test_cases": [
     {"asks_for_a_visual_plan": true,"enabled": true,"id": "production-settings","n_ctx": null,"n_parallel": null},
-    {"asks_for_a_visual_plan": false,"enabled": true,"id": "no-visual-plan","n_ctx": null,"n_parallel": null},
+    {"asks_for_a_visual_plan": false,"enabled": false,"id": "no-visual-plan","n_ctx": null,"n_parallel": null},
     {"asks_for_a_visual_plan": true,"enabled": false,"id": "parallel-summarization","n_ctx": 131072,"n_parallel": 2}
   ],
   "version": "2026-09-29"

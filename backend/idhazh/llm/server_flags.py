@@ -42,7 +42,7 @@ DIGESTED_FLAGS: Final = (
 )
 
 # The resource is the pinned binary's specification, bound to the pin by a test.
-RECORDED_SERVER_HELP: Final = "b10598-llama-server-help.txt"
+RECORDED_SERVER_HELP: Final = "b12359-llama-server-help.txt"
 _CONSUMED_FLAGS: Final = frozenset((*SETTING_KEYS.values(), *DIGESTED_FLAGS))
 _DECLARATION: Final = re.compile(
     r"^(-{1,2}[A-Za-z0-9][A-Za-z0-9-]*(?:,\s*-{1,2}[A-Za-z0-9][A-Za-z0-9-]*)*)"

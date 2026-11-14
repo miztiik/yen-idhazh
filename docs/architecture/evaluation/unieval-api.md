@@ -1,6 +1,6 @@
 # How the UniEval API checks a complete source
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-13
 
 How the local evaluator produces applicable distinct scores without silently
 cutting the article or replacing an unfinished result. The
@@ -189,7 +189,7 @@ relative attention and declares no fixed input-position ceiling.
 Its pinned `tokenizer_config.json` advertises 512 tokens; this is advisory
 metadata, not a second input cap.
 
-The native `max_input_tokens` resource allowance is currently 4096 tokens,
+The native `max_input_tokens` resource allowance is currently 6144 tokens,
 above that upstream constructor default, and remains operator-configurable.
 It counts the complete assembled input without clipping. Neither the
 allowance, the constructor default nor tokenizer metadata establishes a fixed
