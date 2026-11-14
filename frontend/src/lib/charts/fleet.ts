@@ -35,6 +35,7 @@ export const FLEET_COLUMNS = [
 	'fingerprint',
 	'fingerprint_version',
 	'cpu_model',
+	'l3_cache_bytes',
 	'job_seconds',
 	'server_prompt_tokens',
 	'server_prompt_seconds',
@@ -57,6 +58,7 @@ export interface FleetJob {
 	fingerprint: string | null;
 	fingerprintVersion: number | null;
 	cpuModel: string | null;
+	l3CacheBytes: number | null;
 	/** The job's own clock, in seconds. */
 	seconds: number | null;
 	/** Prompt tokens its model server read a second. Only a job that served the
@@ -103,6 +105,7 @@ export interface FleetLine {
 	shard: number | null;
 	/** The kind of machine in words, never a fold's name. */
 	machine: string;
+	l3Cache?: string;
 	swatch: string;
 	seconds: number | null;
 	rate: number | null;
@@ -201,6 +204,7 @@ export function fleetJobs(rows: readonly Row[]): FleetJob[] {
 			fingerprint: text(row.fingerprint),
 			fingerprintVersion: figure(row.fingerprint_version),
 			cpuModel: text(row.cpu_model),
+			l3CacheBytes: figure(row.l3_cache_bytes),
 			seconds: figure(row.job_seconds),
 			rate: promptRate(figure(row.server_prompt_tokens), figure(row.server_prompt_seconds))
 		});
@@ -596,5 +600,3 @@ export function fleetDots(
 		blocks
 	};
 }
-
-export const FLEET_HINT = 'Select a day for machine counts and jobs.';

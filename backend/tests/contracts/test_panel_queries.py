@@ -72,7 +72,7 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "slowerMachinesQuery": ("run_id", "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens"),
     "platformMixQuery": (
         "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "fingerprint", "fingerprint_version",
-        "cpu_model", "cpu_logical_processors", "model_load_ms", "job_seconds",
+        "cpu_model", "l3_cache_bytes", "cpu_logical_processors", "model_load_ms", "job_seconds",
         "server_prompt_tokens", "server_prompt_seconds",
         *LEGACY_HOST_INPUT_COLUMNS,
     ),
