@@ -109,6 +109,17 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(fleet).toHaveCount(1);
 	expect(Number(await fleet.getAttribute('data-fleet-placements'))).toBeGreaterThan(0);
 	const history = page.locator('[data-console-panel-id="platform-mix"]');
+	await expect(history).not.toContainText('Select a day for machine counts and jobs.');
+	await expect(history).toContainText('Counts are recorded jobs, not unique physical machines.');
+	const cacheLegend = history.locator('[data-fleet-identity-key]');
+	await expect(cacheLegend).toHaveAttribute('aria-label', 'Reported L3 capacity, largest first');
+	expect(await cacheLegend.evaluate((legend) =>
+		legend.getBoundingClientRect().top >= legend.previousElementSibling!.getBoundingClientRect().bottom))
+		.toBe(true);
+	await history.screenshot({ path: test.info().outputPath('hardware-cache-wide-dark.png') });
+	await page.getByRole('button', { name: 'Switch to the light theme' }).click();
+	await history.screenshot({ path: test.info().outputPath('hardware-cache-wide-light.png') });
+	await page.getByRole('button', { name: 'Switch to the dark theme' }).click();
 	const square = history.locator('[data-fleet-square]:not([data-fleet-square="unrecorded"])').first();
 	await square.scrollIntoViewIfNeeded();
 	await square.hover();
@@ -261,6 +272,7 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 		return label.getBoundingClientRect().top - context.getBoundingClientRect().bottom;
 	}), 'the threshold label must not overlap the source readings on a phone').toBeGreaterThanOrEqual(0);
 	await page.screenshot({ path: test.info().outputPath('hardware-narrow-light.png') });
+	await history.screenshot({ path: test.info().outputPath('hardware-cache-narrow-light.png') });
 	await tokens.screenshot({ path: test.info().outputPath('run-token-lines-narrow.png') });
 	await expect.poll(contextFits).toBe(true);
 	await expect.poll(clockRulesFit).toBe(true);

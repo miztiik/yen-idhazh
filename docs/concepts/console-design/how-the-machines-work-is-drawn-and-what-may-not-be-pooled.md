@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-14
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -36,27 +36,28 @@ The chart rules these panels obey are
  another machine's speed by pooling. Hardware names the missing comparable work.
 - **A run that drew one machine says so too.** That is a good state, 4 of 90,
  and the panel reads as one rather than as a panel with a missing spread.
-- **Machine-history colour identifies a machine kind, not its speed.**
- Canonical full identities from the bounded widest host query receive the
- configured ordinal palette in order, using D3's built-in PiYG scheme by
- the committed setting. Fingerprint version and digest form one
- identity; namespaced name-only evidence remains coarser and separate. Equal
- CPU names receive stable kind qualifiers from that same universe. Neither the
- selected window, frequency nor speed assigns a slot. Repeated palette slots
- never merge identities: labels and position remain the second signal.
-- **Missing identity is neutral; missing speed is not missing identity.**
- `--chart-8` remains reserved for "Machine not recorded". A known machine with
- no speed has its own identity fill and says `Speed not recorded` in details.
-- **Each known category gets the same decorative gradient treatment.**
+- **Daily placement history groups jobs by exact reported L3 bytes across CPU
+ vendors.** MiB is a display conversion, not a grouping rounded to a bin.
+ The widest bounded host query fixes the descending capacity order and tint
+ positions across presets. Larger capacities are darker; one theme-aware
+ chart hue and the configured tint floor supply a coherent progression.
+ Missing L3 is a separate neutral `L3 not measured` group; measured zero stays
+ `0 MiB L3`. CPU names and versioned fingerprint qualifiers remain in job
+ details. Equal capacities do not imply equal topology or performance.
+- **These are recorded job counts, not independently identified machines.**
+ A fingerprint groups reported characteristics, not physical hosts. Repeated
+ rows remain counted as jobs. The ledger contains no L2 capacity, so no L2
+ aggregate is offered and the limitation is printed beside the chart.
+- **Each measured capacity gets the same decorative gradient treatment.**
  The existing gradient switch keeps fills flat when false. When true, an
- opaque lighter-to-base gradient restarts within each machine subsegment or
+ opaque lighter-to-base gradient restarts within each capacity subsegment or
  job square, with matching swatches. Existing appearance tokens and the
- uniform tint floor supply the stops in both themes. Strength carries no
- speed, utilization, health or probability reading.
+ uniform tint floor supply the stops in both themes. Neither tint nor gradient
+ carries speed, utilization, health or probability.
 - **The name is on the row, always.** Colour here encodes a fact, so it is
  semantic and may never be the only carrier of it. The rankings use named rows,
  not a scatter that cannot carry a name per mark.
-- **A count of machine kinds is a count and never a rate.** No percentage, no
+- **A count of jobs is a count and never a rate.** No percentage, no
  probability, no pie: what the next job will draw is precisely what the
  processor lottery refuses to quote. Under `console.fleet_min_rows` placements
  it is **one square a job**, a column a day - a bar over a handful of
@@ -66,7 +67,7 @@ The chart rules these panels obey are
  busiest day's is tall, so a day's height is its count and kinds with the most
  jobs fill from the bottom. **It switches at 160 as a
  declared estimate and not a measurement** - see the design rationale below.
-- **Over that floor the count is one bar a day, split by the kind of machine
+- **Over that floor the count is one bar a day, split by the reported L3 capacity
  that ran its jobs, largest daily count at the bottom.** The panel's title asks which
  machines ran our jobs, day by day, and a ranked list answers which is biggest
  rather than what is changing. Rank each day independently, not by a whole-window
@@ -74,29 +75,25 @@ The chart rules these panels obey are
  that recorded a placement are drawn** - a zero-height day would say the
  platform gave us nothing that day, and a day the record never reached says
  nothing at all.
-- **Placement selection and folds retain their existing populations.**
- `console.fleet_top_kinds` names the most-placed kinds, breaking ties by the
- newest placement. Leftovers keep their whole-record median-speed groups,
- including the untimed group; a lone leftover keeps its own name. Each folded
- group retains its exact total and compact legend grouping. Its constituent
- identities are ranked individually inside each day's stack, so a group need
- not remain contiguous. Missing identity stays separate and neutral, with its
- actual count taking its own daily position. Selecting a day opens all machine
- counts, known zeros and actual jobs under their own qualified machine names.
+- **Every observed capacity remains visible, with no speed-based folds.**
+ The legend sits below the plot in wrapping vertical columns, largest L3
+ first and unmeasured last. Actual daily counts still determine stack position.
+ Selecting a day opens all capacity counts, known zeros and actual jobs
+ under their own qualified CPU names, with each job's reported L3.
  The held day stays outlined; phone job details wrap instead of scrolling.
 - **Framing and hover are compact, not incomplete.** Keep the title, one
- context line and the name/swatch key. Only small-cohort mode adds `One square
- per job.` Below the plot are the selected UTC day, total recorded jobs and a
- short selection hint. Actual mark hover shows only that date, machine and its
- exact machine-day count out of the day's recorded jobs. Day space shows the
+ context line and the capacity/swatch key. Only small-cohort mode adds `One square
+ per job.` Below the plot are the selected UTC day and total recorded jobs,
+ without a selection instruction. Actual mark hover shows only that date, capacity and its
+ exact capacity-day count out of the day's recorded jobs. Day space shows the
  date and total. Keyboard/touch selection exposes complete counts and speed
- notes plus run, job or pipeline/task, shard, machine, seconds and speed.
+ notes plus run, job or pipeline/task, shard, machine, L3, seconds and speed.
 - **The machine mix reads after mount through the shared query reader.** Its
  window is the route's own, ending on the common item-health, host-fingerprint
  and run-shards evidence day, and
  the door starts it no earlier than the day the record began. It asks only for the columns it draws. Changing the window keeps
  whole files already read, and a late answer cannot replace a newer selection.
- The widest host query fixes the identity universe, but the document carries
+ The widest host query fixes the capacity and identity universes, but the document carries
  no fleet rows. The drill-through uses the rows
  already fetched for the window. `data-readout-fetched` declares that this
  panel's strip arrives with those rows and is absent from the initial document.
@@ -281,16 +278,19 @@ same thing. What would settle it is a seventh machine kind arriving - every shar
 drops, the rarest gets rarer and the bar rises - so the number is re-derived
 from the committed rows rather than argued with.
 
-**Identity, rather than speed, is the useful colour reading of placement
-history.** Uniform gradients distinguish categories without introducing a
-performance scale. D3 supplies PiYG rather than a second hand-authored
-palette. Palette reuse keeps distinct names; daily count ranking may change
-positions without changing identity colour. Folded identities remain separately painted. The removed newest-run detail,
-processor-steal and model-paging panels are not replaced by this history.
+**Reported L3 capacity is the useful ordered reading of placement history.**
+ CPU model categories hid the cache comparison behind many unrelated hues.
+ Combining vendors by exact cache bytes answers the available question without
+ claiming equivalent performance or unique host counts. A single chart hue,
+ lightened toward each theme's existing identity-highlight token, replaces
+ unrelated categorical colours; the tint floor and gradient switch remain
+ configurable. Daily count ranking may move segments without changing their
+ capacity tint. The legend's numerical order makes that tint readable.
 
-The old speed-ramp contrast measurements do not measure these categorical
-gradients and are not evidence for them. The existing tint floor is shared
-uniformly, while measured speeds remain reachable in dated job details.
+L2 aggregation requires a separately declared and collected L2-capacity field;
+historical L2 cannot be inferred from L3 or CPU names. Unique physical-machine
+counts would additionally require reliable host identity evidence, not the
+existing hardware fingerprint. Neither new measurement is part of this view.
 
 ## See also
 

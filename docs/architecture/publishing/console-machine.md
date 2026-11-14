@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-11-13
+**Last Updated**: 2026-11-14
 
 `/console/machine/` asks what machine the work actually got, whether its two
 clocks agree, and how much resource headroom that work left.
@@ -29,8 +29,8 @@ endpoint and first-day clamp; its own UTC bounds print beside its readings.
 Neither group moves the other's endpoint. Following panels use the chosen preset; snapshot panels use
 the newest day and name their newest recorded run rather than falling back to
 an older successful one. The bounded widest host population supplies canonical
-full-identity palette slots and name qualifiers, so narrowing a window cannot
-recolour or rename a machine. Identity is fingerprint version plus digest;
+L3 capacity tint positions and full-identity name qualifiers, so narrowing a
+window cannot recolour a capacity or rename a machine. Identity is fingerprint version plus digest;
 name-only evidence and missing identity remain separate.
 
 `RouteStatus` owns one delayed shimmer and reserved route-read status, not a
@@ -106,7 +106,7 @@ Membership and order live in `config/console/machine.json`.
 | --- | --- | --- |
 | What the machine was doing | `two-clocks` | One ranked gap percentage per shard of the newest recorded run, with the allowed-disagreement rule; the item and independent server readings are printed together |
 | | `slower-machines` | Separate Reading and Writing rankings of comparable work by machine kind |
-| | `platform-mix` | Shipped placement counts: one square a job below the configured floor, otherwise stacked day bars; never a probability of the next draw |
+| | `platform-mix` | Recorded jobs grouped across vendors by exact reported L3 capacity: one square a job below the configured floor, otherwise stacked day bars; never unique physical-machine counts or a probability of the next draw |
 | Where the time went | `slower-on-same-work` | One dated seconds reading for a fixed typical article on one reference machine |
 | How close we are to the limits | `closest-to-memory` | Dated articles ranked by memory held; the empty remainder ends at total machine memory |
 | | `memory-held` | Existing memory split and overlapping process brackets, for the newest day |
@@ -130,6 +130,13 @@ parity, alongside versioned identity and independent server counters. Its four
 legacy columns are finite migration inputs only. No private manifest inputs are
 added. A conflicting count file is a visible unreachable record, never a
 reactive page crash.
+
+That same bounded query selects `l3_cache_bytes` for placement aggregation.
+`charts/fleet-cache.ts` groups normalized job rows by the exact byte value,
+converting only the label to MiB. Missing L3 remains unmeasured, not zero.
+The browser reuses the fetched rows for full CPU/job/L3 details and does not
+fetch another ledger or infer L2 capacity. The host collector described in
+[host metrics](../../reference/host-metrics.md) produces these measurements.
 
 Slower machines chooses the kind with most qualifying articles as reference,
 with a deterministic name tie-break. Each article's read or write milliseconds
