@@ -107,7 +107,7 @@
 							Published charts: {shortDate(span.start)}{span.start === span.end ? '' : ` - ${shortDate(span.end)}`} UTC.
 						</p>
 					{/if}
-					{#if windowSource.record || !windowSource.publishedWindow}
+					{#if windowSource.record || windowSource.statusLine || !windowSource.publishedWindow}
 						<WindowStatus days={windowSource.days} presets={windowSource.presets}
 							monthsFor={windowSource.monthsFor} busy={windowSource.busy} ready={windowSource.ready}
 							statusLine={windowSource.statusLine ?? null} record={windowSource.record ?? null}
@@ -180,6 +180,7 @@
 	.console-window-evidence > .console-date-readings {
 		display: flex;
 		flex-wrap: wrap;
+		flex-grow: 1;
 		gap: var(--console-control-padding-block) var(--console-panel-gap);
 		padding: 0;
 	}

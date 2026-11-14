@@ -78,7 +78,8 @@ window`; neither is a page-wide endpoint. The latter names both UTC bounds
 instead of an unqualified `Showing ... to ...` claim. A short record names how
 many requested days are available. Pending or missing reach supplies no data
 date. Per-panel bounds name independently clamped, private packed or snapshot
-evidence. The closed `Data sources` disclosure explains build-time counts and private chart inputs,
+evidence. The date readings fill the row so the closed disclosure stays
+end-aligned when a pending packed record arrives. `Data sources` explains build-time counts and private chart inputs,
 compact ledgers rather than raw files, and `Site built` from the band's
 `generated_at`. Opening it never reanchors a source.
 
