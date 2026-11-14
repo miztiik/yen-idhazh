@@ -26,12 +26,12 @@
   },
   "compaction_lag_days": 0,
   "covers_through": "2026-11-14",
-  "generated_at": "2026-11-14T14:48:21Z",
+  "generated_at": "2026-11-14T18:16:32Z",
   "routes": [
-    {"carries": "The model spent 48 h 30 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "2 runs failed"},
-    {"carries": "This day ran in 5 runs, 2.75x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "106 items failed"},
-    {"carries": "271 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 1,"worst": "8 shards read 3.31x apart"},
-    {"carries": "36 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
+    {"carries": "The model spent 53 h 17 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "3 runs failed"},
+    {"carries": "This day ran in 6 runs, 3.13x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "136 items failed"},
+    {"carries": "321 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "2 shards reported nothing"},
+    {"carries": "41 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
     {"carries": "100 feeds failed on the last ask.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "6 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
   ],
@@ -167,12 +167,12 @@
     "compared_from": "2026-09-14"
   },
   "size": {
-    "articles_to_cap": 475542,
-    "bytes": 68636653,
-    "cap_fraction": 0.06392286438494921,
-    "left_mb": 958.542986869812,
+    "articles_to_cap": 475494,
+    "bytes": 68738122,
+    "cap_fraction": 0.06401736475527287,
+    "left_mb": 958.4462184906006,
     "measured_days": 84,
-    "sentence": "65.5 MB of the 1 GB limit - room for about 476,000 more articles."
+    "sentence": "65.6 MB of the 1 GB limit - room for about 475,000 more articles."
   },
   "verdict": {
     "date": "2026-11-14",
@@ -183,15 +183,16 @@
       {"health": "red","label": "Run 2 failed"},
       {"health": "amber","label": "Run 3 is worth a look"},
       {"health": "amber","label": "Run 4 is worth a look"},
-      {"health": "amber","label": "Run 5 is worth a look"}
+      {"health": "amber","label": "Run 5 is worth a look"},
+      {"health": "red","label": "Run 6 failed"}
     ],
-    "sentence": "2026-11-14 ran 5 runs and published 294 of 400 planned items. 106 items failed."
+    "sentence": "2026-11-14 ran 6 runs and published 344 of 480 planned items. 136 items failed."
   },
   "version": "2026-10-11T21:00",
   "worst": {
     "href": "/console/",
     "id": "pipelines",
     "label": "Pipelines",
-    "sentence": "2 runs failed, so the items they planned are not in the day."
+    "sentence": "3 runs failed, so the items they planned are not in the day."
   }
 }
