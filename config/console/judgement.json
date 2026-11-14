@@ -1,11 +1,17 @@
 {
   "panel_groups": [
     {
-      "id": "judgement",
-      "title": "",
+      "id": "what-was-grouped",
+      "title": "What was grouped",
       "panels": [
         "merged-stories",
-        "merge-line",
+        "merge-line"
+      ]
+    },
+    {
+      "id": "what-the-judge-found",
+      "title": "What the judge found",
+      "panels": [
         "judge-agreement",
         "record-gates",
         "verdict-split",

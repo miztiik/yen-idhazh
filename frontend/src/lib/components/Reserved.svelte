@@ -171,6 +171,9 @@
 
 	.reserved.loading {
 		background-color: transparent;
+		/* A whole-frame sweep uses the quieter rule ink; the small legacy
+		   placeholder bars use the stronger shared sweep. Neither is data. */
+		--shimmer-band: var(--color-rule-strong);
 	}
 
 	/* A failed fetch is the only one of the four that is a fault, so it is the

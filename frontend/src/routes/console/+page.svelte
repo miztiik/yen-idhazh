@@ -7,7 +7,7 @@
 	import { PIPELINES_QUERY_GROUPS } from '$lib/console/pipelines/query-groups';
 	import * as queries from '$lib/console/queries/pipelines';
 	import { settingsRules } from '$lib/console/settings-moved';
-	import { daysInWindow, windowOfDays } from '$lib/charts/viewport';
+	import { daysInWindow, windowFromDates, windowOfDays } from '$lib/charts/viewport';
 	import { countDays } from '$lib/console/span-words';
 	import { noRecordSentence, setAsideSentence } from '$lib/console/recording';
 	import type { LedgerReach, Row, SliceResult } from '$lib/data/ledger';
@@ -61,10 +61,11 @@
 	const busy = $derived(allAnswers.some((answer) => answer === 'pending'));
 	const nativeBusy = $derived(PIPELINES_QUERY_GROUPS[0].queries.some((query) => answers[query.name] === 'pending'));
 	const recordReady = $derived(mounted && reach?.through !== null && reach?.through !== undefined && !nativeBusy);
-	const viewport = $derived(windowOfDays(data.windowDay, windowDays, knobs.today_anchor));
+	const publishedWindow = $derived(windowFromDates(data.charts.filter((day) => Object.hasOwn(data.publishedItems, day.date)).map((day) => day.date), windowDays));
+	const viewport = $derived(publishedWindow ?? windowOfDays(data.windowDay, windowDays, 'right'));
+	const attemptWindow = $derived(windowFromDates(data.visualAttempts.days.map((day) => day.date), windowDays));
 	const settings = $derived(settingsRules(data, { from: viewport.start, to: viewport.end }, 'none'));
 	const charts = $derived(data.charts.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
-	const attemptDays = $derived(data.visualAttempts.days.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
 	const record = $derived(recordReady ? pipelinesRecord(reach, windowDays) : null);
 
 	async function ask(selected: readonly PanelQuery[], retryWindow = false, days = windowDays) {
@@ -162,7 +163,7 @@
 <svelte:head><title>Pipelines — Console — {data.ui.site_title}</title><meta name="robots" content="noindex" /></svelte:head>
 <noscript><p data-native-script-required>The article record needs JavaScript to load. Private published-day panels remain available below.</p></noscript>
 <WindowControlSource route="pipelines" days={windowDays} presets={knobs.window_presets} monthsFor={() => 0}
-	ready={mounted} {busy} {record} publishedWindow={viewport} statusLine={recordReady ? null : 'The record window is not ready.'} onChange={show} />
+	ready={mounted} {busy} {record} {publishedWindow} statusLine={recordReady ? null : 'Packed chart dates are not ready.'} onChange={show} />
 <RouteStatus route="pipelines" answers={allAnswers} days={windowDays} through={recordReady ? reach?.through : null}
 	recordScope="Native record"
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retry}>
@@ -196,7 +197,7 @@
 						{:else if id === 'chart-drawing'}
 							<ChartDrawing days={charts} {windowDays} {knobs} />
 						{:else if id === 'visual-refusals'}
-							<VisualRefusals days={attemptDays} read={data.visualAttempts.read} window={viewport} {knobs} chart={data.chart} />
+							<VisualRefusals days={data.visualAttempts.days} read={data.visualAttempts.read} window={attemptWindow ?? viewport} {knobs} chart={data.chart} />
 						{:else if id === 'run-timeline'}
 							<RunTimeline {knobs} chart={data.chart} answer={answers[queries.runTimelineQuery.name]} />
 						{:else if id === 'failure-mix'}

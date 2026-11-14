@@ -1,6 +1,7 @@
 {
   "panel_groups": [
-    { "id": "summaries", "title": "", "panels": ["model-cards", "model-throughput", "item-cost", "call-ending", "doubt-reasons", "faithfulness", "source-doubts", "score-cost", "summary-length"] }
+    { "id": "what-the-model-spent", "title": "What the model spent", "panels": ["model-cards", "model-throughput", "item-cost"] },
+    { "id": "how-the-summaries-held-up", "title": "How the summaries held up", "panels": ["call-ending", "doubt-reasons", "faithfulness", "source-doubts", "score-cost", "summary-length"] }
   ],
   "judged": ["model-cards", "model-throughput", "item-cost", "call-ending", "doubt-reasons", "faithfulness", "source-doubts", "score-cost", "summary-length"],
   "knobs": {}

@@ -41,6 +41,12 @@ test('record freshness names the data day and when a short window fills, in UTC'
 		'Showing 9 days, to 9 Oct 2026. The record starts on 1 Oct 2026; the 14-day window fills on 14 Oct 2026.'
 	);
 	expect(recordWindowSentence({ asked: 7, first: '2026-09-01', through: '2026-10-09' })).toBe('Showing 7 days, to 9 Oct 2026.');
+	expect(recordWindowSentence({ asked: 14, first: '2026-10-01', through: '2026-11-11' }, 'Main packed window'))
+		.toBe('Main packed window: 29 Oct 2026 - 11 Nov 2026 UTC.');
+	expect(recordWindowSentence({ asked: 14, first: '2026-11-09', through: '2026-11-11' }, 'Main packed window'))
+		.toBe('Main packed window: 9 Nov 2026 - 11 Nov 2026 UTC. 3 of 14 requested days are available.');
+	expect(recordWindowSentence({ asked: 1, first: '2026-10-01', through: '2026-11-11' }, 'Main packed window'))
+		.toBe('Main packed window: 11 Nov 2026 UTC.');
 	expect(() => recordWindowSentence({ asked: 0, first: '2026-10-01', through: '2026-10-09' })).toThrow(/preset/);
 	expect(() => recordWindowSentence({ asked: 7, first: '2026-02-30', through: '2026-03-09' })).toThrow(/UTC days/);
 });
@@ -79,4 +85,7 @@ test('the real window status does not print a supplied record day before the bro
 	expect(pending).not.toContain('Showing');
 	const ready = render(component, { props: { ...props, ready: true } }).body;
 	expect(ready).toContain('Showing 9 days, to 9 Oct 2026.');
+	const scoped = render(component, { props: { ...props, ready: true, recordLabel: 'Main packed window' } }).body;
+	expect(scoped).toContain('Main packed window: 1 Oct 2026 - 9 Oct 2026 UTC.');
+	expect(scoped).not.toContain('Showing');
 });

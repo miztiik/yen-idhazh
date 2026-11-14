@@ -50,8 +50,10 @@ test.describe('route-owned console configuration', () => {
 			'record-gates', 'verdict-split', 'holdout-margin'
 		];
 		expect(routes.judgement.panel_groups).toEqual([
-			{ id: 'judgement', title: '', panels: judgementPanels }
+			{ id: 'what-was-grouped', title: 'What was grouped', panels: judgementPanels.slice(0, 2) },
+			{ id: 'what-the-judge-found', title: 'What the judge found', panels: judgementPanels.slice(2) }
 		]);
+		expect(routes.judgement.panel_groups.flatMap((group) => group.panels)).toEqual(judgementPanels);
 		expect(routes.judgement.judged).toEqual(judgementPanels);
 		const modelPanels = [
 			'model-cards', 'model-throughput', 'item-cost', 'call-ending',
@@ -59,9 +61,21 @@ test.describe('route-owned console configuration', () => {
 			'score-cost', 'summary-length'
 		];
 		expect(routes.model.panel_groups).toEqual([
-			{ id: 'summaries', title: '', panels: modelPanels }
+			{ id: 'what-the-model-spent', title: 'What the model spent', panels: modelPanels.slice(0, 3) },
+			{ id: 'how-the-summaries-held-up', title: 'How the summaries held up', panels: modelPanels.slice(3) }
 		]);
+		expect(routes.model.panel_groups.flatMap((group) => group.panels)).toEqual(modelPanels);
 		expect(routes.model.judged).toEqual(modelPanels);
+		expect(routes.pipelines.panel_groups.map(({ id, title }) => ({ id, title }))).toEqual([
+			{ id: 'how-publishing-went', title: 'How publishing went' },
+			{ id: 'where-the-time-went', title: 'Where the time went' },
+			{ id: 'what-reached-the-digest', title: 'What reached the digest' }
+		]);
+		expect(routes.pipelines.panel_groups.flatMap((group) => group.panels)).toEqual([
+			'at-a-glance', 'run-health', 'site-cost-per-item', 'failure-mix',
+			'item-time-split', 'stage-timings', 'write-cost', 'tail-trend', 'run-timeline', 'slowest-articles',
+			'chart-drawing', 'visual-refusals', 'article-age'
+		]);
 		const sources = ['source-health', 'feeds-failed', 'fetch-time', 'retiring', 'source-cuts'];
 		const ranking = ['ranking-discount', 'why-chosen'];
 		expect(routes.voices.panel_groups).toEqual([

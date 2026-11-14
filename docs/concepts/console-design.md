@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-14
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -397,6 +397,23 @@ new section.
 **Say it once per screen.** A fact stated twice on one screen reads as two
 facts - two sections both explaining that they follow the window rather than a
 pan, or a date span printed under the heading that already printed it.
+
+**At a glance is two named counts, not a narrated comparison.** Keep the total
+first and the dated bars second. Both cards use `--chart-1`, the primary
+categorical ink, rather than the pale/dulled third category. Each card already
+names its series, so its readout has no colour key: date, measure and exact count
+share one wrapping row below the plot. The tooltip keeps the same named reading.
+Do not restore the sentence explaining that articles and visuals cover the same
+days; the common axis and window already say that.
+
+**Long routes expose their questions in the rail.** Named `panel_groups` in
+`config/console/<route>.json` supply the left-rail links and the matching
+`PanelGroup` headings and anchors. Pipelines groups publishing, time and digest
+output; Summaries groups model spend and summary quality; Judgement groups story
+merging and judge evidence. Hardware and Voices retain their existing groups.
+Keep panel order, ids, readings and judged membership unchanged. The Data
+explorer is one workbench, not a stack of independent panels to split up.
+The same group links remain available in the existing narrow navigation.
 
 ## Design rationale
 

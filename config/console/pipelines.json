@@ -1,23 +1,35 @@
 {
   "panel_groups": [
     {
-      "id": "pipelines",
+      "id": "how-publishing-went",
+      "title": "How publishing went",
       "panels": [
         "at-a-glance",
         "run-health",
         "site-cost-per-item",
-        "failure-mix",
+        "failure-mix"
+      ]
+    },
+    {
+      "id": "where-the-time-went",
+      "title": "Where the time went",
+      "panels": [
         "item-time-split",
         "stage-timings",
         "write-cost",
         "tail-trend",
         "run-timeline",
-        "slowest-articles",
+        "slowest-articles"
+      ]
+    },
+    {
+      "id": "what-reached-the-digest",
+      "title": "What reached the digest",
+      "panels": [
         "chart-drawing",
         "visual-refusals",
         "article-age"
-      ],
-      "title": ""
+      ]
     }
   ],
   "judged": [

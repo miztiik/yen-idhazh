@@ -88,19 +88,19 @@ test('daily refusal lines keep recorded zeros, unknown dates, partial counts and
 	const lines = refusalLines(days, READ, WINDOW, numberFormat);
 	const enough = lines.find((line) => line.reason === 'enough_data')!;
 	const invented = lines.find((line) => line.reason === 'no_invented_values')!;
-	expect(enough.series.points.map((point) => point.value)).toEqual([null, 2, 0, null, null, null, null]);
-	expect(invented.series.points.map((point) => point.value)).toEqual([null, 0, 0, null, null, 1, null]);
+	expect(enough.series.points.map((point) => point.value)).toEqual([2, 0, null, null, null]);
+	expect(invented.series.points.map((point) => point.value)).toEqual([0, 0, null, null, 1]);
 	expect(enough.readout.series.find((series) => series.label === 'Recorded attempts')?.values)
-		.toEqual([null, '2 attempts', '1 attempt', null, null, '1 attempt', null]);
-	expect(enough.readout.notMeasuredAt[4]).toContain('was lost');
-	expect(enough.readout.events[4]).toEqual([]);
-	expect(enough.readout.events[5][0].value).toContain('unreadable');
-	expect(enough.readout.notMeasuredAt[0]).toContain('Outside');
-	expect(enough.readout.notMeasuredAt[3]).toContain('No visual attempt');
+		.toEqual(['2 attempts', '1 attempt', null, null, '1 attempt']);
+	expect(enough.readout.notMeasuredAt[3]).toContain('was lost');
+	expect(enough.readout.events[3]).toEqual([]);
+	expect(enough.readout.events[4][0].value).toContain('unreadable');
+	expect(enough.readout.notMeasuredAt[2]).toContain('No visual attempt');
 	expect(enough.readout.columns).toEqual([
-		'1 Jun 2030 UTC', '2 Jun 2030 UTC', '3 Jun 2030 UTC', '4 Jun 2030 UTC',
-		'5 Jun 2030 UTC', '6 Jun 2030 UTC', '7 Jun 2030 UTC'
+		'2 Jun 2030 UTC', '3 Jun 2030 UTC', '4 Jun 2030 UTC',
+		'5 Jun 2030 UTC', '6 Jun 2030 UTC'
 	]);
+	expect(refusalLines(days, READ, { start: '2030-06-07', end: '2030-06-08' }, numberFormat)).toEqual([]);
 	const shape = dateSeries([invented.series], { frame: frame(760, 220), density: 6, valueTicks: 5, padding: 0.2 });
 	expect(shape?.lines[0].points.find((point) => point.date === '2030-06-06')).toMatchObject({ value: 1, alone: true });
 	expect(shape?.lines[0].path.match(/M/g)).toHaveLength(2);

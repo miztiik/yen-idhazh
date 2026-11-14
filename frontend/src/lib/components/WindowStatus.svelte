@@ -10,7 +10,8 @@
 		busy = false,
 		ready = false,
 		statusLine = null,
-		record = null
+		record = null,
+		recordLabel = null
 	}: {
 		days: number;
 		presets: readonly number[];
@@ -21,6 +22,7 @@
 		ready?: boolean;
 		statusLine?: string | null;
 		record?: RecordWindow | null;
+		recordLabel?: string | null;
 	} = $props();
 
 	const pending = $derived(monthsFor(days));
@@ -28,7 +30,7 @@
 	$effect(() => { if (record !== null) previousRecord = record; });
 	const sizingRecord = $derived(record ?? previousRecord);
 	const recordSizes = $derived(!ready || sizingRecord === null ? [] :
-		presets.map((asked) => recordWindowSentence({ ...sizingRecord, asked })));
+		presets.map((asked) => recordWindowSentence({ ...sizingRecord, asked }, recordLabel ?? undefined)));
 
 	/** Each wider preset that would fetch something, narrowest first. */
 	const priced = $derived(
@@ -39,7 +41,7 @@
 	);
 
 	const status = $derived.by(() => {
-		if (record !== null) return ready ? recordWindowSentence(record) : '';
+		if (record !== null) return ready ? recordWindowSentence(record, recordLabel ?? undefined) : '';
 		if (statusLine !== null) return statusLine;
 		if (!ready) {
 			// It said the sections below were "showing N days" until 2026-09-09.

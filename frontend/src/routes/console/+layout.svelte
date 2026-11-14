@@ -100,22 +100,31 @@
 		</header>
 		{#if !workbench}
 			<div class="console-window-evidence">
-				<details class="console-data-dates" data-console-data-dates>
-					<summary>Data dates (UTC)</summary>
-					<div class="console-date-readings">
-						{#if windowSource.record}<p>Native record</p>{/if}
+				<div class="console-date-readings">
+					{#if windowSource.publishedWindow}
+						{@const span = windowSource.publishedWindow}
+						<p data-private-window data-range-from={span.start} data-range-to={span.end}>
+							Published charts: {shortDate(span.start)}{span.start === span.end ? '' : ` - ${shortDate(span.end)}`} UTC.
+						</p>
+					{/if}
+					{#if windowSource.record || !windowSource.publishedWindow}
 						<WindowStatus days={windowSource.days} presets={windowSource.presets}
 							monthsFor={windowSource.monthsFor} busy={windowSource.busy} ready={windowSource.ready}
-							statusLine={windowSource.statusLine ?? null} record={windowSource.record ?? null} />
+							statusLine={windowSource.statusLine ?? null} record={windowSource.record ?? null}
+							recordLabel="Main packed window" />
+					{/if}
+				</div>
+				<details class="console-data-dates" data-console-data-dates>
+					<summary>Data sources</summary>
+					<div class="console-date-readings">
 						{#if windowSource.publishedWindow}
-							{@const span = windowSource.publishedWindow}
-							<p data-private-window data-range-from={span.start} data-range-to={span.end}>
-								Published days: {shortDate(span.start)}{span.start === span.end ? '' : ` - ${shortDate(span.end)}`} UTC.
-							</p>
+							<p>Published counts and private chart inputs are included when the site is built. Browser-loaded charts read staged compact ledgers, not live raw files. Each panel names its own dates when they differ from the main packed window.</p>
+						{:else}
+							<p>Browser-loaded charts read staged compact ledgers, not live raw files. Private chart inputs are included when the site is built. Each panel names its own dates when they differ from the main packed window.</p>
 						{/if}
 						{#if completeness.kind !== 'unread'}
 							{@const finished = new Date(completeness.finished).toISOString()}
-							<p>Last console update: <time datetime={finished}>{shortDate(finished.slice(0, 10))}, {clockUtc(finished)}</time>.</p>
+							<p>Site built: <time datetime={finished}>{shortDate(finished.slice(0, 10))}, {clockUtc(finished)}</time>.</p>
 						{/if}
 					</div>
 				</details>
@@ -158,7 +167,22 @@
 		background: var(--color-bg);
 	}
 	[data-console-chrome='workbench'] .console-route-head { grid-template-columns: minmax(0, 1fr) auto; }
-	.console-window-evidence { margin-block-start: var(--console-control-padding-block); }
+	.console-window-evidence {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--console-control-gap) var(--console-panel-gap);
+		margin-block-start: var(--console-control-padding-block);
+		color: var(--color-text-secondary);
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
+	}
+	.console-window-evidence > .console-date-readings {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--console-control-padding-block) var(--console-panel-gap);
+		padding: 0;
+	}
 	.console-data-dates {
 		color: var(--color-text-secondary);
 		font-size: var(--console-small-size);

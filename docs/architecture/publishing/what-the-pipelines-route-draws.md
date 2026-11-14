@@ -1,15 +1,15 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-11-13
+**Last Updated**: 2026-11-14
 
 Moved plots use the shared width observer and redraw in the CSS-pixel frame
 their panel actually occupies. Private date axes retain missing days as null,
 not zero, so a settings change on a day without a reading still has its place.
-Private panels keep their published-day window while native reads are pending.
+Private published-count panels keep their published-day window while native reads are pending.
 Native reads start independently; request epochs prevent late windows replacing
 the current one.
 Native record limitations sit after the failure plot. Source windows remain
-separate in the shared date disclosure, without repeated introductory prose.
+separate in the shared date line, without repeated introductory prose.
 The retained run-square cut wording is tested on that actual component with
 independent capped and uncapped records; no item-ledger cut identities cross
 the native page's private manifest boundary.
@@ -59,11 +59,16 @@ ordinary item-health or writing-cost endpoint.
 `at-a-glance`, `run-health`, `site-cost-per-item` and `chart-drawing`
 remain private BUILD_TIME readings of manifests,
 published-chart counts and day metrics. They are not newly published datasets
-and are not reconstructed from native queries. Their window is anchored on
-`windowDay`, the newest published day, never on a native ledger's endpoint.
+and are not reconstructed from native queries. Their drawn window ends on
+their own published dates, never on a native ledger's endpoint or a clock.
 `ChartDrawing.svelte` retains its private `chartFlow` diagram or stepped list,
 target cards and sparklines. Those use published-day records, not inferred
 item failure populations.
+
+The private refusal view ends on its own newest recorded attempt date, keeping
+internal missing days rather than padding to the published-count endpoint.
+Its visible packed-attempt bounds qualify the chart. The source-labelled
+date line does not claim that every panel ends on the main item-health date.
 
 **Source age at work start** measures the source's feed-stated publication time
 to the successful item's recorded work start, not to publication by this site.

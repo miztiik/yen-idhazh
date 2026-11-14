@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-14
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -270,6 +270,11 @@ column - four series or one - and the rules are not negotiable per chart:
  on the name's first line and its value follows the name's last word. The
  value still keeps its reserved width. A phone must not strand the swatch or
  put a short count on a line of its own while the name has room beside it.
+- **A named single-series card may use the compact strip.** The date and named
+ reading share one wrapping row, with the same reserved value width and
+ selection behavior. Its card title already identifies the marks, so it
+ prints no colour key. At a glance uses this presentation; multi-series
+ readouts keep their own heading line and keys.
 - **A vertical guide down the hovered column**, across every series.
 - **Reachable by keyboard.** Left and Right step, Home and End jump, Escape
  returns to rest. **A tooltip is never the only place a value appears**: a
