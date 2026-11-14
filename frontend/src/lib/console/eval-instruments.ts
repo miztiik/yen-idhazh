@@ -437,12 +437,12 @@ export function evalColumnLabels(days: readonly EvalDay[]): string[] {
 export function matchSeries(days: readonly EvalDay[]): StackSeries[] {
 	return [
 		{
-			label: 'Half scored above',
+			label: 'Median (p50)',
 			token: '--chart-6',
 			values: days.map((day) => day.matchMid ?? 0)
 		},
 		{
-			label: 'A quarter scored below',
+			label: 'p25',
 			token: '--chart-7',
 			values: days.map((day) => day.matchLow ?? 0)
 		}
@@ -555,13 +555,13 @@ export function matchColumns(days: readonly EvalDay[], numberFormat: NumberForma
 		columns: days.map((day) => shortDate(day.date)),
 		series: [
 			{
-				label: 'Half scored above',
+				label: 'Median (p50)',
 				swatch: 'var(--chart-6)',
 				values: days.map((day) => day.matchMid),
 				format: percent
 			},
 			{
-				label: 'A quarter scored below',
+				label: 'p25',
 				swatch: 'var(--chart-7)',
 				values: days.map((day) => day.matchLow),
 				format: percent
@@ -620,12 +620,11 @@ export function matchHeadline(
 	const low = middleDay(drawn.map((day) => day.matchLow));
 	if (mid === null || low === null) return null;
 	const totals = evalTotals(days);
-	// One day has no middle day, so at one day the sentence names the day itself.
 	const lead =
 		windowDays === 1
-			? `${openWithSpan(windowDays)} put`
-			: `Over ${nameSpan(windowDays)} the middle day put`;
-	return `${lead} half its summaries above ${mid} percent, and a quarter of them under ${low} percent, on ${grouped(totals.matched, numberFormat)} summaries checked.`;
+			? `${openWithSpan(windowDays)}: median (p50) ${mid} percent and p25 ${low} percent`
+			: `Over ${nameSpan(windowDays)}: median daily p50 ${mid} percent and median daily p25 ${low} percent`;
+	return `${lead}, on ${grouped(totals.matched, numberFormat)} summaries checked.`;
 }
 
 /** Which day the faithfulness plot's points are, as its intro says it. A
@@ -642,8 +641,8 @@ export function matchPoints(windowDays: number): string {
 export function matchLabel(windowDays: number, rulesAt: readonly number[]): string {
 	const drawn =
 		windowDays === 1
-			? `Summary faithfulness in ${nameSpan(windowDays)}, as a percentage. One point is the day's middle summary and the other is the summary a quarter of the way up from the bottom.`
-			: `Summary faithfulness per day over ${countDays(windowDays)}, as a percentage. One line is each day's middle summary and the other is the summary a quarter of the way up from the bottom.`;
+			? `Summary faithfulness in ${nameSpan(windowDays)}, as a percentage. One point is the day's median (p50) and the other is p25.`
+			: `Summary faithfulness per day over ${countDays(windowDays)}, as a percentage. One line is each day's median (p50) and the other is p25.`;
 	const rules =
 		rulesAt.length === 0
 			? ''

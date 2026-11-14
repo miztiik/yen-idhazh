@@ -138,15 +138,16 @@ test('timing-rule inspection keeps both events on a changed day', async ({ page 
 });
 
 test('histogram bars and inspection swatches use the same named quantity', async ({ page }) => {
+	const barToken = SERIES_TOKENS['reading-prompt'];
 	await drawClient(page, code, 'TimeHistogram', {
 		times: { n: 2, median: 1000, p95: 2000, fastest: 500, slowest: 2000,
 			bins: [{ from: 0, to: 1, n: 1, throughPct: 50 }, { from: 1, to: 2, n: 1, throughPct: 100 }] },
 		name: 'reading', subject: 'Seconds to read a prompt', verb: 'read', noun: 'prompt', nouns: 'prompts',
 		noRuleReason: 'This pooled window has no date axis.', width: 390, height: 220,
-		barToken: SERIES_TOKENS['reading-prompt']
+		barToken
 	});
-	await expect(page.locator('[data-hist-bin] rect').first()).toHaveAttribute('fill', 'var(--chart-6)');
-	expect(await page.locator('[data-readout-row="Read in this band"] .readout-swatch').evaluate((node) => (node as HTMLElement).style.background)).toBe('var(--chart-6)');
+	await expect(page.locator('[data-hist-bin] rect').first()).toHaveAttribute('fill', `var(${barToken})`);
+	expect(await page.locator('[data-readout-row="Read in this band"] .readout-swatch').evaluate((node) => (node as HTMLElement).style.background)).toBe(`var(${barToken})`);
 	await expect(page.locator('[data-histogram="cumulative"]')).toHaveAttribute('stroke', 'var(--chart-3)');
 	await expect(page.locator('svg[data-chart="time-histogram"]')).toHaveAttribute('data-chart-name', 'reading');
 });

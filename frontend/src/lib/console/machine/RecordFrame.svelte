@@ -20,7 +20,8 @@
 	{#if state === 'ok'}
 		{@render children()}
 	{:else}
-		<Panel {id} {title} {heading} verdict={id === 'two-clocks'} note="The published record has not answered this comparison yet.">
+		<Panel {id} {title} {heading} verdict={id === 'two-clocks'}
+			note={state === 'loading' ? 'Loading the published record for this comparison.' : 'The published record has no usable answer for this comparison.'}>
 			<div data-readout-none="The requested record has no drawing yet; agreed with Susan"
 				data-empty-state={state === 'loading' ? undefined : state}
 				data-model-rule-name={`machine-${id}`}

@@ -19,7 +19,7 @@ export const SERIES_TOKENS = {
 	'fetch-rest': '--chart-8',
 	'other-memory': '--chart-8',
 	'queue-wait': '--chart-axis',
-	'reading-prompt': '--chart-6',
+	'reading-prompt': '--chart-1',
 	'writing-reply': '--chart-7',
 	'done-by-then': '--chart-3',
 	'model-server-memory': '--chart-1',

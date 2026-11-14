@@ -113,6 +113,39 @@ machines read as correct for weeks. **A run is not a machine** is the most
 load-bearing fact on this route, and a title that hides it hides everything under
 it.
 
+## Design rationale: show hardware phase means without mistaking them for CPU speed
+
+The slower-machine panel retains its run-normalized median (p50) comparisons
+and p90 duration notches. Below them, one stacked bar per full CPU model and
+reported L3 cache size combines all qualifying shards in the selected window.
+Each phase is its total measured seconds divided by the group's qualifying
+article count. The two means add to the mean model-processing seconds per
+article on one shared scale, not elapsed job time. Neither shard means nor
+medians are averaged: shards process different article counts, and separate
+phase medians need not add to a median total. Prefill processes fresh prompt
+tokens; decode generates output tokens.
+Their shared quantity tokens use opposite palette hues, not adjacent shades,
+so both phases remain distinguishable in the Hardware and Summaries views.
+
+Each phase shows its mean seconds per article, share of the group's paired phase time,
+and summed tokens divided by summed phase seconds in matching phase-coloured
+text. Each group's article and distinct shard counts, full CPU model and
+reported L3 size in MiB remain visible; none requires a disclosure.
+The host join uses the same dated
+run, generic pipeline/task (or legacy job) and shard identity as article cost,
+never a CPU-name lookup. Group only after that join: the same CPU with a
+different L3 size stays separate. Missing L3 is labelled unrecorded and never
+merged into a known-cache group; conflicting readings form explicitly labelled
+disagreement groups, not a selected value. A recorded zero remains zero.
+Missing host metadata does not hide measured phases.
+Per-article means remove article-count differences, but article lengths and
+token workloads still make these means unsuitable as CPU speed rankings; the
+adjacent normalized comparisons answer that question.
+Missing shard identities and incomplete or non-positive paired timings are
+excluded and counted, never converted to zero. The item query includes machine
+identity cells and the existing host query includes L3 bytes. No persisted
+fields are added.
+
 ## What is holding the machine's memory is two parts a reader may add, and two brackets they may not
 
 > **Abutting slices invite addition.** Where the numbers cannot be added, the marks overlap on purpose, and the reader never has to be told.

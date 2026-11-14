@@ -189,7 +189,7 @@
 			run.askLow === null || run.askHigh === null
 				? `${NO_ASK.charAt(0).toUpperCase()}${NO_ASK.slice(1)}.`
 				: `Asked for ${run.askLow} to ${run.askHigh} words.`;
-		return `Run ${run.runId}${run.model === null ? '' : `, ${run.model}`}: ${run.items} summaries, shortest ${run.low} words, middle ${run.median}, longest ${run.high}. ${asked}`;
+		return `Run ${run.runId}${run.model === null ? '' : `, ${run.model}`}: ${run.items} summaries, shortest ${run.low} words, median (p50) ${run.median}, longest ${run.high}. ${asked}`;
 	}
 
 	/** What a model rule says, on the rule and in the strip on the run it opens. */
@@ -198,7 +198,7 @@
 	}
 
 	const description = $derived(
-		`Summary length per run over ${runs.length} runs, lowest, middle and highest of each. ` +
+		`Summary length per run over ${runs.length} runs, minimum, median (p50) and maximum of each. ` +
 			(ask === null ? '' : `The shaded band is the ${ask.low} to ${ask.high} words the articles were asked for. `) +
 			placed.map(({ run }) => sentence(run)).join(' ')
 	);

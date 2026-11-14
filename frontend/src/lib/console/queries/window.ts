@@ -85,9 +85,11 @@ export interface QueryWindow {
 	retryAsks(queries?: readonly PanelQuery[]): void;
 }
 
-/** One held range per query name, not an accumulating map of every past range. */
-export function createQueryWindow(door: PanelDoor): QueryWindow {
-	const held = new Map<string, { from: DateStamp; to: DateStamp; answer: Promise<SliceResult> }>();
+/** Keep a bounded set of recent windows per declared query for this read session. */
+export function createQueryWindow(door: PanelDoor, rangeLimit = 1): QueryWindow {
+	positiveDays(rangeLimit, 'rangeLimit');
+	const held = new Map<string, Map<string, Promise<SliceResult>>>();
+	const identity = (query: PanelQuery) => JSON.stringify([query.name, query.ledger, query.columns, query.where ?? []]);
 	let session = door.currentSession?.();
 	return {
 		async routeReach(ledgers) {
@@ -102,11 +104,17 @@ export function createQueryWindow(door: PanelDoor): QueryWindow {
 				held.clear();
 				session = current;
 			}
-			const previous = held.get(query.name);
-			if (previous?.from === range.from && previous.to === range.to) return previous.answer;
+			const key = identity(query);
+			const window = JSON.stringify([range.from, range.to]);
+			const windows = held.get(key) ?? new Map<string, Promise<SliceResult>>();
+			const previous = windows.get(window);
+			if (previous !== undefined) {
+				windows.delete(window);
+				windows.set(window, previous);
+				return previous;
+			}
 			const forget = (answer: Promise<SliceResult>) => {
-				// An older range completing late must not evict its replacement.
-				if (held.get(query.name)?.answer === answer) held.delete(query.name);
+				if (windows.get(window) === answer) windows.delete(window);
 			};
 			const answer: Promise<SliceResult> = door.rows(query.ledger, {
 				columns: query.columns, from: range.from, to: range.to,
@@ -118,12 +126,14 @@ export function createQueryWindow(door: PanelDoor): QueryWindow {
 				},
 				(error: Error) => { forget(answer); throw error; }
 			);
-			held.set(query.name, { from: range.from, to: range.to, answer });
+			windows.set(window, answer);
+			held.set(key, windows);
+			while (windows.size > rangeLimit) windows.delete(windows.keys().next().value!);
 			return answer;
 		},
 		retryAsks(queries) {
 			if (queries === undefined) held.clear();
-			else for (const query of queries) held.delete(query.name);
+			else for (const query of queries) held.delete(identity(query));
 		}
 	};
 }
@@ -135,7 +145,7 @@ const page = createQueryWindow({
 		const { slice } = await import('../../data/ledger');
 		return slice(ledger, options);
 	}
-});
+}, typeof __CONSOLE__ === 'undefined' ? 1 : __CONSOLE__.shared.window_presets.length);
 
 export const routeReach = page.routeReach;
 export const sliceOnce = page.sliceOnce;

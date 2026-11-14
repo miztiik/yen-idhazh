@@ -228,7 +228,7 @@
 		}
 		if (agreedAt === null) return '';
 		return agreedOnScale
-			? `${agreedScores.length} pairs read as one story, running ${reads(agreedAt.min)} to ${reads(agreedAt.max)}, middle ${reads(agreedAt.median)}`
+			? `${agreedScores.length} pairs read as one story, running ${reads(agreedAt.min)} to ${reads(agreedAt.max)}, median (p50) ${reads(agreedAt.median)}`
 			: `${agreedScores.length} pairs read as one story, all of them off this scale, running ${reads(agreedAt.min)} to ${reads(agreedAt.max)}`;
 	}
 
@@ -527,7 +527,7 @@
 				>
 					{agreedAt === null
 						? 'No scored pairs marked one story were returned'
-						: `read as one story: ${reads(agreedAt.min)} to ${reads(agreedAt.max)}, middle ${reads(agreedAt.median)}, ${agreedBelow} below the line`}
+						: `read as one story: ${reads(agreedAt.min)} to ${reads(agreedAt.max)}, median (p50) ${reads(agreedAt.median)}, ${agreedBelow} below the line`}
 				</text>
 
 				{#if agreedAt !== null && agreedOnScale}

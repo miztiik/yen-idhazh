@@ -183,7 +183,7 @@
 		const band = day[key];
 		return (
 			`median ${rate(band.median)}, ` +
-			`middle half ${formatNumber(band.p25, numberFormat)} to ${formatNumber(band.p75, numberFormat)}, ` +
+			`interquartile range (p25-p75) ${formatNumber(band.p25, numberFormat)} to ${formatNumber(band.p75, numberFormat)}, ` +
 			`slowest ${formatNumber(band.min, numberFormat)}, fastest ${formatNumber(band.max, numberFormat)}`
 		);
 	}
@@ -316,7 +316,7 @@
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 		<em>Read</em> is the model taking an article in, <em>write</em> is it producing the summary. Write
 		is slower because it goes one token at a time. Each candle is one day: the line spans the slowest
-		and fastest item, the box is the middle half, and the tick is the median. The axis starts at the
+		and fastest item, the box is the interquartile range (p25-p75), and the tick is the median (p50). The axis starts at the
 		slowest rate drawn, not at zero. A wide candle is a mixed day, not a fault -
 		<a href={reference} class="text-accent hover:underline" rel="noreferrer">why the range is wide</a
 		>.

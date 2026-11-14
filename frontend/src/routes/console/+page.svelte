@@ -52,10 +52,10 @@
 	const choice = useWindowChoice();
 	const windowDays = $derived(choice.days);
 	let mounted = $state(false);
-	let reaches = $state<Record<string, RouteReach>>({});
+	let reaches = $state.raw<Record<string, RouteReach>>({});
 	const reach = $derived(reaches.native ?? null);
-	let answers = $state<Record<string, Answer>>(Object.fromEntries(asks.map((query) => [query.name, 'pending'])));
-	let ranges = $state<Record<string, Range>>({});
+	let answers = $state.raw<Record<string, Answer>>(Object.fromEntries(asks.map((query) => [query.name, 'pending'])));
+	let ranges = $state.raw<Record<string, Range>>({});
 	let revision = 0;
 	const allAnswers = $derived(asks.map((query) => answers[query.name]));
 	const busy = $derived(allAnswers.some((answer) => answer === 'pending'));

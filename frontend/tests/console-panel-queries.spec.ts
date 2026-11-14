@@ -347,7 +347,7 @@ test('a ledger starting after the common data end is quiet rather than an invert
 	expect(rangeFor(slowerOnSameWorkQuery, 3, reach, PRESETS)).toEqual({ state: 'quiet' });
 });
 
-test('one name and range shares its promise; a new range replaces it and explicit retry asks again', async ({}, info) => {
+test('recent windows survive tab and preset changes; eviction and explicit retry read again', async ({}, info) => {
 	const root = info.outputPath('held-range');
 	await writeWindowLedgers(root);
 	const door = diskDoor(root);
@@ -355,7 +355,7 @@ test('one name and range shares its promise; a new range replaces it and explici
 	const reader = createQueryWindow({
 		reach: door.reach,
 		rows: (ledger, options) => { calls += 1; return door.rows(ledger, options); }
-	});
+	}, 2);
 	const wide = windowRange(3, '2026-09-26', '2026-09-24');
 	const narrow = windowRange(1, '2026-09-26', '2026-09-24');
 	const first = reader.sliceOnce(slowerOnSameWorkQuery, wide);
@@ -365,17 +365,27 @@ test('one name and range shares its promise; a new range replaces it and explici
 	expect(next).not.toBe(first);
 	expect((await next).rows).toHaveLength(1);
 	const back = reader.sliceOnce(slowerOnSameWorkQuery, wide);
-	expect(back).not.toBe(first);
+	expect(back).toBe(first);
 	await back;
+	expect(calls).toBe(2);
+	const otherShape = { ...slowerOnSameWorkQuery, columns: ['cpu_model'] };
+	expect((await reader.sliceOnce(otherShape, wide)).rows[0]).toEqual({ cpu_model: 'machine-a' });
+	expect(reader.sliceOnce(slowerOnSameWorkQuery, wide)).toBe(first);
 	expect(calls).toBe(3);
+	const middle = windowRange(2, '2026-09-26', '2026-09-24');
+	await reader.sliceOnce(slowerOnSameWorkQuery, middle);
+	const evicted = reader.sliceOnce(slowerOnSameWorkQuery, narrow);
+	expect(evicted).not.toBe(next);
+	await evicted;
+	expect(calls).toBe(5);
 	reader.retryAsks([slowerOnSameWorkQuery]);
 	const retried = reader.sliceOnce(slowerOnSameWorkQuery, wide);
 	expect(retried).not.toBe(back);
 	await retried;
-	expect(calls).toBe(4);
+	expect(calls).toBe(6);
 	reader.retryAsks();
 	await reader.sliceOnce(slowerOnSameWorkQuery, wide);
-	expect(calls).toBe(5);
+	expect(calls).toBe(7);
 });
 
 test('missing and unreachable slices are retried using real repaired files, not cached empty successes', async ({}, info) => {

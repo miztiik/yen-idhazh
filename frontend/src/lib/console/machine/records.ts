@@ -92,7 +92,7 @@ export function slowerMachines(rows: readonly Row[]) {
 	const list = (kind: 'read' | 'write'): RankedInput[] => [...readings].filter(([, values]) => values[kind].length > 0).map(([label, values]) => ({
 		label, value: nearestRank(values[kind], 0.5)!,
 		range: { high: [...values[kind]].sort((a, b) => a - b)[Math.ceil(0.9 * values[kind].length) - 1], count: values[kind].length },
-		context: `${values[kind].length} articles; notch: slowest tenth`
+		context: `${values[kind].length} articles; median (p50); notch: p90`
 	}));
 	return { reference, typical, reading: list('read'), writing: list('write'), withoutReference };
 }
@@ -132,7 +132,7 @@ export function contextReadings(rows: readonly Row[]) {
 	}), 0.5);
 	const rules = [
 		...(slots.length ? [{ at: slots[0], label: `Reading limit: ${slots[0]} tokens per slot` }] : []),
-		...(cap !== null && cap > 0 ? [{ at: cap, label: `Cut articles' middle label request: ${cap} tokens` }] : [])
+		...(cap !== null && cap > 0 ? [{ at: cap, label: `Cut articles' median (p50) label request: ${cap} tokens` }] : [])
 	];
 	return { label: values('label_input_tokens'), summary: values('summary_input_tokens'), rules,
 		limits: [...new Set(slots)], cut: cut.length };

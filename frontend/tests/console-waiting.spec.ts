@@ -26,8 +26,8 @@ test('each settled ledger state has its own words and only failure takes warning
 
 test('the route standing waits without giving an answer and counts missing panels separately', () => {
 	const reading = { days: 14, through: '2026-10-09', missing: 4, unreachable: 6, shimmer: false };
-	expect(routeStanding({ ...reading, state: 'loading' })).toBe('');
-	expect(routeStanding({ ...reading, state: 'loading', shimmer: true })).toBe('Fetching the record.');
+	expect(routeStanding({ ...reading, state: 'loading' })).toBe('Loading chart data. Previously loaded windows are reused.');
+	expect(routeStanding({ ...reading, state: 'loading', shimmer: true })).toBe('Loading chart data. Previously loaded windows are reused.');
 	expect(routeStanding({ ...reading, state: 'quiet' })).toBe('Nothing was recorded in these 14 days.');
 	expect(routeStanding({ ...reading, state: 'missing' })).toBe('4 panels read a record this site has not published yet, so they have nothing to draw.');
 	expect(routeStanding({ ...reading, state: 'unreachable' })).toBe('Part of the record did not arrive, so 6 panels have nothing to draw.');
@@ -67,6 +67,7 @@ test('the real server frame stays loading and empty even when settled answers ar
 	} }).body;
 	expect(body).toContain('data-route-state="loading"');
 	expect(body).toContain('data-shimmer="off"');
+	expect(body).toContain('Loading chart data...');
 	expect(body).toContain('data-reserved-frame="waiting-fixture"');
 	expect(body).not.toContain('data-real-count');
 	expect(body).not.toContain('Not published yet.');

@@ -17,10 +17,11 @@
 </script>
 {#snippet timingTrack(row: RankedRow<RankedDisplay>)}
 	{@const entry = view.geometry?.rows.find((candidate) => candidate.key === row.key)}
-	<span class="timing-track" data-readout-at={view.geometry?.rows.findIndex((candidate) => candidate.key === row.key)}>
+	<span class="timing-track chart-bar-stack" style:--chart-filled-width={row.percent}
+		data-readout-at={view.geometry?.rows.findIndex((candidate) => candidate.key === row.key)}>
 		{#if entry?.segments.length}
-			{#each entry.segments as part (part.label)}<span class="timing-part" style="inset-inline-start: {part.start}; inline-size: {part.size}; background: var({part.token})" aria-label="{part.label}: {formatNumber(part.value, numberFormat, { si: false })} ms"></span>{/each}
-		{:else}<span class="timing-whole" style="inline-size: {row.percent}"></span>{/if}
+			{#each entry.segments.filter((part) => part.value > 0) as part (part.label)}<span class="timing-part" style="inset-inline-start: {part.start}; inline-size: {part.size}; background: var({part.token})" aria-label="{part.label}: {formatNumber(part.value, numberFormat, { si: false })} ms"></span>{/each}
+		{:else}<span class="timing-whole chart-bar" style="inline-size: {row.percent}"></span>{/if}
 	</span>
 {/snippet}
 <VoicesPanel id="fetch-time" title="Where a fetch spent its time" question="what happened" {days}

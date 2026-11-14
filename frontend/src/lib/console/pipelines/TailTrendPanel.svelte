@@ -196,9 +196,9 @@
 			data-model-rule-from={tailRuns[0]?.date ?? ''} data-model-rule-to={tailRuns.at(-1)?.date ?? ''}>
 		<p class="lede" data-lede>
 			{slowestTenth === null ? 'No slowest-tenth reading was recorded.'
-				: `${formatNumber(slowestTenth / 1000, chart.number_format, { si: false })} seconds at the slowest tenth of the newest measured run.`}
+				: `${formatNumber(slowestTenth / 1000, chart.number_format, { si: false })} seconds at p90 (90th percentile) of the newest measured run.`}
 		</p>
-		<p data-comparison="The slowest articles against the middle one">The slowest articles against the middle one.</p>
+		<p data-comparison="p90 duration against median (p50)">p90 duration against median (p50).</p>
 		{#if tailRuns.length === 0}
 			<div data-readout-none="No run timed enough articles to draw a percentile; agreed with Susan"
 				use:observeWidth={(px) => (tailWidth = px)}>
@@ -413,7 +413,7 @@
 				<p class="reads" data-latency-spread={spread.times.toFixed(2)}>
 					On {spread.run.runId}, the newest run drawn, the slowest articles took
 					<strong>{formatNumber(spread.times, chart.number_format, { si: false })} times as long</strong>
-					as the middle one: {seconds(spread.slowest / 1000, chart.number_format)} against
+					as the median (p50): {seconds(spread.slowest / 1000, chart.number_format)} against
 					{seconds(spread.middle / 1000, chart.number_format)}. That is how wide the spread is today; the plots above
 					are whether it is widening.
 				</p>

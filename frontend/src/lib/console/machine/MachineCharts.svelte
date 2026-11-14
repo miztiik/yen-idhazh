@@ -3,6 +3,7 @@
 	import RankedList from '$lib/components/RankedList.svelte';
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import Distribution from '$lib/charts/d3/Distribution.svelte';
+	import MachinePhases from './MachinePhases.svelte';
 	import { rankedList } from '$lib/charts/d3/rankedList';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import { distribution } from '$lib/charts/d3/distribution';
@@ -20,8 +21,9 @@
 	import type { ChartConfig } from '$lib/server/config';
 	import type { MachineRun as CounterRun } from './counters';
 
-	let { id, title, rows, newest = null, newestRunId = null, chart, shell, start, end, knobs, windowDays }: {
+	let { id, title, rows, hostRows = [], newest = null, newestRunId = null, chart, shell, start, end, knobs, windowDays }: {
 		id: string; title: string; rows: readonly Row[];
+		hostRows?: readonly Row[];
 		newest?: CounterRun | null; newestRunId?: string | null; chart: ChartConfig; shell: ConsoleShell;
 		start: string; end: string; knobs: Readonly<Record<string, number>>; windowDays: number;
 	} = $props();
@@ -34,7 +36,7 @@
 		{ ...MARGIN, right: Math.ceil(labelWidth('100%', labels()) + AXIS_LABEL_GAP_PX) }));
 	const declined = { declined: 'This compares records within one run or kind, not a change over days.' };
 	const rule = $derived(settingsRules(shell, { from: start, to: end }, 'none'));
-	const slower = $derived(slowerMachines(rows));
+	const slower = $derived(slowerMachines(id === 'slower-machines' ? rows : []));
 	const comparableKinds = $derived(new Set([...slower.reading, ...slower.writing]
 		.filter((row) => (row.range?.count ?? 0) >= knobs.slower_machines_min_articles).map((row) => row.label)));
 	const memoryReadings = $derived(closestToMemory(rows));
@@ -111,11 +113,15 @@
 					{@const target = kind === 'reading' ? slower.typical.read : slower.typical.write}
 					{@const geometry = rankedList(readings, { max: knobs.fleet_top_kinds, minCount: knobs.slower_machines_min_articles,
 						rules: target === null ? [] : [{ at: target, label: slower.reference.cpuModel ?? 'Reference machine' }] })}
-					<RankedList {geometry} caption={kind === 'reading' ? 'Reading' : 'Writing'} maxText={`${geometry === null ? '0' : formatNumber(geometry.max, numberFormat, { si: false })} seconds`} fitRuleLabels
+					<div>
+					<h4>{kind === 'reading' ? 'Prefill' : 'Decode'} - median (p50), notch p90</h4>
+					<RankedList {geometry} caption={kind === 'reading' ? 'Prefill' : 'Decode'} maxText={`${geometry === null ? '0' : formatNumber(geometry.max, numberFormat, { si: false })} seconds`} fitRuleLabels
 						unmeasuredNote="No comparable reading." emptyNote="No comparable reading." />
+					</div>
 				{/each}
 			</div>
 			<p>{slower.withoutReference} runs had no reference-machine reading. {slower.reference.unqualified} articles lacked a comparable reading.</p>
+			<MachinePhases {rows} hosts={hostRows} {numberFormat} />
 		{:else if id === 'closest-to-memory'}
 			<p class="lede" data-lede>{tightest?.ends
 				? `The tightest article left ${formatNumber(tightest.ends.end - tightest.value, numberFormat, { si: false })} GiB of the machine's ${formatNumber(tightest.ends.end, numberFormat, { si: false })} GiB free.`
@@ -139,14 +145,14 @@
 			<p>{context.cut ? `${context.cut} articles were cut.` : 'No article was cut in this window.'}
 				{context.limits.length > 1 ? ` Other request-slot limits: ${context.limits.slice(1).join(', ')} tokens.` : ''}</p>
 		{:else}
-			<p class="lede" data-lede>{reuseMedian === null ? 'No label request recorded held text.' : `${formatNumber(reuseMedian, numberFormat)} tokens held for the middle label request.`}</p>
+			<p class="lede" data-lede>{reuseMedian === null ? 'No label request recorded held text.' : `${formatNumber(reuseMedian, numberFormat)} median (p50) cached tokens per label request.`}</p>
 			<div use:observeWidth={(px) => (width = px)}><DateSeries geometry={drawing}
 				readout={drawing === null ? null : { ...drawing.readout, columns: drawing.dates.map(shortDate) }}
 				empty={emptyState('quiet', 'Nothing recorded for this comparison.')}
 				name={id} label={title} width={box.width} height={box.height} readoutMaxShare={chart.readout_max_share} /></div>
 			{#if ruleNote}<p data-model-rule-empty={id}>{ruleNote}</p>{/if}
 			{#each reuse as check}<p>{check.call}: our pooled held share {check.ours === null ? 'not recorded' : formatNumber(check.ours, numberFormat, { si: false })}%;
-				server's middle held share {check.server === null ? 'not recorded' : formatNumber(check.server, numberFormat, { si: false })}%; {formatNumber(check.count, numberFormat, { exact: true, si: false })} complete article readings.</p>{/each}
+				server's median (p50) cached share {check.server === null ? 'not recorded' : formatNumber(check.server, numberFormat, { si: false })}%; {formatNumber(check.count, numberFormat, { exact: true, si: false })} complete article readings.</p>{/each}
 		{/if}
 	</div>
 </Panel>
@@ -155,4 +161,5 @@
 <style>
 	.lede { font-size: var(--console-page-title-size); line-height: var(--console-page-title-leading); font-weight: var(--console-page-title-weight); }
 	.halves > div { min-width: 0; }
+	h4 { font-size: var(--console-body-size); line-height: var(--console-body-leading); margin-block: var(--console-control-gap); }
 </style>

@@ -112,6 +112,9 @@ test.describe('the published cards draw their calendar, not just the selected da
         expect(body).toContain('data-readout-row="Articles published"');
         expect(body).toContain('data-readout-row="Visuals published"');
         expect(body).not.toMatch(/<dt[^>]*basis-full/);
+        const bars = [...body.matchAll(/<rect\b[^>]*data-published-bar=[^>]*>/g)].map((match) => match[0]);
+        expect(bars).toHaveLength(2);
+        for (const bar of bars) expect(bar).not.toMatch(/chart-bar|\b(?:rx|ry|clip-path)\s*[:=]/);
     });
     test('ordinary shared readouts keep their heading line and series keys', () => {
         const body = renderConfigured(readoutComponent, { props: {

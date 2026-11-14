@@ -21,7 +21,8 @@ export const twoClocksHostsQuery = {
 
 export const slowerMachinesQuery = {
 	name: 'slowerMachinesQuery', ledger: 'item-health',
-	columns: ['run_id', 'cpu_model', 'prefill_ms', 'input_tokens', 'cached_tokens', 'decode_ms', 'output_tokens'],
+	columns: ['date', 'run_id', 'machine_job', 'machine_pipeline_name', 'machine_task_name', 'machine_shard',
+		'cpu_model', 'prefill_ms', 'input_tokens', 'cached_tokens', 'decode_ms', 'output_tokens'],
 	span: 'window'
 } as const satisfies PanelQuery;
 
