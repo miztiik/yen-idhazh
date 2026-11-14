@@ -69,7 +69,10 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "summaryLengthQuery": ("date", "run_id", "model_id", "summary_words", "source_words_before_cap", "source_words", "compression"),
     "twoClocksQuery": ("date", "run_id", "machine_job", "machine_shard", "prefill_ms", "input_tokens", "cached_tokens"),
     "twoClocksHostsQuery": ("date", "run_id", "job", "shard", "server_prompt_tokens", "server_prompt_seconds"),
-    "slowerMachinesQuery": ("run_id", "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens"),
+    "slowerMachinesQuery": (
+        "date", "run_id", "machine_job", "machine_pipeline_name", "machine_task_name", "machine_shard",
+        "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens",
+    ),
     "platformMixQuery": (
         "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "fingerprint", "fingerprint_version",
         "cpu_model", "l3_cache_bytes", "cpu_logical_processors", "model_load_ms", "job_seconds",

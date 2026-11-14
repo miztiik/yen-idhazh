@@ -128,7 +128,7 @@ Ledger panels name their settled nothing inside the reserved frame:
 answer, number or fabricated bar. Only a failed read takes warning colour.
 The route has one reserved standing and one delayed shimmer; retry asks only
 for the failed record, not already usable siblings. Existing month-based
-callers retain their treatment until their route migration removes it.
+callers retain their settled-state treatment; waiting uses the shared frame.
 
 The standing immediately says `Loading chart data. Previously loaded windows
 are reused.` Each reserved chart also says `Loading chart data...`; a pending
@@ -146,7 +146,7 @@ reactive state: mounting a chart does not proxy every ledger cell.
 
 The operator sweep uses existing neutral inks, not the faint surface-wash
 token: `--color-rule-strong` over a transparent ledger frame and
-`--color-text-tertiary` over the smaller legacy skeleton marks. This makes the
+`--color-text-tertiary` over other loading blocks. This makes the
 wait visible in both themes without inventing progress, data or a status hue.
 The route still owns the one delayed animation switch, reserved dimensions stay
 fixed, and reduced motion removes the gradient entirely.

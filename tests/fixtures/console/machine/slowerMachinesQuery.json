@@ -2,7 +2,12 @@
   "state": "ok",
   "rows": [
     {
+      "date": "2026-08-10",
       "run_id": "2026-08-10-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -11,7 +16,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -20,7 +30,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -29,7 +44,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -38,7 +58,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -47,7 +72,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -56,7 +86,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -65,7 +100,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -74,7 +114,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -83,7 +128,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -92,7 +142,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -101,7 +156,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -110,7 +170,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -119,7 +184,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -128,7 +198,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -137,7 +212,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -146,7 +226,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -155,7 +240,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -164,7 +254,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -173,7 +268,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -182,7 +282,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -191,7 +296,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -200,7 +310,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -209,7 +324,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -218,7 +338,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -227,7 +352,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -236,7 +366,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -245,7 +380,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -254,7 +394,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -263,7 +408,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -272,7 +422,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -281,7 +436,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -290,7 +450,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -299,7 +464,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -308,7 +478,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -317,7 +492,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -326,7 +506,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -335,7 +520,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -344,7 +534,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -353,7 +548,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -362,7 +562,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -371,7 +576,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -380,7 +590,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -389,7 +604,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -398,7 +618,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -407,7 +632,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -416,7 +646,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -425,7 +660,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -434,7 +674,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -443,7 +688,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -452,7 +702,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -461,7 +716,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -470,7 +730,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -479,7 +744,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -488,7 +758,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -497,7 +772,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -506,7 +786,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -515,7 +800,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -524,7 +814,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -533,7 +828,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -542,7 +842,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -551,7 +856,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -560,7 +870,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -569,7 +884,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-17",
       "run_id": "2026-08-17-2",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": null,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -578,7 +898,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-18",
       "run_id": "2026-08-18-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": 0,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -587,7 +912,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-18",
       "run_id": "2026-08-18-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": 1,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -596,7 +926,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-18",
       "run_id": "2026-08-18-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": 1,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
@@ -605,7 +940,12 @@
       "output_tokens": null
     },
     {
+      "date": "2026-08-19",
       "run_id": "2026-08-19-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": 0,
       "cpu_model": "AMD EPYC 7763 64-Core Processor",
       "prefill_ms": 53309,
       "input_tokens": 1497,
@@ -614,7 +954,12 @@
       "output_tokens": 215
     },
     {
+      "date": "2026-08-19",
       "run_id": "2026-08-19-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": 0,
       "cpu_model": "AMD EPYC 7763 64-Core Processor",
       "prefill_ms": 63586,
       "input_tokens": 1608,
@@ -623,7 +968,12 @@
       "output_tokens": 270
     },
     {
+      "date": "2026-08-19",
       "run_id": "2026-08-19-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": 1,
       "cpu_model": "AMD EPYC 7763 64-Core Processor",
       "prefill_ms": 77778,
       "input_tokens": 1765,
@@ -632,16 +982,12 @@
       "output_tokens": 230
     },
     {
+      "date": "2026-08-20",
       "run_id": "2026-08-20-1",
-      "cpu_model": "AMD EPYC 7763 64-Core Processor",
-      "prefill_ms": 7120,
-      "input_tokens": 975,
-      "cached_tokens": 900,
-      "decode_ms": 28206,
-      "output_tokens": 167
-    },
-    {
-      "run_id": "2026-08-20-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": 0,
       "cpu_model": "AMD EPYC 7763 64-Core Processor",
       "prefill_ms": 79100,
       "input_tokens": 942,
@@ -650,7 +996,26 @@
       "output_tokens": 170
     },
     {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": 1,
+      "cpu_model": "AMD EPYC 7763 64-Core Processor",
+      "prefill_ms": 7120,
+      "input_tokens": 975,
+      "cached_tokens": 900,
+      "decode_ms": 28206,
+      "output_tokens": 167
+    },
+    {
+      "date": "2026-08-20",
       "run_id": "2026-08-20-2",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": 0,
       "cpu_model": "AMD EPYC 7763 64-Core Processor",
       "prefill_ms": 64000,
       "input_tokens": 1700,
@@ -659,7 +1024,12 @@
       "output_tokens": 60
     },
     {
+      "date": "2026-08-20",
       "run_id": "2026-08-20-2",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": 0,
       "cpu_model": "AMD EPYC 7763 64-Core Processor",
       "prefill_ms": 8883,
       "input_tokens": 999,
@@ -668,22 +1038,32 @@
       "output_tokens": 129
     },
     {
+      "date": "2026-08-20",
       "run_id": "2026-08-20-2",
-      "cpu_model": null,
-      "prefill_ms": 82146,
-      "input_tokens": 1337,
-      "cached_tokens": 383,
-      "decode_ms": 33203,
-      "output_tokens": 189
-    },
-    {
-      "run_id": "2026-08-20-2",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": 0,
       "cpu_model": null,
       "prefill_ms": null,
       "input_tokens": null,
       "cached_tokens": null,
       "decode_ms": null,
       "output_tokens": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
+      "machine_shard": 1,
+      "cpu_model": null,
+      "prefill_ms": 82146,
+      "input_tokens": 1337,
+      "cached_tokens": 383,
+      "decode_ms": 33203,
+      "output_tokens": 189
     }
   ],
   "first": "2026-08-07",

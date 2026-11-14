@@ -23,12 +23,10 @@ import { resolve } from 'node:path';
  *   the whole column rather than the panels alone, and cuts the set at the
  *   first panel's top rather than at the fold - a fold is a question about the
  *   runner's fonts, and this one was six pixels from answering it wrongly.
- * - **One timeline.** Every shimmering block starts its sweep in the same
- *   frame. Out of phase, twelve sweeping boxes read as twelve broken things.
- * - **Reduced motion.** `app.css` zeroes every `animation-duration` to
- *   `0.01ms !important` on `*`, which would FREEZE a moving gradient mid-sweep
- *   and leave a bright band nobody chose. The flat block has to beat that rule,
- *   and the proof is the computed style in a browser that asked for stillness.
+ * - **One timeline.** Every shimmering block shares the moving sweep position,
+ *   including a block mounted late.
+ * - **Reduced motion.** Waiting frames retain their axes and loading words,
+ *   without an animation or a frozen gradient.
  * - **A state per state**, each with the sentence it prints.
  *
  * Every case blocks the service worker. A "the payload did not arrive" case is a
@@ -318,19 +316,28 @@ test('THE ORACLE: every shimmering block is on one timeline', async ({ page }) =
 	);
 	await page.screenshot();
 
-	const starts = await page.locator('[data-shimmer="on"] .loading').evaluateAll((nodes) =>
-		nodes.flatMap((node) =>
-			node.getAnimations().map((animation) => Math.round(Number(animation.startTime ?? -1)))
-		)
-	);
-	expect(starts.length, 'nothing was animating').toBeGreaterThan(4);
+	const blocks = page.locator('[data-shimmer="on"] .loading');
+	await expect(blocks.first()).toHaveCSS('background-image', /linear-gradient/);
+	const positions = await blocks.evaluateAll((nodes) => {
+		const first = nodes[0];
+		if (!first?.parentElement) throw new Error('No waiting frame to inspect.');
+		const late = first.cloneNode(true) as Element;
+		first.parentElement.append(late);
+		const positions = [...nodes, late].map((node) => getComputedStyle(node).backgroundPositionX);
+		late.remove();
+		return positions;
+	});
+	expect(positions.length, 'not enough waiting frames').toBeGreaterThan(5);
 	expect(
-		new Set(starts).size,
-		`blocks started their sweep at ${[...new Set(starts)].join(', ')} - out of phase`
+		new Set(positions).size,
+		`blocks drew their sweep at ${[...new Set(positions)].join(', ')} - out of phase`
 	).toBe(1);
+	await expect.poll(() => blocks.first().evaluate((node) =>
+		getComputedStyle(node).backgroundPositionX
+	), { message: 'the shared sweep did not move' }).not.toBe(positions[0]);
 });
 
-test('under reduced motion a reserved block is a flat tint, with no gradient frozen in it', async ({
+test('under reduced motion waiting frames keep loading words and axes without a frozen gradient', async ({
 	page
 }) => {
 	await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -342,11 +349,12 @@ test('under reduced motion a reserved block is a flat tint, with no gradient fro
 	await expect(block).toBeVisible();
 	const look = await block.evaluate((node) => {
 		const style = getComputedStyle(node);
-		return { image: style.backgroundImage, colour: style.backgroundColor, running: node.getAnimations().length };
+		return { image: style.backgroundImage, running: node.getAnimations().length };
 	});
 	expect(look.image).toBe('none');
 	expect(look.running).toBe(0);
-	expect(look.colour, 'the kept monthly block lost its flat tint').not.toBe('rgba(0, 0, 0, 0)');
+	await expect(block.locator('[data-reserved-frame]')).toBeVisible();
+	await expect(block).toContainText('Loading chart data...');
 
 	await holdMonths(page);
 	await page.goto('/console/');
@@ -361,9 +369,6 @@ test('under reduced motion a reserved block is a flat tint, with no gradient fro
 	const native = page.locator('[data-shimmer="on"] .loading').first();
 	await expect(native).toBeVisible();
 
-	// The blanket `animation-duration: 0.01ms !important` on `*` does not remove
-	// a gradient - it freezes one mid-sweep. So the block has to lose the image
-	// outright, and this is where that is proved rather than reasoned about.
 	const nativeLook = await native.evaluate((node) => {
 		const style = getComputedStyle(node);
 		return {
@@ -375,6 +380,7 @@ test('under reduced motion a reserved block is a flat tint, with no gradient fro
 	expect(nativeLook.image, 'a gradient survived reduced motion and is frozen mid-sweep').toBe('none');
 	expect(nativeLook.running, 'an animation is still attached under reduced motion').toBe(0);
 	await expect(native.locator('[data-reserved-frame]')).toBeVisible();
+	await expect(native).toContainText('Loading chart data...');
 });
 
 test('QUIET: a window that was read and held nothing says so once, and names the widening', async ({
