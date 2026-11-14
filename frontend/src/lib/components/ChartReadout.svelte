@@ -44,7 +44,8 @@
 		restingNote = '',
 		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.',
 		hintOne = '',
-		eventRoom = false
+		eventRoom = false,
+		compact = false
 	}: {
 		/** What `readoutOf` or `factsOf` built. Null draws nothing at all. */
 		readout: Readout | ReadoutFacts | null;
@@ -71,6 +72,9 @@
 		 * column prints, so stepping onto the one day that has a line does not
 		 * grow the strip and push everything under it down. */
 		eventRoom?: boolean;
+		/** A named, single-series card already identifies its marks. Keep its
+		 * date beside the reading and omit a redundant colour key. */
+		compact?: boolean;
 	} = $props();
 
 	const view = $derived(readoutView(readout, at, resting, eventRoom));
@@ -84,15 +88,17 @@
 	     contents', so being one changes nothing it draws. -->
 	<dl
 		class="chart-readout @container mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-text-tertiary"
+		class:compact
 		style={readoutCapStyle(maxShare)}
 		data-readout={name}
 		data-readout-shape={view.shape}
 		aria-live="polite"
 	>
-		<!-- The heading takes a line of its own, so the entries after it start at
-		     the same place on every column and the eye does not hunt for them. -->
+		<!-- Multi-series readings keep their own heading line. A compact card
+		     keeps date and reading together, wrapping only when needed. -->
 		<dt
-			class="basis-full font-semibold text-text-secondary"
+			class="font-semibold text-text-secondary"
+			class:basis-full={!compact}
 			data-readout-day={view.shape === 'columns' ? '' : undefined}
 			data-readout-subject={view.shape === 'record' ? '' : undefined}
 		>
@@ -106,7 +112,7 @@
 				data-readout-row={entry.held ? undefined : entry.label}
 				data-readout-held={entry.held ? '' : undefined}
 			>
-				<dd class="readout-label">{#if entry.swatch}<span class="readout-swatch size-3 rounded-sm" style="background: {entry.swatch}"></span>{'\u00a0'}{/if}{entry.label}</dd>
+				<dd class="readout-label">{#if entry.swatch && !compact}<span class="readout-swatch size-3 rounded-sm" style="background: {entry.swatch}"></span>{'\u00a0'}{/if}{entry.label}</dd>
 				{#if entry.value !== ''}
 					{'\u00a0'}
 					<dd
@@ -142,6 +148,7 @@
 		letter-spacing: var(--console-small-tracking, normal);
 	}
 	.chart-readout { padding-block-start: var(--console-control-gap, var(--space-2)); border-block-start: 1px solid var(--color-rule); }
+	.compact > dt { min-inline-size: 0; max-inline-size: 100%; overflow-wrap: anywhere; }
 	.readout-value { font-family: var(--font-data); color: var(--color-text); }
 	.readout-entry {
 		overflow-wrap: anywhere;

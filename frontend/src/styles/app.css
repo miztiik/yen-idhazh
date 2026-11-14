@@ -487,6 +487,14 @@ html:has([data-surface='operator']) { scroll-padding-block-start: var(--console-
 	border-radius: var(--radius-sm);
 }
 
+/* The console's generated wash is deliberately quiet for surfaces, but was
+   imperceptible as motion over a transparent ledger frame. A neutral ink token
+   supplies the sweep in either theme, not a categorical or confidence hue.
+   The reserved axes and the route's words still identify this as a wait. */
+[data-surface='operator'] .loading {
+	--shimmer-band: var(--color-text-tertiary);
+}
+
 /* ONE timeline for every reserved block on the surface, and hanging the switch
    on an ancestor is the whole reason it is one. A dozen blocks each starting
    its own sweep at the moment it happened to mount reads as a dozen broken

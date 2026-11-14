@@ -1,6 +1,6 @@
 # How a console chart gets its data
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-11-14
 
 Seven rules about where a panel's bytes come from, and what a panel may never do to
 get them. **They are settled by what the formats do, not by a benchmark**, and none
@@ -133,6 +133,13 @@ The standing's state tally is pure. It imports no query engine, and completing
 one answer does not restart the route's wait while another is pending. Ledger
 frames share that one shimmer without drawing placeholder bars. With reduced
 motion they keep a still frame.
+
+The operator sweep uses existing neutral inks, not the faint surface-wash
+token: `--color-rule-strong` over a transparent ledger frame and
+`--color-text-tertiary` over the smaller legacy skeleton marks. This makes the
+wait visible in both themes without inventing progress, data or a status hue.
+The route still owns the one delayed animation switch, reserved dimensions stay
+fixed, and reduced motion removes the gradient entirely.
 
 The packed canary replays the machine producer's two actual writes. Each job
 uses its own run, attempt, job, shard and `telemetry.silicon` producer. The clock

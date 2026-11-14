@@ -7,12 +7,13 @@
 	import type { LedgerReach, SliceResult } from '$lib/data/ledger';
 	import * as queries from '$lib/console/queries/model';
 	import { settingsRules } from '$lib/console/settings-moved';
-	import { windowOfDays } from '$lib/charts/viewport';
+	import { windowFromDates, windowOfDays } from '$lib/charts/viewport';
 	import { nameSpan } from '$lib/console/span-words';
 	import RecordNotes from '$lib/console/RecordNotes.svelte';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import Panel from '$lib/components/Panel.svelte';
+	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import Cards from '$lib/console/model/Cards.svelte';
 	import Query from '$lib/console/model/Query.svelte';
 	import Panels from '$lib/console/model/Panels.svelte';
@@ -34,10 +35,14 @@
 	const allAnswers = $derived(doorIds.map((id) => answers[id] ?? 'pending'));
 	const tally = $derived(tallyAsks(allAnswers));
 	const first = $derived(reach === null ? null : Object.values(reach.ledgers).flatMap((r) => r?.state === 'ok' ? [r.first] : []).sort()[0] ?? null);
-	const span = $derived(windowOfDays(data.windowDay, windowDays, knobs.today_anchor));
+	const publishedWindow = $derived(windowFromDates((data.reasons ?? []).map((day) => day.date), windowDays));
+	const span = $derived(publishedWindow ?? windowOfDays(data.windowDay, windowDays, 'right'));
+	const cardSpan = $derived(windowFromDates(Object.values(data.cardReads).flatMap((read) =>
+		read.state === 'read' ? [read.first, read.through] : []), windowDays) ?? span);
 	const shell = $derived(data);
-	const cardRule = $derived(settingsRules(shell, { from: span.start, to: span.end }, 'none', nameSpan(windowDays)));
-	const checkerRule = $derived(settingsRules(shell, { from: span.start, to: span.end }, 'every', nameSpan(windowDays)));
+	const cardRule = $derived(settingsRules(shell, { from: cardSpan.start, to: cardSpan.end }, 'none', nameSpan(windowDays)));
+	const checkerRule = $derived(settingsRules(shell, { from: cardSpan.start, to: cardSpan.end }, 'every', nameSpan(windowDays)));
+	const reasonRule = $derived(settingsRules(shell, { from: span.start, to: span.end }, 'every', nameSpan(windowDays)));
 	const recording = $derived(data.recordingNotes[String(windowDays)]);
 	const measurementOff = $derived(data.measurementOff[String(windowDays)]);
 	onMount(() => {
@@ -81,7 +86,7 @@
 </svelte:head>
 
 <WindowControlSource route="model" days={windowDays} presets={knobs.window_presets} {ready} busy={tally.state === 'loading'}
-	record={{ asked: windowDays, first, through: reach?.through ?? null }} publishedWindow={span} monthsFor={() => 0} onChange={show} />
+	record={{ asked: windowDays, first, through: reach?.through ?? null }} {publishedWindow} monthsFor={() => 0} onChange={show} />
 <RouteStatus route="model" answers={allAnswers} days={windowDays} through={reach?.through ?? null}
 	recordScope="Native record"
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retryFailed}>
@@ -94,16 +99,16 @@
 	<RecordNotes notes={data.recordNotes[String(windowDays)] ?? []} />
 	<p>A dashed line marks a day a recorded setting changed: the model, its settings, the prompt, the chat template, the runtime or the weights file. A dotted line marks a day the checker changed.</p>
 	{#each configured.panel_groups as group (group.id)}
-		<div data-console-panel-group={group.id}>
+		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
 				<Panel {id} title={titles[id]} verdict={id === 'model-cards'}
 					note={id === 'model-cards' ? "What the model wrote for the day's own articles, how long it took, and what it got wrong." : null}>
 					<div data-panel-question={titles[id]}>
 					{#if id === 'model-cards'}
-						<Cards days={data.cardDays} reads={data.cardReads} instruments={data.instruments} start={span.start} end={span.end}
+						<Cards days={data.cardDays} reads={data.cardReads} instruments={data.instruments} start={cardSpan.start} end={cardSpan.end}
 							rule={cardRule} {checkerRule} chart={data.chart} {windowDays} />
 					{:else if id === 'doubt-reasons'}
-						<Reasons days={data.reasons} start={span.start} end={span.end} rule={checkerRule} chart={data.chart} {windowDays} />
+						<Reasons days={data.reasons} start={span.start} end={span.end} rule={reasonRule} chart={data.chart} {windowDays} />
 					{:else if id in panelQueries}
 						{#if id === 'faithfulness'}<a href={data.faithfulnessReference}>How each of these measures is scored</a>{/if}
 						<Query queries={panelQueries[id]} reach={id === 'item-cost' ? itemCostReach : reach} preset={windowDays} presets={knobs.window_presets}
@@ -118,7 +123,7 @@
 					</div>
 				</Panel>
 			{/each}
-		</div>
+		</PanelGroup>
 	{/each}
 </RouteStatus>
 

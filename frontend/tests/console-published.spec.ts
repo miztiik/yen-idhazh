@@ -79,6 +79,7 @@ test('the bars sit inside the box and never touch each other', () => {
 });
 test.describe('the published cards draw their calendar, not just the selected date', () => {
     let component: Component<Record<string, unknown>>;
+    let readoutComponent: Component<Record<string, unknown>>;
     test.beforeAll(async ({}, info) => {
         const compile = serverCompiler(info.outputPath('published-cards'));
         const rewrites = [
@@ -86,7 +87,8 @@ test.describe('the published cards draw their calendar, not just the selected da
             ['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs']
         ] as const;
         await compile('src/lib/components/KpiCard.svelte', 'KpiCard', rewrites);
-        await compile('src/lib/components/ChartReadout.svelte', 'ChartReadout', rewrites);
+        const readoutModule = await compile('src/lib/components/ChartReadout.svelte', 'ChartReadout', rewrites);
+        readoutComponent = (await import(pathToFileURL(readoutModule).href)).default;
         const module = await compile('src/lib/console/pipelines/AtAGlance.svelte', 'AtAGlance', rewrites);
         component = (await import(pathToFileURL(module).href)).default;
     });
@@ -99,6 +101,33 @@ test.describe('the published cards draw their calendar, not just the selected da
             days, publishedItems, window: { start, end }, knobs: { ...consoleConfig(), chart_width: width }, chart: chartConfig()
         } }).body;
     }
+    test('named single-series cards keep a compact dated count without a colour key or narrated caption', () => {
+        const date = '2028-02-29';
+        const body = cards(640, [recorded(date, 6, 2)], date, date);
+        expect(body).not.toContain('Articles published against visuals published over the same days.');
+        expect(body).not.toContain('data-comparison=');
+        expect(body).not.toContain('readout-swatch');
+        expect(body.match(/class="chart-readout[^"]*\bcompact\b/g)).toHaveLength(2);
+        expect(body.match(/fill="var\(--chart-1\)"/g)).toHaveLength(2);
+        expect(body).toContain('data-readout-row="Articles published"');
+        expect(body).toContain('data-readout-row="Visuals published"');
+        expect(body).not.toMatch(/<dt[^>]*basis-full/);
+    });
+    test('ordinary shared readouts keep their heading line and series keys', () => {
+        const body = renderConfigured(readoutComponent, { props: {
+            readout: {
+                subject: '29 Feb 2028',
+                facts: [
+                    { label: 'Read', value: '6', swatch: 'var(--chart-1)' },
+                    { label: 'Written', value: '2', swatch: 'var(--chart-2)' }
+                ],
+                notMeasured: 'Not measured'
+            },
+            name: 'ordinary', maxShare: 1, hint: ''
+        } }).body;
+        expect(body).toMatch(/<dt[^>]*basis-full/);
+        expect(body.match(/class="readout-swatch/g)).toHaveLength(2);
+    });
     test('both card axes span leap day, thin to real dates on a narrow card, and keep their original counts', () => {
         const days = [recorded('2028-02-27', 40, 1), recorded('2028-03-01', 60, 3)];
         const axes = (body: string) => [...body.matchAll(/data-day-axis="([^"]+)"/g)].map((match) => match[1]);

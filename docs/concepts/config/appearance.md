@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-14
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -142,8 +142,10 @@ missing or extra top-level keys, repeated ids and judged ids the route does not
 draw. These are repository-authored config files, not persisted telemetry, so
 their parser owns the validation; no second Pydantic model restates it.
 `console.panel_groups` and `console.judged_panel_ids` are removed from the shared
-appearance block. Pipelines and Hardware retain their panel lists. The other
-routes start with empty groups, judged ids and knobs until their panels opt in.
+appearance block. Named groups on Pipelines, Summaries, Hardware, Voices and
+Judgement supply the existing rail links and matching `PanelGroup` anchors.
+Grouping does not change panel ids, their order or judged membership. The Data
+explorer retains one untitled workbench group.
 
 `frontend/src/lib/server/config.ts` reads the named route files through
 `routeConsolesFrom` and exposes `routeConsoles()`. Vite supplies one build-time

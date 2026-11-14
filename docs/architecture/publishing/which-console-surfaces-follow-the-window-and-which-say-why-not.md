@@ -1,13 +1,13 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-11-13
+**Last Updated**: 2026-11-14
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
 which is the question asked far more often than how the control is drawn.
 
-Which panel sits on which route is [console.md](console.md). The control stands beside the active route heading, with record reach in the closed
-`Data dates (UTC)` disclosure below it. Labelled route navigation occupies a separate left rail or narrow menu;
+Which panel sits on which route is [console.md](console.md). The control stands beside the active route heading, with compact source-labelled UTC ranges below it.
+`Data sources` holds provenance and build time. Labelled route navigation occupies a separate left rail or narrow menu;
 the shell it stands in is
 [what-sits-above-every-console-route.md](what-sits-above-every-console-route.md).
 
@@ -26,17 +26,17 @@ pan or multiplicative zoom control. Its former knobs have no live reader and
 are removed; [appearance configuration](../../concepts/config/appearance.md#console-surface)
 owns the retained span bounds.
 
-**Build-time evidence uses the site's newest published day**, the newest day the
-site published a digest, which is the day the console treats as today. Every
-build-time span is placed on that day using `console.today_anchor`, read at build time
-by `windowDay()` in `frontend/src/lib/server/window-day.ts`. Neither the build
-clock nor any record's own newest day places a window, so two builds of the same
-data draw the same windows, and a record whose rows stop leaves its panels empty
-for the window rather than moving the window back to its last rows. A route
-reads the widest configured window and no day before it
+**Chart axes end at their own source's available data, not the current day or
+another chart's endpoint.** `windowFromDates` bounds published charts to the
+published dates in their payload. Packed visual-attempt charts use their
+attempt dates; Judgement's packed comparisons use their returned record
+coverage. Internal missing days remain gaps. An empty source invents no date.
+Build-time loading still uses `windowDay()` in
+`frontend/src/lib/server/window-day.ts` to bound the read to the site's newest
+published day. A route reads the widest configured window and no day before it
 ([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-far-a-ledger-reaches)).
-When the site has published no day, the window is placed on the build's own UTC
-day: there is nothing to draw either way, and the page still renders.
+The no-publication fallback supplies an internal empty frame, never a measured
+axis or source date.
 
 **The route distinguishes a quiet answer from an absent record.** Published
 ledger panels share the pending, quiet, missing and failed states. A reach that
@@ -59,23 +59,27 @@ to its own ledger's first day. Neither the browser clock nor the build clock
 supplies a data day. A reach that did not arrive supplies no day at all.
 
 The typed record reach passes through the existing route-to-layout window
-slot. Within `Data dates (UTC)`, `WindowStatus` says `Showing N days, to DATE.`
-If the record is shorter
-than the requested preset, it also names its first day and the UTC day on
-which that preset fills. A first frame with no record yet prints no data date.
-Build-time evidence keeps the published-day behavior above. This does not
-reinterpret the recorded judging and holdout evidence on Judgement.
+slot. `WindowStatus` names `Main packed window: START - END UTC.`, not an
+unqualified page-wide endpoint. If the record is shorter than the requested
+preset, it names the available day count. A first frame with no record yet
+prints no data date. Published counts retain their newer endpoint when packing
+lags; source labels make that difference explicit.
 
 **Mixed routes name both scopes.** Pipelines keeps its run health, published
-counts, site cost, chart counts and visual attempts on the
+counts, site cost and chart counts on the
 published-day window, even while native reads are pending or lag behind it.
 The removed extraction panel supplies neither a private share nor native
 extraction or flag queries. Settings markers follow the evidence they annotate.
+The private visual-attempt view instead ends on its own newest attempt day and
+prints that span beside its charts. It does not extend an axis to the newest
+published day when no attempt data reaches it.
 
-Summaries keeps its private cards, daily figures and published doubt reasons
-on the published-day window. Native panels retain the common record endpoint,
+Summaries dates its private cards and daily figures from their build-time
+article and score record coverage. Published doubt reasons keep their own
+published-day window, so a newer publication cannot hide older measured cards.
+Native panels retain the common record endpoint,
 their own first-day clamp and any declared widest-span comparison. Both routes
-keep the private bounds and native reach in the shared date disclosure; panels
+keep the private bounds and native reach in the shared date line; panels
 retain their own independently clamped bounds. Neither
 an empty private window nor an unavailable native read moves either clock.
 Successful native reads add no standing summary. Quiet, missing and failed
@@ -116,15 +120,14 @@ the configured presets, using the actual record reach and current typography.
 Hidden, aria-hidden copies share one grid cell; no fixed line count assumes a font or width.
 During a fetch, the previous reach is retained only for sizing. The visible
 line claims no date until the current answer arrives, and switching presets
-does not move the evidence within the disclosure.
+does not move the readings beneath the date line.
 
 ### Build-time window space and control behavior
 
-**A build-time window of N days is exactly N days, even when the ledger holds fewer.** A
-window that shrinks to fit the rows it finds is invisible while nothing on the
-page names the span and a lie the moment a control does - a page reading 90 days
-while the charts draw 2 cannot be trusted about anything else. Empty calendar
-space is the honest answer to "there is nothing there".
+**A preset requests up to N days of each source.** Axes keep missing dates
+inside that source's selected span, without padding before its first available
+date or after its endpoint. The visible bounds say what was actually available;
+an empty calendar after the record ends is not evidence that no work happened.
 
 **Changing the preset asks only for its declared native window.** The shared
 query reader owns indexes, files and reuse; no panel rebuilds a public-month URL
@@ -252,10 +255,11 @@ inputs. Each query and build-time read still names a fixed-size input under
 
 ## Design rationale
 
-**One selected span has one declared endpoint.** Native routes use their shared
-record reach; build-time evidence uses the site's published day. Neither the
-browser clock nor the build clock invents a data date. A missing native reach
-stays missing rather than silently moving the panel to another record.
+**One preset can cover sources with different endpoints.** A newer published
+count is not discarded because packing is behind. Source-labelled bounds and
+each panel's own dates distinguish those spans, without an unqualified
+page-wide date claim. Neither clock invents a data date, and an unavailable
+source never borrows another source's date as a measured axis.
 
 **The day packing has not reached gets one quiet line on the route, not a mark
 on every panel.** Ruled on 2026-10-06 by Susan and Jony, with Reader on the
