@@ -1,22 +1,21 @@
 <script lang="ts">
-	/** Show historical job placements by machine identity, with exact day details. */
+	/** Show historical job placements by reported L3 capacity, with exact day details. */
 	import Panel from '$lib/components/Panel.svelte';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import { emptyState } from '$lib/charts/d3/empty';
 	import {
-		FLEET_HINT,
 		fleetDots,
 		fleetHover,
 		fleetJobs,
 		fleetReadout,
 		fleetSummary,
-		fleetSeries,
-		fleetView
+		fleetSeries
 	} from '$lib/charts/fleet';
-	import { chartWidth, observeWidth } from '$lib/charts/frame';
-	import { useChartFrame } from '$lib/charts/label-context';
+	import { fleetCacheView } from '$lib/charts/fleet-cache';
+	import { chartWidth, labelWidth, observeWidth } from '$lib/charts/frame';
+	import { useChartFrame, useChartLabels } from '$lib/charts/label-context';
 	import { rateWords, type MachineRamp } from '$lib/charts/machine-colour';
 	import FleetDots from '$lib/console/machine/FleetDots.svelte';
 	import type { LostDay } from '$lib/console/recording';
@@ -60,6 +59,7 @@
 	/** How many value ticks the count axis aims for. */
 	const VALUE_TICKS = 4;
 	const frame = useChartFrame(() => chart);
+	const labels = useChartLabels();
 	/** The share of a day's column left empty beside its bar. */
 	const PADDING = 0.2;
 	/** One CSS pixel separates counted job squares without changing their count. */
@@ -73,7 +73,7 @@
 	});
 	const jobs = $derived(fleetJobs(recordRows));
 	const view = $derived(
-		fleetView(jobs, {
+		fleetCacheView(jobs, {
 			ramp,
 			appearance: { gradients, floor: knobs.machine_colour_floor_share, palette: chart.palette },
 			start: span?.start ?? start,
@@ -87,6 +87,14 @@
 		})
 	);
 	let measured = $state<number | null>(null);
+	const legendColumns = $derived.by(() => {
+		const style = labels();
+		const widest = Math.max(style.fontSize, ...view.rows.map((row) =>
+			labelWidth(`  ${row.label}`, style) + style.fontSize));
+		return Math.max(1, Math.min(Math.ceil(Math.sqrt(view.rows.length)),
+			Math.floor(chartWidth(measured, chart.width_px) / widest)));
+	});
+	const legendRows = $derived(Math.ceil(view.rows.length / legendColumns));
 	const box = $derived(frame(chartWidth(measured, chart.width_px), chart.height_px));
 	const bars = $derived(
 		view.shape === 'bars'
@@ -116,10 +124,10 @@
 	const readout = $derived(fleetSummary(view));
 	const details = $derived(fleetReadout(view));
 	const hover = $derived(fleetHover(view));
-	const note = $derived(`Recorded jobs per UTC day. Largest at the bottom; colour identifies machines.${view.shape === 'dots' ? ' One square per job.' : ''}`);
-	const barsLabel = 'Recorded jobs per UTC day, largest machine count at the bottom of each stack.';
-	const dotsLabel = 'One square per recorded job, grouped by UTC day and machine kind.';
-	const hint = FLEET_HINT;
+	const note = $derived(`Recorded jobs per UTC day, grouped by reported L3 across CPU vendors. Larger caches are darker.${view.shape === 'dots' ? ' One square per job.' : ''}`);
+	const barsLabel = 'Recorded jobs per UTC day by reported L3 capacity, largest job count at the bottom of each stack.';
+	const dotsLabel = 'One square per recorded job, grouped by UTC day and reported L3 capacity.';
+	const hint = '';
 
 	/** The day whose jobs are listed under the plot, by date, so a new span
 	 * cannot leave the list on a column that now means another day. */
@@ -172,18 +180,6 @@
 				data-fleet-placements={view.placements}
 				data-fleet-min-rows={view.minRows}
 			>
-				<div class="machine-key" data-fleet-identity-key>
-					{#each view.rows as row (row.key)}
-						<span class="key-group">
-							{#if row.parts.length > 1}<span>{row.label}:</span>{/if}
-							{#each row.parts as part (part.key)}
-								<span class="key-kind" data-fleet-kind={part.key}>
-									<span class="chip" style:background={part.swatch}></span>{part.label}
-								</span>
-							{/each}
-						</span>
-					{/each}
-				</div>
 				<div
 					class="plot"
 					bind:this={plot}
@@ -226,6 +222,16 @@
 						/>
 					{/if}
 				</div>
+				<ul class="machine-key" data-fleet-identity-key aria-label="Reported L3 capacity, largest first"
+					style:grid-template-columns={`repeat(${legendColumns}, minmax(0, 1fr))`}
+					style:grid-template-rows={`repeat(${legendRows}, auto)`}>
+					{#each view.rows as row (row.key)}
+						<li class="key-kind" data-fleet-kind={row.key}>
+							<span class="chip" style:background={row.parts[0].swatch}></span>{row.label}
+						</li>
+					{/each}
+				</ul>
+				<p class="count-note">Counts are recorded jobs, not unique physical machines. L2 capacity is not recorded.</p>
 				{#if open >= 0}
 					<!-- One tab stop for the whole list, where a pick moves focus, and
 					     Escape inside it closes it. -->
@@ -255,7 +261,7 @@
 									<th scope="col">Run</th>
 									<th scope="col">Job or pipeline/task</th>
 									<th scope="col" class="number">Shard</th>
-									<th scope="col">Machine</th>
+									<th scope="col">Machine and L3</th>
 									<th scope="col" class="number">Seconds</th>
 									<th scope="col" class="number">Speed</th>
 								</tr>
@@ -271,7 +277,7 @@
 											? `${line.pipelineName}/${line.taskName}`
 											: line.job ?? 'not recorded'}</td>
 										<td class="number shard"><span class="narrow-word" aria-hidden="true">{'shard '}</span>{line.shard ?? 'not recorded'}</td>
-										<td class="machine"><span class="chip" style:background={line.swatch}></span> {line.machine}</td>
+										<td class="machine"><span class="chip" style:background={line.swatch}></span> {line.machine}; {line.l3Cache}</td>
 										{#if line.seconds === null}
 											<td class="number seconds"><span class="narrow-word" aria-hidden="true">{'seconds '}</span>not recorded</td>
 										{:else}
@@ -298,22 +304,24 @@
 		color: var(--color-text-secondary);
 	}
 
-	.machine-key, .key-group, .key-kind {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--console-control-gap);
-	}
 	.machine-key {
+		display: grid;
+		grid-auto-flow: column;
+		list-style: none;
+		padding: 0;
+		margin-block: var(--space-3);
 		gap: var(--console-control-gap) var(--console-panel-gap);
 		font-size: var(--console-small-size);
 		line-height: var(--console-small-leading);
 		color: var(--color-text-secondary);
 	}
 	.key-kind {
-		display: inline;
-		align-items: center;
 		overflow-wrap: anywhere;
+	}
+	.count-note {
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
+		color: var(--color-text-tertiary);
 	}
 
 	.chip {

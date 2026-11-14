@@ -29,7 +29,7 @@ export const platformMixQuery = {
 	name: 'platformMixQuery', ledger: 'host-fingerprint',
 	columns: [
 		'version', 'date', 'run_id', 'job', 'pipeline_name', 'task_name', 'shard', 'fingerprint', 'fingerprint_version',
-		'cpu_model', 'cpu_logical_processors', 'model_load_ms', 'job_seconds',
+		'cpu_model', 'l3_cache_bytes', 'cpu_logical_processors', 'model_load_ms', 'job_seconds',
 		'server_prompt_tokens', 'server_prompt_seconds',
 		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
 	],

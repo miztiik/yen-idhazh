@@ -66,10 +66,10 @@ which shape a panel reaches for is
   history.** Elsewhere, read stays at the bottom, write at the top, and unclaimed
   and residual always last. A stack whose order moves between panels cannot be
   compared between panels, and a reader cannot learn it. Machine history alone
-  ranks each UTC day's recorded machine counts independently, largest at the
-  bottom: it answers daily job placement, not fixed stage composition. Identity
-  follows the stable machine key, never its daily position; missing identity
-  stays neutral with its exact count. All other stacks retain their declared
+  ranks each UTC day's recorded job counts by reported L3 capacity independently,
+  largest at the bottom: it answers daily job placement, not fixed stage composition.
+  Tint follows the capacity's stable widest-query position, never its daily
+  count; unmeasured L3 stays neutral with its exact count. All other stacks retain their declared
   series order. See
   [the machine drawing contract](how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md).
 - **No piecewise or non-uniform value axis.** Where a spread genuinely defeats a

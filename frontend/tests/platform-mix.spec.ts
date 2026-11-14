@@ -37,6 +37,7 @@ import {
 	type FleetOptions
 } from '../src/lib/charts/fleet';
 import { frame } from '../src/lib/charts/frame';
+import { fleetCacheView } from '../src/lib/charts/fleet-cache';
 import {
 	machineKeys,
 	machineRamp,
@@ -144,6 +145,40 @@ function jobsOf(count: number, fingerprint: string | null, cpu: string | null, r
 		})
 	);
 }
+
+test('L3 groups combine vendors, count jobs rather than fingerprints, and preserve unknown and measured zero', () => {
+	const jobs = fleetJobs([
+		job({ date: '2026-09-26', l3_cache_bytes: 32 * 2 ** 20 }),
+		job({ date: '2026-09-26', l3_cache_bytes: 32 * 2 ** 20 }),
+		job({ date: '2026-09-26', cpu_model: 'Intel Xeon', fingerprint: 'bbbb000000000000', l3_cache_bytes: 32 * 2 ** 20 }),
+		job({ date: '2026-09-27', l3_cache_bytes: 64 * 2 ** 20 }),
+		job({ date: '2026-09-27', l3_cache_bytes: 0 }),
+		job({ date: '2026-09-27', l3_cache_bytes: null })
+	]);
+	const view = fleetCacheView(jobs, options(jobs));
+	expect(view.rows.map((row) => [row.label, row.counts])).toEqual([
+		['64 MiB L3', [0, 1]], ['32 MiB L3', [3, 0]],
+		['0 MiB L3', [0, 1]], ['L3 not measured', [0, 1]]
+	]);
+	expect(view.placements).toBe(6);
+	expect(fleetSummary(view).series[0].values).toEqual(['3', '3']);
+	expect(view.lines[0].map((line) => line.machine)).toContain('Intel Xeon');
+	expect(view.lines[0].map((line) => line.l3Cache)).toEqual(['32 MiB L3', '32 MiB L3', '32 MiB L3']);
+	expect(fleetSeries(view).map((series) => series.points.map((point) => point.value)))
+		.toEqual([[0, 1], [3, 0], [0, 1], [0, 1]]);
+	const narrow = fleetCacheView(jobs, options(jobs, { end: '2026-09-26', windowDays: 1 }));
+	expect(narrow.rows[0].parts[0].swatch).toBe(view.rows[1].parts[0].swatch);
+	const flat = fleetCacheView(jobs, options(jobs, {
+		appearance: { ...options(jobs).appearance, gradients: false }
+	}));
+	expect(flat.rows.every((row) => row.parts[0].gradient === null)).toBe(true);
+	const unnamed = fleetJobs([job({
+		date: '2026-09-26', fingerprint: null, cpu_model: null, l3_cache_bytes: 32 * 2 ** 20
+	})]);
+	const reported = fleetCacheView(unnamed, options(unnamed, { lost: [{ date: '2026-09-27', articles: 1 }] }));
+	expect(reported.nothing).toBeNull();
+	expect(reported.rows[0].counts).toEqual([1]);
+});
 
 test.describe('THE ORACLE: the recorded door answer, drawn', () => {
 	test('one stacked bar a day, one segment a kind, largest daily count at the bottom', () => {
