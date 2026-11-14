@@ -124,7 +124,7 @@
 	const readout = $derived(fleetSummary(view));
 	const details = $derived(fleetReadout(view));
 	const hover = $derived(fleetHover(view));
-	const note = $derived(`Recorded jobs per UTC day, grouped by reported L3 across CPU vendors. Larger caches are darker.${view.shape === 'dots' ? ' One square per job.' : ''}`);
+	const note = $derived(`Recorded jobs per UTC day, grouped by reported L3 across CPU vendors. Colours distinguish capacities; the legend lists largest first.${view.shape === 'dots' ? ' One square per job.' : ''}`);
 	const barsLabel = 'Recorded jobs per UTC day by reported L3 capacity, largest job count at the bottom of each stack.';
 	const dotsLabel = 'One square per recorded job, grouped by UTC day and reported L3 capacity.';
 	const hint = '';

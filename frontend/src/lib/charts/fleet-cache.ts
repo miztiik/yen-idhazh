@@ -4,6 +4,8 @@ import { fleetIdentities } from './fleet-identity';
 import { machineKeys, UNRECORDED_KEY } from './machine-colour';
 import { RESERVED_GREY_INK } from './d3/ordered-colour';
 import { formatNumber } from '../number-format';
+import { colourScheme } from './colour-scheme';
+import { PALETTE } from './theme';
 
 /** Binary cache capacities are stored in bytes and displayed in MiB. */
 const BYTES_PER_MIB = 2 ** 20;
@@ -16,6 +18,9 @@ export function fleetCacheView(jobs: readonly FleetJob[], options: FleetOptions)
 	const capacities = [...new Set(jobs.flatMap((job) =>
 		job.l3CacheBytes === null ? [] : [job.l3CacheBytes]))].sort((a, b) => b - a);
 	const identities = fleetIdentities(options.ramp.rows, options.appearance);
+	const tokens = PALETTE.filter((token) => token !== '--chart-8');
+	const palette = options.appearance.palette === 'categorical'
+		? tokens.map((token) => `var(${token})`) : colourScheme(options.appearance.palette);
 	const resolve = machineKeys(jobs);
 	const cacheKey = (job: FleetJob) => job.l3CacheBytes === null ? UNKNOWN_CACHE : `l3:${job.l3CacheBytes}`;
 	const present = new Set(placed.map(cacheKey));
@@ -26,10 +31,10 @@ export function fleetCacheView(jobs: readonly FleetJob[], options: FleetOptions)
 		const label = bytes === null ? 'L3 not measured'
 			: `${formatNumber(bytes / BYTES_PER_MIB, options.numberFormat, { si: false, exact: true })} MiB L3`;
 		const rank = bytes === null ? 0 : capacities.indexOf(bytes);
-		const share = capacities.length < 2 ? 1
-			: 1 - (1 - options.appearance.floor) * rank / (capacities.length - 1);
+		const position = capacities.length < 2 ? 0
+			: Math.round(rank * (palette.length - 1) / (capacities.length - 1));
 		const colour = bytes === null ? RESERVED_GREY_INK
-			: `color-mix(in oklab, var(--chart-1) ${share * 100}%, var(--chart-identity-highlight))`;
+			: palette[position];
 		const top = `color-mix(in oklab, ${colour} ${(1 - options.appearance.floor) * 100}%, var(--chart-identity-highlight))`;
 		const gradient = bytes !== null && options.appearance.gradients ? { top, bottom: colour } : null;
 		const counts = days.map(() => 0);
@@ -41,7 +46,7 @@ export function fleetCacheView(jobs: readonly FleetJob[], options: FleetOptions)
 			step: null, rate: null, counts, placements: counts.reduce((sum, count) => sum + count, 0),
 			members: [],
 			parts: [{
-				key, label, colour, gradient, token: bytes === null ? '--chart-8' : '--chart-1',
+				key, label, colour, gradient, token: bytes === null ? '--chart-8' : tokens[position % tokens.length],
 				swatch: gradient === null ? colour : `${colour} linear-gradient(180deg, ${top}, ${colour})`,
 				counts, note: null
 			}]
