@@ -1,8 +1,9 @@
 {
   "entries": [
-    {"bytes": 930707,"covers": "2026-08","lost_days": [],"rows": 4110,"set_aside": 0,"state": "packed"}
+    {"bytes": 930707,"covers": "2026-08","lost_days": [],"rows": 4110,"set_aside": 0,"state": "packed"},
+    {"bytes": 2666675,"covers": "2026-09","lost_days": [],"rows": 10990,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "summary-quality-evals",
   "period": "monthly",
-  "version": "2026-10-07"
+  "version": "2026-10-25"
 }
