@@ -1,22 +1,22 @@
-# Why a summary was doubted, and what the checker measures
+# What the summary console measures
 
 **Last Updated**: 2026-11-15
 
 `/console/model/` answers what the model wrote, how long it took, and what it got
-wrong. Its nine panels are the measure cards, throughput, model read/write
-timing, call endings, doubt reasons, faithfulness, source doubts, checking cost and summary
-length. The eleven original card labels stay
-verbatim; determinism is the twelfth card. The cards and distributions are drawn to
+wrong. Its panels are the retained measure cards, throughput, model read/write
+timing, call endings, faithfulness, checking cost and summary length.
+The cards and distributions are drawn to
 the rules in
 [../../concepts/console-design/what-the-quality-and-source-panels-draw.md](../../concepts/console-design/what-the-quality-and-source-panels-draw.md).
 
 Which panel sits on which route is [console.md](console.md).
 
-The seven eligible panels read the declarations in
+The native panels read the declarations in
 `frontend/src/lib/console/queries/model.ts` through `sliceOnce`, at view time.
 The cards and their daily disclosure remain private build-time inputs; their
-published-summary and determinism counts come from distinct day metrics, not
-score-row counts. The reasons remain private published-item decisions. No live
+published-summary count comes from distinct day metrics, not score-row counts.
+Bounded dates from the publication inventory preserve the shared published-day
+window without opening payload items or reconstructing reasons. No live
 ledger values or ledger-read metadata are serialized into the route page data.
 A missing private input and a recorded quiet input say different things.
 
@@ -70,90 +70,33 @@ separate readings; an unknown cache count cannot become a whole-prompt read.
 Per-call charging follows
 [the model's contract](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum).
 
-## Why a summary was doubted, and the one ledger that can answer it
+## Which measurements the console draws
 
-The existing route draws recorded reasons a summary failed to reach the top
-band, including historical decisions, one column a day over its shared window.
-It is not a count of the warnings the current reading surface displays.
-
-**It reads the committed day payloads, not the eval ledger.** `band_reason` is
-decided by `verdict` and written onto the published item during assembly.
-Fresh decisions use only the saved `hhem`, or explicitly `not_scored` when no
-evaluation exists. The raw eval ledger retains its recorded band and existing
-diagnostic columns, but has no reason column. The route reads only the
-publication inventory's named day payloads,
-and what ships is one count per reason per day
-rather than the payloads. Re-deriving the reason from the ledger's inputs was
-refused: it puts a second copy of `verdict` in a second language, and the day the
-two disagree the console is wrong about the item a reader was shown
-([../../concepts/evaluation.md](../../concepts/evaluation.md)).
-
-**The five are drawn apart and never added into one doubt count.** A single
-number says how often the checker stopped and never says which fault to go and
-fix. Each item carries at most one reason, so the five add up with nothing
-counted twice - which is what makes the stack legal and what the oracle checks.
-
-**Stacked, on `dateSeries`.** Each reason has one named series token, and the
-stack counts decisions from the same day. It is not a sum of unrelated scores.
-The drawing follows
-[../../concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md](../../concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md)
-without the former engine chart or its shape control. Every recorded checker
-change marks the reason chart; faithfulness marks only changes whose
-`score_moved` is true. Settings are dashed, checker changes dotted; a day with
-both draws the settings boundary and prints both changes in its readout.
-
-**A reason with no items draws nothing, so the panel names it in a sentence.**
-`not_scored` has never fired: it needs a missing faithfulness score, and the
-scorer has run on every production item. A series that is zero everywhere is
-dropped by `stacked`, so without the sentence a reader cannot tell a fault that
-never happened from one nobody looked for.
-
-**The column total is the day's reason count, never its doubtful count**, and the
-difference is printed. 369 doubtful summaries carry no reason, all of them on the
-three days published before the field existed. A panel that folded them into a
-band would draw a fault the checker never named; one that dropped them silently
-would make three days look clean.
-
-## Every instrument the checker writes, and the panel that owes it a number
-
-The recorded-only panel is gone. Its eight instruments now sit beside the
-measure each explains, and the map still owes every measured field a receiver.
-
-**The artefact is `DRAWN_BY`, not the charts.**
+**The inventories describe real readers, not hypothetical receivers.**
 [../../../frontend/src/lib/console/eval-instruments.ts](../../../frontend/src/lib/console/eval-instruments.ts)
-assigns every measured column of the eval ledger to exactly one panel, and
-`NOT_A_MEASUREMENT` says of every remaining column why it is not one - fifteen
-identity and provenance columns, each with a sentence. Between them the two must
-name every property of
-`EvalRow`,
-once, and name nothing else.
+assigns active measurements through `DRAWN_BY`, deliberately omitted diagnostics
+through `UNDRAWN`, and identities through `NOT_A_MEASUREMENT`. Together they
+name every native `EvalRow` property exactly once, and nothing else.
 `backend/tests/contracts/test_frontend_console_lists.py` compares the sets;
 [../../../frontend/tests/console-model-instruments.spec.ts](../../../frontend/tests/console-model-instruments.spec.ts)
-holds each instrument to its approved receiver and checks the numeric reductions.
+checks retained reductions and proves omitted diagnostics are not requested.
+The build-time score reader requests only active measurements and identities.
 One native Summaries journey checks arrival and a window change; real private
-server rendering checks absent, quiet and populated build-time records. These
-are distinct boundaries, not page, panel, width or theme matrices. So a column added to `EvalRow`
-next month fails a test rather than going undrawn - which is the defect the map
-exists for: `hhem` and `coverage` were scored on every summary from the first
-published day and read by nothing on the site for two weeks.
+server rendering checks absent, quiet and populated records, including a valid
+day without retired aggregates. The published count and date bounds survive;
+missing retained readings stay unknown rather than becoming zero.
 
 | Instrument | Receiver and reading |
 | --- | --- |
 | Compression | Summary length: median percent on the run's row, no mark of its own |
-| Self repetition | Daily figures: median percent, adjacent to coherence |
 | Coherence | Daily figures: median signed cosine to two decimal places |
-| Semantic coverage | Daily figures: median percent; before 24 September 2026, not measured |
-| Evidential density | Source doubts: median per 1,000 article words on its source row |
-| Speculative density | Source doubts: the same unit, beside the hedge count |
-| Extraction suspect | Pipelines extraction: distinct published articles and days |
-| Determinism violation | Twelfth model card and daily figures: distinct published articles per day |
+| Extraction cuts | Model cards and daily figures: real count and share, with the historical flag-meaning boundary |
+| Summary and article lengths | Per-run shortest, median and longest summary against the requested length bounds |
+| Runtime | Writing and checking clocks, tokens, failures and call endings from their native records |
 
-The authoritative labels and notes remain `RECORDED` and `FLAGS`. None receives a
-threshold, direction, tint or worst marker. Each receiving panel says once:
-**Nothing acts on these numbers.** Densities are figures, never parts of a bar.
-Sources meet score and item records only on the declared URL key, keeping the
-later score of a repeated URL. Unmatched scores are counted, never assigned a
-fabricated source; a small sample refuses its share instead of drawing zero.
+`RECORDED` retains the coherence and compression labels and notes. Neither
+receives a new threshold, confidence tint or worst marker. The cards and length
+panel each say once: **Nothing acts on these numbers.**
 
 **`hhem_full` and `hhem_delta` are a sentence, not a second chart.** The checker
 scores each summary twice, once against the text the machine was given and once
@@ -168,9 +111,7 @@ fact at the size it is worth.
 **Two bars, and they are the pipeline's own.** The faithfulness plot draws a rule
 at each of the two scores a published story is banded on - `band_high_min` and
 `band_medium_min` in [../../../config/idhazh.json](../../../config/idhazh.json),
-0.80 and 0.50 as committed - and nothing else on either panel sets a bar. No
-reading is tinted, no day is coloured, and the spec still fails the build if a
-tinted element appears inside either score panel.
+0.80 and 0.50 as committed. No reading is tinted and no day is coloured.
 
 **A rule under the axis floor is dropped, not handed over.** The floor rises to
 fill the panel with the range the days hold, and on the committed record it sits
@@ -214,11 +155,6 @@ here would not.
 use the project's nearest-rank rule: an actual observation, never an average of
 two observations. The daily disclosure does not replace an unavailable reading
 with zero. A coherence cosine keeps its sign and is not mislabeled a percentage.
-
-**The two densities are drawn per thousand words, not per word.** Per word they
-are 0.011 and 0.004 - two numbers a reader cannot tell apart, neither of which
-reads as a quantity of anything. Per thousand words they are 11.0 and 4.0
-markers, which is a count of phrases in about four pages.
 
 **The faithfulness plot's axis is fitted to the days it drew, and bounded both
 ways.** The floor is the lowest figure on the plot rounded down to the step below
@@ -277,7 +213,7 @@ rather than moving their boundary to another measured day. The cards first
 scope that rule to each mini chart's measured date range; their one native
 history disclosure retains the complete selected-window rule and the shared
 recording note remains visible. The
-[model-card rules](../../concepts/console-design/what-the-quality-and-source-panels-draw.md#eleven-measures-are-eleven-cards-and-the-rows-are-one-control-away)
+[model-card rules](../../concepts/console-design/what-the-quality-and-source-panels-draw.md#retained-measures-are-cards-and-the-rows-are-one-control-away)
 own the wording and inspection behavior. Throughput keeps its
 candles and adds the window-median rule; call endings skip empty cells and put
 length endings at the bottom. Writing and checking keep `TimeHistogram` and its
@@ -291,8 +227,24 @@ mounts no refusal chart and starts no second failed-rule query.
 Reader warnings follow the
 [confidence compatibility rule](../../concepts/evaluation.md#the-band-says-what-is-missing-not-how-good-the-item-is):
 historical number/hedge chips and unexplained low/medium chips render nothing.
-The existing console panels still consume recorded decisions and raw diagnostics;
-changing fresh confidence does not remove those consumers or rewrite history.
+The console does not reinterpret mixed historical decisions as HHEM grades.
+
+The unsupported-number, dropped-hedge, low-band aggregate, mixed-reason,
+source-doubt, copying, repetition, lexical-coverage, source-language-density and
+output-difference surfaces are removed. This gives up their historical counts,
+shares and rankings; no replacement diagnostic or hidden live query remains.
+HHEM and its full-article comparison, sentence-encoder coherence, lengths,
+compression, real extraction cuts and runtime measurements remain.
+
+This layer removes frontend consumers, not backend calculations or persisted
+diagnostic fields. Fields still emitted by `EvalRow` remain explicitly
+`UNDRAWN` until their native retirement. Legacy confidence-reason decoding is
+protocol compatibility, not an active diagnostic.
+
+Cards retain one settings-only history. Faithfulness retains scorer markers
+only where `score_moved` is true. The publication-date list and independent
+article, score and runtime windows remain separate; deleting reason rows must
+not move their endpoints or turn unavailable input into a quiet measurement.
 
 The combined model-change comparison is permanently removed, with no hidden
 or relocated replacement. The

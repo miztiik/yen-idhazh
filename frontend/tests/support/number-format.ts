@@ -30,11 +30,6 @@ import {
 	describeUnclear as writeDescribeUnclear,
 	type MergeTotals
 } from '../../src/lib/console/merge-line';
-import {
-	reasonHeadline as writeReasonHeadline,
-	unexplainedNote as writeUnexplainedNote,
-	type ReasonDay
-} from '../../src/lib/console/doubt-reasons';
 import { faithfulness as reduceFaithfulness } from '../../src/lib/console/model/faithfulness';
 import { matchHeadline as writeMatchHeadline, type EvalDay } from '../../src/lib/console/eval-instruments';
 import { numberFormatter } from '../../src/lib/number-format';
@@ -139,14 +134,6 @@ export function describeUnclear(
 	mark?: number
 ): string {
 	return writeDescribeUnclear(unclear, agreed, floor, numberFormat, mark);
-}
-
-export function reasonHeadline(days: readonly ReasonDay[], span: number): string | null {
-	return writeReasonHeadline(days, span, numberFormat);
-}
-
-export function unexplainedNote(days: readonly ReasonDay[], span: number): string | null {
-	return writeUnexplainedNote(days, span, numberFormat);
 }
 
 export function faithfulness(

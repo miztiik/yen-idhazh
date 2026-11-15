@@ -1,8 +1,8 @@
 """Does every hand-written list in the console still name what its contract declares?
 
 Eleven console modules carry a value that has to match what a Pydantic contract
-declares - the eval panel's column map, the settings vocabulary, the doubt
-reasons, the bandwidth margin, the prompt-reuse column grammar, the date the
+declares - the eval panel's column map, the settings vocabulary,
+the bandwidth margin, the prompt-reuse column grammar, the date the
 busy share stopped holding the stolen half, the article, feed, holdout score,
 holdout mark and fitted line records' column lists, the columns the run
 timeline reads off every row, and the routes the strip draws. A copy that has
@@ -29,7 +29,7 @@ import pytest
 from support.paths import REPO_ROOT, read_text
 
 from idhazh.contracts.console_band import RouteId
-from idhazh.contracts.eval_row import BandReason, EvalRow
+from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
@@ -52,13 +52,6 @@ def object_keys(text: str, name: str) -> list[str]:
     found = re.search(rf"export const {name}\b[^=]*= \{{(.*?)\n\}};", text, re.DOTALL)
     assert found, f"no exported object named {name}"
     return re.findall(r"^\t([A-Za-z_][A-Za-z0-9_]*):", found[1], re.MULTILINE)
-
-
-def quoted_ids(text: str, name: str) -> list[str]:
-    """Every `id: '<value>'` inside `export const <name> = [ ... ];`."""
-    found = re.search(rf"export const {name}\b[^=]*= \[(.*?)\n\];", text, re.DOTALL)
-    assert found, f"no exported array named {name}"
-    return re.findall(r"\bid: '([^']*)'", found[1])
 
 
 def quoted_strings(text: str, name: str) -> list[str]:
@@ -251,14 +244,6 @@ def test_every_recorded_input_has_words_and_every_word_has_a_recorded_input() ->
     spelled = object_keys(read_text(CONSOLE / "settings-moved.ts"), "SETTING_WORDS")
     assert sorted(spelled) == sorted(PipelineInputs.model_fields), (
         "a recorded input with no words, or words with no recorded input"
-    )
-
-
-def test_the_panel_names_every_reason_the_contract_can_publish() -> None:
-    """A sixth reason has to fail here rather than go unnoticed on the page."""
-    drawn = quoted_ids(read_text(CONSOLE / "doubt-reasons.ts"), "REASONS")
-    assert sorted(drawn) == sorted(member.value for member in BandReason), (
-        "the panel and the contract disagree about which reasons exist"
     )
 
 

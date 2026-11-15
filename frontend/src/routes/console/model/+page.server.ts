@@ -1,19 +1,17 @@
 import { chartConfig, consoleConfig, evaluationConfig, observabilityConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import { evalDays, type DayScoredCounts } from '$lib/console/eval-instruments';
-import { reasonDays } from '$lib/console/doubt-reasons';
 import { modelWork, workDates } from '$lib/server/model-work';
 import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
-import { dayMetrics, loadDay, publishedDates } from '$lib/server/payload';
+import { dayMetrics, publishedDates } from '$lib/server/payload';
 import { windowDay } from '$lib/server/window-day';
 import { windowOfDays } from '$lib/charts/viewport';
 import { measurementOff, recordingNotes, recordNotesByWindow } from '$lib/console/recording';
 
 export const prerender = true;
-export type { CapPoint, DayWindow, Distribution, ModelDay, ModelRow, RunLength, ScoreCost, SourceDoubt, SourceDoubts, WriteBin, WriteTimes } from '$lib/server/model-work';
-export type { ReasonDay } from '$lib/console/doubt-reasons';
+export type { CapPoint, DayWindow, Distribution, ModelDay, ModelRow, RunLength, ScoreCost, WriteBin, WriteTimes } from '$lib/server/model-work';
 export type { EvalDay } from '$lib/console/eval-instruments';
 
-/** Only the approved cards, daily disclosure and item decisions cross this boundary. */
+/** Only the retained cards, daily coherence and bounded publication dates cross this boundary. */
 export async function load() {
 	const shared = consoleConfig();
 	const widest = Math.max(...shared.window_presets);
@@ -23,30 +21,19 @@ export async function load() {
 	const [scores, health] = await Promise.all([evalRows(span), itemHealthRows(span)]);
 	const metrics = dayMetrics(workDates(scores.rows, health.rows));
 	const counts = new Map<string, DayScoredCounts>([...metrics].map(([date, record]) => [
-		date, { scored: record.summariesScored, determinismViolations: record.determinismViolations, extractionSuspect: record.extractionSuspect }
+		date, { scored: record.summariesScored }
 	]));
 	const days = modelWork(scores.rows, health.rows, counts).flatMap((row) => {
 		if (row.kind !== 'day') return [];
 		const settled = counts.get(row.day.date);
-		return [{ ...row.day, models: [], summaries: settled?.scored ?? null,
-			determinismViolations: settled?.determinismViolations ?? null }];
+		return [{ ...row.day, models: [], summaries: settled?.scored ?? null }];
 	});
 	const instruments = evalDays(scores.rows, counts).map((value) => ({
 		date: value.date,
 		recorded: {
-			self_repetition: value.recorded.self_repetition ?? null,
-			coherence: value.recorded.coherence ?? null,
-			semantic_coverage: value.date < '2026-09-24' ? null : value.recorded.semantic_coverage ?? null
+			coherence: value.recorded.coherence ?? null
 		}
 	}));
-	const published = publishedDates(undefined, widest);
-	const decisions = published.flatMap((date) => {
-		const payload = loadDay(date);
-		return payload === null ? [] : [{ date, items: payload.items.map((item) => ({
-			band: item.band, reason: item.band_reason
-		})) }];
-	});
-	const reasons = published.length === 0 || decisions.length !== published.length ? null : reasonDays(decisions);
 	const evaluation = evaluationConfig();
 	const repo = uiConfig().repo_url.replace(/\/+$/, '');
 	const recording = observabilityConfig();
@@ -64,7 +51,7 @@ export async function load() {
 	return {
 		cardDays: scores.read.state === 'read' || health.read.state === 'read' ? days : null,
 		cardReads: { article: health.read, score: scores.read },
-		instruments, reasons, windowDay: day, chart: chartConfig(),
+		instruments, publishedDates: publishedDates(undefined, widest), windowDay: day, chart: chartConfig(),
 		summarizeBands: summarizeConfig().bands,
 		matchThresholds: { high: Math.round(evaluation.band_high_min * 100), low: Math.round(evaluation.band_medium_min * 100) },
 		recordingNotes: notes, measurementOff: off,

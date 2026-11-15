@@ -23,13 +23,6 @@ import {
 	type GlanceDay
 } from '../src/lib/charts/glance';
 import { dailyFiguresPointer, dailyFiguresRows, dailyFiguresSummary } from '../src/lib/console/daily-figures';
-import {
-	neverSeenNote,
-	reasonDays,
-	reasonHeadline as reasonHeadlineWithFormat,
-	reasonsLabel,
-	unexplainedNote as unexplainedNoteWithFormat
-} from '../src/lib/console/doubt-reasons';
 import { EVAL_PANELS, matchLabel, matchPoints, matchTitle, type EvalDay } from '../src/lib/console/eval-instruments';
 import {
 	clampNote,
@@ -45,10 +38,6 @@ import { matchHeadline, numberFormat } from './support/number-format';
 const coverageSentence = (found: Parameters<typeof coverageSentenceWithFormat>[0], lead: string) =>
 	coverageSentenceWithFormat(found, lead, numberFormat);
 const horizonRate = (rate: number, days: number) => horizonRateWithFormat(rate, days, numberFormat);
-const reasonHeadline = (days: Parameters<typeof reasonHeadlineWithFormat>[0], span: number) =>
-	reasonHeadlineWithFormat(days, span, numberFormat);
-const unexplainedNote = (days: Parameters<typeof unexplainedNoteWithFormat>[0], span: number) =>
-	unexplainedNoteWithFormat(days, span, numberFormat);
 const mergeNote = (totals: Parameters<typeof mergeNoteWithFormat>[0], span: number) =>
 	mergeNoteWithFormat(totals, span, numberFormat);
 const mergeRate = (totals: Parameters<typeof mergeRateWithFormat>[0], span: number) =>
@@ -80,8 +69,7 @@ function evalDay(date: string): EvalDay {
 		matchHigh: 91,
 		widerDiffers: 0,
 		widestGap: 0,
-		recorded: {},
-		fired: {}
+		recorded: {}
 	};
 }
 
@@ -147,15 +135,6 @@ test('a table of daily figures opens on one day, and on seven day by day, newest
 	);
 });
 
-test('the doubt-reasons chart describes its one column at one day', () => {
-	expect(reasonsLabel(1)).toBe(
-		"Why summaries were doubted in this one day. The column's height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count and the total is not shown."
-	);
-	expect(reasonsLabel(7)).toBe(
-		'Why summaries were doubted, per day, over 7 days. One column is one day, its height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count a day and the total is not shown.'
-	);
-});
-
 test('the faithfulness plot names its two points at one day, and its lines over seven', () => {
 	const lower = 'the other is p25.';
 	expect(matchLabel(1, [])).toBe(
@@ -178,43 +157,6 @@ test('the per-article measurement names the published articles and payload days 
 	// The rate stays a rate at one day; it is that day's own count.
 	expect(horizonRate(300, 1)).toBe("300 articles a published day, this one day's count");
 	expect(horizonRate(334.4, 7)).toBe('a median of 334 articles a published day');
-});
-
-test('the doubt sentences name the days they counted', () => {
-	const doubted = reasonDays([
-		{
-			date: '2026-10-06',
-			items: [
-				{ band: 'medium', reason: 'faithfulness' },
-				{ band: 'low', reason: 'faithfulness' }
-			]
-		}
-	]);
-	expect(reasonHeadline(doubted, 1)).toBe(
-		'The reason given most often is "Does not match the article": 2 summaries in this one day.'
-	);
-	expect(reasonHeadline(doubted, 7)).toBe(
-		'The reason given most often is "Does not match the article": 2 summaries in these 7 days.'
-	);
-
-	const unexplained = reasonDays([
-		{
-			date: '2026-10-06',
-			items: [
-				{ band: 'medium', reason: 'faithfulness' },
-				{ band: 'medium', reason: null }
-			]
-		}
-	]);
-	expect(unexplainedNote(unexplained, 1)).toBe(
-		'1 of the 2 doubted summaries in this one day have no reason written down, on 1 day. Those columns are short by that much: the reason is missing from our record, not from the summary.'
-	);
-
-	const clean = reasonDays([{ date: '2026-10-06', items: [{ band: 'high', reason: null }] }]);
-	const five =
-		'"Numbers not in the article", "Does not match the article", "Never checked", "Left out the opening facts" and ""Maybe" told as fact" are reasons the checker can give and did not give once in';
-	expect(neverSeenNote(clean, 1)).toBe(`${five} this one day, so they have no line on the chart.`);
-	expect(neverSeenNote(clean, 7)).toBe(`${five} these 7 days, so they have no line on the chart.`);
 });
 
 test('the faithfulness headline distinguishes daily percentiles from their window medians', () => {

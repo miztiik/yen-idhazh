@@ -8,7 +8,6 @@ export const panelQueries: Readonly<Record<string, readonly PanelQuery[]>> = {
 	'model-throughput': [queries.modelThroughputQuery], 'item-cost': [queries.itemCostQuery],
 	'call-ending': [queries.callEndingQuery],
 	faithfulness: [queries.faithfulnessQuery],
-	'source-doubts': [queries.sourceDoubtsQuery, queries.sourceDoubtsItemsQuery],
 	'score-cost': [queries.scoreCostQuery],
 	'summary-length': [queries.summaryLengthQuery]
 };
@@ -16,12 +15,11 @@ export const titles: Readonly<Record<string, string>> = {
 	'model-cards': 'What the model did', 'model-throughput': 'Model tokens per second',
 	'item-cost': 'What one item cost the model',
 	'call-ending': 'How a model call ended',
-	'doubt-reasons': 'Why a summary was doubted', faithfulness: 'Summary faithfulness, day by day',
-	'source-doubts': 'Which sources the checker doubts',
+	faithfulness: 'Summary faithfulness, day by day',
 	'score-cost': 'What checking one summary cost', 'summary-length': 'How long summaries came out'
 };
 export function modelRuleFor(id: string, shell: ConsoleShell, range: Range) {
-	if (['source-doubts', 'item-cost', 'score-cost'].includes(id)) {
+	if (['item-cost', 'score-cost'].includes(id)) {
 		return { declined: 'One ranking or distribution pools the window and has no dated change position.' } as const;
 	}
 	return settingsRules(shell, { from: range.from, to: range.to }, id === 'faithfulness' ? 'score' : 'none', nameSpan(range.days));

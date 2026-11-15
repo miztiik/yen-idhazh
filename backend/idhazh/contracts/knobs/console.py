@@ -224,19 +224,6 @@ class ConsoleConfig(Model):
             "`console.source_rows`."
         ),
     )
-    doubt_rows: int = Field(
-        default=10,
-        ge=1,
-        description=(
-            "How many sources the Summaries route ranks by the summaries its "
-            "faithfulness checker doubted, before it states the tail in one sentence. "
-            "Measured 2026-09-01 over the committed score ledger, a thirty-day window "
-            "holds 112 sources carrying at least one doubted summary and the worst ten "
-            "hold 266 of the 1,047 doubts - so the tail is sources with a single doubt "
-            "in a month, which nobody acts on. Ten, matching `console.source_rows` and "
-            "`console.feed_rows`."
-        ),
-    )
     timeline_bars: int = Field(
         default=120,
         ge=1,
@@ -679,6 +666,14 @@ class ConsoleConfig(Model):
             "against its ledgers' row contracts and answers what its title says."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_source_doubt_limit(cls, data: object) -> object:
+        """Historical configs can carry the removed ranking's limit, never its behavior."""
+        if isinstance(data, dict) and "doubt_rows" in data:
+            return {key: value for key, value in data.items() if key != "doubt_rows"}
+        return data
 
     @model_validator(mode="after")
     def _window_bounds_are_ordered(self) -> Self:

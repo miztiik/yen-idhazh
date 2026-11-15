@@ -28,7 +28,7 @@
 
 // Relative, not `$lib`, for the reason in the module docstring.
 import type { TimeWindow } from '../charts/viewport';
-import { DRAWN_BY, NOT_A_MEASUREMENT, UNDRAWN } from '../console/eval-instruments';
+import { DRAWN_BY, NOT_A_MEASUREMENT } from '../console/eval-instruments';
 import type { RecordRead } from '../console/recording';
 import type { DateStamp, LedgerName, Row, SliceResult } from '../data/slice-shapes';
 import { reachFromDisk, sliceFromDisk } from './ledger-disk';
@@ -73,18 +73,16 @@ export const ITEM_HEALTH_COLUMNS = [
 	'visual_id'
 ] as const;
 
-/** Every column `EvalRow` declares.
+/** Only the drawn measurements and row identities the console reads.
  *
  * Not a second copy: `eval-instruments.ts` already names each column once, as a
  * drawn measurement, deliberately omitted diagnostic or row identity, and
  * `backend/tests/contracts/test_frontend_console_lists.py` holds those maps
- * to the contract. The score record is read through them, so it cannot fall
- * behind the contract without that test failing first.
+ * to the contract. Omitted diagnostics are never requested by this reader.
  */
 export const SCORE_COLUMNS: readonly string[] = [
 	...Object.keys(NOT_A_MEASUREMENT),
-	...Object.keys(DRAWN_BY),
-	...Object.keys(UNDRAWN)
+	...Object.keys(DRAWN_BY)
 ];
 
 /** A packed record's rows in one window, as the text cells the console's panels read. */

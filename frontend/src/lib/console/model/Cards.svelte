@@ -4,23 +4,23 @@
 	import KpiCard from '../../components/KpiCard.svelte';
 	import Sparkline from '../../components/Sparkline.svelte';
 	import { buildCardTrends } from '../model-cards';
-	import { FLAGS, RECORDED } from '../eval-instruments';
+	import { RECORDED } from '../eval-instruments';
 	import { cardColumns, cardValue, cardText, cardTrendDays, cardReadState, cardModelRule, type CardReads } from './cards';
 	import type { ChartConfig } from '../../server/config';
 	import { nameSpan } from '../span-words';
 	import { formatNumber } from '$lib/number-format';
-	let { days, reads, instruments, start, end, rule, checkerRule, chart, windowDays }: {
-		days: readonly (ModelDay & { determinismViolations: number | null })[] | null;
+	let { days, reads, instruments, start, end, rule, chart, windowDays }: {
+		days: readonly ModelDay[] | null;
 		reads?: CardReads;
 		instruments: readonly { date: string; recorded: Readonly<Record<string, number | null>> }[];
-		start: string; end: string; rule: ModelRule; checkerRule: ModelRule; chart: ChartConfig; windowDays: number;
+		start: string; end: string; rule: ModelRule; chart: ChartConfig; windowDays: number;
 	} = $props();
 	const ordered = $derived((days ?? []).filter((day) => day.date >= start && day.date <= end).toSorted((a, b) => a.date.localeCompare(b.date)));
 	const newest = $derived(ordered.at(-1));
 	const empty = $derived(days === null || reads === undefined ? 'missing' : cardReadState(reads, { start, end }));
 	const trends = $derived(buildCardTrends(cardColumns.map((c) => c.key), cardTrendDays(ordered), cardValue, []));
-	const extra = $derived(RECORDED.filter((i) => ['self_repetition', 'coherence', 'semantic_coverage'].includes(i.id)));
-	const ruleContext = $derived('changes' in checkerRule && checkerRule.changes.length > 0 ? 'model-card-changes' : undefined);
+	const extra = RECORDED.filter((i) => i.id === 'coherence');
+	const ruleContext = $derived('changes' in rule && rule.changes.length > 0 ? 'model-card-changes' : undefined);
 </script>
 
 <div data-model-cards data-model-cards-day={newest?.date} data-model-cards-from={start} data-model-cards-to={end} data-windowed="model-cards" data-window-days={windowDays}>
@@ -38,14 +38,12 @@
 		<div class="cards" data-chart="cards" aria-label="The newest model readings and their measured daily history">
 			{#each cardColumns as column, index (column.key)}
 				{@const cardTrend = trends.get(column.key)}
-				{@const activeRule = cardModelRule(column.key === 'not-sure' ? checkerRule : rule, cardTrend?.marks.dates ?? [])}
-				<div data-instrument={column.key === 'determinism' ? 'determinism_violation' : undefined} data-instrument-slot={column.key === 'determinism' ? 'model-cards' : undefined}>
+				{@const activeRule = cardModelRule(rule, cardTrend?.marks.dates ?? [])}
 				<KpiCard label={column.label} value={cardText(cardValue(newest, column.key), column.key)}
 					line={column.line} polarity={column.polarity} lede={index === 0} rule={activeRule}
 					movement={cardTrend?.marks.movement ?? null} ruleName={`card-${column.key}`}
 					ruleRange={{ from: cardTrend?.marks.dates[0] ?? newest.date, to: cardTrend?.marks.dates.at(-1) ?? newest.date }}
-					note={column.key === 'per-item' ? (newest.perItemCutMs === null ? null : `${cardText(newest.perItemCutMs, column.key)} when cut short`) :
-						['not-sure', 'unsupported', 'hedge', 'copied', 'determinism'].includes(column.key) && newest.summaries !== null ? `of ${newest.summaries} ${newest.summaries === 1 ? 'summary' : 'summaries'}` : null}
+					note={column.key === 'per-item' && newest.perItemCutMs !== null ? `${cardText(newest.perItemCutMs, column.key)} when cut short` : null}
 					{windowDays}>
 					{#snippet trend()}
 						{#if cardTrend !== undefined && !cardTrend.marks.empty}
@@ -59,23 +57,22 @@
 						{/if}
 					{/snippet}
 				</KpiCard>
-				</div>
 			{/each}
 		</div>
 	{/if}
-	{#if 'declined' in checkerRule}
-		<p data-model-cards-rule-note>{checkerRule.declined}</p>
+	{#if 'declined' in rule}
+		<p data-model-cards-rule-note>{rule.declined}</p>
 	{:else}
-		{#if checkerRule.note !== null}<p data-model-cards-rule-note>{checkerRule.note}</p>{/if}
-		{#if checkerRule.changes.length > 0}
+		{#if rule.note !== null}<p data-model-cards-rule-note>{rule.note}</p>{/if}
+		{#if rule.changes.length > 0}
 			<details class="console-disclosure" data-model-cards-rule-history data-window-days={windowDays}>
-				<summary class="console-summary" id={ruleContext}>Settings and checker changes in {nameSpan(windowDays)}</summary>
+				<summary class="console-summary" id={ruleContext}>Settings changes in {nameSpan(windowDays)}</summary>
 				<p>This history covers {start} through {end} UTC, including days before the mini charts.
-					Markers stay on measured chart days. Checker markers apply only to Marked "not sure".</p>
+					Markers stay on measured chart days.</p>
 				<ul>
-					{#each checkerRule.changes as change (`${change.date}-${change.kind}`)}
+					{#each rule.changes as change (`${change.date}-${change.kind}`)}
 						<li data-model-card-change={change.date} data-model-card-change-kind={change.kind}>
-							<time datetime={change.date}>{change.date} UTC</time> - {change.kind === 'settings' ? 'Settings' : 'Checker'}: {change.words}.
+							<time datetime={change.date}>{change.date} UTC</time> - {change.words}.
 						</li>
 					{/each}
 				</ul>
@@ -92,7 +89,7 @@
 					{#each extra as instrument}<th scope="col">{instrument.label}</th>{/each}</tr></thead>
 				<tbody>{#each ordered.toReversed() as day (day.date)}
 					<tr data-model-day={day.date}><th scope="row">{day.date}</th>
-						{#each cardColumns as column}<td data-model-cell={column.key} data-instrument={column.key === 'determinism' ? 'determinism_violation' : undefined}>{cardText(cardValue(day, column.key), column.key)}
+						{#each cardColumns as column}<td data-model-cell={column.key}>{cardText(cardValue(day, column.key), column.key)}
 							{#if column.key === 'per-item' && day.perItemCutMs !== null}<span data-model-aside="per-item">{cardText(day.perItemCutMs, column.key)} when cut short</span>{/if}
 						</td>{/each}
 						{#each extra as instrument}
@@ -105,7 +102,6 @@
 				{/each}</tbody>
 			</table>
 			{#each extra as instrument}<p><strong>{instrument.label}</strong> {instrument.note}</p>{/each}
-			<p>{FLAGS.find((flag) => flag.id === 'determinism_violation')?.note}</p>
 		</div>
 	</details>
 </div>

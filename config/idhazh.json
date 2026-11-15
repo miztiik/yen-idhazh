@@ -187,7 +187,6 @@
   },
   "console": {
     "default_window_days": 14,
-    "doubt_rows": 10,
     "failure_list_max": 25,
     "feed_rows": 10,
     "max_window_days": 366,
@@ -436,7 +435,7 @@
     "tagline": "Daily news summaries, with links to their sources.",
     "theme_default": "dark"
   },
-  "version": "2026-11-11",
+  "version": "2026-11-15",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,

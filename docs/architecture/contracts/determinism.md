@@ -1,6 +1,6 @@
 # The Recorded Input Manifest
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-11-15
 
 What a run records about its own inputs, where each value is read from, and the one alarm built on that record. This page owns the enumeration and what the record cannot see.
 
@@ -179,17 +179,17 @@ there is nothing to reconcile.
 ## What a violation does
 
 `determinism_violation` is a column on the eval row. Its count reaches the day
-metrics and the run record, the console reads it, and a row carrying it is kept
+metrics and the run record, and a row carrying it is kept
 out of the training corpus. The build does not fail.
 
 **A production run never sets it.** A run summarizes each item once, so it
 cannot compare two outputs for one prompt. `determinism_violation` remains in
-the persisted row because committed days and the console still use the field.
+the persisted row and corpus selection; the console no longer reads or counts it.
 
 A gate that failed the build would fire across runner CPU classes for reasons
 unrelated to any regression, and a flaky gate gets switched off within a month -
 at which point the project has neither the gate nor the signal. Recorded and
-counted, it stays visible and stays trustworthy.
+counted in backend records, it remains inspectable without a console surface.
 
 The comparison is over the **published words only** - the generated title and
 summary - so a re-run that produced the same text in a different wall-clock or

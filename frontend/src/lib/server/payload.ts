@@ -445,8 +445,8 @@ export function readShards(dir: string, months: number = LEDGER_WINDOW_MONTHS): 
 /** The counts a run settled about one day.
  *
  * Read back from the committed day-metrics record so the console does not
- * re-count them by walking the whole score ledger. The three checker counts -
- * scored, drift, suspect - count the day's *distinct published* items, never
+ * re-count them by walking the whole score ledger. The checker counts
+ * refer to the day's *distinct published* items, never
  * score-ledger rows: the ledger dedupes by
  * measurement, so one item re-scored under a new stamp keeps both rows, and a
  * run may score an item it then drops (`backend/idhazh/telemetry/publish/day_metrics.py`).
@@ -467,16 +467,10 @@ export interface DayMetrics {
 	itemsFailed: number;
 	/** Distinct published items the checker gave a faithfulness score. */
 	summariesScored: number;
-	/** Of those, the ones whose identical inputs produced different words. */
-	determinismViolations: number;
 	/** Of those, the ones whose source read like page furniture. */
 	extractionSuspect: number;
-	/** Published items the checker put in the lowest confidence band, from the
-	 * record's `bands.low`. Null only where a record predates the field; every
-	 * record the producer writes carries it, so real data never reads null. */
-	notSure: number | null;
 	/** Published items whose source extract the cap cut short, from the record's
-	 * `items_truncated`. Null on the same terms as `notSure`. */
+	 * `items_truncated`. Null where a record predates the field. */
 	itemsTruncated: number | null;
 	/** What the candidate pass found on the day and what the page drew from it,
 	 * or null on a record written before 2026-09-08. */
@@ -556,15 +550,12 @@ export function dayMetrics(
 		try {
 			const parsed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
 			const scored = parsed.summaries_scored;
-			const drift = parsed.determinism_violations;
 			const suspect = parsed.extraction_suspect;
 			const planned = parsed.items_planned;
 			const published = parsed.items_published;
 			const failed = parsed.items_failed;
 			if (
-				typeof scored !== 'number' ||
-				typeof drift !== 'number' ||
-				typeof suspect !== 'number'
+				typeof scored !== 'number' || typeof suspect !== 'number'
 			) {
 				throw new TypeError('a day-metrics count is missing or not a number');
 			}
@@ -577,12 +568,6 @@ export function dayMetrics(
 			) {
 				throw new TypeError('a day-metrics item count is missing or not a number');
 			}
-			// The band's two counts are read leniently: a record predating either
-			// field drops to null for that count rather than dropping the whole day,
-			// which would take the model route's strict triple down with it. Every
-			// record the producer writes carries both, so real data never reads null.
-			const bands = parsed.bands as Record<string, unknown> | undefined;
-			const low = bands?.low;
 			const truncated = parsed.items_truncated;
 			found.set(date, {
 				date,
@@ -590,9 +575,7 @@ export function dayMetrics(
 				itemsPublished: published,
 				itemsFailed: failed,
 				summariesScored: scored,
-				determinismViolations: drift,
 				extractionSuspect: suspect,
-				notSure: typeof low === 'number' ? low : null,
 				itemsTruncated: typeof truncated === 'number' ? truncated : null,
 				extraction: extractionOf(parsed)
 			});

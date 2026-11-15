@@ -299,11 +299,10 @@ export interface ConsoleConfig {
 	source_rows: number;
 	/** How many failing feeds the feed section lists, before the tail sentence. */
 	feed_rows: number;
-	/** How many sources the Summaries route ranks by the summaries its checker
-	 * doubted, before the tail sentence. */
-	doubt_rows: number;		/** How many items the run timeline draws as bars, in start order, before the
-		 * tail sentence. A cap on the drawing and never on the arithmetic. */
-		timeline_bars: number;	/** The span the chart retirement rule is stated over. Under it the
+	/** How many items the run timeline draws as bars, in start order, before the
+	 * tail sentence. A cap on the drawing and never on the arithmetic. */
+	timeline_bars: number;
+	/** The span the chart retirement rule is stated over. Under it the
 	 * section prints the rule's own span and no median. */
 	chart_rule_days: number;
 	/** Router minutes per published chart that retires chart drawing. */
@@ -670,7 +669,6 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	failure_list_max: 25,
 	source_rows: 10,
 	feed_rows: 10,
-	doubt_rows: 10,
 	timeline_bars: 120,
 	chart_rule_days: 14,
 	chart_minutes_target: 6,

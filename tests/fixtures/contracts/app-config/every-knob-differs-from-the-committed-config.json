@@ -107,7 +107,6 @@
     "context_cut_off_reason": "max_tokens",
     "context_high_percentile": 95.0,
     "default_window_days": 21,
-    "doubt_rows": 6,
     "explorer_bar_spread_share": 0.6,
     "explorer_cell_max_ch": 41,
     "explorer_chart_min_rows": 4,

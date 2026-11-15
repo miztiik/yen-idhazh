@@ -405,9 +405,11 @@ new section.
 **Say it once per screen.** A fact stated twice on one screen reads as two
 facts - two sections both explaining that they follow the window rather than a
 pan, or a date span printed under the heading that already printed it.
-The [model-card rules](console-design/what-the-quality-and-source-panels-draw.md#eleven-measures-are-eleven-cards-and-the-rows-are-one-control-away)
+The [model-card rules](console-design/what-the-quality-and-source-panels-draw.md#retained-measures-are-cards-and-the-rows-are-one-control-away)
 apply this to shared chart instructions and settings history while keeping
-each card's missing-data qualifications beside its reading.
+each card's missing-data qualifications beside its reading. Cards keep settings
+history; scorer changes stay with the faithfulness plot. Retired diagnostics
+leave the declarations, readers and queries rather than remaining hidden.
 
 **At a glance is two named counts, not a narrated comparison.** Keep the total
 first and the dated bars second. Both cards use `--chart-1`, the primary

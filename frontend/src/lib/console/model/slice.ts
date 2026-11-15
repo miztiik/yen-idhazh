@@ -8,8 +8,6 @@ export function modelSlice(query: PanelQuery, range: Range) {
 		case 'itemCostQuery': return sliceOnce(queries.itemCostQuery, range);
 		case 'callEndingQuery': return sliceOnce(queries.callEndingQuery, range);
 		case 'faithfulnessQuery': return sliceOnce(queries.faithfulnessQuery, range);
-		case 'sourceDoubtsQuery': return sliceOnce(queries.sourceDoubtsQuery, range);
-		case 'sourceDoubtsItemsQuery': return sliceOnce(queries.sourceDoubtsItemsQuery, range);
 		case 'scoreCostQuery': return sliceOnce(queries.scoreCostQuery, range);
 		case 'summaryLengthQuery': return sliceOnce(queries.summaryLengthQuery, range);
 		default: throw new Error(`No declared Summaries query is named ${query.name}.`);

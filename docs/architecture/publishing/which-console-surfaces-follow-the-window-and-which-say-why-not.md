@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-11-14
+**Last Updated**: 2026-11-15
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -75,8 +75,9 @@ prints that span beside its charts. It does not extend an axis to the newest
 published day when no attempt data reaches it.
 
 Summaries dates its private cards and daily figures from their build-time
-article and score record coverage. Published doubt reasons keep their own
-published-day window, so a newer publication cannot hide older measured cards.
+article and score record coverage. Bounded publication dates retain the shared
+published-day window without reading retired reason or confidence aggregates,
+so a newer publication cannot hide older measured cards.
 Native panels retain the common record endpoint,
 their own first-day clamp and any declared widest-span comparison. Both routes
 keep the private bounds and native reach in the shared date line; panels

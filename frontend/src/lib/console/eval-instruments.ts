@@ -9,7 +9,7 @@
  * **The map below is the point of this module, not the charts.** `DRAWN_BY`
  * assigns each drawn measurement to exactly one panel, `UNDRAWN` names an
  * intentionally omitted diagnostic, and `NOT_A_MEASUREMENT` names identities. The three
- * together must cover the contract exactly - `frontend/tests/console-model-instruments.spec.ts`
+ * together must cover the contract exactly - the native frontend-list binding
  * reads `EvalRow` and fails on a column that is in neither,
  * in both, or in a map and not in the contract. So a column added to `EvalRow`
  * next month fails a test instead of quietly going undrawn for a year, which is
@@ -55,7 +55,6 @@ export const EVAL_PANELS: readonly EvalPanel[] = [
 		title: matchTitle(),
 		route: '/console/model/'
 	},
-	{ id: 'source-doubts', title: 'Which sources the checker doubts', route: '/console/model/' },
 	{ id: 'summary-length', title: 'How long summaries came out', route: '/console/model/' },
 	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' }
 ];
@@ -69,31 +68,15 @@ export function matchTitle(windowDays?: number): string {
 
 /** Which panel answers for which ledger column.
  *
- * One maintainer each. A column can inform more than one surface - `band` sets a
- * card and sorts the source list - and the maintainer
- * is the panel that is *about* it, the one an operator opens to ask how that
- * number is doing.
+ * One receiver each, naming the surface that actually reads the measurement.
  */
 export const DRAWN_BY: Readonly<Record<string, string>> = {
-	// The eleven-column table under "What the model did", one row per day.
-	band: 'daily-figures',
 	truncation_flagged: 'daily-figures',
-	extractiveness: 'daily-figures',
-	verbatim_run: 'daily-figures',
-	unsupported_numbers: 'daily-figures',
-	hedge_dropped: 'daily-figures',
-	// New here.
 	hhem: 'faithfulness',
 	hhem_full: 'faithfulness',
 	hhem_delta: 'faithfulness',
 	compression: 'summary-length',
-	self_repetition: 'daily-figures',
-	evidential_density: 'source-doubts',
-	speculative_density: 'source-doubts',
 	coherence: 'daily-figures',
-	semantic_coverage: 'daily-figures',
-	determinism_violation: 'daily-figures',
-	// Already drawn, now declared.
 	summary_words: 'summary-length',
 	source_words_before_cap: 'summary-length',
 	source_words: 'summary-length',
@@ -102,6 +85,16 @@ export const DRAWN_BY: Readonly<Record<string, string>> = {
 
 /** Recorded measurements deliberately omitted from the console, not replaced by another panel. */
 export const UNDRAWN: Readonly<Record<string, string>> = {
+	band: 'The mixed historical confidence aggregate is not drawn or reinterpreted as HHEM.',
+	unsupported_numbers: 'The unsupported-number diagnostic is not drawn; it remains recorded.',
+	hedge_dropped: 'The dropped-hedge diagnostic is not drawn; it remains recorded.',
+	extractiveness: 'The copying diagnostic is not drawn; it remains recorded.',
+	verbatim_run: 'The verbatim-run diagnostic is not drawn; it remains recorded.',
+	self_repetition: 'The repetition diagnostic is not drawn; it remains recorded.',
+	semantic_coverage: 'The lexical coverage diagnostic is not drawn; it remains recorded.',
+	evidential_density: 'The source-language density diagnostic is not drawn; it remains recorded.',
+	speculative_density: 'The source-language density diagnostic is not drawn; it remains recorded.',
+	determinism_violation: 'The output-difference diagnostic is not drawn; it remains recorded.',
 	extraction_suspect: 'The extraction class, flag and yield diagnostic is removed; the flag remains recorded.'
 };
 
@@ -138,18 +131,12 @@ export interface RecordedInstrument {
 	/** The ledger column. */
 	id: string;
 	label: string;
-	unit: 'percent' | 'per-thousand-words' | 'cosine';
+	unit: 'percent' | 'cosine';
 	/** What the number is, and which way is bad, in the reader's words. */
 	note: string;
 }
 
-/** Six numbers the checker writes down and no band, no card and no rule reads.
- *
- * Order is the order they are drawn in, and it is deliberate: the three about
- * the summary first, then the one about the summary against its article, then
- * the two marker counts, which are about the article and are read against each
- * other rather than alone.
- */
+/** The retained recorded instruments, each with its own unit and explanation. */
 export const RECORDED: readonly RecordedInstrument[] = [
 	{
 		id: 'compression',
@@ -158,58 +145,14 @@ export const RECORDED: readonly RecordedInstrument[] = [
 		note: 'A length and not a mark. It is here to read the other lines against: a summary that scores badly at a tenth of the article length is a different problem from one that scores badly at half.'
 	},
 	{
-		id: 'self_repetition',
-		label: 'Summary text that repeats itself',
-		unit: 'percent',
-		note: 'The share of four-word runs the summary had already used. Up is the bad direction, and nothing bands it.'
-	},
-	{
 		id: 'coherence',
 		label: 'Summary sentences that follow one another',
 		unit: 'cosine',
 		note: 'How close each sentence sits to the one before it, from -1 to 1. A summary that says the same thing twice scores near the top, so it is a poor thing to judge one by.'
-	},
-	{
-		id: 'semantic_coverage',
-		label: "Article's most-used words the summary kept",
-		unit: 'percent',
-		note: 'Word for word, not by meaning: a summary saying "the chipmaker" where the article said "Nvidia" counts as a miss. A low reading is as often a good short summary as a poor one.'
-	},
-	{
-		id: 'evidential_density',
-		label: 'Article says who reported it',
-		unit: 'per-thousand-words',
-		note: 'Phrases like "according to". Read against the line below, never alone.'
-	},
-	{
-		id: 'speculative_density',
-		label: 'Article hedges',
-		unit: 'per-thousand-words',
-		note: 'Phrases like "may" and "could". Read against the line above, never alone.'
 	}
 ];
 
-/** An instrument that either fired on a summary or did not. */
-export interface FlagInstrument {
-	id: string;
-	label: string;
-	note: string;
-}
-
-export const FLAGS: readonly FlagInstrument[] = [
-	{
-		id: 'extraction_suspect',
-		label: 'Article text looked wrong to the checker',
-		note: 'Set when the body read like navigation furniture rather than an article.'
-	},
-	{
-		id: 'determinism_violation',
-		label: 'The same input gave a different summary',
-		note: 'Set when a re-run of one item did not reproduce its own output.'
-	}
-];
-
-/** One day of the ledger, reduced to what the three panels draw.
+/** One day of the ledger, reduced to the retained measurements.
  *
  * Percents are whole numbers, and that is the whole reason the reductions happen
  * here rather than in the page: a raw score between zero and one is the checker's
@@ -231,25 +174,18 @@ export interface EvalDay {
 	widestGap: number;
 	/** The middle summary's reading on each recorded instrument, in its own unit. */
 	recorded: Readonly<Record<string, number | null>>;
-	/** How many summaries each flag fired on. */
-	fired: Readonly<Record<string, number>>;
 }
 
 /** The distinct-published counts a run settled for one day.
  *
- * The three figures a re-score or a scored-then-dropped item would inflate if
- * counted off the ledger rows, so they are counted over the day's published set
- * once, at publication, and read back here. Keyed by date in the map `evalDays`
+ * A re-score or scored-then-dropped item inflates the ledger row count.
+ * Publication counts its distinct set once. Keyed by date in the map `evalDays`
  * and `modelWork` take. Defined in the console layer both reducers already reach,
  * so neither has to import a server type to name the shape it is handed.
  */
 export interface DayScoredCounts {
 	/** Distinct published items the checker scored - replaces the row count. */
 	scored: number;
-	/** Of those, the ones whose identical inputs produced different words. */
-	determinismViolations: number;
-	/** Of those, the ones whose source read like page furniture. */
-	extractionSuspect: number;
 }
 
 /** A cell that is present and reads as a number, or null.
@@ -262,11 +198,6 @@ function measured(value: string | undefined): number | null {
 	if (value === undefined || value.trim() === '') return null;
 	const parsed = Number(value);
 	return Number.isFinite(parsed) ? parsed : null;
-}
-
-/** The ledger's own spelling of true. Anything else, including a blank, is false. */
-function flag(value: string | undefined): boolean {
-	return (value ?? '').trim().toLowerCase() === 'true';
 }
 
 /** The value at a fraction of a sorted list, by position and never by averaging.
@@ -285,16 +216,6 @@ function pct(value: number): number {
 	return Math.round(value * 100);
 }
 
-/** A per-word rate as a rate per thousand words, to one place.
- *
- * Per word these are 0.003 and 0.011 - two numbers a reader cannot tell apart
- * and neither of which reads as a quantity of anything. Per thousand words they
- * are 3.4 and 11.0 markers, which is a count of phrases in about four pages.
- */
-function perThousand(value: number): number {
-	return Math.round(value * 10000) / 10;
-}
-
 /** A cosine kept on its own scale, to two places.
  *
  * Not a percent. It runs from -1 to 1 and has no denominator, so the reader is
@@ -307,8 +228,7 @@ function toTwoPlaces(value: number): number {
 /** Every day the ledger holds, oldest first, reduced.
  *
  * `counts` carries the distinct-published counts a run settled for a day, keyed
- * by date. Where a day is present, the three published-set figures - the scored
- * count and the two flag counts - are taken from it instead of counted off the
+ * by date. Where a day is present, the scored count comes from it instead of the
  * ledger rows: the ledger dedupes by measurement, so a re-scored item keeps two
  * rows and a scored-then-dropped item keeps one, and either runs the row count
  * high. Every measurement distribution beside them still reads every row, so a
@@ -340,8 +260,6 @@ export function evalDays(
 		let widestGap = 0;
 		const recordedValues = new Map<string, number[]>();
 		for (const instrument of RECORDED) recordedValues.set(instrument.id, []);
-		const fired: Record<string, number> = {};
-		for (const instrument of FLAGS) fired[instrument.id] = 0;
 
 		for (const row of group) {
 			const hhem = measured(row.hhem);
@@ -355,21 +273,10 @@ export function evalDays(
 				const value = measured(row[instrument.id]);
 				if (value !== null) recordedValues.get(instrument.id)?.push(value);
 			}
-			for (const instrument of FLAGS) {
-				if (flag(row[instrument.id])) fired[instrument.id] += 1;
-			}
 		}
 
 		match.sort((a, b) => a - b);
-		// The published-set counts, where a run settled them. A flag fires on a
-		// distinct published item, not on a ledger row, so a re-scored day counts
-		// it once here even though its two rows still both enter the distributions
-		// above. Absent, the row counts stand exactly as they did.
 		const settled = counts?.get(date);
-		if (settled !== undefined) {
-			fired.determinism_violation = settled.determinismViolations;
-			fired.extraction_suspect = settled.extractionSuspect;
-		}
 		const recorded: Record<string, number | null> = {};
 		for (const instrument of RECORDED) {
 			const values = (recordedValues.get(instrument.id) ?? []).sort((a, b) => a - b);
@@ -379,11 +286,7 @@ export function evalDays(
 			}
 			const middle = at(values, 0.5);
 			recorded[instrument.id] =
-				instrument.unit === 'percent'
-					? pct(middle)
-					: instrument.unit === 'cosine'
-						? toTwoPlaces(middle)
-						: perThousand(middle);
+				instrument.unit === 'percent' ? pct(middle) : toTwoPlaces(middle);
 		}
 
 		days.push({
@@ -399,8 +302,7 @@ export function evalDays(
 			matchHigh: match.length === 0 ? null : pct(at(match, 0.75)),
 			widerDiffers,
 			widestGap: pct(widestGap),
-			recorded,
-			fired
+			recorded
 		});
 	}
 	return days;
@@ -703,21 +605,6 @@ export function recordedReadings(days: readonly EvalDay[]): RecordedReading[] {
 	});
 }
 
-/** One flag over the window. */
-export interface FlagReading extends FlagInstrument {
-	fired: number;
-	of: number;
-}
-
-export function flagReadings(days: readonly EvalDay[]): FlagReading[] {
-	const totals = evalTotals(days);
-	return FLAGS.map((instrument) => ({
-		...instrument,
-		fired: days.reduce((sum, day) => sum + (day.fired[instrument.id] ?? 0), 0),
-		of: totals.scored
-	}));
-}
-
 /** How a recorded reading is written, unit included, or a dash where there is none.
  *
  * A cosine is printed as the number it is, to two places. Multiplying it by a
@@ -731,6 +618,5 @@ export function recordedText(
 ): string {
 	if (value === null) return '-';
 	if (reading.unit === 'percent') return `${formatNumber(value, numberFormat, { si: false })}%`;
-	if (reading.unit === 'cosine') return formatNumber(value, numberFormat, { si: false });
-	return `${formatNumber(value, numberFormat, { si: false })} per 1,000 words`;
+	return formatNumber(value, numberFormat, { si: false });
 }

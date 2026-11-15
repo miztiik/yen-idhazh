@@ -34,7 +34,7 @@ EXPECTED_NAMES: Final = {
     ),
     "model": (
         "modelThroughputQuery", "itemCostQuery", "callEndingQuery", "faithfulnessQuery",
-        "sourceDoubtsQuery", "sourceDoubtsItemsQuery", "scoreCostQuery",
+        "scoreCostQuery",
         "summaryLengthQuery",
     ),
     "machine": (
@@ -62,8 +62,6 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "modelThroughputQuery": ("date", "run_id", "model_id", "prefill_ms", "decode_ms", "input_tokens", "cached_tokens", "output_tokens"),
     "callEndingQuery": ("date", "summary_finish_reason", "label_finish_reason"),
     "faithfulnessQuery": ("date", "hhem", "hhem_delta"),
-    "sourceDoubtsQuery": ("date", "url_key", "band", "unsupported_numbers", "hedge_dropped", "evidential_density", "speculative_density"),
-    "sourceDoubtsItemsQuery": ("url_key", "source_id"),
     "writeCostQuery": ("date", "summarize_ms"),
     "scoreCostQuery": ("date", "score_ms"),
     "summaryLengthQuery": ("date", "run_id", "model_id", "summary_words", "source_words_before_cap", "source_words", "compression"),

@@ -1,20 +1,7 @@
-/** One selected view feeds every model card, built in one pass.
+/** One selected view feeds every retained card in one pass.
  *
- * The model route's per-card trend used to be drawn eleven times, once for each
- * card, each time re-walking the open window. It is now a single pass that fills
- * every card's line together. The output does not move: the arithmetic is the one
- * the eleven passes ran. What this file protects is that it stays that way, and
- * that a card reads its OWN column rather than a neighbour's.
- *
- * The route cannot prove this against the canary day. That fixture runs one
- * model start to finish over two days, and every one of the eleven columns is
- * either a single day or two equal days, so every drawn line is empty or flat
- * and every movement is null - the page has nothing per-column to disagree
- * about. So the selected-view builder is lifted into `$lib/console/model-cards`
- * and driven here from a window built to move each column its own way.
- *
- * Nothing here reads a committed ledger. A test that walks the archive costs
- * more every published day (Guardrail #12); this window is three rows, written down.
+ * A bounded input moves each column independently, so a card cannot borrow a
+ * neighbour's movement or date range and pass on equal canary readings.
  */
 
 import { expect, test } from '@playwright/test';
@@ -80,7 +67,7 @@ test.describe('a model card reads one selected view, in one pass', () => {
 
 		// Each is its own column's movement, computed by the same function the page
 		// draws the line with. A builder that returned one column for every key -
-		// the drift eleven separate passes invited - fails at the first mismatch.
+		// returning one column for every key fails at the first mismatch.
 		expect(trends.get('steep')?.marks.movement).toBe(sparklineShape([10, 20, 40]).movement);
 		expect(trends.get('falling')?.marks.movement).toBe(sparklineShape([100, 50, 25]).movement);
 		expect(trends.get('gentle')?.marks.movement).toBe(sparklineShape([10, 20, 30]).movement);
@@ -123,9 +110,7 @@ test.describe('a model card reads one selected view, in one pass', () => {
 
 		buildCardTrends(KEYS, WINDOW, counted, []);
 
-		// One read per day per column and no more. The eleven passes this replaces
-		// read the whole window once for each card; here a cell is touched once
-		// however many cards there are.
+		// One read per day per column, however many cards there are.
 		expect(reads).toBe(WINDOW.length * KEYS.length);
 	});
 });

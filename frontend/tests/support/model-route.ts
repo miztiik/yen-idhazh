@@ -1,5 +1,5 @@
 /** Compile the actual private Summaries builder against owned native records. */
-import { appendFileSync, cpSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdirSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { FRONTEND, sourceFiles } from './console-sources';
@@ -29,18 +29,6 @@ export async function modelRoute(report: string, evidence: 'missing' | 'quiet' |
 	try {
 		const sufficientCount = Math.max(8, consoleConfig().min_attempts_for_rate);
 		const site = publishedSite(join(root, 'public'), { published: evidence === 'missing' ? [] : ['2030-06-15'] });
-		if (evidence === 'sufficient') {
-			const payload = join(site.digest, '2030', '06', '15', 'digest.json');
-			const items = [{ band: 'low', band_reason: 'faithfulness' }, { band: 'medium', band_reason: 'unsupported_number' }];
-			const body = JSON.stringify({ date: '2030-06-15', items });
-			writeFileSync(payload, body);
-			const publication = JSON.parse(readFileSync(join(site.site, 'publication.json'), 'utf8'));
-			publication.entries[0].bytes = Buffer.byteLength(body);
-			publication.entries[0].items = items.length;
-			publication.total_bytes = Buffer.byteLength(body);
-			publication.total_items = items.length;
-			writeFileSync(join(site.site, 'publication.json'), JSON.stringify(publication));
-		}
 		const state = join(root, 'state');
 		mkdirSync(state, { recursive: true });
 		if (evidence !== 'missing') {
@@ -48,10 +36,8 @@ export async function modelRoute(report: string, evidence: 'missing' | 'quiet' |
 			const article = Object.fromEntries(ITEM_HEALTH_COLUMNS.map((column) => [column, null]));
 			const scores = evidence === 'quiet' ? [] : [1, 2].map((index) => ({
 				...score, version: '2026-10-11', date: '2030-06-14', run_id: `2030-06-14-${index}`,
-				model_id: 'recorded-model', band: 'low', hhem: 0.4, unsupported_numbers: 0,
-				hedge_dropped: false, truncation_flagged: false, extractiveness: 0.2, verbatim_run: 0.1,
-				determinism_violation: true, summary_words: 100, source_words: 500,
-				source_words_before_cap: 500, self_repetition: 0, coherence: -0.25, semantic_coverage: 0.5
+				model_id: 'recorded-model', hhem: 0.4, truncation_flagged: false,
+				summary_words: 100, source_words: 500, source_words_before_cap: 500, coherence: -0.25
 			}));
 			const articles = evidence === 'quiet' ? [] : [{
 				...article, version: '2026-10-11', date: '2030-06-14', run_id: '2030-06-14-1',
@@ -64,12 +50,9 @@ export async function modelRoute(report: string, evidence: 'missing' | 'quiet' |
 				const model = date === '2030-06-10' ? 'before-model' : 'after-model';
 				const measuredScores = evidence === 'sufficient' ? Array.from({ length: sufficientCount }, (_, index) => ({
 					...score, version: '2026-10-11', date, run_id: `${date}-one`, model_id: model,
-					url_key: `${date}-${index}`, band: index < 2 ? 'low' : 'high', hhem: 0.5 + index / (sufficientCount * 2),
-					hhem_delta: 0, unsupported_numbers: index === 0 ? 1 : 0, hedge_dropped: false,
+					url_key: `${date}-${index}`, hhem: 0.5 + index / (sufficientCount * 2), hhem_delta: 0,
 					summary_words: 100 + index * 5, source_words: 500, source_words_before_cap: 500,
-					compression: 0.2, extractiveness: 0.2, verbatim_run: 0.1, score_ms: 1000 + index * 200,
-					determinism_violation: index === 0, self_repetition: 0, coherence: -0.25, semantic_coverage: 0.5,
-					evidential_density: 0.004, speculative_density: 0.001
+					compression: 0.2, score_ms: 1000 + index * 200, coherence: -0.25
 				})) : scores;
 				const measuredItems = evidence === 'sufficient' ? Array.from({ length: sufficientCount }, (_, index) => ({
 					...article, version: '2026-10-11', date, run_id: `${date}-one`, model_id: model,
@@ -94,7 +77,7 @@ export async function modelRoute(report: string, evidence: 'missing' | 'quiet' |
 					items_published: evidence === 'sufficient' ? sufficientCount : 1,
 					items_failed: evidence === 'sufficient' ? 1 : 0,
 					summaries_scored: evidence === 'sufficient' ? sufficientCount : 1,
-					determinism_violations: 1, extraction_suspect: 0
+					extraction_suspect: 0
 				}));
 			}
 		}

@@ -212,7 +212,6 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "cached_tokens",
             "decode_ms",
             "output_tokens",
-            "url_key",
             "model_id",
             "label_input_tokens",
             "label_cached_tokens",
@@ -246,6 +245,7 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "summary_prefill_tokens_per_s",
         ),
         "frontend/src/lib/console/queries/voices.ts": (
+            "url_key",
             "http_status",
             "source_form",
             "tier",

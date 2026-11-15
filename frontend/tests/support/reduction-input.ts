@@ -148,12 +148,7 @@ export function scoreRows(sizes: Sizes): Record<string, string>[] {
 			// have a boundary to find.
 			model_id: run < sizes.runs / 2 ? 'older-9b' : 'newer-9b',
 			pipeline_fingerprint: run < sizes.runs / 2 ? 'aaaa1111' : 'bbbb2222',
-			band: index % 9 === 0 ? 'low' : 'high',
-			unsupported_numbers: index % 13 === 0 ? '1' : '0',
-			hedge_dropped: index % 17 === 0 ? 'True' : 'False',
 			truncation_flagged: index % 4 === 0 ? 'True' : 'False',
-			extractiveness: String(Math.round(next() * 100) / 100),
-			verbatim_run: String(Math.round(next() * 100) / 100),
 			summary_words: String(40 + Math.round(next() * 160)),
 			source_words_before_cap: String(words),
 			source_words: String(words),

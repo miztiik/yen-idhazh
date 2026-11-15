@@ -9,7 +9,6 @@ for (const evidence of ['missing', 'quiet', 'populated'] as const) {
 			await page.goto(new URL('console/model/', fixture.origin).href);
 			if (evidence !== 'populated') {
 				await expect(page.locator('[data-model-cards-empty]')).toHaveAttribute('data-model-cards-empty', evidence);
-				await expect(page.locator('[data-doubt-reasons-empty]')).toHaveAttribute('data-doubt-reasons-empty', evidence);
 				await expect(page.locator('[data-model-cards] [data-kpi]')).toHaveCount(0);
 				if (evidence === 'quiet') {
 					await page.locator('[data-window-preset="1"]').click();
@@ -23,10 +22,11 @@ for (const evidence of ['missing', 'quiet', 'populated'] as const) {
 			} else {
 				// Two score measurements of one published summary remain one distinct card count.
 				await expect(page.locator('[data-kpi="Summaries today"] [data-kpi-value]')).toHaveText('1');
-				await expect(page.locator('[data-instrument-slot="model-cards"] [data-kpi-value]')).toHaveText('1');
+				await expect(page.locator('[data-model-cards] [data-kpi]')).toHaveCount(7);
 				await page.locator('[data-model-table-control] > summary').click();
 				await expect(page.locator('[data-instrument="coherence"]').first()).toHaveText('-0.25');
-				await expect(page.locator('[data-instrument="self_repetition"]').first()).toHaveText('0%');
+				await expect(page.locator('[data-model-cards]')).not.toContainText('Marked "not sure"');
+				await expect(page.locator('[data-console-panel-id="doubt-reasons"], [data-console-panel-id="source-doubts"]')).toHaveCount(0);
 				await page.locator('[data-window-preset="1"]').click();
 				await expect(page.locator('[data-model-cards]')).toHaveAttribute('data-model-cards-from', '2030-06-14');
 				await expect(page.locator('[data-model-cards]')).toHaveAttribute('data-model-cards-to', '2030-06-14');
