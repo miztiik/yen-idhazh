@@ -169,10 +169,9 @@ def _score(
     source_id: str,
     band: ConfidenceBand,
     hhem: float,
-    semantic_coverage: float,
+    coherence: float,
     compression: float,
     *,
-    determinism: bool = False,
     extraction: bool = False,
     output: str = "",
 ) -> EvalRow:
@@ -192,12 +191,8 @@ def _score(
         hhem_full=hhem,
         hhem_delta=0.0,
         truncation_flagged=False,
-        semantic_coverage=semantic_coverage,
+        coherence=coherence,
         compression=compression,
-        extractiveness=0.2,
-        verbatim_run=0.1,
-        unsupported_numbers=0,
-        hedge_dropped=False,
         extraction_suspect=extraction,
         band=band,
         source_words_before_cap=500,
@@ -205,7 +200,6 @@ def _score(
         summary_words=100,
         pipeline_fingerprint="a" * 64,
         output_digest=derive_url_key(f"summary-{item_id}-{output}"),
-        determinism_violation=determinism,
         scorer_version="canary-1",
         scored_at=f"{DATE}T06:12:00Z",
         score_ms=2000,
@@ -219,7 +213,7 @@ def _scores() -> list[EvalRow]:
         _score(
             "energy-02", "grid-news", ConfidenceBand.MEDIUM, 0.60, 0.50, 0.20, extraction=True
         ),
-        _score("energy-03", "wire-co", ConfidenceBand.LOW, 0.30, 0.20, 0.30, determinism=True),
+        _score("energy-03", "wire-co", ConfidenceBand.LOW, 0.30, 0.20, 0.30),
     ]
 
 
@@ -353,28 +347,18 @@ def test_the_producer_writes_the_whole_day_record(tmp_path: Path) -> None:
     assert metrics.sources_present == 2
     assert metrics.addresses_considered == 10
 
-    # Bands partition the published items.
-    assert (metrics.bands.high, metrics.bands.medium, metrics.bands.low) == (1, 2, 1)
-
-    # Each doubted item lands in one reason bucket; energy-04 is unattributed.
-    assert metrics.reasons.unsupported_number == 1
-    assert metrics.reasons.faithfulness == 1
-    assert metrics.reasons.unattributed == 1
-    assert metrics.reasons.not_scored == 0
-    assert metrics.reasons.lead_missing == 0
-    assert metrics.reasons.hedge_dropped == 0
-    assert metrics.reasons.total() == 3
+    assert {"bands", "reasons", "determinism_violations"}.isdisjoint(metrics.model_dump())
 
     # Off the score ledger.
     assert metrics.summaries_scored == 3
-    assert metrics.determinism_violations == 1
     assert metrics.extraction_suspect == 1
 
     # Per source, off the published day.
-    assert [(s.source_id, s.published, s.doubted, s.truncated) for s in metrics.sources] == [
-        ("grid-news", 2, 1, 1),
-        ("wire-co", 2, 2, 0),
+    assert [(s.source_id, s.published, s.truncated) for s in metrics.sources] == [
+        ("grid-news", 2, 1),
+        ("wire-co", 2, 0),
     ]
+    assert all("doubted" not in source.model_dump() for source in metrics.sources)
 
 
 def test_throughput_sums_only_the_timed_items(tmp_path: Path) -> None:
@@ -447,12 +431,19 @@ def test_instruments_are_nearest_rank_quartiles(tmp_path: Path) -> None:
     assert hhem.stat.p75 == pytest.approx(0.90)
     assert hhem.stat.maximum == pytest.approx(0.90)
 
-    coverage = _instrument(metrics, "semantic_coverage")
-    assert coverage.stat.count == 3
-    assert coverage.stat.total == pytest.approx(1.50)
-
-    # A column no row measured is left out, never stored as a row of zeroes.
-    assert not any(entry.column == "coherence" for entry in metrics.instruments)
+    coherence = _instrument(metrics, "coherence")
+    assert coherence.stat.count == 3
+    assert coherence.stat.total == pytest.approx(1.50)
+    assert {"extractiveness", "verbatim_run", "semantic_coverage"}.isdisjoint(
+        entry.column for entry in metrics.instruments
+    )
+    unmeasured = [
+        row.model_copy(update={"coherence": None}).csv_row() for row in _scores()
+    ]
+    quiet = day_metrics.build(
+        date=DATE, day=_day(), manifest=_manifest(), score_rows=unmeasured, health_rows=[]
+    )
+    assert not any(entry.column == "coherence" for entry in quiet.instruments)
 
 
 def test_a_correction_rewrites_the_record_whole(tmp_path: Path) -> None:
@@ -531,7 +522,7 @@ def test_scored_counts_distinct_published_items_not_ledger_rows(tmp_path: Path) 
     seed_scores(
         state_root,
         [
-            # energy-01 scored twice, drifting once - two rows, one published item.
+            # energy-01 scored twice - two rows, one published item.
             _score("energy-01", "grid-news", ConfidenceBand.MEDIUM, 0.5, 0.5, 0.2, output="a"),
             _score(
                 "energy-01",
@@ -541,7 +532,6 @@ def test_scored_counts_distinct_published_items_not_ledger_rows(tmp_path: Path) 
                 0.5,
                 0.2,
                 output="b",
-                determinism=True,
             ),
             _score("energy-02", "grid-news", ConfidenceBand.HIGH, 0.9, 0.9, 0.1),
             # A row for an item this day did not publish.
@@ -560,7 +550,6 @@ def test_scored_counts_distinct_published_items_not_ledger_rows(tmp_path: Path) 
     # not inflate it, and the item cannot outrun the published set.
     assert metrics.items_published == 2
     assert metrics.summaries_scored == 2
-    assert metrics.determinism_violations == 1
 
     # The instrument still reads all four rows, matching the console reducer.
     assert _instrument(metrics, "hhem").stat.count == 4

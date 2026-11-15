@@ -50,7 +50,7 @@ Five rules hold for every number the console prints:
  figure but is not equal to the mark, it prints `just above 15%` or
  `just below 15%`, using that mark's own figure. This applies to the sentence,
  the daily readout and the dot's name. At exact equality it prints `15%`.
-- **No ledger column name on screen.** `hhem`, `hedge_dropped` and
+- **No ledger column name on screen.** `hhem`, `compression` and
  `truncation_flagged` are how the file spells it. The page spells what it
  means.
 - **A dash where the ledger holds no answer.** Null and zero are different

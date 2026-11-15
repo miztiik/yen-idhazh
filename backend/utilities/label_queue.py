@@ -32,7 +32,7 @@ pool and the figure over it is a figure.
 the source's own headline, the date, the link, and the extracted article text -
 the same text the scorer read. They never see `hhem`, the band, any
 counterweight, the scorer version, the decile, another row's label, or the tally
-so far. Somebody shown `unsupported_numbers = 1` will find an unsupported number.
+so far. Showing an automatic defect verdict would anchor the human answer.
 
 **The extracted text is the authority for the verdict; the link exists to decide
 whether that text is the article at all.** URL alone would have the labeller
@@ -330,10 +330,6 @@ def main() -> int:
                 "labelled_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "seconds_spent": max(1, round(time.monotonic() - started)),
                 "note": note or None,
-                # Copied off the score row now, not re-joined later, so the label
-                # carries what its tag vocabulary is measured against on its own.
-                "unsupported_numbers": int(item["unsupported_numbers"] or 0),
-                "hedge_dropped": item["hedge_dropped"].strip().lower() == "true",
                 "extraction_suspect": item["extraction_suspect"].strip().lower() == "true",
             }
         )

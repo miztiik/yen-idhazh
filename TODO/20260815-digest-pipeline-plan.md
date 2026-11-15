@@ -1,6 +1,12 @@
 # yen-idhazh - static-first article digest pipeline - plan
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-11-15
+
+**Current metric boundary:** [Summary metrics](../docs/concepts/summary-metrics.md)
+replaces this historical plan's heuristic measurement and output-difference
+instructions. Their native cells, active predicates and aggregates are retired;
+do not implement them again from this plan. Input provenance, real extraction
+cuts, lengths, clocks, faithfulness and coherence remain.
 **Level**: 4 (structural, new subsystem) with named Level-5 ESCALATE triggers.
 
 Execute per `docs/how-to/execute-a-plan.md`, with one maintainer override in force (2026-08-21, `CLAUDE.md` section 0): **one agent works this repo and commits direct to `main`** - no worktree isolation, no worker-per-row fan-out and no PRs, because there is no second agent to isolate from and nobody to review a PR. Everything else stands: personas are consulted on ambiguity, rows respect the Depends-on column, gates must be green before a row is marked DONE, parallel N = 3, and the ESCALATE triggers in section 0 are honoured. A trigger that fires mid-execution is handled per `docs/how-to/handle-scope-change.md`.

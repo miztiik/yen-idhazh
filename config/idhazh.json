@@ -196,7 +196,6 @@
     "today_anchor": "right"
   },
   "drift": {
-    "extractiveness_rise": 0.15,
     "min_domain_rows": 20,
     "min_window_rows": 20,
     "month_over_month_pct": 10.0,
@@ -219,7 +218,7 @@
       "miztiik"
     ],
     "spot_checks_per_week": 10,
-    "verbatim_reject_ceiling": 0.75
+    "corpus_compression_ceiling": 0.75
   },
   "extract": {
     "backoff_initial_seconds": 1.0,
@@ -254,7 +253,6 @@
     "harvest_every_days": 7,
     "holdout_days": 2,
     "min_rows": 500,
-    "prompt_iterations": 3,
     "reference_rows": 500,
     "reference_test_rows": 100,
     "sequence_length": 49152,

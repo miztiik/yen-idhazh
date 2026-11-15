@@ -12,6 +12,7 @@ Nothing here reads `state/`.
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import os
@@ -45,6 +46,8 @@ from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import filenames, json_lines, parquet
+from idhazh.ledger.arrow_schema import Column, ColumnType
+from idhazh.ledger.persist import file_columns
 
 from ._fixtures import fixture_rows
 
@@ -265,6 +268,60 @@ def test_every_contract_comes_back_equal_in_both_formats(
     )
 
     _same_rows(ledger.load(written, model=model), rows)
+
+
+def test_historical_eval_door_cells_drop_without_hiding_retained_damage(tmp_path: Path) -> None:
+    row = fixture_rows(EvalRow)[0]
+    (written,) = ledger.persist(
+        tmp_path, [row], ledger=LedgerName.SUMMARY_QUALITY_EVALS,
+        covers=row.date, identity=_identity(), fmt=Format.PARQUET,
+    )
+    metadata, rows = parquet.read(written.read_bytes())
+    assert "extractiveness" not in rows[0], "the current producer must omit retired cells"
+    retired: dict[str, int | float] = {
+        "unsupported_numbers": 3,
+        "hedge_dropped": True,
+        "extractiveness": 0.95,
+        "verbatim_run": 1.0,
+        "self_repetition": 0.8,
+        "semantic_coverage": 0.1,
+        "evidential_density": 0.01,
+        "speculative_density": 0.02,
+        "determinism_violation": True,
+    }
+    columns = (
+        *file_columns(EvalRow),
+        *(
+            Column(
+                name,
+                ColumnType.BOOL if isinstance(value, bool) else
+                ColumnType.FLOAT64 if isinstance(value, float) else ColumnType.INT64,
+                False,
+            )
+            for name, value in retired.items()
+        ),
+    )
+    legacy = [{**rows[0], **retired}]
+    metadata = {
+        **metadata,
+        b"schema_version": b"2026-09-29",
+        b"content_sha256": hashlib.sha256(json_lines.rows_bytes(legacy)).hexdigest().encode("ascii"),
+    }
+    written.write_bytes(
+        parquet.render(columns, legacy, envelope=metadata, compression=Compression.NONE)
+    )
+
+    read_back = ledger.load_days(
+        tmp_path, LedgerName.SUMMARY_QUALITY_EVALS, [row.date], model=EvalRow
+    )
+    assert read_back == [row]
+    assert retired.keys().isdisjoint(read_back[0].csv_row())
+    legacy[0]["hhem_delta"] = 0.4
+    written.write_bytes(
+        parquet.render(columns, legacy, envelope=metadata, compression=Compression.NONE)
+    )
+    with pytest.raises(ValueError, match="holds a row this build refuses"):
+        ledger.load([written], model=EvalRow)
 
 
 @pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])

@@ -520,6 +520,7 @@ class FailureCode(StrEnum):
     LABELS_TRUNCATED = "labels_truncated"
     BAD_SHAPE = "bad_shape"
     LENGTH_OUT_OF_RANGE = "length_out_of_range"
+    #: Historical outcome only; current summarization does not reject copied text.
     COPIED_SOURCE = "copied_source"
     LEAKED_ADDRESS = "leaked_address"
     #: The worker ran out of its own clock before this item's model work began.

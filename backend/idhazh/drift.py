@@ -32,7 +32,7 @@ from idhazh.day_partition import days_in_window
 
 #: Bumped when a rule below changes, because a fired alert has to be
 #: interpretable against the rules in force when it fired.
-DRIFT_VERSION: Final = "idhazh-drift-3"
+DRIFT_VERSION: Final = "idhazh-drift-4"
 
 FAILURE_RATE_MAX: Final = 0.20
 GITHUB_ISSUE_BODY_MAX_BYTES: Final = 65536
@@ -42,7 +42,6 @@ type Series = tuple[str, str]
 
 class Alert(StrEnum):
     SHORTER_SOURCES = "shorter_sources"
-    MORE_COPYING = "more_copying"
     SCORING_CHROME = "scoring_chrome"
 
 
@@ -53,14 +52,12 @@ class Observation:
     `source_word_count` is None when the ledger does not know how long the
     article was. A row written before 2026-08-27 whose article was truncated is
     the case: the pre-cap body was discarded at extract, so that length exists
-    nowhere. Such a row still carries a faithfulness score and an extractiveness
-    score, so it is kept and only the length rule steps over it - dropping the
-    whole observation would take two working signals away with the missing one.
+    nowhere. Such a row still carries its faithfulness score and identity; only
+    comparisons requiring the unknown length step over it.
     """
 
     source_url: str
     hhem: float | None
-    extractiveness: float | None
     source_word_count: int | None
     model_id: str = ""
     scorer_version: str = ""
@@ -105,7 +102,6 @@ def _observation(row: EvalRow) -> Observation:
     return Observation(
         str(row.source_url),
         row.hhem,
-        row.extractiveness,
         row.source_words_before_cap,
         model_id=row.model_id,
         scorer_version=row.scorer_version,
@@ -253,34 +249,6 @@ def assess(
             current_series = [row for row in current if row.series == series]
             earlier_series = [row for row in earlier if row.series == series]
             label = f"{domain} [{series[0]}, scorer {series[1]}]"
-            current_copy = _distinct(
-                [row for row in current_series if row.extractiveness is not None]
-            )
-            earlier_copy = _distinct(
-                [row for row in earlier_series if row.extractiveness is not None]
-            )
-            reason = _too_few(current_copy, earlier_copy, minimum)
-            if reason:
-                skipped.append(f"{label}: copying not compared; {reason}")
-            else:
-                compared += 1
-                extract_now = _median(
-                    [row.extractiveness for row in current_copy if row.extractiveness is not None]
-                )
-                extract_before = _median(
-                    [row.extractiveness for row in earlier_copy if row.extractiveness is not None]
-                )
-                if extract_now - extract_before > config.extractiveness_rise:
-                    findings.append(
-                        Finding(
-                            Alert.MORE_COPYING,
-                            domain,
-                            f"copied four-word-phrase share rose from {extract_before:.2f} "
-                            f"to {extract_now:.2f}; {_counts(current_copy, earlier_copy)}",
-                            series,
-                        )
-                    )
-
             current_pair = _distinct(
                 [
                     row
@@ -380,8 +348,8 @@ def report(
         f"Baseline: {windows.baseline_start} through {baseline_end} UTC.",
         "Only completed UTC days are included. Live article changes are signals, not diagnoses.",
         f"Each domain metric needs {config.min_domain_rows} distinct measured articles per side.",
-        f"Alerts: source length falls over {config.source_word_count_drop:.0%}; "
-        f"copied four-word-phrase share rises over {config.extractiveness_rise:.2f}.",
+        f"Alerts: source length falls over {config.source_word_count_drop:.0%}, "
+        "alone or while comparable faithfulness holds or rises.",
     ]
     for side, observations in (("Recent", windows.recent), ("Baseline", windows.baseline)):
         recorded_dates = sorted({row.date for row in observations})

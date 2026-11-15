@@ -86,15 +86,6 @@ export const DRAWN_BY: Readonly<Record<string, string>> = {
 /** Recorded measurements deliberately omitted from the console, not replaced by another panel. */
 export const UNDRAWN: Readonly<Record<string, string>> = {
 	band: 'The mixed historical confidence aggregate is not drawn or reinterpreted as HHEM.',
-	unsupported_numbers: 'The unsupported-number diagnostic is not drawn; it remains recorded.',
-	hedge_dropped: 'The dropped-hedge diagnostic is not drawn; it remains recorded.',
-	extractiveness: 'The copying diagnostic is not drawn; it remains recorded.',
-	verbatim_run: 'The verbatim-run diagnostic is not drawn; it remains recorded.',
-	self_repetition: 'The repetition diagnostic is not drawn; it remains recorded.',
-	semantic_coverage: 'The lexical coverage diagnostic is not drawn; it remains recorded.',
-	evidential_density: 'The source-language density diagnostic is not drawn; it remains recorded.',
-	speculative_density: 'The source-language density diagnostic is not drawn; it remains recorded.',
-	determinism_violation: 'The output-difference diagnostic is not drawn; it remains recorded.',
 	extraction_suspect: 'The extraction class, flag and yield diagnostic is removed; the flag remains recorded.'
 };
 

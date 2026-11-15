@@ -25,12 +25,9 @@ written reason, and a Level 5 consultation.
 **`seconds_spent` is the cheapest fatigue detector there is**, and together with
 `labelled_at` it is what a contract test reads to refuse a machine-paced dump.
 
-**A label outlives the score row it was drawn from.** `state/scores/` keeps
-fourteen months of item-level rows and then becomes a summary, so from
-2026-09-03 the three counterweights whose defects this vocabulary mirrors are
-copied onto the row itself. Without them a label written today would stop being
-readable as evidence about those counterweights the moment its month was
-archived - which is the one thing the label ledger exists to produce.
+**A label outlives the score row it was drawn from.** The human verdict and tag
+stay valid after that row expires. The extraction-suspect reading is copied
+alongside them; retired number and hedge measurements are discarded on read.
 """
 
 from __future__ import annotations
@@ -38,7 +35,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, ClassVar, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from idhazh.contracts.article import UntrustedLine
 from idhazh.contracts.base import (
@@ -51,6 +48,7 @@ from idhazh.contracts.base import (
     Timestamp,
     Url,
     UrlKey,
+    without_retired_keys,
 )
 from idhazh.contracts.eval_row import ConfidenceBand
 
@@ -69,9 +67,8 @@ class LabelTag(StrEnum):
     """Why, in one closed word.
 
     Every tag names a defect with a **different** fix. Two tags that lead to the
-    same code change would be one tag. Three of these deliberately mirror a
-    counterweight the pipeline already computes, which buys that counterweight's
-    own precision and recall out of the same 60 labels.
+    same code change would be one tag. These are human judgements, not names of
+    required automatic measurements.
 
     Absent on purpose: severity, which is a second axis with its own agreement
     problem; anything about style, which is not faithfulness; and `other`, which
@@ -98,7 +95,20 @@ class LabelRow(Contract):
     """One labelled item, appended by a human."""
 
     __schema_stem__: ClassVar[str] = "label-row"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "readCompatibility": (
+                "discard historical unsupported_numbers and hedge_dropped copies; "
+                "preserve human verdicts, tags, scorer identities and extraction_suspect"
+            )
+        }
+    )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-15",
+            change="Remove copied number and hedge measurements without changing human labels.",
+            why="Historical measurement copies are discarded on read.",
+        ),
         ChangelogEntry(
             version="2026-09-13T22:00",
             change="Removed pipeline_fingerprint.",
@@ -113,11 +123,6 @@ class LabelRow(Contract):
             version="2026-09-03",
             change="Added unsupported_numbers, hedge_dropped and extraction_suspect, nullable.",
             why="The read side re-joined all three from another ledger on every output.",
-        ),
-        ChangelogEntry(
-            version="2026-08-27",
-            change="source_word_count is now source_seen_word_count.",
-            why="The old name read as the article's length and holds what the model was shown.",
         ),
         ChangelogEntry(
             version="2026-08-24",
@@ -193,30 +198,6 @@ class LabelRow(Contract):
         description="Capped and sanitized. If notes pile onto one tag, the vocabulary is wrong.",
     )
 
-    # --- the counterweights the tags mirror, carried so the label survives its
-    # source row. Appended at the end rather than filed beside the scorer's
-    # number they belong with by meaning, for the reason the eval ledger appends:
-    # a column inserted mid-row shifts every later cell one place right under a
-    # reader that maps by position.
-    unsupported_numbers: int | None = Field(
-        default=None,
-        ge=0,
-        description=(
-            "Numbers the summary asserted that appear nowhere in the article, as the "
-            "scorer counted them at draw time. What the wrong_number tag is measured "
-            "against. Null on a row written before 2026-09-03, which means re-join it "
-            "from state/scores/ while that month is still at full grain - it does not "
-            "mean zero."
-        ),
-    )
-    hedge_dropped: bool | None = Field(
-        default=None,
-        description=(
-            "The article hedged and the summary asserted, as the scorer read it at "
-            "draw time. What the overstated tag is measured against. Null means "
-            "unrecorded, never False."
-        ),
-    )
     extraction_suspect: bool | None = Field(
         default=None,
         description=(
@@ -225,6 +206,11 @@ class LabelRow(Contract):
             "False."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_measurements(cls, data: Any) -> Any:
+        return without_retired_keys(data, "unsupported_numbers", "hedge_dropped")
 
     @model_validator(mode="after")
     def _tag_agrees_with_the_verdict(self) -> Self:
@@ -246,15 +232,7 @@ class LabelRow(Contract):
 
     @classmethod
     def from_csv_row(cls, row: dict[str, str]) -> Self:
-        """The inverse, and the read migration for a row written before 2026-09-03.
-
-        An empty cell is an absent value rather than the empty string, so a row
-        that predates a column reads back as unrecorded - which for the three
-        counterweights is the difference between "nobody wrote it down" and "the
-        scorer read it and it did not fire". A column missing from the file
-        entirely reads the same way, which is what lets a header written before
-        those columns existed still parse.
-        """
+        """Read current cells, leaving absent optional measurements unrecorded."""
         payload: dict[str, Any] = {name: row.get(name, "") for name in cls.model_fields}
         for name, field in cls.model_fields.items():
             if field.default is None and payload[name] == "":

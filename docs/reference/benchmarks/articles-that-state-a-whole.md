@@ -1,6 +1,6 @@
 # How often an article states a whole its parts add up to, 2026-09-13
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-11-15
 Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
@@ -66,12 +66,10 @@ body. The visual planner
 reads the article too, so this is also the text the `pie` gate would see.
 
 **Two things the population is not.** It is not every article the pipeline
-fetched: `corpus.keeps_its_counterweights` drops a row whose summary hedged, went
-unfaithful to a number, or came from a suspect extraction, so the corpus is a
-sample of articles that summarised **well**. One of those filters is
-`unsupported_numbers == 0`, which a number-dense article is likelier to trip, so
-if the sample is biased at all it is biased **against** the articles this count is
-looking for. And it is a rolling window rather than an archive - `corpus.roll`
+fetched: the corpus was selected under the rules in force when this sample was
+collected. Those historical rules are not today's retained extraction and
+compression checks, so this sample cannot measure current selection bias.
+And it is a rolling window rather than an archive - `corpus.roll`
 evicts the oldest on every harvest - so this is 19 days of articles and not all
 of them.
 

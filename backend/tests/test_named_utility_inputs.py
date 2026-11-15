@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 from support.ledger import SEED_COMMIT
 
-from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX
 from utilities import (
@@ -17,7 +16,6 @@ from utilities import (
     build_reference_dataset,
     index_sizing,
     pipeline_test_ledgers,
-    prompt_loop,
     sample_sheet,
     token_budget,
 )
@@ -134,15 +132,6 @@ def test_junit_report_names_only_modules_it_ran(tmp_path: Path) -> None:
     assert average_seconds_by_module(report, repo_root=tmp_path) == {"test_named": 3.0}
 
 
-def test_prompt_loop_ignores_unnamed_articles(tmp_path: Path, article_ok: Article) -> None:
-    (tmp_path / "wanted.json").write_text(article_ok.to_json(), encoding="ascii", newline="\n")
-    (tmp_path / "unrelated.json").write_bytes(b"\xff")
-
-    articles, items = prompt_loop.load_frozen_articles(tmp_path, ["wanted.json"])
-
-    assert articles == [article_ok]
-    assert len(items) == 1
-    assert items[0].source == article_ok.text
 
 
 def test_trial_gather_copies_only_named_days(tmp_path: Path) -> None:

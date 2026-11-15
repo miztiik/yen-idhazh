@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, ClassVar, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,
@@ -49,6 +49,7 @@ from idhazh.contracts.base import (
     records_json,
     without_retired_keys,
 )
+from idhazh.contracts.eval_row import DROPPED_CELLS as EVAL_DROPPED_CELLS
 from idhazh.contracts.eval_row import RENAMED_CELLS as EVAL_RENAMED_CELLS
 from idhazh.contracts.item_health import ItemStage
 
@@ -75,71 +76,13 @@ INSTRUMENT_COLUMNS: frozenset[str] = frozenset(
         "hhem_full",
         "hhem_delta",
         "compression",
-        "extractiveness",
-        "verbatim_run",
-        "self_repetition",
-        "evidential_density",
-        "speculative_density",
         "coherence",
-        "semantic_coverage",
         "source_words_before_cap",
         "source_words",
         "summary_words",
         "score_ms",
     }
 )
-
-
-class DayBands(Model):
-    """How the day's published items split across the confidence bands.
-
-    Additive. Every published item carries exactly one band, so the three counts
-    partition the published set and a window's band counts are the daily counts
-    added up.
-    """
-
-    high: int = Field(ge=0, description="Items the checker did not doubt.")
-    medium: int = Field(ge=0)
-    low: int = Field(ge=0)
-
-
-class DayReasons(Model):
-    """Why each doubted item did not reach the top band.
-
-    Additive. A `high` item has no reason; every `medium` or `low` item falls
-    into exactly one bucket here, so the six counts partition the doubted set.
-    `unattributed` is a doubted item the checker recorded no reason for - a real
-    category the Model page counts separately, not the same fact as `not_scored`
-    (which is a recorded reason meaning no faithfulness score exists).
-    """
-
-    unsupported_number: int = Field(ge=0)
-    not_scored: int = Field(ge=0)
-    lead_missing: int = Field(
-        ge=0,
-        description=(
-            "Zero on every day recorded from 2026-09-24: the band stopped reading whether "
-            "the article's opening survived. The bucket stays because published days "
-            "before that carry the reason, and a record that dropped the column could not "
-            "be read back or added into a window."
-        ),
-    )
-    hedge_dropped: int = Field(ge=0)
-    faithfulness: int = Field(ge=0)
-    unattributed: int = Field(
-        ge=0,
-        description="Doubted, with no band_reason on the published item. Never source text.",
-    )
-
-    def total(self) -> int:
-        return (
-            self.unsupported_number
-            + self.not_scored
-            + self.lead_missing
-            + self.hedge_dropped
-            + self.faithfulness
-            + self.unattributed
-        )
 
 
 class DayThroughput(Model):
@@ -298,13 +241,15 @@ class DaySource(Model):
 
     source_id: Slug
     published: int = Field(ge=0, description="Items this source contributed to the day.")
-    doubted: int = Field(ge=0, description="Of those, the ones not in the top band.")
     truncated: int = Field(ge=0, description="Of those, the ones extract cut at the cap.")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_keys(cls, data: Any) -> Any:
+        return without_retired_keys(data, "doubted")
 
     @model_validator(mode="after")
     def _the_parts_fit_the_source(self) -> Self:
-        if self.doubted > self.published:
-            raise ValueError("a source cannot doubt more items than it published")
         if self.truncated > self.published:
             raise ValueError("a source cannot cut more items than it published")
         return self
@@ -377,7 +322,20 @@ class DayMetrics(Contract):
     """Everything a run settled about one published day, for a later reducer to read."""
 
     __schema_stem__: ClassVar[str] = "day-metrics"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "readCompatibility": (
+                "discard historical bands, reasons, determinism_violations, source doubted "
+                "counts and named retired eval instruments; retain all other validation"
+            )
+        }
+    )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-15",
+            change="Remove retired instruments and confidence, source-doubt and difference counts.",
+            why="Historical records drop only named retired data on read.",
+        ),
         ChangelogEntry(
             version="2026-10-29",
             change="New day records omit the historical label_similarity diagnostic.",
@@ -392,11 +350,6 @@ class DayMetrics(Contract):
             version="2026-09-14T01:30",
             change="ItemStage gained visual, so stage_timing may name it.",
             why="The enum is inlined here, so a name the event envelope gained moves this file.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprint.",
-            why="The stamp gated nothing and no writer had filled it for a month.",
         ),
         ChangelogEntry(
             version="2026-09-07",
@@ -446,10 +399,6 @@ class DayMetrics(Contract):
         ge=0,
         description="Published items the checker gave a faithfulness score. Additive.",
     )
-    determinism_violations: int = Field(
-        ge=0,
-        description="Scored items whose identical inputs produced different words. Additive.",
-    )
     extraction_suspect: int = Field(
         ge=0,
         description="Scored items whose source read like page furniture. Additive.",
@@ -473,8 +422,6 @@ class DayMetrics(Contract):
         ),
     )
 
-    bands: DayBands
-    reasons: DayReasons
     throughput: DayThroughput | None = Field(
         default=None,
         description="The day's token clock, or null when no item timed a token. Additive parts.",
@@ -515,26 +462,27 @@ class DayMetrics(Contract):
     @model_validator(mode="before")
     @classmethod
     def _drop_retired_keys(cls, data: Any) -> Any:
-        """Read-side migration for `pipeline_fingerprint`, removed 2026-09-13T22:00.
-
-        Delete this when `git grep -l pipeline_fingerprint -- state/day-metrics`
-        returns nothing. Historic native day records still carry the key,
-        and `extra="forbid"` refuses a key the model does not declare.
-        """
-        return without_retired_keys(data, "pipeline_fingerprint")
+        """Discard named retired data without hiding unknown or invalid retained fields."""
+        migrated = without_retired_keys(
+            data, "pipeline_fingerprint", "bands", "reasons", "determinism_violations"
+        )
+        if not isinstance(migrated, dict) or not isinstance(migrated.get("instruments"), list):
+            return migrated
+        retained = []
+        for entry in migrated["instruments"]:
+            if isinstance(entry, dict) and entry.get("column") in EVAL_DROPPED_CELLS:
+                continue
+            if isinstance(entry, DayInstrument) and entry.column in EVAL_DROPPED_CELLS:
+                continue
+            retained.append(entry)
+        return {**migrated, "instruments": retained}
 
     @model_validator(mode="after")
     def _the_parts_fit_the_day(self) -> Self:
-        if self.bands.high + self.bands.medium + self.bands.low != self.items_published:
-            raise ValueError("every published item carries exactly one band")
-        if self.reasons.total() != self.bands.medium + self.bands.low:
-            raise ValueError("every doubted item carries exactly one reason bucket")
         if self.summaries_scored > self.items_published:
             raise ValueError("more scored summaries than published items")
         if self.items_truncated > self.items_published:
             raise ValueError("more cut items than published items")
-        if self.determinism_violations > self.summaries_scored:
-            raise ValueError("more determinism violations than scored summaries")
         if self.extraction_suspect > self.summaries_scored:
             raise ValueError("more extraction-suspect items than scored summaries")
 

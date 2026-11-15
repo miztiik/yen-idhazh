@@ -83,8 +83,6 @@ def test_fresh_publication_uses_an_old_rows_hhem_not_its_mixed_band(
     recorded = row(
         version="2026-09-29",
         band=ConfidenceBand.LOW,
-        unsupported_numbers=1,
-        hedge_dropped=True,
     )
     path = common.VAR_ROOT / run_plan.date / "items" / f"{run_plan.items[0].item_id}.eval.json"
     path.write_text(recorded.to_json(), encoding="utf-8")

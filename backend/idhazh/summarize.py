@@ -54,11 +54,9 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.item_health import FailureCode
-from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.summarize import OverLengthAction, SummarizeConfig, SummaryBand
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
-from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.server import Completion, TurnMarkers, request_payload
 from idhazh.load_prompt_text import load_prompt_text
 from idhazh.sanitize import LINK_PLACEHOLDER, sanitize, untrusted_block
@@ -570,7 +568,6 @@ def to_summary(
     model_id: str,
     generated_at: str,
     prompt_config: SummarizeConfig | None = None,
-    evaluation: EvaluationConfig | None = None,
     duration_ms: int = 0,
     attempt: int = 1,
     no_reply: FailureCode = FailureCode.MODEL_UNREACHABLE,
@@ -587,7 +584,6 @@ def to_summary(
     words (Guardrail #11).
     """
     ask = prompt_config or SummarizeConfig()
-    bounds = evaluation or EvaluationConfig()
     if article.status is not ArticleStatus.OK:
         return _failed(
             article,
@@ -662,23 +658,6 @@ def to_summary(
         )
     if verdict.action is LengthAction.TRIM:
         draft.summary = trim_to_words(draft.summary, band.target_words_max + ask.allowance(band))
-
-    # Read against `article.text`, which is the text the model was shown. For a
-    # brief that is the whole article; on a truncated item it is less, so a run
-    # measured here can only under-report the copying.
-    copied = verbatim_run(draft.summary, article.text or "")
-    if copied > bounds.verbatim_reject_ceiling:
-        return _failed(
-            article,
-            model_id=model_id,
-            detail=(
-                f"{copied:.3f} of the summary is one unbroken run copied from the source, "
-                "which republishes the article instead of summarizing it"
-            ),
-            generated_at=generated_at,
-            completion=completion,
-            failure_code=FailureCode.COPIED_SOURCE,
-        )
 
     leaked = _leaked_address(draft.summary)
     if leaked is not None:

@@ -1,12 +1,4 @@
-"""Unit-tier tests for the model-free counterweights.
-
-Each test names the defect the metric exists to catch, because a metric that
-cannot separate a good summary from the bad one it was written for is a
-constant column - and a constant column is worse than no column, since it looks
-like a measurement.
-
-No mocks and no network (Guardrail #7). The text here is written for the test.
-"""
+"""Check retained measurements, checker identity and historical eval-row reads."""
 
 from __future__ import annotations
 
@@ -24,7 +16,6 @@ from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from idhazh import ledger
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob, derive_url_key
-from idhazh.contracts.eval_row import DROPPED_CELLS as DROPPED_EVAL_CELLS
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
@@ -41,19 +32,8 @@ from idhazh.evals.hhem import (
     weights_digest,
 )
 from idhazh.evals.metrics import (
-    EVIDENTIAL_TERMS,
-    HEDGE_TERMS,
-    SPECULATIVE_TERMS,
     compression,
-    evidential_density,
-    extractiveness,
-    hedge_dropped,
     scorer_version,
-    self_repetition,
-    semantic_coverage,
-    speculative_density,
-    unsupported_numbers,
-    verbatim_run,
     word_count,
 )
 from idhazh.evals.score import to_eval_row
@@ -102,311 +82,35 @@ FAITHFUL = (
 )
 
 
-#: One article and one summary of it, small enough for a reader to work the
-#: answer out by hand. `mars`, `rock` and `rover` are used three times each and
-#: `nasa` and `tube` twice, so the five most-used content words are exactly the
-#: five with a count above one and no tie-break is needed to see the reference.
-#: The summary carries three of the five.
-_COVERAGE_SOURCE = (
-    "Mars rover drilled rock. The rover sealed a rock sample in a tube. "
-    "NASA said the Mars rover will drill more rock samples on Mars, "
-    "and NASA praised the tube design."
-)
-_COVERAGE_SUMMARY = "The rover sealed a rock sample on Mars."
-
-
-def test_semantic_coverage_is_the_share_of_the_top_terms_the_summary_kept() -> None:
-    """Worked by hand, so a reader can check the arithmetic without running it.
-
-    Reference at five terms: mars 3, rock 3, rover 3, nasa 2, tube 2. The
-    summary carries mars, rock and rover and drops nasa and tube, so 3 of 5.
-    """
-    assert semantic_coverage(_COVERAGE_SUMMARY, _COVERAGE_SOURCE, terms=5) == 0.6
-
-
-def test_a_source_with_no_content_word_is_unmeasured_rather_than_zero() -> None:
-    """Null and 0.0 are two different facts, and only one of them is a reading."""
-    assert semantic_coverage(_COVERAGE_SUMMARY, "") is None
-    assert semantic_coverage(_COVERAGE_SUMMARY, "The and of to in on at") is None
-
-
-def test_semantic_coverage_stays_inside_the_zero_to_one_bound() -> None:
-    """A summary can carry every reference term and cannot carry more than all."""
-    assert semantic_coverage(_COVERAGE_SOURCE, _COVERAGE_SOURCE, terms=5) == 1.0
-    assert semantic_coverage("nothing whatever in common", _COVERAGE_SOURCE, terms=5) == 0.0
-
-
-def test_semantic_coverage_does_not_grow_with_the_article() -> None:
-    """The denominator is the reference size, never the article's own length.
-
-    Recall against the whole article is the shape this replaced: it falls as the
-    article lengthens whatever the summary says, which is a length measure
-    wearing a quality measure's name. A few new words the summary does not use
-    are enough to show that none displace a term the article keeps returning to.
-    """
-    padding = " ".join(f"filler{index}" for index in range(3))
-    unchanged = semantic_coverage(_COVERAGE_SUMMARY, f"{_COVERAGE_SOURCE} {padding}", terms=5)
-
-    assert unchanged == semantic_coverage(_COVERAGE_SUMMARY, _COVERAGE_SOURCE, terms=5) == 0.6
-
-
-# --- The defect nothing else can see: a wrong number -----------------------
-
-
-def test_an_invented_number_is_counted() -> None:
-    invented = "Example Grid ordered four reactors in a 7.8 billion dollar deal."
-    assert unsupported_numbers(invented, ARTICLE) == 1
-
-
-def test_every_number_present_in_the_source_is_supported() -> None:
-    assert unsupported_numbers(FAITHFUL, ARTICLE) == 0
-
-
-def test_thousands_separators_and_trailing_zeros_are_not_defects() -> None:
-    assert unsupported_numbers("It delivers 1,200 megawatts.", ARTICLE) == 0
-    assert unsupported_numbers("The deal is worth 4.20 billion.", ARTICLE) == 0
-
-
-def test_a_number_only_in_the_full_article_still_counts_as_supported() -> None:
-    """Checked against the full source: a figure the model never saw is still in the article."""
-    assert unsupported_numbers("The largest since 1994.", ARTICLE) == 0
-
-
-# --- The defect a faithfulness score marks generously ----------------------
-
-
-def test_a_dropped_hedge_is_caught() -> None:
-    hedged = "Northwind is reportedly weighing a second order. The company declined to comment."
-    assert hedge_dropped("Northwind will place a second order.", hedged)
-
-
-def test_a_kept_hedge_is_not_flagged() -> None:
-    hedged = "Northwind is reportedly weighing a second order."
-    assert not hedge_dropped("Northwind reportedly plans a second order.", hedged)
-
-
-def test_an_unhedged_source_cannot_drop_a_hedge() -> None:
-    assert not hedge_dropped("Northwind placed the order.", "Northwind placed the order.")
-
-
-# --- What the article itself was worth ---------------------------------------
-#
-# The only metrics here that score the input. A faithful summary of an unsourced
-# rumour scores well on everything above and is still an unsourced rumour.
-
-SOURCED = (
-    "The Ministry of Energy said the plant will close in March, according to a statement "
-    "published on Tuesday. Two officials familiar with the decision claimed the date was "
-    "set in June. A spokesperson for the operator said staff were told last week."
-)
-
-SPECULATIVE = (
-    "The plant could close as early as March, and the operator may announce a date within "
-    "weeks. Analysts expected to see a decision by June. A closure would leave the region "
-    "short of capacity, and a replacement might not be approved for years."
-)
-
-
-def test_the_two_lexicons_do_not_overlap() -> None:
-    """They mark opposite things. A term in both would count twice and mean nothing."""
-    assert not set(EVIDENTIAL_TERMS) & set(SPECULATIVE_TERMS)
-
-
-def test_splitting_the_lexicon_left_hedge_dropped_alone() -> None:
-    """The split is for the new columns. Changing an existing column was not the ask."""
-    assert HEDGE_TERMS == tuple(sorted(EVIDENTIAL_TERMS + SPECULATIVE_TERMS))
-    assert len(HEDGE_TERMS) == len(EVIDENTIAL_TERMS) + len(SPECULATIVE_TERMS)
-
-
-def test_a_sourced_article_is_dense_in_attribution_and_thin_on_speculation() -> None:
-    assert evidential_density(SOURCED) > speculative_density(SOURCED)
-
-
-def test_an_article_of_maybes_is_the_other_way_round() -> None:
-    assert speculative_density(SPECULATIVE) > evidential_density(SPECULATIVE)
-
-
-def test_the_pair_separates_two_articles_a_faithfulness_score_cannot() -> None:
-    """The whole point. Both are internally consistent; one of them knows something."""
-    assert evidential_density(SOURCED) > evidential_density(SPECULATIVE)
-    assert speculative_density(SPECULATIVE) > speculative_density(SOURCED)
-
-
-def test_a_density_is_a_share_and_not_a_count() -> None:
-    """Doubling the article must not double the number, or it measures length."""
-    once = evidential_density(SOURCED)
-    twice = evidential_density(SOURCED + " " + SOURCED)
-    assert once == pytest.approx(twice)
-
-
-def test_a_density_stays_inside_the_bounds_the_ledger_declares() -> None:
-    for text in (SOURCED, SPECULATIVE, ARTICLE, FAITHFUL):
-        assert 0.0 <= evidential_density(text) <= 1.0
-        assert 0.0 <= speculative_density(text) <= 1.0
-
-
-def test_an_empty_article_does_not_divide_by_zero() -> None:
-    assert evidential_density("") == 0.0
-    assert speculative_density("") == 0.0
-
-
-def test_a_marker_inside_a_longer_word_does_not_fire() -> None:
-    """Whole words only, or "Mayor" makes every local story speculative."""
-    assert speculative_density("The Mayor of Maybury opened the plant.") == 0.0
-
-
-# --- Copying -----------------------------------------------------------------
-
-
-def test_a_copied_paragraph_shows_as_a_long_verbatim_run() -> None:
-    copied = ARTICLE.split("\n\n")[0]
-    assert verbatim_run(copied, ARTICLE) > 0.9
-    assert extractiveness(copied, ARTICLE) > 0.9
-
-
-def test_an_original_summary_does_not() -> None:
-    assert verbatim_run(FAITHFUL, ARTICLE) < 0.5
-
-
-def test_function_words_alone_do_not_lift_the_score() -> None:
-    """The reason this is 4-gram precision and not a longest common subsequence."""
-    stopwords = "the of a to in and the of a to in and the of a to"
-    assert extractiveness(stopwords, ARTICLE) < 0.2
-
-
-def test_a_summary_shorter_than_one_ngram_is_not_extractive() -> None:
-    assert extractiveness("Four reactors", ARTICLE) == 0.0
-
-
-# --- Repeating itself --------------------------------------------------------
-#
-# The defect greedy decoding makes possible and every metric above is blind to.
-# A repeated sentence is still perfectly supported by the article, so it scores
-# BETTER on faithfulness the worse it gets.
-#
-# The pair below is one summary written twice at the same length: `LOOPED` says
-# one clause three times, `CONTROL` says it once and then says something else.
-# They are built so the older metrics cannot tell them apart, which is the whole
-# claim the column makes.
-
-_SHARED = "Northwind Atomics won the order for four reactors."
-_CLAUSE = "Ontario has still not signed off."
-_ELSEWHERE = "The regulator has asked for more paperwork and a longer review window."
-
-LOOPED = f"{_SHARED} {_CLAUSE} {_CLAUSE} {_CLAUSE}"
-CONTROL = f"{_SHARED} {_CLAUSE} {_ELSEWHERE}"
-
-
-def test_a_looping_summary_is_invisible_to_every_metric_that_reads_the_source() -> None:
-    """The blind spot, stated as an equality rather than as an opinion.
-
-    Same length, same 4-gram overlap with the article, same longest copied run.
-    Three numbers that cannot separate a summary that said one thing three times
-    from a summary that said three things.
-    """
-    assert word_count(LOOPED) == word_count(CONTROL) == 26
-    assert extractiveness(LOOPED, ARTICLE) == extractiveness(CONTROL, ARTICLE)
-    assert verbatim_run(LOOPED, ARTICLE) == verbatim_run(CONTROL, ARTICLE)
-
-    assert self_repetition(CONTROL) == 0.0
-    assert self_repetition(LOOPED) > 0.0
-
-
-def test_ordinary_prose_sits_at_the_zero_point() -> None:
-    """Zero is not "good" - it is "every four-word window is different"."""
-    assert self_repetition(FAITHFUL) == 0.0
-    assert self_repetition(ARTICLE) == 0.0
-
-
-def test_one_phrase_said_three_times_is_all_it_takes() -> None:
-    """The smallest repetition a four-word window can see, and what it reads as.
-
-    Two of this summary's 97 windows go on repeat, so the number is 0.02. Small
-    on purpose: one echoed phrase in a hundred words is a wobble. A whole clause
-    said three times, as above, is 0.39.
-    """
-    phrase = "at the same time"
-    gaps = [" ".join(f"filler{n}" for n in range(at, at + 22)) for at in (0, 22, 44, 66)]
-    summary = " ".join((gaps[0], phrase, gaps[1], phrase, gaps[2], phrase, gaps[3]))
-
-    assert word_count(summary) == 100
-    assert self_repetition(summary) == pytest.approx(2 / 97)
-
-
-def test_a_summary_shorter_than_one_window_cannot_repeat_itself() -> None:
-    assert self_repetition("Four reactors") == 0.0
-    assert self_repetition("") == 0.0
-
-
-def test_self_repetition_stays_inside_the_bounds_the_ledger_declares() -> None:
-    for text in (LOOPED, CONTROL, FAITHFUL, ARTICLE, SOURCED, SPECULATIVE, ""):
-        assert 0.0 <= self_repetition(text) <= 1.0
-
-
-def test_the_ledger_row_carries_the_repetition_and_leaves_faithfulness_alone() -> None:
-    """The wiring, and the one metric this suite cannot compute itself.
-
-    `hhem` is a model score handed to the scorer, never recomputed from the
-    summary, so a loop cannot move it. HHEM's weights are not on the machine
-    that runs this suite and no test may fetch them (Guardrail #7), so what is proved
-    here is the plumbing: the same faithfulness number goes in for both
-    summaries and the same number comes out, while the new column separates
-    them.
-    """
-    item = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")).items[
-        0
-    ]
-    article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
-    written = Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
-
-    def scored(text: str) -> EvalRow:
-        return to_eval_row(
-            item=item,
-            article=article,
-            summary=written.model_copy(update={"summary": text}),
-            full_text=ARTICLE,
-            premise=ARTICLE,
-            hhem=0.91,
-            hhem_full=0.89,
-            config=EvaluationConfig(),
-            date="2026-08-21",
-            run_id="2026-08-21-1",
-            scorer_version="hhem-2.1-open@aaaaaaaa;weights-bbbbbbbb;metrics-3;bands=0.80/0.50",
-            scored_at="2026-08-21T06:18:02Z",
-        )
-
-    control, looped = scored(CONTROL), scored(LOOPED)
-
-    assert control.hhem == looped.hhem == 0.91
-    assert control.hhem_full == looped.hhem_full == 0.89
-    assert control.extractiveness == looped.extractiveness
-    assert control.verbatim_run == looped.verbatim_run
-    assert control.semantic_coverage == looped.semantic_coverage
-    assert control.band == looped.band
-
-    assert control.self_repetition == 0.0
-    assert looped.self_repetition is not None
-    assert looped.self_repetition > 0.0
-
-
-def test_a_row_still_carrying_the_two_retired_cells_reads_through_the_migration() -> None:
-    """The read-side migration `CLAUDE.md` section 11 owes a removed column.
-
-    A work shard seals one `.eval.json` per item and two later jobs read it back
-    hours afterwards, so a column that leaves the row in between is a key
-    `extra="forbid"` would refuse - and the run that wrote the payload would lose
-    its whole day. The fixture is the wide shape as it stood before the
-    narrowing: the two cells are put back onto a committed payload by hand.
-    """
+_RETIRED_READINGS = {
+    "coverage": 0.62,
+    "new_fact_rate": 0.5,
+    "unsupported_numbers": 3,
+    "hedge_dropped": True,
+    "extractiveness": 0.95,
+    "verbatim_run": 1.0,
+    "self_repetition": 0.8,
+    "semantic_coverage": 0.1,
+    "evidential_density": 0.01,
+    "speculative_density": 0.02,
+    "determinism_violation": True,
+}
+
+
+def test_historical_eval_json_discards_only_retired_cells() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
-    wide = {**payload, "coverage": 0.62, "new_fact_rate": 0.5}
-
+    wide = {**payload, **_RETIRED_READINGS}
     row = EvalRow.model_validate(wide)
 
-    assert not hasattr(row, "coverage")
-    assert not hasattr(row, "new_fact_rate")
-    assert row.hhem == payload["hhem"], "the rest of the row survives the drop"
-    assert {"coverage", "new_fact_rate"} == DROPPED_EVAL_CELLS
+    assert _RETIRED_READINGS.keys().isdisjoint(row.model_dump())
+    for key in ("version", "hhem", "hhem_full", "hhem_delta", "band", "scorer_version"):
+        assert row.model_dump()[key] == payload[key]
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        EvalRow.model_validate({**wide, "unknown_measurement": 0.2})
+    with pytest.raises(ValidationError, match="hhem_delta"):
+        EvalRow.model_validate({**wide, "hhem_delta": 0.4})
+    with pytest.raises(ValidationError, match="source_words"):
+        EvalRow.model_validate({**wide, "source_words": wide["source_words_before_cap"] + 1})
 
 
 def test_a_committed_shard_under_the_wide_header_still_parses_row_by_row() -> None:
@@ -418,33 +122,15 @@ def test_a_committed_shard_under_the_wide_header_still_parses_row_by_row() -> No
     CSV day of the eval ledger through it.
     """
     row = EvalRow.from_json(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
-    wide_cells = {**row.csv_row(), "coverage": "0.62", "new_fact_rate": "0.5"}
+    wide_cells = {**row.csv_row(), **{key: str(value) for key, value in _RETIRED_READINGS.items()}}
+    wide_cells["source_word_count"] = wide_cells.pop("source_words_before_cap")
+    wide_cells["source_seen_word_count"] = wide_cells.pop("source_words")
 
     read_back = EvalRow.from_csv_row(wide_cells)
 
-    assert read_back.hhem == row.hhem
+    assert read_back == row
     assert read_back.csv_row().keys() == set(EvalRow.csv_columns())
-
-
-def test_an_eval_row_written_before_this_column_still_loads() -> None:
-    """Nullable, so yesterday's committed row is not a release blocker (section 11).
-
-    The pre-change shape is a committed fixture with the key removed, which is
-    exactly what every row already in `state/scores.csv` carries. Null is the
-    honest value: 0.0 would claim the summary was read and never repeated.
-    """
-    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
-    del payload["self_repetition"]
-
-    before = EvalRow.model_validate(payload)
-
-    assert before.self_repetition is None
-    assert before.version == "2026-08-21T03:00", "an older stamp still validates"
-    columns = EvalRow.csv_columns()
-    assert columns.index("self_repetition") > columns.index("speculative_density"), (
-        "appended, so no cell shifts right"
-    )
-
+    assert _RETIRED_READINGS.keys().isdisjoint(read_back.csv_row())
 
 # --- The article's length, before the cap and after it ------------------------
 
@@ -690,7 +376,7 @@ def test_scorer_version_spells_its_components() -> None:
         evaluation=EvaluationConfig(),
     )
     assert (
-        version == "hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-5;"
+        version == "hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-6;"
         "window=900/150/anchored;bands=0.80/0.50"
     )
 

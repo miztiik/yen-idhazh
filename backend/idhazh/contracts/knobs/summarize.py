@@ -222,9 +222,8 @@ class SummarizeConfig(Model):
         description=(
             "Longest quotation the prompt allows, and it must be attributed. Long "
             "enough to carry a real sentence somebody said, short enough that a summary "
-            "cannot become the article. The ledger measures the run that actually came "
-            "back (`verbatim_run`), so this number is the ask and that column is the "
-            "answer."
+            "cannot become the article. This is a prompt instruction, not a copied-text "
+            "measurement or rejection threshold."
         ),
     )
     asks_for_a_visual_plan: bool = Field(

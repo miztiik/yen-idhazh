@@ -589,50 +589,30 @@ class TestTheRow:
         with pytest.raises(ValidationError):
             a_label(seconds_spent=0)
 
-    def test_the_row_carries_the_counterweights_its_tags_are_measured_against(self) -> None:
-        """A label copies the three counterweights its tags are measured against.
-
-        The eval ledger keeps every row, so a re-join on `output_digest` still
-        works, but a label that carries its own three is read with no second
-        file beside it - and they are exactly the precision and recall the sixty
-        labels are drawn to buy.
-        """
-        mirrored = {
-            "wrong_number": "unsupported_numbers",
-            "overstated": "hedge_dropped",
-            "not_the_article": "extraction_suspect",
-        }
-        fields = set(LabelRow.model_fields)
-
-        assert set(mirrored.values()) <= fields
-        for tag in mirrored:
-            assert tag in {member.value for member in LabelTag}
-        row = a_label(unsupported_numbers=2, hedge_dropped=True, extraction_suspect=False)
-        assert row.unsupported_numbers == 2
-        assert row.hedge_dropped is True
+    def test_historical_copies_disappear_without_losing_human_judgements(self) -> None:
+        row = a_label(
+            unsupported_numbers=2, hedge_dropped=True, extraction_suspect=False,
+            verdict="unsupported", tag="wrong_number",
+        )
+        assert row.verdict is LabelVerdict.UNSUPPORTED
+        assert row.tag is LabelTag.WRONG_NUMBER
         assert row.extraction_suspect is False
+        assert {"unsupported_numbers", "hedge_dropped"}.isdisjoint(row.model_dump())
+        old_cells = {**row.csv_row(), "unsupported_numbers": "2", "hedge_dropped": "True"}
+        assert LabelRow.from_csv_row(old_cells) == row
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            a_label(unknown_measurement=True)
 
-    def test_a_row_written_before_the_counterweights_reads_as_unrecorded(self) -> None:
-        """Null means re-join from the ledger, and False would mean it did not fire.
-
-        The read migration for 2026-09-03. `state/labels.csv` has never been
-        written, so no row is migrated - but a header written before those
-        columns still has to parse, because the alternative is a ledger the
-        build cannot open (`CLAUDE.md` section 11).
-        """
+    def test_an_unrecorded_extraction_flag_stays_unknown(self) -> None:
         old = a_label(version="2026-08-27")
-        assert old.unsupported_numbers is None
-        assert old.hedge_dropped is None
         assert old.extraction_suspect is None
 
         cells = old.csv_row()
-        for name in ("unsupported_numbers", "hedge_dropped", "extraction_suspect"):
-            assert cells[name] == "", "an absent optional is an empty cell, not the word None"
-            del cells[name]
+        assert cells.pop("extraction_suspect") == ""
         assert LabelRow.from_csv_row(cells) == old
 
     def test_a_row_written_after_them_round_trips_through_the_file(self) -> None:
-        row = a_label(unsupported_numbers=0, hedge_dropped=False, extraction_suspect=True)
+        row = a_label(extraction_suspect=True)
 
         assert LabelRow.from_csv_row(row.csv_row()) == row
 
@@ -685,7 +665,7 @@ class TestTheLoopStaysOpen:
         for forbidden in ('"--from-file"', '"--model"', "sys.stdin", "readlines("):
             assert forbidden not in source, f"label_queue.py offers {forbidden}"
 
-    def test_the_queue_fills_the_counterweights_rather_than_leaving_them_to_a_re_join(
+    def test_the_queue_fills_the_current_label_fields_without_retired_measurements(
         self,
     ) -> None:
         """The only writer of this ledger has to copy them, or the column is dead.
@@ -713,7 +693,8 @@ class TestTheLoopStaysOpen:
                         if isinstance(key, ast.Constant) and isinstance(key.value, str)
                     }
 
-        assert {"unsupported_numbers", "hedge_dropped", "extraction_suspect"} <= filled
+        assert "extraction_suspect" in filled
+        assert {"unsupported_numbers", "hedge_dropped"}.isdisjoint(filled)
         assert filled == set(LabelRow.model_fields) - {"version"}, (
             "the queue fills every column but the schema stamp, which defaults"
         )

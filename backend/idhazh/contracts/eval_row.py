@@ -54,7 +54,21 @@ _DELTA_PLACES = 6
 #: **Both sides of the row read this one set.** A file the ledger door reads
 #: back and the per-item payload both reach it through the before-validator
 #: below.
-DROPPED_CELLS: Final[frozenset[str]] = frozenset({"coverage", "new_fact_rate"})
+DROPPED_CELLS: Final[frozenset[str]] = frozenset(
+    {
+        "coverage",
+        "new_fact_rate",
+        "unsupported_numbers",
+        "hedge_dropped",
+        "extractiveness",
+        "verbatim_run",
+        "self_repetition",
+        "semantic_coverage",
+        "evidential_density",
+        "speculative_density",
+        "determinism_violation",
+    }
+)
 
 #: Headings and keys this row renamed, old name first, read under the new name.
 #: `attempt` named which try at the summary produced the text, while the ledger
@@ -114,6 +128,7 @@ class EvalRow(Contract):
         json_schema_extra={
             "readCompatibility": (
                 "historical bands, versions and scorer identities remain unchanged; "
+                "named retired cells are discarded on JSON and ledger reads; "
                 "fresh publication grades hhem under the current confidence policy"
             )
         }
@@ -121,8 +136,8 @@ class EvalRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-11-15",
-            change="New bands use faithfulness alone; historical recorded bands remain readable.",
-            why="Number and hedge diagnostics no longer determine published confidence.",
+            change="Retire heuristic cells; new bands use faithfulness alone.",
+            why="Discard old cells without changing recorded bands or scorer identities.",
         ),
         ChangelogEntry(
             version="2026-09-29",
@@ -223,26 +238,6 @@ class EvalRow(Contract):
             "budget this measures the article's length, not the summary's quality."
         ),
     )
-    extractiveness: Score = Field(
-        ge=0.0,
-        le=1.0,
-        description="Share of the summary's 4-grams found verbatim in the source.",
-    )
-    verbatim_run: Score = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-        description="Longest unbroken copied stretch. This is the one that names copying.",
-    )
-    unsupported_numbers: int = Field(
-        default=0,
-        ge=0,
-        description="Numbers asserted by the summary that appear nowhere in the full source.",
-    )
-    hedge_dropped: bool = Field(
-        default=False,
-        description="The source hedged and the summary asserted. A rumour became a fact.",
-    )
     extraction_suspect: bool = Field(
         default=False,
         description="The text looks like page furniture. A faithful summary of chrome scores high.",
@@ -287,10 +282,6 @@ class EvalRow(Contract):
         ),
     )
     output_digest: Sha256
-    determinism_violation: bool = Field(
-        default=False,
-        description="Identical inputs, different words. Counted and published, never fatal.",
-    )
     scorer_version: str = Field(
         min_length=1,
         description=(
@@ -321,52 +312,7 @@ class EvalRow(Contract):
         ),
     )
 
-    # Appended at the end, and not filed next to `hedge_dropped` where they belong
-    # by meaning. The ledger was a committed append-only CSV with rows already in
-    # it; a column inserted mid-row would have shifted every historical cell one
-    # place right under a reader that maps by position. Meaning lost to layout here.
-    #
-    # Null and not 0.0, for the same reason: 0.0 is a measurement that says the
-    # article marked nothing. A row written before these existed measured neither,
-    # and the difference is the whole value of the column.
-    evidential_density: Score | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Attribution markers as a share of the ARTICLE's words. How often the story "
-            "says where it got a claim. Scores the source, not our summary of it. Null "
-            "on a row scored before metrics-2."
-        ),
-    )
-    speculative_density: Score | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Unresolved-claim markers as a share of the ARTICLE's words. Read against "
-            "evidential_density: speculation nobody is cited for is the fragile case. "
-            "Null on a row scored before metrics-2."
-        ),
-    )
-    # Appended for the same layout reason as the pair above, and null for the
-    # same meaning reason: 0.0 says the summary was read and never repeated
-    # itself, which is not what a row written before 2026-08-26 can claim.
-    self_repetition: Score | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Share of the summary's 4-word windows that repeat one it already used. The "
-            "only column that reads the summary against ITSELF: every other n-gram column "
-            "reads it against the article, and a repeated sentence is perfectly supported "
-            "by the article. Zero means no window repeats. Recorded only, never banded. "
-            "Null on a row scored before 2026-08-26."
-        ),
-    )
-    # Appended for the same layout reason again. Null rather than a digest of the
-    # empty string: an empty premise is a real and different thing from a premise
-    # nobody wrote down, and only one of the two is a defect.
+    # An empty premise is a real and different thing from a premise nobody recorded.
     source_digest: Sha256 | None = Field(
         default=None,
         description=(
@@ -378,9 +324,6 @@ class EvalRow(Contract):
             "than a scorer error. Null on a row scored before 2026-08-27."
         ),
     )
-    # Appended for the same layout reason as the block above, and null for the
-    # same meaning reason: a row written before these existed measured neither,
-    # and 0.0 would claim a measurement that never ran.
     coherence: Score | None = Field(
         default=None,
         ge=-1.0,
@@ -397,23 +340,6 @@ class EvalRow(Contract):
             "perfectly coherent. Null when the summary holds fewer than two sentences, "
             "because there is no neighbouring pair to compare, and null on a row scored "
             "before metrics-4."
-        ),
-    )
-    semantic_coverage: Score | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Share of the article's most-repeated content words that appear in the "
-            "summary. Lexical, not semantic, despite the name: it matches word forms, so "
-            "a summary saying 'the chipmaker' where the article said 'Nvidia' is scored "
-            "as a miss. The reference is a fixed count of the article's most frequent "
-            "non-function words, so the denominator does not grow with the article - "
-            "recall over the WHOLE article was measured at the same time and rejected, "
-            "because it tracks article length and restates `compression`. Recorded only, "
-            "and a low score is as often a faithful abstraction as an omission, which is "
-            "why no band reads it. Null when the article yielded no content word, and "
-            "null on a row scored before metrics-4."
         ),
     )
 

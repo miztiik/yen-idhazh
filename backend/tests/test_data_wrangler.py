@@ -546,14 +546,14 @@ def test_refill_will_not_pair_a_summary_a_later_run_rewrote(
 def test_refill_will_not_reach_for_a_pair_the_run_itself_rejected(
     tmp_path: Path, app: AppConfig, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A pair the counterweights already failed is dropped before the fetch.
+    """A pair with suspect extraction is dropped before the fetch.
 
     The saved round trip is the smaller half. The larger half is that the only
     way such a pair could pass on re-measurement is if the page moved under it,
     and a row that needs the article to have changed is not one to teach.
     """
     article, _ = refetched(refill_body(), app)
-    recorded = refill_recorded(article, refill_published(), unsupported_numbers=2)
+    recorded = refill_recorded(article, refill_published(), extraction_suspect=True)
     corpus_dir = tmp_path / "corpus"
 
     def refuse(url: str) -> FetchResult:

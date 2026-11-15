@@ -25,7 +25,7 @@ from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.elements import element_table
 from idhazh.load_prompt_text import load_prompt_text
 from idhazh.similarity import judge, prompt, stamps
-from utilities import model_runtime, prompt_loop, reference_set
+from utilities import model_runtime, reference_set
 
 
 class PromptLocation(TypedDict):
@@ -234,12 +234,6 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
         assert reference_set.band_prompts(settings.app.summarize, **options)[0] == (
             summarize.system_prompt(settings.app.summarize, **options)
         )
-        assert prompt_loop.render_system(
-            load_prompt_text(root, settings.app.prompt_files.summarize_article),
-            settings.app.summarize,
-            source_words=0,
-            brief=False,
-        ) == summarize.system_prompt(settings.app.summarize, **options)
         plain = settings.models.summarizer.model_copy(update={"thinking_close": None})
         settings = dataclasses.replace(
             settings, models=settings.models.model_copy(update={"summarizer": plain, "judge": None})
@@ -259,11 +253,3 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
             )
         )
     assert all(left != right for left, right in zip(*found, strict=True))
-
-
-def test_prompt_loop_renders_the_live_paragraph_substitution() -> None:
-    settings = config.load(CONFIG_DIR)
-    text = load_prompt_text(CONFIG_DIR, settings.app.prompt_files.summarize_article)
-    assert prompt_loop.render_system(
-        text, settings.app.summarize, source_words=0, brief=False
-    ) == summarize.system_prompt(settings.app.summarize)

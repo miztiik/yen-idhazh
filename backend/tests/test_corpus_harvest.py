@@ -26,6 +26,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.evals.metrics import compression, word_count
 
 DATE = "2026-08-28"
 
@@ -159,23 +160,48 @@ def test_a_summary_whose_title_missed_its_range_is_not_a_target(
     )
 
 
-def test_a_row_that_hedged_or_invented_a_number_is_not_a_target(
+def test_retired_measurements_do_not_reject_a_training_target(
     app: AppConfig, article: Article
 ) -> None:
-    """Rejection sampling on the measures a model cannot game by copying."""
-    assert (
-        corpus.harvest_rows(
-            [scored(article, "titled", "low-invented-number")],
-            date=DATE,
-            prompt_config=app.summarize,
-            evaluation=app.evaluation,
-        )
-        == []
+    item = scored(article, "titled", "low-invented-number")
+    assert item.row is not None
+    copied = item.summary.summary
+    assert copied is not None
+    source = f"{copied} {article.text} {article.text}"
+    extracted = Article.model_validate(
+        {
+            **article.model_dump(mode="json"),
+            "text": source,
+            "word_count": len(source.split()),
+            "source_word_count": len(source.split()),
+        }
     )
+    legacy = EvalRow.model_validate(
+        {
+            **item.row.model_dump(mode="json"),
+            "compression": compression(copied, source),
+            "summary_words": word_count(copied),
+            "source_words": extracted.word_count,
+            "source_words_before_cap": extracted.source_word_count,
+            "unsupported_numbers": 3,
+            "hedge_dropped": True,
+            "determinism_violation": True,
+            "extractiveness": 1.0,
+            "verbatim_run": 1.0,
+        }
+    )
+    harvested = corpus.harvest_rows(
+        [item._replace(article=extracted, row=legacy)],
+        date=DATE,
+        prompt_config=app.summarize,
+        evaluation=app.evaluation,
+    )
+    assert len(harvested) == 1
+    assert json.loads(harvested[0].messages[-1].content)["summary"] == copied
 
 
 def test_an_unscored_item_is_not_a_target(app: AppConfig, article: Article) -> None:
-    """No eval row means no counterweights, and a filter that cannot run is not a filter."""
+    """No eval row means the retained extraction and length readings are unavailable."""
     assert (
         corpus.harvest_rows(
             [scored(article, "titled", None)],
@@ -187,17 +213,39 @@ def test_an_unscored_item_is_not_a_target(app: AppConfig, article: Article) -> N
     )
 
 
-def test_the_faithfulness_score_is_never_what_selects_a_row() -> None:
-    """It is the alarm this project reads a run by.
+def test_corpus_selection_retains_the_exact_compression_cutoff_without_a_model_gate(
+    app: AppConfig, article: Article
+) -> None:
+    item = scored(article, "titled", "high")
+    assert item.row is not None
+    cutoff = app.evaluation.corpus_compression_ceiling
+    assert cutoff == 0.75
+    assert corpus.accepts_training_candidate(
+        item.row.model_copy(
+            update={"hhem": 0.0, "hhem_full": 0.0, "hhem_delta": 0.0, "compression": cutoff - 0.001}
+        ),
+        evaluation=app.evaluation,
+    )
+    for changes in ({"compression": cutoff}, {"compression": cutoff + 0.001}, {"extraction_suspect": True}):
+        assert not corpus.accepts_training_candidate(
+            item.row.model_copy(update=changes), evaluation=app.evaluation
+        )
 
-    Shape the training data with it and the tuned model has been optimised
-    against its own monitor, after which the monitor is measuring something it
-    helped produce. Asserted on the source so the rule cannot be undone quietly.
-    """
-    source = read_text(Path(corpus.__file__))
-    body = source.split("def keeps_its_counterweights", 1)[1].split("\ndef ", 1)[0]
 
-    assert "hhem" not in body, "the alarm may veto a model; it may never select a row"
+def test_refetched_lengths_are_recomputed_without_resurrecting_retired_checks(
+    app: AppConfig,
+) -> None:
+    article, full_text = refetched(refill_body(), app)
+    recorded = refill_recorded(article, refill_published()).model_copy(update={"compression": 0.99})
+    rebuilt = corpus.rescored(article, full_text, recorded=recorded, published=refill_published())
+    assert rebuilt.row is not None
+    assert rebuilt.row.compression < app.evaluation.corpus_compression_ceiling
+    assert rebuilt.row.source_words == article.word_count
+    assert rebuilt.row.hhem == recorded.hhem
+    assert rebuilt.row.scorer_version == recorded.scorer_version
+    assert len(corpus.harvest_rows(
+        [rebuilt], date=DATE, prompt_config=app.summarize, evaluation=app.evaluation
+    )) == 1
 
 
 # --- Reading a run's items directory ---------------------------------------
@@ -415,57 +463,8 @@ def test_a_refilled_row_is_the_same_bytes_as_a_harvested_row(app: AppConfig) -> 
     assert corpus.to_line(refilled[0]) == corpus.to_line(harvested[0])
 
 
-def test_the_counterweights_are_measured_against_the_body_that_came_back(
-    app: AppConfig,
-) -> None:
-    """A page edited past its summary loses the row, whatever the ledger recorded.
-
-    This is the whole safety argument for re-fetching. The recorded row says the
-    pair was fine, because it was fine against a body this process never saw. If
-    `rescored` trusted it, an article that has since been rewritten would still
-    be taught with a summary it no longer supports.
-    """
-    unrelated = (
-        "The city transport board approved a new tram alignment along the eastern "
-        "quays yesterday, after a consultation that drew 800 responses. Work is "
-        "expected to begin in autumn and to last four years. The board said fares "
-        "would not rise to pay for it, and that two ferry routes would keep "
-        "running throughout construction. A cycle lane will be rebuilt alongside "
-        "the tracks, and 60 trees are to be planted where the depot once stood."
-    )
-    article, full_text = refetched(unrelated, app)
-    recorded = refill_recorded(article, refill_published())
-    assert corpus.keeps_its_counterweights(recorded, evaluation=app.evaluation)
-
-    rebuilt = corpus.rescored(
-        article, full_text, recorded=recorded, published=refill_published()
-    )
-
-    assert rebuilt.row is not None
-    assert rebuilt.row.unsupported_numbers > recorded.unsupported_numbers
-    assert not corpus.keeps_its_counterweights(rebuilt.row, evaluation=app.evaluation)
-    assert not corpus.harvest_rows(
-        [rebuilt], date=DATE, prompt_config=app.summarize, evaluation=app.evaluation
-    )
 
 
-def test_a_determinism_violation_is_carried_across_the_rebuild(app: AppConfig) -> None:
-    """It is a property of two decodes, not of the text, so a re-fetch cannot clear it.
-
-    Recomputing it as False would silently un-fail an item the run had caught.
-    """
-    article, full_text = refetched(refill_body(), app)
-    recorded = refill_recorded(article, refill_published(), determinism_violation=True)
-
-    rebuilt = corpus.rescored(
-        article, full_text, recorded=recorded, published=refill_published()
-    )
-
-    assert rebuilt.row is not None
-    assert rebuilt.row.determinism_violation is True
-    assert not corpus.harvest_rows(
-        [rebuilt], date=DATE, prompt_config=app.summarize, evaluation=app.evaluation
-    )
 
 
 def test_the_join_accepts_the_output_the_row_actually_scored(app: AppConfig) -> None:

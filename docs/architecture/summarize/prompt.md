@@ -1,6 +1,6 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-15
 
 What the model is asked to produce, how the two calls share context, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
 
@@ -30,10 +30,9 @@ Table A - Production instruction files
 | A6 | `compare_articles` | `prompts/compare-articles.txt` |
 
 Production rendering retains universal-newline reading and performs no
-whitespace trimming. The prompt-loop utility retains its raw-newline incumbent
-read. The app config's additive reader uses the declared task paths if an older
+whitespace trimming. The app config's additive reader uses the declared task paths if an older
 authored input omits `prompt_files`; new authored configuration names them all.
-The standalone summary, corpus, reference-set and prompt-loop readers use A5;
+The standalone summary, corpus and reference-set readers use A5;
 the comparison judge and its stamp use A6's full rendered instructions.
 Offline judge capture and saved-evidence validation use that same selected file,
 so their recorded identity cannot describe instructions from another root.
@@ -260,7 +259,6 @@ A cut label reply fails as `labels_truncated`. Do not repair missing arrays as e
 
 After parsing, `to_summary` enforces publishability.
 
-- Reject excessive contiguous copying from the source with `copied_source`, using the configured verbatim ceiling.
 - Reject a summary containing an address or the sanitizer's link marker with `leaked_address`. Reuse the sanitizer's definition instead of adding another URL pattern.
 - If the generated title is invalid or leaks an address, discard that title and use the established fallback; do not discard a valid summary for a title failure.
 - Record a typed failure and its observed values in item health. Do not infer outcomes later by scraping logs.

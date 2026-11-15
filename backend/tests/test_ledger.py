@@ -614,9 +614,7 @@ def _scores(**cells: str) -> str:
             "scorer_version": "hhem-2.1-open@aaaaaaaa;weights-bbbbbbbb;metrics-3;bands=0.80/0.50",
             "scored_at": "2026-08-23T06:18:02Z",
             "truncation_flagged": "False",
-            "hedge_dropped": "False",
             "extraction_suspect": "False",
-            "determinism_violation": "False",
         }
     )
     base.update(cells)

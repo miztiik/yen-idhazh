@@ -40,7 +40,6 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.item_health import FailureCode
-from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.summarize import (
     LengthPolicy,
@@ -50,7 +49,6 @@ from idhazh.contracts.knobs.summarize import (
 )
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
-from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.reasoning import split_reasoning
 from idhazh.llm.server import (
     PROBE_ANSWER,
@@ -2325,9 +2323,8 @@ FLOORED: Final = SummarizeConfig(
     length_policy=LengthPolicy(absolute_floor_words=75, floor_applies_above_source_words=0),
 )
 
-#: One case per `_failed` site in `to_summary` that has a reply in hand. Six
-#: sites and five codes, because `bad_shape` answers to two different gates.
-REFUSED_A_REPLY: Final = ("truncated", "reasoned", "unparseable", "too-short", "copied", "leaked")
+#: One case per reply refusal, including both ways a reply can have a bad shape.
+REFUSED_A_REPLY: Final = ("truncated", "reasoned", "unparseable", "too-short", "leaked")
 
 
 def refused(case: str) -> tuple[Completion, str, SummarizeConfig | None]:
@@ -2348,8 +2345,6 @@ def refused(case: str) -> tuple[Completion, str, SummarizeConfig | None]:
             return replace(recorded, content=completion("obeyed-the-injection").content), "ok", None
         case "too-short":
             return recorded, "ok", FLOORED
-        case "copied":
-            return replace(recorded, content=completion("copied-the-source").content), "brief", None
         case "leaked":
             return replace(recorded, content=completion("leaked-the-address").content), "ok", None
         case _:
@@ -2379,7 +2374,7 @@ def test_a_reply_that_failed_its_shape_still_reports_what_it_cost(case: str) -> 
     assert result.cached_tokens == reply.cached_tokens
 
 
-def test_the_six_sites_that_hold_a_reply_cover_five_codes() -> None:
+def test_reply_refusals_retain_their_costs_and_failure_codes() -> None:
     """The cases above are the failure vocabulary and not a sample of it.
 
     A code added to the summarize stage without a case here would leave one
@@ -2396,7 +2391,6 @@ def test_the_six_sites_that_hold_a_reply_cover_five_codes() -> None:
         FailureCode.OUTPUT_TRUNCATED,
         FailureCode.BAD_SHAPE,
         FailureCode.LENGTH_OUT_OF_RANGE,
-        FailureCode.COPIED_SOURCE,
         FailureCode.LEAKED_ADDRESS,
     }
 
@@ -2408,7 +2402,7 @@ def test_a_failed_row_names_the_call_that_spent_it() -> None:
     so a writer cannot fill the cells and leave the slot empty - which is what
     keeps `reconcile_prefill` and the console's pooled rates correct.
     """
-    reply, source, ask = refused("copied")
+    reply, source, ask = refused("leaked")
     result = to_summary(
         article(source), reply, model_id="m", generated_at=GENERATED_AT, prompt_config=ask
     )
@@ -2651,104 +2645,27 @@ def test_the_tolerance_comes_from_config() -> None:
 # --- A copy is not a summary -------------------------------------------------
 
 
-def copied_run(kept: int) -> str:
-    """A 44-word summary whose first `kept` words are one unbroken lift.
-
-    The tail is words the source does not contain, so the longest run is exactly
-    `kept` and the ratio is exactly `kept / 44`.
-    """
-    lifted = (article("brief").text or "").split()[9:]
-    ours = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo".split()
-    return " ".join(lifted[:kept] + ours[: 44 - kept])
 
 
-def test_a_summary_that_is_one_copied_run_of_its_source_is_refused() -> None:
-    """The measured defect: 44 published words, every one of them lifted unbroken.
-
-    Run 33016222069 on 2026-08-26 published item business-economy-4010712495 as a
-    44-word copy of its 53-word source. An article body is never republished to a
-    reader, so it is refused rather than scored down.
-    """
+def test_copied_text_no_longer_rejects_an_otherwise_valid_summary() -> None:
     result = summarised("copied-the-source", source="brief")
-
-    assert result.status is SummaryStatus.FAILED
-    assert result.failure_code is FailureCode.COPIED_SOURCE
-    assert "1.000 of the summary" in (result.failure_detail or "")
-    assert result.summary is None
-
-
-def test_the_copied_reply_failed_on_the_copying_and_on_nothing_else() -> None:
-    """Every other rule in `to_summary` passes this reply, so only one can have fired.
-
-    Without this, the test above would still pass if the reply were malformed or
-    the wrong length, and the copy rule could be dead.
-    """
-    source = article("brief")
     draft = parse_draft(completion("copied-the-source").content)
-    ask = SummarizeConfig()
-    band = ask.band_for(source.band_source_words)
-
-    verdict = length_verdict(
-        len(draft.summary.split()), band, ask, source_words=source.band_source_words
-    )
-    assert verdict.action is LengthAction.PUBLISH
-    assert verbatim_run(draft.summary, source.text or "") == 1.0
-    assert source.brief is True
-    assert source.source_word_count == 53
-
-
-def test_the_reject_fires_above_the_ceiling_and_not_at_it() -> None:
-    """0.75 is the ceiling, so 0.750 publishes and 0.773 does not.
-
-    A boundary either side of one number, because a rule that fired at the
-    ceiling would leave `brief_copying_ceiling` a band it can never fail in.
-    """
-    text = article("brief").text or ""
-    assert verbatim_run(copied_run(33), text) == pytest.approx(0.75)
-    assert verbatim_run(copied_run(34), text) == pytest.approx(34 / 44)
-
-    assert (
-        replied(body(summary=copied_run(33)), source="brief").status
-        is SummaryStatus.OK
-    )
-    over = replied(body(summary=copied_run(34)), source="brief")
-    assert over.failure_code is FailureCode.COPIED_SOURCE
-
-
-def test_the_copy_ceiling_is_read_from_config_and_not_written_in_the_code() -> None:
-    """Guardrail #6. Move the knob and the same reply changes side."""
-    reply = completion("copied-the-source").content
-    permissive = EvaluationConfig(verbatim_reject_ceiling=1.0)
-    strict = EvaluationConfig(verbatim_reject_ceiling=0.6)
-
-    assert replied(reply, source="brief", evaluation=permissive).status is SummaryStatus.OK
-    assert replied(reply, source="brief", evaluation=strict).failure_code is (
-        FailureCode.COPIED_SOURCE
-    )
-    assert replied(
-        body(summary=copied_run(33)),
-        source="brief",
-        evaluation=strict,
-    ).failure_code is (
-        FailureCode.COPIED_SOURCE
-    )
-
-
-def test_a_summary_in_its_own_words_is_untouched_by_the_copy_rule() -> None:
-    """The rule must cost nothing to the summaries it is not about."""
-    result = summarised("ok")
+    assert draft.summary in (article("brief").text or "")
     assert result.status is SummaryStatus.OK
-    assert verbatim_run(result.summary or "", article().text or "") < 0.75
+    assert result.failure_code is None
+    assert result.summary == draft.summary
+
+
+
+
+
+
+
+
 
 
 def test_the_summarizer_never_imports_the_scorer() -> None:
-    """It borrows one model-free metric and may reach no further.
-
-    `verbatim_run` is pure string work. `evals/hhem.py` loads a model and
-    `evals/score.py` decides what publishes, so a
-    summarizer able to import any of them would let the thing being measured
-    reach its own judge - and would drag a model load into every worker.
-    """
+    """Generating a summary must not depend on loading its evaluator."""
     tree = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "summarize.py"))
     for node in ast.walk(tree):
         names: list[str] = []
@@ -2790,7 +2707,6 @@ def test_the_exfiltration_canarys_address_cannot_reach_a_payload() -> None:
 def test_the_leaked_reply_failed_on_the_address_and_on_nothing_else() -> None:
     """Every other rule passes this reply, so the address rule is the one that fired."""
     draft = parse_draft(completion("leaked-the-address").content)
-    bounds = EvaluationConfig()
     source = article()
     ask = SummarizeConfig()
 
@@ -2801,7 +2717,6 @@ def test_the_leaked_reply_failed_on_the_address_and_on_nothing_else() -> None:
         source_words=source.band_source_words,
     )
     assert verdict.action is LengthAction.PUBLISH
-    assert verbatim_run(draft.summary, source.text or "") < bounds.verbatim_reject_ceiling
 
 
 @pytest.mark.parametrize(

@@ -22,7 +22,13 @@ from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_tex
 
 from idhazh import config, extract, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import ServerJob, column_bounds, derive_url_key, field_column
+from idhazh.contracts.base import (
+    ServerJob,
+    column_bounds,
+    derive_output_digest,
+    derive_url_key,
+    field_column,
+)
 from idhazh.contracts.call_cost import COST_FIELDS, DERIVED_FIELDS, CallCost, CallKind
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import (
@@ -363,20 +369,21 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 run_id="2026-08-21-1",
             )
         case FailureCode.COPIED_SOURCE:
-            draft = {
-                "title": "Example Lab publishes a smaller inference model",
-                "summary": ok_article.text or "",
-            }
-            failed_summary = summarize.to_summary(
-                ok_article,
-                Completion(json.dumps(draft)),
-                model_id="qwen3-8b",
-                generated_at="2026-08-21T06:00:00Z",
+            historical = Summary.model_validate(
+                {
+                    **summary().model_dump(mode="json"),
+                    "title": None,
+                    "summary": None,
+                    "output_digest": derive_output_digest(None),
+                    "status": "failed",
+                    "failure_code": "copied_source",
+                    "failure_detail": "Historical copied-source rejection.",
+                }
             )
             return telemetry.classify_item(
                 planned=item(),
                 article=ok_article,
-                summary=failed_summary,
+                summary=historical,
                 date=plan().date,
                 run_id="2026-08-21-1",
             )
@@ -417,7 +424,7 @@ def row_for(code: FailureCode) -> ItemHealthRow:
 
 
 @pytest.mark.parametrize("code", list(FailureCode))
-def test_every_failure_code_has_a_real_fixture_writer(code: FailureCode) -> None:
+def test_current_and_historical_failure_codes_retain_their_typed_outcomes(code: FailureCode) -> None:
     row = row_for(code)
 
     if code in {

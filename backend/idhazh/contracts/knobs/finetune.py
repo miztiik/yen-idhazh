@@ -8,7 +8,7 @@ from typing import Annotated, Any, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
-from idhazh.contracts.base import Model
+from idhazh.contracts.base import Model, without_retired_keys
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 
 #: The `finetune` keys this block used to carry. `student` named the small
@@ -200,24 +200,12 @@ class FinetuneConfig(Model):
             "rows for that session only and says how many it dropped."
         ),
     )
-    prompt_iterations: int = Field(
-        default=3,
-        ge=1,
-        description=(
-            "How many write-critique-revise rounds the offline prompt loop runs before "
-            "it stops (`backend/utilities/prompt_loop.py`). Nothing here runs on the "
-            "runner or in the daily pipeline: the loop is manual, reads a frozen "
-            "committed article set, and a candidate replaces the incumbent prompt only "
-            "when it beats it on the deterministic, model-free scorers. More rounds cost "
-            "more local model calls and buy more chances at a candidate that clears the "
-            "gate; they change no digest a reader sees."
-        ),
-    )
-
     @model_validator(mode="before")
     @classmethod
     def _a_removed_role_is_refused_by_name(cls, data: Any) -> Any:
-        return refuse_a_removed_knob("finetune", data, SUPERSEDED_FINETUNE_NAMES)
+        return refuse_a_removed_knob(
+            "finetune", without_retired_keys(data, "prompt_iterations"), SUPERSEDED_FINETUNE_NAMES
+        )
 
     @model_validator(mode="after")
     def _a_session_cannot_draw_more_than_the_window_holds(self) -> Self:

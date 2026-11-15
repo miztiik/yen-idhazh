@@ -1,6 +1,13 @@
 # The summary-quality judge as a pipeline of replaceable scorers: intent and contracts
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-11-15
+
+**Current metric boundary:** [Summary metrics](../docs/concepts/summary-metrics.md)
+supersedes this draft's raw number, hedge, copying, repetition, lexical-coverage,
+source-density and output-difference guards and aggregates. Those fields and
+their consumers must not be recreated. The corpus retains extraction and
+compression checks without a replacement HHEM or model-judge selection gate.
+The unrelated scorer-stage and model-evaluation designs below are unchanged.
 
 **Author**: Fowler (architecture), 2026-10-12, plan 65 Q68. **Status**: design for plan 65.2. The maintainer ruled T1, U1 and V1 on 2026-10-12 (plan 65, Table Q, Q69 to Q71), and named the unified judge summary-fidelity-judge, with the drift judge renamed summary-drift-judge (Q72); "the drift judge" below is summary-drift-judge; everything else here is proposed until 65.2 is approved. In this record "source" means a feed or publisher only; a summary is checked against its article. "Estimate" marks an estimate.
 **Ids**: Q61, QQ28, P15, X8.4 cite plan 65 (`TODO/20261011-65-summary-fidelity-judge-plan.md`), as "plan 65 B2" where a row here could be meant; "research Q5" cites `TODO/20261012-unsupervised-summary-improvement-research-record.md`. Code paths are repository paths.
