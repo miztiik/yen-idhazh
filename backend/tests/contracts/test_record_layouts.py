@@ -99,7 +99,7 @@ def test_state_producer_keeps_days_expanded_and_sources_on_one_line(tmp_path: Pa
     expected = metrics.model_dump(mode="json")
     expected.pop("label_similarity", None)
     assert state_text.startswith("{\n")
-    assert '  "bands": {\n' in state_text
+    assert '  "throughput": {\n' in state_text
     assert json.loads(state_text) == expected
     assert DayMetrics.read(state_path).label_similarity is None
     assert state_text == metrics.to_json()

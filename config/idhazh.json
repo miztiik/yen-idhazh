@@ -212,13 +212,13 @@
     "brief_compression_ceiling": 0.5,
     "chunk_overlap_words": 150,
     "chunk_words": 900,
+    "corpus_compression_ceiling": 0.75,
     "label_draw_per_decile": 6,
     "label_min_run_days": 10,
     "labellers": [
       "miztiik"
     ],
-    "spot_checks_per_week": 10,
-    "corpus_compression_ceiling": 0.75
+    "spot_checks_per_week": 10
   },
   "extract": {
     "backoff_initial_seconds": 1.0,
