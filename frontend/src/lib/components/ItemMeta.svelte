@@ -9,7 +9,7 @@
 	 *
 	 * What stays is everything that is a claim about our summary rather than
 	 * about the story. The confidence sentence is the reason for the split:
-	 * printing "our summary leaves out figures from the opening" above a headline
+	 * printing a faithfulness warning above a headline
 	 * the reader has not read is a disclaimer on nothing.
 	 *
 	 * The way out sits at the trailing edge, so it lands in the same place on

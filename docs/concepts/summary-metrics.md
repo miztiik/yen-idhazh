@@ -1,6 +1,6 @@
 # Summary Metrics
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-11-15
 
 What one number about one summary means, and what it cannot see.
 
@@ -22,18 +22,22 @@ Faithfulness measures **consistency with the source, not informativeness**. Two 
 - *"This article discusses technology."* Perfectly faithful. Says nothing.
 - A verbatim quote of the first three paragraphs. Perfectly faithful. Has not summarized anything.
 
-Optimising for faithfulness alone therefore drives the system toward bland copying. It is paired with deterministic counterweights that see what it cannot:
+The raw diagnostics below describe other properties of a summary. They are not
+confidence inputs: fresh bands use HHEM alone, and no evaluation means explicitly
+unscored ([evaluation.md](evaluation.md#bands-not-raw-numbers)). Their current
+calculations and existing consumers remain separate from that publication rule.
 
 | Counterweight | What it catches |
 | --- | --- |
-| **Lead coverage** | Whether the names and figures in the source's opening lines survived into the summary. This is the direct instrument for *selective omission* - the thing faithfulness structurally cannot see, because omitting a fact is perfectly consistent with the source. It is anchored on the lead rather than the whole article for a reason given below. A line break is an entity boundary, so a title line cannot glue itself to the first capitalised word of the body. |
-| **Unsupported numbers** | A figure the summary asserts that appears nowhere in the full article. Coverage sees an *omitted* number and is structurally blind to an *invented* one, and a wrong figure is the most damaging thing a news summary can carry. |
-| **Dropped hedge** | The source said "reportedly" and the summary said it flat. A rumour became a fact. Faithfulness marks this generously, because the entity and the relation are both present - only the uncertainty went missing. |
+| **Unsupported numbers** | A figure the summary asserts that appears nowhere in the full article. Recorded by existing raw consumers, but no longer forces a low-confidence band or a reader warning. |
+| **Dropped hedge** | The source uses a hedge absent from the summary. Recorded by existing raw consumers, but no longer caps confidence or produces a reader warning. |
 | **Extractiveness** | How much of the summary is lifted verbatim, as 4-gram overlap plus the longest unbroken copied run. High extractiveness *plus* high faithfulness means copying, not summarizing. |
 | **Self-repetition** | How much of the summary is a phrase the summary already used. Every counterweight above reads our summary against the *article*; this one reads it against *itself*. **Recorded, never flagged** - see below. |
 | **Compression** | Summary length over source length. **Recorded, never flagged** - see below. |
 
-These are deterministic and cost effectively nothing, which is why they are preferred over an additional model pass. They also run whether or not a faithfulness model is available, which makes them the floor the whole instrument rests on rather than an accessory to it.
+These diagnostics do not replace a missing faithfulness evaluation. In
+particular, assembly no longer calculates number or hedge checks for an
+unevaluated summary.
 
 ## The one column that reads the summary against itself
 
@@ -233,6 +237,11 @@ ten-run-day count below to record a change that did not happen to the
 counterweights.
 
 ## Design rationale
+
+The checker/verdict bundle is `metrics-5` because new bands no longer read number
+or hedge diagnostics. The HHEM instrument is unchanged. Historical raw bands and
+scorer identities remain recorded values; the reader's minimal legacy handling
+is defined once in [evaluation.md](evaluation.md#the-band-says-what-is-missing-not-how-good-the-item-is).
 
 **One column reads the summary against itself (2026-08-26).** Eleven quality columns, and every n-gram machine in `backend/idhazh/evals/metrics.py` intersected the summary's n-grams with the *source's*. Nothing could see a summary that repeated itself, which greedy decoding makes possible and which every other column scores *better* on the worse it gets. Proved on committed fixtures rather than argued: two 26-word summaries of the same article, one saying a clause three times and one saying it once, score exactly equal on `extractiveness` (0.000), `verbatim_run` (0.077) and `coverage` (0.333), and 0.000 against 0.391 on the new one. Authority: Andre's blind-spot finding; nullable and appended, Fowler's layout rule.
 

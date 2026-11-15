@@ -8,7 +8,8 @@ import pytest
 from support.paths import REPO_ROOT, read_text
 
 from idhazh import extract
-from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.base import derive_output_digest
+from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.extract import ExtractConfig
@@ -53,6 +54,34 @@ def test_a_row_carries_everything_needed_to_read_it_years_later() -> None:
     assert built.title == planned.title
     assert built.date == run_plan.date
     assert built.scorer_version == scorer_version
+
+
+def test_number_and_hedge_diagnostics_do_not_lower_faithfulness_confidence() -> None:
+    source = "Officials reportedly approved 12 reactors."
+    text = "Officials approved 99 reactors."
+    written = summary()
+    built = to_eval_row(
+        item=plan().items[0],
+        article=article(),
+        summary=written.model_copy(
+            update={"summary": text, "output_digest": derive_output_digest(text, title=written.title)}
+        ),
+        full_text=source,
+        premise=source,
+        hhem=0.95,
+        hhem_full=0.89,
+        config=EvaluationConfig(),
+        date="2026-08-21",
+        run_id="2026-08-21-1",
+        scorer_version="recorded-test-scorer",
+        scored_at="2026-08-21T06:18:02Z",
+    )
+
+    assert built.unsupported_numbers == 1
+    assert built.hedge_dropped is True
+    assert built.band is ConfidenceBand.HIGH
+    assert built.hhem == 0.95
+    assert built.hhem_full == 0.89
 
 
 def test_the_truncation_gap_is_computed_not_asserted() -> None:

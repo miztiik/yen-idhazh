@@ -4,46 +4,156 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from pytest import MonkeyPatch
 from support.paths import CONFIG_DIR, read_text
 
-from idhazh import cli, config
-from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh import assemble, cli, config
+from idhazh.contracts.base import derive_output_digest
+from idhazh.contracts.digest_run_fragment import DigestRunFragment
+from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.item_health import FailureCode
-from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.run_manifest import RunManifest
+from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.evals.score import band
+from idhazh.evals import metrics
 from idhazh.stages import common
+from idhazh.stages.assemble import stage_assemble
 from idhazh.stages.work import stage_work
 
 from ._builders import (
     SilentCompletionEndpoint,
     a_server_that_refuses_every_completion,
+    article,
     captured_article_fetch,
+    isolate_ledgers,
     plan,
+    row,
+    summary,
 )
 
 
-def test_the_counterweights_alone_never_claim_the_top_band() -> None:
-    """Without a faithfulness score there is no basis for claiming high confidence."""
-    assert (
-        band(None, unsupported_numbers=0, hedge_dropped=False, config=EvaluationConfig())
-        is ConfidenceBand.MEDIUM
+def _saved_completed_item(tmp_path: Path, monkeypatch: MonkeyPatch) -> RunPlan:
+    run_plan = plan(item_count=1)
+    isolate_ledgers(tmp_path, monkeypatch)
+    items = common.VAR_ROOT / run_plan.date / "items"
+    items.mkdir(parents=True)
+    source = "Officials reportedly approved 12 reactors."
+    text = "Officials approved 99 reactors."
+    extracted = article().model_copy(
+        update={
+            "text": source,
+            "word_count": metrics.word_count(source),
+            "source_word_count": metrics.word_count(source),
+            "truncated": False,
+        }
+    )
+    original = summary()
+    written = Summary.model_validate(
+        {
+            **original.model_dump(),
+            "summary": text,
+            "output_digest": derive_output_digest(text, title=original.title),
+        }
+    )
+    item_id = run_plan.items[0].item_id
+    (items / f"{item_id}.article.json").write_text(extracted.to_json(), encoding="utf-8")
+    (items / f"{item_id}.summary.json").write_text(written.to_json(), encoding="utf-8")
+    return run_plan
+
+
+def test_an_item_without_an_eval_is_explicitly_unscored(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    run_plan = _saved_completed_item(tmp_path, monkeypatch)
+    day = stage_assemble(
+        run_plan, settings=config.load(CONFIG_DIR), commit_sha="a" * 40, runner="fixture"
+    )
+    assert [(item.band, item.band_reason) for item in day.items] == [
+        (ConfidenceBand.MEDIUM, BandReason.NOT_SCORED)
+    ]
+    manifest = RunManifest.read(assemble.day_dir(common.PUBLIC_ROOT, run_plan.date) / "run.json")
+    assert manifest.runs[-1].scorer_version is None
+
+
+def test_fresh_publication_uses_an_old_rows_hhem_not_its_mixed_band(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    run_plan = _saved_completed_item(tmp_path, monkeypatch)
+    recorded = row(
+        version="2026-09-29",
+        band=ConfidenceBand.LOW,
+        unsupported_numbers=1,
+        hedge_dropped=True,
+    )
+    path = common.VAR_ROOT / run_plan.date / "items" / f"{run_plan.items[0].item_id}.eval.json"
+    path.write_text(recorded.to_json(), encoding="utf-8")
+    day = stage_assemble(
+        run_plan, settings=config.load(CONFIG_DIR), commit_sha="a" * 40, runner="fixture"
+    )
+    assert [(item.band, item.band_reason) for item in day.items] == [(ConfidenceBand.HIGH, None)]
+    assert EvalRow.read(path) == recorded
+    manifest = RunManifest.read(assemble.day_dir(common.PUBLIC_ROOT, run_plan.date) / "run.json")
+    assert manifest.runs[-1].scorer_version == recorded.scorer_version
+
+
+@pytest.mark.parametrize(
+    ("band", "reason"),
+    [
+        (ConfidenceBand.LOW, BandReason.UNSUPPORTED_NUMBER),
+        (ConfidenceBand.MEDIUM, BandReason.HEDGE_DROPPED),
+        (ConfidenceBand.LOW, None),
+    ],
+)
+def test_replaying_a_sealed_fragment_keeps_its_original_confidence_decision(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    band: ConfidenceBand,
+    reason: BandReason | None,
+) -> None:
+    run_plan = _saved_completed_item(tmp_path, monkeypatch)
+    settings = config.load(CONFIG_DIR)
+    stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+    path = assemble.fragment_path(common.STATE_ROOT, date=run_plan.date, run_id=run_plan.run_id)
+    fragment = DigestRunFragment.read(path)
+    sealed = fragment.model_copy(
+        update={
+            "version": "2026-10-20",
+            "items": [
+                item.model_copy(update={"band": band, "band_reason": reason})
+                for item in fragment.items
+            ],
+        }
+    )
+    path.write_text(sealed.to_json(), encoding="utf-8")
+    before = path.read_bytes()
+
+    replayed = stage_assemble(
+        run_plan, settings=settings, commit_sha="a" * 40, runner="fixture", reuse_fragment=True
     )
 
+    assert [(item.band, item.band_reason) for item in replayed.items] == [(band, reason)]
+    assert path.read_bytes() == before
 
-def test_an_invented_number_still_reaches_the_reader_as_low() -> None:
-    assert (
-        band(None, unsupported_numbers=1, hedge_dropped=False, config=EvaluationConfig())
-        is ConfidenceBand.LOW
+
+@pytest.mark.parametrize("changed", [{"summary": "Changed saved content."}, {"item_id": "ai-99"}])
+def test_replaying_a_fragment_still_refuses_changed_content_or_identity(
+    tmp_path: Path, monkeypatch: MonkeyPatch, changed: dict[str, str]
+) -> None:
+    run_plan = _saved_completed_item(tmp_path, monkeypatch)
+    settings = config.load(CONFIG_DIR)
+    stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+    path = assemble.fragment_path(common.STATE_ROOT, date=run_plan.date, run_id=run_plan.run_id)
+    fragment = DigestRunFragment.read(path)
+    altered = fragment.model_copy(
+        update={"items": [item.model_copy(update=changed) for item in fragment.items]}
     )
+    path.write_text(altered.to_json(), encoding="utf-8")
 
-
-def test_a_summary_that_flattened_a_hedge_reaches_the_reader_as_medium() -> None:
-    assert (
-        band(None, unsupported_numbers=0, hedge_dropped=True, config=EvaluationConfig())
-        is ConfidenceBand.MEDIUM
-    )
+    with pytest.raises(ValueError, match="retained source fragment does not match"):
+        stage_assemble(
+            run_plan, settings=settings, commit_sha="a" * 40, runner="fixture", reuse_fragment=True
+        )
 
 
 def test_a_scorer_that_will_not_load_costs_rows_not_the_digest(monkeypatch) -> None:  # type: ignore[no-untyped-def]

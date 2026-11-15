@@ -15,7 +15,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, ClassVar, Final, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from idhazh.contracts.article import UntrustedLine
 from idhazh.contracts.base import (
@@ -91,7 +91,7 @@ class BandReason(StrEnum):
     because there is nothing to explain.
     """
 
-    #: The summary asserts a figure that appears nowhere in the article.
+    #: Retained for historical published items; no fresh verdict produces it.
     UNSUPPORTED_NUMBER = "unsupported_number"
     #: No faithfulness score exists, so the item cannot claim the top band.
     NOT_SCORED = "not_scored"
@@ -100,7 +100,7 @@ class BandReason(StrEnum):
     #: stopped reading it. The member stays because committed published days
     #: carry it, and a reader of one of those days still has to name the reason.
     LEAD_MISSING = "lead_missing"
-    #: The article hedged and the summary asserted.
+    #: Retained for historical published items; no fresh verdict produces it.
     HEDGE_DROPPED = "hedge_dropped"
     #: The faithfulness score itself put the item here.
     FAITHFULNESS = "faithfulness"
@@ -110,7 +110,20 @@ class EvalRow(Contract):
     """The Evaluate stage's output, filed once per item."""
 
     __schema_stem__: ClassVar[str] = "eval-row"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "readCompatibility": (
+                "historical bands, versions and scorer identities remain unchanged; "
+                "fresh publication grades hhem under the current confidence policy"
+            )
+        }
+    )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-15",
+            change="New bands use faithfulness alone; historical recorded bands remain readable.",
+            why="Number and hedge diagnostics no longer determine published confidence.",
+        ),
         ChangelogEntry(
             version="2026-09-29",
             change="attempt is summary_attempt; the three word counts take item-health's names.",
@@ -125,11 +138,6 @@ class EvalRow(Contract):
             version="2026-09-13T22:00",
             change="pipeline_fingerprint stays on this one shape after leaving the other nine.",
             why="The console still reads its column on every day that recorded no input manifest.",
-        ),
-        ChangelogEntry(
-            version="2026-09-12T21:00",
-            change="pipeline_fingerprint is optional and nothing sets it.",
-            why="It keyed the eval window, and the window stopped being keyed on a stamp.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -239,7 +247,12 @@ class EvalRow(Contract):
         default=False,
         description="The text looks like page furniture. A faithful summary of chrome scores high.",
     )
-    band: ConfidenceBand
+    band: ConfidenceBand = Field(
+        description=(
+            "Confidence at scoring time. New rows grade hhem alone; historical rows "
+            "retain the band their recorded scorer wrote, including retired checks."
+        )
+    )
 
     source_words_before_cap: int | None = Field(
         default=None,

@@ -36,7 +36,54 @@
  * without anybody changing a line.
  */
 import { expect, test } from '@playwright/test';
+import { pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
+import { render } from 'svelte/server';
 import { KIND_WORTH_SAYING, SOURCE_KINDS, sourceKindCopy } from '../src/lib/bands';
+import { projectDay } from '../src/lib/payload/project';
+import type { BandReason, ConfidenceBand, DigestItem } from '../src/lib/payload/types';
+import { iconsConfig } from '../src/lib/server/config';
+import { serverCompiler } from './support/server-render';
+
+test('only explicit current confidence reasons render a sentence and mark, even in a fresh day wrapper', async ({}, info) => {
+    const compile = serverCompiler(info.outputPath('confidence'));
+    const icon = await compile('src/lib/icons/Icon.svelte', 'Icon', [
+        ['./generated', '$lib/icons/generated']
+    ]);
+    const module = await compile('src/lib/components/ConfidenceChip.svelte', 'ConfidenceChip', [
+        ['$lib/icons/Icon.svelte', pathToFileURL(icon).href],
+        ['$lib/bands', pathToFileURL(resolve('src', 'lib', 'bands.ts')).href]
+    ]);
+    const component = (await import(pathToFileURL(module).href)).default;
+    Object.assign(globalThis, { __ICON_STROKE_PX__: iconsConfig().stroke_px });
+    for (const band of ['low', 'medium'] satisfies ConfidenceBand[]) {
+        for (const reason of ['unsupported_number', 'hedge_dropped', null, undefined] satisfies (BandReason | null | undefined)[]) {
+            const day: { items: Pick<DigestItem, 'band' | 'band_reason'>[] } = JSON.parse(projectDay(JSON.stringify({
+                version: '2026-11-15',
+                items: [{ item_id: 'ai-1', title: 'A story', summary: 'A summary.', band,
+                    ...(reason === undefined ? {} : { band_reason: reason }) }]
+            })));
+            const item = day.items[0];
+            expect(item.band_reason).toBe(reason ?? null);
+            const body = render(component, { props: { band: item.band, reason: item.band_reason } }).body;
+            expect(body.replace(/<!--.*?-->/gs, '').trim()).toBe('');
+        }
+    }
+    for (const [band, reason, sentence] of [
+        ['low', 'faithfulness', 'Parts of our summary do not line up with the article.'],
+        ['medium', 'faithfulness', 'Parts of our summary do not line up with the article.'],
+        ['medium', 'not_scored', 'We could not check this summary against the article.'],
+        ['medium', 'lead_missing', 'Our summary leaves out names or figures from the opening.']
+    ] satisfies [ConfidenceBand, BandReason, string][]) {
+        const body = render(component, { props: { band, reason } }).body;
+        expect(body).toContain(sentence);
+        expect(body).toContain(`data-band="${band}"`);
+        expect(body).toContain('<svg');
+    }
+    const high = render(component, { props: { band: 'high', reason: null } }).body;
+    expect(high.replace(/<!--.*?-->/gs, '').trim()).toBe('');
+});
+
 test.describe('the item names the speaker only where the speaker has a stake', () => {
     test('four kinds, each with copy, and never the one that is most of the tree', () => {
         // Four kinds carry copy. `government` is a ministry announcing its own
